@@ -1,0 +1,31 @@
+;*
+;* MOVE CMD DOWN TO $1000-$2000
+;*
+	LDA	#<_CMDBEGIN
+	STA	$06
+	LDA	#>_CMDBEGIN
+	STA	$07
+	LDA	#$00
+	STA	$08
+	LDA	#$10
+	STA	$09
+	LDY	#$00
+-	LDA	($06),Y
+	STA	($08),Y
+	INY
+	BNE	-
+	INC	$07
+	INC	$09
+	LDA	$09
+	CMP	#$20
+	BNE	-
+	LDA	#<_CMDEND
+	STA	$06
+	LDA	#>_CMDEND
+	STA	$07
+	JMP	$1000
+_CMDBEGIN =	*
+	!PSEUDOPC	$1000 {
+	!SOURCE	"cmd.a"
+_CMDEND	=	*
+}
