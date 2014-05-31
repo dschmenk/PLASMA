@@ -509,7 +509,7 @@ void emit_def(char *name, int is_bytecode)
     {
         //printf("%s%c\n", name, LBL);
         if (is_bytecode)
-            printf("\tJSR	$03D0\n");
+            printf("\tJSR\tINTERP\n");
     }
 }
 void emit_codetag(int tag)

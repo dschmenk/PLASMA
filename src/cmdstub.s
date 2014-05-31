@@ -1,3 +1,4 @@
+INTERP	=	$03D0
 ;*
 ;* MOVE CMD DOWN TO $1000-$2000
 ;*
