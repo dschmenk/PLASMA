@@ -1,6 +1,8 @@
 ;**********************************************************
 ;*
-;* SYSTEM ROUTINES AND LOCATIONS
+;*           APPLE ][ 64K/128K PLASMA INTERPETER
+;*
+;*             SYSTEM ROUTINES AND LOCATIONS
 ;*
 ;**********************************************************
 ;*

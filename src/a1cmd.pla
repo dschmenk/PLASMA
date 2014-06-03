@@ -1,4 +1,3 @@
-const membank     = $FFEF
 const MODADDR     = $1000
 ;
 ; ROMCALL return register structure.
@@ -7,15 +6,6 @@ const acc         = 0
 const xreg        = 1
 const yreg        = 2
 const preg        = 3
-;
-; System flags: memory allocator screen holes.
-;
-const restxt1     = $0001
-const restxt2     = $0002
-const reshgr1     = $0004
-const reshgr2     = $0008
-const resxhgr1    = $0010
-const resxhgr2    = $0020
 ;
 ; SOS flags
 ;
@@ -26,9 +16,9 @@ const O_READ_WRITE = 3
 ; Pedefined functions.
 ;
 predef home, gotoxy, viewport, crout, cout, prstr, cin, rdstr
-predef syscall, romcall
+predef syscall
 predef markheap, allocheap, allocalignheap, releaseheap, availheap
-predef memset, memcpy, xmemcpy, memxcpy
+predef memset, memcpy, xmemcpy
 predef uword_isgt, uword_isge, uword_islt, uword_isle
 predef execmod
 ;
@@ -50,7 +40,6 @@ byte hprelstr[]   = "HEAPRELEASE"
 byte hpavailstr[] = "HEAPAVAIL"
 byte memsetstr[]  = "MEMSET"
 byte memcpystr[]  = "MEMCPY"
-byte memxcpystr[] = "MEMXCPY"
 byte uisgtstr[]   = "ISUGT"
 byte uisgestr[]   = "ISUGE"
 byte uisltstr[]   = "ISULT"
@@ -70,7 +59,6 @@ word		  = @hpalignstr,@allocalignheap
 word		  = @hprelstr,  @releaseheap
 word		  = @memsetstr, @memset
 word		  = @memcpystr, @memcpy
-word		  = @memxcpystr, @memxcpy
 word              = @uisgtstr,  @uword_isgt
 word              = @uisgestr,  @uword_isge
 word              = @uisltstr,  @uword_islt
@@ -82,7 +70,6 @@ word stdlibsym    = @exports
 ; String pool.
 ;
 byte console[]    = ".CONSOLE"
-byte devtovol[]   = " => /"
 byte version[]    = "PLASMA 0.9\n"
 byte freestr[]    = "MEM FREE:$"
 byte errorstr[]   = "ERR:$"
@@ -94,29 +81,15 @@ byte hexchar[]    = '0','1','2','3','4','5','6','7','8','9','A','B','C','D','E',
 ; System variable.
 ;
 word systemflags = 0
-word heap        = $2000
+word heap
 word symtbl, lastsym
-word refcons, devcons
-word perr, terr
+word perr
 word cmdptr
 ;
 ; CALL SOS
 ; SYSCALL(CMD, PARAMS)
 ;
 asm syscall
-	LDA	ESTKL,X
-	LDY	ESTKH,X
-	STA	PARAMS
-	STY	PARAMS+1
-	INX
-	LDA	ESTKL,X
-	STA	CMD
-	BRK
-CMD	!BYTE	00
-PARAMS	!WORD	0000
-	STA	ESTKL,X
-	LDY    	#$00
-	STY	ESTKH,X
 	RTS
 end
 ;
@@ -298,9 +271,9 @@ end
 ;
 asm interp
 	DEX
-	LDA	#<XINTERP
+	LDA	#<IINTERP
 	STA	ESTKL,X
-	LDA	#>XINTERP
+	LDA	#>IINTERP
 	STA	ESTKH,X
 	RTS
 end
@@ -502,7 +475,51 @@ asm lookuptbl
 	BNE	-
 end
 ;
-; SOS routines
+; CONSOLE I/O
+;
+def cout(ch)
+    if ch == $0D
+        ch = $0A0D
+    else
+    fin
+end
+def cin
+    byte ch
+    return ch
+end
+def prstr(str)
+    if (str).[^str] == $0D
+        cout($0A)
+    fin
+end
+def rdstr(prompt)
+    cout(prompt)
+    if (heap).[^heap] == $0D
+        ^heap = ^heap - 1
+    fin
+    cout($0D)
+    return heap
+end
+def home
+    return cout(28)
+end
+def gotoxy(x, y)
+end
+def viewport(left, top, width, height)
+end
+def crout
+    return cout($0D)
+end
+def prbyte(v)
+    cout(hexchar[(v >> 4) & $0F])
+    return cout(hexchar[v & $0F])
+end
+def prword(v)
+    prbyte(v >> 8)
+    return prbyte(v)
+end
+;
+; CFFA1 routines
 ; FILE I/O
 ;
 def getpfx(path)
@@ -585,187 +602,6 @@ def write(refnum, buff, len)
     params:4 = len
     perr     = syscall($CB, @params)
     return perr
-end
-;
-; DEVICE I/O
-;
-def dev_status(devnum, list)
-    byte params[5]
-    
-    params.0 = 3
-    params.1 = devnum
-    params.2 = 0
-    params:3 = list
-    perr     = syscall($82, @params)
-    return params.2
-end
-def dev_control(devnum, code, list)
-    byte params[5]
-    
-    params.0 = 3
-    params.1 = devnum
-    params.2 = code
-    params:3 = list
-    perr     = syscall($83, @params)
-    return perr
-end
-def dev_getnum(name)
-    byte params[4]
-    
-    params.0 = 2
-    params:1 = name
-    params.3 = 0
-    perr     = syscall($84, @params)
-    return params.3
-end
-def dev_info(devnum, name, list, listlen)
-    byte params[7]
-    
-    params.0 = 4
-    params.1 = devnum
-    params:2 = name
-    params:4 = list
-    params.6 = listlen
-    perr     = syscall($85, @params)
-    return perr
-end
-;
-; MEMORY CALLS
-;
-def seg_request(base, limit, id)
-    byte params[7]
-    
-    params.0 = 4
-    params:1 = base
-    params:3 = limit
-    params.5 = id
-    params.6 = 0
-    perr     = syscall($40, @params)
-    return params.6
-end
-def seg_find(search, base, limit, pages, id)
-    byte params[10]
-    
-    params.0 = 6
-    params.1 = search
-    params.2 = id
-    params:3 = 0
-    params:5 = 0
-    params:7 = 0
-    params.9 = 0
-    perr     = syscall($41, @params)
-    *pages   = params:3
-    *base    = params:5
-    *limit   = params:7
-    return params.9
-end
-def seg_change(segnum, mode, pages)
-    byte params[5]
-    
-    params.0 = 3
-    params.1 = segnum
-    params.2 = mode
-    params:3 = pages
-    perr     = syscall($42, @params)
-    return params:3
-end
-def seg_getinfo(segnum, base, limit, pages, id)
-    byte params[9]
-    
-    params.0 = 6
-    params.1 = segnum
-    params:2 = 0
-    params:4 = 0
-    params:6 = 0
-    params.8 = 0
-    perr      = syscall($43, @params)
-    *base    = params:2
-    *limit   = params:4
-    *pages   = params:6
-    return params.8
-end
-def seg_getnum(segaddr)
-    byte params[4]
-    
-    params.0 = 2
-    params:1 = segaddr
-    params.3 = 0
-    perr     = syscall($44, @params)
-    return params.3
-end
-def seg_release(segnum)
-    byte params[2]
-    
-    params.0 = 1
-    params.1 = segnum
-    perr     = syscall($45, @params)
-    return perr
-end
-;
-; CONSOLE I/O
-;
-def init_cons
-    byte nlmode[2]
-    refcons  = open(@console, O_READ_WRITE)
-    devcons  = dev_getnum(@console)
-    nlmode.0 = $80
-    nlmode.1 = $0D
-    dev_control(devcons, $02, @nlmode)
-end
-def cout(ch)
-    if ch == $0D
-        ch = $0A0D
-	write(refcons, @ch, 2)
-    else
-        write(refcons, @ch, 1)
-    fin
-end
-def cin
-    byte ch
-    read(refcons, @ch, 1)
-    return ch
-end
-def prstr(str)
-    write(refcons, str + 1, ^str)
-    if (str).[^str] == $0D
-        cout($0A)
-    fin
-end
-def rdstr(prompt)
-    cout(prompt)
-    ^heap = read(refcons, heap + 1, 128)
-    if (heap).[^heap] == $0D
-        ^heap = ^heap - 1
-    fin
-    cout($0D)
-    return heap
-end
-def home
-    return cout(28)
-end
-def gotoxy(x, y)
-    cout(26)
-    cout(x)
-    return cout(y)
-end
-def viewport(left, top, width, height)
-    cout(1) ; Reset viewport
-    gotoxy(left, top)
-    cout(2)
-    gotoxy(width, height)
-    cout(3)
-    return gotoxy(0, 0)
-end
-def crout
-    return cout($0D)
-end
-def prbyte(v)
-    cout(hexchar[(v >> 4) & $0F])
-    return cout(hexchar[v & $0F])
-end
-def prword(v)
-    prbyte(v >> 8)
-    return prbyte(v)
 end
 ;
 ; Heap routines.
@@ -877,18 +713,14 @@ def lookupextern(esd, index)
     crout
     return 0
 end
-def adddef(ext, addr, deflast)
+def adddef(addr, deflast)
     word defentry
     defentry = *deflast
-    *deflast = defentry + 6
+    *deflast = defentry + 5
     (defentry).0 = $20
     (defentry):1 = interp
     (defentry):3 = addr
-    (defentry):5 = ext ; ext is byte, so this nulls out next entry
-    ;prword(defentry)
-    ;cout('@')
-    ;prword(addr)
-    ;crout
+    (defentry).4 = 0 ; null out next entry
     return defentry
 end
 def lookupdef(addr, deftbl)
@@ -900,19 +732,16 @@ def lookupdef(addr, deftbl)
 	    ;crout
             return deftbl
         fin
-        deftbl = deftbl + 6
+        deftbl = deftbl + 5
     loop
-    ;prword(addr)
-    ;cout('?')
-    ;crout
     return 0
 end
 def loadmod(mod)
     word refnum, rdlen, modsize, bytecode, defofst, defcnt, init, fixup
-    word addr, defaddr, modaddr, modfix, modend
+    word addr, modaddr, modfix, modend
     word deftbl, deflast
     word moddep, rld, esd, sym
-    byte defext, str[16], filename[64]
+    byte str[16], filename[32]
     byte header[128]
     ;
     ; Read the RELocatable module header (first 128 bytes)
@@ -920,7 +749,6 @@ def loadmod(mod)
     dcitos(mod, @filename)
     refnum = open(@filename, O_READ)
     if refnum > 0
-        ;newline(refnum, 0, $0D)
         rdlen   = read(refnum, @header, 128)
 	modsize = header:0
 	moddep  = @header.1
@@ -940,6 +768,10 @@ def loadmod(mod)
 	    ;
             while ^moddep
                 if !lookupmod(moddep)
+		    if refnum
+		        close(refnum)
+			refnum = 0
+		    fin
                     if loadmod(moddep) < 0
 	      	        return perr
 		    fin
@@ -949,9 +781,16 @@ def loadmod(mod)
 	    ;
 	    ; Init def table.
 	    ;
-	    deftbl   = allocheap(defcnt * 6 + 1)
+	    deftbl   = allocheap(defcnt * 5 + 1)
 	    deflast  = deftbl
 	    ^deflast = 0
+	    if !refnum
+	        ;
+		; Reset read pointer.
+		;
+	        refnum = open(@filename)
+		rdlen  = read(refnum, @header, 128)
+	    fin
         fin
 	;
 	; Alloc heap space for relocated module (data + bytecode).
@@ -983,17 +822,6 @@ def loadmod(mod)
             esd = esd + 4
 	loop
         esd = esd + 1
-	;
-	; Locate bytecode defs in appropriate bank.
-	;
-	;if ^MACHID & $30 == $30
-	    ;defext  = 1
-	    ;defaddr = allocxheap(rld - bytecode)
-	    ;modend  = bytecode
-	;else
-	    defext  = 0
-	    defaddr = bytecode
-	;fin
         ;
         ; Run through the Re-Location Dictionary.
         ;
@@ -1002,7 +830,7 @@ def loadmod(mod)
 	        ;
 		; This is a bytcode def entry - add it to the def directory.
 		;
-                adddef(defext, (rld):1 - defofst + defaddr, @deflast)
+                adddef((rld):1 - defofst + bytecode, @deflast)
             else
                 addr = (rld):1 + modfix
                 if uword_isge(addr, modaddr) ; Skip fixups to header
@@ -1018,42 +846,15 @@ def loadmod(mod)
                     else	  ; BYTE sized fixup.
                         fixup = ^addr
                     fin
-;		    if uword_isge(fixup, modend)
-;		        cout('<')
-;		        cout('<')
-;		        prword(*addr);fixup)
-;			cout('@')
-;			prword(addr)
-;		        cout('>')
-;		        cout('>')
-;			prword(^rld)
-;			crout
-;		    fin
                     if ^rld & $10 ; EXTERN reference.
                         fixup = fixup + lookupextern(esd, (rld).3)
                     else	  ; INTERN fixup.
                         fixup = fixup + modfix - MODADDR
-;			if uword_isge(fixup, modend)
-;	prword(@(modaddr).$62)
-;	cout('=')
-;	prword((modaddr).$62)
-;	crout
-;		            cout('<')
-;			    cout('<')
-;			    cout('<')
-;			    prword(fixup)
-;			    cout('>')
-;			    cout('>')
-;			    cout('>')
-;			    prword(rld)
-;			    cin
-;			    crout
-;			fin
                         if uword_isge(fixup, bytecode)
                             ;
                             ; Bytecode address - replace with call def directory.
                             ;
-                            fixup = lookupdef(fixup - bytecode + defaddr, deftbl)
+                            fixup = lookupdef(fixup - bytecode + bytecode, deftbl)
                         fin
                     fin
                     if ^rld & $80 ; WORD sized fixup.
@@ -1080,18 +881,12 @@ def loadmod(mod)
 		    ;
 		    ; Use the def directory address for bytecode.
 		    ;
-                    addr = lookupdef(addr - bytecode + defaddr, deftbl)
+                    addr = lookupdef(addr - bytecode + bytecode, deftbl)
                 fin
                 addsym(sym, addr)
             fin
             esd = esd + 3
         loop
-	if defext
-	    ;
-	    ; Move bytecode to AUX bank.
-	    ;
-	    memxcpy(0, defext, defaddr, bytecode, modsize - (bytecode - modaddr))
-       	fin
 	;
 	; Free up end-of-module main memory.
 	;
@@ -1104,7 +899,7 @@ def loadmod(mod)
     ; Call init routine if it exists.
     ;
     if init
-        return adddef(defext, init - defofst + defaddr, @deflast)()
+        return adddef(init - defofst + bytecode, @deflast)()
     fin
     return 0
 end
@@ -1112,24 +907,6 @@ end
 ; Command mode
 ;
 def volumes
-    byte info[11]
-    byte devname[17]
-    byte volname[17]
-    byte i
-    word ttlblks, freblks
-
-    for i = $01 to $18
-        if dev_info(i, @devname, @info, 11) == 0
-	    prstr(@devname)
-	    if volume(@devname, @volname, @ttlblks, @freblks) == 0
-	        prstr(@devtovol)
-	        prstr(@volname)
-	        cout('/')
-	    fin
-	    crout
-	fin
-    next
-    perr = 0
 end
 def catalog(optpath)
     byte path[64]
@@ -1248,9 +1025,9 @@ def execmod(modfile)
 end
 
 ;
-; Init console
+; Get heap start
 ;
-init_cons
+heap = *$0006
 ;
 ; Print some startup info.
 ;
@@ -1261,7 +1038,7 @@ crout
 ;
 ; Init symbol table.
 ;
-symtbl   = allocheap($400)
+symtbl   = allocheap($200)
 lastsym  = symtbl
 ^lastsym = 0
 stodci(@stdlibstr, heap)
@@ -1293,9 +1070,8 @@ while 1
 	        prstr(@huhstr)
         wend
         if perr
-	    terr = perr
             prstr(@errorstr)
-	    prbyte(terr)
+	    prbyte(perr)
 	    perr = 0
         else
             prstr(@okstr)

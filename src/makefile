@@ -2,6 +2,7 @@
 AFLAGS	= -o $@
 LFLAGS	= -C default.cfg
 PLVM    = plvm
+PLVM01  = A1PLASMA\#060280
 PLVM02	= PLASMA.SYSTEM\#FF2000
 PLVM03	= SOS.INTERP\#050000
 CMD     = CMD\#FF2000
@@ -25,7 +26,7 @@ TXTTYPE	= .TXT
 #SYSTYPE	= \#ff2000
 #TXTTYPE	= \#040000
 
-all: $(PLASM) $(PLVM) $(PLVM02) $(PLVM03) $(CMD) $(ROD) $(HGR1)
+all: $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVM03) $(CMD) $(ROD) $(HGR1)
 
 clean:
 	-rm *.o *~ *.a *.SYM $(CMD) *\#FE1000 $(ROD) $(HGR1) $(PLASM) $(PLVM)
@@ -35,6 +36,12 @@ $(PLASM): $(OBJS) $(INCS)
 
 $(PLVM): plvm.c
 	cc plvm.c -o $(PLVM)
+
+a1cmd.a: a1cmd.pla $(PLASM)
+	./$(PLASM) -A < a1cmd.pla > a1cmd.a
+
+$(PLVM01): plvm01.s a1cmd.a
+	acme -o $(PLVM01) -l PLVM01.SYM plvm01.s
 
 cmdexec.a: cmdexec.pla $(PLASM)
 	./$(PLASM) -A < cmdexec.pla > cmdexec.a
