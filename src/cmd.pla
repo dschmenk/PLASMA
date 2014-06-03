@@ -726,46 +726,6 @@ asm lookuptbl
 	STA	DSTH
 	BNE	-
 end
-def lookupdef(addr, deftbl)
-    while (deftbl).0 == $20
-        if (deftbl):3 == addr
-            return deftbl
-        fin
-        deftbl = deftbl + 5
-    loop
-    return 0
-;asm lookupdef
-;	LDA	ESTKL,X
-;	STA	DSTL
-;	LDA	ESTKH,X
-;	STA	DSTH
-;	INX
-;-	LDY	#$00
-;	LDA	#$20
-;	AND	(DST),Y
-;	BEQ	++
-;	LDY	#$03
-;	LDA	(DST),Y
-;	CMP	ESTKL,X
-;	BNE	+++
-;	INY
-;	LDA	(DST),Y
-;	CMP	ESTKH,X
-;	BNE	++
-;+	LDA	DSTL
-;	LDY	DSTH
-;++	STA	ESTKL,X
-;	STY	ESTKH,X
-;	RTS
-;+++	LDA	#$05
-;	CLC
-;	ADC	DSTL
-;	STA	DSTL
-;	LDA	#$00
-;	ADC	DSTH
-;	STA	DSTH
-;	BNE	-
-end
 ;
 ; CHAR IN
 ; RDKEY()
@@ -1003,16 +963,27 @@ def lookupextern(esd, index)
     return 0
 end
 def adddef(bank, addr, deflast)
-    (*deflast).0 = $20
-    if bank == 0
-        (*deflast):1 = $03D6 ; JSR $03D6 (MAIN MEM INTERP)
+    word defentry
+    defentry = *deflast
+    *deflast = defentry + 5
+    if bank
+        (defentry):1 = $03DC ; JSR $03DC (AUX MEM INTERP)
     else
-        (*deflast):1 = $03DC ; JSR $03DC (AUX MEM INTERP)
+        (defentry):1 = $03D6 ; JSR $03D6 (MAIN MEM INTERP)
     fin
-    (*deflast):3 = addr
-    *deflast = *deflast + 5
-    (*deflast).0 = 0
-    return *deflast - 5
+    (defentry).0 = $20
+    (defentry):3 = addr
+    (defentry).5 = 0 ; NULL out next entry
+    return defentry
+end
+def lookupdef(addr, deftbl)
+    while (deftbl).0 == $20
+        if (deftbl):3 == addr
+            return deftbl
+        fin
+        deftbl = deftbl + 5
+    loop
+    return 0
 end
 def loadmod(mod)
     word refnum, rdlen, modsize, bytecode, defofst, defcnt, init, fixup
@@ -1021,7 +992,6 @@ def loadmod(mod)
     word moddep, rld, esd, sym
     byte defbank, str[16], filename[64]
     byte header[128]
-
     ;
     ; Read the RELocatable module header (first 128 bytes)
     ;
@@ -1095,7 +1065,7 @@ def loadmod(mod)
         modend   = modaddr + modsize
         rld      = modend  ; Re-Locatable Directory
         esd      = rld     ; Extern+Entry Symbol Directory
-        while !^esd        ; Scan to end of ESD
+        while ^esd        ; Scan to end of ESD
             esd = esd + 4
 	loop
         esd = esd + 1
@@ -1121,7 +1091,7 @@ def loadmod(mod)
                 adddef(defbank, (rld):1 - defofst + defaddr, @deflast)
             else
                 addr = (rld):1 + modfix
-                if addr >= modaddr ; Skip fixups to header
+                if uword_isge(addr, modaddr) ; Skip fixups to header
                     if ^rld & $80 ; WORD sized fixup.
                         fixup = *addr
                     else	      ; BYTE sized fixup.

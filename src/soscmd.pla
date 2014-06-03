@@ -501,46 +501,6 @@ asm lookuptbl
 	STA	DSTH
 	BNE	-
 end
-def lookupdef(addr, deftbl)
-    while (deftbl).0 == $20
-        if (deftbl):3 == addr
-            return deftbl
-        fin
-        deftbl = deftbl + 6
-    loop
-    return 0
-;asm lookupdef
-;	LDA	ESTKL,X
-;	STA	DSTL
-;	LDA	ESTKH,X
-;	STA	DSTH
-;	INX
-;-	LDY	#$00
-;	LDA	#$20
-;	AND	(DST),Y
-;	BEQ	++
-;	LDY	#$03
-;	LDA	(DST),Y
-;	CMP	ESTKL,X
-;	BNE	+++
-;	INY
-;	LDA	(DST),Y
-;	CMP	ESTKH,X
-;	BNE	++
-;+	LDA	DSTL
-;	LDY	DSTH
-;++	STA	ESTKL,X
-;	STY	ESTKH,X
-;	RTS
-;+++	LDA	#$05
-;	CLC
-;	ADC	DSTL
-;	STA	DSTL
-;	LDA	#$00
-;	ADC	DSTH
-;	STA	DSTH
-;	BNE	-
-end
 ;
 ; SOS routines
 ; FILE I/O
@@ -593,6 +553,16 @@ def close(refnum)
     params.0 = 1
     params.1 = refnum
     perr     = syscall($CC, @params)
+    return perr
+end
+def newline(refnum, set, char)
+    byte params[4]
+
+    params.0 = 1
+    params.1 = refnum
+    params.2 = set
+    params.3 = char
+    perr     = syscall($C9, @params)
     return perr
 end
 def read(refnum, buff, len)
@@ -808,18 +778,6 @@ def allocheap(size)
     word addr
     addr = heap
     heap = heap + size
-    if systemflags & reshgr1
-        if uword_isle(addr, $4000) and uword_isgt(heap, $2000)
-	    addr = $4000
-	    heap = addr + size
-	fin
-    fin
-    if systemflags & reshgr2
-        if uword_isle(addr, $6000) and uword_isgt(heap, $4000)
-	    addr = $6000
-	    heap = addr + size
-	fin
-    fin
     if uword_isge(heap, @addr)
         return 0
     fin
@@ -868,7 +826,7 @@ end
 ;        cout('$')
 ;        prword(*tbl)
 ;        crout
-;        tbl = tbl + 2
+;	tbl = tbl + 2
 ;    loop
 ;end
 def addtbl(dci, val, last)
@@ -914,16 +872,40 @@ def lookupextern(esd, index)
         fin
         esd = esd + 3
     loop
+    prbyte(index)
+    cout('?')
+    crout
     return 0
 end
 def adddef(ext, addr, deflast)
-    (*deflast).0 = $20
-    (*deflast):1 = interp
-    (*deflast):3 = addr
-    (*deflast).5 = ext
-    *deflast = *deflast + 6
-    (*deflast).0 = 0
-    return *deflast - 6
+    word defentry
+    defentry = *deflast
+    *deflast = defentry + 6
+    (defentry).0 = $20
+    (defentry):1 = interp
+    (defentry):3 = addr
+    (defentry):5 = ext ; ext is byte, so this nulls out next entry
+    ;prword(defentry)
+    ;cout('@')
+    ;prword(addr)
+    ;crout
+    return defentry
+end
+def lookupdef(addr, deftbl)
+    while (deftbl).0 == $20
+        if (deftbl):3 == addr
+	    ;prword(addr)
+	    ;cout('>')
+	    ;prword(deftbl)
+	    ;crout
+            return deftbl
+        fin
+        deftbl = deftbl + 6
+    loop
+    prword(addr)
+    cout('?')
+    crout
+    return 0
 end
 def loadmod(mod)
     word refnum, rdlen, modsize, bytecode, defofst, defcnt, init, fixup
@@ -932,13 +914,13 @@ def loadmod(mod)
     word moddep, rld, esd, sym
     byte defext, str[16], filename[64]
     byte header[128]
-
     ;
     ; Read the RELocatable module header (first 128 bytes)
     ;
     dcitos(mod, @filename)
     refnum = open(@filename, O_READ)
     if refnum > 0
+        newline(refnum, 0, $0D)
         rdlen   = read(refnum, @header, 128)
 	modsize = header:0
 	moddep  = @header.1
@@ -958,11 +940,12 @@ def loadmod(mod)
 	    ;
             while ^moddep
                 if !lookupmod(moddep)
-		    close(refnum)
-	            refnum = 0
+		    ;close(refnum)
+	            ;refnum = 0
                     if loadmod(moddep) < 0
 	      	        return perr
 		    fin
+		    cout('!')
                 fin
                 moddep = moddep + dcitos(moddep, @str)
             loop
@@ -976,8 +959,8 @@ def loadmod(mod)
 	        ;
 		; Reset read pointer.
 		;
-	        refnum = open(@filename, O_READ)
-		rdlen  = read(refnum, @header, 128)
+	        ;refnum = open(@filename, O_READ)
+		;rdlen  = read(refnum, @header, 128)
 	    fin
         fin
 	;
@@ -1006,7 +989,7 @@ def loadmod(mod)
         modend   = modaddr + modsize
         rld      = modend  ; Re-Locatable Directory
         esd      = rld     ; Extern+Entry Symbol Directory
-        while !^esd        ; Scan to end of ESD
+        while ^esd         ; Scan to end of ESD
             esd = esd + 4
 	loop
         esd = esd + 1
@@ -1032,16 +1015,50 @@ def loadmod(mod)
                 adddef(defext, (rld):1 - defofst + defaddr, @deflast)
             else
                 addr = (rld):1 + modfix
-                if addr >= modaddr ; Skip fixups to header
+                if uword_isge(addr, modaddr) ; Skip fixups to header
+		    ;if uword_isge(addr, modend)
+		    ;    cout('<')
+		    ;    prword((rld):1)
+		    ;    cout('>')
+		    ;	prword(rld)
+		    ;	crout
+		    ;fin
                     if ^rld & $80 ; WORD sized fixup.
                         fixup = *addr
-                    else	      ; BYTE sized fixup.
+                    else	  ; BYTE sized fixup.
                         fixup = ^addr
                     fin
+		    if uword_isge(fixup, modend)
+		        cout('<')
+		        cout('<')
+		        prword(*addr);fixup)
+			cout('@')
+			prword(addr)
+		        cout('>')
+		        cout('>')
+			prword(^rld)
+			crout
+		    fin
                     if ^rld & $10 ; EXTERN reference.
                         fixup = fixup + lookupextern(esd, (rld).3)
                     else	  ; INTERN fixup.
                         fixup = fixup + modfix - MODADDR
+			if uword_isge(fixup, modend)
+	prword(@(modaddr).$62)
+	cout('=')
+	prword((modaddr).$62)
+	crout
+		            cout('<')
+			    cout('<')
+			    cout('<')
+			    prword(fixup)
+			    cout('>')
+			    cout('>')
+			    cout('>')
+			    prword(rld)
+			    cin
+			    crout
+			fin
                         if uword_isge(fixup, bytecode)
                             ;
                             ; Bytecode address - replace with call def directory.
@@ -1051,7 +1068,7 @@ def loadmod(mod)
                     fin
                     if ^rld & $80 ; WORD sized fixup.
                         *addr = fixup
-                    else	      ; BYTE sized fixup.
+                    else	  ; BYTE sized fixup.
                         ^addr = fixup
                     fin
                 fin
@@ -1097,6 +1114,8 @@ def loadmod(mod)
     ; Call init routine if it exists.
     ;
     if init
+        cout('>')
+        cin
         return adddef(defext, init - defofst + defaddr, @deflast)()
     fin
     return 0
@@ -1241,14 +1260,6 @@ def execmod(modfile)
 end
 
 ;
-; Save Symbol Table start.
-;
-symtbl = *$A000
-;
-; Request bank $01.
-;
-seg_request($0120, $019F, $10)
-;
 ; Init console
 ;
 init_cons
@@ -1262,6 +1273,7 @@ crout
 ;
 ; Init symbol table.
 ;
+symtbl   = allocheap($400)
 lastsym  = symtbl
 ^lastsym = 0
 stodci(@stdlibstr, heap)
