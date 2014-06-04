@@ -1,17 +1,12 @@
-const MODADDR     = $1000
-;
-; ROMCALL return register structure.
-;
-const acc         = 0
-const xreg        = 1
-const yreg        = 2
-const preg        = 3
-;
-; SOS flags
-;
-const O_READ      = 1
-const O_WRITE     = 2
-const O_READ_WRITE = 3
+const MODADDR      = $1000
+const inbuff       = $200
+const CFFADest     = $00
+const CFFAFileName = $02
+const CFFAOldName  = $04
+const CFFAFileType = $06
+const CFFAAuxType  = $07
+const CFFAFileSize = $09
+const CFFAEntryPtr = $0B
 ;
 ; Pedefined functions.
 ;
@@ -69,13 +64,12 @@ word stdlibsym    = @exports
 ;
 ; String pool.
 ;
-byte console[]    = ".CONSOLE"
-byte version[]    = "PLASMA 0.9\n"
+byte version[]    = "\nPLASMA 0.9\n"
 byte freestr[]    = "MEM FREE:$"
 byte errorstr[]   = "ERR:$"
+byte prompt[]     = "PLASMA"
 byte okstr[]      = "OK"
 byte huhstr[]     = "?\n"
-byte prefix[128]  = ""
 byte hexchar[]    = '0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F'
 ;
 ; System variable.
@@ -87,10 +81,24 @@ word perr
 word cmdptr
 ;
 ; CALL SOS
-; SYSCALL(CMD, PARAMS)
+; SYSCALL(CMD)
 ;
 asm syscall
+	LDA	ESTKL,X
+	STX	ESP
+	TAX
+	JSR	$900C
+	LDX	ESP
+	STA	ESTKL,X
+	LDY    	#$00
+	STY	ESTKH,X	
 	RTS
+end
+;
+; QUIT TO MONITOR
+;
+asm quit
+	JMP	$9000
 end
 ;
 ; SET MEMORY TO VALUE
@@ -199,16 +207,6 @@ FORCPYLP
 	BNE	FORCPYLP
 CPYMEX	INX
 	INX
-	RTS
-end
-;
-; COPY FROM MAIN MEM TO EXT MEM.
-;
-; MEMXCPY(DIR, EXT, DST, SRC, SIZE)
-;   DIR = 0 : COPY FROM MAIN TO EXT
-;   DIR = 1 : COPY FROM EXT  TO MAIN
-;
-asm memxcpy
 	RTS
 end
 ;
@@ -477,38 +475,91 @@ end
 ;
 ; CONSOLE I/O
 ;
-def cout(ch)
-    if ch == $0D
-        ch = $0A0D
-    else
-    fin
+asm cout
+	LDA	ESTKL,X
+	JSR	TOUPR
+	ORA	#$80
+	JMP	$FFEF
 end
-def cin
-    byte ch
-    return ch
+asm cin
+	DEX
+-	LDA	$D011
+	BPL	-
+	LDA	$D010
+	AND	#$7F
+	STA	ESTKL,X
+	LDA	#$00
+	STA	ESTKH,X
+	RTS
+end
+def crout
+    return cout($0D)
 end
 def prstr(str)
-    if (str).[^str] == $0D
-        cout($0A)
-    fin
+    byte i
+    i = 1
+    while i <= ^str
+        cout((str)[i])
+	i = i + 1
+    loop
 end
 def rdstr(prompt)
+    byte ch, maxlen, i
+    maxlen = 0
+    inbuff.0 = 0
     cout(prompt)
-    if (heap).[^heap] == $0D
-        ^heap = ^heap - 1
-    fin
+    repeat
+        ch = cin
+	when ch
+	    is $08 ; right arrow
+	        if inbuff.0 < maxlen
+		    inbuff.0 = inbuff.0 + 1
+		    ch = inbuff[inbuff.0]
+		    cout(ch)
+		fin
+	    is $15 ; left arrow
+	        if inbuff.0
+		    cout('\\')
+		    cout(inbuff[inbuff.0])
+		    inbuff.0 = inbuff.0 - 1
+		fin
+	    is $04 ; ctrl-d
+	        if inbuff.0
+		    cout('#')
+		    cout(inbuff[inbuff.0])
+		    for i = inbuff.0 + 1 to maxlen
+		        inbuff[i - 1] = inbuff[i]
+		    next
+		    maxlen   = maxlen   - 1
+		    inbuff.0 = inbuff.0 - 1
+		fin
+	    is $0C ; ctrl-l
+	        crout
+		prstr(inbuff)
+	    is $0D ; return
+	    is $18 ; ctrl-x
+	        crout
+		inbuff.0 = 0
+	    is $9B ; escape
+	        inbuff.0 = 0
+		ch = $0D
+	    otherwise
+	        cout(ch)
+		inbuff.0 = inbuff.0 + 1
+		inbuff[inbuff.0] = ch
+		if inbuff.0 > maxlen
+		    maxlen = inbuff.0
+		fin
+	wend
+    until ch == $0D or inbuff.0 == $7F
     cout($0D)
-    return heap
+    return inbuff
 end
 def home
-    return cout(28)
 end
 def gotoxy(x, y)
 end
 def viewport(left, top, width, height)
-end
-def crout
-    return cout($0D)
 end
 def prbyte(v)
     cout(hexchar[(v >> 4) & $0F])
@@ -522,85 +573,23 @@ end
 ; CFFA1 routines
 ; FILE I/O
 ;
-def getpfx(path)
-    byte params[4]
-
-    ^path    = 0
-    params.0 = 2
-    params:1 = path
-    params.3 = 128
-    perr     = syscall($C7, @params)
-    return path
-end
-def setpfx(path)
-    byte params[3]
-
-    params.0 = 1
-    params:1 = path
-    perr     = syscall($C6, @params)
-    return path
-end
-def volume(devname, volname, ttlblks, freblks)
-    byte params[9]
-
-    params.0 = 4
-    params:1 = devname
-    params:3 = volname
-    params:5 = 0
-    params:7 = 0
-    perr     = syscall($C5, @params)
-    *ttlblks = params:5
-    *freblks = params:7
+def opendir
+    perr = syscall($10)
     return perr
 end
-def open(path, access)
-    byte params[7]
-
-    params.0 = 4
-    params:1 = path
-    params.3 = 0
-    params:4 = @access
-    params.6 = 1
-    perr     = syscall($C8, @params)
-    return params.3
+def readdir
+    perr = syscall($12)
+    return *CFFAEntryPtr
 end
-def close(refnum)
-    byte params[2]
-
-    params.0 = 1
-    params.1 = refnum
-    perr     = syscall($CC, @params)
-    return perr
+def finddirentry(filename)
+    *CFFAFileName = filename
+    perr = syscall($14)
+    return *CFFAEntryPtr    
 end
-def newline(refnum, set, char)
-    byte params[4]
-
-    params.0 = 1
-    params.1 = refnum
-    params.2 = set
-    params.3 = char
-    perr     = syscall($C9, @params)
-    return perr
-end
-def read(refnum, buff, len)
-    byte params[8]
-
-    params.0 = 4
-    params.1 = refnum
-    params:2 = buff
-    params:4 = len
-    params:6 = 0
-    perr     = syscall($CA, @params)
-    return params:6
-end
-def write(refnum, buff, len)
-    byte params[6]
-
-    params.0 = 3
-    params.1 = refnum
-    params:2 = buff
-    params:4 = len
-    perr     = syscall($CB, @params)
+def readfile(filename, buffer)
+    *CFFADest     = buffer
+    *CFFAFileName = filename
+    perr = syscall($22)
     return perr
 end
 ;
@@ -642,29 +631,6 @@ end
 ;
 ; DCI table routines,
 ;
-;def dumptbl(tbl)
-;    byte len
-;
-;    while ^tbl
-;        len = 0
-;        while ^tbl & $80
-;            cout(^tbl)
-;            tbl = tbl + 1
-;            len = len + 1
-;        loop
-;        cout(^tbl)
-;        tbl = tbl + 1
-;        cout(':')
-;        while len < 15
-;            cout(' ')
-;            len = len + 1
-;        loop
-;        cout('$')
-;        prword(*tbl)
-;        crout
-;	tbl = tbl + 2
-;    loop
-;end
 def addtbl(dci, val, last)
     while ^dci & $80
         ^*last = ^dci
@@ -720,16 +686,12 @@ def adddef(addr, deflast)
     (defentry).0 = $20
     (defentry):1 = interp
     (defentry):3 = addr
-    (defentry).4 = 0 ; null out next entry
+    (defentry).5 = 0 ; null out next entry
     return defentry
 end
 def lookupdef(addr, deftbl)
     while (deftbl).0 == $20
         if (deftbl):3 == addr
-	    ;prword(addr)
-	    ;cout('>')
-	    ;prword(deftbl)
-	    ;crout
             return deftbl
         fin
         deftbl = deftbl + 5
@@ -741,37 +703,31 @@ def loadmod(mod)
     word addr, modaddr, modfix, modend
     word deftbl, deflast
     word moddep, rld, esd, sym
-    byte str[16], filename[32]
-    byte header[128]
+    byte str[17], filename[17]
     ;
     ; Read the RELocatable module header (first 128 bytes)
     ;
-    dcitos(mod, @filename)
-    refnum = open(@filename, O_READ)
-    if refnum > 0
-        rdlen   = read(refnum, @header, 128)
-	modsize = header:0
-	moddep  = @header.1
+    dcitos(mod, @filename)    
+    rdlen = (finddirentry(@filename)):$15
+    if rdlen > 0
+        readfile(@filename, heap)
+	modsize = (heap):0
+	moddep  = heap+1
 	defofst = modsize
         init    = 0
-        if rdlen > 4 and header:2 == $DA7E ; DAVE = magic number :-)
+        if rdlen > 4 and (heap):2 == $DA7E ; DAVE = magic number :-)
             ;
             ; This is an EXTended RELocatable (data+bytecode) module.
             ;
-	    systemflags = header:4 | systemflags
-            defofst  = header:6
-            defcnt   = header:8
-            init     = header:10
-            moddep   = @header.12
+            defofst  = (heap):6
+            defcnt   = (heap):8
+            init     = (heap):10
+            moddep   = heap + 12
 	    ;
 	    ; Load module dependencies.
 	    ;
             while ^moddep
                 if !lookupmod(moddep)
-		    if refnum
-		        close(refnum)
-			refnum = 0
-		    fin
                     if loadmod(moddep) < 0
 	      	        return perr
 		    fin
@@ -784,32 +740,24 @@ def loadmod(mod)
 	    deftbl   = allocheap(defcnt * 5 + 1)
 	    deflast  = deftbl
 	    ^deflast = 0
-	    if !refnum
-	        ;
-		; Reset read pointer.
-		;
-	        refnum = open(@filename)
-		rdlen  = read(refnum, @header, 128)
-	    fin
+	    ;
+	    ; Re-read file
+	    ;
+	    readfile(@filename, heap)
+            moddep = heap + 12
+            while ^moddep
+                moddep = moddep + dcitos(moddep, @str)
+            loop
         fin
 	;
 	; Alloc heap space for relocated module (data + bytecode).
 	;
 	moddep  = moddep  + 1
-	modfix  = moddep  - @header.2 ; Adjust to skip header
+	modfix  = moddep  - (heap + 2) ; Adjust to skip header
 	modsize = modsize - modfix
 	rdlen   = rdlen   - modfix - 2
 	modaddr = allocheap(modsize)
 	memcpy(modaddr, moddep, rdlen)
-	;
-	; Read in remainder of module into memory for fixups.
-	;
-	addr = modaddr;
-        repeat
-            addr  = addr + rdlen
-            rdlen = read(refnum, addr, 4096)
-        until rdlen <= 0
-        close(refnum)
 	;
 	; Apply all fixups and symbol import/export.
 	;
@@ -834,13 +782,6 @@ def loadmod(mod)
             else
                 addr = (rld):1 + modfix
                 if uword_isge(addr, modaddr) ; Skip fixups to header
-		    ;if uword_isge(addr, modend)
-		    ;    cout('<')
-		    ;    prword((rld):1)
-		    ;    cout('>')
-		    ;	prword(rld)
-		    ;	crout
-		    ;fin
                     if ^rld & $80 ; WORD sized fixup.
                         fixup = *addr
                     else	  ; BYTE sized fixup.
@@ -887,10 +828,6 @@ def loadmod(mod)
             fin
             esd = esd + 3
         loop
-	;
-	; Free up end-of-module main memory.
-	;
-	releaseheap(modend)
     else
         perr = perr | 0x100
         return -perr
@@ -906,68 +843,37 @@ end
 ;
 ; Command mode
 ;
-def volumes
-end
-def catalog(optpath)
-    byte path[64]
-    byte refnum
-    byte firstblk
-    byte entrylen, entriesblk
-    byte i, type, len
+def catalog
+    byte type, len
     word entry, filecnt
 
-    if ^optpath
-        memcpy(@path, optpath, ^optpath + 1)
-    else
-        getpfx(@path)
-        prstr(@path)
-        crout()
-    fin
-    refnum = open(@path, O_READ)
-    if perr
-        return perr
-    fin
-    firstblk = 1
+    opendir
     repeat
-        if read(refnum, heap, 512) == 512
-            entry = heap + 4
-            if firstblk
-                entrylen   = (heap).$23
-                entriesblk = (heap).$24
-                filecnt    = (heap):$25
-                entry      = entry + entrylen
+        entry = readdir
+	if !perr
+	    type = ^entry
+	    if type
+	        len = type & $0F
+		^entry = len
+		prstr(entry)
+	    if type & $F0 == $D0 ; Is it a directory?
+	        cout('/')
+	        len = len + 1
+	    elsif (entry).$10 == $FF
+	        cout('-')
+		len = len + 1
+	    elsif (entry).$10 == $FE
+	        cout('+')
+		len = len + 1
+	    fin
+	        for len = 19 - len downto 0
+		    cout(' ')
+                next
             fin
-            for i = firstblk to entriesblk
-                type = ^entry
-                if type <> 0
-                    len = type & $0F
-                    ^entry = len
-                    prstr(entry)
-                    if type & $F0 == $D0 ; Is it a directory?
-                        cout('/')
-                        len = len + 1
-		    elsif (entry).$10 == $FF
-		        cout('-')
-			len = len + 1
-		    elsif (entry).$10 == $FE
-		        cout('+')
-			len = len + 1
-                    fin
-                    for len = 19 - len downto 0
-                        cout(' ')
-                    next
-                    filecnt = filecnt - 1
-                fin
-                entry = entry + entrylen
-            next
-            firstblk = 0
-        else
-            filecnt = 0
-        fin
-    until filecnt == 0
-    close(refnum)
-    crout()
-    return 0
+	fin
+    until perr
+    perr = 0
+    return crout()
 end
 def stripchars(strptr)
     while ^strptr and ^(strptr + 1) <> ' '
@@ -1052,18 +958,16 @@ loop
 ; Handle commands.
 ;
 while 1
-    prstr(getpfx(@prefix))
+    prstr(@prompt)
     cmdptr = rdstr($BA)
     if ^cmdptr
         when toupper(parsecmd(cmdptr))
             is 'Q'
-	        ; reboot()
+	        quit
+	    is 'M'
+	        syscall($02)
 	    is 'C'
-	        catalog(cmdptr)
-	    is 'P'
-	        setpfx(cmdptr)
-	    is 'V'
-	        volumes()
+	        catalog
 	    is '+'
 	        execmod(cmdptr)
 	    otherwise
