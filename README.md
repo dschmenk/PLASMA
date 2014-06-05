@@ -5,7 +5,7 @@ PLASMA is a combination of virtual machine and assembler/compiler matched closel
 
 ## Multi-Platform Support
 
-PLASMA 123 is named as such because it runs on the Apple I, II, and III. More platforms will be supported in the future. Throught the use of dynamically loaded modules, system differences can be virtualized to provide a consistent set of services for a variety of physical machines.
+PLASMA 123 is named as such because it runs on the Apple I, II, and III. More platforms will be supported in the future. Through the use of dynamically loaded modules, system differences can be virtualized to provide a consistent set of services for a variety of physical machines.
 
 ## Low Level Implementation
 
