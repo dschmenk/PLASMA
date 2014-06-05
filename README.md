@@ -1,15 +1,19 @@
-#PLASMA
-##Introduction
+# PLASMA 123
+## Introduction
 
-PLASMA is a combination of virtual machine and assembler/compiler matched closely to the 6502 architecture.  It is an attempt to satisfy a few challenges surrounding code size, efficient execution, small runtime and fast just-in-time compilation.  By architecting a unique bytecode that maps nearly one-to-one to the higher level representation, the compiler/assembler can be very simple and execute quickly on the Apple II for a self-hosted environment.  A modular approach provides for incremental development and code reuse.  Different projects have led to the architecture of PLASMA, most notably Apple Pascal, FORTH, and my own Java VM for the 6502, VM02. Each has tried to map a generic VM to the 6502 with varying levels of success.  Apple Pascal, based on the USCD Pascal using the p-code interpreter, was a very powerful system and ran fast enough on the Apple II to be interactive but didn't win any speed contests. FORTH was the poster child for efficiency and obtuse syntax. Commonly referred to as a write only language, it was difficult to come up to speed as a developer, especially when using other's code. My own project in creating a Java VM for the Apple II uncovered the folly of shoehorning a large system into something never intended to run 32 bit applications.
+PLASMA is a combination of virtual machine and assembler/compiler matched closely to the 6502 architecture.  It is an attempt to satisfy a few challenges surrounding code size, efficient execution, small runtime and flexible code location.  By architecting a unique bytecode that maps nearly one-to-one to the higher level representation, the compiler/assembler can be very simple and execute quickly on the Apple II for a self-hosted environment.  A modular approach provides for incremental development and code reuse.  Different projects have led to the architecture of PLASMA, most notably Apple Pascal, FORTH, and my own Java VM for the 6502, VM02. Each has tried to map a generic VM to the 6502 with varying levels of success.  Apple Pascal, based on the USCD Pascal using the p-code interpreter, was a very powerful system and ran fast enough on the Apple II to be interactive but didn't win any speed contests. FORTH was the poster child for efficiency and obtuse syntax. Commonly referred to as a write only language, it was difficult to come up to speed as a developer, especially when using other's code. My own project in creating a Java VM for the Apple II uncovered the folly of shoehorning a large system into something never intended to run 32 bit applications.
 
-##Low Level Implementation
+## Multi-Platform Support
+
+PLASMA 123 is named as such because it runs on the Apple I, II, and III. More platforms will be supported in the future. Throught the use of dynamically loaded modules, system differences can be virtualized to provide a consistent set of services for a variety of physical machines.
+
+## Low Level Implementation
 
 Both the Pascal and Java VMs used a bytecode to hide the underlying CPU architecture and offer platform agnostic application execution. The application and tool chains were easily moved from platform to platform by simply writing a bytecode interpreter and small runtime to translate the higher level constructs to the underlying hardware. The performance of the system was dependent on the actual hardware and efficiency of the interpreter. Just-in-time compilation wasn't really an option on small, 8 bit systems. FORTH, on the other hand, was usually implemented as a threaded interpreter. A threaded interpreter will use the address of functions to call as the code stream instead of a bytecode, eliminating one level of indirection with a slight increase in code size.  The threaded approach can be made faster at the expense of another slight increase in size by inserting an actual Jump SubRoutine opcode before each address, thus removing the interpreter's inner loop altogether. 
 
 All three systems were implemented using stack architecture.  Pascal and Java were meant to be compiled high level languages, using a stack machine as a simple compilation target.  FORTH was meant to be written directly as a stack oriented language, similar to RPN on HP calculators. The 6502 is a challenging target due to it's unusual architecture so writing a bytecode interpreter for Pascal and Java results in some inefficiencies and limitations.  FORTH's inner interpreter loop on the 6502 tends to be less efficient than most other CPUs.  Another difference is how each system creates and manipulates it's stack. Pascal and Java use the 6502 hardware stack for all stack operations. Unfortunately the 6502 stack is hard-limited to 256 bytes. However, in normal usage this isn't too much of a problem as the compilers don't put undue pressure on the stack size by keeping most values in global or local variables.  FORTH creates a small stack using a portion of the 6502's zero page, a 256 byte area of low memory that can be accessed with only a byte address and indexed using either of the X or Y registers. With zero page, the X register can be used as an indexed, indirect address and the Y register can be used as an indirect, indexed address.
 
-##A New Approach
+## A New Approach
 
 PLASMA takes an approach that uses the best of all the above implementations to create a unique, powerful and efficient platform for developing new applications on the Apple II. One goal was to create a very small VM runtime, bytecode interpreter, and module loader. The decision was made early on to implement a stack based architecture duplicating the approach taken by FORTH. Space in the zero page would be assigned to a 16 bit, 16 element evaluation stack, indexed by the X register.
 
@@ -17,7 +21,7 @@ A simple compiler was written so that higher level constructs could be used and 
 
 One of the goals of PLASMA was to allow for intermixing of functions implemented as bytecode, or native code. Taking a page from the FORTH play book, a function call is implemented as a native subroutine call to an address. If the function is in bytecode, the first thing it does is call back into the interpreter to execute the following bytecode (or a pointer to the bytecode). Function call parameters are pushed onto the evaluation stack in order they are written. The first operation inside of the function call is to pull the parameters off the evaluation stack and put them in local frame storage. Function callers and callees must agree on the number of parameters to avoid stack underflow/overflow. All functions return a value on the evaluation stack regardless of it being used or not.
 
-The bytecode interpreter is capable of executing code in main memory or banked memory, increasing the available code space and relieving pressure on the limited 48K of data memory. In the Apple IIe with 64K expansion card, the IIc, and the IIgs, there is an auxilliary memory that swaps in and out for the main memory in chunks.  The interpreter resides in the Language Card memory area that can easily swap in and out the $0200 to $BFFF memory bank.  The module loader will move the bytecode into the auxilliary memory and fix up the entrypoints to reflect the bytecode location.
+The bytecode interpreter is capable of executing code in main memory or banked/extended memory, increasing the available code space and relieving pressure on the limited 64K of addressible data memory. In the Apple IIe with 64K expansion card, the IIc, and the IIgs, there is an auxilliary memory that swaps in and out for the main memory in chunks.  The interpreter resides in the Language Card memory area that can easily swap in and out the $0200 to $BFFF memory bank.  The module loader will move the bytecode into the auxilliary memory and fix up the entrypoints to reflect the bytecode location. The Apple /// has a sophisticated extended addressing architecture where bytecode is located and interpreted.
 
 Lastly, PLASMA is not a typed language. Just like assembly, any value can represent a character, integer, or address. It's the programmer's job to know the type. Only bytes and words are known to PLASMA. Bytes are unsigned 8 bit quantities, words are signed 16 bit quantities. All stack operations involve 16 bits of precision.
 
@@ -90,7 +94,7 @@ The PLASMA low level operations are defined as:
 | DAW    | duplicate top of stack into word at absolute address
 
 
-##PLASMA Compiler/Assembler
+## PLASMA Compiler/Assembler
 
 Although the low-level operations could easily by coded by hand, they were chosen to be an easy target for a simple compiler. Think along the lines of an advanced assembler or stripped down C compiler ( C--).  Taking concepts from BASIC, Pascal, C and assembler, the PLASMA compiler is simple yet expressive. The syntax is line oriented; there is no statement delimiter except newline.
 
@@ -106,7 +110,7 @@ Hexadecimal constants are preceded with a ‘$’ to identify them as such.
     $C030 ; Speaker address
 ```
 
-###Constants, Variables and Functions
+### Constants, Variables and Functions
 
 The source code of a PLASMA module first defines imports, constants, variables and data.  Constants must be initialized with a value.  Variables can have sizes associated with them to declare storage space.  Data can be declared with or without a variable name associated with it.  Arrays, tables, strings and any predeclared data can be created and accessed in multiple ways.
 
@@ -329,7 +333,7 @@ Lastly, the repeat/until statement will continue looping as long as the until ex
     until txtbuf == 0 or numlines == maxlines
 ```
 
-###Runtime
+### Runtime
 
 PLASMA includes a very minimal runtime that nevertheless provides a great deal of functionality to the system.  Two system calls are provided to access native 6502 routines (usually in ROM) and ProDOS.
 
@@ -373,19 +377,22 @@ memset(addr, len, val) will fill memory with a 16 bit value.  memcpy(dstaddr, sr
     memcpy(scrnptr, strptr + ofst + 1, numchars)
 ```
 
-##Implementation Details
-###The Original PLASMA
-The original design concept was to create an efficient, flexible, and expressive environment for building applications directly on the Apple II.  Choosing a stack based architecture was easy after much experience with other stack based implementations. It also makes the compiler simple to implement.  The first take on the stack architecture was to make it a very strict stack architecture in that everything had to be on the stack.  The only opcode with operands was the CONSTANT opcode. This allowed for a very small bytecode interpreter and a very easy compile target.  However, only when adding an opcode with operands that would greatly improved performance, native code generation or code size was it done. The opcode table grew slowly over time but still retains a small runtime interpreter with good native code density.
+## Implementation Details
+This version of PLASMA has dispensed with the native/threaded/bytecode code generation from the original version to focus on code density and the ability to interpret bytecode from extended memory, should it be available. By focussing on the bytecode interpreter, certain optimizations were implemented that weren't posssible when allowing for threaded/native code; the interpreted bytecode is now about the same performance as the directly threaded code.
 
-The VM was constructed such that code generation could ouput native 6502 code, threaded code into the opcode functions, or interpreted bytecodes.  This gave a level of control over speed vs memory.
+Dynamically loadable modules, a backward compatible extension to the .REL format introduced by EDASM, is the new, main feature for this version of PLASMA. This allows different platforms the ability to virtualize their differences in a way such that the modules can run unmodified.
 
-###The Lawless Legends PLASMA
-This version of PLASMA has dispensed with the native/threaded/bytecode code generation from the original version to focus on code density and the ability to interpret bytecode from AUX memory, should it be available. By focussing on the bytecode interpreter, certain optimizations were implemented that weren't posssible when allowing for threaded/native code; the interpreted bytecode is now about the same performance as the directly threaded code.
+### Apple 1 PLASMA
+Obviously the Apple 1 is a little more constrained than most machines PLASMA is targetting. But, with the required addition of the CFFA1 (http://dreher.net/?s=projects/CFforApple1&c=projects/CFforApple1/main.php), the Apple 1 gets 32K of RAM and a mass storage device. Enough to run PLASMA and load/execute modules.
 
-Dynamically loadable modules, a backward compatible extension to the .REL format introduced by EDASM, is the new, main feature for this version of PLASMA. A game like Lawless Legends will push the capabilities of the Apple II well beyond anything before it. A powerful OS + language + VM environment is required to achieve the goals set out.
+### Apple ][ PLASMA
+The Apple II support covers the full range of the Apple II family. From the Rev 0 Apple II to the ROM3 Apple IIgs. The only requirement is 64K of RAM. If 128K is present, it will be automatically used to load and interpret bytecode, freeing up the main 40K for data and native 6502 code. The IIgs is currently operated in the compatibilty 8 bit mode.
+
+### Apple /// PLASMA
+Probably the most exciting development is the support for the Apple ///. PLASMA on the Apple /// provides 32K for global data and 6502 code, and the rest of the memory for bytecode and extended data.
 
 ## References
-PLASMA User Manual: https://github.com/badvision/lawless-legends/blob/master/Docs/Tutorials/PLASMA/User%20Manual.md
+PLASMA User Manual: https://github.com/dschmenk/PLASMA/blob/master/User%20Manual.md
 
 B Programming Language User Manual  http://cm.bell-labs.com/cm/cs/who/dmr/kbman.html
 
