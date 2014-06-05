@@ -28,13 +28,18 @@ const O_READ_WRITE = 3
 predef home, gotoxy, viewport, crout, cout, prstr, cin, rdstr
 predef syscall, romcall
 predef markheap, allocheap, allocalignheap, releaseheap, availheap
-predef memset, memcpy, xmemcpy, memxcpy
+predef memset, memcpy
 predef uword_isgt, uword_isge, uword_islt, uword_isle
 predef execmod
+;
+; Exported Machine ID.
+;
+byte machid       = $F2 ; Apple ///, 80 columns
 ;
 ; Standard Library exported functions.
 ;
 byte stdlibstr[]  = "STDLIB"
+byte machidstr[]  = "MACHID"
 byte clsstr[]     = "CLS"
 byte gotoxystr[]  = "GOTOXY"
 byte viewstr[]    = "VIEWPORT"
@@ -50,7 +55,6 @@ byte hprelstr[]   = "HEAPRELEASE"
 byte hpavailstr[] = "HEAPAVAIL"
 byte memsetstr[]  = "MEMSET"
 byte memcpystr[]  = "MEMCPY"
-byte memxcpystr[] = "MEMXCPY"
 byte uisgtstr[]   = "ISUGT"
 byte uisgestr[]   = "ISUGE"
 byte uisltstr[]   = "ISULT"
@@ -70,12 +74,12 @@ word		  = @hpalignstr,@allocalignheap
 word		  = @hprelstr,  @releaseheap
 word		  = @memsetstr, @memset
 word		  = @memcpystr, @memcpy
-word		  = @memxcpystr, @memxcpy
 word              = @uisgtstr,  @uword_isgt
 word              = @uisgestr,  @uword_isge
 word              = @uisltstr,  @uword_islt
 word              = @uislestr,  @uword_isle
 word              = @execstr,   @execmod
+word              = @machidstr, @machid
 word              = 0
 word stdlibsym    = @exports     
 ;
@@ -94,6 +98,8 @@ byte hexchar[]    = '0','1','2','3','4','5','6','7','8','9','A','B','C','D','E',
 ; System variable.
 ;
 word systemflags = 0
+byte modid       = 0
+byte modseg[15] 
 word heap        = $2000
 word symtbl, lastsym
 word refcons, devcons
@@ -214,11 +220,9 @@ FORCPY	INC 	ESTKH,X
 FORCPYLP
 	LDA	(SRC),Y
 	STA	(DST),Y
-	INC	DSTL
+	INY
 	BNE	+
 	INC	DSTH
-+	INC	SRCL
-	BNE	+
 	INC	SRCH
 +	DEC 	ESTKL,X
 	BNE	FORCPYLP
@@ -231,11 +235,41 @@ end
 ;
 ; COPY FROM MAIN MEM TO EXT MEM.
 ;
-; MEMXCPY(DIR, EXT, DST, SRC, SIZE)
-;   DIR = 0 : COPY FROM MAIN TO EXT
-;   DIR = 1 : COPY FROM EXT  TO MAIN
+; MEMXCPY(DSTSEG, SRC, SIZE)
 ;
 asm memxcpy
+	LDA	ESTKL,X
+	ORA	ESTKH,X
+	BEQ	CPYXMEX
+	LDA	ESTKL+2,X
+	ORA	#$80
+	STA 	DSTX
+	LDA	ESTKH+2,X
+	BNE	+
+	DEC	DSTX
+	LDA	#$80
++	STA 	DSTH
+	LDY	#$00
+	STY	DSTL
+	LDA	ESTKL+1,X
+	STA 	SRCL
+	LDA	ESTKH+1,X
+	STA 	SRCH
+	INC 	ESTKH,X
+CPYXLP	LDA	(SRC),Y
+	STA	(DST),Y
+	INY
+	BNE	+
+	INC	DSTH
+	INC	SRCH
++	DEC 	ESTKL,X
+	BNE	CPYXLP
+	DEC	ESTKH,X
+	BNE	CPYXLP
+	LDA	#$00
+	STA	DSTX
+CPYXMEX	INX
+	INX
 	RTS
 end
 ;
@@ -649,12 +683,11 @@ def seg_find(search, base, limit, pages, id)
     params.0 = 6
     params.1 = search
     params.2 = id
-    params:3 = 0
+    params:3 = pages
     params:5 = 0
     params:7 = 0
     params.9 = 0
     perr     = syscall($41, @params)
-    *pages   = params:3
     *base    = params:5
     *limit   = params:7
     return params.9
@@ -887,6 +920,8 @@ def adddef(ext, addr, deflast)
     (defentry):5 = ext ; ext is byte, so this nulls out next entry
     ;prword(defentry)
     ;cout('@')
+    ;prbyte(ext)
+    ;cout(':')
     ;prword(addr)
     ;crout
     return defentry
@@ -910,9 +945,9 @@ end
 def loadmod(mod)
     word refnum, rdlen, modsize, bytecode, defofst, defcnt, init, fixup
     word addr, defaddr, modaddr, modfix, modend
-    word deftbl, deflast
+    word deftbl, deflast, codeseg
     word moddep, rld, esd, sym
-    byte defext, str[16], filename[64]
+    byte defext, str[16], filename[33]
     byte header[128]
     ;
     ; Read the RELocatable module header (first 128 bytes)
@@ -940,6 +975,8 @@ def loadmod(mod)
 	    ;
             while ^moddep
                 if !lookupmod(moddep)
+		    close(refnum)
+	            refnum = 0
                     if loadmod(moddep) < 0
 	      	        return perr
 		    fin
@@ -952,6 +989,13 @@ def loadmod(mod)
 	    deftbl   = allocheap(defcnt * 6 + 1)
 	    deflast  = deftbl
 	    ^deflast = 0
+	    if !refnum
+	        ;
+		; Reset read pointer.
+		;
+		refnum = open(@filename, O_READ)
+		rdlen  = read(refnum, @header, 128)
+	    fin
         fin
 	;
 	; Alloc heap space for relocated module (data + bytecode).
@@ -984,16 +1028,25 @@ def loadmod(mod)
 	loop
         esd = esd + 1
 	;
-	; Locate bytecode defs in appropriate bank.
+	; Locate bytecode defs in allocated segment.
 	;
-	;if ^MACHID & $30 == $30
-	    ;defext  = 1
-	    ;defaddr = allocxheap(rld - bytecode)
-	    ;modend  = bytecode
-	;else
-	    defext  = 0
-	    defaddr = bytecode
-	;fin
+	modseg[modid] = seg_find($00, @codeseg, @defaddr, (rld - bytecode + 255) >> 8, modid + $11)
+	if perr
+	    return -perr
+	fin
+	modid = modid + 1
+	if !codeseg.1 ; Fix up address if at bottom of segment: 8n:00 -> 8(n-1):80
+	    codeseg = codeseg - $8001
+	fin
+	;prbyte((rld - bytecode + 255) >> 8)
+	;cout(':')
+	;prword(codeseg)
+	;cout('-')
+	;cout('>')
+	;prword(defaddr)
+	;crout
+	defext  = codeseg.0 | $80
+	defaddr = codeseg & $FF00
         ;
         ; Run through the Re-Location Dictionary.
         ;
@@ -1088,14 +1141,14 @@ def loadmod(mod)
         loop
 	if defext
 	    ;
-	    ; Move bytecode to AUX bank.
+	    ; Copy bytecode to code segment.
 	    ;
-	    memxcpy(0, defext, defaddr, bytecode, modsize - (bytecode - modaddr))
+	    memxcpy(codeseg, bytecode, modsize - (bytecode - modaddr))
        	fin
 	;
 	; Free up end-of-module main memory.
 	;
-	releaseheap(modend)
+	releaseheap(bytecode)
     else
         perr = perr | 0x100
         return -perr
@@ -1244,6 +1297,10 @@ def execmod(modfile)
 	systemflags = saveflags
 	lastsym     = savesym
 	heap        = saveheap
+	while modid
+	    modid = modid - 1
+	    seg_release(modseg[modid])
+	loop
     fin
 end
 
