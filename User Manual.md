@@ -25,7 +25,7 @@ Three tools are required to build and run this program: **plasm**, **acme**, and
 
 ```
 ./plasm -AM < hello.pla > hello.a
-acme --setpc 4096 -o HELLO.REL hello.a
+acme --setpc 4094 -o HELLO.REL hello.a
 ./plvm HELLO.REL
 ```
 
