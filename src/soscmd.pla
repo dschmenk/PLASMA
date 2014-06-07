@@ -89,7 +89,7 @@ byte modseg[15]
 word heap        = $2000
 word symtbl, lastsym
 word refcons, devcons
-word perr, terr
+byte perr, terr, lerr
 word cmdptr
 ;
 ; CALL SOS
@@ -890,19 +890,23 @@ def addmod(mod, addr)
     return addtbl(modtosym(mod, @dci), addr, @lastsym)
 end
 def lookupextern(esd, index)
-    word sym
+    word sym, addr
     byte str[16]
     while ^esd
         sym = esd
         esd = esd + dcitos(esd, @str)
         if (esd).0 & $10 and (esd).1 == index
-            return lookupsym(sym)
+            addr = lookupsym(sym)
+	    if !addr
+                lerr = $81
+	        cout('?')
+		prstr(@str)
+		crout
+	    fin
+            return addr
         fin
         esd = esd + 3
     loop
-    prbyte(index)
-    cout('?')
-    crout
     return 0
 end
 def adddef(ext, addr, deflast)
@@ -944,6 +948,7 @@ def loadmod(mod)
     word moddep, rld, esd, sym
     byte defext, str[16], filename[33]
     byte header[128]
+    lerr = 0
     ;
     ; Read the RELocatable module header (first 128 bytes)
     ;
@@ -1147,6 +1152,9 @@ def loadmod(mod)
     else
         perr = perr | 0x100
         return -perr
+    fin
+    if lerr
+        return -lerr
     fin
     ;
     ; Call init routine if it exists.
