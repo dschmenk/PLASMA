@@ -17,7 +17,7 @@ const resxhgr2    = $0020
 ; Pedefined functions.
 ;
 predef home, gotoxy, viewport, crout, cout, prstr, cin, rdstr
-predef syscall
+predef syscall, call
 predef markheap, allocheap, allocalignheap, releaseheap, availheap
 predef memset, memcpy
 predef uword_isgt, uword_isge, uword_islt, uword_isle
@@ -35,6 +35,7 @@ byte putsstr[]    = "PUTS"
 byte getcstr[]    = "GETC"
 byte getsstr[]    = "GETS"
 byte sysstr[]     = "SYSCALL"
+byte callstr[]    = "CALL"
 byte hpmarkstr[]  = "HEAPMARK"
 byte hpalignstr[] = "HEAPALLOCALIGN"
 byte hpallocstr[] = "HEAPALLOC"
@@ -56,6 +57,7 @@ word		  = @putsstr,   @prstr
 word		  = @getcstr,   @cin
 word		  = @getsstr,   @rdstr
 word		  = @sysstr,    @syscall
+word		  = @callstr,   @call
 word		  = @hpmarkstr, @markheap
 word		  = @hpallocstr,@allocheap
 word		  = @hpalignstr,@allocalignheap
@@ -87,7 +89,7 @@ word heap
 word lastsym     = symtbl
 word xheap       = $0800
 word systemflags = 0
-byte perr, lerr
+byte perr
 word cmdptr
 ;
 ; Utility functions
@@ -119,10 +121,54 @@ asm syscall
 	JSR	$BF00
 CMD:	!BYTE	00
 PARAMS:	!WORD	0000
-	STA	ESTKL,X
 	LDY    	#$00
+	STA	ESTKL,X
 	STY	ESTKH,X
 	RTS
+end
+;
+; CALL 6502 ROUTINE
+; CALL(AREG, XREG, YREG, STATUS, ADDR)
+;
+asm call
+REGVALS	=	SRC
+        PHP
+        LDA     ESTKL,X
+        STA     TMPL
+        LDA     ESTKH,X
+        STA     TMPH
+        INX
+        LDA     ESTKL,X
+        PHA
+        INX
+        LDA     ESTKL,X
+        TAY
+        INX
+        LDA     ESTKL+1,X
+        PHA
+        LDA     ESTKL,X
+        INX
+        STX     ESP
+        TAX
+        PLA
+        BIT     ROMEN
+        PLP
+        JSR     JMPTMP
+        PHP
+        BIT     LCRDEN+LCBNK2
+        STA     REGVALS+0
+        STX     REGVALS+1
+        STY     REGVALS+2
+        PLA
+        STA     REGVALS+3
+        LDX     ESP
+        LDA     #<REGVALS
+        LDY     #>REGVALS
+        STA     ESTKL,X
+        STY     ESTKH,X
+        PLP
+        RTS
+JMPTMP	JMP	(TMP)
 end
 ;
 ; CALL LOADED SYSTEM PROGRAM
@@ -143,8 +189,7 @@ end
 ;
 asm reboot
 	BIT	ROMEN
-	LDA	#$00
-	STA	$3F4		; INVALIDATE POWER-UP BYTE
+	DEC	$3F4		; INVALIDATE POWER-UP BYTE
 	JMP	($FFFC)		; RESET
 end
 ;
@@ -325,13 +370,6 @@ asm viewport
 	INX
 	INX
 	BNE	VTAB
-;	STX     ESP
-;	BIT	ROMEN
-;	JSR	$FB5B
-;	BIT	LCRDEN+LCBNK2
-;	LDX     ESP
-;	INX
-;	RTS
 end
 ;
 ; SET VIEWPORT RELATIVE CURSOR POSITION
@@ -472,7 +510,7 @@ asm uword_isge
 	CMP	ESTKL,X
 	LDA	ESTKH+1,X
 	SBC	ESTKH,X
-+ 	BCC	+
+ 	BCC	+
 	DEY
 + 	STY	ESTKL+1,X
 	STY	ESTKH+1,X
@@ -485,7 +523,7 @@ asm uword_isle
 	CMP	ESTKL+1,X
 	LDA	ESTKH,X
 	SBC	ESTKH+1,X
-+ 	BCC	+
+ 	BCC	+
 	DEY
 + 	STY	ESTKL+1,X
 	STY	ESTKH+1,X
@@ -498,7 +536,7 @@ asm uword_isgt
 	CMP	ESTKL+1,X
 	LDA	ESTKH,X
 	SBC	ESTKH+1,X
-+ 	BCC	+
+ 	BCC	+
 	INY
 + 	STY	ESTKL+1,X
 	STY	ESTKH+1,X
@@ -511,7 +549,7 @@ asm uword_islt
 	CMP	ESTKL,X
 	LDA	ESTKH+1,X
 	SBC	ESTKH,X
-+ 	BCC	+
+ 	BCC	+
 	INY
 + 	STY	ESTKL+1,X
 	STY	ESTKH+1,X
@@ -737,15 +775,6 @@ def setpfx(path)
     perr     = syscall($C6, @params)
     return path
 end
-def online
-    byte params[4]
-
-    params.0 = 2
-    params.1 = 0
-    params:2 = databuff
-    perr     = syscall($C5, @params)
-    return databuff
-end
 def open(path, buff)
     byte params[6]
 
@@ -823,9 +852,6 @@ def releaseheap(newheap)
     heap = newheap;
     return @newheap - heap;
 end
-def availxheap(void)
-    return $BF00 - xheap;
-end
 def allocxheap(size)
     word xaddr
     xaddr = xheap
@@ -859,6 +885,9 @@ def allocxheap(size)
     fin
     return xaddr
 end
+;def availxheap(void)
+;    return $BF00 - xheap;
+;end
 ;def markxheap
 ;    return xheap
 ;end
@@ -893,16 +922,17 @@ end
 ;    loop
 ;end
 def addtbl(dci, val, last)
+    word tblentry
+    tblentry = *last
     while ^dci & $80
-        ^*last = ^dci
-        *last  = *last + 1
-        dci    = dci   + 1
+        ^tblentry = ^dci
+        tblentry  = tblentry + 1
+        dci       = dci      + 1
     loop
-    ^*last = ^dci
-    *last  = *last + 1
-    **last = val
-    *last  = *last + 2
-    ^*last = 0
+    (tblentry).0 = ^dci
+    (tblentry):1 = val
+    *last        = tblentry + 3
+    ^*last       = 0
 end
 ;
 ; Symbol table routines.
@@ -933,7 +963,7 @@ def lookupextern(esd, index)
         if (esd).0 & $10 and (esd).1 == index
             addr = lookupsym(sym)
 	    if !addr
-                lerr = $81
+                perr = $81
 	        cout('?')
 		prstr(@str)
 		crout
@@ -974,7 +1004,6 @@ def loadmod(mod)
     word moddep, rld, esd, sym
     byte defbank, str[16], filename[64]
     byte header[128]
-    lerr = 0
     ;
     ; Read the RELocatable module header (first 128 bytes)
     ;
@@ -1060,7 +1089,7 @@ def loadmod(mod)
 	    defaddr = allocxheap(rld - bytecode)
 	    modend  = bytecode
 	else
-	    defbank  = 0
+	    defbank = 0
 	    defaddr = bytecode
 	fin
         ;
@@ -1131,12 +1160,9 @@ def loadmod(mod)
 	; Free up the end-of-module in main memory.
 	;
 	releaseheap(modend)
-    else
-        perr = perr | 0x100
-        return -perr
     fin
-    if lerr
-        return -lerr
+    if perr
+        return -perr
     fin
     ;
     ; Call init routine if it exists.
@@ -1150,10 +1176,15 @@ end
 ; Command mode
 ;
 def volumes
+    byte params[4]
     word strbuf
     byte i
 
-    strbuf = online()
+    params.0 = 2
+    params.1 = 0
+    params:2 = databuff
+    perr     = syscall($C5, @params)
+    strbuf   = databuff
     for i = 0 to 15
         ^strbuf = ^strbuf & $0F
 	if ^strbuf
@@ -1195,7 +1226,7 @@ def catalog(optpath)
             fin
             for i = firstblk to entriesblk
                 type = ^entry
-                if type <> 0
+                if type
                     len = type & $0F
                     ^entry = len
                     prstr(entry)
@@ -1220,7 +1251,7 @@ def catalog(optpath)
         else
             filecnt = 0
         fin
-    until filecnt == 0
+    until !filecnt
     close(refnum)
     crout()
     return 0
@@ -1273,7 +1304,6 @@ def resetmemfiles
     ;
     ; Set memory bitmap
     ;
-    ;memclr($BF58, 24)
     memset($BF58, 24, 0)
     ^$BF58 = $CF
     ^$BF6F = $01
@@ -1322,11 +1352,11 @@ def execmod(modfile)
 end
 
 heap = *freemem
-stodci(@stdlibstr, $0280)
-addmod($0280, 1)
+stodci(@stdlibstr, heap)
+addmod(heap, 1)
 while *stdlibsym
-    stodci((stdlibsym):0, $0280)
-    addsym($0280, (stdlibsym):2)
+    stodci((stdlibsym):0, heap)
+    addsym(heap, (stdlibsym):2)
     stdlibsym = stdlibsym + 4
 loop
 resetmemfiles()

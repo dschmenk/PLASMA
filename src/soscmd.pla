@@ -10,7 +10,7 @@ const O_READ_WRITE = 3
 ; Pedefined functions.
 ;
 predef home, gotoxy, viewport, crout, cout, prstr, cin, rdstr
-predef syscall, romcall
+predef syscall, call
 predef markheap, allocheap, allocalignheap, releaseheap, availheap
 predef memset, memcpy
 predef uword_isgt, uword_isge, uword_islt, uword_isle
@@ -32,6 +32,8 @@ byte putsstr[]    = "PUTS"
 byte getcstr[]    = "GETC"
 byte getsstr[]    = "GETS"
 byte sysstr[]     = "SYSCALL"
+byte sysstr[]     = "SYSCALL"
+byte callstr[]    = "CALL"
 byte hpmarkstr[]  = "HEAPMARK"
 byte hpalignstr[] = "HEAPALLOCALIGN"
 byte hpallocstr[] = "HEAPALLOC"
@@ -53,6 +55,7 @@ word		  = @putsstr,   @prstr
 word		  = @getcstr,   @cin
 word		  = @getsstr,   @rdstr
 word		  = @sysstr,    @syscall
+word		  = @callstr,   @call
 word		  = @hpmarkstr, @markheap
 word		  = @hpallocstr,@allocheap
 word		  = @hpalignstr,@allocalignheap
@@ -106,10 +109,52 @@ asm syscall
 	BRK
 CMD	!BYTE	00
 PARAMS	!WORD	0000
-	STA	ESTKL,X
 	LDY    	#$00
+	STA	ESTKL,X
 	STY	ESTKH,X
 	RTS
+end
+;
+; CALL 6502 ROUTINE
+; CALL(AREG, XREG, YREG, STATUS, ADDR)
+;
+asm call
+REGVALS	=	SRC
+        PHP
+        LDA     ESTKL,X
+        STA     TMPL
+        LDA     ESTKH,X
+        STA     TMPH
+        INX
+        LDA     ESTKL,X
+        PHA
+        INX
+        LDA     ESTKL,X
+        TAY
+        INX
+        LDA     ESTKL+1,X
+        PHA
+        LDA     ESTKL,X
+        INX
+        STX     ESP
+        TAX
+        PLA
+        PLP
+        JSR     JMPTMP
+        PHP
+        STA     REGVALS+0
+        STX     REGVALS+1
+        STY     REGVALS+2
+        PLA
+        STA     REGVALS+3
+        LDX     ESP
+        LDA     #<REGVALS
+        LDY     #>REGVALS
+        STA     ESTKL,X
+        STY     ESTKH,X
+        PLP
+        RTS
+JMPTMP	JMP	(TMP)
 end
 ;
 ; SET MEMORY TO VALUE
@@ -267,7 +312,7 @@ asm uword_isge
 	CMP	ESTKL,X
 	LDA	ESTKH+1,X
 	SBC	ESTKH,X
-+ 	BCC	+
+ 	BCC	+
 	DEY
 + 	STY	ESTKL+1,X
 	STY	ESTKH+1,X
@@ -280,7 +325,7 @@ asm uword_isle
 	CMP	ESTKL+1,X
 	LDA	ESTKH,X
 	SBC	ESTKH+1,X
-+ 	BCC	+
+	BCC	+
 	DEY
 + 	STY	ESTKL+1,X
 	STY	ESTKH+1,X
@@ -293,7 +338,7 @@ asm uword_isgt
 	CMP	ESTKL+1,X
 	LDA	ESTKH,X
 	SBC	ESTKH+1,X
-+ 	BCC	+
+	BCC	+
 	INY
 + 	STY	ESTKL+1,X
 	STY	ESTKH+1,X
@@ -306,7 +351,7 @@ asm uword_islt
 	CMP	ESTKL,X
 	LDA	ESTKH+1,X
 	SBC	ESTKH,X
-+ 	BCC	+
+	BCC	+
 	INY
 + 	STY	ESTKL+1,X
 	STY	ESTKH+1,X
@@ -858,16 +903,17 @@ end
 ;    loop
 ;end
 def addtbl(dci, val, last)
+    word tblentry
+    tblentry = *last
     while ^dci & $80
-        ^*last = ^dci
-        *last  = *last + 1
-        dci    = dci   + 1
+        ^tblentry = ^dci
+        tblentry  = tblentry + 1
+        dci       = dci      + 1
     loop
-    ^*last = ^dci
-    *last  = *last + 1
-    **last = val
-    *last  = *last + 2
-    ^*last = 0
+    (tblentry).0 = ^dci
+    (tblentry):1 = val
+    *last        = tblentry + 3
+    ^*last       = 0
 end
 ;
 ; Symbol table routines.
@@ -1150,7 +1196,6 @@ def loadmod(mod)
 	;
 	releaseheap(bytecode)
     else
-        perr = perr | 0x100
         return -perr
     fin
     if lerr
