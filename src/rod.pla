@@ -1,6 +1,16 @@
 import STDLIB
     predef romcall, puts
 end
+;
+; ROMCALL return register structure.
+;
+const acc         = 0
+const xreg        = 1
+const yreg        = 2
+const preg        = 3
+;
+; Hardware constants
+;
 const speaker=$C030
 const showgraphics=$C050
 const showtext=$C051
@@ -21,7 +31,62 @@ const page2=1
 byte exitmsg[] = "PRESS ANY KEY TO EXIT.\n"
 byte goodbye[] = "THAT'S ALL FOLKS!\n"
 byte i, j, k, w, fmi, fmk, color
-
+asm equates
+;*
+;* BANK SWITCHED MEM
+;*
+LCRDEN 	=	$C080
+LCWTEN	=	$C081
+ROMEN	=	$C082
+LCRWEN 	=	$C083
+LCBNK2	=	$00
+LCBNK1	=	$08
+	!SOURCE	"plvm02zp.inc"
+end
+;
+; CALL 6502 ROUTINE
+; ROMCALL(AREG, XREG, YREG, STATUS, ADDR)
+;
+asm romcall
+        PHP
+        LDA     ESTKL,X
+        STA     TMPL
+        LDA     ESTKH,X
+        STA     TMPH
+        INX
+        LDA     ESTKL,X
+        PHA
+        INX
+        LDA     ESTKL,X
+        TAY
+        INX
+        LDA     ESTKL+1,X
+        PHA
+        LDA     ESTKL,X
+        INX
+        STX     ESP
+        TAX
+        PLA
+        BIT     ROMEN
+        PLP
+        JSR     JMPTMP
+        PHP
+        BIT     LCRDEN+LCBNK2
+        STA     REGVALS+0
+        STX     REGVALS+1
+        STY     REGVALS+2
+        PLA
+        STA     REGVALS+3
+        LDX     ESP
+        LDA     #<REGVALS
+        LDY     #>REGVALS
+        STA     ESTKL,X
+        STY     ESTKH,X
+        PLP
+        RTS
+REGVALS !FILL	4
+JMPTMP	JMP	(TMP)
+end
 def textmode
     romcall(0, 0, 0, 0, $FB39)
 end

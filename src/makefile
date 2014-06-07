@@ -60,9 +60,9 @@ $(CMD): cmd.pla cmdstub.s $(PLVM02) $(PLASM)
 	acme --setpc 8192 -o $(CMD) cmdstub.s
 
 test:	test.pla testlib.pla $(PLVM) $(PLASM)
-	./$(PLASM) -AM < test.pla > test.a
+	m4 < test.pla | ./$(PLASM) -AM  > test.a
 	acme --setpc 4094 -o TEST#FE1000 test.a
-	./$(PLASM) -AM < teslib.pla >testlib.a 
+	m4 < testlib.pla | ./$(PLASM) -AM  > testlib.a
 	acme --setpc 4094 -o TESTLIB#FE1000 testlib.a
 	./$(PLVM) TEST\#FE1000
 

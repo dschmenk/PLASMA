@@ -1,22 +1,6 @@
 const membank     = $FFEF
 const MODADDR     = $1000
 ;
-; ROMCALL return register structure.
-;
-const acc         = 0
-const xreg        = 1
-const yreg        = 2
-const preg        = 3
-;
-; System flags: memory allocator screen holes.
-;
-const restxt1     = $0001
-const restxt2     = $0002
-const reshgr1     = $0004
-const reshgr2     = $0008
-const resxhgr1    = $0010
-const resxhgr2    = $0020
-;
 ; SOS flags
 ;
 const O_READ      = 1
@@ -30,7 +14,7 @@ predef syscall, romcall
 predef markheap, allocheap, allocalignheap, releaseheap, availheap
 predef memset, memcpy
 predef uword_isgt, uword_isge, uword_islt, uword_isle
-predef execmod
+predef loadmod, execmod
 ;
 ; Exported Machine ID.
 ;
@@ -59,6 +43,7 @@ byte uisgtstr[]   = "ISUGT"
 byte uisgestr[]   = "ISUGE"
 byte uisltstr[]   = "ISULT"
 byte uislestr[]   = "ISULE"
+byte loadstr[]    = "LOAD"
 byte execstr[]    = "EXEC"
 word exports[]    = @clsstr,    @home
 word              = @gotoxystr, @gotoxy
@@ -78,6 +63,7 @@ word              = @uisgtstr,  @uword_isgt
 word              = @uisgestr,  @uword_isge
 word              = @uisltstr,  @uword_islt
 word              = @uislestr,  @uword_isle
+word              = @loadstr,   @loadmod
 word              = @execstr,   @execmod
 word              = @machidstr, @machid
 word              = 0
@@ -165,72 +151,72 @@ end
 ; MEMCPY(DSTADDR, SRCADDR, SIZE)
 ;
 asm memcpy
-	LDY	#$00
+	INX
+	INX
+	LDA	ESTKL-2,X
+	ORA	ESTKH-2,X
+	BEQ	CPYMEX
+	LDA	ESTKL-1,X
+	CMP	ESTKL,X
+	LDA	ESTKH-1,X
+	SBC	ESTKH,X
+ 	BCC	REVCPY
+;
+; FORWARD COPY
+;
 	LDA	ESTKL,X
-	BNE 	+
-	LDA	ESTKH,X
-	BEQ	CPYMEX
-+	LDA	ESTKL+2,X
 	STA 	DSTL
-	LDA	ESTKH+2,X
+	LDA	ESTKH,X
 	STA 	DSTH
-	LDA	ESTKL+1,X
+	LDA	ESTKL-1,X
 	STA 	SRCL
-	LDA	ESTKH+1,X
+	LDA	ESTKH-1,X
 	STA 	SRCH
-	CMP	DSTH
-	BCC	REVCPY
-	BNE	FORCPY
-	LDA 	SRCL
-	CMP	DSTL
-	BCS	FORCPY
-REVCPY				; REVERSE DIRECTION COPY
-;	CLC
-	LDA 	ESTKL,X
-	ADC	DSTL
-	STA	DSTL
-	LDA	ESTKH,X
-	ADC	DSTH
-	STA	DSTH
-	CLC
-	LDA 	ESTKL,X
-	ADC	SRCL
-	STA	SRCL
-	LDA	ESTKH,X
-	ADC	SRCH
-	STA	SRCH
-	INC 	ESTKH,X
-REVCPYLP
-	LDA	DSTL
-	BNE	+
-	DEC	DSTH
-+	DEC	DSTL
-	LDA	SRCL
-	BNE	+
-	DEC	SRCH
-+	DEC	SRCL
-	LDA	(SRC),Y
-	STA	(DST),Y
-	DEC 	ESTKL,X
-	BNE	REVCPYLP
-	DEC	ESTKH,X
-	BNE	REVCPYLP
-	BEQ	CPYMEX
-FORCPY	INC 	ESTKH,X
-FORCPYLP
-	LDA	(SRC),Y
+	INC 	ESTKH-2,X
+	LDY	#$00
+FORCPYLP LDA	(SRC),Y
 	STA	(DST),Y
 	INY
 	BNE	+
 	INC	DSTH
 	INC	SRCH
-+	DEC 	ESTKL,X
++	DEC 	ESTKL-2,X
 	BNE	FORCPYLP
-	DEC	ESTKH,X
+	DEC	ESTKH-2,X
 	BNE	FORCPYLP
-CPYMEX	INX
-	INX
 	RTS
+;
+; REVERSE COPY
+;
+REVCPY	;CLC
+	LDA 	ESTKL-2,X
+	ADC	ESTKL,X
+	STA	DSTL
+	LDA	ESTKH-2,X
+	ADC	ESTKH,X
+	STA	DSTH
+	CLC
+	LDA 	ESTKL-2,X
+	ADC	ESTKL-1,X
+	STA	SRCL
+	LDA	ESTKH-2,X
+	ADC	ESTKH-1,X
+	STA	SRCH
+	INC 	ESTKH-2,X
+	DEC	DSTH
+	DEC	SRCH
+	LDY	#$FF
+REVCPYLP LDA	(SRC),Y
+	STA	(DST),Y
+	DEY
+	BNE	+
+	DEC	DSTH
+	DEC	SRCH
++	DEC 	ESTKL-2,X
+	BNE	REVCPYLP
+	DEC	ESTKH-2,X
+	BNE	REVCPYLP
+CPYMEX	RTS
 end
 ;
 ; COPY FROM MAIN MEM TO EXT MEM.
@@ -589,16 +575,16 @@ def close(refnum)
     perr     = syscall($CC, @params)
     return perr
 end
-def newline(refnum, set, char)
-    byte params[4]
-
-    params.0 = 1
-    params.1 = refnum
-    params.2 = set
-    params.3 = char
-    perr     = syscall($C9, @params)
-    return perr
-end
+;def newline(refnum, set, char)
+;    byte params[4]
+;
+;    params.0 = 1
+;    params.1 = refnum
+;    params.2 = set
+;    params.3 = char
+;    perr     = syscall($C9, @params)
+;    return perr
+;end
 def read(refnum, buff, len)
     byte params[8]
 
@@ -623,16 +609,16 @@ end
 ;
 ; DEVICE I/O
 ;
-def dev_status(devnum, list)
-    byte params[5]
-    
-    params.0 = 3
-    params.1 = devnum
-    params.2 = 0
-    params:3 = list
-    perr     = syscall($82, @params)
-    return params.2
-end
+;def dev_status(devnum, list)
+;    byte params[5]
+;    
+;    params.0 = 3
+;    params.1 = devnum
+;    params.2 = 0
+;    params:3 = list
+;    perr     = syscall($82, @params)
+;    return params.2
+;end
 def dev_control(devnum, code, list)
     byte params[5]
     
@@ -692,40 +678,40 @@ def seg_find(search, base, limit, pages, id)
     *limit   = params:7
     return params.9
 end
-def seg_change(segnum, mode, pages)
-    byte params[5]
-    
-    params.0 = 3
-    params.1 = segnum
-    params.2 = mode
-    params:3 = pages
-    perr     = syscall($42, @params)
-    return params:3
-end
-def seg_getinfo(segnum, base, limit, pages, id)
-    byte params[9]
-    
-    params.0 = 6
-    params.1 = segnum
-    params:2 = 0
-    params:4 = 0
-    params:6 = 0
-    params.8 = 0
-    perr      = syscall($43, @params)
-    *base    = params:2
-    *limit   = params:4
-    *pages   = params:6
-    return params.8
-end
-def seg_getnum(segaddr)
-    byte params[4]
-    
-    params.0 = 2
-    params:1 = segaddr
-    params.3 = 0
-    perr     = syscall($44, @params)
-    return params.3
-end
+;def seg_change(segnum, mode, pages)
+;    byte params[5]
+;    
+;    params.0 = 3
+;    params.1 = segnum
+;    params.2 = mode
+;    params:3 = pages
+;    perr     = syscall($42, @params)
+;    return params:3
+;end
+;def seg_getinfo(segnum, base, limit, pages, id)
+;    byte params[9]
+;    
+;    params.0 = 6
+;    params.1 = segnum
+;    params:2 = 0
+;    params:4 = 0
+;    params:6 = 0
+;    params.8 = 0
+;    perr      = syscall($43, @params)
+;    *base    = params:2
+;    *limit   = params:4
+;    *pages   = params:6
+;    return params.8
+;end
+;def seg_getnum(segaddr)
+;    byte params[4]
+;    
+;    params.0 = 2
+;    params:1 = segaddr
+;    params.3 = 0
+;    perr     = syscall($44, @params)
+;    return params.3
+;end
 def seg_release(segnum)
     byte params[2]
     
@@ -782,10 +768,19 @@ def gotoxy(x, y)
     return cout(y)
 end
 def viewport(left, top, width, height)
+    if !width or !height
+        ;
+	; Reset the full-screen viewport
+	;
+        left   = 0
+	top    = 0
+	width  = 80
+	height = 24
+    fin
     cout(1) ; Reset viewport
     gotoxy(left, top)
     cout(2)
-    gotoxy(width, height)
+    gotoxy(width - 1, height - 1)
     cout(3)
     return gotoxy(0, 0)
 end

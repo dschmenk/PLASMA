@@ -13,9 +13,9 @@ const CFFAEntryPtr = $0B
 predef home, gotoxy, viewport, crout, cout, prstr, cin, rdstr
 predef syscall
 predef markheap, allocheap, allocalignheap, releaseheap, availheap
-predef memset, memcpy, xmemcpy
+predef memset, memcpy
 predef uword_isgt, uword_isge, uword_islt, uword_isle
-predef execmod
+predef loadmod, execmod
 ;
 ; Exported Machine ID.
 ;
@@ -44,6 +44,7 @@ byte uisgtstr[]   = "ISUGT"
 byte uisgestr[]   = "ISUGE"
 byte uisltstr[]   = "ISULT"
 byte uislestr[]   = "ISULE"
+byte loadstr[]    = "LOAD"
 byte execstr[]    = "EXEC"
 word exports[]    = @clsstr,    @home
 word              = @gotoxystr, @gotoxy
@@ -63,6 +64,7 @@ word              = @uisgtstr,  @uword_isgt
 word              = @uisgestr,  @uword_isge
 word              = @uisltstr,  @uword_islt
 word              = @uislestr,  @uword_isle
+word              = @loadstr,   @loadmod
 word              = @execstr,   @execmod
 word              = @machidstr, @machid
 word              = 0
@@ -146,74 +148,72 @@ end
 ; MEMCPY(DSTADDR, SRCADDR, SIZE)
 ;
 asm memcpy
-	LDY	#$00
+	INX
+	INX
+	LDA	ESTKL-2,X
+	ORA	ESTKH-2,X
+	BEQ	CPYMEX
+	LDA	ESTKL-1,X
+	CMP	ESTKL,X
+	LDA	ESTKH-1,X
+	SBC	ESTKH,X
+ 	BCC	REVCPY
+;
+; FORWARD COPY
+;
 	LDA	ESTKL,X
-	BNE 	+
-	LDA	ESTKH,X
-	BEQ	CPYMEX
-+	LDA	ESTKL+2,X
 	STA 	DSTL
-	LDA	ESTKH+2,X
+	LDA	ESTKH,X
 	STA 	DSTH
-	LDA	ESTKL+1,X
+	LDA	ESTKL-1,X
 	STA 	SRCL
-	LDA	ESTKH+1,X
+	LDA	ESTKH-1,X
 	STA 	SRCH
-	CMP	DSTH
-	BCC	REVCPY
-	BNE	FORCPY
-	LDA 	SRCL
-	CMP	DSTL
-	BCS	FORCPY
-REVCPY				; REVERSE DIRECTION COPY
-;	CLC
-	LDA 	ESTKL,X
-	ADC	DSTL
-	STA	DSTL
-	LDA	ESTKH,X
-	ADC	DSTH
-	STA	DSTH
-	CLC
-	LDA 	ESTKL,X
-	ADC	SRCL
-	STA	SRCL
-	LDA	ESTKH,X
-	ADC	SRCH
-	STA	SRCH
-	INC 	ESTKH,X
-REVCPYLP
-	LDA	DSTL
-	BNE	+
-	DEC	DSTH
-+	DEC	DSTL
-	LDA	SRCL
-	BNE	+
-	DEC	SRCH
-+	DEC	SRCL
-	LDA	(SRC),Y
+	INC 	ESTKH-2,X
+	LDY	#$00
+FORCPYLP LDA	(SRC),Y
 	STA	(DST),Y
-	DEC 	ESTKL,X
-	BNE	REVCPYLP
-	DEC	ESTKH,X
-	BNE	REVCPYLP
-	BEQ	CPYMEX
-FORCPY	INC 	ESTKH,X
-FORCPYLP
-	LDA	(SRC),Y
-	STA	(DST),Y
-	INC	DSTL
+	INY
 	BNE	+
 	INC	DSTH
-+	INC	SRCL
-	BNE	+
 	INC	SRCH
-+	DEC 	ESTKL,X
++	DEC 	ESTKL-2,X
 	BNE	FORCPYLP
-	DEC	ESTKH,X
+	DEC	ESTKH-2,X
 	BNE	FORCPYLP
-CPYMEX	INX
-	INX
 	RTS
+;
+; REVERSE COPY
+;
+REVCPY	;CLC
+	LDA 	ESTKL-2,X
+	ADC	ESTKL,X
+	STA	DSTL
+	LDA	ESTKH-2,X
+	ADC	ESTKH,X
+	STA	DSTH
+	CLC
+	LDA 	ESTKL-2,X
+	ADC	ESTKL-1,X
+	STA	SRCL
+	LDA	ESTKH-2,X
+	ADC	ESTKH-1,X
+	STA	SRCH
+	INC 	ESTKH-2,X
+	DEC	DSTH
+	DEC	SRCH
+	LDY	#$FF
+REVCPYLP LDA	(SRC),Y
+	STA	(DST),Y
+	DEY
+	BNE	+
+	DEC	DSTH
+	DEC	SRCH
++	DEC 	ESTKL-2,X
+	BNE	REVCPYLP
+	DEC	ESTKH-2,X
+	BNE	REVCPYLP
+CPYMEX	RTS
 end
 ;
 ; Unsigned word comparisons.
