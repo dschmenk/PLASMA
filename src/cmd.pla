@@ -16,26 +16,34 @@ const resxhgr2    = $0020
 ;
 ; Pedefined functions.
 ;
-predef home, gotoxy, viewport, crout, cout, prstr, cin, rdstr
 predef syscall, call
+predef crout, cout, prstr, cin, rdstr
 predef markheap, allocheap, allocalignheap, releaseheap, availheap
 predef memset, memcpy
 predef uword_isgt, uword_isge, uword_islt, uword_isle
 predef loadmod, execmod
 ;
+; System variable.
+;
+word systemflags = 0
+word heap
+word xheap       = $0800
+word lastsym     = symtbl
+byte perr
+word cmdptr
+;
 ; Standard Library exported functions.
 ;
 byte stdlibstr[]  = "STDLIB"
 byte machidstr[]  = "MACHID"
-byte clsstr[]     = "CLS"
-byte gotoxystr[]  = "GOTOXY"
-byte viewstr[]    = "VIEWPORT"
+byte sysvarstr[]  = "SYSVARS"
+byte sysstr[]     = "SYSCALL"
+byte callstr[]    = "CALL"
 byte putcstr[]    = "PUTC"
+byte putlnstr[]   = "PUTLN"
 byte putsstr[]    = "PUTS"
 byte getcstr[]    = "GETC"
 byte getsstr[]    = "GETS"
-byte sysstr[]     = "SYSCALL"
-byte callstr[]    = "CALL"
 byte hpmarkstr[]  = "HEAPMARK"
 byte hpalignstr[] = "HEAPALLOCALIGN"
 byte hpallocstr[] = "HEAPALLOC"
@@ -49,15 +57,13 @@ byte uisltstr[]   = "ISULT"
 byte uislestr[]   = "ISULE"
 byte loadstr[]    = "LOAD"
 byte execstr[]    = "EXEC"
-word exports[]    = @clsstr,    @home
-word              = @gotoxystr, @gotoxy
-word		  = @viewstr,   @viewport
+word exports[]	  = @sysstr,    @syscall
+word		  = @callstr,   @call
 word		  = @putcstr,   @cout
+word              = @putlnstr,  @crout
 word		  = @putsstr,   @prstr
 word		  = @getcstr,   @cin
 word		  = @getsstr,   @rdstr
-word		  = @sysstr,    @syscall
-word		  = @callstr,   @call
 word		  = @hpmarkstr, @markheap
 word		  = @hpallocstr,@allocheap
 word		  = @hpalignstr,@allocalignheap
@@ -71,26 +77,19 @@ word              = @uislestr,  @uword_isle
 word              = @loadstr,   @loadmod
 word              = @execstr,   @execmod
 word              = @machidstr, MACHID
+word              = @sysvarstr, @systemflags
 word              = 0
 word stdlibsym    = @exports     
 ;
 ; String pool.
 ;
+byte autorun[]    = "AUTORUN"
 byte version[]    = "PLASMA 0.9\n"
 byte freestr[]    = "MEM FREE:$"
 byte errorstr[]   = "ERR:$"
 byte okstr[]      = "OK"
 byte huhstr[]     = "?\n"
 byte prefix[32]   = ""
-;
-; System variable.
-;
-word heap
-word lastsym     = symtbl
-word xheap       = $0800
-word systemflags = 0
-byte perr
-word cmdptr
 ;
 ; Utility functions
 ;
@@ -128,26 +127,26 @@ PARAMS:	!WORD	0000
 end
 ;
 ; CALL 6502 ROUTINE
-; CALL(AREG, XREG, YREG, STATUS, ADDR)
+; CALL(ADDR, AREG, XREG, YREG, STATUS)
 ;
 asm call
 REGVALS	=	SRC
         PHP
-        LDA     ESTKL,X
+        LDA     ESTKL+4,X
         STA     TMPL
-        LDA     ESTKH,X
+        LDA     ESTKH+4,X
         STA     TMPH
-        INX
         LDA     ESTKL,X
         PHA
-        INX
-        LDA     ESTKL,X
-        TAY
-        INX
         LDA     ESTKL+1,X
+        TAY
+        LDA     ESTKL+3,X
         PHA
-        LDA     ESTKL,X
+        LDA     ESTKL+2,X
         INX
+        INX
+        INX
+	INX
         STX     ESP
         TAX
         PLA
@@ -325,67 +324,6 @@ asm memxcpy
 	BIT	LCRDEN+LCBNK2
 	LDX     ESP
 	INX
-	INX
-	RTS
-end
-;
-; HOME
-;
-asm home
-	STX	ESP
-	BIT	ROMEN
-	JSR	$FC58
-	BIT	LCRDEN+LCBNK2
-	LDX	ESP
-	DEX
-	RTS
-end
-;
-; SET VIEWPORT
-; VIEWPORT(LEFT, TOP, WIDTH, HEIGHT)
-;
-asm viewport
-	LDA	ESTKL+1,X
-	BNE	+
-	LDA	ESTKL,X
-	BNE	+
-	STA	ESTKL+3,X
-	STA	ESTKL+2,X
-	LDA	#40
-	STA	ESTKL+1,X
-	LDA	#24
-	STA	ESTKL,X	
-+	LDA	ESTKL+3,X
-	STA	$20
-	LDA	ESTKL+1,X
-	STA	$21
-	LDA	ESTKL+2,X
-	STA	$22
-	CLC
-	ADC	ESTKL,X
-	STA	$23
-	LDY	#$00
-	STY	$24
-	LDA	$22
-	INX
-	INX
-	BNE	VTAB
-end
-;
-; SET VIEWPORT RELATIVE CURSOR POSITION
-; GOTOXY(X,Y)
-;
-asm gotoxy
-	LDA	ESTKL+1,X
-	STA	$24
-	LDA	ESTKL,X
-	CLC
-	ADC	$22
-VTAB	STX     ESP
-	BIT	ROMEN
-	JSR	$FB5B
-	BIT	LCRDEN+LCBNK2
-	LDX     ESP
 	INX
 	RTS
 end
@@ -1032,7 +970,7 @@ def loadmod(mod)
 		    close(refnum)
 	            refnum = 0
                     if loadmod(moddep) < 0
-	      	        return perr
+	      	        return -perr
 		    fin
                 fin
                 moddep = moddep + dcitos(moddep, @str)
@@ -1351,7 +1289,13 @@ def execmod(modfile)
     fin
 end
 
+;
+; Get heap start.
+;
 heap = *freemem
+;
+; Init symbol table.
+;
 stodci(@stdlibstr, heap)
 addmod(heap, 1)
 while *stdlibsym
@@ -1359,7 +1303,15 @@ while *stdlibsym
     addsym(heap, (stdlibsym):2)
     stdlibsym = stdlibsym + 4
 loop
+;
+; Try to run autorun module.
+;
+execmod(@autorun)
 resetmemfiles()
+perr = 0
+;
+; Print some startup info.
+;
 prstr(@version)
 prstr(@freestr)
 prword(availheap)

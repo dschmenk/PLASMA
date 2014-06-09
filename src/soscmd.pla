@@ -9,7 +9,7 @@ const O_READ_WRITE = 3
 ;
 ; Pedefined functions.
 ;
-predef home, gotoxy, viewport, crout, cout, prstr, cin, rdstr
+predef crout, cout, prstr, cin, rdstr
 predef syscall, call
 predef markheap, allocheap, allocalignheap, releaseheap, availheap
 predef memset, memcpy
@@ -20,20 +20,29 @@ predef loadmod, execmod
 ;
 byte machid       = $F2 ; Apple ///, 80 columns
 ;
+; System variable.
+;
+word systemflags = 0
+word heap        = $2000
+word refcons, devcons
+byte modid       = 0
+byte modseg[15] 
+word symtbl, lastsym
+byte perr, terr, lerr
+word cmdptr
+;
 ; Standard Library exported functions.
 ;
 byte stdlibstr[]  = "STDLIB"
 byte machidstr[]  = "MACHID"
-byte clsstr[]     = "CLS"
-byte gotoxystr[]  = "GOTOXY"
-byte viewstr[]    = "VIEWPORT"
+byte sysvarstr[]  = "SYSVARS"
+byte sysstr[]     = "SYSCALL"
+byte callstr[]    = "CALL"
 byte putcstr[]    = "PUTC"
+byte putlnstr[]   = "PUTLN"
 byte putsstr[]    = "PUTS"
 byte getcstr[]    = "GETC"
 byte getsstr[]    = "GETS"
-byte sysstr[]     = "SYSCALL"
-byte sysstr[]     = "SYSCALL"
-byte callstr[]    = "CALL"
 byte hpmarkstr[]  = "HEAPMARK"
 byte hpalignstr[] = "HEAPALLOCALIGN"
 byte hpallocstr[] = "HEAPALLOC"
@@ -47,15 +56,13 @@ byte uisltstr[]   = "ISULT"
 byte uislestr[]   = "ISULE"
 byte loadstr[]    = "LOAD"
 byte execstr[]    = "EXEC"
-word exports[]    = @clsstr,    @home
-word              = @gotoxystr, @gotoxy
-word		  = @viewstr,   @viewport
+word exports[]	  = @sysstr,    @syscall
+word		  = @callstr,   @call
 word		  = @putcstr,   @cout
+word		  = @putlnstr,  @crout
 word		  = @putsstr,   @prstr
 word		  = @getcstr,   @cin
 word		  = @getsstr,   @rdstr
-word		  = @sysstr,    @syscall
-word		  = @callstr,   @call
 word		  = @hpmarkstr, @markheap
 word		  = @hpallocstr,@allocheap
 word		  = @hpalignstr,@allocalignheap
@@ -69,31 +76,22 @@ word              = @uislestr,  @uword_isle
 word              = @loadstr,   @loadmod
 word              = @execstr,   @execmod
 word              = @machidstr, @machid
+word              = @sysvarstr, @systemflags
 word              = 0
 word stdlibsym    = @exports     
 ;
 ; String pool.
 ;
 byte console[]    = ".CONSOLE"
-byte devtovol[]   = " => /"
+byte autorun[]    = "AUTORUN"
 byte version[]    = "PLASMA 0.9\n"
 byte freestr[]    = "MEM FREE:$"
 byte errorstr[]   = "ERR:$"
 byte okstr[]      = "OK"
 byte huhstr[]     = "?\n"
+byte devtovol[]   = " => /"
 byte prefix[128]  = ""
 byte hexchar[]    = '0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F'
-;
-; System variable.
-;
-word systemflags = 0
-byte modid       = 0
-byte modseg[15] 
-word heap        = $2000
-word symtbl, lastsym
-word refcons, devcons
-byte perr, terr, lerr
-word cmdptr
 ;
 ; CALL SOS
 ; SYSCALL(CMD, PARAMS)
@@ -804,31 +802,6 @@ def rdstr(prompt)
     cout($0D)
     return heap
 end
-def home
-    return cout(28)
-end
-def gotoxy(x, y)
-    cout(26)
-    cout(x)
-    return cout(y)
-end
-def viewport(left, top, width, height)
-    if !width or !height
-        ;
-	; Reset the full-screen viewport
-	;
-        left   = 0
-	top    = 0
-	width  = 80
-	height = 24
-    fin
-    cout(1) ; Reset viewport
-    gotoxy(left, top)
-    cout(2)
-    gotoxy(width - 1, height - 1)
-    cout(3)
-    return gotoxy(0, 0)
-end
 def crout
     return cout($0D)
 end
@@ -963,28 +936,15 @@ def adddef(ext, addr, deflast)
     (defentry):1 = interp
     (defentry):3 = addr
     (defentry):5 = ext ; ext is byte, so this nulls out next entry
-    ;prword(defentry)
-    ;cout('@')
-    ;prbyte(ext)
-    ;cout(':')
-    ;prword(addr)
-    ;crout
     return defentry
 end
 def lookupdef(addr, deftbl)
     while (deftbl).0 == $20
         if (deftbl):3 == addr
-	    ;prword(addr)
-	    ;cout('>')
-	    ;prword(deftbl)
-	    ;crout
             return deftbl
         fin
         deftbl = deftbl + 6
     loop
-    ;prword(addr)
-    ;cout('?')
-    ;crout
     return 0
 end
 def loadmod(mod)
@@ -1001,7 +961,6 @@ def loadmod(mod)
     dcitos(mod, @filename)
     refnum = open(@filename, O_READ)
     if refnum > 0
-        ;newline(refnum, 0, $0D)
         rdlen   = read(refnum, @header, 128)
 	modsize = header:0
 	moddep  = @header.1
@@ -1024,7 +983,7 @@ def loadmod(mod)
 		    close(refnum)
 	            refnum = 0
                     if loadmod(moddep) < 0
-	      	        return perr
+	      	        return -perr
 		    fin
                 fin
                 moddep = moddep + dcitos(moddep, @str)
@@ -1084,13 +1043,6 @@ def loadmod(mod)
 	if !codeseg.1 ; Fix up address if at bottom of segment: 8n:00 -> 8(n-1):80
 	    codeseg = codeseg - $8001
 	fin
-	;prbyte((rld - bytecode + 255) >> 8)
-	;cout(':')
-	;prword(codeseg)
-	;cout('-')
-	;cout('>')
-	;prword(defaddr)
-	;crout
 	defext  = codeseg.0 | $80
 	defaddr = codeseg & $FF00
         ;
@@ -1105,49 +1057,15 @@ def loadmod(mod)
             else
                 addr = (rld):1 + modfix
                 if uword_isge(addr, modaddr) ; Skip fixups to header
-		    ;if uword_isge(addr, modend)
-		    ;    cout('<')
-		    ;    prword((rld):1)
-		    ;    cout('>')
-		    ;	prword(rld)
-		    ;	crout
-		    ;fin
                     if ^rld & $80 ; WORD sized fixup.
                         fixup = *addr
                     else	  ; BYTE sized fixup.
                         fixup = ^addr
                     fin
-;		    if uword_isge(fixup, modend)
-;		        cout('<')
-;		        cout('<')
-;		        prword(*addr);fixup)
-;			cout('@')
-;			prword(addr)
-;		        cout('>')
-;		        cout('>')
-;			prword(^rld)
-;			crout
-;		    fin
                     if ^rld & $10 ; EXTERN reference.
                         fixup = fixup + lookupextern(esd, (rld).3)
                     else	  ; INTERN fixup.
                         fixup = fixup + modfix - MODADDR
-;			if uword_isge(fixup, modend)
-;	prword(@(modaddr).$62)
-;	cout('=')
-;	prword((modaddr).$62)
-;	crout
-;		            cout('<')
-;			    cout('<')
-;			    cout('<')
-;			    prword(fixup)
-;			    cout('>')
-;			    cout('>')
-;			    cout('>')
-;			    prword(rld)
-;			    cin
-;			    crout
-;			fin
                         if uword_isge(fixup, bytecode)
                             ;
                             ; Bytecode address - replace with call def directory.
@@ -1353,16 +1271,9 @@ def execmod(modfile)
 end
 
 ;
-; Init console
+; Init console.
 ;
 init_cons
-;
-; Print some startup info.
-;
-prstr(@version)
-prstr(@freestr)
-prword(availheap)
-crout
 ;
 ; Init symbol table.
 ;
@@ -1376,6 +1287,18 @@ while *stdlibsym
     addsym(heap, (stdlibsym):2)
     stdlibsym = stdlibsym + 4
 loop
+;
+; Try to run autorun module.
+;
+execmod(@autorun)
+perr = 0
+;
+; Print some startup info.
+;
+prstr(@version)
+prstr(@freestr)
+prword(availheap)
+crout
 ;
 ; Handle commands.
 ;
