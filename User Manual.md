@@ -25,7 +25,7 @@ Three tools are required to build and run this program: **plasm**, **acme**, and
 
 ```
 ./plasm -AM < hello.pla > hello.a
-acme --setpc 4096 -o HELLO.REL hello.a
+acme --setpc 4094 -o HELLO.REL hello.a
 ./plvm HELLO.REL
 ```
 
@@ -36,7 +36,7 @@ Load module HELLO.REL
 Hello, world.
 ```
 
-A couple of things to note: **plasm** only accepts input from stdin and output to stdout. To build **acme** compatible module source, tha '-AM' flags must be passed in. The **acme** assembler needs the --setpc 4096 to assemble the module at the proper address, and the -o option sets the output file. The makefile in the lawless-legends/PLASMA/src directory has automated this process. Enter:
+A couple of things to note: **plasm** only accepts input from stdin and output to stdout. To build **acme** compatible module source, tha '-AM' flags must be passed in. The **acme** assembler needs the --setpc 4094 to assemble the module at the proper address ($1000 - 2), and the -o option sets the output file. The makefile in the lawless-legends/PLASMA/src directory has automated this process. Enter:
 
 ```
 make hello
