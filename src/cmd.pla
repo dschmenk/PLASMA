@@ -173,11 +173,11 @@ end
 ; CALL LOADED SYSTEM PROGRAM
 ;
 asm exec
-	LDA	#$00
-	STA	IFPL
 	LDA	#$BF
 	STA	IFPH
-	LDX	#$FF
+	LDX	#$00
+	STX	IFPL
+	DEX
 	TXS
 	LDX	#ESTKSZ/2
 	BIT	ROMEN
@@ -203,25 +203,21 @@ asm memset
 	STA     DSTH
 	INC     ESTKL+1,X
 	INC     ESTKH+1,X
+-	CLC
 SETMLP	DEC     ESTKL+1,X
 	BNE     +
 	DEC     ESTKH+1,X
 	BEQ     SETMEX
 +	LDA     ESTKL,X
-	STA     (DST),Y
+	BCC	+
+	LDA	ESTKH,X
++	STA     (DST),Y
 	INY
 	BNE     +
 	INC     DSTH
-+	DEC     ESTKL+1,X
-	BNE     +
-	DEC     ESTKH+1,X
-	BEQ     SETMEX
-+	LDA     ESTKH,X
-	STA     (DST),Y
-	INY
-	BNE     SETMLP
-	INC     DSTH
-	BNE     SETMLP
++	BCS	-
+	SEC
+	BCS	SETMLP
 SETMEX	INX
 	INX
 	RTS
@@ -384,8 +380,7 @@ asm prstr
 	JSR	TOUPR
 +	ORA	#$80
 	JSR	$FDED
-	TYA
-	CMP	TMP
+	CPY	TMP
 	BNE	-
 	BIT	LCRDEN+LCBNK2
 ++	RTS
@@ -406,12 +401,11 @@ end
 ; PRINT WORD
 ;
 asm prword
-	LDA	ESTKH,X
+	STX	ESP
+	TXA
 	TAY
-	LDA	ESTKL,X
-	STX     ESP
-	TAX
-	TYA
+	LDA	ESTKH,Y
+	LDX	ESTKL,Y
 	BIT	ROMEN
 	JSR	$F941
 	LDX     ESP
@@ -434,8 +428,8 @@ asm rdstr
 	STA	$01FF,X
 	DEX
 	BPL	-
+	TXA
 	LDX     ESP
-	LDA     #$FF
 	STA     ESTKL,X
 	LDA     #$01
 	STA     ESTKH,X
@@ -469,28 +463,26 @@ asm uword_isle
 	RTS
 end
 asm uword_isgt
-	LDY	#$FF
 	LDA	ESTKL,X
 	CMP	ESTKL+1,X
 	LDA	ESTKH,X
 	SBC	ESTKH+1,X
- 	BCC	+
-	INY
-+ 	STY	ESTKL+1,X
-	STY	ESTKH+1,X
+ 	LDA	#$00
+	ADC	#$00
+ 	STA	ESTKL+1,X
+	STA	ESTKH+1,X
 	INX
 	RTS
 end
 asm uword_islt
-	LDY	#$FF
 	LDA	ESTKL+1,X
 	CMP	ESTKL,X
 	LDA	ESTKH+1,X
 	SBC	ESTKH,X
- 	BCC	+
-	INY
-+ 	STY	ESTKL+1,X
-	STY	ESTKH+1,X
+ 	LDA	#$00
+	ADC	#$00
+ 	STA	ESTKL+1,X
+	STA	ESTKH+1,X
 	INX
 	RTS
 end
@@ -587,8 +579,7 @@ TOUPR	AND	#$7F
 	BCC     +
 	CMP     #'z'+1
 	BCS     +
-	SEC
-	SBC     #$20
+	SBC     #$1F
 +	STA     ESTKL,X
 	RTS
 end
