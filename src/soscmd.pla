@@ -14,28 +14,29 @@ predef syscall, call
 predef markheap, allocheap, allocalignheap, releaseheap, availheap
 predef memset, memcpy
 predef uword_isgt, uword_isge, uword_islt, uword_isle
-predef loadmod, execmod
+predef loadmod, execmod, lookupmod
 ;
-; Exported Machine ID.
+; System variables.
 ;
-byte machid       = $F2 ; Apple ///, 80 columns
-;
-; System variable.
-;
+word version     = $0010 ; 00.10
 word systemflags = 0
 word heap        = $2000
-word refcons, devcons
+word refcons     = 0
+word devcons
 byte modid       = 0
 byte modseg[15] 
 word symtbl, lastsym
 byte perr, terr, lerr
 word cmdptr
 ;
+; Exported Machine ID.
+;
+byte machid       = $F2 ; Apple ///, 80 columns
+;
 ; Standard Library exported functions.
 ;
 byte stdlibstr[]  = "STDLIB"
 byte machidstr[]  = "MACHID"
-byte sysvarstr[]  = "SYSVARS"
 byte sysstr[]     = "SYSCALL"
 byte callstr[]    = "CALL"
 byte putcstr[]    = "PUTC"
@@ -54,8 +55,9 @@ byte uisgtstr[]   = "ISUGT"
 byte uisgestr[]   = "ISUGE"
 byte uisltstr[]   = "ISULT"
 byte uislestr[]   = "ISULE"
-byte loadstr[]    = "LOAD"
-byte execstr[]    = "EXEC"
+byte loadstr[]    = "MODLOAD"
+byte execstr[]    = "MODEXEC"
+byte modadrstr[]  = "MODADDR"
 word exports[]	  = @sysstr,    @syscall
 word		  = @callstr,   @call
 word		  = @putcstr,   @cout
@@ -75,8 +77,8 @@ word              = @uisltstr,  @uword_islt
 word              = @uislestr,  @uword_isle
 word              = @loadstr,   @loadmod
 word              = @execstr,   @execmod
+word              = @modadrstr, @lookupmod
 word              = @machidstr, @machid
-word              = @sysvarstr, @systemflags
 word              = 0
 word stdlibsym    = @exports     
 ;
@@ -84,13 +86,14 @@ word stdlibsym    = @exports
 ;
 byte console[]    = ".CONSOLE"
 byte autorun[]    = "AUTORUN"
-byte version[]    = "PLASMA 0.9\n"
+byte verstr[]     = "PLASMA "
 byte freestr[]    = "MEM FREE:$"
 byte errorstr[]   = "ERR:$"
 byte okstr[]      = "OK"
 byte huhstr[]     = "?\n"
 byte devtovol[]   = " => /"
 byte prefix[128]  = ""
+byte textmode[]   = 16, 0, 15
 byte hexchar[]    = '0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F'
 ;
 ; CALL SOS
@@ -331,28 +334,26 @@ asm uword_isle
 	RTS
 end
 asm uword_isgt
-	LDY	#$FF
 	LDA	ESTKL,X
 	CMP	ESTKL+1,X
 	LDA	ESTKH,X
 	SBC	ESTKH+1,X
-	BCC	+
-	INY
-+ 	STY	ESTKL+1,X
-	STY	ESTKH+1,X
+	LDA	#$FF
+	ADC	#$00
+ 	STA	ESTKL+1,X
+	STA	ESTKH+1,X
 	INX
 	RTS
 end
 asm uword_islt
-	LDY	#$FF
 	LDA	ESTKL+1,X
 	CMP	ESTKL,X
 	LDA	ESTKH+1,X
 	SBC	ESTKH,X
-	BCC	+
-	INY
-+ 	STY	ESTKL+1,X
-	STY	ESTKH+1,X
+	LDA	#$FF
+	ADC	#$00
+ 	STA	ESTKL+1,X
+	STA	ESTKH+1,X
 	INX
 	RTS
 end
@@ -458,8 +459,7 @@ TOUPR	AND	#$7F
 	BCC     +
 	CMP     #'z'+1
 	BCS     +
-	SEC
-	SBC     #$20
+	SBC     #$1F
 +	STA     ESTKL,X
 	RTS
 end
@@ -768,7 +768,10 @@ end
 ;
 def init_cons
     byte nlmode[2]
-    refcons  = open(@console, O_READ_WRITE)
+    if !refcons
+        refcons = open(@console, O_READ_WRITE)
+    fin
+    write(refcons, @textmode, 3)
     devcons  = dev_getnum(@console)
     nlmode.0 = $80
     nlmode.1 = $0D
@@ -1021,6 +1024,10 @@ def loadmod(mod)
         until rdlen <= 0
         close(refnum)
 	;
+	; Add module to symbol table.
+	;
+	addmod(mod, modaddr)
+	;
 	; Apply all fixups and symbol import/export.
 	;
         modfix   = modaddr - modfix
@@ -1123,9 +1130,11 @@ def loadmod(mod)
     ; Call init routine if it exists.
     ;
     if init
-        return adddef(defext, init - defofst + defaddr, @deflast)()
+        fixup = adddef(defext, init - defofst + defaddr, @deflast)()
+    else
+        fixup = 0
     fin
-    return 0
+    return fixup
 end
 ;
 ; Command mode
@@ -1269,7 +1278,6 @@ def execmod(modfile)
 	loop
     fin
 end
-
 ;
 ; Init console.
 ;
@@ -1281,7 +1289,7 @@ symtbl   = allocheap($400)
 lastsym  = symtbl
 ^lastsym = 0
 stodci(@stdlibstr, heap)
-addmod(heap, 1)
+addmod(heap, @systemflags)
 while *stdlibsym
     stodci((stdlibsym):0, heap)
     addsym(heap, (stdlibsym):2)
@@ -1295,7 +1303,11 @@ perr = 0
 ;
 ; Print some startup info.
 ;
-prstr(@version)
+prstr(@verstr)
+prbyte(version.1)
+cout('.')
+prbyte(version.0)
+crout
 prstr(@freestr)
 prword(availheap)
 crout

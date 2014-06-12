@@ -19,25 +19,25 @@ predef syscall, call
 predef markheap, allocheap, allocalignheap, releaseheap, availheap
 predef memset, memcpy
 predef uword_isgt, uword_isge, uword_islt, uword_isle
-predef loadmod, execmod
+predef loadmod, execmod, lookupmod
 ;
-; Exported Machine ID.
+; System variables.
 ;
-byte machid       = $08 ; Apple 1 (NA in ProDOS Tech Ref)
-;
-; System variable.
-;
+word version     = $0010 ; 00.10
 word systemflags = 0
 word heap
 word symtbl, lastsym
 byte perr
 word cmdptr
 ;
+; Exported Machine ID.
+;
+byte machid       = $08 ; Apple 1 (NA in ProDOS Tech Ref)
+;
 ; Standard Library exported functions.
 ;
 byte stdlibstr[]  = "STDLIB"
 byte machidstr[]  = "MACHID"
-byte sysvarstr[]  = "SYSVARS"
 byte putcstr[]    = "PUTC"
 byte putlnstr[]   = "PUTLN"
 byte putsstr[]    = "PUTS"
@@ -56,8 +56,9 @@ byte uisgtstr[]   = "ISUGT"
 byte uisgestr[]   = "ISUGE"
 byte uisltstr[]   = "ISULT"
 byte uislestr[]   = "ISULE"
-byte loadstr[]    = "LOAD"
-byte execstr[]    = "EXEC"
+byte loadstr[]    = "MODLOAD"
+byte execstr[]    = "MODEXEC"
+byte modadrstr[]  = "MODADDR"
 word exports[]	  = @sysstr,    @syscall
 word		  = @callstr,   @call
 word 		  = @putcstr,   @cout
@@ -77,15 +78,15 @@ word              = @uisltstr,  @uword_islt
 word              = @uislestr,  @uword_isle
 word              = @loadstr,   @loadmod
 word              = @execstr,   @execmod
+word              = @modadrstr, @lookupmod
 word              = @machidstr, @machid
-word              = @sysvarstr, @systemflags
 word              = 0
 word stdlibsym    = @exports     
 ;
 ; String pool.
 ;
 byte autorun[]    = "AUTORUN"
-byte version[]    = "\nPLASMA 0.9\n"
+byte verstr[]    = "\nPLASMA "
 byte freestr[]    = "MEM FREE:$"
 byte errorstr[]   = "ERR:$"
 byte prompt[]     = "PLASMA"
@@ -292,28 +293,26 @@ asm uword_isle
 	RTS
 end
 asm uword_isgt
-	LDY	#$FF
 	LDA	ESTKL,X
 	CMP	ESTKL+1,X
 	LDA	ESTKH,X
 	SBC	ESTKH+1,X
-	BCC	+
-	INY
-+ 	STY	ESTKL+1,X
-	STY	ESTKH+1,X
+	LDA	#$FF
+	ADC	#$00
+ 	STA	ESTKL+1,X
+	STA	ESTKH+1,X
 	INX
 	RTS
 end
 asm uword_islt
-	LDY	#$FF
 	LDA	ESTKL+1,X
 	CMP	ESTKL,X
 	LDA	ESTKH+1,X
 	SBC	ESTKH,X
-	BCC	+
-	INY
-+ 	STY	ESTKL+1,X
-	STY	ESTKH+1,X
+	LDA	#$FF
+	ADC	#$00
+ 	STA	ESTKL+1,X
+	STA	ESTKH+1,X
 	INX
 	RTS
 end
@@ -419,8 +418,7 @@ TOUPR	AND	#$7F
 	BCC     +
 	CMP     #'z'+1
 	BCS     +
-	SEC
-	SBC     #$20
+	SBC     #$1F
 +	STA     ESTKL,X
 	RTS
 end
@@ -812,6 +810,10 @@ def loadmod(mod)
 	modaddr = allocheap(modsize)
 	memcpy(modaddr, moddep, rdlen)
 	;
+	; Add module to symbol table.
+	;
+	addmod(mod, modaddr)
+	;
 	; Apply all fixups and symbol import/export.
 	;
         modfix   = modaddr - modfix
@@ -889,8 +891,15 @@ def loadmod(mod)
     ; Call init routine if it exists.
     ;
     if init
-        return adddef(init - defofst + bytecode, @deflast)()
+	fixup  = adddef(init - defofst + bytecode, @deflast)()
+        modend = init - defofst + bytecode
+    else
+        fixup = 0
     fin
+    ;
+    ; Free up the end-of-module in main memory.
+    ;
+    releaseheap(modend)
     return 0
 end
 ;
@@ -982,7 +991,6 @@ def execmod(modfile)
 	heap        = saveheap
     fin
 end
-
 ;
 ; Get heap start.
 ;
@@ -994,7 +1002,7 @@ symtbl   = allocheap($200)
 lastsym  = symtbl
 ^lastsym = 0
 stodci(@stdlibstr, heap)
-addmod(heap, 1)
+addmod(heap, @systemflags)
 while *stdlibsym
     stodci((stdlibsym):0, heap)
     addsym(heap, (stdlibsym):2)
@@ -1008,7 +1016,11 @@ perr = 0
 ;
 ; Print some startup info.
 ;
-prstr(@version)
+prstr(@verstr)
+prbyte(version.1)
+cout('.')
+prbyte(version.0)
+crout
 prstr(@freestr)
 prword(availheap)
 crout

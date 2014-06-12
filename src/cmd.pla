@@ -21,10 +21,11 @@ predef crout, cout, prstr, cin, rdstr
 predef markheap, allocheap, allocalignheap, releaseheap, availheap
 predef memset, memcpy
 predef uword_isgt, uword_isge, uword_islt, uword_isle
-predef loadmod, execmod
+predef loadmod, execmod, lookupmod
 ;
 ; System variable.
 ;
+word version     = $0010 ; 00.10
 word systemflags = 0
 word heap
 word xheap       = $0800
@@ -36,7 +37,6 @@ word cmdptr
 ;
 byte stdlibstr[]  = "STDLIB"
 byte machidstr[]  = "MACHID"
-byte sysvarstr[]  = "SYSVARS"
 byte sysstr[]     = "SYSCALL"
 byte callstr[]    = "CALL"
 byte putcstr[]    = "PUTC"
@@ -55,8 +55,9 @@ byte uisgtstr[]   = "ISUGT"
 byte uisgestr[]   = "ISUGE"
 byte uisltstr[]   = "ISULT"
 byte uislestr[]   = "ISULE"
-byte loadstr[]    = "LOAD"
-byte execstr[]    = "EXEC"
+byte loadstr[]    = "MODLOAD"
+byte execstr[]    = "MODEXEC"
+byte modadrstr[]  = "MODADDR"
 word exports[]	  = @sysstr,    @syscall
 word		  = @callstr,   @call
 word		  = @putcstr,   @cout
@@ -76,15 +77,15 @@ word              = @uisltstr,  @uword_islt
 word              = @uislestr,  @uword_isle
 word              = @loadstr,   @loadmod
 word              = @execstr,   @execmod
+word              = @modadrstr, @lookupmod
 word              = @machidstr, MACHID
-word              = @sysvarstr, @systemflags
 word              = 0
 word stdlibsym    = @exports     
 ;
 ; String pool.
 ;
 byte autorun[]    = "AUTORUN"
-byte version[]    = "PLASMA 0.9\n"
+byte verstr[]     = "PLASMA "
 byte freestr[]    = "MEM FREE:$"
 byte errorstr[]   = "ERR:$"
 byte okstr[]      = "OK"
@@ -173,11 +174,11 @@ end
 ; CALL LOADED SYSTEM PROGRAM
 ;
 asm exec
-	LDA	#$00
-	STA	IFPL
+	LDX	#$00
+	STX	IFPL
 	LDA	#$BF
 	STA	IFPH
-	LDX	#$FF
+	DEX
 	TXS
 	LDX	#ESTKSZ/2
 	BIT	ROMEN
@@ -372,7 +373,6 @@ asm prstr
 	STA     SRCL
 	LDA     ESTKH,X
 	STA     SRCH
-        STY	ESTKH,X
 	LDA     (SRC),Y
 	STA     TMP
 	BEQ     ++
@@ -384,8 +384,7 @@ asm prstr
 	JSR	TOUPR
 +	ORA	#$80
 	JSR	$FDED
-	TYA
-	CMP	TMP
+	CPY	TMP
 	BNE	-
 	BIT	LCRDEN+LCBNK2
 ++	RTS
@@ -406,12 +405,11 @@ end
 ; PRINT WORD
 ;
 asm prword
-	LDA	ESTKH,X
+	STX	ESP
+	TXA
 	TAY
-	LDA	ESTKL,X
-	STX     ESP
-	TAX
-	TYA
+	LDA	ESTKH,Y
+	LDX	ESTKL,Y
 	BIT	ROMEN
 	JSR	$F941
 	LDX     ESP
@@ -434,8 +432,8 @@ asm rdstr
 	STA	$01FF,X
 	DEX
 	BPL	-
+	TXA
 	LDX     ESP
-	LDA     #$FF
 	STA     ESTKL,X
 	LDA     #$01
 	STA     ESTKH,X
@@ -461,7 +459,7 @@ asm uword_isle
 	CMP	ESTKL+1,X
 	LDA	ESTKH,X
 	SBC	ESTKH+1,X
- 	BCC	+
+	BCC	+
 	DEY
 + 	STY	ESTKL+1,X
 	STY	ESTKH+1,X
@@ -469,28 +467,26 @@ asm uword_isle
 	RTS
 end
 asm uword_isgt
-	LDY	#$FF
 	LDA	ESTKL,X
 	CMP	ESTKL+1,X
 	LDA	ESTKH,X
 	SBC	ESTKH+1,X
- 	BCC	+
-	INY
-+ 	STY	ESTKL+1,X
-	STY	ESTKH+1,X
+	LDA	#$FF
+	ADC	#$00
+ 	STA	ESTKL+1,X
+	STA	ESTKH+1,X
 	INX
 	RTS
 end
 asm uword_islt
-	LDY	#$FF
 	LDA	ESTKL+1,X
 	CMP	ESTKL,X
 	LDA	ESTKH+1,X
 	SBC	ESTKH,X
- 	BCC	+
-	INY
-+ 	STY	ESTKL+1,X
-	STY	ESTKH+1,X
+	LDA	#$FF
+	ADC	#$00
+ 	STA	ESTKL+1,X
+	STA	ESTKH+1,X
 	INX
 	RTS
 end
@@ -587,8 +583,7 @@ TOUPR	AND	#$7F
 	BCC     +
 	CMP     #'z'+1
 	BCS     +
-	SEC
-	SBC     #$20
+	SBC     #$1F
 +	STA     ESTKL,X
 	RTS
 end
@@ -823,16 +818,6 @@ def allocxheap(size)
     fin
     return xaddr
 end
-;def availxheap(void)
-;    return $BF00 - xheap;
-;end
-;def markxheap
-;    return xheap
-;end
-;def releasexheap(newxheap)
-;    xheap = newxheap;
-;    return $BF00 - xheap
-;end
 ;
 ; DCI table routines,
 ;
@@ -1008,6 +993,10 @@ def loadmod(mod)
         until rdlen <= 0
         close(refnum)
 	;
+	; Add module to symbol table.
+	;
+	addmod(mod, modaddr)
+	;
 	; Apply all fixups and symbol import/export.
 	;
         modfix   = modaddr - modfix
@@ -1094,10 +1083,6 @@ def loadmod(mod)
 	    ;
 	    memxcpy(defaddr, bytecode, modsize - (bytecode - modaddr))
        	fin
-	;
-	; Free up the end-of-module in main memory.
-	;
-	releaseheap(modend)
     fin
     if perr
         return -perr
@@ -1106,9 +1091,20 @@ def loadmod(mod)
     ; Call init routine if it exists.
     ;
     if init
-        return adddef(defbank, init - defofst + defaddr, @deflast)()
+        fixup = adddef(defbank, init - defofst + defaddr, @deflast)()
+	if defbank
+	    xheap  = init - defofst + defaddr
+        else
+	    modend = init - defofst + defaddr
+	fin
+    else
+        fixup = 0
     fin
-    return 0
+    ;
+    ; Free up the end-of-module in main memory.
+    ;
+    releaseheap(modend)
+    return fixup
 end
 ;
 ; Command mode
@@ -1288,7 +1284,6 @@ def execmod(modfile)
 	heap        = saveheap
     fin
 end
-
 ;
 ; Get heap start.
 ;
@@ -1297,7 +1292,7 @@ heap = *freemem
 ; Init symbol table.
 ;
 stodci(@stdlibstr, heap)
-addmod(heap, 1)
+addmod(heap, @systemflags)
 while *stdlibsym
     stodci((stdlibsym):0, heap)
     addsym(heap, (stdlibsym):2)
@@ -1312,7 +1307,11 @@ perr = 0
 ;
 ; Print some startup info.
 ;
-prstr(@version)
+prstr(@verstr)
+prbyte(version.1)
+cout('.')
+prbyte(version.0)
+crout
 prstr(@freestr)
 prword(availheap)
 crout
