@@ -80,7 +80,7 @@ test:	samplesrc/test.pla samplesrc/testlib.pla $(PLVM) $(PLASM)
 	acme --setpc 4094 -o $(TEST) samplesrc/test.a
 	m4 -I inc < samplesrc/testlib.pla | ./$(PLASM) -AM  > samplesrc/testlib.a
 	acme --setpc 4094 -o $(TESTLIB) samplesrc/testlib.a
-	./$(PLVM) $(TEST)
+	./$(PLVM) TEST
 
 $(ROD): samplesrc/rod.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AM < samplesrc/rod.pla > samplesrc/rod.a
@@ -95,4 +95,4 @@ $(HGR1):	samplesrc/hgr1.pla samplesrc/hgr1test.pla $(PLVM02) $(PLASM)
 hello:	samplesrc/hello.pla $(PLVM) $(PLASM)
 	m4 -I inc < samplesrc/hello.pla | ./$(PLASM) -AM > samplesrc/hello.a
 	acme --setpc 4094 -o $(HELLO) samplesrc/hello.a
-	./$(PLVM) $(HELLO)
+	./$(PLVM) HELLO

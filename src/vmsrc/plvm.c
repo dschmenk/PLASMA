@@ -146,6 +146,8 @@ uword lookup_tbl(byte *dci, byte *tbl)
         while (*entry++ & 0x80);
         entry += 2;
     }
+    dcitos(dci, str);
+    printf("\nError: symbols %s not found in symbol table.\n", str);
     return 0;
 }
 uword add_tbl(byte *dci, int val, byte **last)
@@ -233,10 +235,12 @@ int load_mod(byte *mod)
     byte *moddep, *rld, *esd, *cdd, *sym;
     byte header[128];
     int fd;
-    char filename[32], string[17];
+    char filename[48], string[17];
 
     dcitos(mod, filename);
     printf("Load module %s\n", filename);
+    if (strlen(filename) < 8 || (filename[strlen(filename) - 7] != '#'))
+        strcat(filename, "#FE1000");
     fd = open(filename, O_RDONLY, 0);
     if ((fd > 0) && (len = read(fd, header, 128)) > 0)
     {
@@ -316,6 +320,10 @@ int load_mod(byte *mod)
             printf("Module def count: $%04X\n", defcnt);
             printf("Module init: $%04X\n", init ? init + modfix - MOD_ADDR : 0);
         }
+        /*
+         * Add module to symbol table.
+         */
+        add_mod(mod, modaddr);
         /*
          * Print out the Re-Location Dictionary.
          */
@@ -418,6 +426,7 @@ int load_mod(byte *mod)
     if (init)
     {
         interp(mem_data + init + modfix - MOD_ADDR);
+//        release_heap(init + modfix - MOD_ADDR); // Free up init code
         return POP;
     }
     return 0;
@@ -429,6 +438,8 @@ void call(uword pc)
     unsigned int i, s;
     char c, sz[64];
 
+    if (show_state)
+        printf("\nCall code:$%02X\n", mem_data[pc]);
     switch (mem_data[pc++])
     {
         case 0: // NULL call
@@ -440,19 +451,14 @@ void call(uword pc)
         case 2: // BYTECODE in mem_data
             interp(mem_data + (mem_data[pc] + (mem_data[pc + 1] << 8)));
             break;
-        case 3: // LIBRARY STDLIB::VIEWPORT
-            printf("Set Viewport %d, %d, %d, %d\n", esp[3], esp[2], esp[1], esp[0]);
-            esp += 4;
-            PUSH(0);
-            break;
-        case 4: // LIBRARY STDLIB::PUTC
+        case 3: // LIBRARY STDLIB::PUTC
             c = POP;
             if (c == 0x0D)
                 c = '\n';
             putchar(c);
             PUSH(0);
             break;
-        case 5: // LIBRARY STDLIB::PUTS
+        case 4: // LIBRARY STDLIB::PUTS
             s = POP;
             i = mem_data[s++];
             PUSH(i);
@@ -464,7 +470,7 @@ void call(uword pc)
                 putchar(c);
             }
             break;
-        case 6: // LIBRARY STDLIB::PUTSZ
+        case 5: // LIBRARY STDLIB::PUTSZ
             s = POP;
             while ((c = mem_data[s++]))
             {
@@ -474,10 +480,10 @@ void call(uword pc)
             }
             PUSH(0);
             break;
-        case 7: // LIBRARY STDLIB::GETC
+        case 6: // LIBRARY STDLIB::GETC
             PUSH(getchar());
             break;
-        case 8: // LIBRARY STDLIB::GETS
+        case 7: // LIBRARY STDLIB::GETS
             gets(sz);
             for (i = 0; sz[i]; i++)
                 mem_data[0x200 + i] = sz[i];
@@ -485,25 +491,14 @@ void call(uword pc)
             mem_data[0x1FF] = i;
             PUSH(i);
             break;
-        case 9: // LIBRARY STDLIB::CLS
-            puts("\033[2J");
-            fflush(stdout);
-            PUSH(0);
-            PUSH(0);
-        case 10: // LIBRARY STDLIB::GOTOXY
-            s = POP + 1;
-            i = POP + 1;
-            printf("\033[%d;%df", s, i);
-            fflush(stdout);
-            PUSH(0);
-            break;
-        case 11: // LIBRARY STDLIB::PUTNL
+        case 8: // LIBRARY STDLIB::PUTNL
             putchar('\n');
             fflush(stdout);
             PUSH(0);
             break;
         default:
-            printf("Bad call code\n");
+            printf("\nBad call code:$%02X\n", mem_data[pc - 1]);
+            exit(1);
     }
 }
     
@@ -880,20 +875,14 @@ void interp(code *ip)
 }
 
 char *stdlib_exp[] = {
-    "VIEWPORT",
     "PUTC",
     "PUTS",
     "PUTSZ",
     "GETC",
     "GETS",
-    "CLS",
-    "GOTOXY",
-    "PUTNL",
+    "PUTLN",
+    "MACHID",
     0
-};
-
-byte stdlib[] = {
-    0x00
 };
 
 int main(int argc, char **argv)
