@@ -27,6 +27,6 @@ INTERP	=	$03D0
 	JMP	$1000
 _CMDBEGIN =	*
 	!PSEUDOPC	$1000 {
-	!SOURCE	"cmd.a"
+	!SOURCE	"vmsrc/cmd.a"
 _CMDEND	=	*
 }

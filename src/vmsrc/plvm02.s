@@ -38,7 +38,7 @@ ALTRDOFF=	$C002
 ALTRDON	=	$C003
 ALTWROFF=	$C004
 ALTWRON	=	$C005
-	!SOURCE	"plvm02zp.inc"
+	!SOURCE	"vmsrc/plvm02zp.inc"
 STRBUF	=	$0280
 ;**********************************************************
 ;*
@@ -260,7 +260,7 @@ START	LDA	#$00
 	LDA	#$BF
 	STA	IFPH
         LDX	#ESTKSZ/2
-	!SOURCE "cmdexec.a"
+	!SOURCE "vmsrc/cmdexec.a"
 DISABLE80 !BYTE	21, 13, '1', 26, 13
 }
 ;*
