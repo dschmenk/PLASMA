@@ -40,21 +40,19 @@ ALTWROFF=	$C004
 ALTWRON	=	$C005
 	!SOURCE	"vmsrc/plvm02zp.inc"
 STRBUF	=	$0280
-;**********************************************************
 ;*
 ;* INTERPRETER INSTRUCTION POINTER INCREMENT MACRO
 ;*
-;**********************************************************
 	!MACRO	INC_IP	{
 	INY
 	BNE	* + 4
 	INC	IPH
 	}
-;***********************************************
-;*
-;* INTERPRETER INITIALIZATION
-;*
-;***********************************************
+;******************************
+;*                            *
+;* INTERPRETER INITIALIZATION *
+;*                            *
+;******************************
 *	=	$2000
 	LDX     #$FF
 	TXS
@@ -178,6 +176,11 @@ INTERP	BIT	LCRDEN+LCBNK2	; $03D0 - DIRECT INTERP ENTRY
 TMRVEC	!WORD	TMRRTS
 TMRRTS	RTS
 }
+;************************************************
+;*                                              *
+;* LANGUAGE CARD RESIDENT PLASMA VM STARTS HERE *
+;*                                              *
+;************************************************
 VMCORE	=	*
 	!PSEUDOPC	$D000 {
 ;*
@@ -203,12 +206,9 @@ OPTBL 	!WORD	ZERO,ADD,SUB,MUL,DIV,MOD,INCR,DECR		; 00 02 04 06 08 0A 0C 0E
 	!WORD	LB,LW,LLB,LLW,LAB,LAW,DLB,DLW			; 60 62 64 66 68 6A 6C 6E
 	!WORD	SB,SW,SLB,SLW,SAB,SAW,DAB,DAW			; 70 72 74 76 78 7A 7C 7E
 ;*
-;* 'BYE' COMMAND PROCESSING
+;* 'BYE' PROCESSING - COPIED TO $1000 ON PRODOS BYE COMMAND
 ;*
 	!PSEUDOPC	$1000 {
-;*
-;* CLEAR COMMAND LINE LENGTH BYTE IF CALLED FROM 'BYE'
-;*
 BYE	JMP	CPYCMD
 DEFCMD	!FILL	63		; AT $D103 IN LC MEMORY
 CPYCMD	LDY	DEFCMD
@@ -216,31 +216,10 @@ CPYCMD	LDY	DEFCMD
 	STA	STRBUF,Y
 	DEY
 	BPL	-
-;*
-;* MOVE REST OF CMD FROM LANGUAGE CARD
-;*
-CMDEXEC	LDY	#$00
-	STY	SRCL
-	STY	DSTL
-	LDA	#$D2
-	STA	SRCH
-	LDA	#$11
-	STA	DSTH
-	BIT	LCRDEN+LCBNK2
--	LDA	(SRC),Y
-	STA	(DST),Y
-	INY
-	BNE	-
-	INC	SRCH
-	INC	DSTH
-	LDA	SRCH
-	CMP	#$D4 ; #$E0
-	BNE	-
-;*
-;* DEACTIVATE 80 COL CARDS
-;*
-	LDX	#$FE
-	TXS
+CMDEXEC	=	*
+;
+; DEACTIVATE 80 COL CARDS
+;
 	BIT	ROMEN
 	LDY	#4
 -	LDA	DISABLE80,Y
@@ -252,16 +231,56 @@ CMDEXEC	LDY	#$00
 	BIT	$C051
 	BIT	$C058
 	JSR	$FC58		; HOME
-;*
-;* JUMP TO INTERPRETER
-;*
-START	LDA	#$00
-	STA	IFPL
-	LDA	#$BF
-	STA	IFPH
-        LDX	#ESTKSZ/2
-	!SOURCE "vmsrc/cmdexec.a"
+;
+; READ CMD INTO MEMORY
+;
+	JSR     PRODOS		; CLOSE EVERYTHING
+	!BYTE	$CC
+	!WORD	CLOSEPARMS
+	BNE     FAIL
+	JSR     PRODOS          ; OPEN CMD
+	!BYTE	$C8
+	!WORD	OPENPARMS
+	BNE	FAIL
+	LDA     REFNUM
+	STA     READPARMS+1
+	JSR     PRODOS
+	!BYTE	$CA
+	!WORD	READPARMS
+	BNE     FAIL
+	JSR     PRODOS
+	!BYTE	$CC
+	!WORD	CLOSEPARMS
+	BNE     FAIL
+	JMP     $2000		; JUMP TO LOADED SYSTEM COMMAND
+;
+; PRINT FAIL MESSAGE, WAIT FOR KEYPRESS, AND REBOOT
+;
+FAIL	INC	$3F4		; INVALIDATE POWER-UP BYTE
+	LDY	#$01
+-	LDA	FAILMSG,Y
+	ORA	#$80
+	JSR	$FDED
+	INY
+	CPY	FAILMSG
+	BNE	-
+	JSR	$FD0C		; WAIT FOR KEYPRESS
+	JMP	($FFFC)		; RESET
+OPENPARMS !BYTE	3
+	!WORD	STRBUF
+	!WORD	$0800
+REFNUM	!BYTE	0
+READPARMS !BYTE	4
+	!BYTE	0
+	!WORD	$2000
+	!WORD	$1100
+	!WORD	0
+CLOSEPARMS !BYTE 1
+	!BYTE	0
 DISABLE80 !BYTE	21, 13, '1', 26, 13
+FAILMSG !BYTE	39
+	!TEXT	"MISSING CMD. PRESS ANY KEY TO RESET..."
+ENDBYE	=	*
 }
 ;*
 ;* ENTER INTO BYTECODE INTERPRETER
