@@ -56,10 +56,11 @@ vmsrc/a1cmd.a: vmsrc/a1cmd.pla $(PLASM)
 $(PLVM01): vmsrc/plvm01.s vmsrc/a1cmd.a
 	acme -o $(PLVM01) -l vmsrc/plvm01.sym vmsrc/plvm01.s
 
-vmsrc/cmdexec.a: vmsrc/cmdexec.pla $(PLASM)
-	./$(PLASM) -A < vmsrc/cmdexec.pla > vmsrc/cmdexec.a
+$(CMD): vmsrc/cmd.pla vmsrc/cmdstub.s $(PLVM02) $(PLASM)
+	./$(PLASM) -A < vmsrc/cmd.pla > vmsrc/cmd.a
+	acme --setpc 8192 -o $(CMD) vmsrc/cmdstub.s
 
-$(PLVM02): vmsrc/plvm02.s vmsrc/cmdexec.a
+$(PLVM02): vmsrc/plvm02.s
 	acme -o $(PLVM02) -l vmsrc/plvm02.sym vmsrc/plvm02.s
 
 vmsrc/soscmd.a: vmsrc/soscmd.pla $(PLASM)
@@ -67,10 +68,6 @@ vmsrc/soscmd.a: vmsrc/soscmd.pla $(PLASM)
 
 $(PLVM03): vmsrc/plvm03.s vmsrc/soscmd.a
 	acme -o $(PLVM03) -l vmsrc/plvm03.sym vmsrc/plvm03.s
-
-$(CMD): vmsrc/cmd.pla vmsrc/cmdstub.s $(PLVM02) $(PLASM)
-	./$(PLASM) -A < vmsrc/cmd.pla > vmsrc/cmd.a
-	acme --setpc 8192 -o $(CMD) vmsrc/cmdstub.s
 
 #
 # Sample code
