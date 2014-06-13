@@ -1,5 +1,5 @@
-# PLASMA Programming User Manual
-## ( Proto Language AsSeMbler for Apple)
+# PLASMA 123 Programming User Manual
+## (Proto Language AsSeMbler for Apple)
 
 ## Introduction
 PLASMA is a medium level programming language targetting the 8 bit 6502 processor. Historically, there were simple languages developed in the early history of computers that improved on the tedium of assembly language programming while still being low level enough for system coding. Languages like B, FORTH, and PLASMA fall into this category. The following will take you through the process of writing, building and running a PLASMA module.
