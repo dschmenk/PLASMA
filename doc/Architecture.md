@@ -15,3 +15,74 @@ Function calls use the call stack to save the return address of the calling code
 
 #### The Local Frame Stack
 One of the biggest problems to overcome with the 6502 is its very small hardware stack. Algorithms that incorporate recursive procedure calls are very difficult or slow on the 6502. PLASMA takes the middle ground when implementing local frames; a frame pointer on the zero page is indirectly indexed by the Y register. Because the Y register is only eight bits, the local frame size is limited to 256 bytes. 256 bytes really is sufficient for all but the most complex of functions. With a little creative use of dynamic memory allocation, almost anything can be implemented without undue hassle. When a function with parameters is called, the first order of business is to allocate the frame, copy the parameters off the evaluation stack into local variables, and save a link to the previous frame. This is all done automatically with the ENTER opcode. The reverse takes place with the LEAVE opcode when the function exits. Functions that have neither parameters or local variables can forgoe the frame build/destroy process.
+
+### The Byecodes
+The compact code representation comes through the use of opcodes closely matched to the PLASMA compiler. They are:
+
+| OPCODE |                  Description
+|:------:|-----------------------------------
+| ZERO   | push zero on the stack
+| ADD    | add top two values, leave result on top
+| SUB    | subtract next from top from top, leave result on top
+| MUL    | multiply two topmost stack values, leave result on top
+| DIV    | divide next from top by top, leave result on top
+| MOD    | divide next from top by top, leave remainder on top
+| INCR   | increment top of stack
+| DECR   | decrement top of stack
+| NEG    | negate top of stack
+| COMP   | compliment top of stack
+| AND    | bit wise AND top two values, leave result on top
+| IOR    | bit wise inclusive OR top two values, leave result on top
+| XOR    | bit wise exclusive OR top two values, leave result on top
+| LOR    | logical OR top two values, leave result on top
+| LAND   | logical AND top two values, leave result on top
+| SHL    | shift left next from top by top, leave result on top
+| SHR    | shift right next from top by top, leave result on top
+| IDXB   | add top of stack to next from top, leave result on top (ADD)
+| IDXW   | add 2X top of stack to next from top, leave result on top
+| NOT    | logical NOT of top of stack
+| LA     | load address
+| LLA    | load local address from frame offset
+| CB     | constant byte
+| CW     | constant word
+| SWAP   | swap two topmost stack values
+| DROP   | drop top stack value
+| DUP    | duplicate top stack value
+| PUSH   | push top to call stack
+| PULL   | pull from call stack
+| BRGT   | branch next from top greater than top
+| BRLT   | branch next from top less than top
+| BREQ   | branch next from top equal to top
+| BRNE   | branch next from top not equal to top
+| ISEQ   | if next from top is equal to top, set top true
+| ISNE   | if next from top is not equal to top, set top true
+| ISGT   | if next from top is greater than top, set top true
+| ISLT   | if next from top is less than top, set top true
+| ISGE   | if next from top is greater than or equal to top, set top true
+| ISLE   | if next from top is less than or equal to top, set top true
+| BRFLS  | branch if top of stack is zero
+| BRTRU  | branch if top of stack is non-zero
+| BRNCH  | branch to address
+| CALL   | sub routine call with stack parameters
+| ICAL   | sub routine call to indirect address on stack top with stack parameters
+| ENTER  | allocate frame size and copy stack parameters to local frame
+| LEAVE  | deallocate frame and return from sub routine call
+| RET    | return from sub routine call
+| LB     | load byte from top of stack address
+| LW     | load word from top of stack address
+| LLB    | load byte from frame offset
+| LLW    | load word from frame offset
+| LAB    | load byte from absolute address
+| LAW    | load word from absolute address
+| SB     | store top of stack byte into next from top address
+| SW     | store top of stack word into next from top address
+| SLB    | store top of stack into local byte at frame offset
+| SLW    | store top of stack into local word at frame offset
+| SAB    | store top of stack into byte at absolute address
+| SAW    | store top of stack into word at absolute address
+| DLB    | duplicate top of stack into local byte at frame offset
+| DLW    | duplicate top of stack into local word at frame offset
+| DAB    | duplicate top of stack into byte at absolute address
+| DAW    | duplicate top of stack into word at absolute address
+
+The opcodes were developed over time by starting with a very basic set of operations and slowly adding opcodes when the PLASMA compiler could improve code density or performance.
