@@ -392,7 +392,7 @@ The Apple II support covers the full range of the Apple II family. From the Rev 
 Probably the most exciting development is the support for the Apple ///. PLASMA on the Apple /// provides 32K for global data and 6502 code, and the rest of the memory for bytecode and extended data.
 
 ## References
-PLASMA User Manual: https://github.com/dschmenk/PLASMA/blob/master/User%20Manual.md
+PLASMA User Manual: https://github.com/dschmenk/PLASMA/blob/master/doc/User%20Manual.md
 
 B Programming Language User Manual  http://cm.bell-labs.com/cm/cs/who/dmr/kbman.html
 
