@@ -168,25 +168,21 @@ asm memset
 	STA     DSTH
 	INC     ESTKL+1,X
 	INC     ESTKH+1,X
+-	CLC
 SETMLP	DEC     ESTKL+1,X
 	BNE     +
 	DEC     ESTKH+1,X
 	BEQ     SETMEX
 +	LDA     ESTKL,X
-	STA     (DST),Y
+	BCC	+
+	LDA     ESTKH,X
++	STA     (DST),Y
 	INY
-	BNE     +
+	BNE	+
 	INC     DSTH
-+	DEC     ESTKL+1,X
-	BNE     +
-	DEC     ESTKH+1,X
-	BEQ     SETMEX
-+	LDA     ESTKH,X
-	STA     (DST),Y
-	INY
-	BNE     SETMLP
-	INC     DSTH
-	BNE     SETMLP
++	BCS	-
+	SEC
+	BCS	SETMLP
 SETMEX	INX
 	INX
 	RTS
@@ -618,14 +614,14 @@ end
 ; CFFA1 routines
 ; FILE I/O
 ;
-def opendir
-    perr = syscall($10)
-    return perr
-end
-def readdir
-    perr = syscall($12)
-    return *CFFAEntryPtr
-end
+;def opendir
+;    perr = syscall($10)
+;    return perr
+;end
+;def readdir
+;    perr = syscall($12)
+;    return *CFFAEntryPtr
+;end
 def finddirentry(filename)
     *CFFAFileName = filename
     perr = syscall($14)
@@ -905,38 +901,38 @@ end
 ;
 ; Command mode
 ;
-def catalog
-    byte type, len
-    word entry, filecnt
+;def catalog
+;    byte type, len
+;    word entry, filecnt
 
-    opendir
-    repeat
-        entry = readdir
-	if !perr
-	    type = ^entry
-	    if type
-	        len = type & $0F
-		^entry = len
-		prstr(entry)
-	    if type & $F0 == $D0 ; Is it a directory?
-	        cout('/')
-	        len = len + 1
-	    elsif (entry).$10 == $FF
-	        cout('-')
-		len = len + 1
-	    elsif (entry).$10 == $FE
-	        cout('+')
-		len = len + 1
-	    fin
-	        for len = 19 - len downto 0
-		    cout(' ')
-                next
-            fin
-	fin
-    until perr
-    perr = 0
-    return crout()
-end
+;    opendir
+;    repeat
+;        entry = readdir
+;	if !perr
+;	    type = ^entry
+;	    if type
+;	        len = type & $0F
+;		^entry = len
+;		prstr(entry)
+;	    if type & $F0 == $D0 ; Is it a directory?
+;	        cout('/')
+;	        len = len + 1
+;	    elsif (entry).$10 == $FF
+;	        cout('-')
+;		len = len + 1
+;	    elsif (entry).$10 == $FE
+;	        cout('+')
+;		len = len + 1
+;	    fin
+;	        for len = 19 - len downto 0
+;		    cout(' ')
+;                next
+;            fin
+;	fin
+;    until perr
+;    perr = 0
+;    return crout()
+;end
 def stripchars(strptr)
     while ^strptr and ^(strptr + 1) <> ' '
         memcpy(strptr + 1, strptr + 2, ^strptr)
@@ -1036,8 +1032,8 @@ while 1
 	        quit
 	    is 'M'
 	        syscall($02)
-	    is 'C'
-	        catalog
+;	    is 'C'
+;	        catalog
 	    is '+'
 	        execmod(cmdptr)
 	    otherwise
