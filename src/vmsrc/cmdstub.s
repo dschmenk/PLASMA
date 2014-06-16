@@ -5,7 +5,7 @@ ROMEN	=	$C082
 LCRWEN 	=	$C083
 LCBNK2	=	$00
 LCBNK1	=	$08
-	!SOURCE	"vmsrc/plvm02zp.inc"
+	!SOURCE	"vmsrc/plvmzp.inc"
 ;*
 ;* MOVE CMD DOWN TO $1000-$2000
 ;*

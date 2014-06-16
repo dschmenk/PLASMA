@@ -3,6 +3,12 @@
 ;* VM ZERO PAGE LOCATIONS
 ;*
 ;**********************************************************
+SRC	=	$06
+SRCL	=	SRC
+SRCH	=	SRC+1
+DST	=	SRC+2
+DSTL	=	DST
+DSTH	=	DST+1
 ESTKSZ	=	$20
 ESTK	=	$C0
 ESTKL	=	ESTK
@@ -18,15 +24,10 @@ IPY	=	IP+2
 TMP	=	IP+3
 TMPL	=	TMP
 TMPH	=	TMP+1
-TMPX	=	TMP+2
 NPARMS	=	TMPL
 FRMSZ	=	TMPH
-DVSIGN	=	TMPX
-ESP     =       TMPX
-TICTOC	=	TMP+3
-SRC	=	$06
-SRCL	=	SRC
-SRCH	=	SRC+1
-DST	=	SRC+2
-DSTL	=	DST
-DSTH	=	DST+1
+DVSIGN	=	TMP+2
+ESP     =       TMP+2
+NEXTOP	=	$F0
+OPIDX	=	NEXTOP+8
+OPPAGE	=	OPIDX+1
