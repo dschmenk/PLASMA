@@ -552,7 +552,7 @@ def prstr(str)
     loop
 end
 def rdstr(prompt)
-    byte ch, maxlen, i
+    byte ch, maxlen
     maxlen = 0
     inbuff.0 = 0
     cout(prompt)
@@ -575,9 +575,7 @@ def rdstr(prompt)
 	        if inbuff.0
 		    cout('#')
 		    cout(inbuff[inbuff.0])
-		    for i = inbuff.0 + 1 to maxlen
-		        inbuff[i - 1] = inbuff[i]
-		    next
+		    memcpy(inbuff + inbuff.0, inbuff + inbuff.0 + 1, maxlen - inbuff.0)
 		    maxlen   = maxlen   - 1
 		    inbuff.0 = inbuff.0 - 1
 		fin
@@ -592,11 +590,13 @@ def rdstr(prompt)
 	        inbuff.0 = 0
 		ch = $0D
 	    otherwise
-	        cout(ch)
-		inbuff.0 = inbuff.0 + 1
-		inbuff[inbuff.0] = ch
-		if inbuff.0 > maxlen
-		    maxlen = inbuff.0
+	        if ch >= ' '
+	            cout(ch)
+		    inbuff.0 = inbuff.0 + 1
+		    inbuff[inbuff.0] = ch
+		    if inbuff.0 > maxlen
+		        maxlen = inbuff.0
+		    fin
 		fin
 	wend
     until ch == $0D or inbuff.0 == $7F
@@ -897,43 +897,11 @@ def loadmod(mod)
     ; Free up the end-of-module in main memory.
     ;
     releaseheap(modend)
-    return 0
+    return fixup
 end
 ;
 ; Command mode
 ;
-;def catalog
-;    byte type, len
-;    word entry, filecnt
-
-;    opendir
-;    repeat
-;        entry = readdir
-;	if !perr
-;	    type = ^entry
-;	    if type
-;	        len = type & $0F
-;		^entry = len
-;		prstr(entry)
-;	    if type & $F0 == $D0 ; Is it a directory?
-;	        cout('/')
-;	        len = len + 1
-;	    elsif (entry).$10 == $FF
-;	        cout('-')
-;		len = len + 1
-;	    elsif (entry).$10 == $FE
-;	        cout('+')
-;		len = len + 1
-;	    fin
-;	        for len = 19 - len downto 0
-;		    cout(' ')
-;                next
-;            fin
-;	fin
-;    until perr
-;    perr = 0
-;    return crout()
-;end
 def stripchars(strptr)
     while ^strptr and ^(strptr + 1) <> ' '
         memcpy(strptr + 1, strptr + 2, ^strptr)
@@ -1033,8 +1001,6 @@ while 1
 	        quit
 	    is 'M'
 	        syscall($02)
-;	    is 'C'
-;	        catalog
 	    is '+'
 	        execmod(cmdptr)
 	    otherwise

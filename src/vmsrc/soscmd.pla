@@ -519,15 +519,19 @@ end
 ;    loop
 ;    return 0
 asm lookuptbl
+	LDY	#$00
+	STY	DSTL
 	LDA	ESTKL,X
-	STA	DSTL
+	STA	DSTX
 	LDA	ESTKH,X
-	STA	DSTH
+	BNE	+
+	DEC	DSTX
+	LDA	#$80
++	STA	DSTH
 	LDA	ESTKL+1,X
 	STA	SRCL
 	LDA	ESTKH+1,X
 	STA	SRCH
-	LDY	#$00
 -	LDA	(DST),Y
 	BEQ	+
 	CMP	(SRC),Y
@@ -544,6 +548,8 @@ asm lookuptbl
 +	INX
 	STA	ESTKL,X
 	STY	ESTKH,X
+	LDA	#$00
+	STA	DSTX
 	RTS
 ++	LDY	#$00
 --	LDA	(DST),Y
@@ -875,7 +881,7 @@ end
 ;	tbl = tbl + 2
 ;    loop
 ;end
-def addtbl(dci, val, last)
+def addtbl(dci, val, seg, last)
     word tblentry
     tblentry = *last
     while ^dci & $80
@@ -895,7 +901,7 @@ def lookupsym(sym)
     return lookuptbl(sym, symtbl)
 end
 def addsym(sym, addr)
-    return addtbl(sym, addr, @lastsym);
+    return addtbl(sym, addr, symtbl, @lastsym);
 end
 ;
 ; Module routines.
@@ -906,7 +912,7 @@ def lookupmod(mod)
 end
 def addmod(mod, addr)
     byte dci[17]
-    return addtbl(modtosym(mod, @dci), addr, @lastsym)
+    return addtbl(modtosym(mod, @dci), addr, symtbl, @lastsym)
 end
 def lookupextern(esd, index)
     word sym, addr
@@ -1039,7 +1045,7 @@ def loadmod(mod)
 	;
 	; Locate bytecode defs in allocated segment.
 	;
-	modseg[modid] = seg_find($00, @codeseg, @defaddr, (rld - bytecode + 255) >> 8, modid + $11)
+	modseg[modid] = seg_find($00, @codeseg, @defaddr, (rld - bytecode + 255) >> 8, modid + $12)
 	if perr
 	    return -perr
 	fin
@@ -1261,7 +1267,7 @@ def execmod(modfile)
     word saveheap, savesym, saveflags
   
     if stodci(modfile, @moddci)
-        saveheap  = heap
+        saveheap    = heap
 	savesym     = lastsym
 	saveflags   = systemflags
 	^lastsym    = 0
@@ -1280,11 +1286,11 @@ end
 ;
 init_cons
 ;
-; Init symbol table.
+; Init 2K symbol table.
 ;
-symtbl   = allocheap($400)
-lastsym  = symtbl
-^lastsym = 0
+seg_find($00, @symtbl, @lastsym, $08, $11)
+lastsym = symtbl & $FF00
+pokeb(symtbl, lastsym, 0)
 stodci(@stdlibstr, heap)
 addmod(heap, @systemflags)
 while *stdlibsym
