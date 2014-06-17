@@ -270,16 +270,16 @@ asm memxcpy
 	LDA	ESTKL,X
 	ORA	ESTKH,X
 	BEQ	CPYXMEX
+	LDY	#$00
+	STY	DSTL
+	LDA	ESTKH+2,X
+	CLC
+	ADC	#$60
+	STA 	DSTH
 	LDA	ESTKL+2,X
 	ORA	#$80
 	STA 	DSTX
-	LDA	ESTKH+2,X
-	BNE	+
 	DEC	DSTX
-	LDA	#$80
-+	STA 	DSTH
-	LDY	#$00
-	STY	DSTL
 	LDA	ESTKL+1,X
 	STA 	SRCL
 	LDA	ESTKH+1,X
@@ -298,6 +298,30 @@ CPYXLP	LDA	(SRC),Y
 	LDA	#$00
 	STA	DSTX
 CPYXMEX	INX
+	INX
+	RTS
+end
+;
+; POKE BYTE VAL INTO EXT MEM.
+;
+; XPOKEB(SEG, DST, BYTEVAL)
+;
+asm xpokeb
+	LDA	ESTKL+1,X
+	STA	DSTL
+	LDA	ESTKH+1,X
+	CLC
+	ADC	#$60
+	STA	DSTH
+	LDA	ESTKL+2,X
+	ORA	#$80
+	STA	DSTX
+	DEC	DSTX
+	LDA	ESTKL,X
+	LDY	#$00
+	STA	(DST),Y
+	STY	DSTX
+	INX
 	INX
 	RTS
 end
@@ -395,7 +419,7 @@ asm dcitos
 	CMP	(SRC),Y
 	INY
 	STA	(DST),Y
-	BCS	-
+	BCC	-
 	TYA
 	LDY	#$00
 	STA	(DST),Y
@@ -520,13 +544,14 @@ end
 asm lookuptbl
 	LDY	#$00
 	STY	DSTL
-	LDA	ESTKL,X
-	STA	DSTX
 	LDA	ESTKH,X
-	BNE	+
+	CLC
+	ADC	#$60
+	STA	DSTH
+	LDA	ESTKL,X
+	ORA	#$80
+	STA	DSTX
 	DEC	DSTX
-	LDA	#$80
-+	STA	DSTH
 	LDA	ESTKL+1,X
 	STA	SRCL
 	LDA	ESTKH+1,X
@@ -553,9 +578,9 @@ asm lookuptbl
 ++	LDY	#$00
 --	LDA	(DST),Y
 	INC	DSTL
-	BNE	++
+	BNE	+
 	INC	DSTH
-++	AND	#$80
++	AND	#$80
 	BMI	--
 	LDA	#$02
 	CLC
@@ -855,52 +880,23 @@ def releaseheap(newheap)
     return @newheap - heap;
 end
 ;
-; DCI table routines,
-;
-;def dumptbl(tbl)
-;    byte len
-;
-;    while ^tbl
-;        len = 0
-;        while ^tbl & $80
-;            cout(^tbl)
-;            tbl = tbl + 1
-;            len = len + 1
-;        loop
-;        cout(^tbl)
-;        tbl = tbl + 1
-;        cout(':')
-;        while len < 15
-;            cout(' ')
-;            len = len + 1
-;        loop
-;        cout('$')
-;        prword(*tbl)
-;        crout
-;	tbl = tbl + 2
-;    loop
-;end
-def addtbl(dci, val, seg, last)
-    word tblentry
-    tblentry = *last
-    while ^dci & $80
-        ^tblentry = ^dci
-        tblentry  = tblentry + 1
-        dci       = dci      + 1
-    loop
-    (tblentry).0 = ^dci
-    (tblentry):1 = val
-    *last        = tblentry + 3
-    ^*last       = 0
-end
-;
 ; Symbol table routines.
 ;
 def lookupsym(sym)
     return lookuptbl(sym, symtbl)
 end
 def addsym(sym, addr)
-    return addtbl(sym, addr, symtbl, @lastsym);
+    while ^sym & $80
+        xpokeb(symtbl.0, lastsym, ^sym)
+        lastsym  = lastsym + 1
+        sym      = sym     + 1
+    loop
+    xpokeb(symtbl.0, lastsym, ^sym)
+    xpokeb(symtbl.0, lastsym + 1, addr.0)
+    xpokeb(symtbl.0, lastsym + 2, addr.1)
+    xpokeb(symtbl.0, lastsym + 3, 0)
+    lastsym = lastsym + 3
+;    return addtbl(sym, addr, symtbl.0, @lastsym)
 end
 ;
 ; Module routines.
@@ -911,7 +907,7 @@ def lookupmod(mod)
 end
 def addmod(mod, addr)
     byte dci[17]
-    return addtbl(modtosym(mod, @dci), addr, symtbl, @lastsym)
+    return addsym(modtosym(mod, @dci), addr)
 end
 def lookupextern(esd, index)
     word sym, addr
@@ -1049,11 +1045,8 @@ def loadmod(mod)
 	    return -perr
 	fin
 	modid = modid + 1
-	if !codeseg.1 ; Fix up address if at bottom of segment: 8n:00 -> 8(n-1):80
-	    codeseg = codeseg - $8001
-	fin
-	defext  = codeseg.0 | $80
-	defaddr = codeseg & $FF00
+	defext  = (codeseg.0 | $80) - 1
+	defaddr = (codeseg & $FF00) + $6000
         ;
         ; Run through the Re-Location Dictionary.
         ;
@@ -1266,10 +1259,10 @@ def execmod(modfile)
     word saveheap, savesym, saveflags
   
     if stodci(modfile, @moddci)
+	xpokeb(symtbl.0, lastsym, 0)
         saveheap    = heap
 	savesym     = lastsym
 	saveflags   = systemflags
-	^lastsym    = 0
 	perr        = loadmod(@moddci)
 	systemflags = saveflags
 	lastsym     = savesym
@@ -1289,7 +1282,7 @@ init_cons
 ;
 seg_find($00, @symtbl, @lastsym, $08, $11)
 lastsym = symtbl & $FF00
-pokeb(symtbl, lastsym, 0)
+xpokeb(symtbl.0, lastsym, 0)
 stodci(@stdlibstr, heap)
 addmod(heap, @systemflags)
 while *stdlibsym
