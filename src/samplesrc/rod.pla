@@ -1,20 +1,14 @@
 import STDLIB
-    predef call, puts
+    predef syscall, call, memset, getc, putc, puts, modaddr
+    byte MACHID
 end
 ;
 ; Handy constants.
 ;
-const FALSE=$0000
+const FALSE=0
 const TRUE=!FALSE
 ;
-; CALL return register structure.
-;
-const acc  = 0
-const xreg = 1
-const yreg = 2
-const preg = 3
-;
-; Hardware constants.
+; Apple II hardware constants.
 ;
 const speaker      = $C030
 const showgraphics = $C050
@@ -32,22 +26,147 @@ const hgr2         = $4000
 const page1        = 0
 const page2        = 1
 ;
-; ROM routinse.
+; Predefined functions.
 ;
-const grplot   = $F800
-const initmode = $FB2F
-const textmode = $FB39
-const grmode   = $FB40
-const vtab     = $FB5B
-const grcolor  = $F864
-const home     = $FC58
+predef a2keypressed, a2gotoxy, a2grmixmode, a2textmode, a2grcolor, a2grplot
 ;
 ; String data.
 ;
+byte a1err[]   = "Apple 1 not supported.\n"
+byte a3err[]   = "Apple 3 version mismatch.\n"
 byte exitmsg[] = "Press any key to exit.\n"
 byte goodbye[] = "That's all, folks!\n"
+byte stdlib[]  = "STDLIB"
 ;
-; Rod's Colors
+; Screen row address arrays.
+;
+word txtscrn[]      = $0400,$0480,$0500,$0580,$0600,$0680,$0700,$0780
+word                = $0428,$04A8,$0528,$05A8,$0628,$06A8,$0728,$07A8
+word                = $0450,$04D0,$0550,$05D0,$0650,$06D0,$0750,$07D0
+word clrscrn[]      = $0800,$0880,$0900,$0980,$0A00,$0A80,$0B00,$0B80
+word                = $0828,$08A8,$0928,$09A8,$0A28,$0AA8,$0B28,$0BA8
+word                = $0850,$08D0,$0950,$09D0,$0A50,$0AD0,$0B50,$0BD0
+;
+; Apple 3 console codes.
+;
+byte textbwmode[]   = 2, 16, 0
+byte textclrmode[]  = 2, 16, 1
+byte grcharset[]    = 1, 0, $7F, $7F, $7F, $7F, $00, $00, $00, $00
+byte grfullcolor
+byte devcons
+;
+; Function pointers.
+;
+word keypressed = @a2keypressed
+word gotoxy     = @a2gotoxy
+word grmixmode  = @a2grmixmode
+word textmode   = @a2textmode
+word grcolor    = @a2grcolor
+word grplot     = @a2grplot
+;
+; Apple II routines.
+;
+def a2keypressed
+    if ^keyboard >= 128
+        return ^keystrobe
+    fin
+    return FALSE
+end
+def a2gotoxy(x, y)
+    ^$24 = x + ^$20
+    return call($FB5B, y + ^$22, 0, 0, 0)
+end
+def a2grmixmode
+    call($FB2F, 0, 0, 0, 0) ;initmode()
+    call($FB40, 0, 0, 0, 0) ;grmode()
+    return call($FC58, 0, 0, 0, 0) ;home()
+end
+def a2textmode
+    call($FB39, 0, 0, 0, 0) ;textmode()
+    return call($FC58, 0, 0, 0, 0) ;home()
+end
+def a2grcolor(color)
+    return call($F864, color, 0, 0, 0)
+end
+def a2grplot(x, y)
+    return call($F800, y, 0, x, 0)
+end
+;
+; Apple III routines.
+;
+def dev_control(devnum, code, list)
+    byte params[5]
+    
+    params.0 = 3
+    params.1 = devnum
+    params.2 = code
+    params:3 = list
+    return syscall($83, @params)
+end
+def dev_status(devnum, code, list)
+    byte params[5]
+    
+    params.0 = 3
+    params.1 = devnum
+    params.2 = code
+    params:3 = list
+    return syscall($82, @params)
+end
+def a3keypressed
+    byte count
+    dev_status(devcons, 5, @count)
+    if count
+        return getc
+    fin
+    return FALSE
+end
+def a3gotoxy(x, y)
+    putc(24)
+    putc(x)
+    putc(25)
+    return putc(y)
+end
+def a3viewport(left, top, width, height)
+    putc(1) ; Reset viewport
+    putc(26)
+    putc(left)
+    putc(top)
+    putc(2)
+    putc(26)
+    putc(left + width  - 1)
+    putc(top  + height - 1)
+    putc(3)
+    return a3gotoxy(0, 0)
+end
+def a3grmixmode
+    byte i
+    puts(@textclrmode)
+    dev_control(devcons, 17, @grcharset)
+    for i = 0 to 19
+        memset(txtscrn[i], 40, $0000)
+        memset(clrscrn[i], 40, $0000)
+    next
+    return a3viewport(0, 20, 40, 4)
+end
+def a3textmode
+    puts(@textbwmode)
+    a3viewport(0, 0, 40, 24)
+    return putc(28)
+end
+def a3grcolor(color)
+    grfullcolor = (color & $0F) | (color << 4)
+end
+def a3grplot(x, y)
+    word blockaddr
+    blockaddr = clrscrn[y >> 1] + x
+    if y & 1
+        ^blockaddr = (^blockaddr & $0F) | (grfullcolor & $F0)
+    else
+        ^blockaddr = (^blockaddr & $F0) | (grfullcolor & $0F)
+    fin
+end
+;
+; Rod's Colors.
 ;
 def rod
     byte i, j, k, w, fmi, fmk, color
@@ -59,31 +178,49 @@ def rod
 		    color = (j * 3) / (i + 3) + i * w / 12
 		    fmi = 40 - i
 		    fmk = 40 - k
-		    call(grcolor, color, 0, 0, 0) ;grcolor(color);
-		    call(grplot,  k,   0, i,   0) ;grplot(i, k);
-		    call(grplot,  i,   0, k,   0) ;grplot(k, i);
-		    call(grplot,  fmk, 0, fmi, 0) ;grplot(fmi, fmk);
-		    call(grplot,  fmi, 0, fmk, 0) ;grplot(fmk, fmi);
-		    call(grplot,  fmi, 0, k,   0) ;grplot(k, fmi);
-		    call(grplot,  k,   0, fmi, 0) ;grplot(fmi, k);
-		    call(grplot,  fmk, 0, i,   0) ;grplot(i, fmk);
-		    call(grplot,  i,   0, fmk, 0) ;grplot(fmk, i);
-		    if ^keyboard >= 128
-		        return ^keystrobe
+		    grcolor(color)
+		    grplot(i, k)
+		    grplot(k, i)
+		    grplot(fmi, fmk)
+		    grplot(fmk, fmi)
+		    grplot(k, fmi)
+		    grplot(fmi, k)
+		    grplot(i, fmk)
+		    grplot(fmk, i)
+		    if keypressed()
+		        return
 		    fin
 		next
 	    next
 	next
     loop
 end
-
-call(initmode, 0, 0, 0, 0) ;initmode()
-call(grmode, 0, 0, 0, 0)   ;grmode()
-^$24 = 10                  ;gotoxy(10,22)
-call(vtab, 22, 0, 0, 0)
+;
+; Machine specific initialization.
+;
+when MACHID & $C8
+    is $08 ; Apple 1
+        puts(@a1err)
+	return
+    is $C0 ; Apple ///
+        keypressed = @a3keypressed
+	gotoxy     = @a3gotoxy
+	grmixmode  = @a3grmixmode
+	textmode   = @a3textmode
+	grcolor    = @a3grcolor
+	grplot     = @a3grplot
+	if modaddr(@stdlib):0 == $0010
+	    devcons = modaddr(@stdlib).5 ; devcons variable from STDLIB
+	else
+	    puts(@a3err)
+	    return
+	fin
+    otherwise ; Apple ][
+wend
+grmixmode()
+gotoxy(11, 1)
 puts(@exitmsg)
 rod
-call(textmode, 0, 0, 0, 0) ;textmode()
-call(home, 0, 0, 0, 0)     ;home()
+textmode()
 puts(@goodbye)
 done
