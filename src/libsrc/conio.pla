@@ -5,10 +5,10 @@ end
 ;
 ; Handy constants.
 ;
-const FALSE=0
-const TRUE=!FALSE
-const FULLMODE=0
-const MIXMODE=1
+const FALSE        = 0
+const TRUE         = !FALSE
+const FULLMODE     = 0
+const MIXMODE      = 1
 ;
 ; Apple II hardware constants.
 ;
@@ -30,14 +30,10 @@ const page2        = 1
 ;
 ; Predefined functions.
 ;
-predef a2keypressed, a2gotoxy, a2grmode, a2textmode
+predef a2keypressed, a2gotoxy, a2grmixmode, a2textmode
 ;
-; String data.
+; String pool.
 ;
-byte a1err[]   = "Apple 1 not supported.\n"
-byte a3err[]   = "Apple 3 version mismatch.\n"
-byte exitmsg[] = "Press any key to exit.\n"
-byte goodbye[] = "That's all, folks!\n"
 byte stdlib[]  = "STDLIB"
 ;
 ; Screen row address arrays.
@@ -56,14 +52,24 @@ byte textclrmode[]  = 2, 16, 1
 byte grcharset[]    = 1, 0, $7F, $7F, $7F, $7F, $00, $00, $00, $00
 byte devcons
 ;
+; Exported function table.
+;
+export word conio[]
+;
 ; Function pointers.
 ;
-word keypressed = @a2keypressed
-word gotoxy     = @a2gotoxy
-word grmode     = @a2grmode
-word textmode   = @a2textmode
+word = @a2reset
+word = @a2keypressed
+word = @a2home
+word = @a2gotoxy
+word = @a2viewport
+word = @a2texttype
+word = @a2textmode
+word = @a2grmixmode
+word = @grcolor
+word = @grplot
 ;
-; Common routines.
+; Native  routines.
 ;
 asm equates
 	!SOURCE	"vmsrc/plvmzp.inc"
@@ -129,17 +135,50 @@ asm grplot
 	RTS
 end
 ;
+; Apple 1 routines.
+;
+def a1keypressed
+    return ^$D011 >= 128
+end
+def a1gotoxy(x, y)
+end
+def a1viewport(left, top, width, height)
+end
+def a1texttype(type)
+end
+def a1textmode(columns)
+end
+def a1grmode(mix)
+    return 0 ; not supported
+end
+;
 ; Apple II routines.
 ;
 def a2keypressed
-    if ^keyboard >= 128
-        return ^keystrobe
-    fin
-    return FALSE
+    return ^keyboard >= 128
 end
 def a2gotoxy(x, y)
     ^$24 = x + ^$20
     return call($FB5B, y + ^$22, 0, 0, 0)
+end
+def a2viewport(left, top, width, height)
+    if !width or !height
+        left   = 0
+	top    = 0
+	width  = 40
+	height = 24
+    fin
+    ^$20 = left
+    ^$21 = width
+    ^$22 = top
+    ^$23 = height + top - 1
+    return a2gotoxy(0, 0)
+end
+def a2texttype(type)
+end
+def a2textmode(columns)
+    call($FB39, 0, 0, 0, 0) ;textmode()
+    return call($FC58, 0, 0, 0, 0) ;home()
 end
 def a2grmode(mix)
     call($FB2F, 0, 0, 0, 0) ;initmode()
@@ -149,10 +188,6 @@ def a2grmode(mix)
     fin
     call($FC58, 0, 0, 0, 0) ;home()
     return grscrn(@txt1scrn) ; point to lo-res screen
-end
-def a2textmode
-    call($FB39, 0, 0, 0, 0) ;textmode()
-    return call($FC58, 0, 0, 0, 0) ;home()
 end
 ;
 ; Apple III routines.
@@ -178,10 +213,10 @@ end
 def a3keypressed
     byte count
     dev_status(devcons, 5, @count)
-    if count
-        return getc
-    fin
-    return FALSE
+    return count
+end
+def a3home
+    return cout(28)
 end
 def a3gotoxy(x, y)
     putc(24)
@@ -190,6 +225,15 @@ def a3gotoxy(x, y)
     return putc(y)
 end
 def a3viewport(left, top, width, height)
+    if !width or !height
+        ;
+	; Reset the full-screen viewport
+	;
+        left   = 0
+	top    = 0
+	width  = 80
+	height = 24
+    fin
     putc(1) ; Reset viewport
     putc(26)
     putc(left)
@@ -200,6 +244,13 @@ def a3viewport(left, top, width, height)
     putc(top  + height - 1)
     putc(3)
     return a3gotoxy(0, 0)
+end
+def a3texttype(type)
+end
+def a3textmode(columns)
+    puts(@textbwmode)
+    a3viewport(0, 0, 40, 24)
+    return putc(28)
 end
 def a3grmode(mix)
     byte i
@@ -217,65 +268,28 @@ def a3grmode(mix)
     next
     return grscrn(@txt2scrn) ; point to color screen
 end
-def a3textmode
-    puts(@textbwmode)
-    a3viewport(0, 0, 40, 24)
-    return putc(28)
-end
-;
-; Rod's Colors.
-;
-def rod
-    byte i, j, k, w, fmi, fmk, color
-    while TRUE
-        for w = 3 to 50
-	    for i = 1 to 19
-	        for j = 0 to 19
-		    k = i + j
-		    color = (j * 3) / (i + 3) + i * w / 12
-		    fmi = 40 - i
-		    fmk = 40 - k
-		    grcolor(color)
-		    grplot(i, k)
-		    grplot(k, i)
-		    grplot(fmi, fmk)
-		    grplot(fmk, fmi)
-		    grplot(k, fmi)
-		    grplot(fmi, k)
-		    grplot(i, fmk)
-		    grplot(fmk, i)
-		    if keypressed()
-		        return
-		    fin
-		next
-	    next
-	next
-    loop
-end
 ;
 ; Machine specific initialization.
 ;
 when MACHID & $C8
     is $08 ; Apple 1
-        puts(@a1err)
-	return
+	conio:reset      = @a1reset
+        conio:keypressed = @a1keypressed
+	conio:home       = @a1home
+	conio:gotoxy     = @a1gotoxy
+	conio:viewport   = @a1viewport
+	conio:texttype   = @a1texttype
+	conio:textmode   = @a1textmode
+	conio:grmixmode  = @a1grmixmode
     is $C0 ; Apple ///
-        keypressed = @a3keypressed
-	gotoxy     = @a3gotoxy
-	grmode	   = @a3grmode
-	textmode   = @a3textmode
-	if modaddr(@stdlib):0 == $0010
-	    devcons = modaddr(@stdlib).5 ; devcons variable from STDLIB
-	else
-	    puts(@a3err)
-	    return
-	fin
+	conio:reset      = @a3reset
+        conio:keypressed = @a3keypressed
+	conio:home       = @a3home
+	conio:gotoxy     = @a3gotoxy
+	conio:viewport   = @a3viewport
+	conio:texttype   = @a3texttype
+	conio:textmode   = @a3textmode
+	conio:grmixmode  = @a3grmixmode
+	devcons = modaddr(@stdlib).5 ; devcons variable from STDLIB
     otherwise ; Apple ][
 wend
-grmode(MIXMODE)
-gotoxy(11, 1)
-puts(@exitmsg)
-rod
-textmode()
-puts(@goodbye)
-done
