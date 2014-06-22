@@ -15,7 +15,7 @@ All three systems were implemented using stack architecture.  Pascal and Java we
 
 ## A New Approach
 
-PLASMA takes an approach that uses the best of all the above implementations to create a unique, powerful and efficient platform for developing new applications on the Apple II. One goal was to create a very small VM runtime, bytecode interpreter, and module loader. The decision was made early on to implement a stack based architecture duplicating the approach taken by FORTH. Space in the zero page would be assigned to a 16 bit, 16 element evaluation stack, indexed by the X register.
+PLASMA takes an approach that uses the best of all the above implementations to create a unique, powerful and efficient platform for developing new applications on the Apple I, II, and III. One goal was to create a very small VM runtime, bytecode interpreter, and module loader. The decision was made early on to implement a stack based architecture duplicating the approach taken by FORTH. Space in the zero page would be assigned to a 16 bit, 16 element evaluation stack, indexed by the X register.
 
 A simple compiler was written so that higher level constructs could be used and global/local variables would hold values instead of using clever stack manipulation. Function/procedure frames would allow for local variables, but with a limitation - the frame could be no larger than 256 bytes. By enforcing this limitation, the function frame could easily be accessed through a frame pointer value in zero page, indexed by the Y register. The call stack uses the 6502's hardware stack resulting in the same 256 byte limitation imposed by the hardware. However, this limitation could be lifted by extending the call sequence to save and restore the return address in the function frame. This was not done initially for performance reasons and simplicity of implementation. Even with these limitations, recursive functions can be effectively implemented.
 
@@ -337,13 +337,13 @@ Lastly, the repeat/until statement will continue looping as long as the until ex
 
 PLASMA includes a very minimal runtime that nevertheless provides a great deal of functionality to the system.  Two system calls are provided to access native 6502 routines (usually in ROM) and ProDOS.
 
-romcall(aReg, xReg, yReg, statusReg, addr) returns a pointer to a four byte structure containing the A,X,Y and STATUS register results.
+call(aReg, xReg, yReg, statusReg, addr) returns a pointer to a four byte structure containing the A,X,Y and STATUS register results.
 
 ```
     const xreg = 1
     const getlin = $FD6A
 
-    numchars = (romcall(0, 0, 0, 0, getlin)).xreg ; return char count in X reg
+    numchars = (call(0, 0, 0, 0, getlin)).xreg ; return char count in X reg
 ```
 
 syscall(cmd, params) calls ProDOS, returning the status value.
