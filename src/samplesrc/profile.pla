@@ -1,0 +1,91 @@
+;
+; Include all imported modules and their data/functions.
+;
+include(stdlib.plh)
+;
+; Profile commands.
+;
+const stop	= 0
+const start	= 1
+const dump	= 2
+;
+; Declare all global variables for this module.
+;
+byte profstr[]     = "PLASMA Profiler\n"
+byte optstr[]      = "Module to profile"
+byte ttlstr[]      = "Total executed opcodes: $"
+byte hdrstr[]      = " OP  COUNT\n"
+byte valstr[] = '0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F'
+word cmdstr
+byte opstats[260]
+;
+; Define functions.
+;
+asm equate
+	!SOURCE	"vmsrc/plvmzp.inc"
+end
+asm profiler
+	LDA	ESTKL,X
+	CMP	#$02
+	BNE	+
+	INX
+	LDY	ESTKL,X
+	STY	DSTL
+	LDY	ESTKH,X
+	STY	DSTH
++	STX	ESP
+	JSR	$03E2
+	LDX	ESP
+	RTS
+end
+def printb(b)
+    putc(valstr[(b >> 4)  & $0F])
+    putc(valstr[ b        & $0F])
+end
+def printw(h)
+    putc(valstr[(h >> 12) & $0F])
+    putc(valstr[(h >> 8)  & $0F])
+    putc(valstr[(h >> 4)  & $0F])
+    putc(valstr[ h        & $0F])
+end
+def printl(lo, hi)
+    printw(hi)
+    printw(lo)
+end
+def dumpstats
+    byte opcnt, linecnt
+    word longptr
+    profiler(@opstats, 2)
+    puts(@ttlstr)
+    printl(opstats:0, opstats:2)
+    putln
+    puts(@hdrstr)
+    longptr = @opstats:4
+    linecnt = 0
+    for opcnt = 0 to 63
+        if (longptr):0 | (longptr):2
+	    putc('$')
+	    printb(opcnt << 1)
+	    putc(' ')
+	    putc('$')
+	    printl((longptr):0, (longptr):2)
+	    linecnt = linecnt + 1
+	    if linecnt % 20 == 0
+	        getc
+	    fin
+	    putln
+	fin
+        longptr = longptr + 4
+    next
+end
+
+puts(@profstr)
+puts(@optstr)
+cmdstr = gets($BA)
+if ^cmdstr
+    profiler(1)
+    modexec(cmdstr)
+    profiler(0)
+    dumpstats
+fin
+done

@@ -11,6 +11,7 @@ HGR1    = HGR1\#FE1000
 HGR1TEST= HGR1TEST\#FE1000
 TEST    = TEST\#FE1000
 TESTLIB = TESTLIB\#FE1000
+PROFILE = PROFILE\#FE1000
 PLASM   = plasm
 INCS    = toolsrc/tokens.h toolsrc/symbols.h toolsrc/lex.h toolsrc/parse.h toolsrc/codegen.h
 OBJS	= toolsrc/plasm.c toolsrc/parse.o toolsrc/lex.o toolsrc/codegen.o
@@ -30,7 +31,7 @@ TXTTYPE	= .TXT
 #SYSTYPE	= \#FF2000
 #TXTTYPE	= \#040000
 
-all: $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVM03) $(CMD) $(ROD) $(HGR1)
+all: $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVM03) $(CMD) $(PROFILE) $(ROD) $(HGR1)
 
 clean:
 	-rm *FE1000 *FF2000 $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVM03)
@@ -82,6 +83,10 @@ test:	samplesrc/test.pla samplesrc/testlib.pla $(PLVM) $(PLASM)
 $(ROD): samplesrc/rod.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AM < samplesrc/rod.pla > samplesrc/rod.a
 	acme --setpc 4094 -o $(ROD) samplesrc/rod.a
+
+$(PROFILE): samplesrc/profile.pla $(PLVM02) $(PLASM)
+	m4 -I inc < samplesrc/profile.pla | ./$(PLASM) -AM > samplesrc/profile.a
+	acme --setpc 4094 -o $(PROFILE) samplesrc/profile.a
 
 $(HGR1):	samplesrc/hgr1.pla samplesrc/hgr1test.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AM < samplesrc/hgr1test.pla > samplesrc/hgr1test.a
