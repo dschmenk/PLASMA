@@ -30,7 +30,9 @@ const page2        = 1
 ;
 ; Predefined functions.
 ;
-predef a2keypressed, a2gotoxy, a2grmixmode, a2textmode
+predef a2reset,a2keypressed,a2home,a2gotoxy,a2viewport,a2texttype
+predef a2textmode,a2writeint,a2writeln
+predef a2grmode,grcolor,grplot
 ;
 ; String pool.
 ;
@@ -44,6 +46,12 @@ word                = $0450,$04D0,$0550,$05D0,$0650,$06D0,$0750,$07D0
 word txt2scrn[]     = $0800,$0880,$0900,$0980,$0A00,$0A80,$0B00,$0B80
 word                = $0828,$08A8,$0928,$09A8,$0A28,$0AA8,$0B28,$0BA8
 word                = $0850,$08D0,$0950,$09D0,$0A50,$0AD0,$0B50,$0BD0
+;
+; Text screen parameters.
+;
+byte textcols = 40
+byte curshpos = 0
+byte cursvpos = 0
 ;
 ; Apple 3 console codes.
 ;
@@ -65,7 +73,7 @@ word = @a2gotoxy
 word = @a2viewport
 word = @a2texttype
 word = @a2textmode
-word = @a2grmixmode
+word = @a2grmode
 word = @grcolor
 word = @grplot
 ;
@@ -141,6 +149,13 @@ def a1keypressed
     return ^$D011 >= 128
 end
 def a1gotoxy(x, y)
+    curshpos = x
+    cursvpos = y
+    putln
+    while x
+        putc(' ')
+	x = x - 1
+    loop
 end
 def a1viewport(left, top, width, height)
 end
@@ -157,7 +172,14 @@ end
 def a2keypressed
     return ^keyboard >= 128
 end
+def a2home
+    curshpos = 0
+    cursypos = 0
+    return call($FC58, 0, 0, 0, 0) ;home()
+end
 def a2gotoxy(x, y)
+    curshpos = x
+    cursvpos = y
     ^$24 = x + ^$20
     return call($FB5B, y + ^$22, 0, 0, 0)
 end
@@ -176,9 +198,12 @@ def a2viewport(left, top, width, height)
 end
 def a2texttype(type)
 end
+def a2writeln(string, start, fill)
+
+end
 def a2textmode(columns)
     call($FB39, 0, 0, 0, 0) ;textmode()
-    return call($FC58, 0, 0, 0, 0) ;home()
+    return a2home 
 end
 def a2grmode(mix)
     call($FB2F, 0, 0, 0, 0) ;initmode()
@@ -186,7 +211,7 @@ def a2grmode(mix)
     if !mix
         ^showfull
     fin
-    call($FC58, 0, 0, 0, 0) ;home()
+    a2home
     return grscrn(@txt1scrn) ; point to lo-res screen
 end
 ;
@@ -216,9 +241,13 @@ def a3keypressed
     return count
 end
 def a3home
+    curshpos = 0
+    cursvpos = 0
     return cout(28)
 end
 def a3gotoxy(x, y)
+    curshpos = x
+    cursvpos = y
     putc(24)
     putc(x)
     putc(25)
@@ -231,7 +260,7 @@ def a3viewport(left, top, width, height)
 	;
         left   = 0
 	top    = 0
-	width  = 80
+	width  = textwidth
 	height = 24
     fin
     putc(1) ; Reset viewport
@@ -248,8 +277,13 @@ end
 def a3texttype(type)
 end
 def a3textmode(columns)
-    puts(@textbwmode)
-    a3viewport(0, 0, 40, 24)
+    if columns > 40
+        puts(@textbwmode)
+        a3viewport(0, 0, 80, 24)
+    else
+        puts(@textbwmode)
+        a3viewport(0, 0, 40, 24)
+    fin
     return putc(28)
 end
 def a3grmode(mix)

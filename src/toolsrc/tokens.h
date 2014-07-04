@@ -85,6 +85,8 @@
 #define DEC_TOKEN           TOKEN('K')
 #define BPTR_TOKEN          TOKEN('^')
 #define WPTR_TOKEN          TOKEN('*')
+#define PTRB_TOKEN          TOKEN('b')
+#define PTRW_TOKEN          TOKEN('w')
 #define POST_INC_TOKEN      TOKEN('p')
 #define POST_DEC_TOKEN      TOKEN('k')
 #define OPEN_PAREN_TOKEN    TOKEN('(')
