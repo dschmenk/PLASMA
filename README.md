@@ -272,26 +272,33 @@ Control structures affect the flow of control through the program.  There are co
     fin
 ```
 
-The when/is/otherwise/wend statement is similar to the if/elsif/else/fin construct except that it is more efficient.  It selects one path based on the evaluated expressions, then merges the code path back together at the end.  However only the 'when' value is compared against a list of expressions.  The expressions do not need to be constants, they can be any valid expression.  The list of expressions is evaluated in order, so for efficiency sake, place the most common cases earlier in the list.
+The when/is/otherwise/wend statement is similar to the if/elsif/else/fin construct except that it is more efficient.  It selects one path based on the evaluated expressions, then merges the code path back together at the end.  However only the 'when' value is compared against a list of expressions.  The expressions do not need to be constants, they can be any valid expression.  The list of expressions is evaluated in order, so for efficiency sake, place the most common cases earlier in the list. Just as in C programs, a 'break' statement is required to keep one clause from falling through to the next. Falling through from one clause to the next can have it's uses, so this behavior has been added to PLASMA.
 
 ```
     when keypressed
         is keyarrowup
             cursup
+            break
         is keyarrowdown
             cursdown
+            break
         is keyarrowleft
             cursleft
+            break
         is keyarrowright
             cursright
+            break
         is keyctrlx
             cutline
+            break
         is keyctrlv
             pasteline
+            break
         is keyescape
             cursoff
             cmdmode
             redraw
+            break
         otherwise
             bell
     wend
