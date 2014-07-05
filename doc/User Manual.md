@@ -269,6 +269,28 @@ def strlen(strptr)
     return ^strptr
 end
 ```
+Pointers to structures or arrays can be referenced with the `->` and `=>` operators, pointing to `byte` or `word` sized elements.
+```
+const elem_id = 0
+const elem_addr  = 1
+
+def addentry(entry, id, addr)
+    entry->elem_id   = id   ; set ID byte
+    entry=>elem_addr = addr ; set address
+    return entry + 3        ; return next enry address
+end
+```
+The above is equivalent to:
+```
+const elem_id = 0
+const elem_addr  = 1
+
+def addentry(entry, id, addr)
+    (entry).elem_id   = id   ; set ID byte
+    (entry):elem_addr = addr ; set address
+    return entry + 3         ; return next enry address
+end
+```
 
 ##### Addresses of Data/Code
 Along with dereferencing a pointer, there is the question of getting the address of a variable. The `@` operator prepended to a variable name or a function definition name, will return the address of the variable/definition. From the previous example, the call to `strlen` would look like:
@@ -403,13 +425,16 @@ The complex test case is handled with `when`. Basically a `if`, `elsifF`, `else`
 when key
     is 'A'
         ; handle A character
+        break
     is 'B'
         ; handle B character
+        break
 ```
 ...
 ```
     is 'Z'
         ; handle Z character
+        break
     otherwise
         ; Not a known key
 wend
@@ -424,13 +449,15 @@ byte a
 when TRUE
     is (a <= 10)
         ; 10 or less
+        break
     is (a > 10) AND (a < 20)
         ; between 10 and 20
+        break
     is (a >= 20)
         ; 20 or greater
 wend
 ```
-
+A `when` clause can fall-through to the following clause, just like C `switch` statements by leaving out the `break` at 
 ##### FOR \<TO,DOWNTO\> [STEP]/NEXT
 Iteration over a range is handled with the `for`/`next` loop. When iterating from a smaller to larger value, the `to` construct is used; when iterating from larger to smaller, the `downto` construct is used.
 ```
