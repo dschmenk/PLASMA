@@ -639,11 +639,10 @@ int parse_stmnt(void)
     char *idptr;
 
     /*
-     * Optimization for last function LEAVE
+     * Optimization for last function LEAVE and OF clause.
      */
-    if (scantoken != END_TOKEN && scantoken != DONE_TOKEN)
+    if (scantoken != END_TOKEN && scantoken != DONE_TOKEN && scantoken != OF_TOKEN && scantoken != DEFAULT_TOKEN)
         prevstmnt = scantoken;
-    
     switch (scantoken)
     {
         case IF_TOKEN:
@@ -822,17 +821,17 @@ int parse_stmnt(void)
                     emit_brne(tag_choice);
                     emit_codetag(tag_of);
                     while (parse_stmnt()) next_line();
-                    //emit_brnch(break_tag);
                     tag_of = tag_new(BRANCH_TYPE);
-                    emit_brnch(tag_of);
+                    if (prevstmnt != BREAK_TOKEN) // Fall through to next OF if no break
+                        emit_brnch(tag_of);
                     emit_codetag(tag_choice);
                     tag_choice = tag_new(BRANCH_TYPE);
                 }
                 else if (scantoken == DEFAULT_TOKEN)
                 {
-                    scan();
                     emit_codetag(tag_of);
                     tag_of = 0;
+                    scan();
                     while (parse_stmnt()) next_line();
                     if (scantoken != ENDCASE_TOKEN)
                     {
