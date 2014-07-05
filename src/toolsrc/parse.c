@@ -634,7 +634,8 @@ int parse_expr()
 }
 int parse_stmnt(void)
 {
-    int tag_prevbrk, tag_else, tag_endif, tag_while, tag_wend, tag_repeat, tag_for, tag_choice, type, addr, step;
+    int tag_prevbrk, tag_else, tag_endif, tag_while, tag_wend, tag_repeat, tag_for, tag_choice, tag_of;
+    int type, addr, step;
     char *idptr;
 
     /*
@@ -802,6 +803,7 @@ int parse_stmnt(void)
             tag_prevbrk = break_tag;
             break_tag   = tag_new(BRANCH_TYPE);
             tag_choice  = tag_new(BRANCH_TYPE);
+            tag_of      = tag_new(BRANCH_TYPE);
             if (!parse_expr())
             {
                 parse_error("Bad CASE expression");
@@ -818,14 +820,19 @@ int parse_stmnt(void)
                         return (0);
                     }
                     emit_brne(tag_choice);
+                    emit_codetag(tag_of);
                     while (parse_stmnt()) next_line();
-                    emit_brnch(break_tag);
+                    //emit_brnch(break_tag);
+                    tag_of = tag_new(BRANCH_TYPE);
+                    emit_brnch(tag_of);
                     emit_codetag(tag_choice);
                     tag_choice = tag_new(BRANCH_TYPE);
                 }
                 else if (scantoken == DEFAULT_TOKEN)
                 {
                     scan();
+                    emit_codetag(tag_of);
+                    tag_of = 0;
                     while (parse_stmnt()) next_line();
                     if (scantoken != ENDCASE_TOKEN)
                     {
@@ -839,6 +846,8 @@ int parse_stmnt(void)
                     return (0);
                 }
             }
+            if (tag_of)
+                emit_codetag(tag_of);
             emit_codetag(break_tag);
             emit_drop();
             break_tag = tag_prevbrk;
