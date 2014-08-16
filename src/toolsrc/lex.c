@@ -4,7 +4,7 @@
 #include "tokens.h"
 #include "symbols.h"
 
-char *statement, *scanpos, *tokenstr;
+char *statement, *tokenstr, *scanpos = "";
 t_token scantoken, prevtoken;
 int tokenlen;
 long constval;
@@ -22,28 +22,28 @@ t_token keywords[] = {
     ENDCASE_TOKEN,          'W', 'E', 'N', 'D',
     FOR_TOKEN,              'F', 'O', 'R',
     TO_TOKEN,	            'T', 'O',
-    DOWNTO_TOKEN,	    	'D', 'O', 'W', 'N', 'T', 'O',
+    DOWNTO_TOKEN,	    'D', 'O', 'W', 'N', 'T', 'O',
     STEP_TOKEN,	            'S', 'T', 'E', 'P',
     NEXT_TOKEN,             'N', 'E', 'X', 'T',
     REPEAT_TOKEN,           'R', 'E', 'P', 'E', 'A', 'T',
-    UNTIL_TOKEN,	    	'U', 'N', 'T', 'I', 'L',
-    BREAK_TOKEN,	    	'B', 'R', 'E', 'A', 'K',
+    UNTIL_TOKEN,	    'U', 'N', 'T', 'I', 'L',
+    BREAK_TOKEN,	    'B', 'R', 'E', 'A', 'K',
     ASM_TOKEN,	            'A', 'S', 'M',
     DEF_TOKEN,	            'D', 'E', 'F',
-    EXPORT_TOKEN,	    	'E', 'X', 'P', 'O', 'R', 'T',
-    IMPORT_TOKEN,	    	'I', 'M', 'P', 'O', 'R', 'T',
+    EXPORT_TOKEN,	    'E', 'X', 'P', 'O', 'R', 'T',
+    IMPORT_TOKEN,	    'I', 'M', 'P', 'O', 'R', 'T',
     RETURN_TOKEN,           'R', 'E', 'T', 'U', 'R', 'N',
     END_TOKEN,              'E', 'N', 'D',
     EXIT_TOKEN,	            'E', 'X', 'I', 'T',
     DONE_TOKEN,	            'D', 'O', 'N', 'E',
     LOGIC_NOT_TOKEN,        'N', 'O', 'T',
     LOGIC_AND_TOKEN,        'A', 'N', 'D',
-    LOGIC_OR_TOKEN,	    	'O', 'R',
+    LOGIC_OR_TOKEN,	    'O', 'R',
     BYTE_TOKEN,             'B', 'Y', 'T', 'E',
     WORD_TOKEN,	            'W', 'O', 'R', 'D',
     CONST_TOKEN,            'C', 'O', 'N', 'S', 'T',
     PREDEF_TOKEN,           'P', 'R', 'E', 'D', 'E', 'F',
-    SYSFLAGS_TOKEN,	    	'S', 'Y', 'S', 'F', 'L', 'A', 'G', 'S',
+    SYSFLAGS_TOKEN,	    'S', 'Y', 'S', 'F', 'L', 'A', 'G', 'S',
     EOL_TOKEN
 };
 
@@ -333,6 +333,15 @@ t_token scan(void)
                     scanpos++;
                 }
                 break;
+            case '/':
+                if (scanpos[1] == '/')
+                    scantoken = EOL_TOKEN;
+                else
+                {
+                    scantoken = DIV_TOKEN;
+                    scanpos++;
+                }
+                break;
             default:
                 /*
                  * Simple single character tokens.
@@ -363,12 +372,21 @@ int scan_lookahead(void)
 char inputline[512];
 int next_line(void)
 {
-    gets(inputline);
-    lineno++;
-    statement = inputline;
-    scanpos   = inputline;
-    scantoken = EOL_TOKEN;
-    scan();
-    printf("; %03d: %s\n", lineno, inputline);
+    if (*scanpos == ';')
+    {
+        statement = ++scanpos;
+        scantoken = EOL_TOKEN;
+        scan();
+    }
+    else
+    {
+        gets(inputline);
+        lineno++;
+        statement = inputline;
+        scanpos   = inputline;
+        scantoken = EOL_TOKEN;
+        scan();
+        printf("; %03d: %s\n", lineno, inputline);
+    }
     return (1);
 }
