@@ -49,10 +49,10 @@ for the **make** program to build all the dependencies and run the module.
 All identifiers and reserved words are case insensitive. Case is only significant inside character constants and strings. Imported and exported symbols are always promoted to upper case when resolved. Because some Apple IIs only work easily with uppercase, the eases the chance of mismatched symbol names.
 
 ### Comments
-Comments are allowed throughout a PLASMA source file. The format follows that of an assembler: they begin with a `;` and comment out the rest of the line:
+Comments are allowed throughout a PLASMA source file. The format follows that of C and C++: they begin with a `//` and comment out the rest of the line:
 
 ```
-; This is a comment, the rest of this line is ignored
+// This is a comment, the rest of this line is ignored
 ```
 
 ### Declarations
@@ -188,7 +188,7 @@ byte smallarray[4]
 byte initbarray[] = 1, 2, 3, 4, 5, 6, 7, 8, 9, 10
 byte string[64] = "Initialized string"
 word wlabel[]
-word = 1000, 2000, 3000, 4000 ; Anonymous array
+word = 1000, 2000, 3000, 4000 // Anonymous array
 word funclist = @myfunc, $0000
 ```
 Arrays can be uninitialized and reserve a size, as in `smallarray` above.  Initilized arrays without a size specifier in the definition will take up as much data as is present, as in `initbarray` above. Strings are special arrays that include a hidden length byte in the beginning (Pascal strings). When specified with a size, a minimum size is reserved for the string value. Labels can be defined as arrays without size or initializers; this can be useful when overlapping labels with other arrays or defining the actual array data as anonymous arrays in following lines as in `wlabel` and following lines. Addresses of other data (must be defined previously) or function definitions (pre-defined with predef), including imported references, can be initializers.
@@ -210,9 +210,9 @@ The override operator becomes more useful when multi-dimenstional arrays are use
 ##### Multi-Dimensional Arrays
 Multi-dimensional arrays are implemented as arrays of arrays, not as a single block of memory. This allows constructs such as:
 ```
-;
-; Hi-Res scanline addresses
-;
+//
+// Hi-Res scanline addresses
+//
 word hgrscan[] = $2000,$2400,$2800,$2C00,$3000,$3400,$3800,$3C00
 word           = $2080,$2480,$2880,$2C80,$3080,$3480,$3880,$3C80
 ```
@@ -245,13 +245,13 @@ Notice how xscan goes to 39 instead of 19 in the byte accessed version.
 #### Offsets (Structure Elements)
 Structures are another fundamental construct when accessing in-common data. Using fixed element offsets from a given address means you only have to pass one address around to access the entire record. Offsets are specified with a constant expression following the type override specifier.
 ```
-predef puti ; print an integer
+predef puti // print an integer
 byte myrec[]
 word = 2
 byte = "PLASMA"
     
-puti(myrec:0) ; ID = 2
-puti(myrec.2) ; Name length = 6 (Pascal string puts length byte first)
+puti(myrec:0) // ID = 2
+puti(myrec.2) // Name length = 6 (Pascal string puts length byte first)
 ```
 This contrived example shows how one can access offsets from a variable as either `byte`s or `word`s regardless of how they were defined. This operator becomes more powerful when combined with pointers, defined next.
 
@@ -275,9 +275,9 @@ const elem_id = 0
 const elem_addr  = 1
 
 def addentry(entry, id, addr)
-    entry->elem_id   = id   ; set ID byte
-    entry=>elem_addr = addr ; set address
-    return entry + 3        ; return next enry address
+    entry->elem_id   = id   // set ID byte
+    entry=>elem_addr = addr // set address
+    return entry + 3        // return next enry address
 end
 ```
 The above is equivalent to:
@@ -286,16 +286,16 @@ const elem_id = 0
 const elem_addr  = 1
 
 def addentry(entry, id, addr)
-    (entry).elem_id   = id   ; set ID byte
-    (entry):elem_addr = addr ; set address
-    return entry + 3         ; return next enry address
+    (entry).elem_id   = id   // set ID byte
+    (entry):elem_addr = addr // set address
+    return entry + 3         // return next enry address
 end
 ```
 
 ##### Addresses of Data/Code
 Along with dereferencing a pointer, there is the question of getting the address of a variable. The `@` operator prepended to a variable name or a function definition name, will return the address of the variable/definition. From the previous example, the call to `strlen` would look like:
 ```
-puti(strlen(@mystring)) ; would print 17 in this example
+puti(strlen(@mystring)) // would print 17 in this example
 ```
 
 ##### Function Pointers
@@ -311,16 +311,16 @@ def subvals(a, b)
 end
     
 funcptr = @addvals
-puti(funcptr(5, 2)) ; Outputs 7 
+puti(funcptr(5, 2)) // Outputs 7 
 funcptr = @subvals
-puti(funcptr(5, 2)) ; Outputs 3
+puti(funcptr(5, 2)) // Outputs 3
 ```
 These concepts can be combined with the structure offsets to create a function table that can be easily changed on the fly. Virtual functions in object oriented languages are implemented this way.
 ```
 predef myinit, mynew, mydelete
     
 export word myobject_class = @myinit, @mynew, @mydelete
-; Rest of class data/code follows...
+// Rest of class data/code follows...
 ```
 And an external module can call into this library (class) like:
 ```
@@ -331,7 +331,7 @@ import myclass
     word myobject_class
 end
     
-word an_obj ; an object pointer
+word an_obj // an object pointer
     
 myobject_class:init()
 an_obj = myobject_class:new()
@@ -390,7 +390,7 @@ Address operators can work on any value, i.e. anything can be an address. Parent
 | AND  |  logical AND
 
 ### Statements
-PLASMA definitions are a list of statements the carry out the algorithm. Statements are generally assignment or control flow in nature.
+PLASMA definitions are a list of statements the carry out the algorithm. Statements are generally assignment or control flow in nature. Generally there is one statement per line. The ';' symbol seperates multiple statements on a single line. It is considered bad form to have multiple statements per line unless they are very short.
 
 #### Assignment
 Assignments evaluate an expression and save the result into memory. They can be very simple or quite complex. A simple example:
@@ -403,8 +403,8 @@ An assignment doesn't even have to save the expression into memory, although the
 ```
 byte keypress
 
-keypress = ^$C000 ; read keyboard
-^$C010 ; read keyboard strobe, throw away value
+keypress = ^$C000 // read keyboard
+^$C010 // read keyboard strobe, throw away value
 ```
 
 #### Control Flow
@@ -424,19 +424,19 @@ The complex test case is handled with `when`. Basically a `if`, `elsifF`, `else`
 ```
 when key
     is 'A'
-        ; handle A character
+        // handle A character
         break
     is 'B'
-        ; handle B character
+        // handle B character
         break
 ```
 ...
 ```
     is 'Z'
-        ; handle Z character
+        // handle Z character
         break
     otherwise
-        ; Not a known key
+        // Not a known key
 wend
 ```
 With a little "Yoda-Speak", some fairly complex test can be made:
@@ -448,13 +448,13 @@ byte a
 
 when TRUE
     is (a <= 10)
-        ; 10 or less
+        // 10 or less
         break
     is (a > 10) AND (a < 20)
-        ; between 10 and 20
+        // between 10 and 20
         break
     is (a >= 20)
-        ; 20 or greater
+        // 20 or greater
 wend
 ```
 A `when` clause can fall-through to the following clause, just like C `switch` statements by leaving out the `break` at 
@@ -462,11 +462,11 @@ A `when` clause can fall-through to the following clause, just like C `switch` s
 Iteration over a range is handled with the `for`/`next` loop. When iterating from a smaller to larger value, the `to` construct is used; when iterating from larger to smaller, the `downto` construct is used.
 ```
 for a = 1 to 10
-    ; do something with a
+    // do something with a
 next
 
 for a = 10 downto 1
-    ; do something else with a
+    // do something else with a
 next
 ```
 An optional stepping value can be used to change the default iteration step from 1 to something else. Always use a positive value; when iterating using `downto`, the step value will be subtracted from the current value.
@@ -474,10 +474,10 @@ An optional stepping value can be used to change the default iteration step from
 ##### WHILE/LOOP
 For loops that test at the top of the loop, use `while`. The loop will run zero or more times.
 ```
-a = c ; Who knows what c could be
+a = c // Who knows what c could be
 while a < 10
-    ; do something
-    a = b * 2 ; b is something special, I'm sure
+    // do something
+    a = b * 2 // b is something special, I'm sure
 loop
 ```
 ##### REPEAT/UNTIL
@@ -511,14 +511,14 @@ end
 PLASMA always returns a value from a function, even if you don't supply one. Probably the easiest optimization to make in PLASMA is to cascade a return value if you don't care about the value you return. This only works if the last thing you do before returning from your routine is calling another definition. You would go from:
 ```
 def mydef
-    ; do some stuff
-    calldef(10) ; call some other def
+    // do some stuff
+    calldef(10) // call some other def
 end
 ```
 PLASMA will effectively add a RETURN 0 to the end of your function, as well as add code to ignore the result of `calldef(10)`. As long as you don't care about the return value from `mydef` or want to use its return as the return value fromyour function (cascade the return), you can save some code bytes with:
 ```
 def mydef
-    ; do some stuff
-    return calldef(10) ; call some other def
+    // do some stuff
+    return calldef(10) // call some other def
 end
 ```
