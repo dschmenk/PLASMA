@@ -98,16 +98,16 @@ The PLASMA low level operations are defined as:
 
 Although the low-level operations could easily by coded by hand, they were chosen to be an easy target for a simple compiler. Think along the lines of an advanced assembler or stripped down C compiler ( C--).  Taking concepts from BASIC, Pascal, C and assembler, the PLASMA compiler is simple yet expressive. The syntax is line oriented; there is no statement delimiter except newline.
 
-Comments are allowed throughout the source, starting with the ‘;’ character.  The rest of the line is ignored.
+Comments are allowed throughout the source, starting with the ‘//’ symbol.  The rest of the line is ignored.
 
 ```
-    ; Data and text buffer constants
+    // Data and text buffer constants
 ```
 
 Hexadecimal constants are preceded with a ‘$’ to identify them as such. 
 
 ```
-    $C030 ; Speaker address
+    $C030 // Speaker address
 ```
 
 ### Constants, Variables and Functions
@@ -115,27 +115,27 @@ Hexadecimal constants are preceded with a ‘$’ to identify them as such.
 The source code of a PLASMA module first defines imports, constants, variables and data.  Constants must be initialized with a value.  Variables can have sizes associated with them to declare storage space.  Data can be declared with or without a variable name associated with it.  Arrays, tables, strings and any predeclared data can be created and accessed in multiple ways.
 
 ```
-    ;
-    ; Import standard library functions.
-    ;
+    //
+    // Import standard library functions.
+    //
     import stdlib
         predef putc, puts, getc, gets, cls, memcpy, memset, memclr
     end
-    ;
-    ; Constants used for hardware and flags
-    ;
+    //
+    // Constants used for hardware and flags
+    //
     const speaker     = $C030
     const changed     = 1
     const insmode     = 2
-    ;
-    ; Array declaration of screen row addresses
-    ;
+    //
+    // Array declaration of screen row addresses
+    //
     word  txtscrn[]   = $0400,$0480,$0500,$0580,$0600,$0680,$0700,$0780
     word              = $0428,$04A8,$0528,$05A8,$0628,$06A8,$0728,$07A8
     word              = $0450,$04D0,$0550,$05D0,$0650,$06D0,$0750,$07D0
-    ;
-    ; Misc global variables
-    ;
+    //
+    // Misc global variables
+    //
     byte  flags       = 0
     word  numlines    = 0
     byte  cursx, cursy
@@ -147,9 +147,9 @@ Variables can have optional brackets; empty brackets don’t reserve any space f
 Strings are defined like Pascal strings, a length byte followed by the string characters so they can be a maximum of 255 characters long.  Strings can only appear in the variable definitions of a module.  String constants can’t be used in expressions or statements.
 
 ```
-    ;
-    ; An initialized string of 64 characters
-    ;
+    //
+    // An initialized string of 64 characters
+    //
     byte txtfile[64] = "UNTITLED"
 ```
 
@@ -199,7 +199,7 @@ Functions with parameters or expressions to be used as a function address to cal
     word keyin
     byte key
 
-    keyin = @keyin2plus ; address-of keyin2plus function
+    keyin = @keyin2plus // address-of keyin2plus function
     key   = keyin()
 ```
 
@@ -210,7 +210,7 @@ Expressions are algebraic.  Data is free-form, but all operations on the evaluat
 ```
     const speaker=$C030
 
-    ^speaker ; click speaker
+    ^speaker // click speaker
     close(refnum)
 ```
 
@@ -261,11 +261,11 @@ Control structures affect the flow of control through the program.  There are co
 ```
     if ^pushbttn3 < 128
         if key == $C0
-            key = $D0 ; P
+            key = $D0 // P
         elsif key == $DD
-            key = $CD ; M
+            key = $CD // M
         elsif key == $DE
-            key = $CE ; N
+            key = $CE // N
         fin
     else
        key = key | $E0
@@ -350,7 +350,7 @@ call(aReg, xReg, yReg, statusReg, addr) returns a pointer to a four byte structu
     const xreg = 1
     const getlin = $FD6A
 
-    numchars = (call(0, 0, 0, 0, getlin)).xreg ; return char count in X reg
+    numchars = (call(0, 0, 0, 0, getlin)).xreg // return char count in X reg
 ```
 
 syscall(cmd, params) calls ProDOS, returning the status value.
@@ -380,7 +380,7 @@ memset(addr, len, val) will fill memory with a 16 bit value.  memcpy(dstaddr, sr
 
 ```
     byte nullstr[] = ""
-    memset(strlinbuf, maxfill * 2, @nullstr) ; fill line buff with pointer to null string
+    memset(strlinbuf, maxfill * 2, @nullstr) // fill line buff with pointer to null string
     memcpy(scrnptr, strptr + ofst + 1, numchars)
 ```
 
