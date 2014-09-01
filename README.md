@@ -401,6 +401,8 @@ Probably the most exciting development is the support for the Apple ///. PLASMA 
 ## References
 PLASMA User Manual: https://github.com/dschmenk/PLASMA/blob/master/doc/User%20Manual.md
 
+PLASMA Architecture: https://github.com/dschmenk/PLASMA/blob/master/doc/Architecture.md
+
 B Programming Language User Manual  http://cm.bell-labs.com/cm/cs/who/dmr/kbman.html
 
 FORTH   http://en.wikipedia.org/wiki/Forth_(programming_language)
