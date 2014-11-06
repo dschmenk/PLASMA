@@ -395,12 +395,15 @@ Address operators can work on any value, i.e. anything can be an address. Parent
 | &#124; | bitwise OR
 | ==   | equals
 | <>   | not equal
+| !=   | not equal (alt)
 | >=   | greater than or equal
 | >    | greater than
 | <=   | less than or equal
 | <    | less than
 | OR   |  logical OR
 | AND  |  logical AND
+| &#124;&#124;    |  logical OR (alt)
+| &&   |  logical AND (alt)
 
 ### Statements
 PLASMA definitions are a list of statements the carry out the algorithm. Statements are generally assignment or control flow in nature. Generally there is one statement per line. The ';' symbol seperates multiple statements on a single line. It is considered bad form to have multiple statements per line unless they are very short.
