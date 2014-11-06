@@ -15,7 +15,7 @@ import stdlib
     predef puts
 end
     
-byte hello[] = "Hello, world.\n"
+byte hello = "Hello, world.\n"
     
 puts(@hello)
 done
@@ -97,7 +97,7 @@ predef exec_file, mydef
 #### Global Data & Variable Declarations
 One of the most powerful features in PLASMA is the flexible data declarations. Data must be defined after all the `import` declarations and before any function definitions, `asm` or `def`. Global labels and data can be defined in multiple ways, and exported for inclusion in other modules. Data can be initialized with constant values, addresses, calculated values (must resolve to a constant), and addresses from imported modules. Here is an exeample using the `predef` line from the previous examples to export an initialized array of 10 function pointer elements (2 defined + null delimiter):
 ```
-export word myfuncs[10] = @exec_file, @mydef, $0000
+export word[10] myfuncs = @exec_file, @mydef, $0000
 ```
 See the section on arrays for more information.
 
@@ -191,12 +191,23 @@ word wlabel[]
 word = 1000, 2000, 3000, 4000 // Anonymous array
 word funclist = @myfunc, $0000
 ```
+Equivalently written as:
+```
+predef myfunc
+    
+byte[4] smallarray
+byte[] initbarray = 1, 2, 3, 4, 5, 6, 7, 8, 9, 10
+byte[64] string = "Initialized string"
+word[] wlabel
+word = 1000, 2000, 3000, 4000 // Anonymous array
+word funclist = @myfunc, $0000
+```
 Arrays can be uninitialized and reserve a size, as in `smallarray` above.  Initilized arrays without a size specifier in the definition will take up as much data as is present, as in `initbarray` above. Strings are special arrays that include a hidden length byte in the beginning (Pascal strings). When specified with a size, a minimum size is reserved for the string value. Labels can be defined as arrays without size or initializers; this can be useful when overlapping labels with other arrays or defining the actual array data as anonymous arrays in following lines as in `wlabel` and following lines. Addresses of other data (must be defined previously) or function definitions (pre-defined with predef), including imported references, can be initializers.
 
 ##### Type Overrides
 Arrays are usually identified by the data type specifier, `byte` or `word` when the array is defined. However, this can be overridden with the type override specifiers: `:` and `.`. `:` overrides the type to be `word`, `.` overrides the type to be `byte`. An example of accessing a `word` array as `bytes`:
 ```
-word myarray[] = $AABB, $CCDD, $EEFF
+word myarray = $AABB, $CCDD, $EEFF
     
 def prarray
     byte i
@@ -213,8 +224,8 @@ Multi-dimensional arrays are implemented as arrays of arrays, not as a single bl
 //
 // Hi-Res scanline addresses
 //
-word hgrscan[] = $2000,$2400,$2800,$2C00,$3000,$3400,$3800,$3C00
-word           = $2080,$2480,$2880,$2C80,$3080,$3480,$3880,$3C80
+word hgrscan = $2000,$2400,$2800,$2C00,$3000,$3400,$3800,$3C00
+word         = $2080,$2480,$2880,$2C80,$3080,$3480,$3880,$3C80
 ```
 ...
 ```
@@ -261,7 +272,7 @@ Pointers are values that represent addresses. In order to get the value pointed 
 ##### Pointer Dereferencing
 Just as there are type override for arrays and offsets, there is a `byte` and `word` type override for pointers. Prepending a value with `^` dereferences a `byte`. Prepending a value with `*` dereferences a `word`. These are unary operators, so they won't be confused with the binary operators using the same symbol. An example getting the length of a Pascal string (length byte at the beginning of character array):
 ```
-byte mystring[] = "This is my string"
+byte mystring = "This is my string"
 byte len
 word strptr
 
@@ -339,7 +350,7 @@ myobject_class:delete(an_obj)
 ```
 
 ## Function Definitions
-Function definitions in PLASMA is what really seperates PLASMA from a low level language like assembly, or even a language like FORTH. 
+Function definitions in PLASMA is what really seperates PLASMA from a low level language like assembly, or even a language like FORTH. The ability to pass in arguments and declare local variables provides PLASMA with a higher language feel and the ability to easily implement recursive functions.
 
 ### Expressions
 Exressions are comprised of operators and operations. Operator precedence follows address, arithmatic, binary, and logical from highest to lowest. Parantheses can be used to force operations to happen in a specific order.
@@ -457,7 +468,7 @@ when TRUE
         // 20 or greater
 wend
 ```
-A `when` clause can fall-through to the following clause, just like C `switch` statements by leaving out the `break` at 
+A `when` clause can fall-through to the following clause, just like C `switch` statements by leaving out the `break`.
 ##### FOR \<TO,DOWNTO\> [STEP]/NEXT
 Iteration over a range is handled with the `for`/`next` loop. When iterating from a smaller to larger value, the `to` construct is used; when iterating from larger to smaller, the `downto` construct is used.
 ```
