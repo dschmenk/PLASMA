@@ -983,7 +983,18 @@ int parse_var(int type)
     int  consttype, constsize, arraysize, idlen = 0;
     long size = 1;
     
-    if (scan() == ID_TOKEN)
+    if (scan() == OPEN_BRACKET_TOKEN)
+    {
+        size = 0;
+        parse_constexpr(&size, &constsize);
+        if (scantoken != CLOSE_BRACKET_TOKEN)
+        {
+            parse_error("Missing closing bracket");
+            return (0);
+        }
+        scan();
+    }
+    if (scantoken == ID_TOKEN)
     {
         idstr = tokenstr;
         idlen = tokenlen;
