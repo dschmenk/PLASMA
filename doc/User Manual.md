@@ -368,6 +368,8 @@ Address operators can work on any value, i.e. anything can be an address. Parent
 |:----:|---------------------|
 | .    | byte type override
 | :    | word type override
+| ->   | pointer to byte
+| =>   | pointer to word
 | []   | array index
 | ()   | functional call
 
