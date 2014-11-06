@@ -112,7 +112,7 @@ Hexadecimal constants are preceded with a ‘$’ to identify them as such.
 
 ### Constants, Variables and Functions
 
-The source code of a PLASMA module first defines imports, constants, variables and data.  Constants must be initialized with a value.  Variables can have sizes associated with them to declare storage space.  Data can be declared with or without a variable name associated with it.  Arrays, tables, strings and any predeclared data can be created and accessed in multiple ways.
+The source code of a PLASMA module first defines imports, constants, variables and data.  Constants must be initialized with a value.  Variables can have sizes associated with them to declare storage space.  Data can be declared with or without a variable name associated with it.  Arrays, tables, strings and any predeclared data can be created and accessed in multiple ways. Arrays can be defined with a size to reserve a minimum storage amount, and the brackets can be after the type declaration or after the identifier.
 
 ```
     //
@@ -128,11 +128,12 @@ The source code of a PLASMA module first defines imports, constants, variables a
     const changed     = 1
     const insmode     = 2
     //
-    // Array declaration of screen row addresses
+    // Array declaration of screen row addresses. All variations are allowed.
     //
     word  txtscrn[]   = $0400,$0480,$0500,$0580,$0600,$0680,$0700,$0780
-    word              = $0428,$04A8,$0528,$05A8,$0628,$06A8,$0728,$07A8
+    word[]            = $0428,$04A8,$0528,$05A8,$0628,$06A8,$0728,$07A8
     word              = $0450,$04D0,$0550,$05D0,$0650,$06D0,$0750,$07D0
+    word[8] txt2scrn  = $0800,$0880,$0900,$0980,$0A00,$0A80,$0B00,$0B80
     //
     // Misc global variables
     //
