@@ -133,7 +133,9 @@ The source code of a PLASMA module first defines imports, constants, variables a
     word  txtscrn[]   = $0400,$0480,$0500,$0580,$0600,$0680,$0700,$0780
     word[]            = $0428,$04A8,$0528,$05A8,$0628,$06A8,$0728,$07A8
     word              = $0450,$04D0,$0550,$05D0,$0650,$06D0,$0750,$07D0
-    word[8] txt2scrn  = $0800,$0880,$0900,$0980,$0A00,$0A80,$0B00,$0B80
+    word txt2scrn[8]  = $0800,$0880,$0900,$0980,$0A00,$0A80,$0B00,$0B80
+    word[8] txt2scrna = $0828,$08A8,$0928,$09A8,$0A28,$0AA8,$0B28,$0BA8
+    word txt2scrnb    = $0850,$08D0,$0950,$09D0,$0A50,$0AD0,$0B50,$0BD0
     //
     // Misc global variables
     //
@@ -151,7 +153,7 @@ Strings are defined like Pascal strings, a length byte followed by the string ch
     //
     // An initialized string of 64 characters
     //
-    byte txtfile[64] = "UNTITLED"
+    byte[64] txtfile = "UNTITLED"
 ```
 
 Functions are defined after all constants, variables and data.  Functions can be forward declared with a *predef* type in the constant and variable declarations.  Functions have optional parameters and always return a value.   Functions can have their own variable declarations.  However, unlike the global declarations, no data can be predeclared, only storage space.  There is also a limit of 254 bytes of local storage.  Each parameter takes two bytes of local storage, plus two bytes for the previous frame pointer.  If a function has no parameters or local variables, no local frame will be created, improving performance.  A function can specify a value to return.  If no return value is specified, a default of 0 will be returned.
@@ -164,7 +166,7 @@ There are four basic types of data that can be manipulated: constants, variables
     word hgrscan[] = $2000,$2400,$2800,$2C00,$3000,$3400,$3800,$3C00
     word           = $2080,$2480,$2880,$2C80,$3080,$3480,$3880,$3C80
 
-    hgrscan:[yscan][xscan] = fillval
+    hgrscan.[yscan][xscan] = fillval
 ```
 
 Values can be treated as pointers by preceding them with a ‘^’ for byte pointers, ‘*’ for word pointers.
@@ -351,7 +353,7 @@ call(aReg, xReg, yReg, statusReg, addr) returns a pointer to a four byte structu
     const xreg = 1
     const getlin = $FD6A
 
-    numchars = (call(0, 0, 0, 0, getlin)).xreg // return char count in X reg
+    numchars = call(0, 0, 0, 0, getlin).xreg // return char count in X reg
 ```
 
 syscall(cmd, params) calls ProDOS, returning the status value.
