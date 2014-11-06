@@ -28,7 +28,8 @@ int show_state = 0;
 #define MEM_SIZE	65536
 byte mem_data[MEM_SIZE];
 uword sp = 0x01FE, fp = 0xFFFF, heap = 0x0200, deftbl = DEF_CALL, lastdef = DEF_CALL;
-
+#define PHA(b)		(mem_data[sp--]=(b))
+#define PLA()		(mem_data[++sp])
 #define EVAL_STACKSZ	16
 #define PUSH(v)	(*(--esp))=(v)
 #define POP		((word)(*(esp++)))
@@ -656,8 +657,8 @@ void interp(code *ip)
                 break;
             case 0x34: // PUSH : TOSP = TOS
                 val = POP;
-                mem_data[sp--] = val >> 8;
-                mem_data[sp--] = val;
+                PHA(val >> 8);
+                PHA(val);
                 break;
             case 0x36: // PULL : TOS = TOSP
                 PUSH(mem_data[sp] | (mem_data[sp + 1] << 8));
@@ -756,8 +757,7 @@ void interp(code *ip)
             case 0x58: // ENTER : NEW FRAME, FOREACH PARAM LOCALVAR = TOS
                 frmsz = BYTE_PTR(ip);
                 ip++;
-                mem_data[fp - frmsz]     = fp;
-                mem_data[fp - frmsz + 1] = fp >> 8;
+                PHA(frmsz);
                 if (show_state)
                     printf("< $%04X: $%04X > ", fp - frmsz, fp);
                 fp -= frmsz;
@@ -766,16 +766,16 @@ void interp(code *ip)
                 while (parmcnt--)
                 {
                     val = POP;
-                    mem_data[fp + parmcnt * 2 + 2] = val;
-                    mem_data[fp + parmcnt * 2 + 3] = val >> 8;
+                    mem_data[fp + parmcnt * 2 + 0] = val;
+                    mem_data[fp + parmcnt * 2 + 1] = val >> 8;
                     if (show_state)
-                        printf("< $%04X: $%04X > ", fp + parmcnt * 2 + 2, mem_data[fp + parmcnt * 2 + 2] | (mem_data[fp + parmcnt * 2 + 3] >> 8));
+                        printf("< $%04X: $%04X > ", fp + parmcnt * 2 + 0, mem_data[fp + parmcnt * 2 + 0] | (mem_data[fp + parmcnt * 2 + 1] >> 8));
                 }
                 if (show_state)
                     printf("\n");
                 break;
             case 0x5A: // LEAVE : DEL FRAME, IP = TOFP
-                fp = mem_data[fp] | (mem_data[fp + 1] << 8);
+                fp += PLA();
             case 0x5C: // RET : IP = TOFP
                 return;
             case 0x5E: // ???

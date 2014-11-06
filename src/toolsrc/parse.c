@@ -869,7 +869,7 @@ int parse_stmnt(void)
                     emit_drop();
                 if (!parse_expr())
                     emit_const(0);
-                emit_leave(idlocal_size());
+                emit_leave();
             }
             else
             {
@@ -1235,7 +1235,6 @@ int parse_defs(void)
         emit_idfunc(func_tag, type, tokenstr);
         emit_def(tokenstr, 1);
         tokenstr[tokenlen] = c;
-        idlocal_reset();
         if (scan() == OPEN_PAREN_TOKEN)
         {
             do
@@ -1255,7 +1254,7 @@ int parse_defs(void)
             scan();
         }
         while (parse_vars(LOCAL_TYPE)) next_line();
-        emit_enter(idlocal_size(), cfnparms);
+        emit_enter(cfnparms);
         prevstmnt = 0;
         while (parse_stmnt()) next_line();
         infunc = 0;
@@ -1272,7 +1271,7 @@ int parse_defs(void)
         if (prevstmnt != RETURN_TOKEN)
         {
             emit_const(0);
-            emit_leave(idlocal_size());
+            emit_leave();
         }
         return (1);
     }

@@ -34,6 +34,4 @@ int id_tag(char *name, int len);
 int id_const(char *name, int len);
 int id_type(char *name, int len);
 void idglobal_size(int type, int size, int constsize);
-int idlocal_size(void);
-void idlocal_reset(void);
 int tag_new(int type);
