@@ -90,7 +90,7 @@ int idconst_add(char *name, int len, int value)
 int idlocal_add(char *name, int len, int type, int size)
 {
     char c = name[len];
-    if (localsize > 254)
+    if (localsize > 255)
     {
         printf("Local variable size overflow\n");
         return (0);
