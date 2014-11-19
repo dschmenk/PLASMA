@@ -388,10 +388,13 @@ void emit_trailer(void)
 }
 void emit_moddep(char *name, int len)
 {
-    if (name)
-        emit_dci(name, len);
-    else
-        printf("\t%s\t$00\t\t\t; END OF MODULE DEPENDENCIES\n", DB);
+    if (outflags & MODULE)
+    {
+        if (name)
+            emit_dci(name, len);
+        else
+            printf("\t%s\t$00\t\t\t; END OF MODULE DEPENDENCIES\n", DB);
+    }
 }
 void emit_sysflags(int val)
 {
