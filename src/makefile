@@ -6,6 +6,7 @@ PLVM02	= PLASMA.SYSTEM\#FF2000
 PLVM03	= SOS.INTERP\#050000
 CMD     = CMD\#FF2000
 ED      = ED\#FF2000
+SB      = SB\#FF2000
 ROD     = ROD\#FE1000
 SIEVE   = SIEVE\#FE1000
 HELLO   = HELLO\#FE1000
@@ -33,7 +34,7 @@ TXTTYPE	= .TXT
 #SYSTYPE	= \#FF2000
 #TXTTYPE	= \#040000
 
-all: $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVM03) $(CMD) $(PROFILE) $(ED) $(ROD) $(SIEVE) $(HGR1)
+all: $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVM03) $(CMD) $(PROFILE) $(ED) $(SB) $(ROD) $(SIEVE) $(HGR1)
 
 clean:
 	-rm *FE1000 *FF2000 $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVM03)
@@ -82,9 +83,13 @@ test:	samplesrc/test.pla samplesrc/testlib.pla $(PLVM) $(PLASM)
 	acme --setpc 4094 -o $(TESTLIB) samplesrc/testlib.a
 	./$(PLVM) TEST
 
-$(ED): toolsrc/ed.pla $(PLVM02) $(PLASM)
+$(ED): toolsrc/ed.pla $(PLVM02) $(PLASM) toolsrc/ed.pla
 	./$(PLASM) -A < toolsrc/ed.pla > toolsrc/ed.a
 	acme --setpc 8192 -o $(ED) toolsrc/ed.a
+
+$(SB): toolsrc/sb.pla $(PLVM02) $(PLASM) toolsrc/sb.pla
+	./$(PLASM) -A < toolsrc/sb.pla > toolsrc/sb.a
+	acme --setpc 8192 -o $(SB) toolsrc/sb.a
 
 $(ROD): samplesrc/rod.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AM < samplesrc/rod.pla > samplesrc/rod.a

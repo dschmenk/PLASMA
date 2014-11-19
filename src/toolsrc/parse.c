@@ -256,7 +256,7 @@ int parse_value(int rvalue)
     }
     else if (scantoken == CLOSE_PAREN_TOKEN)
     {
-        //                type |= WORD_TYPE;
+        // type |= WORD_TYPE;
         emit_value = 1;
     }
     else
@@ -867,16 +867,10 @@ int parse_stmnt(void)
                 int i;
                 for (i = 0; i < stack_loop; i++)
                     emit_drop();
-                if (!parse_expr())
-                    emit_const(0);
-                emit_leave();
             }
-            else
-            {
-                if (!parse_expr())
-                    emit_const(0);
-                emit_ret();
-            }
+            if (!parse_expr())
+                emit_const(0);
+            emit_ret();
             break;
         case EOL_TOKEN:
         case COMMENT_TOKEN:
