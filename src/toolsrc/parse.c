@@ -355,8 +355,8 @@ int parse_value(int rvalue)
                     }
                     else
                         (type & BPTR_TYPE) ? emit_lb() : emit_lw();
+                    emit_value = 1;
                 }
-                emit_value = 1;
                 type &= ~(VAR_TYPE | ADDR_TYPE);
                     type |= WORD_TYPE;
                 scantoken = scantoken == PTRB_TOKEN ? DOT_TOKEN : COLON_TOKEN;
@@ -387,6 +387,7 @@ int parse_value(int rvalue)
                         else // FUNC_TYPE
                         {
                             emit_globaladdr(value, elem_offset, type);
+                            elem_offset = 0;
                             emit_value = 1;
                         }
                     }
@@ -416,9 +417,10 @@ int parse_value(int rvalue)
                         }
                         else if (type & CONST_TYPE)
                         {
-                            emit_const(value);
+                            emit_const(value + elem_offset);
                         }
-                        emit_value = 1;
+                        elem_offset = 0;
+                        emit_value  = 1;
                     }
                     while (parse_expr())
                     {
@@ -442,7 +444,7 @@ int parse_value(int rvalue)
                     parse_error("Invalid member offset");
                     return (0);
                 }
-                type = elem_type; //(type & ~(ADDR_TYPE | CONST_TYPE)) | elem_type;
+                type = elem_type;
                 break;
             case OPEN_PAREN_TOKEN:
                 /*
@@ -867,10 +869,16 @@ int parse_stmnt(void)
                 int i;
                 for (i = 0; i < stack_loop; i++)
                     emit_drop();
+                if (!parse_expr())
+                    emit_const(0);
+                emit_leave();
             }
-            if (!parse_expr())
-                emit_const(0);
-            emit_ret();
+            else
+            {
+                if (!parse_expr())
+                    emit_const(0);
+                emit_ret();
+            }
             break;
         case EOL_TOKEN:
         case COMMENT_TOKEN:

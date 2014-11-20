@@ -1,8 +1,8 @@
 //
 // Global constants
 //
-const false         = 0
-const true          = 1
+const FALSE         = 0
+const TRUE          = 1
 //
 // Hardware constants
 //
@@ -61,10 +61,10 @@ const iobuffer      = $0800
 const databuff      = $0C00
 const strlinbuf     = $1000
 const strheapmap    = $1500
-const strheapmsz    = $70 // = memory@16 bytes per bit map, 128 bytes per 8 bit map, 1K bytes per 8 byte map
+const strheapmsz    = $80 // = memory@16 bytes per bit map, 128 bytes per 8 bit map, 1K bytes per 8 byte map
 const maxlnlen      = 79
-const strheap       = $7000
-const strheasz      = $3800
+const strheap       = $6800
+const strheasz      = $4000
 const codebuff      = $A800
 const codebuffsz    = $1000
 const pgjmp         = 16
@@ -89,12 +89,12 @@ word              = $0450,$04D0,$0550,$05D0,$0650,$06D0,$0750,$07D0
 // Editor variables
 //
 byte nullstr      = ""
-byte version      = "PLASMA ][ SANDBOX VERSION 0.9 "
+byte version      = "PLASMA ][ SANDBOX VERSION 00.10 "
 byte errorstr     = "ERROR: $"
 byte okstr        = "OK"
 byte outofmem     = "OUT OF MEMORY!"
 byte losechng     = "LOSE CHANGES TO FILE (Y/N)?"
-byte untitled     = "UNTITLED"
+byte untitled     = "UNTITLED.PLA"
 byte[64] txtfile  = "UNTITLED.PLA"
 byte flags        = 0
 byte flash        = 0
@@ -288,9 +288,8 @@ const idglobal_tblsz    = 2048
 const idlocal_tblsz     = 512
 const idglobal_tbl      = $1600
 const idlocal_tbl       = $1E00
-const ctag_max          = 640
-const ctag_value        = $800
-const ctag_flags        = $D80
+const ctag_max          = 1024
+const ctag_tbl          = $800
 const idval             = 0
 const idtype            = 2
 const idname            = 3
@@ -301,9 +300,10 @@ word lastglobal
 byte locals             = 0
 word framesize          = 0
 word lastlocal
-const resolved          = 1
-const is_ctag           = $8000
-const mask_ctag         = $7FFF
+const IS_RESOLVED       = $8000
+const IS_RELATIVE       = $8000
+const IS_CTAG           = $8000
+const MASK_CTAG         = $7FFF
 word codetag            = -1
 word codeptr, entrypoint = 0
 byte lastop             = $FF
@@ -337,6 +337,7 @@ byte local_overflw[]        = "LOCAL FRAME OVERFLOW"
 byte global_sym_overflw[]   = "GLOBAL SYMBOL TABLE OVERFLOW"
 byte local_sym_overflw[]    = "LOCAL SYMBOL TABLE OVERFLOW"
 byte ctag_full[]            = "CODE LABEL OVERFLOW"
+byte no_ctag_offst[]        = "CODE OFFSET NOT SUPPORTED"
 byte no_close_paren[]       = "MISSING CLOSING PAREN"
 byte no_close_bracket[]     = "MISSING CLOSING BRACKET"
 byte missing_op[]           = "MISSING OPERAND"
@@ -723,13 +724,13 @@ CPLNLP  LDA     (SRC),Y
 end
 //def isalpha(c)
 //    if c >= 'A' and c <= 'Z'
-//        return true
+//        return TRUE
 //    elsif c >= 'a' and c <= 'z'
-//        return true
+//        return TRUE
 //    elsif c == '_'
-//        return true
+//        return TRUE
 //    fin
-//    return false
+//    return FALSE
 //end
 asm isalpha
         LDY     #$00
@@ -755,9 +756,9 @@ ISALRET STY     ESTKL,X
 end
 //def isnum(c)
 //    if c >= '0' and c <= '9'
-//        return true
+//        return TRUE
 //    fin
-//    return false
+//    return FALSE
 //end
 asm isnum
         LDY     #$00
@@ -773,15 +774,15 @@ asm isnum
 end
 //def isalphanum(c)
 //    if c >= 'A' and c <= 'Z'
-//        return true
+//        return TRUE
 //    elsif c >= '0' and c <= '9'
-//        return true
+//        return TRUE
 //    elsif c >= 'a' and c <= 'z'
-//        return true
+//        return TRUE
 //    elsif c == '_'
-//        return true
+//        return TRUE
 //    fin
-//    return false
+//    return FALSE
 //end
 asm isalphanum
         LDY     #$00
@@ -1500,15 +1501,15 @@ def splitline
 end
 def editkey(key)
     if key >= keyspace
-        return true
+        return TRUE
     elsif key == keydelete
-        return true
+        return TRUE
     elsif key == keyctrld
-        return true
+        return TRUE
     elsif key == keyctrlr
-        return true
+        return TRUE
     fin
-    return false
+    return FALSE
 end
 def editline(key)
     byte editstr[80]
@@ -1671,7 +1672,7 @@ def editmode
                 redraw
 		break
         wend
-    until false
+    until FALSE
 end
 //
 // Command mode
@@ -1757,11 +1758,11 @@ def chkchng
         prstr(@losechng)
         if toupper(keyin()) == 'N'
             crout
-            return false
+            return FALSE
         fin
         crout
     fin
-    return true
+    return TRUE
 end
 def quit
     if chkchng
@@ -1775,7 +1776,7 @@ def cmdmode
     clrscrn
     prstr(@version)
     crout
-    while true
+    while TRUE
         prstr(@txtfile)
         cmdptr = rdstr($BA)
         when toupper(parsecmd(cmdptr))
@@ -1837,10 +1838,10 @@ def cmdmode
                         cursx    = curscol - scrnleft
                     else
                         crout
-                        (entrypoint)()
+                        entrypoint()
                     fin
                 else
-                    (entrypoint)()
+                    entrypoint()
                 fin
                 crout
 		break
@@ -1870,7 +1871,7 @@ end
 //
 def parse_err(err)
     if !parserr
-        parserr    = true
+        parserr    = TRUE
         parserrln  = lineno - 1
         parserrpos = tknptr - inbuff
         print(lineno)
@@ -1881,37 +1882,36 @@ def parse_err(err)
     return ERR_TKN
 end
 //
-// Code tags
+// Code tags. Upper bit is IS_RESOLVED flag, lower 15 is offset into codebuff
+// Flags are: 
 //
 def ctag_new
-    if codetag >= ctag_max
-        return parse_err(@ctag_full)
-    fin
+    if codetag >= ctag_max; return parse_err(@ctag_full); fin
     codetag = codetag + 1
-    ctag_value:[codetag] = 0
-    ctag_flags.[codetag] = 0
-    return codetag | is_ctag
+    ctag_tbl:[codetag] = 0 // Unresolved, nothing to update yet
+    return codetag | IS_CTAG
 end
-def ctag_resolve(tag, addr)
+def ctag_resolve(ctag, addr)
     word updtptr, nextptr
 
-    tag = tag & mask_ctag
-    if ctag_flags.[tag] & resolved
-        return parse_err(@dup_id)
-    fin
-    updtptr = ctag_value:[tag]
+    ctag = ctag & MASK_CTAG // Better be a ctag!
+    if ctag_tbl:[ctag] & IS_RESOLVED; return parse_err(@dup_id); fin
+    updtptr = ctag_tbl:[ctag] & MASK_CTAG
     while updtptr
         //
         // Update list of addresses needing resolution
         //
-        nextptr  = *updtptr
-        *updtptr = addr
-        updtptr  = nextptr
+	updtptr  = updtptr + codebuff
+        nextptr  = *updtptr & MASK_CTAG
+	if *updtptr & IS_RELATIVE
+	    *updtptr = addr - updtptr
+	else
+            *updtptr = addr
+	fin
+        updtptr = nextptr
     loop
-    ctag_value:[tag] = addr
-    ctag_flags.[tag] = ctag_flags.[tag] | resolved
+    ctag_tbl:[ctag] = (addr - codebuff) | IS_RESOLVED
 end
-
 //
 // Emit data/bytecode
 //
@@ -1927,28 +1927,49 @@ def emit_fill(size)
     memset(codeptr, size, 0)
     codeptr = codeptr + size
 end
-def emit_codetag(tag)
-    return ctag_resolve(tag, codeptr)
-end
 def emit_op(op)
     lastop = op
     return emit_byte(op)
 end
+def emit_codetag(tag)
+    return ctag_resolve(tag, codeptr)
+end
 def emit_tag(tag)
     word updtptr
 
-    if tag & is_ctag
-        tag = tag & mask_ctag
-        updtptr = ctag_value:[tag]
-        if !(ctag_flags.[tag] & resolved)
+    if tag & IS_CTAG
+        tag = tag & MASK_CTAG
+        if !(ctag_tbl:[tag] & IS_RESOLVED)
             //
             // Add to list of tags needing resolution
             //
-            ctag_value:[tag] = codeptr
+	    updtptr = ctag_tbl:[tag] & MASK_CTAG
+            ctag_tbl:[tag] = codeptr - codebuff
+	else
+	    updtptr = (ctag_tbl:[tag] & MASK_CTAG) + codebuff
         fin
         emit_word(updtptr)
     else
         emit_word(tag + codebuff)
+    fin
+end
+def emit_reltag(tag)
+    word updtptr
+
+    if tag & IS_CTAG
+        tag = tag & MASK_CTAG
+        if !(ctag_tbl:[tag] & IS_RESOLVED)
+            //
+            // Add to list of tags needing resolution
+            //
+	    updtptr = ctag_tbl:[tag] | IS_RELATIVE
+            ctag_tbl:[tag] = codeptr - codebuff
+	else
+	    updtptr = (ctag_tbl:[tag] & MASK_CTAG) + codebuff
+        fin
+        emit_word(updtptr)
+    else
+        emit_word(tag - (codeptr - codebuff))
     fin
 end
 def emit_iddata(value, size, namestr)
@@ -1999,21 +2020,23 @@ end
 def emit_lw
     return emit_op($62)
 end
-def emit_llb(index)
+def emit_llb(offset)
     emit_op($64)
-    return emit_byte(index)
+    return emit_byte(offset)
 end
-def emit_llw(index)
+def emit_llw(offset)
     emit_op($66)
-    return emit_byte(index)
+    return emit_byte(offset)
 end
-def emit_lab(tag)
+def emit_lab(tag, offset)
+    if tag & IS_CTAG and offset; return parse_err(@no_ctag_offst); fin
     emit_op($68)
-    return emit_tag(tag)
+    return emit_tag(tag+offset)
 end
-def emit_law(tag)
+def emit_law(tag, offset)
+    if tag & IS_CTAG and offset; return parse_err(@no_ctag_offst); fin
     emit_op($6A)
-    return emit_tag(tag)
+    return emit_tag(tag+offset)
 end
 def emit_sb
     return emit_op($70)
@@ -2021,67 +2044,63 @@ end
 def emit_sw
     return emit_op($72)
 end
-def emit_slb(index)
+def emit_slb(offset)
     emit_op($74)
-    return emit_byte(index)
+    return emit_byte(offset)
 end
-def emit_slw(index)
+def emit_slw(offset)
     emit_op($76)
-    return emit_byte(index)
+    return emit_byte(offset)
 end
-def emit_dlb(index)
+def emit_dlb(offset)
     emit_op($6C)
-    return emit_byte(index)
+    return emit_byte(offset)
 end
-def emit_dlw(index)
+def emit_dlw(offset)
     emit_op($6E)
-    return emit_byte(index)
+    return emit_byte(offset)
 end
-def emit_sab(tag)
+def emit_sab(tag, offset)
+    if tag & IS_CTAG and offset; return parse_err(@no_ctag_offst); fin
     emit_op($78)
-    return emit_tag(tag)
+    return emit_tag(tag+offset)
 end
-def emit_saw(tag)
+def emit_saw(tag, offset)
+    if tag & IS_CTAG and offset; return parse_err(@no_ctag_offst); fin
     emit_op($7A)
-    return emit_tag(tag)
+    return emit_tag(tag+offset)
 end
-def emit_dab(tag)
+def emit_dab(tag, offset)
+    if tag & IS_CTAG and offset; return parse_err(@no_ctag_offst); fin
     emit_op($7C)
-    return emit_tag(tag)
+    return emit_tag(tag+offset)
 end
-def emit_daw(tag)
+def emit_daw(tag, offset)
+    if tag & IS_CTAG and offset; return parse_err(@no_ctag_offst); fin
     emit_op($7E)
-    return emit_tag(tag)
+    return emit_tag(tag+offset)
 end
-def emit_call(tag, cparams)
+def emit_call(tag)
     emit_op($54)
     return emit_tag(tag)
 end
-def emit_ical(cparams)
-    emit_op($56)
-    return emit_byte(cparams)
+def emit_ical
+    return emit_op($56)
 end
 def emit_push
-        emit_op($34)
+    emit_op($34)
 end
 def emit_pull
-        //
-        // Skip if last op was push
-        //
-        if lastop == $34
-                codeptr = codeptr - 1
-        lastop = $FF
-        else
-                emit_op($36)
-        fin
+    emit_op($36)
 end
-def emit_localaddr(index)
+def emit_localaddr(offset)
     emit_op($28)
-    return emit_byte(index)
+    return emit_byte(offset)
 end
-def emit_globaladdr(tag)
+def emit_globaladdr(tag, offset)
+    if tag & IS_CTAG and offset; return parse_err(@no_ctag_offst); fin
     emit_op($26)
-    return emit_tag(tag)
+    return emit_tag(tag+offset)
 end
 def emit_indexbyte
     return emit_op($2E)
@@ -2106,9 +2125,9 @@ def emit_unaryop(op)
         is WPTR_TKN
             emit_op($62); break
         otherwise
-            return false
+            return FALSE
     wend
-    return true
+    return TRUE
 end
 def emit_binaryop(op)
     when op
@@ -2187,33 +2206,33 @@ def emit_binaryop(op)
         is LOGIC_AND_TKN
             emit_op($24); break
         otherwise
-            return false
+            return FALSE
     wend
-    return true
+    return TRUE
 end
 def emit_brtru(tag)
     emit_op($4E)
-    return emit_tag(tag)
+    return emit_reltag(tag)
 end
 def emit_brfls(tag)
     emit_op($4C)
-    return emit_tag(tag)
+    return emit_reltag(tag)
 end
 def emit_brgt(tag)
     emit_op($38)
-    return emit_tag(tag)
+    return emit_reltag(tag)
 end
 def emit_brlt(tag)
     emit_op($3A)
-    return emit_tag(tag)
+    return emit_reltag(tag)
 end
 def emit_brne(tag)
     emit_op($3E)
-    return emit_tag(tag)
+    return emit_reltag(tag)
 end
 def emit_branch(tag)
     emit_op($50)
-    return emit_tag(tag)
+    return emit_reltag(tag)
 end
 def emit_drop
     return emit_op($30)
@@ -2235,15 +2254,6 @@ def emit_enter(cparams)
         emit_byte(cparams)
     fin
 end
-def emit_start
-    //
-    // Save address
-    //
-    entrypoint = codeptr
-    emit_byte(emit_start.[0])
-    emit_byte(emit_start.[1])
-    return emit_op(emit_start.[2])
-end
 //
 // Symbol table
 //
@@ -2251,9 +2261,9 @@ def idmatch(nameptr, len, idptr, idcnt)
     byte i
 
     while idcnt
-        if len == (idptr).idname
+        if len == idptr->idname
             for i = 1 to len
-                if (nameptr).[i - 1] <> (idptr).idname.[i]
+                if nameptr->[i - 1] <> idptr->idname.[i]
                     break
                 fin
             next
@@ -2261,30 +2271,30 @@ def idmatch(nameptr, len, idptr, idcnt)
                 return idptr
             fin
         fin
-        idptr = idptr + (idptr).idname + idrecsz
+        idptr = idptr + idptr->idname + idrecsz
         idcnt = idcnt - 1
     loop
     return 0
 end
 def dumpsym(idptr, idcnt)
     while idcnt
-        prword((idptr):idval)
+        prword(idptr=>idval)
         cout(' ')
-        prbyte((idptr).idtype)
+        prbyte(idptr->idtype)
         cout(' ')
-        prstr(@(idptr).idname)
+        prstr(@idptr->idname)
         cout('=')
-        if (idptr).idtype & ADDR_TYPE
-            if (idptr):idval & is_ctag
-                prword(ctag_value:[(idptr):idval & mask_ctag])
+        if idptr->idtype & ADDR_TYPE
+            if idptr=>idval & IS_CTAG
+                prword((ctag_tbl:[idptr=>idval & MASK_CTAG] & MASK_CTAG) + codebuff)
             else
-                prword((idptr):idval + codebuff)
+                prword(idptr=>idval + codebuff)
             fin
         else
-            prword((idptr):idval)
+            prword(idptr=>idval)
         fin
         crout
-        idptr = idptr + (idptr).idname + idrecsz
+        idptr = idptr + idptr->idname + idrecsz
         idcnt = idcnt - 1
     loop
 end
@@ -2305,11 +2315,9 @@ def idglobal_lookup(nameptr, len)
     return idmatch(nameptr, len, idglobal_tbl, globals)
 end
 def idlocal_add(namestr, len, type, size)
-    if idmatch(namestr, len, @idlocal_tbl, locals)
-        return parse_err(@dup_id)
-    fin
-    (lastlocal):idval  = framesize
-    (lastlocal).idtype = type | LOCAL_TYPE
+    if idmatch(namestr, len, @idlocal_tbl, locals); return parse_err(@dup_id); fin
+    lastlocal=>idval  = framesize
+    lastlocal->idtype = type | LOCAL_TYPE
     nametostr(namestr, len, lastlocal + idname)
     locals    = locals + 1
     lastlocal = lastlocal + idrecsz + len
@@ -2320,16 +2328,14 @@ def idlocal_add(namestr, len, type, size)
     framesize = framesize + size
     if framesize > 255
         prstr(@local_overflw)
-        return false
+        return FALSE
     fin
-    return true
+    return TRUE
 end
 def iddata_add(namestr, len, type, size)
-    if idmatch(namestr, len, idglobal_tbl, globals)
-        return parse_err(@dup_id)
-    fin
-    (lastglobal):idval    = datasize
-    (lastglobal).idtype = type
+    if idmatch(namestr, len, idglobal_tbl, globals); return parse_err(@dup_id); fin
+    lastglobal=>idval  = datasize
+    lastglobal->idtype = type
     nametostr(namestr, len, lastglobal + idname)
     emit_iddata(datasize, size, lastglobal + idname)
     globals    = globals + 1
@@ -2339,7 +2345,7 @@ def iddata_add(namestr, len, type, size)
         exit
     fin
     datasize = datasize + size
-    return true
+    return TRUE
 end
 def iddata_size(type, varsize, initsize)
     if varsize > initsize
@@ -2347,25 +2353,19 @@ def iddata_size(type, varsize, initsize)
     else
         datasize = datasize + initsize
     fin
-//    if datasize <> codeptr - codebuff
-//        prstr(@emiterr)
-//        keyin()
-//    fin
 end
 def idglobal_add(namestr, len, type, value)
-    if idmatch(namestr, len, idglobal_tbl, globals)
-        return parse_err(@dup_id)
-    fin
-    (lastglobal):idval    = value
-    (lastglobal).idtype = type
+    if idmatch(namestr, len, idglobal_tbl, globals); return parse_err(@dup_id); fin
+    lastglobal=>idval  = value
+    lastglobal->idtype = type
     nametostr(namestr, len, lastglobal + idname)
-    globals       = globals + 1
+    globals    = globals + 1
     lastglobal = lastglobal + idrecsz + len
     if lastglobal > idglobal_tbl + idglobal_tblsz
         prstr(@global_sym_overflw)
         exit
     fin
-    return true
+    return TRUE
 end
 def idfunc_add(namestr, len, tag)
     return idglobal_add(namestr, len, FUNC_TYPE, tag)
@@ -2381,42 +2381,64 @@ def idglobal_init
     codeptr      = codebuff
     lastop       = $FF
     entrypoint   = 0
-    datasize     = 0
     globals      = 0
     lastglobal   = idglobal_tbl
     codetag      = -1
+    //
+    // Create local jump table to some library functions
+    //
     ctag = ctag_new
     idfunc_add(@runtime0 + 1, runtime0, ctag)
     idfunc_add(@RUNTIME0 + 1, RUNTIME0, ctag)
-    ctag_resolve(ctag, @call)
+    ctag_resolve(ctag, codeptr)
+    emit_byte($4C)
+    emit_word(@call)
     ctag = ctag_new
     idfunc_add(@runtime1 + 1, runtime1, ctag)
     idfunc_add(@RUNTIME1 + 1, RUNTIME1, ctag)
-    ctag_resolve(ctag, @syscall)
+    ctag_resolve(ctag, codeptr)
+    emit_byte($4C)
+    emit_word(@syscall)
     ctag = ctag_new
     idfunc_add(@runtime2 + 1, runtime2, ctag)
     idfunc_add(@RUNTIME2 + 1, RUNTIME2, ctag)
-    ctag_resolve(ctag, @memset)
+    ctag_resolve(ctag, codeptr)
+    emit_byte($4C)
+    emit_word(@memset)
     ctag = ctag_new
     idfunc_add(@runtime3 + 1, runtime3, ctag)
     idfunc_add(@RUNTIME3 + 1, RUNTIME3, ctag)
-    ctag_resolve(ctag, @memcpy)
+    ctag_resolve(ctag, codeptr)
+    emit_byte($4C)
+    emit_word(@memcpy)
     ctag = ctag_new
     idfunc_add(@runtime4 + 1, runtime4, ctag)
     idfunc_add(@RUNTIME4 + 1, RUNTIME4, ctag)
-    ctag_resolve(ctag, @cout)
+    ctag_resolve(ctag, codeptr)
+    emit_byte($4C)
+    emit_word(@cout)
     ctag = ctag_new
     idfunc_add(@runtime5 + 1, runtime5, ctag)
     idfunc_add(@RUNTIME5 + 1, RUNTIME5, ctag)
-    ctag_resolve(ctag, @cin)
+    ctag_resolve(ctag, codeptr)
+    emit_byte($4C)
+    emit_word(@cin)
     ctag = ctag_new
     idfunc_add(@runtime6 + 1, runtime6, ctag)
     idfunc_add(@RUNTIME6 + 1, RUNTIME6, ctag)
-    ctag_resolve(ctag, @prstr)
+    ctag_resolve(ctag, codeptr)
+    emit_byte($4C)
+    emit_word(@prstr)
     ctag = ctag_new
     idfunc_add(@runtime7 + 1, runtime7, ctag)
     idfunc_add(@RUNTIME7 + 1, RUNTIME7, ctag)
-    ctag_resolve(ctag, @rdstr)
+    ctag_resolve(ctag, codeptr)
+    emit_byte($4C)
+    emit_word(@rdstr)
+    //
+    // Start data after jump table
+    //
+    datasize = codeptr - codebuff
 end
 def idlocal_init
     locals    = 0
@@ -2702,7 +2724,7 @@ def parse_term
     when scan
         is OPEN_PAREN_TKN
             if !parse_expr
-                return false
+                return FALSE
             fin
             if token <> CLOSE_PAREN_TKN
                 return parse_err(@no_close_paren)
@@ -2711,9 +2733,9 @@ def parse_term
         is INT_TKN
         is CHR_TKN
         is STR_TKN
-            return true
+            return TRUE
     wend
-    return false
+    return FALSE
 end
 def parse_constval(valptr, sizeptr)
     byte mod, type
@@ -2792,9 +2814,9 @@ def ispostop
         is COLON_TKN
         is PTRB_TKN
         is PTRW_TKN
-            return true
+            return TRUE
     wend
-    return false
+    return FALSE
 end
 def parse_value(rvalue)
     byte cparams, deref, type, emit_val
@@ -2802,11 +2824,12 @@ def parse_value(rvalue)
     byte elem_size, elem_type
     word elem_offset
 
-    deref    = rvalue
-    optos    = opsp
-    type     = 0
-    emit_val = false
-    value    = 0
+    deref       = rvalue
+    optos       = opsp
+    type        = 0
+    elem_offset = 0
+    emit_val    = FALSE
+    value       = 0
 
     //
     // Parse pre-ops
@@ -2859,7 +2882,7 @@ def parse_value(rvalue)
 	    break
         is CLOSE_PAREN_TKN
             // type     = type | WORD_TYPE
-            emit_val = true
+            emit_val = TRUE
 	    break
         otherwise
             return 0
@@ -2868,7 +2891,7 @@ def parse_value(rvalue)
     // Constant optimizations
     //
     if type & CONST_TYPE
-        cparams = true
+        cparams = TRUE
         while optos < opsp and cparams
             when tos_op
                 is NEG_TKN
@@ -2884,7 +2907,7 @@ def parse_value(rvalue)
                     value = !value
 		    break
                 otherwise
-                    cparams = false
+                    cparams = FALSE
             wend
         loop
     fin
@@ -2902,12 +2925,12 @@ def parse_value(rvalue)
                         if type & LOCAL_TYPE
                             emit_localaddr(value)
                         else
-                            emit_globaladdr(value)
+                            emit_globaladdr(value, 0)
                         fin
                     elsif type & CONST_TYPE
                         emit_const(value)
                     fin
-                    emit_val = true
+                    emit_val = TRUE
                 fin // !emit_val
                 if type & PTR_TYPE
                     emit_lw
@@ -2930,7 +2953,7 @@ def parse_value(rvalue)
             is PTRW_TKN
                 if !emit_val
                     if type & FUNC_TYPE
-                        emit_call(value, type)
+                        emit_call(value)
                     elsif type & VAR_TYPE
                         if type & LOCAL_TYPE
                             if type & BYTE_TYPE
@@ -2940,9 +2963,9 @@ def parse_value(rvalue)
                             fin
                         else
                             if type & BYTE_TYPE
-                                emit_lab(value, elem_offset, type)
+                                emit_lab(value, elem_offset)
                             else
-                                emit_law(value, elem_offset, type)
+                                emit_law(value, elem_offset)
                             fin
                         fin
                     else
@@ -2980,27 +3003,28 @@ def parse_value(rvalue)
                     //
                     if !emit_val
                         if type & VAR_TYPE
-                            if type & LOCAL_TYPE
-                                emit_localaddr(value + elem_offset)
+                            if elem_type & BPTR_TYPE
+                                elem_type = (type & ~VAR_TYPE) | BYTE_TYPE
                             else
-                                // emit_globaladdr(value + elem_offset)
-                                emit_globaladdr(value)
-                                emit_const(elem_offset)
-                                emit_binaryop(ADD_TKN)
+                                elem_type = (type & ~VAR_TYPE) | WORD_TYPE
                             fin
                         elsif type & CONST_TYPE
                             value = value + elem_offset
                             emit_const(value)
+                            elem_offset = 0
+                            emit_val    = TRUE
                         else // FUNC_TYPE
-                            emit_globaladdr(value)
+                            emit_globaladdr(value, 0)
                             emit_const(elem_offset)
                             emit_binaryop(ADD_TKN)
+                            elem_offset = 0
+                            emit_val    = TRUE
                         fin
-                        emit_val = true
                     else
                         if elem_offset <> 0
                             emit_const(elem_offset)
                             emit_binaryop(ADD_TKN)
+                            elem_offset = 0
                         fin
                     fin // !emit_val
                 elsif token == OPEN_BRACKET_TKN
@@ -3010,14 +3034,15 @@ def parse_value(rvalue)
                     if !emit_val
                         if type & ADDR_TYPE
                             if type & LOCAL_TYPE
-                                emit_localaddr(value)
+                                emit_localaddr(value + elem_offset)
                             else
-                                emit_globaladdr(value)
+                                emit_globaladdr(value, elem_offset)
                             fin
                         elsif type & CONST_TYPE
-                            emit_const(value)
+                            emit_const(value + elem_offset)
                         fin
-                        emit_val = true
+                        elem_offset = 0
+                        emit_val    = TRUE
                     fin // !emit_val
                     while parse_expr
                         if token <> COMMA_TKN
@@ -3059,7 +3084,7 @@ def parse_value(rvalue)
                     return parse_err(@no_close_paren)
                 fin
                 if type & FUNC_CONST_TYPE
-                    emit_call(value, type)
+                    emit_call(value)
                 else
                     if !emit_val
                         if type & VAR_TYPE
@@ -3078,7 +3103,7 @@ def parse_value(rvalue)
                     fin
                     emit_ical
                 fin
-                emit_val = true
+                emit_val = TRUE
                 type = WORD_TYPE
         wend
     loop
@@ -3097,7 +3122,7 @@ def parse_value(rvalue)
             emit_const(value)
         elsif deref
             if type & FUNC_TYPE
-                emit_call(value, 0)
+                emit_call(value)
             elsif type & VAR_TYPE
                 if type & LOCAL_TYPE
                     if type & BYTE_TYPE
@@ -3254,7 +3279,7 @@ def parse_stmnt
                 if !parse_expr; return 0; fin
                 tag_else = ctag_new
                 emit_brfls(tag_else)
-            until false
+            until FALSE
             if token == ELSE_TKN
                 emit_branch(tag_endif)
                 emit_codetag(tag_else)
@@ -3311,7 +3336,7 @@ def parse_stmnt
                 type  = idptr->idtype
                 addr  = idptr=>idval
             else
-                return false
+                return FALSE
             fin
             if scan <> SET_TKN; return parse_err(@bad_stmnt); fin
             if !parse_expr; return parse_err(@bad_stmnt); fin
@@ -3428,7 +3453,7 @@ def parse_stmnt
 	    break
         is EOL_TKN
         is COMMENT_TKN
-            return true
+            return TRUE
         is ELSE_TKN
         is ELSEIF_TKN
         is FIN_TKN
@@ -3441,11 +3466,11 @@ def parse_stmnt
         is END_TKN
         is DONE_TKN
         is DEF_TKN
-            return false
+            return FALSE
         is ID_TKN
             saveptr = tknptr
             idptr = id_lookup(tknptr, tknlen)
-            if !idptr; return false; fin
+            if !idptr; return FALSE; fin
             type = idptr->idtype
             addr = idptr=>idval
             if type & VAR_TYPE
@@ -3485,7 +3510,7 @@ def parse_stmnt
                 fin
             elsif type & FUNC_TYPE
                 if scan == EOL_TKN
-                    emit_call(addr, 0)
+                    emit_call(addr)
                     emit_drop
                     break
                 fin
@@ -3517,7 +3542,7 @@ def parse_stmnt
     if scan <> EOL_TKN
         return parse_err(@bad_syntax)
     fin
-    return true
+    return TRUE
 end
 def parse_var(type)
     byte consttype, constsize, idlen
@@ -3582,7 +3607,7 @@ def parse_var(type)
             iddata_add(idptr, idlen, type, size)
         fin
     fin
-    return true
+    return TRUE
 end
 def parse_vars
     byte idlen, type, size
@@ -3612,7 +3637,7 @@ def parse_vars
             fin
             repeat
                 if !parse_var(type)
-                    return false
+                    return FALSE
                 fin
             until token <> COMMA_TKN
 	    break
@@ -3627,11 +3652,11 @@ def parse_vars
 	    break
         is EOL_TKN
         is COMMENT_TKN
-            return true
+            return TRUE
         otherwise
-            return false
+            return FALSE
     wend
-    return true
+    return TRUE
 end
 def parse_defs
     byte cfnparms
@@ -3640,7 +3665,7 @@ def parse_defs
     if token == DEF_TKN
         if scan <> ID_TKN; return parse_err(@bad_decl); fin
         cfnparms = 0
-        infunc   = true
+        infunc   = TRUE
         idptr    = idglobal_lookup(tknptr, tknlen)
         if idptr
             func_tag = (idptr):idval
@@ -3672,18 +3697,18 @@ def parse_defs
         while parse_stmnt
             nextln
         loop
-        infunc = false
+        infunc = FALSE
         if token <> END_TKN; return parse_err(@bad_syntax); fin
         if scan <> EOL_TKN and token <> COMMENT_TKN; return parse_err(@bad_syntax); fin
         if prevstmnt <> RETURN_TKN
             emit_const(0)
             emit_leave
         fin
-        return true
+        return TRUE
     elsif token == EOL_TKN or token == COMMENT_TKN
-        return true
+        return TRUE
     fin
-    return false
+    return FALSE
 end
 def parse_module
     entrypoint = 0
@@ -3697,26 +3722,26 @@ def parse_module
             nextln
         loop
 	framesize = 0
+	entrypoint = codeptr
+	emit_enter
+	prevstmnt = 0
         if token <> DONE_TKN
-            emit_start
-            prevstmnt = 0
             while parse_stmnt
                 nextln
             loop
-            if token <> DONE_TKN; parse_err(@no_done); fin
-            if prevstmnt <> RETURN_TKN
-	        emit_const(0)
-                emit_leave
-            fin
         fin
+	if prevstmnt <> RETURN_TKN
+	    emit_const(0)
+	    emit_leave
+	fin
         dumpsym(idglobal_tbl, globals)
         prstr(@entrypt_str)
         prword(entrypoint)
         crout
         keyin()
-        return true
+        return TRUE
     fin
-    return false
+    return FALSE
 end
 //
 // Init editor
