@@ -55,7 +55,7 @@ INTERP	=	$03D0
 ;*                            *
 ;******************************
 *	=	$2000
-	LDX     #$FF
+	LDX     #$FE
 	TXS
 ;*
 ;* DISCONNECT /RAM
@@ -152,9 +152,49 @@ RAMDONE	CLI
 	STA	LCDEFCMD,Y
 	DEY
 	BPL	-
-	JMP     CMDEXEC
+;*
+;* LOOK FOR STARTUP FILE
+;*
+        JSR     PRODOS          ; OPEN AUTORUN
+        !BYTE   $C8
+        !WORD   AUTOOPENPARMS
+        BCS     CMDEXEC
+        LDA     AUTOREFNUM
+        STA     AUTONLPARMS+1
+        JSR     PRODOS
+        !BYTE   $C9
+        !WORD   AUTONLPARMS
+        BCS     CMDEXEC
+        LDA     AUTOREFNUM
+        STA     AUTOREADPARMS+1
+        JSR     PRODOS
+        !BYTE   $CA
+        !WORD   AUTOREADPARMS
+        BCS     CMDEXEC
+        LDX     AUTOREADPARMS+6
+        STX     $01FF
+CMDEXEC JSR     PRODOS
+        !BYTE   $CC
+        !WORD   AUTOCLOSEPARMS
+	JMP     CMDENTRY
 GETPFXPARMS !BYTE 1
 	!WORD	STRBUF		; PATH STRING GOES HERE
+AUTORUN !BYTE   7,'A','U','T','O','R','U','N'
+AUTOOPENPARMS !BYTE 3
+        !WORD   AUTORUN
+        !WORD   $0800
+AUTOREFNUM  !BYTE   0
+AUTONLPARMS !BYTE   3
+        !BYTE   0
+        !BYTE   $7F
+        !BYTE   $0D
+AUTOREADPARMS !BYTE 4
+        !BYTE   0
+        !WORD   $0200
+        !WORD   $0080
+        !WORD   0
+AUTOCLOSEPARMS !BYTE 1
+        !BYTE   0
 ;************************************************
 ;*                                              *
 ;* LANGUAGE CARD RESIDENT PLASMA VM STARTS HERE *
@@ -232,7 +272,9 @@ BYE	LDY	DEFCMD
 	STA	STRBUF,Y
 	DEY
 	BPL	-
-CMDEXEC	=	*
+	INY			; CLEAR CMDLINE BUFF
+	STY	$01FF
+CMDENTRY =	*
 ;
 ; DEACTIVATE 80 COL CARDS
 ;

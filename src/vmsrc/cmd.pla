@@ -31,34 +31,34 @@ word heap
 word xheap       = $0800
 word lastsym     = symtbl
 byte perr
-word cmdptr
+word cmdptr      = $01FF
 //
 // Standard Library exported functions.
 //
-byte stdlibstr[]  = "STDLIB"
-byte machidstr[]  = "MACHID"
-byte sysstr[]     = "SYSCALL"
-byte callstr[]    = "CALL"
-byte putcstr[]    = "PUTC"
-byte putlnstr[]   = "PUTLN"
-byte putsstr[]    = "PUTS"
-byte getcstr[]    = "GETC"
-byte getsstr[]    = "GETS"
-byte hpmarkstr[]  = "HEAPMARK"
-byte hpalignstr[] = "HEAPALLOCALIGN"
-byte hpallocstr[] = "HEAPALLOC"
-byte hprelstr[]   = "HEAPRELEASE"
-byte hpavailstr[] = "HEAPAVAIL"
-byte memsetstr[]  = "MEMSET"
-byte memcpystr[]  = "MEMCPY"
-byte uisgtstr[]   = "ISUGT"
-byte uisgestr[]   = "ISUGE"
-byte uisltstr[]   = "ISULT"
-byte uislestr[]   = "ISULE"
-byte loadstr[]    = "MODLOAD"
-byte execstr[]    = "MODEXEC"
-byte modadrstr[]  = "MODADDR"
-word exports[]	  = @sysstr,    @syscall
+byte stdlibstr  = "STDLIB"
+byte machidstr  = "MACHID"
+byte sysstr     = "SYSCALL"
+byte callstr    = "CALL"
+byte putcstr    = "PUTC"
+byte putlnstr   = "PUTLN"
+byte putsstr    = "PUTS"
+byte getcstr    = "GETC"
+byte getsstr    = "GETS"
+byte hpmarkstr  = "HEAPMARK"
+byte hpalignstr = "HEAPALLOCALIGN"
+byte hpallocstr = "HEAPALLOC"
+byte hprelstr   = "HEAPRELEASE"
+byte hpavailstr = "HEAPAVAIL"
+byte memsetstr  = "MEMSET"
+byte memcpystr  = "MEMCPY"
+byte uisgtstr   = "ISUGT"
+byte uisgestr   = "ISUGE"
+byte uisltstr   = "ISULT"
+byte uislestr   = "ISULE"
+byte loadstr    = "MODLOAD"
+byte execstr    = "MODEXEC"
+byte modadrstr  = "MODADDR"
+word exports	  = @sysstr,    @syscall
 word		  = @callstr,   @call
 word		  = @putcstr,   @cout
 word              = @putlnstr,  @crout
@@ -84,13 +84,12 @@ word stdlibsym    = @exports
 //
 // String pool.
 //
-byte autorun[]    = "AUTORUN"
-byte verstr[]     = "PLASMA "
-byte freestr[]    = "MEM FREE:$"
-byte errorstr[]   = "ERR:$"
-byte okstr[]      = "OK"
-byte huhstr[]     = "?\n"
-byte prefix[32]   = ""
+byte verstr     = "PLASMA "
+byte freestr    = "MEM FREE:$"
+byte errorstr   = "ERR:$"
+byte okstr      = "OK"
+byte huhstr     = "?\n"
+byte[32] prefix = ""
 //
 // Utility functions
 //
@@ -167,7 +166,7 @@ asm exec
 	STX	IFPL
 	LDA	#$BF
 	STA	IFPH
-	DEX
+	LDX	#$FE
 	TXS
 	LDX	#ESTKSZ/2
 	BIT	ROMEN
@@ -1147,7 +1146,7 @@ def catalog(optpath)
     return 0
 end
 def stripchars(strptr)
-    while ^strptr and ^(strptr + 1) <> ' '
+    while ^strptr and ^(strptr + 1) > ' '
         memcpy(strptr + 1, strptr + 2, ^strptr)
         ^strptr = ^strptr - 1
     loop
@@ -1166,7 +1165,7 @@ def striptrail(strptr)
     byte i
 
     for i = 1 to ^strptr
-        if (strptr)[i] == ' '
+        if ^(strptr + i) <= ' '
 	    ^strptr = i - 1
 	    return
 	fin
@@ -1213,7 +1212,7 @@ def execsys(sysfile)
 	        memcpy(sysfile, $280, ^$280 + 1)
 		if stripchars(sysfile) and ^$2000 == $4C and *$2003 == $EEEE
 		    stripspaces(sysfile)
-		    if ^$2006 <= ^sysfile
+		    if ^$2005 >= ^sysfile + 1
 		        memcpy($2006, sysfile, ^sysfile + 1)
 		    fin
 		fin
@@ -1255,25 +1254,22 @@ while *stdlibsym
     stdlibsym = stdlibsym + 4
 loop
 //
-// Try to run autorun module.
-//
-resetmemfiles()
-execmod(@autorun)
-perr = 0
-//
 // Print some startup info.
 //
-prstr(@verstr)
-prbyte(version.1)
-cout('.')
-prbyte(version.0)
-crout
-prstr(@freestr)
-prword(availheap)
-crout
+if not ^cmdptr
+    prstr(@verstr)
+    prbyte(version.1)
+    cout('.')
+    prbyte(version.0)
+    crout
+    prstr(@freestr)
+    prword(availheap)
+    crout
+else
+    getpfx(@prefix)
+fin
+perr = 0
 while 1
-    prstr(getpfx(@prefix))
-    cmdptr = rdstr($BA)
     if ^cmdptr
         when toupper(parsecmd(cmdptr))
             is 'Q'
@@ -1306,5 +1302,7 @@ while 1
         fin
 	crout()
     fin
+    prstr(getpfx(@prefix))
+    cmdptr = rdstr($BA)
 loop
 done
