@@ -167,7 +167,7 @@ const CLOSE_BRACKET_TKN  = $DD // ]
 // Misc. tokens
 //
 const COMMA_TKN          = $AC // ,
-const COMMENT_TKN        = $BB // //
+//const COMMENT_TKN        = $BB // //
 //
 // Keyword tokens
 //
@@ -601,10 +601,12 @@ REVCPY	;CLC
 	LDA	ESTKH-2,X
 	ADC	ESTKH-1,X
 	STA	SRCH
-	INC 	ESTKH-2,X
 	DEC	DSTH
 	DEC	SRCH
 	LDY	#$FF
+	LDA 	ESTKL-2,X
+	BEQ	REVCPYLP	
+	INC 	ESTKH-2,X
 REVCPYLP LDA	(SRC),Y
 	STA	(DST),Y
 	DEY
@@ -2568,7 +2570,7 @@ def scan
     //
     // Skip whitespace
     //
-    while ^scanptr and ^scanptr <= ' '
+    while ^scanptr == ' '
         scanptr = scanptr + 1
     loop
     tknptr = scanptr
@@ -2602,7 +2604,7 @@ def scan
         //
         // Hexadecimal constant
         //
-        token    = INT_TKN//
+        token    = INT_TKN
         constval = 0
         repeat
             scanptr = scanptr + 1
@@ -2712,8 +2714,8 @@ def scan
 		break
             is '/'
                 if ^(scanptr + 1) == '/'
-                    token   = EOL_TKN
-                    scanptr = scanptr + 2
+                    token    = EOL_TKN
+                    ^scanptr = $00
                 else
                     token   = DIV_TKN
                     scanptr = scanptr + 1
@@ -2775,7 +2777,6 @@ def nextln
         else
 	    ^instr  = 0
 	    ^inbuff = 0
-            scanptr = inbuff
             token   = DONE_TKN
         fin
     fin
@@ -3504,7 +3505,6 @@ def parse_stmnt
             emit_leave
 	    break
         is EOL_TKN
-        is COMMENT_TKN
             return TRUE
         is ELSE_TKN
         is ELSEIF_TKN
@@ -3703,7 +3703,6 @@ def parse_vars
             until scan <> COMMA_TKN
 	    break
         is EOL_TKN
-        is COMMENT_TKN
             return TRUE
         otherwise
             return FALSE
@@ -3729,13 +3728,13 @@ def parse_defs
         retfunc_tag = ctag_new
         idlocal_init
         if scan == OPEN_PAREN_TKN
-          repeat
+            repeat
         if scan == ID_TKN
-          cfnparms = cfnparms + 1
-          idlocal_add(tknptr, tknlen, WORD_TYPE, 2)
-          scan
+            cfnparms = cfnparms + 1
+            idlocal_add(tknptr, tknlen, WORD_TYPE, 2)
+            scan
         fin
-            until token <> COMMA_TKN
+        until token <> COMMA_TKN
             if token <> CLOSE_PAREN_TKN
                 return parse_err(@bad_decl)
             fin
@@ -3751,13 +3750,13 @@ def parse_defs
         loop
         infunc = FALSE
         if token <> END_TKN; return parse_err(@bad_syntax); fin
-        if scan <> EOL_TKN and token <> COMMENT_TKN; return parse_err(@bad_syntax); fin
+        if scan <> EOL_TKN; return parse_err(@bad_syntax); fin
         if prevstmnt <> RETURN_TKN
             emit_const(0)
             emit_leave
         fin
         return TRUE
-    elsif token == EOL_TKN or token == COMMENT_TKN
+    elsif token == EOL_TKN
         return TRUE
     fin
     return FALSE
