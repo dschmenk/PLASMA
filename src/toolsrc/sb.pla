@@ -76,7 +76,7 @@ const shiftlock     = 128
 //
 // Argument buffer (must be first declared variables)
 //
-word	          = $EEEE // buffer signature
+word signature	  = $EEEE // buffer signature
 byte              = 32    // buffer length
 byte[32] argbuff  = ""    // buffer
 //
@@ -193,6 +193,7 @@ const NEXT_TKN           = $92
 const REPEAT_TKN         = $93
 const UNTIL_TKN          = $94
 const DEF_TKN            = $95
+const STRUC_TKN          = $96
 const DONE_TKN           = $98
 const RETURN_TKN         = $99
 const BREAK_TKN          = $9A
@@ -240,6 +241,7 @@ byte                     = "STEP",     STEP_TKN
 byte                     = "DONE",     DONE_TKN
 byte                     = "WEND",     ENDCASE_TKN
 byte                     = "CONST",    CONST_TKN
+byte                     = "STRUC",    STRUC_TKN
 byte                     = "ELSIF",    ELSEIF_TKN
 byte                     = "WHILE",    WHILE_TKN
 byte                     = "UNTIL",    UNTIL_TKN
@@ -321,11 +323,13 @@ word  lineno = 0
 //
 // Compiler output messages
 //
-byte entrypt_str[]          = "START: "
-byte comp_ok_msg[]          = "COMPILATION COMPLETE"
+//byte entrypt_str[]          = "START: "
+byte bytes_compiled_str[]   = "\nBYTES COMPILED: "
+//byte comp_ok_msg[]          = "COMPILATION COMPLETE"
 byte dup_id[]               = "DUPLICATE IDENTIFIER"
 byte undecl_id[]            = "UNDECLARED IDENTIFIER"
 byte bad_cnst[]             = "BAD CONSTANT"
+byte bad_struc[]            = "BAD STRUCTURE"
 byte bad_offset[]           = "BAD STRUCT OFFSET"
 byte bad_decl[]             = "BAD DECLARATION"
 byte bad_op[]               = "BAD OPERATION"
@@ -358,14 +362,20 @@ byte runtime2[] = "memset"
 byte RUNTIME2[] = "MEMSET"
 byte runtime3[] = "memcpy"
 byte RUNTIME3[] = "MEMCPY"
-byte runtime4[] = "cout"
-byte RUNTIME4[] = "COUT"
-byte runtime5[] = "cin"
-byte RUNTIME5[] = "CIN"
-byte runtime6[] = "prstr"
-byte RUNTIME6[] = "PRSTR"
-byte runtime7[] = "rdstr"
-byte RUNTIME7[] = "RDSTR"
+byte runtime4[] = "putc"
+byte RUNTIME4[] = "PUTC"
+byte runtime5[] = "getc"
+byte RUNTIME5[] = "GETC"
+byte runtime6[] = "puts"
+byte RUNTIME6[] = "PUTS"
+byte runtime7[] = "gets"
+byte RUNTIME7[] = "GETS"
+byte runtime8[] = "puti"
+byte RUNTIME8[] = "PUTI"
+byte runtime9[] = "home"
+byte RUNTIME9[] = "HOME"
+byte runtime10[] = "gotoxy"
+byte RUNTIME10[] = "GOTOXY"
 //
 // Parser variables
 //
@@ -394,19 +404,6 @@ end
 // SAVE VM STATE
 //
 asm save_vmstate
-	STX	VMESP
-	LDX	#ESTKSZ
--	LDA	ESTK,X
-	STA	VMESTK,X
-	DEX
-	BPL	-
-	TSX
-	STX	VMSP
-	LDX	VMESP
-	LDA	IFPL
-	STA	VMIFP
-	LDA	IFPH
-	STA	VMIFP+1
 	LDA	$03F2
 	STA	VMRESET
 	LDA	$03F3
@@ -419,36 +416,37 @@ asm save_vmstate
 	STA	$03F3
 	EOR	#$A5
 	STA	$03F4
-	RTS
-VMESTK	!FILL	ESTKSZ
-VMESP	!BYTE	0
-VMSP    !BYTE	0
-VMIFP	!WORD	0
-VMRESET	!FILL	3
-RESETENTRY
-	LDX	VMSP
-	TXS
-end
-//
-// RESTORE VM STATE
-//
-asm restore_vmstate
-	LDX	#ESTKSZ
--	LDA	VMESTK,X
-	STA	ESTK,X
 	DEX
-	BPL	-
-	LDX	VMESP
-	LDA	VMIFP
-	STA	IFPL
-	LDA	VMIFP+1
-	STA	IFPH
+	RTS
+RESETENTRY
 	LDA	VMRESET
 	STA	$03F2
 	LDA	VMRESET+1
 	STA	$03F3
 	LDA	VMRESET+2	
 	STA	$03F4
+	LDX	#$00
+	STX	IFPL
+	LDA	#$BF
+	STA	IFPH
+	LDX	#$FE
+	TXS
+	LDX	#ESTKSZ/2
+	BIT	ROMEN
+	JMP	$2000
+VMRESET	!FILL	3
+end
+//
+// RESTORE VM STATE
+//
+asm restore_vmstate
+	LDA	VMRESET
+	STA	$03F2
+	LDA	VMRESET+1
+	STA	$03F3
+	LDA	VMRESET+2	
+	STA	$03F4
+	DEX
 	RTS
 end
 //
@@ -626,11 +624,21 @@ end
 //
 asm cout
 	LDA	ESTKL,X
-	ORA 	#$80
+	BIT	$BF98
+	BMI	+
+	JSR	TOUPR
++	ORA 	#$80
 	BIT	ROMEN
 	JSR	$FDED
 	BIT	LCRDEN+LCBNK2
 	RTS
+TOUPR	AND	#$7F
+	CMP     #'a'
+	BCC     +
+	CMP     #'z'+1
+	BCS     +
+	SBC     #$1F
++	RTS
 end
 //
 // CHAR IN
@@ -662,7 +670,10 @@ asm prstr
 	BIT	ROMEN
 -	INY
 	LDA	(SRC),Y
-	ORA	#$80
+	BIT	$BF98
+	BMI	+
+	JSR	TOUPR
++	ORA	#$80
 	JSR	$FDED
 	CPY	TMP
 	BNE	-
@@ -875,6 +886,16 @@ asm isalphanum
 ISANRET STY     ESTKL,X
         STY     ESTKH,X
         RTS
+end
+//
+// Runtime routines
+//
+def home
+    return call($FC58, 0, 0, 0, 0)
+end
+def gotoxy(x, y)
+    ^$24 = x + ^$20
+    return call($FB5B, y + ^$22, 0, 0, 0)
 end
 //
 // ProDOS routines
@@ -1422,10 +1443,31 @@ end
 // Keyboard routines
 //
 def keyin2e
+    byte key
     repeat
         cursflash
     until ^keyboard >= 128
-    return ^keystrobe
+    key = ^keystrobe
+    if ^$C062 & 128 // Closed Apple pressed
+        when key
+	    is keyarrowleft
+	        key = keyctrla
+		break
+	    is keyarrowright
+	        key = keyctrls
+		break
+	    is keyarrowup
+	        key = keyctrlw
+		break
+	    is keyarrowdown
+	        key = keyctrlz
+		break
+	    is keyenter
+	        key = keyctrlo
+		break
+	wend
+    fin
+    return key
 end
 def keyin2
     byte key
@@ -1700,6 +1742,9 @@ def editmode
 	        cursdown
             is keyctrlo
                 openline(cursrow)
+		curscol  = 0
+		cursx    = 0
+		scrnleft = 0
                 redraw
 		break
             is keyenter
@@ -1864,7 +1909,7 @@ def cmdmode
                     strcpy(@txtfile, cmdptr)
                 fin
                 writetxt(@txtfile)
-                //if flags & changed; fin
+                if flags & changed; entrypoint = 0; fin
                 flags = flags & ~changed
 		break
             is 'C'
@@ -2501,6 +2546,24 @@ def idglobal_init
     ctag_resolve(ctag)
     emit_byte($4C)
     emit_word(@rdstr)
+    ctag = ctag_new
+    idfunc_add(@runtime8 + 1, runtime8, ctag)
+    idfunc_add(@RUNTIME8 + 1, RUNTIME8, ctag)
+    ctag_resolve(ctag)
+    emit_byte($4C)
+    emit_word(@print)
+    ctag = ctag_new
+    idfunc_add(@runtime9 + 1, runtime9, ctag)
+    idfunc_add(@RUNTIME9 + 1, RUNTIME9, ctag)
+    ctag_resolve(ctag)
+    emit_byte($4C)
+    emit_word(@home)
+    ctag = ctag_new
+    idfunc_add(@runtime10 + 1, runtime10, ctag)
+    idfunc_add(@RUNTIME10 + 1, RUNTIME10, ctag)
+    ctag_resolve(ctag)
+    emit_byte($4C)
+    emit_word(@gotoxy)
     //
     // Start data after jump table
     //
@@ -2780,7 +2843,7 @@ def nextln
             token   = DONE_TKN
         fin
     fin
-    return ^instr
+    return token
 end
 //
 // Parser
@@ -3602,17 +3665,11 @@ def parse_var(type)
 
     idlen = 0
     size  = 1
-    if scan == ID_TKN
-        idptr = tknptr
-        idlen = tknlen
-        if scan == OPEN_BRACKET_TKN
-            size = 0
-            parse_constexpr(@size, @constsize)
-            if token <> CLOSE_BRACKET_TKN
-                return parse_err(@no_close_bracket)
-            fin
-            scan
-        fin
+    if scan == OPEN_BRACKET_TKN
+      size = 0
+      parse_constexpr(@size, @constsize)
+      if token <> CLOSE_BRACKET_TKN;  return parse_err(@no_close_bracket); fin
+      scan
     fin
     if token == ID_TKN
         idptr = tknptr
@@ -3621,16 +3678,14 @@ def parse_var(type)
             size = 0
             parse_constexpr(@size, @constsize)
             if token <> CLOSE_BRACKET_TKN; return parse_err(@no_close_bracket); fin
+            scan
         fin
-        scan
     fin
     if type == WORD_TYPE
         size = size * 2
     fin
     if token == SET_TKN
-        if infunc
-            return parse_err(@no_local_init)
-        fin
+        if infunc; return parse_err(@no_local_init); fin
         if idlen
             iddata_add(idptr, idlen, type, 0)
         fin
@@ -3645,9 +3700,6 @@ def parse_var(type)
                     return parse_err(@bad_decl)
                 fin
             loop
-            if token <> EOL_TKN
-                return parse_err(@no_close_bracket)
-            fin
             iddata_size(PTR_TYPE, size, arraysize)//
         else
             return parse_err(@bad_decl)
@@ -3660,6 +3712,47 @@ def parse_var(type)
         fin
     fin
     return TRUE
+end
+def parse_struc
+    word size, type, constsize, offset, idstr, idlen
+
+    offset = 0    
+    while nextln == BYTE_TKN or token == WORD_TKN
+        size = 1
+        if token == BYTE_TKN
+            type = BYTE_TYPE
+        else
+            type = WORD_TYPE
+        fin
+        if scan == OPEN_BRACKET_TKN
+            size = 0
+            parse_constexpr(@size, @constsize)
+            if token <> CLOSE_BRACKET_TKN;  return parse_err(@no_close_bracket); fin            
+            scan
+        fin
+        repeat
+            idlen = 0;
+            if token == ID_TKN
+                idstr = tknptr
+                idlen = tknlen
+                if scan == OPEN_BRACKET_TKN
+                    size = 0
+                    parse_constexpr(@size, @constsize)
+                    if token <> CLOSE_BRACKET_TKN;  return parse_err(@no_close_bracket); fin            
+                    scan
+                fin                   
+            fin
+            if type & WORD_TYPE
+                size = size * 2
+	    fin
+            if idlen
+                idconst_add(idstr, idlen, offset)
+	    fin
+            offset = offset + size
+        until token <> COMMA_TKN
+        if token <> EOL_TKN; return FALSE; fin
+    loop
+    return token == END_TKN
 end
 def parse_vars
     byte idlen, type, size
@@ -3679,7 +3772,10 @@ def parse_vars
                 return parse_err(@bad_cnst)
             fin
             idconst_add(idptr, idlen, value)
-	    break
+	        break
+        is STRUC_TKN
+            if !parse_struc; parse_err(@bad_struc); fin
+            break
         is BYTE_TKN
         is WORD_TKN
             if token == BYTE_TKN
@@ -3692,7 +3788,7 @@ def parse_vars
                     return FALSE
                 fin
             until token <> COMMA_TKN
-	    break
+	        break
         is PREDEF_TKN
             repeat
                 if scan == ID_TKN
@@ -3701,7 +3797,7 @@ def parse_vars
                     return parse_err(@bad_decl)
                 fin
             until scan <> COMMA_TKN
-	    break
+	        break
         is EOL_TKN
             return TRUE
         otherwise
@@ -3784,11 +3880,15 @@ def parse_module
 	    emit_const(0)
 	    emit_leave
 	fin
-        //dumpsym(idglobal_tbl, globals)
-        //prstr(@entrypt_str)
-        //prword(entrypoint)
-        //crout
-        //keyin()
+	if not parserr
+            //dumpsym(idglobal_tbl, globals)
+            //prstr(@entrypt_str)
+            //prword(entrypoint)
+	    prstr(@bytes_compiled_str)
+	    prword(codeptr - codebuff)
+            crout
+            keyin()
+	fin
         return not parserr
     fin
     return FALSE
@@ -3802,12 +3902,15 @@ if !(^machid & $80)
 else
     keyin = @keyin2e
 fin
-inittxtbuf
-if argbuff
-    strcpy(@txtfile, @argbuff)
-    prstr(@txtfile)
-    numlines = 0
-    readtxt(@txtfile)
+if signature == $EEEE
+    inittxtbuf
+    if argbuff
+        strcpy(@txtfile, @argbuff)
+        prstr(@txtfile)
+        numlines = 0
+        readtxt(@txtfile)
+    fin
+    signature = 0
 fin
 curschr  = '+'
 flags = flags | insmode

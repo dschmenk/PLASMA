@@ -1052,6 +1052,56 @@ int parse_var(int type)
         id_add(idstr, idlen, type, size);
     return (1);
 }
+int parse_struc(void)
+{
+    long size;
+    int type, constsize, offset = 0;
+    
+    while (next_line() == BYTE_TOKEN || scantoken == WORD_TOKEN)
+    {
+        size = 1;
+        type = scantoken == BYTE_TOKEN ? BYTE_TYPE : WORD_TYPE;
+        if (scan() == OPEN_BRACKET_TOKEN)
+        {
+            size = 0;
+            parse_constexpr(&size, &constsize);
+            if (scantoken != CLOSE_BRACKET_TOKEN)
+            {
+                parse_error("Missing closing bracket");
+                return (0);
+            }
+            scan();
+        }
+        do {
+            char *idstr;
+            int   idlen = 0;
+            if (scantoken == ID_TOKEN)
+            {
+                idstr = tokenstr;
+                idlen = tokenlen;
+                if (scan() == OPEN_BRACKET_TOKEN)
+                {
+                    size = 0;
+                    parse_constexpr(&size, &constsize);
+                    if (scantoken != CLOSE_BRACKET_TOKEN)
+                    {
+                        parse_error("Missing closing bracket");
+                        return (0);
+                    }
+                    scan();
+                }                   
+            }
+            if (type & WORD_TYPE)
+                size *= 2;
+            if (idlen)
+                idconst_add(idstr, idlen, offset);
+            offset += size;
+        } while (scantoken == COMMA_TOKEN);
+        if (scantoken != EOL_TOKEN && scantoken != COMMENT_TOKEN)
+            return (0);
+    }
+    return (scantoken == END_TOKEN);
+}
 int parse_vars(int type)
 {
     long value;
@@ -1092,6 +1142,13 @@ int parse_vars(int type)
                 return (0);
             }
             idconst_add(idstr, idlen, value);
+            break;
+        case STRUC_TOKEN:
+            if (!parse_struc())
+            {
+                parse_error("Bad structure definition");
+                return (0);
+            }
             break;
         case EXPORT_TOKEN:
             if (type & (EXTERN_TYPE | LOCAL_TYPE))

@@ -42,7 +42,7 @@
 #define RETURN_TOKEN        TOKEN(28)
 #define BREAK_TOKEN         TOKEN(29)
 #define SYSFLAGS_TOKEN      TOKEN(30)
-#define EXIT_TOKEN          TOKEN(31)
+#define STRUC_TOKEN         TOKEN(31)
 #define EVAL_TOKEN          TOKEN(32)
 /*
  * Double operand operators.
