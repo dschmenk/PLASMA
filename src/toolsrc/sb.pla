@@ -2104,12 +2104,16 @@ def emit_data(vartype, consttype, constval, constsize)
             constsize = constsize - 1
         loop
     else
-        if vartype == WORD_TYPE
-            size = 2
-            emit_word(constval)
-        else
+        if vartype & BYTE_TYPE
             size = 1
             emit_byte(constval)
+        else
+            size = 2
+	    if consttype & ADDR_TYPE
+	        emit_addr(constval)
+	    else
+                emit_word(constval)
+	    fin
         fin
     fin
     return size
@@ -2893,7 +2897,7 @@ def parse_constval(valptr, sizeptr)
             if mod; return parse_err(@bad_op); fin
 	    break
         is CHR_TKN
-            ^valptr  = constval
+            *valptr  = constval
             ^sizeptr = 1
             type     = BYTE_TYPE
 	    break
@@ -2906,46 +2910,23 @@ def parse_constval(valptr, sizeptr)
             ^sizeptr = 2
             idptr    = id_lookup(tknptr, tknlen)
             if !idptr; return parse_err(@bad_cnst); fin
-            type    = idptr->idtype
-            if type & VAR_TYPE
+            type = idptr->idtype
+            if type & ADDR_TYPE
 	        if !(mod & 8); return parse_err(@bad_cnst); fin
-		if idptr=>idval & IS_CTAG
-                    ctag = idptr=>idval & MASK_CTAG
-		    if ctag_tbl:[ctag] & IS_RESOLVED
-	                *valptr = (ctag_tbl:[ctag] & MASK_CTAG) + codebuff
-		    else
-		        return parse_err(@bad_cnst)
-                    fin
-                else
-                    *valptr = idptr=>idval + codebuff
-		fin
-	    else
-                *valptr = idptr=>idval
             fin
+	    *valptr = idptr=>idval
     	    break
         otherwise
             return parse_err(@bad_cnst)
     wend
     if mod & 1
-        if type == BYTE_TYPE
-	    ^valptr = -^valptr
-	else
-            *valptr = -*valptr
-	fin
+        *valptr = -*valptr
     fin
     if mod & 2
-        if type == BYTE_TYPE
-            ^valptr = ~^valptr
-	else
-            *valptr = ~*valptr
-	fin
+        *valptr = ~*valptr
     fin
     if mod & 4
-        if type == BYTE_TYPE
-            ^valptr = !^valptr
-	else
-            *valptr = !*valptr
-	fin
+        *valptr = !*valptr
     fin
     return type
 end
