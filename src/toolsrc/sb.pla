@@ -2865,7 +2865,7 @@ def parse_term
 end
 def parse_constval(valptr, sizeptr)
     byte mod, type
-    word idptr
+    word idptr, ctag
 
     mod     = 0
     type    = 0
@@ -2908,9 +2908,26 @@ def parse_constval(valptr, sizeptr)
             idptr    = id_lookup(tknptr, tknlen)
             if !idptr; return parse_err(@bad_cnst); fin
             type    = idptr->idtype
-            *valptr = idptr=>idval
-            if type & VAR_TYPE and !(mod & 8); return parse_err(@bad_cnst); fin
-	    break
+            if type & VAR_TYPE
+	        if !(mod & 8); return parse_err(@bad_cnst); fin
+		if idptr=>idval & IS_CTAG
+                    ctag = idptr=>idval & MASK_CTAG
+		    if ctag_tbl:[ctag] & IS_RESOLVED
+	                *valptr = (ctag_tbl:[ctag] & MASK_CTAG) + codebuff
+		    else
+                        //
+			// Add to list of tags needing resolution
+			//
+			*valptr = ctag_tbl:[ctag] & MASK_CTAG
+			ctag_tbl:[ctag] = valptr - codebuff
+                    fin
+                else
+                    *valptr = idptr=>idval + codebuff
+		fin
+	    else
+                *valptr = idptr=>idval
+            fin
+    	    break
         otherwise
             return parse_err(@bad_cnst)
     wend
