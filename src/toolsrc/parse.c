@@ -1054,9 +1054,17 @@ int parse_var(int type)
 }
 int parse_struc(void)
 {
-    long size;
-    int type, constsize, offset = 0;
-    
+    long  size;
+    int   type, constsize, offset = 0;
+    char *idstr, strucid[80];
+    int   idlen = 0, struclen = 0;
+
+    if (scan() == ID_TOKEN)
+    {
+        struclen = tokenlen;
+        for (idlen = 0; idlen < struclen; idlen++)
+            strucid[idlen] = tokenstr[idlen];
+    }
     while (next_line() == BYTE_TOKEN || scantoken == WORD_TOKEN)
     {
         size = 1;
@@ -1073,8 +1081,7 @@ int parse_struc(void)
             scan();
         }
         do {
-            char *idstr;
-            int   idlen = 0;
+            idlen = 0;
             if (scantoken == ID_TOKEN)
             {
                 idstr = tokenstr;
@@ -1100,6 +1107,8 @@ int parse_struc(void)
         if (scantoken != EOL_TOKEN && scantoken != COMMENT_TOKEN)
             return (0);
     }
+    if (struclen)
+        idconst_add(strucid, struclen, offset);
     return (scantoken == END_TOKEN);
 }
 int parse_vars(int type)

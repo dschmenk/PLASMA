@@ -2100,7 +2100,7 @@ def emit_data(vartype, consttype, constval, constsize)
         constsize = constsize - 1
         emit_byte(constsize)
         while constsize > 0
-          emit_byte(^chrptr)
+            emit_byte(^chrptr)
             chrptr    = chrptr + 1
             constsize = constsize - 1
         loop
@@ -2465,7 +2465,8 @@ def iddata_add(namestr, len, type, size)
 end
 def iddata_size(type, varsize, initsize)
     if varsize > initsize
-        datasize = datasize + emit_data(0, 0, 0, varsize - initsize)
+        datasize = datasize + varsize
+        emit_data(0, 0, 0, varsize - initsize)
     else
         datasize = datasize + initsize
     fin
@@ -2913,7 +2914,7 @@ def parse_constval(valptr, sizeptr)
             if !idptr; return parse_err(@bad_cnst); fin
             type = idptr->idtype
             if type & XADDR_TYPE
-	        if !(mod & 8); return parse_err(@bad_cnst); fin
+	        if mod <> 8; return parse_err(@bad_cnst); fin
             fin
 	    *valptr = idptr=>idval
     	    break
@@ -3666,8 +3667,8 @@ def parse_stmnt
     return TRUE
 end
 def parse_var(type)
-    byte consttype, constsize, idlen
-    word idptr, constval, arraysize, size
+    byte consttype, idlen
+    word idptr, constval, arraysize, constsize, size
 
     idlen = 0
     size  = 1
@@ -3706,7 +3707,7 @@ def parse_var(type)
                     return parse_err(@bad_decl)
                 fin
             loop
-            iddata_size(PTR_TYPE, size, arraysize)//
+            iddata_size(PTR_TYPE, size, arraysize)
         else
             return parse_err(@bad_decl)
         fin
@@ -3720,8 +3721,20 @@ def parse_var(type)
     return TRUE
 end
 def parse_struc
-    word size, type, constsize, offset, idstr, idlen
+    byte strucid[16]
+    byte type, idlen, struclen
+    word size, constsize, offset, idstr
 
+    struclen = 0
+    if scan == ID_TKN
+        struclen = tknlen
+	if struclen > 16
+	    struclen = 16
+	fin
+	for idlen = 0 to struclen
+	    strucid[idlen] = ^(tknptr + idlen)
+	next
+    fin
     offset = 0    
     while nextln == BYTE_TKN or token == WORD_TKN
         size = 1
@@ -3758,6 +3771,9 @@ def parse_struc
         until token <> COMMA_TKN
         if token <> EOL_TKN; return FALSE; fin
     loop
+    if struclen
+        idconst_add(@strucid, struclen, offset)
+    fin
     return token == END_TKN
 end
 def parse_vars
