@@ -234,7 +234,7 @@ def hgrfill(val)
 
 	for yscan = 0 to 191
 		for xscan = 0 to 19
-			hgrscan:[yscan][xscan] = val
+			hgrscan:[yscan, xscan] = val
 		next
 	next
 end
@@ -246,7 +246,7 @@ def hgrfill(val)
 
 	for yscan = 0 to 191
 		for xscan = 0 to 39
-			hgrscan.[yscan][xscan] = val
+			hgrscan.[yscan, xscan] = val
 		next
 	next
 end
@@ -262,9 +262,30 @@ word = 2
 byte = "PLASMA"
     
 puti(myrec:0) // ID = 2
+putc($8D) // Carriage return
 puti(myrec.2) // Name length = 6 (Pascal string puts length byte first)
 ```
 This contrived example shows how one can access offsets from a variable as either `byte`s or `word`s regardless of how they were defined. This operator becomes more powerful when combined with pointers, defined next.
+
+#### Defining Structures
+Structures can be defined so that the offsets are calculated for you. The previous example can be written as:
+```
+predef puti // print an integer
+struc mystruc // mystruc will be defined as the size of the structure itself
+  word id
+  byte name // one byte for length, the number of characters are variable
+end
+
+byte myrec[]
+word = 2
+byte = "PLASMA"
+    
+puti(mystruc) // This will print '3', the size of the structure as defined
+putc($8D) // Carriage return
+puti(myrec:id) // ID = 2
+putc($8D) // Carriage return
+puti(myrec.name) // Name length = 6 (Pascal string puts length byte first)
+```
 
 #### Pointers
 Pointers are values that represent addresses. In order to get the value pointed to by the address, one must 'dereference' the pointer. All data and code memory has a unique address, all 65536 of them (16 bits). In the Apple II, many addresses are actually connected to hardware instead of memory. Accessing these addresses can make thing happen in the Apple II, or read external inputs like the keyboard and joystick.
@@ -282,24 +303,27 @@ end
 ```
 Pointers to structures or arrays can be referenced with the `->` and `=>` operators, pointing to `byte` or `word` sized elements.
 ```
-const elem_id = 0
-const elem_addr  = 1
+struc record
+  byte id
+  word addr
+end
 
-def addentry(entry, id, addr)
-    entry->elem_id   = id   // set ID byte
-    entry=>elem_addr = addr // set address
-    return entry + 3        // return next enry address
+def addentry(entry, new_id, new_addr)
+    entry->id   = new_id   // set ID      (byte)
+    entry=>addr = new_addr // set address (word)
+    return entry + record  // return next enry address
 end
 ```
 The above is equivalent to:
 ```
 const elem_id = 0
 const elem_addr  = 1
+const record_size = 3
 
-def addentry(entry, id, addr)
-    (entry).elem_id   = id   // set ID byte
-    (entry):elem_addr = addr // set address
-    return entry + 3         // return next enry address
+def addentry(entry, new_id, new_addr)
+    (entry).elem_id   = new_id   // set ID byte
+    (entry):elem_addr = new_addr // set address
+    return entry + record_size   // return next enry address
 end
 ```
 
