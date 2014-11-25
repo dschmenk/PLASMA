@@ -87,6 +87,23 @@ const bufflen = 2048
 
 These constants can be used in expressions just like a variable name.
 
+#### Structure Declarations
+There is a shortcut for defining constant offsets into structures:
+```
+struc s_entry
+  word id
+  byte[32] name
+  word next_entry
+end
+```
+is equivalent to:
+```
+const s_entry    = 36 // size of the structure
+const id         = 0  // offset to id element
+const name       = 2  // offset to name element
+const next_entry = 34 // offset to next_entry element
+```
+
 #### Predefined Functions
 Sometimes a function needs to be referenced before it is defined. The `predef` declaration reserves the label for a function. The `import` declaration block also uses the `predef` declaration to reserve an external function. Outside of an `import` block, `predef` will only predefine a function that must be declared later in the source file, otherwise an error will occur.
 
