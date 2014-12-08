@@ -57,6 +57,8 @@ INTERP	=	$03D0
 *	=	$2000
 	LDX     #$FE
 	TXS
+	LDX	#$00
+	STX	$01FF
 ;*
 ;* DISCONNECT /RAM
 ;*
