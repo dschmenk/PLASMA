@@ -1,6 +1,22 @@
 const membank     = $FFEF
 const MODADDR     = $1000
 //
+// System flags: memory allocator screen holes.
+//
+const restxt1     = $0001
+const restxt2     = $0002
+const resxtxt1    = $0004
+const resxtxt2    = $0008
+const reshgr1     = $0010
+const reshgr2     = $0020
+const resxhgr1    = $0040
+const resxhgr2    = $0080
+//
+// Module don't free memory
+//
+const modkeep     = $1000
+const modinitkeep = $2000
+//
 // SOS flags
 //
 const O_READ      = 1
@@ -1084,12 +1100,11 @@ def loadmod(mod)
     //
     // Call init routine if it exists.
     //
+    fixup = 0
     if init
         fixup = adddef(defext, init - defofst + defaddr, @deflast)()
-    else
-        fixup = 0
     fin
-    return fixup
+    return fixup | (systemflags & modkeep)
 end
 //
 // Command mode
@@ -1224,13 +1239,17 @@ def execmod(modfile)
 	savesym     = lastsym
 	saveflags   = systemflags
 	perr        = loadmod(@moddci)
+	if perr >= modkeep
+	    perr = perr & ~modkeep
+        else
+	    lastsym = savesym
+	    heap    = saveheap
+	    while modid
+	        modid = modid - 1
+	        seg_release(modseg[modid])
+	    loop
+	fin
 	systemflags = saveflags
-	lastsym     = savesym
-	heap        = saveheap
-	while modid
-	    modid = modid - 1
-	    seg_release(modseg[modid])
-	loop
     fin
 end
 //

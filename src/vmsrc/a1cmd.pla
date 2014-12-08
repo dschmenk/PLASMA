@@ -2,6 +2,22 @@ const MODADDR      = $1000
 const inbuff       = $200
 const freemem      = $0006
 //
+// System flags: memory allocator screen holes.
+//
+const restxt1     = $0001
+const restxt2     = $0002
+const resxtxt1    = $0004
+const resxtxt2    = $0008
+const reshgr1     = $0010
+const reshgr2     = $0020
+const resxhgr1    = $0040
+const resxhgr2    = $0080
+//
+// Module don't free memory
+//
+const modkeep     = $1000
+const modinitkeep = $2000
+//
 // CFFA1 addresses.
 //
 const CFFADest     = $00
@@ -882,17 +898,18 @@ def loadmod(mod)
     //
     // Call init routine if it exists.
     //
+    fixup = 0
     if init
-	fixup  = adddef(init - defofst + bytecode, @deflast)()
-        modend = init - defofst + bytecode
-    else
-        fixup = 0
+	fixup = adddef(init - defofst + bytecode, @deflast)()
+	if !(systemflags & modinitkeep)
+            modend = init - defofst + bytecode
+	fin
     fin
     //
     // Free up the end-of-module in main memory.
     //
     releaseheap(modend)
-    return fixup
+    return fixup | (systemflags & modkeep)
 end
 //
 // Command mode
@@ -942,13 +959,17 @@ def execmod(modfile)
   
     if stodci(modfile, @moddci)
         saveheap  = heap
-	savesym     = lastsym
-	saveflags   = systemflags
-	^lastsym    = 0
-	perr        = loadmod(@moddci)
+	savesym   = lastsym
+	saveflags = systemflags
+	^lastsym  = 0
+	perr      = loadmod(@moddci)
+	if perr >= modkeep
+	    perr = perr & ~modkeep
+        else
+	    lastsym = savesym
+	    heap    = saveheap
+	fin
 	systemflags = saveflags
-	lastsym     = savesym
-	heap        = saveheap
     fin
 end
 //

@@ -9,10 +9,17 @@ const freemem     = $0006
 //
 const restxt1     = $0001
 const restxt2     = $0002
-const reshgr1     = $0004
-const reshgr2     = $0008
-const resxhgr1    = $0010
-const resxhgr2    = $0020
+const resxtxt1    = $0004
+const resxtxt2    = $0008
+const reshgr1     = $0010
+const reshgr2     = $0020
+const resxhgr1    = $0040
+const resxhgr2    = $0080
+//
+// Module don't free memory
+//
+const modkeep     = $1000
+const modinitkeep = $2000
 //
 // Pedefined functions.
 //
@@ -317,8 +324,8 @@ asm memxcpy
 end
 asm crout
 	DEX
-	LDA	#$8D
-	STA	ESTKL,X
+	LDA	#$0D
+	BNE	+
 	; FALL THROUGH TO COUT
 end
 //
@@ -984,7 +991,7 @@ def loadmod(mod)
 	        //
 		// This is a bytcode def entry - add it to the def directory.
 		//
-            adddef(defbank, rld=>1 - defofst + defaddr, @deflast)
+		adddef(defbank, rld=>1 - defofst + defaddr, @deflast)
             else
                 addr = rld=>1 + modfix
                 if uword_isge(addr, modaddr) // Skip fixups to header
@@ -1047,21 +1054,25 @@ def loadmod(mod)
     //
     // Call init routine if it exists.
     //
+    fixup = 0 // This is repurposed for the return code
     if init
         fixup = adddef(defbank, init - defofst + defaddr, @deflast)()
-	if defbank
-	    xheap  = init - defofst + defaddr
-        else
-	    modend = init - defofst + defaddr
+	if !(systemflags & modinitkeep)
+	    //
+	    // Free init routine unless initkeep
+	    //
+	    if defbank
+	        xheap  = init - defofst + defaddr
+            else
+	        modend = init - defofst + defaddr
+	    fin
 	fin
-    else
-        fixup = 0
     fin
     //
     // Free up the end-of-module in main memory.
     //
     releaseheap(modend)
-    return fixup
+    return fixup | (systemflags & modkeep)
 end
 //
 // Command mode
@@ -1230,15 +1241,19 @@ def execmod(modfile)
   
     if stodci(modfile, @moddci)
         saveheap  = heap
-	savexheap   = xheap
-	savesym     = lastsym
-	saveflags   = systemflags
-	^lastsym    = 0
-	perr        = loadmod(@moddci)
+	savexheap = xheap
+	savesym   = lastsym
+	saveflags = systemflags
+	^lastsym  = 0
+	perr      = loadmod(@moddci)
+	if perr >= modkeep
+	    perr = perr & ~modkeep
+        else
+	    lastsym = savesym
+	    xheap   = savexheap
+	    heap    = saveheap
+	fin
 	systemflags = saveflags
-	lastsym     = savesym
-	xheap       = savexheap
-	heap        = saveheap
     fin
 end
 //
