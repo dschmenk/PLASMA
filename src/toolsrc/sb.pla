@@ -129,7 +129,7 @@ const SUB_TKN            = $AD // -
 const MUL_TKN            = $AA // *
 const DIV_TKN            = $AF // /
 const MOD_TKN            = $A5 // %
-const OR_TKN             = $BF // ?
+const OR_TKN             = $FC // |
 const EOR_TKN            = $DE // ^
 const AND_TKN            = $A6 // &
 const SHR_TKN            = $D2 // R
@@ -150,7 +150,7 @@ const DOT_TKN            = $AE // .
 const COLON_TKN          = $BA // :
 const NEG_TKN            = $AD // -
 const COMP_TKN           = $A3 // #
-const LOGIC_NOT_TKN      = $A1 // !
+const LOGIC_NOT_TKN      = $FE // ~
 const BPTR_TKN           = $DE // ^
 const WPTR_TKN           = $AA // *
 const PTRB_TKN           = $D8 // X
@@ -317,7 +317,7 @@ byte lastop             = $FF
 const inbuff            = $0200
 const instr             = $01FF
 word  scanptr           = @nullstr
-byte  token, tknlen
+byte  scanchr, token, tknlen
 byte  parserrpos, parserr = 0
 word  tknptr, parserrln
 word  constval
@@ -2630,15 +2630,16 @@ def scan
     while ^scanptr == ' '
         scanptr = scanptr + 1
     loop
-    tknptr = scanptr
+    tknptr  = scanptr
+    scanchr = ^scanptr
     //
     // Scan for token based on first character
     //
-    if !^scanptr or ^scanptr == ';'
+    if !scanchr or scanchr == ';'
         if token <> EOF_TKN
             token = EOL_TKN
         fin
-    elsif isalpha(^scanptr)
+    elsif isalpha(scanchr)
         //
         // ID, either variable name or reserved word
         //
@@ -2647,7 +2648,7 @@ def scan
         until !isalphanum(^scanptr)
         tknlen = scanptr - tknptr
         token  = keymatch
-    elsif isnum(^scanptr)
+    elsif isnum(scanchr)
         //
         // Decimal constant
         //
@@ -2657,71 +2658,42 @@ def scan
             constval = constval * 10 + ^scanptr - '0'
             scanptr  = scanptr + 1
         until !isnum(^scanptr)
-    elsif ^scanptr == '$'
-        //
-        // Hexadecimal constant
-        //
-        token    = INT_TKN
-        constval = 0
-        repeat
-            scanptr = scanptr + 1
-            if ^scanptr >= '0' and ^scanptr <= '9'
-                constval = (constval << 4) + ^scanptr - '0'
-            elsif ^scanptr >= 'A' and ^scanptr <= 'F'
-                constval = (constval << 4) + ^scanptr - '7'// 'A'-10
-            elsif ^scanptr >= 'a' and ^scanptr <= 'f'
-                constval = (constval << 4) + ^scanptr - 'W'// 'a'-10
-            else
-                break
-            fin
-        until !^scanptr
-    elsif ^scanptr == $27 // '
-        //
-        // Character constant
-        //
-        token = CHR_TKN
-        if ^(scanptr + 1) <> $5C // \
-            constval = ^(scanptr + 1)
-            if ^(scanptr + 2) <> $27 // '
-                return parse_err(@bad_cnst)
-            fin
-            scanptr = scanptr + 3
-        else
-            when ^(scanptr + 2)
-                is 'n'
-                    constval = $0D; break
-                is 'r'
-                    constval = $0A; break
-                is 't'
-                    constval = $09; break
-                otherwise
-                    constval = ^(scanptr + 2)
-            wend
-            if ^(scanptr + 3) <> $27 // '
-                return parse_err(@bad_cnst)
-            fin
-            scanptr = scanptr + 4
-        fin
-    elsif ^scanptr == '"'
-        //
-        // String constant
-        //
-        token    = STR_TKN
-        scanptr  = scanptr + 1
-        constval = scanptr
-        while ^scanptr and ^scanptr <> '"'
-            scanptr = scanptr + 1
-        loop
-        if !^scanptr
-            return parse_err(@bad_cnst)
-        fin
-        scanptr = scanptr + 1
     else
         //
-        // Potential two and three character tokens
+        // Potential multiple character tokens
         //
-        when ^scanptr
-            is '>'
+        when scanchr
+            is '/'
+                if ^(scanptr + 1) == '/'
+                    token    = EOL_TKN
+                    ^scanptr = $00
+                else
+                    token   = DIV_TKN
+                    scanptr = scanptr + 1
+                fin
+		break
+            is '='
+                if ^(scanptr + 1) == '='
+                    token   = EQ_TKN
+                    scanptr = scanptr + 2
+                elsif ^(scanptr + 1) == '>'
+                    token   = PTRW_TKN
+                    scanptr = scanptr + 2
+                else
+                    token   = SET_TKN
+                    scanptr = scanptr + 1
+                fin
+		break
+            is '-'
+                if ^(scanptr + 1) == '>'
+                    token   = PTRB_TKN
+                    scanptr = scanptr + 2
+                else
+                    token   = SUB_TKN
+                    scanptr = scanptr + 1
+                fin
+		break
+	    is '>'
                 if ^(scanptr + 1) == '>'
                     token   = SHR_TKN
                     scanptr = scanptr + 2
@@ -2748,49 +2720,73 @@ def scan
                     scanptr = scanptr + 1
                 fin
 		break
-            is '='
-                if ^(scanptr + 1) == '='
-                    token   = EQ_TKN
-                    scanptr = scanptr + 2
-                elsif ^(scanptr + 1) == '>'
-                    token   = PTRW_TKN
-                    scanptr = scanptr + 2
-                else
-                    token   = SET_TKN
+	    is '$'
+	        //
+		// Hexadecimal constant
+		//
+		token    = INT_TKN
+		constval = 0
+		repeat
                     scanptr = scanptr + 1
+		    if ^scanptr >= '0' and ^scanptr <= '9'
+                        constval = (constval << 4) + ^scanptr - '0'
+		    elsif ^scanptr >= 'A' and ^scanptr <= 'F'
+                        constval = (constval << 4) + ^scanptr - '7'// 'A'-10
+                    elsif ^scanptr >= 'a' and ^scanptr <= 'f'
+                        constval = (constval << 4) + ^scanptr - 'W'// 'a'-10
+		    else
+                        break
+                    fin
+                until !^scanptr
+	        break
+            is $27 // '
+	        //
+		// Character constant
+		//
+		token = CHR_TKN
+		if ^(scanptr + 1) <> $5C // \
+		    constval = ^(scanptr + 1)
+		    if ^(scanptr + 2) <> $27 // '
+                        return parse_err(@bad_cnst)
+                    fin
+		    scanptr = scanptr + 3
+		else
+   		    when ^(scanptr + 2)
+                        is 'n'
+                            constval = $0D; break
+                        is 'r'
+                            constval = $0A; break
+                        is 't'
+                            constval = $09; break
+                        otherwise
+                            constval = ^(scanptr + 2)
+                    wend
+                    if ^(scanptr + 3) <> $27 // '
+                        return parse_err(@bad_cnst)
+                    fin
+                    scanptr = scanptr + 4
                 fin
+	        break
+	    is '"'
+	        //
+		// String constant
+		//
+		token    = STR_TKN
+		scanptr  = scanptr + 1
+		constval = scanptr
+		while ^scanptr and ^scanptr <> '"'
+		    scanptr = scanptr + 1
+		loop
+		if !^scanptr
+		    return parse_err(@bad_cnst)
+		fin
+		scanptr = scanptr + 1
 		break
-            is '-'
-                if ^(scanptr + 1) == '>'
-                    token   = PTRB_TKN
-                    scanptr = scanptr + 2
-                else
-                    token   = SUB_TKN
-                    scanptr = scanptr + 1
-                fin
-		break
-            is '/'
-                if ^(scanptr + 1) == '/'
-                    token    = EOL_TKN
-                    ^scanptr = $00
-                else
-                    token   = DIV_TKN
-                    scanptr = scanptr + 1
-                fin
-		break
-            is '~'
-                token = COMP_TKN
-                scanptr = scanptr + 1
-                break
-            is '|'
-                token = OR_TKN
-                scanptr = scanptr + 1
-                break
             otherwise
                 //
                 // Simple single character tokens
                 //
-                token    = ^scanptr | $80
+                token    = scanchr | $80
                 scanptr = scanptr + 1
         wend
     fin
