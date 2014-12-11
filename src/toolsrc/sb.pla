@@ -1,3 +1,4 @@
+
 //
 // Global constants
 //
@@ -626,13 +627,6 @@ asm cout
 	JSR	$FDED
 	BIT	LCRDEN+LCBNK2
 	RTS
-TOUPR	AND	#$7F
-	CMP     #'a'
-	BCC     +
-	CMP     #'z'+1
-	BCS     +
-	SBC     #$1F
-+	RTS
 end
 //
 // CHAR IN
@@ -720,12 +714,11 @@ end
 //end
 asm toupper
         LDA     ESTKL,X
-	AND     #$7F
-        CMP     #'a'
-        BCC     +
+TOUPR	AND     #$7F
         CMP     #'z'+1
         BCS     +
-        SEC
+        CMP     #'a'
+        BCC     +
         SBC     #$20
 +       STA     ESTKL,X
 	RTS
@@ -790,6 +783,31 @@ CPLNLP  LDA     (SRC),Y
         BNE     CPLNLP
         LDA     (SRC),Y
 ++      STA     (DST),Y
+	RTS
+end
+//
+//def skipspace(scanptr)
+//     while ^scanptr == ' '
+//        scanptr = scanptr + 1
+//    loop
+//    return scanptr
+//end
+asm skipspace(scanptr)
+	LDA	#$00
+	STA	SRCL
+        LDA     ESTKH,X
+        STA     SRCH
+        LDY     ESTKL,X
+-	LDA	(SRC),Y
+	CMP	#' '
+	BNE	+
+	INY
+	BNE	-
+	INC	SRCH
+	BNE	-
++	STY	ESTKL,X
+	LDA	SRCH
+	STA	ESTKH,X
 	RTS
 end
 //def isalpha(c)
@@ -2627,19 +2645,13 @@ def scan
     //
     // Skip whitespace
     //
-    while ^scanptr == ' '
-        scanptr = scanptr + 1
-    loop
+    scanptr = skipspace(scanptr)
     tknptr  = scanptr
     scanchr = ^scanptr
     //
     // Scan for token based on first character
     //
-    if !scanchr or scanchr == ';'
-        if token <> EOF_TKN
-            token = EOL_TKN
-        fin
-    elsif isalpha(scanchr)
+    if isalpha(scanchr)
         //
         // ID, either variable name or reserved word
         //
@@ -2781,6 +2793,12 @@ def scan
 		    return parse_err(@bad_cnst)
 		fin
 		scanptr = scanptr + 1
+		break
+	    is 0
+	    is ';'
+	        if token <> EOF_TKN
+		    token = EOL_TKN
+		fin
 		break
             otherwise
                 //
