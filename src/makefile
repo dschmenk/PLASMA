@@ -9,6 +9,7 @@ ED      = ED\#FF2000
 SB      = SB\#FF2000
 ROD     = ROD\#FE1000
 SIEVE   = SIEVE\#FE1000
+ROGUE   = ROGUE\#FE1000
 HELLO   = HELLO\#FE1000
 HGR1    = HGR1\#FE1000
 HGR1TEST= HGR1TEST\#FE1000
@@ -34,7 +35,7 @@ TXTTYPE	= .TXT
 #SYSTYPE	= \#FF2000
 #TXTTYPE	= \#040000
 
-all: $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVM03) $(CMD) $(PROFILE) $(ED) $(SB) $(ROD) $(SIEVE) $(HGR1)
+all: $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVM03) $(CMD) $(PROFILE) $(ED) $(SB) $(ROD) $(SIEVE) $(ROGUE) $(HGR1)
 
 clean:
 	-rm *FE1000 *FF2000 $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVM03)
@@ -98,6 +99,10 @@ $(ROD): samplesrc/rod.pla $(PLVM02) $(PLASM)
 $(SIEVE): samplesrc/sieve.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AM < samplesrc/sieve.pla > samplesrc/sieve.a
 	acme --setpc 4094 -o $(SIEVE) samplesrc/sieve.a
+
+$(ROGUE): samplesrc/rogue.pla $(PLVM02) $(PLASM)
+	./$(PLASM) -AM < samplesrc/rogue.pla > samplesrc/rogue.a
+	acme --setpc 4094 -o $(ROGUE) samplesrc/rogue.a
 
 $(PROFILE): samplesrc/profile.pla $(PLVM02) $(PLASM)
 	m4 -I inc < samplesrc/profile.pla | ./$(PLASM) -AM > samplesrc/profile.a

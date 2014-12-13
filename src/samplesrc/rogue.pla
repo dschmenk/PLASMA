@@ -1,3 +1,9 @@
+import STDLIB
+    predef syscall, call, memset, getc, putc, puts, putln
+    predef heapmark, heapallocallign, heapalloc, heaprelease, heapavail
+    byte MACHID
+end
+
 const FALSE = 0
 const TRUE  = not FALSE
 //
@@ -79,7 +85,9 @@ byte = "#......##.......#.#......#....#"
 byte = "#.#.............#.#......#....#"
 byte = "#.###############.#......###..#"
 byte = "#.................#...........#"
-byte = "######################################"
+byte = "###############################"
+
+word vismap
 
 const xcentr = 20
 const ycentr = 12
@@ -89,20 +97,31 @@ word = $400, $480, $500, $580, $600, $680, $700, $780
 word = $428, $4A8, $528, $5A8, $628, $6A8, $728, $7A8
 word = $450, $4D0, $550, $5D0, $650, $6D0, $750, $7D0
 
-word xdir = 0, 1, 1, 1, 0, -1, -1, -1
-word ydir = -1, -1, 0, 1, 1, 1, 0, -1
+word xdir =  0,  1,  1,  1,  0, -1, -1, -1
+word ydir = -1, -1,  0,  1,  1,  1,  0, -1
 word xplayer = 5
 word yplayer = 5
 byte aplayer = 0
-byte lamp    = 10
+byte lamp    = 4
 byte fov     = 1
 byte vplayer = '^', '\\', '>', '/', 'v', '\\', '<', '/'
 
+def home
+    return call($FC58, 0, 0, 0, 0)
+end
+def gotoxy(x, y)
+    ^$24 = x + ^$20
+    return call($FB5B, y + ^$22, 0, 0, 0)
+end
 def drawmap(xorg, yorg, dir, light)
   byte[octpts] vispix
   byte o, l, tile, occlude
-  word ymap, xmap
+  word ymap, xmap, imap
   byte yscr, xscr
+
+  //
+  // Clear screen
+  //
   home
   //
   // Draw background map
@@ -113,7 +132,7 @@ def drawmap(xorg, yorg, dir, light)
       for xscr = 0 to 39
         xmap = xscr - xcentr + xorg
         if xmap >= 0 and xmap < mapcols - 1
-          screen.[yscr, xscr] = map[(ymap << 5) + xmap + 1] | $80
+          screen.[yscr, xscr] = ^(vismap + (ymap << 5) + xmap + 1) | $80
         fin
       next
     fin
@@ -127,11 +146,14 @@ def drawmap(xorg, yorg, dir, light)
       is 0
         for l = 1 to dbeam[light]
           if vispix[vbeam[l]]
-            tile = map[((yorg - ybeam[l]) << 5) + xorg + xbeam[l] + 1]
+            imap = ((yorg - ybeam[l]) << 5) + xorg + xbeam[l] + 1
+            tile = map[imap]
+            ^(vismap + imap) =  tile
             if tile <> '.'
               vispix[l] = FALSE
             else
-              if map[((yorg - ybeam[l]) << 5) + xorg + xbeam[l] + 2] == '#'
+              if map[imap + 1] == '#'
+                ^(vismap + imap + 1) = '#'
                 screen.[ycentr - ybeam[l], xcentr + xbeam[l] + 1] = '#'
               fin
             fin
@@ -144,11 +166,14 @@ def drawmap(xorg, yorg, dir, light)
       is 1
         for l = 1 to dbeam[light]
           if vispix[vbeam[l]]
-            tile = map[((yorg - xbeam[l]) << 5) + xorg + ybeam[l] + 1]
+            imap = ((yorg - xbeam[l]) << 5) + xorg + ybeam[l] + 1
+            tile = map[imap]
+            ^(vismap + imap) = tile
             if tile <> '.'
               vispix[l] = FALSE
             else
-              if map[((yorg - xbeam[l] - 1) << 5) + xorg + ybeam[l] + 1] == '#'
+              if map[imap - mapcols] == '#'
+                ^(vismap + imap - mapcols)='#'
                 screen.[ycentr - xbeam[l] - 1, xcentr + ybeam[l]] = '#'
               fin
             fin
@@ -161,12 +186,15 @@ def drawmap(xorg, yorg, dir, light)
       is 2
         for l = 1 to dbeam[light]
           if vispix[vbeam[l]]
-            tile = map[((yorg + xbeam[l]) << 5) + xorg + ybeam[l] + 1]
+            imap = ((yorg + xbeam[l]) << 5) + xorg + ybeam[l] + 1
+            tile = map[imap]
+            ^(vismap + imap) = tile
             if tile <> '.'
               vispix[l] = FALSE
             else
-              if map[((yorg - xbeam[l] + 1) << 5) + xorg + ybeam[l] + 1] == '#'
-                screen.[ycentr - xbeam[l] + 1, xcentr + ybeam[l]] = '#'
+              if map[imap + mapcols] == '#'
+                ^(vismap + imap + mapcols) = '#'
+                screen.[ycentr + xbeam[l] + 1, xcentr + ybeam[l]] = '#'
               fin
             fin
             screen.[ycentr + xbeam[l], xcentr + ybeam[l]] = tile
@@ -178,11 +206,14 @@ def drawmap(xorg, yorg, dir, light)
       is 3
         for l = 1 to dbeam[light]
           if vispix[vbeam[l]]
-            tile = map[((yorg + ybeam[l]) << 5) + xorg + xbeam[l] + 1]
+            imap = ((yorg + ybeam[l]) << 5) + xorg + xbeam[l] + 1
+            tile = map[imap]
+            ^(vismap + imap) = tile
             if tile <> '.'
               vispix[l] = FALSE
             else
-              if map[((yorg + ybeam[l]) << 5) + xorg + xbeam[l] + 2] == '#'
+              if map[imap + 1] == '#'
+                ^(vismap + imap + 1) = '#'
                 screen.[ycentr + ybeam[l], xcentr + xbeam[l] + 1] = '#'
               fin
             fin
@@ -195,11 +226,14 @@ def drawmap(xorg, yorg, dir, light)
       is 4
         for l = 1 to dbeam[light]
           if vispix[vbeam[l]]
-            tile = map[((yorg + ybeam[l]) << 5) + xorg - xbeam[l] + 1]
+            imap = ((yorg + ybeam[l]) << 5) + xorg - xbeam[l] + 1
+            tile = map[imap]
+            ^(vismap + imap) = tile
             if tile <> '.'
               vispix[l] = FALSE
             else
-              if map[((yorg + ybeam[l]) << 5) + xorg - xbeam[l]] == '#'
+              if map[imap - 1] == '#'
+                ^(vismap + imap - 1) = '#'
                 screen.[ycentr + ybeam[l], xcentr - xbeam[l] - 1] = '#'
               fin
             fin
@@ -212,11 +246,14 @@ def drawmap(xorg, yorg, dir, light)
       is 5
         for l = 1 to dbeam[light]
           if vispix[vbeam[l]]
-            tile = map[((yorg + xbeam[l]) << 5) + xorg - ybeam[l] + 1]
+            imap = ((yorg + xbeam[l]) << 5) + xorg - ybeam[l] + 1
+            tile = map[imap]
+            ^(vismap + imap) = tile
             if tile <> '.'
               vispix[l] = FALSE
             else
-              if map[((yorg + xbeam[l] + 1) << 5) + xorg - ybeam[l] + 1] == '#'
+              if map[imap + mapcols] == '#'
+                ^(vismap + imap + mapcols) = '#'
                 screen.[ycentr + xbeam[l] + 1, xcentr - ybeam[l]] = '#'
               fin
             fin
@@ -229,11 +266,14 @@ def drawmap(xorg, yorg, dir, light)
       is 6
         for l = 1 to dbeam[light]
           if vispix[vbeam[l]]
-            tile = map[((yorg - xbeam[l]) << 5) + xorg - ybeam[l] + 1]
+            imap = ((yorg - xbeam[l]) << 5) + xorg - ybeam[l] + 1
+            tile = map[imap]
+            ^(vismap + imap) = tile
             if tile <> '.'
               vispix[l] = FALSE
             else
-              if map[((yorg - xbeam[l] - 1) << 5) + xorg - ybeam[l] + 1] == '#'
+              if map[imap - mapcols] == '#'
+                ^(vismap + imap - mapcols) = '#'
                 screen.[ycentr - xbeam[l] - 1, xcentr - ybeam[l]] = '#'
               fin
             fin
@@ -246,11 +286,14 @@ def drawmap(xorg, yorg, dir, light)
       is 7
         for l = 1 to dbeam[light]
           if vispix[vbeam[l]]
-            tile = map[((yorg - ybeam[l]) << 5) + xorg - xbeam[l] + 1]
+            imap = ((yorg - ybeam[l]) << 5) + xorg - xbeam[l] + 1
+            tile = map[imap]
+            ^(vismap + imap) = tile
             if tile <> '.'
               vispix[l] = FALSE
             else
-              if map[((yorg - ybeam[l]) << 5) + xorg - xbeam[l]] == '#'
+              if map[imap - 1] == '#'
+                ^(vismap + imap - 1) = '#'
                 screen.[ycentr - ybeam[l], xcentr - xbeam[l] - 1] = '#'
               fin
             fin
@@ -276,6 +319,8 @@ def moveplayer(dir)
   fin
 end
 
+vismap = heapalloc(maprows * mapcols)
+memset(vismap, maprows * mapcols, $2020)
 while TRUE
   drawmap(xplayer, yplayer, aplayer, lamp)
   when getc()
@@ -297,7 +342,7 @@ while TRUE
       fin
       break
     is '+'
-      if lamp < 9
+      if lamp < beamdepth - 1
         lamp = lamp + 1
       fin
       break
