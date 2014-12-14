@@ -32,7 +32,7 @@ NEW
 400 PRINT "byte[] vbeam": PRINT "byte = 0": FOR R = 1 TO RI
 410   PRINT "byte = ";: FOR L = DB(R-1)+1 TO DB(R)
 420     M = 0: IF YB(L) <> 0 THEN M = XB(L)/YB(L)
-430     SY = INT(YB(L) - 1): SX = INT(XB(L) - M + .5)
+430     SY = INT(YB(L) - 1): SX = INT(XB(L) - M + .25): REM ADJ OFFSET TO PEEK AROUND CORNERS
 440     FOR P = 0 TO L
 450       IF SY = YB(P) AND SX = XB(P) THEN VB(L) = P: P = L
 460     NEXT
