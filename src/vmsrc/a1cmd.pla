@@ -43,12 +43,26 @@ word version     = $0010 // 00.10
 word systemflags = 0
 word heap
 word symtbl, lastsym
-byte perr
-word cmdptr
+byte perr, refauto
+//
+// String pool.
+//
+byte autorun[]    = "AUTORUN"
+byte verstr[]     = "\nPLASMA "
+byte freestr[]    = "MEM FREE:$"
+byte errorstr[]   = "ERR:$"
+byte prompt[]     = "PLASMA"
+byte okstr[]      = "OK"
+byte huhstr[]     = "?\n"
+byte hexchar[]    = '0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F'
 //
 // Exported Machine ID.
 //
 byte machid       = $08 // Apple 1 (NA in ProDOS Tech Ref)
+//
+// Command line pointer
+//
+word cmdptr       = @hexchar // make it point to a zero
 //
 // Standard Library exported functions.
 //
@@ -75,6 +89,7 @@ byte uislestr[]   = "ISULE"
 byte loadstr[]    = "MODLOAD"
 byte execstr[]    = "MODEXEC"
 byte modadrstr[]  = "MODADDR"
+byte argstr[]     = "ARGS"
 word exports[]	  = @sysstr,    @syscall
 word		  = @callstr,   @call
 word 		  = @putcstr,   @cout
@@ -96,19 +111,9 @@ word              = @loadstr,   @loadmod
 word              = @execstr,   @execmod
 word              = @modadrstr, @lookupstrmod
 word              = @machidstr, @machid
+word              = @argstr,    @cmdptr
 word              = 0
 word stdlibsym    = @exports     
-//
-// String pool.
-//
-byte autorun[]    = "AUTORUN"
-byte verstr[]    = "\nPLASMA "
-byte freestr[]    = "MEM FREE:$"
-byte errorstr[]   = "ERR:$"
-byte prompt[]     = "PLASMA"
-byte okstr[]      = "OK"
-byte huhstr[]     = "?\n"
-byte hexchar[]    = '0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F'
 //
 // CALL CFFA1 API ENTRYPOINT
 // SYSCALL(CMD)
@@ -990,9 +995,14 @@ while *stdlibsym
     stdlibsym = stdlibsym + 4
 loop
 //
-// Try to run autorun module.
+// Try to load autorun.
 //
-execmod(@autorun)
+cmdptr = heap
+memset(cmdptr, 64, 0)
+readfile(@autorun, cmdptr + 1)
+while ^(cmdptr + ^cmdptr + 1) >= ' '
+    ^cmdptr = ^cmdptr + 1
+loop
 perr = 0
 //
 // Print some startup info.
@@ -1009,8 +1019,6 @@ crout
 // Handle commands.
 //
 while 1
-    prstr(@prompt)
-    cmdptr = rdstr($BA)
     if ^cmdptr
         when toupper(parsecmd(cmdptr))
             is 'Q'
@@ -1033,5 +1041,7 @@ while 1
         fin
 	crout()
     fin
+    prstr(@prompt)
+    cmdptr = rdstr($BA)
 loop
 done

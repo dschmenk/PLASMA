@@ -14,8 +14,8 @@ const resxhgr2    = $0080
 //
 // Module don't free memory
 //
-const modkeep     = $1000
-const modinitkeep = $2000
+const modkeep     = $2000
+const modinitkeep = $4000
 //
 // SOS flags
 //
@@ -43,11 +43,28 @@ byte modid       = 0
 byte modseg[15] 
 word symtbl, lastsym
 byte perr, terr, lerr
-word cmdptr
+//
+// String pool.
+//
+byte console[]    = ".CONSOLE"
+byte autorun[]    = "AUTORUN"
+byte verstr[]     = "PLASMA "
+byte freestr[]    = "MEM FREE:$"
+byte errorstr[]   = "ERR:$"
+byte okstr[]      = "OK"
+byte huhstr[]     = "?\n"
+byte devtovol[]   = " => /"
+byte prefix[64]   = ""
+byte textmode[]   = 16, 0, 15
+byte hexchar[]    = '0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F'
 //
 // Exported Machine ID.
 //
 byte machid       = $F2 // Apple ///, 80 columns
+//
+// Command line pointer
+//
+word cmdptr       = @autorun
 //
 // Standard Library exported functions.
 //
@@ -74,6 +91,7 @@ byte uislestr[]   = "ISULE"
 byte loadstr[]    = "MODLOAD"
 byte execstr[]    = "MODEXEC"
 byte modadrstr[]  = "MODADDR"
+byte argstr[]     = "ARGS"
 word exports[]	  = @sysstr,    @syscall
 word		  = @callstr,   @call
 word		  = @putcstr,   @cout
@@ -95,22 +113,9 @@ word              = @loadstr,   @loadmod
 word              = @execstr,   @execmod
 word              = @modadrstr, @lookupstrmod
 word              = @machidstr, @machid
+word              = @argstr,    @cmdptr
 word              = 0
 word stdlibsym    = @exports     
-//
-// String pool.
-//
-byte console[]    = ".CONSOLE"
-byte autorun[]    = "AUTORUN"
-byte verstr[]     = "PLASMA "
-byte freestr[]    = "MEM FREE:$"
-byte errorstr[]   = "ERR:$"
-byte okstr[]      = "OK"
-byte huhstr[]     = "?\n"
-byte devtovol[]   = " => /"
-byte prefix[128]  = ""
-byte textmode[]   = 16, 0, 15
-byte hexchar[]    = '0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F'
 //
 // CALL SOS
 // SYSCALL(CMD, PARAMS)
@@ -787,7 +792,7 @@ end
 def cin
     byte ch
     read(refcons, @ch, 1)
-    return ch
+    return ch & $7F
 end
 def prstr(str)
     write(refcons, str + 1, ^str)
@@ -1104,7 +1109,7 @@ def loadmod(mod)
     if init
         fixup = adddef(defext, init - defofst + defaddr, @deflast)()
     fin
-    return fixup | (systemflags & modkeep)
+    return fixup
 end
 //
 // Command mode
@@ -1210,7 +1215,7 @@ def striptrail(strptr)
     byte i
 
     for i = 1 to ^strptr
-        if (strptr)[i] == ' '
+        if (strptr)[i] <= ' '
 	    ^strptr = i - 1
 	    return
 	fin
@@ -1239,15 +1244,15 @@ def execmod(modfile)
 	savesym     = lastsym
 	saveflags   = systemflags
 	perr        = loadmod(@moddci)
-	if perr >= modkeep
-	    perr = perr & ~modkeep
-        else
+	if perr < modkeep
 	    lastsym = savesym
 	    heap    = saveheap
 	    while modid
 	        modid = modid - 1
 	        seg_release(modseg[modid])
 	    loop
+        else
+	    perr = perr & ~modkeep
 	fin
 	systemflags = saveflags
     fin
@@ -1270,27 +1275,35 @@ while *stdlibsym
     stdlibsym = stdlibsym + 4
 loop
 //
-// Try to run autorun module.
+// Try to load autorun.
 //
-execmod(@autorun)
+cmdptr  = heap
+^cmdptr = 0
+terr = open(@autorun, O_READ)
+if terr > 0
+  ^cmdptr = read(terr, cmdptr + 1, 64)
+  close(terr)
+fin
 perr = 0
 //
 // Print some startup info.
 //
-prstr(@verstr)
-prbyte(version.1)
-cout('.')
-prbyte(version.0)
-crout
-prstr(@freestr)
-prword(availheap)
-crout
+if not ^cmdptr
+    prstr(@verstr)
+    prbyte(version.1)
+    cout('.')
+    prbyte(version.0)
+    crout
+    prstr(@freestr)
+    prword(availheap)
+    crout
+else
+    getpfx(@prefix)
+fin
 //
 // Handle commands.
 //
 while 1
-    prstr(getpfx(@prefix))
-    cmdptr = rdstr($BA)
     if ^cmdptr
         when toupper(parsecmd(cmdptr))
             is 'Q'
@@ -1321,5 +1334,7 @@ while 1
         fin
 	crout()
     fin
+    prstr(getpfx(@prefix))
+    cmdptr = rdstr($BA)
 loop
 done

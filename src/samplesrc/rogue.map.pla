@@ -3,14 +3,16 @@
 //
 
 import STDLIB
-    predef syscall, call, memset, getc, putc, puts, putln
-    predef memset, memcpy
+    predef syscall, call, getc, putc, puts, putln
+    predef memset, memcpy, modaddr
     predef heapmark, heapallocallign, heapalloc, heaprelease, heapavail
     byte MACHID
 end
 
 const modkeep     = $2000
 const modinitkeep = $4000
+
+byte stdlib[]  = "STDLIB"
 
 const FALSE = 0
 const TRUE  = not FALSE
@@ -174,6 +176,107 @@ word = @linebuffer, @linebuffer, @linebuffer, @linebuffer, @linebuffer
 word = @linebuffer, @linebuffer, @linebuffer, @linebuffer, @linebuffer
 
 //
+// Machine specific routines
+//
+
+export word rnd
+export word getkb
+export word tone
+export word home
+export word gotoxy
+
+byte noapple1 = "APPLE 1 NOT SUPPORTED."
+byte apple2   = "Apple II "
+byte apple3   = "Apple /// "
+
+const SPEAKER = $C030
+
+const a2rndnum = $4E // ZP location of RND
+const a2rndl   = $4E
+const a2rndh   = $4F
+
+word a3rndnum = 12345
+byte devcons
+
+def a3rnd
+  a3rndnum = (a3rndnum << 1) + a3rndnum + 123
+  return *a3rndnum & $7FFF
+end
+
+def a2rnd
+  *a2rndnum = (*a2rndnum << 1) + *a2rndnum + 123
+  return *a2rndnum & $7FFF
+end
+
+def a2getkb
+  return getc()
+end
+
+def a3tone(duration, pitch)
+end
+
+def a2tone(duration, delay)
+  byte i
+  
+  while duration
+    ^SPEAKER
+    for i = 0 to delay
+    next
+    duration = duration - 1
+  loop
+end
+
+//
+// Apple /// console routines
+//
+
+def dev_status(devnum, code, list)
+  byte params[5]
+    
+  params.0 = 3
+  params.1 = devnum
+  params.2 = code
+  params:3 = list
+  return syscall($82, @params)
+end
+def a3keypressed
+  byte count
+  dev_status(devcons, 5, @count)
+  return count
+end
+
+def a3getkb
+  while not a3keypressed
+    a3rndnum = a3rndnum + 123
+  loop
+  return getc()
+end
+
+def a3home
+    return putc(28)
+end
+
+def a3gotoxy(ch, cv)
+    putc(24)
+    putc(ch)
+    putc(25)
+    return putc(cv)
+end
+
+//
+// Apple ][ console routines
+//
+
+def a2home
+    return call($FC58, 0, 0, 0, 0) // home()
+end
+
+def a2gotoxy(x, y)
+    ^$24 = x + ^$20
+    return call($FB5B, y + ^$22, 0, 0, 0)
+end
+
+//
 // Load map
 //
 
@@ -255,7 +358,7 @@ export def drawmap(xorg, yorg, viewfield, viewdir, lightdist, viewdist)
   //
   // Clear screen
   //
-  call($FC58, 0, 0, 0, 0)
+  home()
   //
   // Draw background map if in light
   //
@@ -736,5 +839,31 @@ export def drawvisentity(xofst, yofst, tile)
     screen.[ycentr+yofst, xcentr+xofst] = tile
   fin
 end
+
+//
+// Set machine specific routines
+//
+
+when MACHID & $C8
+  is $08 // Apple 1
+    puts(@noapple1)
+    return -1
+  is $C0 // Apple ///
+    puts(@apple3)
+    rnd     = @a3rnd
+    getkb   = @a3getkb
+    home    = @a3home
+    gotoxy  = @a3gotoxy
+    tone    = @a3tone
+    devcons = modaddr(@stdlib).5 // devcons variable from STDLIB
+    break
+  otherwise // Apple ][
+    puts(@apple2)
+    rnd     = @a2rnd
+    getkb   = @a2getkb
+    home    = @a2home
+    gotoxy  = @a2gotoxy
+    tone    = @a2tone
+wend
 
 done
