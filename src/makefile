@@ -10,6 +10,7 @@ SB      = SB\#FF2000
 ROD     = ROD\#FE1000
 SIEVE   = SIEVE\#FE1000
 ROGUE   = ROGUE\#FE1000
+ROGUEMAP= ROGUEMAP\#FE1000
 HELLO   = HELLO\#FE1000
 HGR1    = HGR1\#FE1000
 HGR1TEST= HGR1TEST\#FE1000
@@ -35,7 +36,7 @@ TXTTYPE	= .TXT
 #SYSTYPE	= \#FF2000
 #TXTTYPE	= \#040000
 
-all: $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVM03) $(CMD) $(PROFILE) $(ED) $(SB) $(ROD) $(SIEVE) $(ROGUE) $(HGR1)
+all: $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVM03) $(CMD) $(PROFILE) $(ED) $(SB) $(ROD) $(SIEVE) $(ROGUE) $(ROGUEMAP) $(HGR1)
 
 clean:
 	-rm *FE1000 *FF2000 $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVM03)
@@ -103,6 +104,10 @@ $(SIEVE): samplesrc/sieve.pla $(PLVM02) $(PLASM)
 $(ROGUE): samplesrc/rogue.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AM < samplesrc/rogue.pla > samplesrc/rogue.a
 	acme --setpc 4094 -o $(ROGUE) samplesrc/rogue.a
+
+$(ROGUEMAP): samplesrc/rogue.map.pla $(PLVM02) $(PLASM)
+	./$(PLASM) -AM < samplesrc/rogue.map.pla > samplesrc/rogue.map.a
+	acme --setpc 4094 -o $(ROGUEMAP) samplesrc/rogue.map.a
 
 $(PROFILE): samplesrc/profile.pla $(PLVM02) $(PLASM)
 	m4 -I inc < samplesrc/profile.pla | ./$(PLASM) -AM > samplesrc/profile.a

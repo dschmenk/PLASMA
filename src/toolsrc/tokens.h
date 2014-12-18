@@ -43,7 +43,8 @@
 #define BREAK_TOKEN         TOKEN(29)
 #define SYSFLAGS_TOKEN      TOKEN(30)
 #define STRUC_TOKEN         TOKEN(31)
-#define EVAL_TOKEN          TOKEN(32)
+#define CONTINUE_TOKEN      TOKEN(32)
+//#define EVAL_TOKEN          TOKEN(32)
 /*
  * Double operand operators.
  */

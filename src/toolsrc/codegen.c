@@ -94,7 +94,17 @@ int idlocal_add(char *name, int len, int type, int size)
     {
         printf("Local variable size overflow\n");
         return (0);
-        }
+    }
+    if (idconst_lookup(name, len) > 0)
+    {
+        parse_error("const/local name conflict\n");
+        return (0);
+    }
+    if (idlocal_lookup(name, len) > 0)
+    {
+        parse_error("local label already defined\n");
+        return (0);
+    }    
     name[len] = '\0';
     emit_idlocal(name, localsize);
     name[len] = c;
@@ -116,6 +126,16 @@ int idglobal_add(char *name, int len, int type, int size)
         printf("Global variable count overflow\n");
         return (0);
     }
+    if (idconst_lookup(name, len) > 0)
+    {
+        parse_error("const/global name conflict\n");
+        return (0);
+    }
+    if (idglobal_lookup(name, len) > 0)
+    {
+        parse_error("global label already defined\n");
+        return (0);
+    }    
     name[len] = '\0';
     name[len] = c;
     idglobal_name[globals][0] = len;

@@ -18,8 +18,8 @@ const resxhgr2    = $0080
 //
 // Module don't free memory
 //
-const modkeep     = $1000
-const modinitkeep = $2000
+const modkeep     = $2000
+const modinitkeep = $4000
 //
 // Pedefined functions.
 //
@@ -1058,7 +1058,7 @@ def loadmod(mod)
     fixup = 0 // This is repurposed for the return code
     if init
         fixup = adddef(defbank, init - defofst + defaddr, @deflast)()
-	if !(systemflags & modinitkeep)
+	if fixup < modinitkeep
 	    //
 	    // Free init routine unless initkeep
 	    //
@@ -1067,13 +1067,15 @@ def loadmod(mod)
             else
 	        modend = init - defofst + defaddr
 	    fin
+	else
+	    fixup = fixup & ~modinitkeep
 	fin
     fin
     //
     // Free up the end-of-module in main memory.
     //
     releaseheap(modend)
-    return fixup | (systemflags & modkeep)
+    return fixup
 end
 //
 // Command mode
@@ -1247,12 +1249,12 @@ def execmod(modfile)
 	saveflags = systemflags
 	^lastsym  = 0
 	perr      = loadmod(@moddci)
-	if perr >= modkeep
-	    perr = perr & ~modkeep
-        else
+	if perr < modkeep
 	    lastsym = savesym
 	    xheap   = savexheap
 	    heap    = saveheap
+        else
+	    perr = perr & ~modkeep
 	fin
 	systemflags = saveflags
     fin

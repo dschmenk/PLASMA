@@ -5,7 +5,7 @@
 #include "codegen.h"
 #include "parse.h"
 
-int infunc = 0, break_tag = 0, stack_loop = 0;
+int infunc = 0, break_tag = 0, cont_tag = 0, stack_loop = 0;
 t_token prevstmnt;
 
 t_token binary_ops_table[] = {
@@ -357,6 +357,8 @@ int parse_value(int rvalue)
                         (type & BPTR_TYPE) ? emit_lb() : emit_lw();
                     emit_value = 1;
                 }
+                else
+                    (type & BPTR_TYPE) ? emit_lb() : emit_lw();
                 type &= ~(VAR_TYPE | ADDR_TYPE);
                     type |= WORD_TYPE;
                 scantoken = scantoken == PTRB_TOKEN ? DOT_TOKEN : COLON_TOKEN;
@@ -636,7 +638,7 @@ int parse_expr()
 }
 int parse_stmnt(void)
 {
-    int tag_prevbrk, tag_else, tag_endif, tag_while, tag_wend, tag_repeat, tag_for, tag_choice, tag_of;
+    int tag_prevbrk, tag_prevcnt, tag_else, tag_endif, tag_while, tag_wend, tag_repeat, tag_for, tag_choice, tag_of;
     int type, addr, step;
     char *idptr;
 
@@ -694,6 +696,8 @@ int parse_stmnt(void)
         case WHILE_TOKEN:
             tag_while   = tag_new(BRANCH_TYPE);
             tag_wend    = tag_new(BRANCH_TYPE);
+            tag_prevcnt = cont_tag;
+            cont_tag    = tag_while;
             tag_prevbrk = break_tag;
             break_tag   = tag_wend;
             emit_codetag(tag_while);
@@ -712,11 +716,14 @@ int parse_stmnt(void)
             emit_brnch(tag_while);
             emit_codetag(tag_wend);
             break_tag = tag_prevbrk;
+            cont_tag  = tag_prevcnt;
             break;
         case REPEAT_TOKEN:
             tag_prevbrk = break_tag;
             break_tag   = tag_new(BRANCH_TYPE);
             tag_repeat  = tag_new(BRANCH_TYPE);
+            tag_prevcnt = cont_tag;
+            cont_tag    = tag_new(BRANCH_TYPE);
             emit_codetag(tag_repeat);
             scan();
             while (parse_stmnt()) next_line();
@@ -725,6 +732,8 @@ int parse_stmnt(void)
                 parse_error("Missing REPEAT/UNTIL");
                 return (0);
             }
+            emit_codetag(cont_tag);
+            cont_tag = tag_prevcnt;
             if (!parse_expr())
             {
                 parse_error("Bad expression");
@@ -739,6 +748,8 @@ int parse_stmnt(void)
             tag_prevbrk = break_tag;
             break_tag   = tag_new(BRANCH_TYPE);
             tag_for     = tag_new(BRANCH_TYPE);
+            tag_prevcnt = cont_tag;
+            cont_tag    = tag_for;
             if (scan() != ID_TOKEN)
             {
                 parse_error("Missing FOR variable");
@@ -794,6 +805,7 @@ int parse_stmnt(void)
                 return (0);
             }
             emit_brnch(tag_for);
+            cont_tag = tag_prevcnt;
             emit_codetag(break_tag);
             emit_drop();
             break_tag = tag_prevbrk;
@@ -853,6 +865,15 @@ int parse_stmnt(void)
             emit_drop();
             break_tag = tag_prevbrk;
             stack_loop--;
+            break;
+        case CONTINUE_TOKEN:
+            if (cont_tag)
+                emit_brnch(cont_tag);
+            else
+            {
+                parse_error("CONTINUE without loop");
+                return (0);
+            }
             break;
         case BREAK_TOKEN:
             if (break_tag)

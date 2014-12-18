@@ -1,9 +1,9 @@
 NEW
 10  GR: COLOR=15: PLOT 0, 0
-20  RI = 24: P = 1: DIM DB(RI): DIM XB(500): DIM YB(500):DIM VB(500)
+20  RI = 23: P = 1: DIM DB(RI): DIM XB(500): DIM YB(500):DIM VB(500)
 30  PRINT "const beamdepth = "; RI: PRINT: PRINT "byte dbeam = 0";: FOR R = 1 TO RI
 50    X = R * .7071: Y = R * .7071
-60    SX = INT(X): SY = INT(Y + .25): IF SCRN(SX,SY) <> 0 THEN 80
+60    SX = INT(X + .5): SY = INT(Y + .5): IF SCRN(SX,SY) <> 0 THEN 80
 70    PLOT SX,SY: XB(P) = SX: YB(P) = SY: P = P + 1
 80    X = X - .25
 90    Y = SQR(R * R - X * X)

@@ -1,464 +1,720 @@
 import STDLIB
-    predef syscall, call, memset, getc, putc, puts, putln
-    predef memset, memcpy
-    predef heapmark, heapallocallign, heapalloc, heaprelease, heapavail
-    byte MACHID
+  predef syscall, call, memset, getc, putc, puts, putln
+  predef memset, memcpy
+  predef heapmark, heapallocallign, heapalloc, heaprelease, heapavail
+  byte MACHID
+end
+
+import ROGUEMAP
+  const xcentr     = 20
+  const ycentr     = 12
+  const scrnwidth  = 40
+  const scrnheight = 22
+  const maprows    = 21
+  const mapcols    = 32
+  const mapsize    = maprows*mapcols
+
+  const FLOOR_TILE  = '.'
+  const TORCH_TILE  = '*'
+  const PIT_TILE    = ' '
+  const DOOR_TILE   = '+'
+  const LOCKED_TILE = '%'
+  const WATER1_TILE = '>'
+  const WATER2_TILE = '<'
+  const KEY_TILE    = ','
+  const GOLD_TILE   = '$'
+  const FOOD_TILE   = '&'
+  const ENTER_TILE  = '-'
+  const EXIT_TILE   = '='
+  const OPAQUE_TILE = $01
+  const VIEWED_TILE = $80
+  const LIT_TILE    = $80
+  const INV_TILE    = $3F
+  const MAP_TILE    = $7F
+
+  predef loadmap, getmaptile, setmaptile, updtmaptile, lighttorches, drawmap, drawvisentity
 end
 
 const FALSE = 0
 const TRUE  = not FALSE
 
-//
-// Octant beam parameters
-//
-
-const beamdepth = 24
-const beampts   = 249
-
-byte dbeam = 0,1,3,7,10,15,20,25,33,40,50,59,68,80,90,103,117,131,145
-byte       = 159,178,195,213,231,248
-
-byte[] xbeam
-byte = 0
-byte = 0
-byte = 1,0
-byte = 2,1,1,0
-byte = 2,1,0
-byte = 3,3,2,1,0
-byte = 4,3,2,1,0
-byte = 4,3,2,1,0
-byte = 5,5,4,4,3,2,1,0
-byte = 6,5,4,3,2,1,0
-byte = 7,6,6,5,4,3,2,2,1,0
-byte = 7,6,5,5,4,3,2,1,0
-byte = 8,7,6,5,4,3,2,1,0
-byte = 9,8,8,7,7,6,5,4,3,2,1,0
-byte = 9,8,7,6,5,4,3,2,1,0
-byte = 10,10,9,9,8,7,6,5,4,3,2,1,0
-byte = 11,10,9,8,8,7,6,6,5,4,3,2,1,0
-byte = 12,11,11,10,9,8,7,6,5,4,3,2,1,0
-byte = 12,11,10,10,9,8,7,6,5,4,3,2,1,0
-byte = 13,12,11,10,9,8,7,6,5,4,3,2,1,0
-byte = 14,13,13,12,12,11,10,9,9,8,7,6,5,4,3,3,2,1,0
-byte = 14,13,12,11,11,10,9,8,7,7,6,5,4,3,2,1,0
-byte = 15,15,14,14,13,12,11,10,9,8,7,6,5,4,3,2,1,0
-byte = 16,15,14,13,13,12,11,10,9,8,7,6,5,4,3,2,1,0
-byte = 16,15,14,13,12,11,10,9,8,7,6,5,4,3,2,1,0
-
-byte[] ybeam
-byte = 0
-byte = 1
-byte = 1,2
-byte = 2,2,3,3
-byte = 3,4,4
-byte = 3,4,4,5,5
-byte = 4,5,5,6,6
-byte = 5,6,6,7,7
-byte = 5,6,6,7,7,7,8,8
-byte = 6,7,8,8,8,9,9
-byte = 7,7,8,8,9,9,9,10,10,10
-byte = 8,9,9,10,10,10,11,11,11
-byte = 8,9,10,11,11,11,12,12,12
-byte = 9,9,10,10,11,11,12,12,12,13,13,13
-byte = 10,11,12,12,13,13,13,14,14,14
-byte = 10,11,11,12,12,13,13,14,14,14,15,15,15
-byte = 11,12,13,13,14,14,14,15,15,15,15,16,16,16
-byte = 12,12,13,13,14,15,15,16,16,16,16,17,17,17
-byte = 13,14,14,15,15,16,16,17,17,17,17,18,18,18
-byte = 13,14,15,16,16,17,17,18,18,18,18,19,19,19
-byte = 14,14,15,15,16,16,17,17,18,18,18,19,19,19,19,20,20,20,20
-byte = 15,16,17,17,18,18,19,19,19,20,20,20,20,21,21,21,21
-byte = 15,16,16,17,17,18,19,19,20,20,21,21,21,21,22,22,22,22
-byte = 16,17,18,18,19,19,20,20,21,21,22,22,22,22,23,23,23,23
-byte = 17,18,19,20,20,21,21,22,22,23,23,23,23,24,24,24,24
-
-byte[] vbeam
-byte = 0
-byte = 0
-byte = 0,1
-byte = 2,1,3,3
-byte = 5,6,7
-byte = 4,8,6,9,10
-byte = 11,13,9,14,15
-byte = 12,18,14,19,20
-byte = 16,21,17,22,23,19,24,25
-byte = 26,28,30,31,31,32,33
-byte = 34,27,35,29,37,38,38,47,39,40
-byte = 42,44,36,45,46,47,48,49,50
-byte = 41,43,53,55,56,48,57,58,59
-byte = 60,51,61,52,62,54,64,65,65,66,67,68
-byte = 70,72,74,63,76,77,77,78,79,80
-byte = 69,81,71,82,73,84,75,86,87,87,88,89,90
-byte = 91,93,95,83,96,97,85,98,99,100,100,101,102,103
-byte = 104,92,105,94,107,109,110,112,113,113,114,115,116,117
-byte = 119,121,106,122,108,124,111,126,127,127,128,129,130,131
-byte = 118,120,134,136,123,138,125,140,141,141,142,143,144,145
-byte = 146,132,147,133,148,135,150,137,151,152,139,154,155,155,156,174,157,158
-byte = 159
-byte = 161,163,165,149,166,167,169,170,153,171,172,172,173,175,176,177,178
-byte = 160,179,162,180,164,182,184,168,186,187,189,190,190,191,192,193,194,195
-byte = 196,198,200,181,201,183,203,185,205,188,207,208,208,209,210,211,212,213
-byte = 197,199,217,219,202,221,204,223,206,225,226,226,227,228,229,230,231
-
-byte[beampts] vispix
-
-const maprows = 21
-const mapcols = 32
-const WALL    = '#'
-const VISWALL = $A3 // '#' | $80
-const FLOOR   = '.'
-
-byte[] map
-byte = "###############################"
-byte = "#.................#...........#"
-byte = "#.............###.#.........#.#"
-byte = "#......##.......#.#.........#.#"
-byte = "#......##.......#.#.........#.#"
-byte = "#...............#...........#.#"
-byte = "#...............#...........#.#"
-byte = "#......##.......#.#.........#.#"
-byte = "#......##.......#.#.........#.#"
-byte = "#...............#.#.........#.#"
-byte = "#...............#.###########.#"
-byte = "#......##.......#.#...........#"
-byte = "#......##.......#.#......######"
-byte = "#...............#.#......#....#"
-byte = "#...............#.#......#....#"
-byte = "#......##.......#.#......#....#"
-byte = "#......##.......#.#......#....#"
-byte = "#.#.............#.#......#....#"
-byte = "#.###############.#......###..#"
-byte = "#.................#...........#"
-byte = "###############################"
-
-word vismap
-
-const xcentr = 20
-const ycentr = 12
-
-word[] screen
-word = $400, $480, $500, $580, $600, $680, $700, $780
-word = $428, $4A8, $528, $5A8, $628, $6A8, $728, $7A8
-word = $450, $4D0, $550, $5D0, $650, $6D0, $750, $7D0
 
 const SPEAKER = $C030
 
 const maxlight = 10
+const maxview  = 20
+
 word xdir =  0,  1,  1,  1,  0, -1, -1, -1
 word ydir = -1, -1,  0,  1,  1,  1,  0, -1
-word xplayer = 5
-word yplayer = 5
-byte aplayer = 0
-byte lamp    = 4
-byte fov     = 1
 byte vplayer = '^', '\\', '>', '/', 'v', '\\', '<', '/'
+byte totaldarkness = 0
+//
+// Power-ups
+//
+
+const TORCH_OIL  = 250
+const MANA       = 50
+const RUN_ENERGY = 4
+struc t_pos
+  byte xpos
+  byte ypos
+end
+
+//
+// Player
+//
+
+struc t_player
+  byte[t_pos]
+  byte     angle
+  byte     lamp
+  byte     fov
+  byte     skill
+  byte     health
+  byte     energy
+  word     oil
+  byte     gold
+  byte     key
+  byte[32] name[32]
+end
+
+byte player = 8   // xpos
+byte        = 2   // ypos
+byte        = 4   // angle
+byte        = 4   // lamp
+byte        = 1   // fov
+byte        = 15  // skill
+byte        = 100 // health
+byte        = 100 // energy
+word        = 500 // oil
+byte        = 0   // gold
+byte        = 0   // key
+byte[32]    = "Player"
+
+predef moveplayer
+
+//
+// Other monsters
+//
+
+struc t_other
+  byte[t_pos]
+  byte kind
+  byte tileid
+  byte life
+  byte power
+  word prev_other
+  word next_other
+end
+
+//
+// Monster types
+//
+
+byte thief    = "Thief",  5
+byte ogre     = "Ogre",   15
+byte zombie   = "Zombie", 25
+byte rogue    = "Rogue",  50
+word entity   = @thief, @ogre, @zombie, @rogue
+word entities = 0
+
+//
+// One line status strings
+//
+
+const statusline = 23
+
+byte helthstr = "Helth:"
+byte enrgystr = "Enrgy:"
+byte oilstr   = "Oil:"
+byte goldstr  = "Gold:"
+byte keystr   = "Key"
+
+//
+// Combat status strings
+//
+
+byte skillstr  = "Skill  :"
+byte healthstr = "Health :"
+byte energystr = "Energy :"
+byte powerstr  = "Power  :"
+byte lifestr   = "Life   :"
+byte fightstr  = "F)ight or R)un?"
+
+//
+// Messages
+//
+
+byte initstr      = "Initializing..."
+byte quitstr      = "Are you sure you want to quit?"
+byte youmadeitstr = "You made it out alive with $"
+byte youdiedstr   = "You perished inside the catacombs :-("
+
+//
+// Utility functions
+//
+
+const rndnum = $4E // ZP location of RND
+const rndl   = $4E
+const rndh   = $4F
+
+def rnd
+  *rndnum = (*rndnum << 1) + *rndnum + 123
+  return *rndnum & $7FFF
+end
 
 def home
     return call($FC58, 0, 0, 0, 0)
 end
 
-def gotoxy(x, y)
-    ^$24 = x + ^$20
-    return call($FB5B, y + ^$22, 0, 0, 0)
+def gotoxy(ch, cv)
+    ^$24 = ch + ^$20
+    return call($FB5B, cv + ^$22, 0, 0, 0)
+end
+
+def toupper(c)
+  if c >= 'a' and c <= 'z'
+    c = c - $20
+  fin
+  return c
+end
+
+def abs(i)
+  if i < 0
+    i = -i
+  fin
+  return i
+end
+
+def tone(duration, delay)
+  byte i
+  
+  while duration
+    ^SPEAKER
+    for i = 0 to delay
+    next
+    duration = duration - 1
+  loop
 end
 
 def ouch
-  byte i, delay
+  tone(128,5)
+end
+
+def gotit
+  tone(10,8)
+  tone(80,2)
+end
+
+def fall
+  byte i
   
-  for i = 0 to 255
-    ^SPEAKER
-    for delay = 0 to 1
-    next
+  for i = 0 to 10
+    tone(50, i)
   next
 end
 
-def drawmap(xorg, yorg, dir, light)
-  byte o, l, dist, tile, occlude
-  word ymap, xmap, imap
-  byte yscr, xscr
+def groan
+  byte i
+  
+  for i = 0 to 5
+    tone(5, 40 + i)
+  next
+end
 
-  //
-  // Clear screen
-  //
-  home
-  //
-  // Draw background map
-  //
-  if light
-    xmap = xorg - xcentr
-    if xmap < 0
-      l    = mapcols - 1
-      xscr = -xmap
-      xmap = 0
-    else
-      l    = mapcols - xmap - 1
-      xscr = 0
-    fin
-    if xscr + l > 40
-      l    = 40 - xscr
-    fin
-    for yscr = 0 to 23
-      ymap = yscr - ycentr + yorg
-      if ymap >= 0 and ymap < maprows
-        memcpy(screen[yscr] + xscr, vismap  + (ymap << 5) + xmap + 1, l)
+def win
+  tone(30, 15)
+  tone(5, 15)
+  tone(5, 15)
+  tone(30, 5)
+end
+
+def puti(i)
+  if i < 0; putc('-'); i = -i; fin
+  if i < 10
+    putc(i + '0')
+  else
+    puti(i / 10)
+    putc(i % 10 + '0')
+  fin
+end
+
+//
+// Update status line
+//
+
+def status
+  gotoxy(0, statusline)
+  puts(@helthstr)
+  puti(player.health)
+  gotoxy(10, statusline)
+  puts(@enrgystr)
+  puti(player.energy)
+  gotoxy(20, statusline)
+  puts(@oilstr)
+  puti(player:oil/10)
+  gotoxy(28, statusline)
+  puts(@goldstr)
+  puti(player.gold)
+  if player.key
+    gotoxy(36, statusline)
+    puts(@keystr)
+  fin
+end
+
+def clearstatus
+  return memset($07D0, 40, $A0A0)
+end
+//
+// Combat
+//
+
+def fight(enemy)
+  word p_atck, e_atck
+  
+  repeat
+    home()
+    gotoxy(0, 0)
+    puts(@player.name)
+    gotoxy(1, 2)
+    puts(@skillstr); puti(player.skill)
+    gotoxy(1, 3)
+    puts(@healthstr); puti(player.health)
+    gotoxy(1, 4)
+    puts(@energystr); puti(player.energy)
+    gotoxy(20, 0)
+    puts(entity[enemy->kind])
+    gotoxy(21, 2)
+    puts(@powerstr); puti(enemy->power)
+    gotoxy(21, 3)
+    puts(@lifestr);  puti(enemy->life)
+    gotoxy(12, 8); puts(@fightstr)
+    if toupper(getc()) == 'R'
+      if player.energy > RUN_ENERGY
+        moveplayer(1)
       fin
-    next
-    //
-    // Draw visible octants
-    //
-    for o = dir - fov - 1 to dir + fov
-      memset(@vispix, dbeam[light], TRUE)
-      when o & 7
-        is 0
-          for l = 1 to dbeam[light]
-            if vispix[vbeam[l]]
-              imap = ((yorg - ybeam[l]) << 5) + xorg + xbeam[l] + 1
-              tile = map[imap]
-              ^(vismap + imap) =  tile | $80
-              if tile <> FLOOR
-                vispix[l] = FALSE
-              else
-                if map[imap + 1] == WALL
-                  ^(vismap + imap + 1) = VISWALL
-                  screen.[ycentr - ybeam[l], xcentr + xbeam[l] + 1] = WALL
-                fin
-              fin
-              screen.[ycentr - ybeam[l], xcentr + xbeam[l]] = tile
-            else
-              vispix[l] = FALSE
-            fin
-          next
-          break
-        is 1
-          for l = 1 to dbeam[light]
-            if vispix[vbeam[l]]
-              imap = ((yorg - xbeam[l]) << 5) + xorg + ybeam[l] + 1
-              tile = map[imap]
-              ^(vismap + imap) = tile | $80
-              if tile <> FLOOR
-                vispix[l] = FALSE
-              else
-                if map[imap - mapcols] == WALL
-                  ^(vismap + imap - mapcols) = VISWALL
-                  screen.[ycentr - xbeam[l] - 1, xcentr + ybeam[l]] = WALL
-                fin
-              fin
-              screen.[ycentr - xbeam[l], xcentr + ybeam[l]] = tile
-            else
-              vispix[l] = FALSE
-            fin
-          next
-          break
-        is 2
-          for l = 1 to dbeam[light]
-            if vispix[vbeam[l]]
-              imap = ((yorg + xbeam[l]) << 5) + xorg + ybeam[l] + 1
-              tile = map[imap]
-              ^(vismap + imap) = tile | $80
-              if tile <> FLOOR
-                vispix[l] = FALSE
-              else
-                if map[imap + mapcols] == WALL
-                  ^(vismap + imap + mapcols) = VISWALL
-                  screen.[ycentr + xbeam[l] + 1, xcentr + ybeam[l]] = WALL
-                fin
-              fin
-              screen.[ycentr + xbeam[l], xcentr + ybeam[l]] = tile
-            else
-              vispix[l] = FALSE
-            fin
-          next
-          break
-        is 3
-          for l = 1 to dbeam[light]
-            if vispix[vbeam[l]]
-              imap = ((yorg + ybeam[l]) << 5) + xorg + xbeam[l] + 1
-              tile = map[imap]
-              ^(vismap + imap) = tile | $80
-              if tile <> FLOOR
-                vispix[l] = FALSE
-              else
-                if map[imap + 1] == WALL
-                  ^(vismap + imap + 1) = VISWALL
-                  screen.[ycentr + ybeam[l], xcentr + xbeam[l] + 1] = WALL
-                fin
-              fin
-              screen.[ycentr + ybeam[l], xcentr + xbeam[l]] = tile
-            else
-              vispix[l] = FALSE
-            fin
-          next
-          break
-        is 4
-          for l = 1 to dbeam[light]
-            if vispix[vbeam[l]]
-              imap = ((yorg + ybeam[l]) << 5) + xorg - xbeam[l] + 1
-              tile = map[imap]
-              ^(vismap + imap) = tile | $80
-              if tile <> FLOOR
-                vispix[l] = FALSE
-              else
-                if map[imap - 1] == WALL
-                  ^(vismap + imap - 1) = VISWALL
-                  screen.[ycentr + ybeam[l], xcentr - xbeam[l] - 1] = WALL
-                fin
-              fin
-              screen.[ycentr + ybeam[l], xcentr - xbeam[l]] = tile
-            else
-              vispix[l] = FALSE
-            fin
-          next
-          break
-        is 5
-          for l = 1 to dbeam[light]
-            if vispix[vbeam[l]]
-              imap = ((yorg + xbeam[l]) << 5) + xorg - ybeam[l] + 1
-              tile = map[imap]
-              ^(vismap + imap) = tile | $80
-              if tile <> FLOOR
-                vispix[l] = FALSE
-              else
-                if map[imap + mapcols] == WALL
-                  ^(vismap + imap + mapcols) = VISWALL
-                  screen.[ycentr + xbeam[l] + 1, xcentr - ybeam[l]] = WALL
-                fin
-              fin
-              screen.[ycentr + xbeam[l], xcentr - ybeam[l]] = tile
-            else
-              vispix[l] = FALSE
-            fin
-          next
-          break
-        is 6
-          for l = 1 to dbeam[light]
-            if vispix[vbeam[l]]
-              imap = ((yorg - xbeam[l]) << 5) + xorg - ybeam[l] + 1
-              tile = map[imap]
-              ^(vismap + imap) = tile | $80
-              if tile <> FLOOR
-                vispix[l] = FALSE
-              else
-                if map[imap - mapcols] == WALL
-                  ^(vismap + imap - mapcols) = VISWALL
-                  screen.[ycentr - xbeam[l] - 1, xcentr - ybeam[l]] = WALL
-                fin
-              fin
-              screen.[ycentr - xbeam[l], xcentr - ybeam[l]] = tile
-            else
-              vispix[l] = FALSE
-            fin
-          next
-          break
-        is 7
-          for l = 1 to dbeam[light]
-            if vispix[vbeam[l]]
-              imap = ((yorg - ybeam[l]) << 5) + xorg - xbeam[l] + 1
-              tile = map[imap]
-              ^(vismap + imap) = tile | $80
-              if tile <> FLOOR
-                vispix[l] = FALSE
-              else
-                if map[imap - 1] == WALL
-                  ^(vismap + imap - 1) = VISWALL
-                  screen.[ycentr - ybeam[l], xcentr - xbeam[l] - 1] = WALL
-                fin
-              fin
-              screen.[ycentr - ybeam[l], xcentr - xbeam[l]] = tile
-            else
-              vispix[l] = FALSE
-            fin
-          next
-          break
+      return moveplayer(1)
+    else
+      //
+      // Turn player in random direction
+      //
+      player.angle = rnd & 7
+      //
+      // Calculate attack (with a little random variation)
+      //
+      p_atck = player.skill + player.energy / 10 - enemy->power / 25  + (rnd & 7)
+      e_atck = enemy->power - player.skill / 5   - player.energy / 20 + (rnd & 7)
+      if enemy->life > p_atck
+        enemy->life = enemy->life - p_atck
+      else
+        win
+        enemy->life = 0
+        p_atck      = player.skill + enemy->power / 3
+        if p_atck > 100 // Limit skill
+          p_atck = 100
+        fin
+        player.skill = p_atck
+	//
+	// Unlink dead enemy from entities list
+	//
+        if enemy == entities
+          entities = enemy=>next_other
+        fin
+	if enemy=>next_other
+          enemy=>next_other=>prev_other = enemy=>prev_other
+	fin
+	if enemy=>prev_other
+          enemy=>prev_other=>next_other = enemy=>next_other
+	fin
+      fin
+      if player.health > e_atck
+        player.health = player.health - e_atck
+      else
+        player.energy = 0
+        player.health = 0
+      fin
+      if player.energy >= 4
+        player.energy = player.energy - 4
+      fin
+    fin
+  until player.health == 0 or enemy->life == 0
+end
+
+//
+// Find other entities in map and put in database
+//
+
+def findentities
+  word newother
+  byte xmap, ymap, what
+  
+  for ymap = 1 to maprows - 2
+    for xmap = 2 to mapcols - 2
+      what = 0
+      when getmaptile(xmap, ymap) & MAP_TILE
+	is 'R' // Rogue
+	  what = what + 1
+	is 'Z' // Zombie
+	  what = what + 1
+        is 'O' // Ogre
+	  what = what + 1
+	is 'T' // Thief
+	  newother         = heapalloc(t_other)
+	  newother->xpos   = xmap
+	  newother->ypos   = ymap
+	  newother->kind   = what
+	  newother->tileid = ^(entity[what] + 1) // First character of name string
+	  newother->power  = ^(entity[what] + ^entity[what] + 1)
+	  newother->life   = 100
+	  //
+	  // Insert into head of entities list
+	  //
+	  newother=>prev_other = 0
+	  newother=>next_other = entities
+	  if entities
+	    entities=>prev_other = newother
+	  fin
+	  entities = newother
+	  //
+	  // Clear entity from map, replace with floor
+	  //
+	  setmaptile(xmap, ymap, FLOOR_TILE)
       wend
     next
-    gotoxy(xcentr, ycentr)
-    putc(vplayer[dir])
-  else
-    gotoxy(xcentr, ycentr)
-    putc('@')
-  fin
-  gotoxy(xcentr, ycentr)
+  next	    
 end
+
+//
+// Draw other entities on map if visible
+//
+
+def drawentities
+  word other, xofst, yofst
+  
+  other = entities
+  while other
+    xofst = other->xpos - player.xpos
+    yofst = other->ypos - player.ypos
+    if abs(xofst) < 20 and abs(yofst) < 12
+      drawvisentity(xofst, yofst, other->tileid)
+    fin
+    other = other=>next_other
+  loop
+end
+
+//
+// Move entitiess
+//
+
+def lineofsight(x1, y1, x2, y2)
+  word sx, sy, dx, dy, dx2, dy2, dd2, err
+
+  dx = x2 - x1
+  if dx < 0
+    dx = -dx
+    sx = -1
+  else
+    sx = 1
+  fin
+  dy = y2 - y1
+  if dy < 0
+    dy = -dy
+    sy = -1
+  else
+    sy = 1
+  fin
+  if dx > maxview or dy > maxview
+    return FALSE
+  fin
+  dx2 = dx << 1
+  dy2 = dy << 1
+  if dx > dy
+    dd2 = dx2 - dy2
+    err = dx  - dy2
+    while x1 <> x2
+      if err < 0
+        y1 = y1 + sy
+        err = err + dd2
+      else
+        err = err - dy2
+      fin
+      x1 = x1 + sx
+      if getmaptile(x1, y1) & OPAQUE_TILE
+        return FALSE
+      fin
+    loop
+  else
+    dd2 = dy2 - dx2
+    err = dy  - dx2
+    while y1 <> y2
+      if err < 0
+        x1 = x1 + sx
+        err = err + dd2
+      else
+        err = err - dx2
+      fin
+      y1 = y1 + sy
+      if getmaptile(x1, y1) & OPAQUE_TILE
+        return FALSE
+      fin
+    loop
+  fin
+  return TRUE
+end
+
+def moveentities(playerisvis)
+  byte xmove, ymove
+  word other
+  
+  other = entities
+  while other
+    if playerisvis
+      if lineofsight(player.xpos, player.ypos, other->xpos, other->ypos)
+        xmove = other->xpos
+        ymove = other->ypos
+        if player.xpos > other->xpos
+          xmove = other->xpos + 1
+        elsif player.xpos < other->xpos
+          xmove = other->xpos - 1
+        fin
+        if player.ypos > other->ypos
+          ymove = other->ypos + 1
+        elsif player.ypos < other->ypos
+          ymove = other->ypos - 1
+        fin
+        when getmaptile(xmove, ymove) & MAP_TILE
+          is FLOOR_TILE
+          is TORCH_TILE
+          is KEY_TILE
+          is GOLD_TILE
+          is FOOD_TILE
+            other->xpos = xmove
+            other->ypos = ymove
+            groan
+        wend
+      fin
+    fin
+    if other->xpos == player.xpos and other->ypos == player.ypos
+      return fight(other)
+    fin
+    other = other=>next_other
+  loop
+end
+
+//
+// Move player, check for obstacles
+//
 
 def moveplayer(dir)
-  xplayer = xplayer + dir * xdir[aplayer]
-  yplayer = yplayer + dir * ydir[aplayer]
-  if map[yplayer * mapcols + xplayer + 1] <> FLOOR
-    xplayer = xplayer - dir * xdir[aplayer]
-    yplayer = yplayer - dir * ydir[aplayer]
-    ouch
-  fin
+  player.xpos = player.xpos + dir * xdir[player.angle]
+  player.ypos = player.ypos + dir * ydir[player.angle]
+  when getmaptile(player.xpos, player.ypos) & MAP_TILE
+    is PIT_TILE
+      fall
+      player.energy = 0
+      player.health = 0
+    is FLOOR_TILE
+    is TORCH_TILE
+    is KEY_TILE
+    is GOLD_TILE
+    is FOOD_TILE
+      if player.energy < 10
+        player.fov = 0
+      fin
+      if player.energy
+        player.energy = player.energy - 1
+      fin
+      break
+    otherwise
+      player.xpos = player.xpos - dir * xdir[player.angle]
+      player.ypos = player.ypos - dir * ydir[player.angle]
+      ouch
+  wend
 end
 
-vismap = heapalloc(maprows * mapcols)
-memset(vismap, maprows * mapcols, $A0A0)
-while TRUE
-  drawmap(xplayer, yplayer, aplayer, lamp)
-  when getc()
-    is ','
-    is '<'
-      if fov > 0
-        fov = fov - 1
-      fin
-      break
-    is '.'
-    is '>'
-      if fov < 4
-        fov = fov + 1
-      fin
-      break
-    is '-'
-      if lamp > 0
-        lamp = lamp - 1
-      fin
-      break
-    is '+'
-      if lamp < maxlight - 1
-        lamp = lamp + 1
-      fin
-      break
-    is 'i'
+//
+// Read player input and do something
+//
+
+def play
+  byte xt, yt
+
+  if player.health == 0
+    return FALSE
+  fin
+  gotoxy(xcentr, ycentr)
+  when toupper(getc)
     is 'I'
-      aplayer = 0
+      if totaldarkness
+        player.angle = rnd & 7
+      else
+        player.angle = 0
+      fin
       moveplayer(1)
       break
-    is 'j'
     is 'J'
-      aplayer = 6
+      if totaldarkness
+        player.angle = rnd & 7
+      else
+        player.angle = 6
+      fin
       moveplayer(1)
       break
-    is 'k'
     is 'K'
-      aplayer = 2
+      if totaldarkness
+        player.angle = rnd & 7
+      else
+        player.angle = 2
+      fin
       moveplayer(1)
       break
-    is 'm'
     is 'M'
-      aplayer = 4
+      if totaldarkness
+        player.angle = rnd & 7
+      else
+        player.angle = 4
+      fin
       moveplayer(1)
       break
-    is 'q'
     is 'Q'
-      moveplayer(1)
-    is 'a'
-    is 'A'
-    is $0B
+      if player.energy > RUN_ENERGY
+        player.energy = player.energy - RUN_ENERGY
+        moveplayer(1)
+      fin
+    is 'W'
+    is $0B // Up Arrow
       moveplayer(1)
       break
-    is 'z'
-    is 'Z'
-    is $0A
+    is 'S'
+    is $0A // Down Arrow
       moveplayer(-1)
       break
-    is $08
-      aplayer = (aplayer - 1) & 7
+    is 'A'
+    is $08 // Left Arrow
+      player.angle = (player.angle - 1) & 7
       break
-    is $15
-      aplayer = (aplayer + 1) & 7
+    is 'D'
+    is $15 // Right Arrow
+      player.angle = (player.angle + 1) & 7
       break
-    is 'x'
+    is ' '
+      when getmaptile(player.xpos + xdir[player.angle], player.ypos + ydir[player.angle]) & MAP_TILE
+        is LOCKED_TILE
+          if not player.key
+            ouch
+            break
+          fin
+        is DOOR_TILE 
+          updtmaptile(player.xpos + xdir[player.angle], player.ypos + ydir[player.angle], FLOOR_TILE)
+	  break
+	is ENTER_TILE
+	  break
+	is EXIT_TILE
+	  return FALSE
+      wend
+      break
+    is $0D // Return
+      when getmaptile(player.xpos, player.ypos) & MAP_TILE
+        is KEY_TILE
+          player.key = 1
+          updtmaptile(player.xpos, player.ypos, FLOOR_TILE)
+	  gotit
+	  break        
+        is GOLD_TILE
+          player.gold = player.gold + 1
+          updtmaptile(player.xpos, player.ypos, FLOOR_TILE)
+	  gotit
+          break        
+        is TORCH_TILE
+          player:oil = player:oil + TORCH_OIL
+	  if player:oil > 1000
+	    player:oil = 1000
+	  fin
+          setmaptile(player.xpos, player.ypos, FLOOR_TILE)
+          for yt = player.ypos - 1 to player.ypos + 1
+  	    for xt = player.xpos - 1 to player.xpos + 1
+	      setmaptile(xt, yt, getmaptile(xt, yt) & MAP_TILE)
+	    next
+	  next
+	  gotit
+          break
+        is FOOD_TILE
+  	  player.health = player.health + MANA/2
+	  if player.health > 100
+	    player.health = 100
+	  fin
+          player.energy = player.energy + MANA
+	  if player.energy > 100
+	    player.energy = 100
+	  fin
+	  updtmaptile(player.xpos, player.ypos, FLOOR_TILE)
+	  player.fov = 1
+	  gotit
+          break
+      wend
+      break
+    is 'O'
+      player.lamp = 0
+      break
+    is '<'
+    is ','
+      if player.lamp > 0
+        player.lamp = player.lamp - 1
+      fin
+      break
+    is '>'
+    is '.'
+      if player.lamp < maxlight - 1
+        player.lamp = player.lamp + 1
+      fin
+      break
     is 'X'
-      return
+      clearstatus
+      gotoxy(0, statusline)
+      puts(@quitstr)
+      if toupper(getc) == 'Y'
+        player.health = 0
+	return FALSE
+      fin
   wend
-loop
+  if player.energy and player.health < 100
+    player.health = player.health + 1
+  fin
+  if player:oil > player.lamp
+    player:oil = player:oil - player.lamp
+  else
+    player:oil  = 0
+    player.lamp = 0
+  fin
+  return TRUE
+end
+
+//
+// Main loop
+//
+
+puts(@initstr)
+loadmap
+findentities
+lighttorches
+repeat
+  moveentities(player.lamp or getmaptile(player.xpos, player.ypos) & LIT_TILE))
+  totaldarkness = drawmap(player.xpos, player.ypos, player.fov, player.angle, player.lamp, maxview)
+  if not totaldarkness
+    drawentities
+    gotoxy(xcentr, ycentr)
+    putc(vplayer[player.angle])
+  fin
+  status
+until not play or player.health == 0
+clearstatus
+gotoxy(0, statusline)
+if player.health > 0
+  puts(@youmadeitstr)
+  puti(player.gold)
+else
+  puts(@youdiedstr)
+fin
+putc($0D)
 done
+

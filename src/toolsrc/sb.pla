@@ -199,7 +199,7 @@ const STRUC_TKN          = $96
 const DONE_TKN           = $98
 const RETURN_TKN         = $99
 const BREAK_TKN          = $9A
-const START_TKN          = $9B
+const CONT_TKN           = $9B
 const EXIT_TKN           = $9C
 const EVAL_TKN           = $9D
 const PREDEF_TKN         = $9E
@@ -253,6 +253,7 @@ byte                     = "DOWNTO",   DOWNTO_TKN
 byte                     = "REPEAT",   REPEAT_TKN
 byte                     = "RETURN",   RETURN_TKN
 byte                     = "PREDEF",   PREDEF_TKN
+byte                     = "CONTINUE", CONT_TKN
 byte                     = "OTHERWISE",DEFAULT_TKN
 byte                     = $FF
 //
@@ -387,6 +388,7 @@ byte stack_loop  = 0
 byte prevstmnt   = 0
 word retfunc_tag = 0
 word break_tag   = 0
+word cont_tag    = 0
 predef parse_expr, parse_module
 //
 // ASM utility functions
@@ -3107,6 +3109,12 @@ def parse_value(rvalue)
                         fin
                     fin
                     emit_val = 1;
+                else
+                  if type & BYTE_TYPE
+                    emit_lab(value, elem_offset)
+                  else
+                    emit_law(value, elem_offset)
+                  fin
                 fin
                 type = type & ~(VAR_TYPE | ADDR_TYPE)
                 type = type | WORD_TYPE
@@ -3380,7 +3388,7 @@ def parse_expr
 end
 def parse_stmnt
     byte type, elem_type, elem_size, i
-    word elem_offset, tag_prevbrk, tag_else, tag_endif, tag_while, tag_wend
+    word elem_offset, tag_prevbrk, tag_prevcnt, tag_else, tag_endif, tag_while, tag_wend
     word tag_repeat, tag_for, tag_choice, tag_of, idptr, saveptr, addr, stepdir
 
     if token <> END_TKN and token <> DONE_TKN and token <> OF_TKN and token <> DEFAULT_TKN
@@ -3423,6 +3431,8 @@ def parse_stmnt
         is WHILE_TKN
             tag_while   = ctag_new
             tag_wend    = ctag_new
+            tag_prevcnt = cont_tag
+            cont_tag    = tag_while
             tag_prevbrk = break_tag
             break_tag   = tag_wend
             ctag_resolve(tag_while)
@@ -3435,17 +3445,22 @@ def parse_stmnt
             emit_branch(tag_while)
             ctag_resolve(tag_wend)
             break_tag = tag_prevbrk
+            cont_tag  = tag_prevcnt
 	    break
         is REPEAT_TKN
             tag_repeat  = ctag_new
             tag_prevbrk = break_tag
             break_tag   = ctag_new
+            tag_prevcnt = cont_tag
+            cont_tag    = ctag_new
             ctag_resolve(tag_repeat)
             scan
             while parse_stmnt
                 nextln
             loop
             if token <> UNTIL_TKN; return parse_err(@no_until); fin
+            ctag_resolve(cont_tag)
+            cont_tag = tag_prevcnt            
             if !parse_expr; return FALSE; fin
             emit_brfls(tag_repeat)
             ctag_resolve(break_tag)
@@ -3454,6 +3469,8 @@ def parse_stmnt
         is FOR_TKN
             stack_loop  = stack_loop + 1
             tag_for     = ctag_new
+            tag_prevcnt = cont_tag
+            cont_tag    = tag_for
             tag_prevbrk = break_tag
             break_tag   = ctag_new
             if scan <> ID_TKN; return parse_err(@bad_stmnt); fin
@@ -3512,6 +3529,7 @@ def parse_stmnt
             loop
             if token <> NEXT_TKN; return parse_err(@bad_stmnt); fin
             emit_branch(tag_for)
+            cont_tag = tag_prevcnt            
             ctag_resolve(break_tag)
             emit_drop
             break_tag  = tag_prevbrk
@@ -3562,6 +3580,13 @@ def parse_stmnt
         is BREAK_TKN
             if break_tag
                 emit_branch(break_tag)
+            else
+                return parse_err(@bad_stmnt)
+            fin
+	    break
+        is CONT_TKN
+            if cont_tag
+                emit_branch(cont_tag)
             else
                 return parse_err(@bad_stmnt)
             fin
