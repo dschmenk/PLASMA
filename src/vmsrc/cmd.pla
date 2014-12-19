@@ -39,7 +39,7 @@ word heap
 word xheap       = $0800
 word lastsym     = symtbl
 byte perr
-byte[] cmdln // Overlay exported strings table
+byte cmdln       = "" // Overlay exported strings table
 //
 // Standard Library exported functions.
 //
@@ -67,7 +67,8 @@ byte loadstr    = "MODLOAD"
 byte execstr    = "MODEXEC"
 byte modadrstr  = "MODADDR"
 byte argstr     = "ARGS"
-byte[] prefix // overlay with exported symbols table
+byte autorun    = "AUTORUN"
+byte prefix[] // overlay with exported symbols table
 word exports	  = @sysstr,    @syscall
 word		  = @callstr,   @call
 word		  = @putcstr,   @cout
@@ -1276,11 +1277,17 @@ while *stdlibsym
     addsym(heap, stdlibsym=>2)
     stdlibsym = stdlibsym + 4
 loop
-memcpy(@cmdln, getlnbuf, 128)
 //
-// Print some startup info.
+// Try to load autorun.
 //
-if not cmdln
+autorun = open(@autorun, iobuffer)
+if autorun > 0
+    cmdln = read(autorun, @stdlibstr, 128)
+    close(autorun)
+else
+    //
+    // Print some startup info.
+    //
     prstr(@verstr)
     prbyte(version.1)
     cout('.')
@@ -1290,7 +1297,6 @@ if not cmdln
     prword(availheap)
     crout
 fin
-getpfx(@prefix)
 perr = 0
 while 1
     if cmdln
