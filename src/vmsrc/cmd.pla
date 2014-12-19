@@ -4,6 +4,7 @@ const databuff    = $2000
 const MODADDR     = $1000
 const symtbl      = $0C00
 const freemem     = $0006
+const getlnbuf    = $01FF
 //
 // System flags: memory allocator screen holes.
 //
@@ -38,7 +39,7 @@ word heap
 word xheap       = $0800
 word lastsym     = symtbl
 byte perr
-word cmdptr      = $01FF
+byte[] cmdln // Overlay exported strings table
 //
 // Standard Library exported functions.
 //
@@ -66,6 +67,7 @@ byte loadstr    = "MODLOAD"
 byte execstr    = "MODEXEC"
 byte modadrstr  = "MODADDR"
 byte argstr     = "ARGS"
+byte[] prefix // overlay with exported symbols table
 word exports	  = @sysstr,    @syscall
 word		  = @callstr,   @call
 word		  = @putcstr,   @cout
@@ -87,7 +89,7 @@ word              = @loadstr,   @loadmod
 word              = @execstr,   @execmod
 word              = @modadrstr, @lookupstrmod
 word              = @machidstr, MACHID
-word              = @argstr,    $01FF
+word              = @argstr,    @cmdln
 word              = 0
 word stdlibsym    = @exports     
 //
@@ -98,7 +100,6 @@ byte freestr    = "MEM FREE:$"
 byte errorstr   = "ERR:$"
 byte okstr      = "OK"
 byte huhstr     = "?\n"
-byte[32] prefix = ""
 //
 // Utility functions
 //
@@ -1275,10 +1276,11 @@ while *stdlibsym
     addsym(heap, stdlibsym=>2)
     stdlibsym = stdlibsym + 4
 loop
+memcpy(@cmdln, getlnbuf, 128)
 //
 // Print some startup info.
 //
-if not ^cmdptr
+if not cmdln
     prstr(@verstr)
     prbyte(version.1)
     cout('.')
@@ -1287,33 +1289,32 @@ if not ^cmdptr
     prstr(@freestr)
     prword(availheap)
     crout
-else
-    getpfx(@prefix)
 fin
+getpfx(@prefix)
 perr = 0
 while 1
-    if ^cmdptr
-        when toupper(parsecmd(cmdptr))
+    if cmdln
+        when toupper(parsecmd(@cmdln))
             is 'Q'
 	        reboot()
 		break
 	    is 'C'
-	        catalog(cmdptr)
+	        catalog(@cmdln)
 		break
 	    is 'P'
-	        setpfx(cmdptr)
+	        setpfx(@cmdln)
 		break
 	    is 'V'
 	        volumes()
 		break
 	    is '-'
-	        execsys(cmdptr)
+	        execsys(@cmdln)
 		break
 	    is '+'
-	        execmod(cmdptr)
+	        execmod(@cmdln)
 		break
 	    otherwise
-	        prstr(@huhstr)
+	        prstr(@huhstr)		
         wend
         if perr
             prstr(@errorstr)
@@ -1325,6 +1326,6 @@ while 1
 	crout()
     fin
     prstr(getpfx(@prefix))
-    cmdptr = rdstr($BA)
+    memcpy(@cmdln, rdstr($BA), 128)
 loop
 done
