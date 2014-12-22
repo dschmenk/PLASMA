@@ -544,8 +544,11 @@ repeat
     update_cursor
 until keypressed
 ```
+##### CONTINUE
+To continue to the next iteration of a looping structure, the `continue` statement will immediately skip to the next iteration of the innermost looping construct.
+
 ##### BREAK
-To exit early from one of the looping constructs, the `break` statement will break out of it immediately and resume control immediately following the bottom of the loop.
+To exit early from one of the looping constructs or `when`, the `break` statement will break out of it immediately and resume control immediately following the bottom of the loop/`when`.
 
 ## Advanced Topics
 There are some things about PLASMA that aren't necessary to know, but can add to it's effectiveness in a tight situation. Usually you can just code along, and the system will do a pretty reasonable job of carrying out your task. However, a little knowledge in the way to implement small assembly language routines or some coding practices just might be the ticket.
