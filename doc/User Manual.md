@@ -311,12 +311,12 @@ Pointers are values that represent addresses. In order to get the value pointed 
 Just as there are type override for arrays and offsets, there is a `byte` and `word` type override for pointers. Prepending a value with `^` dereferences a `byte`. Prepending a value with `*` dereferences a `word`. These are unary operators, so they won't be confused with the binary operators using the same symbol. An example getting the length of a Pascal string (length byte at the beginning of character array):
 ```
 byte mystring = "This is my string"
-byte len
-word strptr
 
 def strlen(strptr)
     return ^strptr
 end
+
+puti(strlen(@mystring)) // print 17 in this case
 ```
 Pointers to structures or arrays can be referenced with the `->` and `=>` operators, pointing to `byte` or `word` sized elements.
 ```
