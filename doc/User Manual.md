@@ -112,7 +112,7 @@ predef exec_file, mydef
 ```
 
 #### Global Data & Variable Declarations
-One of the most powerful features in PLASMA is the flexible data declarations. Data must be defined after all the `import` declarations and before any function definitions, `asm` or `def`. Global labels and data can be defined in multiple ways, and exported for inclusion in other modules. Data can be initialized with constant values, addresses, calculated values (must resolve to a constant), and addresses from imported modules. Here is an exeample using the `predef` line from the previous examples to export an initialized array of 10 function pointer elements (2 defined + null delimiter):
+One of the most powerful features in PLASMA is the flexible data declarations. Data must be defined after all the `import` declarations and before any function definitions, `asm` or `def`. Global labels and data can be defined in multiple ways, and exported for inclusion in other modules. Data can be initialized with constant values, addresses, calculated values (must resolve to a constant), and addresses from imported modules. Here is an example using the `predef` line from the previous examples to export an initialized array of 10 function pointer elements (2 defined + null delimiter):
 ```
 export word[10] myfuncs = @exec_file, @mydef, $0000
 ```
@@ -122,7 +122,7 @@ See the section on arrays for more information.
 An advanced feature of PLASMA is the ability to write functions in native assembly language. This is a very advanced topic that is covered more in-depth in the Advanced Topics section.
 
 #### Function Definitions
-Function definitions **must** come after all other declarations. Once a function definition is written, no other global declarations are allowed. Function definitions can be `export`ed for inclusion in other modules. Functions can take parameters, passed on the evaluation stack, then copied to the local frame for easy access. Note: there is no mechanism to ensure caller and callee agrre on the number of parameters. Historically, programmers have used Hungarian Notation (http://en.wikipedia.org/wiki/Hungarian_notation) to embedd the parameter number and type in the function name itself. This is a notational aid: the compiler enforces nothing.
+Function definitions **must** come after all other declarations. Once a function definition is written, no other global declarations are allowed. Function definitions can be `export`ed for inclusion in other modules. Functions can take parameters, passed on the evaluation stack, then copied to the local frame for easy access. Note: there is no mechanism to ensure caller and callee agree on the number of parameters. Historically, programmers have used Hungarian Notation (http://en.wikipedia.org/wiki/Hungarian_notation) to embedd the parameter number and type in the function name itself. This is a notational aid; the compiler enforces nothing.
 
 Function definitions are completed with the `end` statement. All definitions return a value, even if not specified in the source. A return value of zero will be inserted by the compiler at the `end` of a definition (or a `return` statement without a value).
 
