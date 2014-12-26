@@ -104,7 +104,7 @@ int idlocal_add(char *name, int len, int type, int size)
     {
         parse_error("local label already defined\n");
         return (0);
-    }    
+    }
     name[len] = '\0';
     emit_idlocal(name, localsize);
     name[len] = c;
@@ -135,7 +135,7 @@ int idglobal_add(char *name, int len, int type, int size)
     {
         parse_error("global label already defined\n");
         return (0);
-    }    
+    }
     name[len] = '\0';
     name[len] = c;
     idglobal_name[globals][0] = len;
@@ -274,7 +274,7 @@ char *tag_string(int tag, int type)
 {
     static char str[16];
     char t;
-    
+
     if (type & EXTERN_TYPE)
         t = 'X';
     else if (type & DEF_TYPE)
@@ -371,7 +371,7 @@ void emit_rld(void)
 void emit_esd(void)
 {
     int i;
-    
+
     printf(";\n; EXTERNAL/ENTRY SYMBOL DICTIONARY\n;\n");
     for (i = 0; i < globals; i++)
     {
@@ -632,7 +632,7 @@ void emit_globaladdr(int tag, int offset, int type)
     int fixup = fixup_new(tag, type, FIXUP_WORD);
     char *taglbl = tag_string(tag, type);
     printf("\t%s\t$26\t\t\t; LA\t%s+%d\n", DB, taglbl, offset);
-    printf("_F%03d%c\t%s\t%s+%d\t\t\n", fixup, LBL, DW, type & EXTERN_TYPE ? "" : taglbl, offset);
+    printf("_F%03d%c\t%s\t%s+%d\t\t\n", fixup, LBL, DW, type & EXTERN_TYPE ? "0" : taglbl, offset);
 }
 void emit_indexbyte(void)
 {

@@ -51,7 +51,7 @@ t_token keywords[] = {
 void parse_error(char *errormsg)
 {
     char *error_carrot = statement;
-    
+
     fprintf(stderr, "\n%4d: %s\n      ", lineno, statement);
     for (error_carrot = statement; error_carrot != tokenstr; error_carrot++)
         putc(*error_carrot == '\t' ? '\t' : ' ', stderr);
@@ -220,6 +220,9 @@ t_token scan(void)
                     case '\'':
                         *scanpos = '\'';
                         break;
+                    case '\"':
+                        *scanpos = '\"';
+                        break;
                     case '\\':
                         *scanpos = '\\';
                         break;
@@ -233,7 +236,7 @@ t_token scan(void)
                 for (scanshift = scanpos + 1; *scanshift; scanshift++)
                     scanshift[0] = scanshift[1];
             }
-            else
+//            else
                 scanpos++;
         }
         if (!*scanpos++)
