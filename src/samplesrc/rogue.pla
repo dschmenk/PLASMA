@@ -1,7 +1,7 @@
 import STDLIB
   predef syscall, call, memset, getc, putc, puts, putln
   predef memset, memcpy
-  predef heapmark, heapallocallign, heapalloc, heaprelease, heapavail
+  predef heapmark, heapallocalign, heapalloc, heaprelease, heapavail
   byte MACHID
 end
 
@@ -10,8 +10,8 @@ import ROGUEMAP
   const ycentr     = 12
   const scrnwidth  = 40
   const scrnheight = 22
-  const maprows    = 21
-  const mapcols    = 32
+  const maprows    = 64
+  const mapcols    = 64
   const mapsize    = maprows*mapcols
 
   const FLOOR_TILE  = '.'
@@ -32,14 +32,17 @@ import ROGUEMAP
   const INV_TILE    = $3F
   const MAP_TILE    = $7F
 
-  predef puti, toupper
   predef loadmap, getmaptile, setmaptile, updtmaptile, lighttorches, drawmap, drawvisentity
-  word rnd, getkb, home, gotoxy, tone
 end
 
 import ROGUECOMBAT
   predef fight
   word entity, entities
+end
+
+import ROGUEIO
+  predef puti, toupper
+  word rnd, getkb, home, gotoxy, tone
 end
 
 const FALSE = 0
@@ -84,8 +87,8 @@ struc t_player
   byte[32] name[32]
 end
 
-byte player = 8   // xpos
-byte        = 2   // ypos
+byte player = 0   // xpos
+byte        = 0   // ypos
 byte        = 4   // angle
 byte        = 4   // lamp
 byte        = 1   // fov
@@ -129,7 +132,6 @@ byte keystr   = "Key"
 // Messages
 //
 
-byte initstr      = "Initializing..."
 byte quitstr      = "Are you sure you want to quit?"
 byte youmadeitstr = "You made it out alive with $"
 byte youdiedstr   = "You perished inside the catacombs :-("
@@ -144,6 +146,10 @@ def abs(i)
   fin
   return i
 end
+
+//
+// Sound functions
+//
 
 def ouch
   tone(128,5)
@@ -240,33 +246,42 @@ def findentities
     for xmap = 2 to mapcols - 2
       what = 0
       when getmaptile(xmap, ymap) & MAP_TILE
-	is 'R' // Rogue
-	  what = what + 1
-	is 'Z' // Zombie
-	  what = what + 1
+        is ENTER_TILE
+          player.xpos = xmap
+          player.ypos = ymap
+          if getmaptile(xmap, ymap - 1) & MAP_TILE == FLOOR_TILE
+            player.angle = 0
+          else
+            player.angle = 4
+          fin
+          break
+	    is 'R' // Rogue
+	      what = what + 1
+	    is 'Z' // Zombie
+	      what = what + 1
         is 'O' // Ogre
-	  what = what + 1
-	is 'T' // Thief
-	  newother         = heapalloc(t_other)
-	  newother->xpos   = xmap
-	  newother->ypos   = ymap
-	  newother->kind   = what
-	  newother->tileid = ^(entity[what] + 1) // First character of name string
-	  newother->power  = ^(entity[what] + ^entity[what] + 1)
-	  newother->life   = 100
-	  //
-	  // Insert into head of entities list
-	  //
-	  newother=>prev_other = 0
-	  newother=>next_other = entities
-	  if entities
-	    entities=>prev_other = newother
-	  fin
-	  entities = newother
-	  //
-	  // Clear entity from map, replace with floor
-	  //
-	  setmaptile(xmap, ymap, FLOOR_TILE)
+	      what = what + 1
+	    is 'T' // Thief
+	      newother         = heapalloc(t_other)
+	      newother->xpos   = xmap
+	      newother->ypos   = ymap
+	      newother->kind   = what
+	      newother->tileid = ^(entity[what] + 1) // First character of name string
+	      newother->power  = ^(entity[what] + ^entity[what] + 1)
+	      newother->life   = 100
+	      //
+	      // Insert into head of entities list
+	      //
+	      newother=>prev_other = 0
+	      newother=>next_other = entities
+	      if entities
+	        entities=>prev_other = newother
+	      fin
+	      entities = newother
+	      //
+	      // Clear entity from map, replace with floor
+	      //
+	      setmaptile(xmap, ymap, FLOOR_TILE)
       wend
     next
   next
@@ -559,7 +574,6 @@ end
 // Main loop
 //
 
-puts(@initstr)
 loadmap
 findentities
 lighttorches

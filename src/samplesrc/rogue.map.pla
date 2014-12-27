@@ -1,18 +1,22 @@
 //
-// Module don't free memory
+// Map module
 //
 
 import STDLIB
-    predef syscall, call, getc, putc, puts, putln
-    predef memset, memcpy, modaddr
-    predef heapmark, heapallocallign, heapalloc, heaprelease, heapavail
-    byte MACHID
+  predef syscall, call, getc, putc, puts, putln
+  predef memset, memcpy, modaddr
+  predef heapmark, heapallocalign, heapalloc, heaprelease, heapavail
+  byte MACHID
 end
 
-const modkeep     = $2000
-const modinitkeep = $4000
+import ROGUEIO
+  const O_READ       = 1
+  const O_WRITE      = 2
+  const O_READ_WRITE = 3
 
-byte stdlib[]  = "STDLIB"
+  predef puti, toupper
+  word rnd, getkb, home, gotoxy, tone, open, read, close
+end
 
 const FALSE = 0
 const TRUE  = not FALSE
@@ -106,9 +110,10 @@ byte = 204,185,205,187,206,189,208,191,210,194,212,213,214,215,216,217,218,219,2
 
 byte[beampts] vispix = 1
 
-const maprows = 21
-const mapcols = 32
-const mapsize = maprows*mapcols
+const rowshift = 6
+const maprows  = 64
+const mapcols  = 64
+const mapsize  = maprows*mapcols
 
 const FLOOR_TILE  = '.'
 const TORCH_TILE  = '*'
@@ -128,30 +133,31 @@ const LIT_TILE    = $80
 const INV_TILE    = $3F
 const MAP_TILE    = $7F
 
-byte[] map
-byte = "###############################"
-byte = "###  .#[-]#.......#&.....O&..*#"
-byte = "##  ..*...*...###T#.....####..#"
-byte = "##  ...###.T...##.#...&...##..#"
-byte = "## ....###.&....#.#.......##..#"
-byte = "#  .............#.+.......##..#"
-byte = "# T.....T.......#.#.T.....##..#"
-byte = "#......&#.....&.#.:.......##..#"
-byte = "#......###....###.:.......##..#"
-byte = "###.....#.....###.#......&##..#"
-byte = "##&.....*...#####.##:#:#:###..#"
-byte = "#######......####.#&........Z*#"
-byte = "####.O......#####.##*....######"
-byte = "##..........#####.##.....##[=]#"
-byte = "###....&#....&###.##.....#..R.#"
-byte = "##.....###...####.###....#$...#"
-byte = "###&...T#.....###.#&#....###%##"
-byte = "#,##....*....####.##.>>.##*..*#"
-byte = "#.######+########.##<<<..##...#"
-byte = "#...............&.##>>>>>..Z.&#"
-byte = "###############################"
+//byte[] map
+//byte = "###############################"
+//byte = "###  .#[-]#.......#&.....O&..*#"
+//byte = "##  ..*...*...###T#.....####..#"
+//byte = "##  ...###.T...##.#...&...##..#"
+//byte = "## ....###.&....#.#.......##..#"
+//byte = "#  .............#.+.......##..#"
+//byte = "# T.....T.......#.#.T.....##..#"
+//byte = "#......&#.....&.#.:.......##..#"
+//byte = "#......###....###.:.......##..#"
+//byte = "###.....#.....###.#......&##..#"
+//byte = "##&.....*...#####.##:#:#:###..#"
+//byte = "#######......####.#&........Z*#"
+//byte = "####.O......#####.##*....######"
+//byte = "##..........#####.##.....##[=]#"
+//byte = "###....&#....&###.##.....#..R.#"
+//byte = "##.....###...####.###....#$...#"
+//byte = "###&...T#.....###.#&#....###%##"
+//byte = "#,##....*....####.##.>>.##*..*#"
+//byte = "#.######+########.##<<<..##...#"
+//byte = "#...............&.##>>>>>..Z.&#"
+//byte = "###############################"
 
-word viewmap = 0
+byte catacomb = "CATACOMB"
+word map, viewmap
 
 const xcentr     = 20
 const ycentr     = 12
@@ -176,143 +182,33 @@ word = @linebuffer, @linebuffer, @linebuffer, @linebuffer, @linebuffer
 word = @linebuffer, @linebuffer, @linebuffer, @linebuffer, @linebuffer
 
 //
-// Machine specific routines
-//
-
-export word rnd
-export word getkb
-export word tone
-export word home
-export word gotoxy
-
-byte noapple1 = "APPLE 1 NOT SUPPORTED."
-byte apple2   = "Apple II "
-byte apple3   = "Apple /// "
-
-const ENV_REG = $FFDF
-
-const SPEAKER = $C030
-
-const a2rndnum = $4E // ZP location of RND
-const a2rndl   = $4E
-const a2rndh   = $4F
-
-word a3rndnum = 12345
-byte devcons
-
-def a3rnd
-  a3rndnum = (a3rndnum << 1) + a3rndnum + 123
-  return *a3rndnum & $7FFF
-end
-
-def a2rnd
-  *a2rndnum = (*a2rndnum << 1) + *a2rndnum + 123
-  return *a2rndnum & $7FFF
-end
-
-def a2getkb
-  return getc()
-end
-
-def a2tone(duration, delay)
-  byte i
-
-  while duration
-    ^SPEAKER
-    for i = 0 to delay
-    next
-    duration = duration - 1
-  loop
-end
-
-def a3tone(duration, pitch)
-  byte env
-
-  env = ^ENV_REG
-  ^ENV_REG = env | $C0
-  a2tone(duration, pitch)
-  ^ENV_REG = env
-end
-
-//
-// Apple /// console routines
-//
-
-def dev_status(devnum, code, list)
-  byte params[5]
-
-  params.0 = 3
-  params.1 = devnum
-  params.2 = code
-  params:3 = list
-  return syscall($82, @params)
-end
-def a3keypressed
-  byte count
-  dev_status(devcons, 5, @count)
-  return count
-end
-
-def a3getkb
-  while not a3keypressed
-    a3rndnum = a3rndnum + 123
-  loop
-  return getc()
-end
-
-def a3home
-    return putc(28)
-end
-
-def a3gotoxy(ch, cv)
-    putc(24)
-    putc(ch)
-    putc(25)
-    return putc(cv)
-end
-
-//
-// Apple ][ console routines
-//
-
-def a2home
-    return call($FC58, 0, 0, 0, 0) // home()
-end
-
-def a2gotoxy(x, y)
-    ^$24 = x + ^$20
-    return call($FB5B, y + ^$22, 0, 0, 0)
-end
-
-export def puti(i)
-  if i < 0; putc('-'); i = -i; fin
-  if i < 10
-    putc(i + '0')
-  else
-    puti(i / 10)
-    putc(i % 10 + '0')
-  fin
-end
-
-export def toupper(c)
-  if c >= 'a' and c <= 'z'
-    c = c - $20
-  fin
-  return c
-end
-
-//
 // Load map
 //
 
 export def loadmap
+  byte mapref, row
+
   //
   // Init the view map
   //
   if not viewmap
-    viewmap = heapalloc(maprows * mapcols)
+    viewmap = heapalloc(mapsize)
   fin
-  memset(viewmap, maprows * mapcols, $A0A0)
+  memset(viewmap, mapsize, $A0A0)
+  //
+  // Load catacomb map from file
+  //
+  if not map
+    map = heapalloc(mapsize)
+  fin
+  memset(viewmap, mapsize, $A3A3) // Solid walls
+  mapref = open(@catacomb, O_READ)
+  if mapref
+    for row = 1 to maprows - 2
+      read(mapref, map + (row << 6) + 1, mapcols - 2)
+    next
+    close(mapref)
+  fin
 end
 
 //
@@ -320,14 +216,14 @@ end
 //
 
 export def getmaptile(xmap, ymap)
-  return map[(ymap << 5) + xmap + 1]
+  return map + (ymap << rowshift) + xmap
 end
 
 export def setmaptile(xmap, ymap, tile)
   word imap
 
-  imap = (ymap << 5) + xmap + 1
-  map[imap] = tile
+  imap = (ymap << rowshift) + xmap
+  ^(map + imap) = tile
   if ^(viewmap + imap) <> $A0
     ^(viewmap + imap) = tile | VIEWED_TILE
   fin
@@ -336,12 +232,13 @@ end
 export def updtmaptile(xmap, ymap, tile)
   word imap
 
-  imap = (ymap << 5) + xmap + 1
-  map[imap] = (map[imap] & LIT_TILE) | tile
+  imap = (ymap << rowshift) + xmap
+  ^(map + imap) = (^(map + imap) & LIT_TILE) | tile
   if ^(viewmap + imap) <> $A0
     ^(viewmap + imap) = tile | VIEWED_TILE
   fin
 end
+
 //
 // Light torches in map
 //
@@ -351,15 +248,15 @@ export def lighttorches
   byte xmap, ymap, xt, yt
 
   for ymap = 1 to maprows - 2
-    for xmap = 2 to mapcols - 2
-      imap = (ymap << 5) + xmap
-      if map[imap] & MAP_TILE == TORCH_TILE
+    for xmap = 1 to mapcols - 2
+      imap = (ymap << rowshift) + xmap
+      if ^(map + imap) & MAP_TILE == TORCH_TILE
         for yt = ymap - 1 to ymap + 1
-	  for xt = xmap - 1 to xmap + 1
-            tmap = (yt << 5) + xt
-	    map[tmap] = map[tmap] | LIT_TILE
-	  next
-	next
+	  	  for xt = xmap - 1 to xmap + 1
+            tmap = (yt << rowshift) + xt
+	    	^(map + tmap) = ^(map + tmap) | LIT_TILE
+	  	  next
+		next
       fin
     next
   next
@@ -388,12 +285,12 @@ export def drawmap(xorg, yorg, viewfield, viewdir, lightdist, viewdist)
   // Draw background map if in light
   //
   darkness = 1
-  imap     = (yorg << 5) + xorg + 1
-  if map[imap] & LIT_TILE or lightdist
+  imap     = (yorg << rowshift) + xorg
+  if ^(map + imap) & LIT_TILE or lightdist
     //
     // Update current spot in viewmap
     //
-    ^(viewmap + imap) =  map[imap] | VIEWED_TILE
+    ^(viewmap + imap) = ^(map + imap) | VIEWED_TILE
     //
     // Draw the viewmap
     //
@@ -407,12 +304,12 @@ export def drawmap(xorg, yorg, viewfield, viewdir, lightdist, viewdist)
       xscr = 0
     fin
     if xscr + l > scrnwidth
-      l    = scrnwidth - xscr
+      l = scrnwidth - xscr
     fin
     for yscr = 0 to scrnheight
       ymap = yscr - ycentr + yorg
       if ymap >= 0 and ymap < maprows
-        memcpy(screen[yscr] + xscr, viewmap  + (ymap << 5) + xmap + 1, l)
+        memcpy(screen[yscr] + xscr, viewmap + (ymap << rowshift) + xmap, l)
       fin
     next
     darkness = 0
@@ -433,8 +330,8 @@ export def drawmap(xorg, yorg, viewfield, viewdir, lightdist, viewdist)
 	  // Check parent visiblity
 	  //
           if vispix[vbeam[l]]
-            imap = ((yorg - ybeam[l]) << 5) + xorg + xbeam[l] + 1
-            tile = map[imap]
+            imap = ((yorg - ybeam[l]) << rowshift) + xorg + xbeam[l]
+            tile = ^(map + imap)
             if tile & OPAQUE_TILE
 	      //
 	      // The view stops here
@@ -471,8 +368,8 @@ export def drawmap(xorg, yorg, viewfield, viewdir, lightdist, viewdist)
 	  // Check parent visiblity
 	  //
           if vispix[vbeam[l]]
-            imap = ((yorg - ybeam[l]) << 5) + xorg + xbeam[l] + 1
-            tile = map[imap]
+            imap = ((yorg - ybeam[l]) << rowshift) + xorg + xbeam[l]
+            tile = ^(map + imap)
             if tile & OPAQUE_TILE
 	      //
 	      // The view stops here
@@ -517,8 +414,8 @@ export def drawmap(xorg, yorg, viewfield, viewdir, lightdist, viewdist)
       is 1
         for l = 1 to dbeam[lightdist]
           if vispix[vbeam[l]]
-            imap = ((yorg - xbeam[l]) << 5) + xorg + ybeam[l] + 1
-            tile = map[imap]
+            imap = ((yorg - xbeam[l]) << rowshift) + xorg + ybeam[l]
+            tile = ^(map + imap)
             if tile & OPAQUE_TILE
               vispix[l] = 0
             else
@@ -537,8 +434,8 @@ export def drawmap(xorg, yorg, viewfield, viewdir, lightdist, viewdist)
         next
         for l = l to dbeam[viewdist]
           if vispix[vbeam[l]]
-            imap = ((yorg - xbeam[l]) << 5) + xorg + ybeam[l] + 1
-            tile = map[imap]
+            imap = ((yorg - xbeam[l]) << rowshift) + xorg + ybeam[l]
+            tile = ^(map + imap)
             if tile & OPAQUE_TILE
               vispix[l] = 0
             else
@@ -565,8 +462,8 @@ export def drawmap(xorg, yorg, viewfield, viewdir, lightdist, viewdist)
       is 2
         for l = 1 to dbeam[lightdist]
           if vispix[vbeam[l]]
-            imap = ((yorg + xbeam[l]) << 5) + xorg + ybeam[l] + 1
-            tile = map[imap]
+            imap = ((yorg + xbeam[l]) << rowshift) + xorg + ybeam[l]
+            tile = ^(map + imap)
             if tile & OPAQUE_TILE
               vispix[l] = 0
             else
@@ -585,8 +482,8 @@ export def drawmap(xorg, yorg, viewfield, viewdir, lightdist, viewdist)
         next
         for l = l to dbeam[viewdist]
           if vispix[vbeam[l]]
-            imap = ((yorg + xbeam[l]) << 5) + xorg + ybeam[l] + 1
-            tile = map[imap]
+            imap = ((yorg + xbeam[l]) << rowshift) + xorg + ybeam[l]
+            tile = ^(map + imap)
             if tile & OPAQUE_TILE
               vispix[l] = 0
             else
@@ -613,8 +510,8 @@ export def drawmap(xorg, yorg, viewfield, viewdir, lightdist, viewdist)
       is 3
         for l = 1 to dbeam[lightdist]
           if vispix[vbeam[l]]
-            imap = ((yorg + ybeam[l]) << 5) + xorg + xbeam[l] + 1
-            tile = map[imap]
+            imap = ((yorg + ybeam[l]) << rowshift) + xorg + xbeam[l]
+            tile = ^(map + imap)
             if tile & OPAQUE_TILE
               vispix[l] = 0
             else
@@ -633,8 +530,8 @@ export def drawmap(xorg, yorg, viewfield, viewdir, lightdist, viewdist)
         next
         for l = l to dbeam[viewdist]
           if vispix[vbeam[l]]
-            imap = ((yorg + ybeam[l]) << 5) + xorg + xbeam[l] + 1
-            tile = map[imap]
+            imap = ((yorg + ybeam[l]) << rowshift) + xorg + xbeam[l]
+            tile = ^(map + imap)
             if tile & OPAQUE_TILE
               vispix[l] = 0
             else
@@ -661,8 +558,8 @@ export def drawmap(xorg, yorg, viewfield, viewdir, lightdist, viewdist)
       is 4
         for l = 1 to dbeam[lightdist]
           if vispix[vbeam[l]]
-            imap = ((yorg + ybeam[l]) << 5) + xorg - xbeam[l] + 1
-            tile = map[imap]
+            imap = ((yorg + ybeam[l]) << rowshift) + xorg - xbeam[l]
+            tile = ^(map + imap)
             if tile & OPAQUE_TILE
               vispix[l] = 0
             else
@@ -681,8 +578,8 @@ export def drawmap(xorg, yorg, viewfield, viewdir, lightdist, viewdist)
         next
         for l = l to dbeam[viewdist]
           if vispix[vbeam[l]]
-            imap = ((yorg + ybeam[l]) << 5) + xorg - xbeam[l] + 1
-            tile = map[imap]
+            imap = ((yorg + ybeam[l]) << rowshift) + xorg - xbeam[l]
+            tile = ^(map + imap)
             if tile & OPAQUE_TILE
               vispix[l] = 0
             else
@@ -709,8 +606,8 @@ export def drawmap(xorg, yorg, viewfield, viewdir, lightdist, viewdist)
       is 5
         for l = 1 to dbeam[lightdist]
           if vispix[vbeam[l]]
-            imap = ((yorg + xbeam[l]) << 5) + xorg - ybeam[l] + 1
-            tile = map[imap]
+            imap = ((yorg + xbeam[l]) << rowshift) + xorg - ybeam[l]
+            tile = ^(map + imap)
             if tile & OPAQUE_TILE
               vispix[l] = 0
             else
@@ -729,8 +626,8 @@ export def drawmap(xorg, yorg, viewfield, viewdir, lightdist, viewdist)
         next
         for l = l to dbeam[viewdist]
           if vispix[vbeam[l]]
-            imap = ((yorg + xbeam[l]) << 5) + xorg - ybeam[l] + 1
-            tile = map[imap]
+            imap = ((yorg + xbeam[l]) << rowshift) + xorg - ybeam[l]
+            tile = ^(map + imap)
             if tile & OPAQUE_TILE
               vispix[l] = 0
             else
@@ -757,8 +654,8 @@ export def drawmap(xorg, yorg, viewfield, viewdir, lightdist, viewdist)
       is 6
         for l = 1 to dbeam[lightdist]
           if vispix[vbeam[l]]
-            imap = ((yorg - xbeam[l]) << 5) + xorg - ybeam[l] + 1
-            tile = map[imap]
+            imap = ((yorg - xbeam[l]) << rowshift) + xorg - ybeam[l]
+            tile = ^(map + imap)
             if tile & OPAQUE_TILE
               vispix[l] = 0
             else
@@ -777,8 +674,8 @@ export def drawmap(xorg, yorg, viewfield, viewdir, lightdist, viewdist)
         next
         for l = l to dbeam[viewdist]
           if vispix[vbeam[l]]
-            imap = ((yorg - xbeam[l]) << 5) + xorg - ybeam[l] + 1
-            tile = map[imap]
+            imap = ((yorg - xbeam[l]) << rowshift) + xorg - ybeam[l]
+            tile = ^(map + imap)
             if tile & OPAQUE_TILE
               vispix[l] = 0
             else
@@ -805,8 +702,8 @@ export def drawmap(xorg, yorg, viewfield, viewdir, lightdist, viewdist)
       is 7
         for l = 1 to dbeam[lightdist]
           if vispix[vbeam[l]]
-            imap = ((yorg - ybeam[l]) << 5) + xorg - xbeam[l] + 1
-            tile = map[imap]
+            imap = ((yorg - ybeam[l]) << rowshift) + xorg - xbeam[l]
+            tile = ^(map + imap)
             if tile & OPAQUE_TILE
               vispix[l] = 0
             else
@@ -824,9 +721,9 @@ export def drawmap(xorg, yorg, viewfield, viewdir, lightdist, viewdist)
           fin
         next
         for l = l to dbeam[viewdist]
-          imap = ((yorg - ybeam[l]) << 5) + xorg - xbeam[l] + 1
+          imap = ((yorg - ybeam[l]) << rowshift) + xorg - xbeam[l]
           if vispix[vbeam[l]]
-            tile = map[imap]
+            tile = ^(map + imap)
             if tile & OPAQUE_TILE
               vispix[l] = 0
             else
@@ -864,31 +761,5 @@ export def drawvisentity(xofst, yofst, tile)
     screen.[ycentr+yofst, xcentr+xofst] = tile
   fin
 end
-
-//
-// Set machine specific routines
-//
-
-when MACHID & $C8
-  is $08 // Apple 1
-    puts(@noapple1)
-    return -1
-  is $C0 // Apple ///
-    puts(@apple3)
-    rnd     = @a3rnd
-    getkb   = @a3getkb
-    home    = @a3home
-    gotoxy  = @a3gotoxy
-    tone    = @a3tone
-    devcons = modaddr(@stdlib).5 // devcons variable from STDLIB
-    break
-  otherwise // Apple ][
-    puts(@apple2)
-    rnd     = @a2rnd
-    getkb   = @a2getkb
-    home    = @a2home
-    gotoxy  = @a2gotoxy
-    tone    = @a2tone
-wend
 
 done
