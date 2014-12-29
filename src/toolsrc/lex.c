@@ -236,8 +236,7 @@ t_token scan(void)
                 for (scanshift = scanpos + 1; *scanshift; scanshift++)
                     scanshift[0] = scanshift[1];
             }
-//            else
-                scanpos++;
+            scanpos++;
         }
         if (!*scanpos++)
         {
