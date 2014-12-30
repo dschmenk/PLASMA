@@ -15,6 +15,7 @@ import ROGUEMAP
   const mapsize    = maprows*mapcols
 
   const FLOOR_TILE  = '.'
+  const WALL_TILE   = '#'
   const TORCH_TILE  = '*'
   const PIT_TILE    = ' '
   const DOOR_TILE   = '+'
@@ -22,6 +23,7 @@ import ROGUEMAP
   const WATER1_TILE = '>'
   const WATER2_TILE = '<'
   const KEY_TILE    = ','
+  const RAFT_TILE   = '@'
   const GOLD_TILE   = '$'
   const FOOD_TILE   = '&'
   const ENTER_TILE  = '-'
@@ -55,7 +57,8 @@ word xdir =  0,  1,  1,  1,  0, -1, -1, -1
 word ydir = -1, -1,  0,  1,  1,  1,  0, -1
 byte vplayer = '^', '\\', '>', '/', 'v', '\\', '<', '/'
 byte totaldarkness = 0
-
+byte level = 0
+word free_entities
 //
 // Power-ups
 //
@@ -84,6 +87,7 @@ struc t_player
   word     oil
   byte     gold
   byte     key
+  byte     raft
   byte[16] name
 end
 
@@ -98,6 +102,7 @@ byte        = 100 // energy
 word        = 500 // oil
 byte        = 0   // gold
 byte        = 0   // key
+byte        = 0   // raft
 byte[16]    = "Player"
 
 predef moveplayer
@@ -122,11 +127,12 @@ end
 
 const statusline = 23
 
-byte helthstr = "Helth:"
-byte enrgystr = "Enrgy:"
+byte helthstr = "Hlth:"
+byte enrgystr = "NRG:"
 byte oilstr   = "Oil:"
-byte goldstr  = "Gold:"
+byte goldstr  = "Gld:"
 byte keystr   = "Key"
+byte raftstr  = "Flt"
 
 //
 // Messages
@@ -134,11 +140,12 @@ byte keystr   = "Key"
 
 word instr
 byte namestr      = "\nGreetings Warrior,\n  what is your name"
-byte prepstr      = "\nPrepare"
+byte prepstr      = "\nPrepare."
 byte quitstr      = "Are you sure you want to quit?"
 byte youmadeitstr = "You made it out alive with $"
 byte youdiedstr   = "You perished inside the catacombs :-("
 byte againstr     = "\n\nPlay again by typing: +rogue\n"
+
 //
 // Utility functions
 //
@@ -171,6 +178,21 @@ def fall
   next
 end
 
+def drown
+  word i
+
+  tone(10,20)
+  tone(10,1)
+  for i = 0 to 1000
+  next
+  tone(10,25)
+  tone(10,2)
+  for i = 0 to 1000
+  next
+  tone(10,30)
+  tone(10,3)
+end
+
 def groan
   byte i
 
@@ -187,15 +209,19 @@ def status
   gotoxy(0, statusline)
   puts(@helthstr)
   puti(player.health)
-  gotoxy(10, statusline)
+  gotoxy(9, statusline)
   puts(@enrgystr)
   puti(player.energy)
-  gotoxy(20, statusline)
+  gotoxy(17, statusline)
   puts(@oilstr)
   puti(player:oil/10)
-  gotoxy(28, statusline)
+  gotoxy(25, statusline)
   puts(@goldstr)
   puti(player.gold)
+  if player.raft
+    gotoxy(32, statusline)
+    puts(@raftstr)
+  fin
   if player.key
     gotoxy(36, statusline)
     puts(@keystr)
@@ -211,16 +237,28 @@ end
 //
 
 def moveplayer(dir)
-  player.xpos = player.xpos + dir * xdir[player.angle]
-  player.ypos = player.ypos + dir * ydir[player.angle]
-  when getmaptile(player.xpos, player.ypos) & MAP_TILE
+  byte xmove, ymove
+  
+  xmove = player.xpos + dir * xdir[player.angle]
+  ymove = player.ypos + dir * ydir[player.angle]
+  when getmaptile(xmove, ymove) & MAP_TILE
     is PIT_TILE
       fall
       player.energy = 0
       player.health = 0
+      break
+    is WATER1_TILE
+    is WATER2_TILE
+      if not player.raft
+        drown
+        player.energy = 0
+        player.health = 0
+        break
+      fin
     is FLOOR_TILE
     is TORCH_TILE
     is KEY_TILE
+    is RAFT_TILE
     is GOLD_TILE
     is FOOD_TILE
       if player.energy < 10
@@ -229,10 +267,10 @@ def moveplayer(dir)
       if player.energy
         player.energy = player.energy - 1
       fin
+      player.xpos = xmove
+      player.ypos = ymove
       break
     otherwise
-      player.xpos = player.xpos - dir * xdir[player.angle]
-      player.ypos = player.ypos - dir * ydir[player.angle]
       ouch
   wend
 end
@@ -258,33 +296,33 @@ def findentities
             player.angle = 4
           fin
           break
-	    is 'R' // Rogue
-	      what = what + 1
-	    is 'Z' // Zombie
-	      what = what + 1
+	is 'R' // Rogue
+	  what = what + 1
+	is 'Z' // Zombie
+	  what = what + 1
         is 'O' // Ogre
-	      what = what + 1
-	    is 'T' // Thief
-	      newother         = heapalloc(t_other)
-	      newother->xpos   = xmap
-	      newother->ypos   = ymap
-	      newother->kind   = what
-	      newother->tileid = ^(entity[what] + 1) // First character of name string
-	      newother->power  = ^(entity[what] + ^entity[what] + 1)
-	      newother->life   = 100
-	      //
-	      // Insert into head of entities list
-	      //
-	      newother=>prev_other = 0
-	      newother=>next_other = entities
-	      if entities
-	        entities=>prev_other = newother
-	      fin
-	      entities = newother
-	      //
-	      // Clear entity from map, replace with floor
-	      //
-	      setmaptile(xmap, ymap, FLOOR_TILE)
+	  what = what + 1
+        is 'T' // Thief
+	  newother         = heapalloc(t_other)
+	  newother->xpos   = xmap
+	  newother->ypos   = ymap
+	  newother->kind   = what
+	  newother->tileid = ^(entity[what] + 1) // First character of name string
+	  newother->power  = ^(entity[what] + ^entity[what] + 1)
+	  newother->life   = 100
+	  //
+	  // Insert into head of entities list
+	  //
+	  newother=>prev_other = 0
+	  newother=>next_other = entities
+	  if entities
+	    entities=>prev_other = newother
+	  fin
+	  entities = newother
+	  //
+	  // Clear entity from map, replace with floor
+	  //
+	  setmaptile(xmap, ymap, FLOOR_TILE)
       wend
     next
     if not (ymap & 7)
@@ -507,36 +545,45 @@ def play
           updtmaptile(player.xpos, player.ypos, FLOOR_TILE)
 	  gotit
 	  break
+        is RAFT_TILE
+          player.raft = 1
+          updtmaptile(player.xpos, player.ypos, FLOOR_TILE)
+	  gotit
+	  break
         is GOLD_TILE
           player.gold = player.gold + 1
           updtmaptile(player.xpos, player.ypos, FLOOR_TILE)
 	  gotit
           break
         is TORCH_TILE
-          player:oil = player:oil + TORCH_OIL
-	  if player:oil > 1000
-	    player:oil = 1000
-	  fin
-          setmaptile(player.xpos, player.ypos, FLOOR_TILE)
-          for yt = player.ypos - 1 to player.ypos + 1
-  	    for xt = player.xpos - 1 to player.xpos + 1
-	      setmaptile(xt, yt, getmaptile(xt, yt) & MAP_TILE)
+	  if player.oil < 1000
+            player:oil = player:oil + TORCH_OIL
+	    if player:oil > 1000
+	      player:oil = 1000
+	    fin
+            setmaptile(player.xpos, player.ypos, FLOOR_TILE)
+            for yt = player.ypos - 1 to player.ypos + 1
+  	      for xt = player.xpos - 1 to player.xpos + 1
+	        setmaptile(xt, yt, getmaptile(xt, yt) & MAP_TILE)
+	      next
 	    next
-	  next
-	  gotit
+	    gotit
+	  fin
           break
         is FOOD_TILE
-  	  player.health = player.health + MANA/2
-	  if player.health > 100
-	    player.health = 100
+	  if player.health < 100 or player.energy < 100
+    	    player.health = player.health + MANA/2
+	    if player.health > 100
+	      player.health = 100
+	    fin
+            player.energy = player.energy + MANA
+	    if player.energy > 100
+	      player.energy = 100
+	    fin
+	    updtmaptile(player.xpos, player.ypos, FLOOR_TILE)
+	    player.fov = 1
+	    gotit
 	  fin
-          player.energy = player.energy + MANA
-	  if player.energy > 100
-	    player.energy = 100
-	  fin
-	  updtmaptile(player.xpos, player.ypos, FLOOR_TILE)
-	  player.fov = 1
-	  gotit
           break
       wend
       break
@@ -573,35 +620,44 @@ def play
     player:oil  = 0
     player.lamp = 0
   fin
-  return TRUE
+  return player.health
 end
 
 //
 // Main loop
 //
 
-loadmap
 puts(@namestr)
 instr = gets($BA)
 if ^instr > 15
   ^instr = 15
 fin
 memcpy(@player.name, instr, ^instr + 1)
-puts(@prepstr)
-findentities
-lighttorches
-repeat
-  moveentities(player.lamp or getmaptile(player.xpos, player.ypos) & LIT_TILE))
-  totaldarkness = drawmap(player.xpos, player.ypos, player.fov, player.angle, player.lamp, maxview)
-  if not totaldarkness
-    drawentities
-    gotoxy(xcentr, ycentr)
-    putc(vplayer[player.angle])
+while loadmap(level)
+  puts(@prepstr)
+  free_entities = heapmark()
+  findentities
+  lighttorches
+  repeat
+    moveentities(player.lamp or getmaptile(player.xpos, player.ypos) & LIT_TILE))
+    totaldarkness = drawmap(player.xpos, player.ypos, player.fov, player.angle, player.lamp, maxview)
+    if not totaldarkness
+      drawentities
+      gotoxy(xcentr, ycentr)
+      putc(vplayer[player.angle])
+    fin
+    status
+  until not play
+  heaprelease(free_entities)
+  entities = 0
+  player.key = 0
+  level = level + 1
+  clearstatus
+  gotoxy(0, statusline)
+  if player.health == 0
+    break
   fin
-  status
-until not play or player.health == 0
-clearstatus
-gotoxy(0, statusline)
+loop
 if player.health > 0
   puts(@youmadeitstr)
   puti(player.gold)

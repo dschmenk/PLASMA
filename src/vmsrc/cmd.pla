@@ -774,11 +774,11 @@ def allocalignheap(size, pow2, freeaddr)
     return addr
 end
 def markheap
-    return heap//
+    return heap
 end
 def releaseheap(newheap)
-    heap = newheap//
-    return @newheap - heap//
+    heap = newheap
+    return @newheap - heap
 end
 def allocxheap(size)
     word xaddr
@@ -903,71 +903,71 @@ def loadmod(mod)
     refnum = open(@filename, iobuffer)
     if refnum > 0
         rdlen   = read(refnum, @header, 128)
-	    modsize = header:0
-	    moddep  = @header.1
-	    defofst = modsize
+	modsize = header:0
+	moddep  = @header.1
+	defofst = modsize
         init    = 0
         if rdlen > 4 and header:2 == $DA7E // DAVE = magic number :-)
             //
             // This is an EXTended RELocatable (data+bytecode) module.
             //
-	        systemflags = header:4 | systemflags
+	    systemflags = header:4 | systemflags
             defofst  = header:6
             defcnt   = header:8
             init     = header:10
             moddep   = @header.12
-	        //
-	        // Load module dependencies.
-	        //
+	    //
+	    // Load module dependencies.
+	    //
             while ^moddep
                 if !lookupmod(moddep)
-		            close(refnum)
-	                refnum = 0
+		    close(refnum)
+		    refnum = 0
                     if loadmod(moddep) < 0
-	      	            return -perr
-		            fin
+		        return -perr
+		    fin
                 fin
                 moddep = moddep + dcitos(moddep, @str)
             loop
+	    //
+	    // Init def table.
+	    //
+	    deftbl   = allocheap(defcnt * 5 + 1)
+	    deflast  = deftbl
+	    ^deflast = 0
+	    if !refnum
 	        //
-	        // Init def table.
-	        //
-	        deftbl   = allocheap(defcnt * 5 + 1)
-	        deflast  = deftbl
-	        ^deflast = 0
-	        if !refnum
-	            //
-		        // Reset read pointer.
-		        //
-	            refnum = open(@filename, iobuffer)
-		        rdlen  = read(refnum, @header, 128)
-	        fin
+		// Reset read pointer.
+		//
+		refnum = open(@filename, iobuffer)
+		rdlen  = read(refnum, @header, 128)
+	    fin
         fin
-	    //
-	    // Alloc heap space for relocated module (data + bytecode).
-	    //
-	    moddep  = moddep  + 1
-	    modfix  = moddep  - @header.2 // Adjust to skip header
-	    modsize = modsize - modfix
-	    rdlen   = rdlen   - modfix - 2
-	    modaddr = allocheap(modsize)
-	    memcpy(modaddr, moddep, rdlen)
-	    //
-	    // Read in remainder of module into memory for fixups.
-	    //
-	    addr = modaddr//
+	//
+	// Alloc heap space for relocated module (data + bytecode).
+	//
+	moddep  = moddep  + 1
+	modfix  = moddep  - @header.2 // Adjust to skip header
+	modsize = modsize - modfix
+	rdlen   = rdlen   - modfix - 2
+	modaddr = allocheap(modsize)
+	memcpy(modaddr, moddep, rdlen)
+	//
+	// Read in remainder of module into memory for fixups.
+	//
+	addr = modaddr//
         repeat
             addr  = addr + rdlen
             rdlen = read(refnum, addr, 4096)
         until rdlen <= 0
         close(refnum)
-	    //
-	    // Add module to symbol table.
-	    //
-	    addmod(mod, modaddr)
-	    //
-	    // Apply all fixups and symbol import/export.
-	    //
+	//
+	// Add module to symbol table.
+	//
+	addmod(mod, modaddr)
+	//
+	// Apply all fixups and symbol import/export.
+	//
         modfix   = modaddr - modfix
         bytecode = defofst + modfix - MODADDR
         modend   = modaddr + modsize
@@ -975,28 +975,28 @@ def loadmod(mod)
         esd      = rld     // Extern+Entry Symbol Directory
         while ^esd        // Scan to end of ESD
             esd = esd + 4
-	    loop
+	loop
         esd = esd + 1
-	    //
-	    // Locate bytecode defs in appropriate bank.
-	    //
-	    if ^MACHID & $30 == $30
-	        defbank = 1
-	        defaddr = allocxheap(rld - bytecode)
-	        modend  = bytecode
-	    else
-	        defbank = 0
-	        defaddr = bytecode
-	    fin
+	//
+	// Locate bytecode defs in appropriate bank.
+	//
+	if ^MACHID & $30 == $30
+	    defbank = 1
+	    defaddr = allocxheap(rld - bytecode)
+	    modend  = bytecode
+	else
+	    defbank = 0
+	    defaddr = bytecode
+	fin
         //
         // Run through the Re-Location Dictionary.
         //
         while ^rld
             if ^rld == $02
-	            //
-		        // This is a bytcode def entry - add it to the def directory.
-		        //
-		        adddef(defbank, rld=>1 - defofst + defaddr, @deflast)
+	    	//
+		// This is a bytcode def entry - add it to the def directory.
+		//
+		adddef(defbank, rld=>1 - defofst + defaddr, @deflast)
             else
                 addr = rld=>1 + modfix
                 if uword_isge(addr, modaddr) // Skip fixups to header
@@ -1025,32 +1025,32 @@ def loadmod(mod)
             fin
             rld = rld + 4
         loop
-	    //
+	//
         // Run through the External/Entry Symbol Directory.
-	    //
+	//
         while ^esd
             sym = esd
             esd = esd + dcitos(esd, @str)
             if ^esd & $08
-		        //
+	    	//
                 // EXPORT symbol - add it to the global symbol table.
-		        //
+		//
                 addr = esd=>1 + modfix - MODADDR
                 if uword_isge(addr, bytecode)
-		            //
-		            // Use the def directory address for bytecode.
-		            //
+		    //
+		    // Use the def directory address for bytecode.
+		    //
                     addr = lookupdef(addr - bytecode + defaddr, deftbl)
                 fin
                 addsym(sym, addr)
             fin
             esd = esd + 3
         loop
-	    if defbank
-	        //
-	        // Move bytecode to AUX bank.
-	        //
-	        memxcpy(defaddr, bytecode, modsize - (bytecode - modaddr))
+	if defbank
+	    //
+	    // Move bytecode to AUX bank.
+	    //
+	    memxcpy(defaddr, bytecode, modsize - (bytecode - modaddr))
        	fin
     fin
     if perr
@@ -1062,18 +1062,18 @@ def loadmod(mod)
     fixup = 0 // This is repurposed for the return code
     if init
         fixup = adddef(defbank, init - defofst + defaddr, @deflast)()
-	    if fixup < modinitkeep
-	        //
-	        // Free init routine unless initkeep
-	        //
-	        if defbank
-	            xheap  = init - defofst + defaddr
-            else
-	            modend = init - defofst + defaddr
-	        fin
+	if fixup < modinitkeep
+	    //
+	    // Free init routine unless initkeep
+	    //
+	    if defbank
+	        xheap  = init - defofst + defaddr
 	    else
-	        fixup = fixup & ~modinitkeep
+	        modend = init - defofst + defaddr
 	    fin
+	else
+	    fixup = fixup & ~modinitkeep
+	fin
     fin
     //
     // Free up the end-of-module in main memory.

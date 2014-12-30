@@ -19,7 +19,7 @@ import ROGUEIO
 end
 
 const FALSE = 0
-const TRUE  = not FALSE
+const TRUE  = 1
 
 //
 // Octant beam parameters
@@ -124,6 +124,7 @@ const LOCKED_TILE = '%'
 const WATER1_TILE = '>'
 const WATER2_TILE = '<'
 const KEY_TILE    = ','
+const RAFT_TILE   = '@'
 const GOLD_TILE   = '$'
 const FOOD_TILE   = '&'
 const ENTER_TILE  = '-'
@@ -134,30 +135,7 @@ const LIT_TILE    = $80
 const INV_TILE    = $3F
 const MAP_TILE    = $7F
 
-//byte[] map
-//byte = "###############################"
-//byte = "###  .#[-]#.......#&.....O&..*#"
-//byte = "##  ..*...*...###T#.....####..#"
-//byte = "##  ...###.T...##.#...&...##..#"
-//byte = "## ....###.&....#.#.......##..#"
-//byte = "#  .............#.+.......##..#"
-//byte = "# T.....T.......#.#.T.....##..#"
-//byte = "#......&#.....&.#.:.......##..#"
-//byte = "#......###....###.:.......##..#"
-//byte = "###.....#.....###.#......&##..#"
-//byte = "##&.....*...#####.##:#:#:###..#"
-//byte = "#######......####.#&........Z*#"
-//byte = "####.O......#####.##*....######"
-//byte = "##..........#####.##.....##[=]#"
-//byte = "###....&#....&###.##.....#..R.#"
-//byte = "##.....###...####.###....#$...#"
-//byte = "###&...T#.....###.#&#....###%##"
-//byte = "#,##....*....####.##.>>.##*..*#"
-//byte = "#.######+########.##<<<..##...#"
-//byte = "#...............&.##>>>>>..Z.&#"
-//byte = "###############################"
-
-byte catacomb = "CATACOMB"
+byte catacomb = "LEVEL0"
 word map, viewmap
 
 const xcentr     = 20
@@ -183,10 +161,10 @@ word = @linebuffer, @linebuffer, @linebuffer, @linebuffer, @linebuffer
 word = @linebuffer, @linebuffer, @linebuffer, @linebuffer, @linebuffer
 
 //
-// Load map
+// Load map - levels 0 to 9
 //
 
-export def loadmap
+export def loadmap(level)
   byte mapref, row, l
 
   //
@@ -203,6 +181,10 @@ export def loadmap
     map = heapalloc(mapsize)
   fin
   memset(map, mapsize, $2323) // Solid walls
+  //
+  // Set level map and read it
+  //
+  catacomb[catacomb] = '0' + level
   mapref = open(@catacomb, O_READ)
   if mapref
     newline(mapref, $7F, $0D)
@@ -211,7 +193,9 @@ export def loadmap
       ^(map + (row << 6) + l) = WALL_TILE
     next
     close(mapref)
+    return TRUE
   fin
+  return FALSE
 end
 
 //
@@ -262,6 +246,9 @@ export def lighttorches
 		next
       fin
     next
+    if not (ymap & 7)
+      putc('.')
+    fin
   next
 end
 
@@ -358,7 +345,9 @@ export def drawmap(xorg, yorg, viewfield, viewdir, lightdist, viewdist)
 	    // Update view
 	    //
             ^(viewmap + imap) =  tile | VIEWED_TILE
-            screen.[ycentr-ybeam[l], xcentr+xbeam[l]] = tile & INV_TILE
+	    if tile <> PIT_TILE
+              screen.[ycentr-ybeam[l], xcentr+xbeam[l]] = tile & INV_TILE
+	    fin
           else
             vispix[l] = 0
           fin
@@ -430,7 +419,9 @@ export def drawmap(xorg, yorg, viewfield, viewdir, lightdist, viewdist)
 	      fin
             fin
             ^(viewmap + imap) =  tile | VIEWED_TILE
-            screen.[ycentr-xbeam[l], xcentr+ybeam[l]] = tile & INV_TILE
+	    if tile <> PIT_TILE
+              screen.[ycentr-xbeam[l], xcentr+ybeam[l]] = tile & INV_TILE
+	    fin
           else
             vispix[l] = 0
           fin
@@ -478,7 +469,9 @@ export def drawmap(xorg, yorg, viewfield, viewdir, lightdist, viewdist)
               fin
 	    fin
             ^(viewmap + imap) =  tile | VIEWED_TILE
-            screen.[ycentr+xbeam[l], xcentr+ybeam[l]] = tile & INV_TILE
+	    if tile <> PIT_TILE
+              screen.[ycentr+xbeam[l], xcentr+ybeam[l]] = tile & INV_TILE
+	    fin
           else
             vispix[l] = 0
           fin
@@ -526,7 +519,9 @@ export def drawmap(xorg, yorg, viewfield, viewdir, lightdist, viewdist)
               fin
             fin
             ^(viewmap + imap) =  tile | VIEWED_TILE
-            screen.[ycentr+ybeam[l], xcentr+xbeam[l]] = tile & INV_TILE
+	    if tile <> PIT_TILE
+              screen.[ycentr+ybeam[l], xcentr+xbeam[l]] = tile & INV_TILE
+	    fin
           else
             vispix[l] = 0
           fin
@@ -574,7 +569,9 @@ export def drawmap(xorg, yorg, viewfield, viewdir, lightdist, viewdist)
               fin
             fin
             ^(viewmap + imap) =  tile | VIEWED_TILE
-            screen.[ycentr+ybeam[l], xcentr-xbeam[l]] = tile & INV_TILE
+	    if tile <> PIT_TILE
+              screen.[ycentr+ybeam[l], xcentr-xbeam[l]] = tile & INV_TILE
+	    fin
           else
             vispix[l] = 0
           fin
@@ -622,7 +619,9 @@ export def drawmap(xorg, yorg, viewfield, viewdir, lightdist, viewdist)
               fin
             fin
             ^(viewmap + imap) =  tile | VIEWED_TILE
-            screen.[ycentr+xbeam[l], xcentr-ybeam[l]] = tile & INV_TILE
+	    if tile <> PIT_TILE
+              screen.[ycentr+xbeam[l], xcentr-ybeam[l]] = tile & INV_TILE
+	    fin
           else
             vispix[l] = 0
           fin
@@ -670,7 +669,9 @@ export def drawmap(xorg, yorg, viewfield, viewdir, lightdist, viewdist)
               fin
             fin
             ^(viewmap + imap) =  tile | VIEWED_TILE
-            screen.[ycentr-xbeam[l], xcentr-ybeam[l]] = tile & INV_TILE
+	    if tile <> PIT_TILE
+              screen.[ycentr-xbeam[l], xcentr-ybeam[l]] = tile & INV_TILE
+	    fin
           else
             vispix[l] = 0
           fin
@@ -718,7 +719,9 @@ export def drawmap(xorg, yorg, viewfield, viewdir, lightdist, viewdist)
               fin
             fin
             ^(viewmap + imap) =  tile | VIEWED_TILE
-            screen.[ycentr-ybeam[l], xcentr-xbeam[l]] = tile & INV_TILE
+	    if tile <> PIT_TILE
+              screen.[ycentr-ybeam[l], xcentr-xbeam[l]] = tile & INV_TILE
+	    fin
           else
             vispix[l] = 0
           fin
