@@ -452,7 +452,7 @@ int parse_value(int rvalue)
                 /*
                  * Function call
                  */
-                if (emit_value && !(type & (FUNC_TYPE | CONST_TYPE)))
+                if (emit_value)
                 {
                     if (scan_lookahead() != CLOSE_PAREN_TOKEN)
                         emit_push();
