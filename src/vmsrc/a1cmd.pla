@@ -79,7 +79,6 @@ byte hpmarkstr[]  = "HEAPMARK"
 byte hpalignstr[] = "HEAPALLOCALIGN"
 byte hpallocstr[] = "HEAPALLOC"
 byte hprelstr[]   = "HEAPRELEASE"
-byte hpavailstr[] = "HEAPAVAIL"
 byte memsetstr[]  = "MEMSET"
 byte memcpystr[]  = "MEMCPY"
 byte uisgtstr[]   = "ISUGT"
@@ -183,21 +182,24 @@ end
 //   With optimizations from Peter Ferrie
 //
 asm memset
-	LDY     #$00
 	LDA     ESTKL+2,X
 	STA     DSTL
 	LDA     ESTKH+2,X
 	STA     DSTH
-	INC     ESTKL+1,X
+	LDY     ESTKL+1,X
+	BEQ	+
 	INC     ESTKH+1,X
+	LDY     #$00
++       LDA	ESTKH+1,X
+        BEQ	SETMEX
 SETMLPL	CLC
 	LDA     ESTKL,X
-SETMLPH	DEC     ESTKL+1,X
+SETMLPH	STA     (DST),Y
+	DEC     ESTKL+1,X
 	BNE     +
 	DEC     ESTKH+1,X
 	BEQ     SETMEX
-+	STA     (DST),Y
-	INY
++	INY
 	BNE	+
 	INC     DSTH
 +	BCS	SETMLPL
@@ -234,6 +236,8 @@ asm memcpy
 	STA 	SRCL
 	LDA	ESTKH-1,X
 	STA 	SRCH
+	LDY	ESTKL-2,X
+	BEQ	FORCPYLP
 	INC 	ESTKH-2,X
 	LDY	#$00
 FORCPYLP LDA	(SRC),Y
@@ -268,7 +272,7 @@ REVCPY	;CLC
 	DEC	SRCH
 	LDY	#$FF
 	LDA 	ESTKL-2,X
-	BEQ	REVCPYLP	
+	BEQ	REVCPYLP
 	INC 	ESTKH-2,X
 REVCPYLP LDA	(SRC),Y
 	STA	(DST),Y
@@ -961,21 +965,20 @@ end
 def execmod(modfile)
     byte moddci[17]
     word saveheap, savesym, saveflags
-  
+
+    perr = 1
     if stodci(modfile, @moddci)
         saveheap  = heap
 	savesym   = lastsym
 	saveflags = systemflags
-	^lastsym  = 0
-	perr      = loadmod(@moddci)
-	if perr >= modkeep
-	    perr = perr & ~modkeep
-        else
+	if loadmod(@moddci) < modkeep
 	    lastsym = savesym
 	    heap    = saveheap
 	fin
+	^lastsym    = 0
 	systemflags = saveflags
     fin
+    return perr
 end
 //
 // Get heap start.

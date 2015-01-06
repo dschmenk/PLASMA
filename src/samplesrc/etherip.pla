@@ -1,0 +1,173 @@
+import STDLIB
+    predef syscall, call, memset, getc, gets, putc, puts, putln
+    predef memset, memcpy, modaddr, modexec
+    predef heapmark, heapallocalign, heapalloc, heaprelease, heapavail
+    byte MACHID
+end
+//
+// Ethernet adapter driver
+//
+byte etherlib = "UTHERNET", 0
+struc t_edrvr
+    word fillMAC
+    word writeFrame
+    word readFrame
+    word nextEvent
+end
+word edrvr
+//
+// IP datagram header
+//
+const HW_ETHER = $0100 // BE format
+const PROTO_IP = $0008 // BE format
+struc t_ip
+    byte ip_vers_hlen
+    byte ip_service
+    word ip_length
+    word ip_id
+    word ip_flags_fragofst
+    byte ip_ttl
+    byte ip_proto
+    word ip_checksum
+    byte[4] ip_src
+    byte[4] ip_dst
+    byte[]  ip_options
+end
+//
+// ARP packet
+//
+const PAYLOAD_ARP = $0608 // BE format
+const ARP_REQST   = $0100 // BE format
+const ARP_REPLY   = $0200 // BE format
+struc t_arp
+    word arp_hw
+    word arp_proto
+    byte arp_hlen
+    byte arp_plen
+    word arp_op
+    byte[6] arp_senderha
+    byte[4] arp_senderip
+    byte[6] arp_targha
+    byte[4] arp_ragip
+end
+byte hARP = $FF,$FF,$FF,$FF,$FF,$FF // BCAST
+byte MAC  = $00,$0A,$99,$1E,$02,$00
+byte      = $08, $06 // ARP payload
+
+byte pARP = $00, $01 // HW TYPE
+byte      = $08, $00 // PROTO TYPE
+byte      = 6        // HLEN
+byte      = 4        // PLEN
+byte      = $00, $01 // OP
+byte[6] senderha = $00,$0A,$99,$1E,$02,$00
+byte[4] senderip = 192,168,123,10
+byte[6] targha
+byte[4] targip   = 192,168,123,1
+const maxesize = 1518
+const ehdrsize = 14
+//
+// Receive packet
+//
+byte[maxesize] recvpkt
+//
+// Defines for ASM routines
+//
+asm equates
+	!SOURCE	"vmsrc/plvmzp.inc"
+end
+//
+// ASM utility functions
+//
+// Swap bytes in word
+//
+asm swab
+	LDA	ESTKL,X
+	LDY	ESTKH,X
+	STA	ESTKH,X
+	STY	ESTKL,X
+	RTS
+end
+//
+// CHECKSUM BE format
+// checksum(BUF, LEN)
+//
+asm checksum
+	LDY	#$00
+	LDA	ESTKL+1,X
+	STY	ESTKL+1,X
+	STA	SRCL
+	LDA	ESTKH+1,X
+	STY	ESTKH+1,X
+	STA	SRCH
+	LSR	ESTKH,X	; CONVERT BYTE LEN TO WORD LEN
+	LDA	ESTKL,X
+	ROR
+	ADC	#$00
+	STA	ESTKL,X
+	BEQ	CHKLP
+	INC     ESTKH,X
+CHKLP	LDA	(SRC),Y
+	PHA
+	INY
+	BNE	+
+	INC	SRCH
++	LDA	(SRC),Y
+	CLC
+	ADC	ESTKH+1,X
+	STA	ESTKH+1,X
+	PLA
+	ADC	ESTKL+1,X
+	STA	ESTKL+1,X
+	INY
+	BNE	+
+    	INC	SRCH
++	DEC	ESTKL,X
+	BNE	CHKLP
+	DEC	ESTKH,X
+	BNE	CHKLP
+	INX
+	LDA	ESTKL,X
+	EOR	#$FF
+	STA	ESTKL,X
+	LDA	ESTKH,X
+	EOR	#$FF
+	STA	ESTKH,X
+	RTS
+end
+//
+// DEBUG
+//
+def putln
+    return putc($0D)
+end
+def putb(hexb)
+    return call($FDDA, hexb, 0, 0, 0)
+end
+def puth(hex)
+    return call($F941, hex >> 8, hex, 0, 0)
+end
+def dumpfrm(packet, len)
+    word i
+
+    if len > 64
+        len = 64
+    fin
+    len = len - 1
+    for i = 0 to len
+        if (i & 7) == 0
+	    putln
+        else
+	    putc(' ')
+	fin
+	putb(^(packet+i))
+    next
+end
+
+if modexec(@etherlib) == 0
+    edrvr = modaddr(@etherlib)
+    edrvr=>writeFrame(@hARP, @pARP, 28)
+    repeat; until edrvr=>nextEvent() or ^$C000 > 127
+    ^$C010
+    dumpfrm(@recvpkt, edrvr=>readFrame(@recvpkt))
+fin
+done

@@ -1,0 +1,252 @@
+import STDLIB
+    predef syscall, call, memset, getc, gets, putc, puts, putln
+    predef memset, memcpy, modaddr, modexec
+    predef heapmark, heapallocalign, heapalloc, heaprelease, heapavail
+    byte MACHID
+end
+//
+// Module don't free memory
+//
+const modkeep     = $2000
+const modinitkeep = $4000
+//
+// Module interface defined by first 4 fields:
+//   word fillMAC
+//   word writeFrame
+//   word readFrame
+//   word nextEvent
+//
+predef fillmac, writefrm, readfrm, nextevt
+word = @fillmac, @writefrm, @readfrm, @nextevt, 0
+//
+// Uthernet register offsets
+//
+const TXDATA     = $00
+const RXDATA     = $00
+const TXCMD      = $04
+const TXLEN      = $06
+const INT_STATUS = $08
+const PREG_INDEX = $0A
+const PREG_DATA  = $0C
+const AUTO_INC   = $8000
+//
+// Uthernet register addresses
+//
+word slot
+byte txcmd
+byte txlen
+byte isq
+byte pregidx
+byte pregdata
+//
+// MAC address
+//
+byte MAC  = $00,$0A,$99,$1E,$02,$00
+//
+// Ethernet header
+//
+struc t_ehdr
+    byte[6] ehdr_dstaddr
+    byte[6] ehdr_srcaddr
+    word    ehdr_type
+end
+//
+// Defines for ASM routines
+//
+asm equates
+	!SOURCE	"vmsrc/plvmzp.inc"
+end
+//
+// I/O access
+//
+//
+// POKE WORD INTO I/O SPACE
+// _pokeiow(DATA)
+//
+asm _pokeiow
+	LDA	ESTKL,X
+end
+asm _pokeiowl
+	STA	$C000
+	LDA	ESTKH,X
+end
+asm _pokeiowh
+	STA	$C000
+	RTS
+end
+//
+// PEEK WORD FROM I/O SPACE
+// _peekiow()
+//
+asm _peekiow
+	DEX
+end
+asm _peekiowl
+	LDA	$C000
+	STA	ESTKL,X
+end
+asm _peekiowh
+	LDA	$C000
+	STA	ESTKH,X
+	RTS
+end
+//
+// POKE PACKET FRAME INTO I/O SPACE
+// _pokefrm(BUF, LEN)
+//
+asm pokefrm
+	LDY	#$00
+	LDA	ESTKL+1,X
+	STA	SRCL
+	LDA	ESTKH+1,X
+	STA	SRCH
+	LSR	ESTKH,X	; CONVERT BYTE LEN TO WORD LEN
+	LDA	ESTKL,X
+	ROR
+	ADC	#$00
+	STA	ESTKL,X
+	BEQ	POKELP
+	INC     ESTKH,X
+POKELP	LDA	(SRC),Y
+end
+asm _pokefrml
+	STA	$C000
+	INY
+	BNE	+
+	INC	SRCH
++	LDA	(SRC),Y
+end
+asm _pokefrmh
+	STA	$C000
+	INY
+	BNE	+
+    	INC	SRCH
++	DEC	ESTKL,X
+	BNE	POKELP
+	DEC	ESTKH,X
+	BNE	POKELP
+	INX
+	RTS
+end
+//
+// PEEK PACKET FRAME FROM I/O SPACE
+// _peekfrm(BUF, LEN)
+//
+asm peekfrm
+	LDA	ESTKL+1,X
+	STA	DSTL
+	LDA	ESTKH+1,X
+	STA	DSTH
+	LDY	ESTKL,X
+	BEQ	PEEKLP
+	LDY	#$00
+	INC     ESTKH,X
+end
+asm _peekfrmh
+PEEKLP	LDA	$C000
+	PHA
+end
+asm _peekfrml
+	LDA	$C000
+	STA	(DST),Y
+	PLA
+	INY
+	BNE	+
+	INC	DSTH
++	DEC	ESTKL,X
+	BNE	+
+	DEC	ESTKH,X
+	BEQ	EXPSW
++	STA	(DST),Y
+	INY
+	BNE	+
+    	INC	DSTH
++	DEC	ESTKL,X
+	BNE	PEEKLP
+	DEC	ESTKH,X
+	BNE	PEEKLP
+EXPSW	INX
+	RTS
+end
+def pokeiow(io, data)
+    _pokeiowl.1 = io
+    _pokeiowh.1 = io+1
+    return _pokeiow(data)
+end
+def peekiow(io)
+    _peekiowl.1 = io
+    _peekiowh.1 = io+1
+    return _peekiow()
+end
+def pokepreg(reg, data)
+    pokeiow(pregidx, reg)
+    return pokeiow(pregdata, data)
+end
+def peekpreg(reg)
+    pokeiow(pregidx, reg)
+    return peekiow(pregdata)
+end
+//
+// Uthernet interface
+//
+def fillmac(pmac)
+    pmac=>0 = MAC:0
+    pmac=>2 = MAC:2
+    pmac=>4 = MAC:4
+    return pmac + 6
+end
+def writefrm(header, payload, size)
+    pokeiow(txcmd, $C0)
+    pokeiow(txlen, size + t_ehdr)
+    repeat; until peekpreg($0138) & $0100
+    pokefrm(header, t_ehdr)
+    pokefrm(payload, size)
+end
+def readfrm(packet)
+    word status, len
+
+    peekfrm(@status, 4)
+    if status & $0100
+        peekfrm(packet, len)
+    else
+        pokepreg($0102, $0140) // Skip pkt
+	len = 0
+    fin
+    return len
+end
+def nextevt
+    return peekiow(isq) & $3F
+end
+//
+// Identify Uthernet card and initialize
+//
+for slot = $90 to $F0 step $10
+    if (peekiow(slot+TXCMD) & $CC3F) == $09
+        pokeiow(slot+PREG_INDEX, 0)
+		if peekiow(slot+PREG_DATA) == $630E
+		    txcmd    = slot + TXCMD
+            txlen    = slot + TXLEN
+            isq      = slot + INT_STATUS
+            pregidx  = slot + PREG_INDEX
+            pregdata = slot + PREG_DATA
+            pokepreg($0114, $40)   // RESET
+            _pokefrml.1 = slot
+            _pokefrmh.1 = slot+1
+            _peekfrml.1 = slot
+            _peekfrmh.1 = slot+1
+            pokepreg($0158, MAC:0) // MAC addr
+            pokepreg($015A, MAC:2) // MAC addr
+            pokepreg($015C, MAC:4) // MAC addr
+            pokepreg($0102, $0100) // Recv cfg
+            pokepreg($0104, $0D00) // Recv ctrl
+            pokepreg($0106, $8200) // Xmit cfg
+            pokepreg($0112, $00C0) // Line ctrl
+            return modkeep
+        fin
+    fin
+next
+//
+// Not found
+//
+return -1
+done
