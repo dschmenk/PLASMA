@@ -2959,15 +2959,14 @@ end
 def parse_value(rvalue)
     byte cparams, deref, type, emit_val
     word optos, idptr, value
-    byte elem_size, elem_type
-    word elem_offset
+    byte const_size, ref_type
+    word ref_offset, const_offset
 
-    deref       = rvalue
-    optos       = opsp
-    type        = 0
-    elem_offset = 0
-    emit_val    = FALSE
-    value       = 0
+    deref    = rvalue
+    optos    = opsp
+    type     = 0
+    emit_val = FALSE
+    value    = 0
 
     //
     // Parse pre-ops
@@ -3054,170 +3053,17 @@ def parse_value(rvalue)
     //
     // Parse post-ops
     //
+    ref_type   = type
+    ref_offset = 0
     while ispostop
         when token
-            is OPEN_BRACKET_TKN
-                //
-                // Array
-                //
-                if !emit_val
-                    if type & ADDR_TYPE
-                        if type & LOCAL_TYPE
-                            emit_localaddr(value)
-                        else
-                            emit_globaladdr(value, 0)
-                        fin
-                    elsif type & CONST_TYPE
-                        emit_const(value)
-                    fin
-                    emit_val = TRUE
-                fin // !emit_val
-                if type & PTR_TYPE
-                    emit_lw
-                fin
-                if !parse_expr
-                    return 0
-                fin
-                if token <> CLOSE_BRACKET_TKN
-                    return parse_err(@no_close_bracket)
-                fin
-                if type & WORD_TYPE
-                    type = WPTR_TYPE
-                    emit_indexword
-                else
-                    type = BPTR_TYPE
-                    emit_indexbyte
-                fin
-                break
-            is PTRB_TKN
-            is PTRW_TKN
-                if !emit_val
-                    if type & FUNC_TYPE
-                        emit_call(value)
-                    elsif type & VAR_TYPE
-                        if type & LOCAL_TYPE
-                            if type & BYTE_TYPE
-                                emit_llb(value + elem_offset)
-                            else
-                                emit_llw(value + elem_offset)
-                            fin
-                        else
-                            if type & BYTE_TYPE
-                                emit_lab(value, elem_offset)
-                            else
-                                emit_law(value, elem_offset)
-                            fin
-                        fin
-                    else
-                        if type & BPTR_TYPE
-                            emit_lb
-                        else
-                            emit_lw
-                        fin
-                    fin
-                    emit_val = 1;
-                else
-                  if type & BYTE_TYPE
-                    emit_lab(value, elem_offset)
-                  else
-                    emit_law(value, elem_offset)
-                  fin
-                fin
-                type = type & ~(VAR_TYPE | ADDR_TYPE)
-                type = type | WORD_TYPE
-                if token == PTRB_TKN
-                    token = DOT_TKN
-                else
-                    token = COLON_TKN
-                fin
-                //
-                // Fall through
-                //
-            is DOT_TKN
-            is COLON_TKN
-                //
-                // Dot and Colon
-                //
-                if token == DOT_TKN
-                    elem_type = BPTR_TYPE
-                else
-                    elem_type = WPTR_TYPE
-                fin
-                if parse_constval(@elem_offset, @elem_size)
-                    //
-                    // Constant structure offset
-                    //
-                    if !emit_val
-                        if type & VAR_TYPE
-                            if elem_type & BPTR_TYPE
-                                elem_type = (type & ~VAR_TYPE) | BYTE_TYPE
-                            else
-                                elem_type = (type & ~VAR_TYPE) | WORD_TYPE
-                            fin
-                        elsif type & CONST_TYPE
-                            value = value + elem_offset
-                            emit_const(value)
-                            elem_offset = 0
-                            emit_val    = TRUE
-                        else // FUNC_TYPE
-                            emit_globaladdr(value, 0)
-                            emit_const(elem_offset)
-                            emit_binaryop(ADD_TKN)
-                            elem_offset = 0
-                            emit_val    = TRUE
-                        fin
-                    else
-                        if elem_offset
-                            emit_const(elem_offset)
-                            emit_binaryop(ADD_TKN)
-                            elem_offset = 0
-                        fin
-                    fin // !emit_val
-                elsif token == OPEN_BRACKET_TKN
-                    //
-                    // Array of arrays
-                    //
-                    if !emit_val
-                        if type & ADDR_TYPE
-                            if type & LOCAL_TYPE
-                                emit_localaddr(value + elem_offset)
-                            else
-                                emit_globaladdr(value, elem_offset)
-                            fin
-                        elsif type & CONST_TYPE
-                            emit_const(value + elem_offset)
-                        fin
-                        elem_offset = 0
-                        emit_val    = TRUE
-                    fin // !emit_val
-                    while parse_expr
-                        if token <> COMMA_TKN
-                            break
-                        fin
-                        emit_indexword
-                        emit_lw
-                    loop
-                    if token <> CLOSE_BRACKET_TKN
-                        return parse_err(@no_close_bracket)
-                    fin
-                    if elem_type & WPTR_TYPE
-                        emit_indexword
-                    else
-                        emit_indexbyte
-                    fin
-                else
-                    return parse_err(@bad_offset)
-                fin
-                type = elem_type
-                break
             is OPEN_PAREN_TKN
                 //
                 // Function call
                 //
                 if emit_val
-                    if type & PTR_TYPE
-                        emit_lw
-                    fin
+                    if    ref_type & BPTR_TYPE; emit_lb
+                    elsif ref_type & WPTR_TYPE; emit_lw; fin
                     if lookahead <> CLOSE_PAREN_TKN
                         emit_push
                     fin
@@ -3232,18 +3078,19 @@ def parse_value(rvalue)
                 if token <> CLOSE_PAREN_TKN
                     return parse_err(@no_close_paren)
                 fin
-                if type & FUNC_CONST_TYPE
+                if ref_type & FUNC_CONST_TYPE
                     emit_call(value)
                 else
                     if !emit_val
-                        if type & VAR_TYPE
+                        if ref_type & CONST_TYPE
+                            emit_const(value)
+                        elsif ref_type & VAR_TYPE
                             if type & LOCAL_TYPE
-                                emit_llw(value + elem_offset)
+                                emit_llw(value + ref_offset)
                             else
-                                emit_law(value, elem_offset)
+                                emit_law(value, ref_offset)
                             fin
-                        elsif type & PTR_TYPE
-                            emit_lw
+                            ref_offset = 0
                         fin
                     else
                         if cparams
@@ -3253,13 +3100,129 @@ def parse_value(rvalue)
                     emit_ical
                 fin
                 emit_val = TRUE
-                type = WORD_TYPE
+                ref_type = 0
+                break
+            is OPEN_BRACKET_TKN
+                //
+		// Array of arrays
+		//
+		if !emit_val
+		    if type & CONST_TYPE
+		        emit_const(value)
+                    elsif type & ADDR_TYPE
+		        if type & LOCAL_TYPE
+			    emit_localaddr(value + ref_offset)
+                        else
+			    emit_globaladdr(value, ref_offset)
+                        fin
+                        ref_offset = 0
+		    fin
+                    emit_val = TRUE
+                fin
+		while parse_expr
+		    if token <> COMMA_TKN
+		        break
+                    fin
+		    emit_indexword
+		    emit_lw
+                loop
+		if token <> CLOSE_BRACKET_TKN
+		    return parse_err(@no_close_bracket)
+                fin
+		if ref_type & (WPTR_TYPE | WORD_TYPE)
+		    emit_indexword
+                    ref_type = WPTR_TYPE
+                else
+		    emit_indexbyte
+                    ref_type = BPTR_TYPE
+                fin
+                break
+            is PTRB_TKN
+            is PTRW_TKN
+                //
+                // Structure member pointer
+                //
+                if !emit_val
+                    if (type & CONST_TYPE)
+                        emit_const(value)
+                    elsif type & ADDR_TYPE
+                        if type & LOCAL_TYPE
+                            if ref_type & BYTE_TYPE
+                                emit_llb(value + ref_offset)
+                            else
+                                emit_llw(value + ref_offset)
+                            fin
+                        else
+                            if ref_type & BYTE_TYPE
+                                emit_lab(value, ref_offset)
+                            else
+                                emit_law(value, ref_offset)
+                            fin
+                        fin
+                    fin
+		    emit_val = 1;
+                fin
+                if token == PTRB_TKN
+                    ref_type = BPTR_TYPE
+                else
+                    ref_type = WPTR_TYPE
+                fin
+                ref_offset = 0
+                if !parse_constval(@ref_offset, @const_size)
+                    rewind(tknptr)
+                fin
+                if ref_offset <> 0
+                    emit_const(ref_offset)
+                    emit_op($02)
+                    ref_offset = 0
+                fin
+                break
+            is DOT_TKN
+            is COLON_TKN
+                //
+                // Structure member offset
+                //
+                if ref_type & (VAR_TYPE | CONST_TYPE)
+                    if token == DOT_TKN
+                        ref_type = BYTE_TYPE
+                    else
+                        ref_type = WORD_TYPE
+                    fin
+                else
+                    if token == DOT_TKN
+                        ref_type = BPTR_TYPE
+                    else
+                        ref_type = WPTR_TYPE
+                    fin
+                fin
+                if parse_constval(@const_offset, @const_size)
+                    ref_offset = ref_offset + const_offset
+                else
+                    rewind(tknptr)
+                fin
+                if !emit_val
+                    if type & CONST_TYPE
+                        value = value + ref_offset
+                        ref_offset = 0
+                    elsif type & FUNC_TYPE
+                        emit_globaladdr(value, ref_offset)
+                        ref_offset = 0
+                        emit_val   = TRUE
+                    fin
+                else
+                    if ref_offset <> 0
+                        emit_const(ref_offset)
+                        emit_op($02)
+                        ref_offset = 0
+                    fin
+                fin
+                break
         wend
     loop
     if emit_val
         if rvalue
-            if deref and type & PTR_TYPE
-                if type & BPTR_TYPE
+            if deref and ref_type & PTR_TYPE
+                if ref_type & BPTR_TYPE
                     emit_lb
                 else
                     emit_lw
@@ -3267,47 +3230,50 @@ def parse_value(rvalue)
             fin
         fin
     else // emit_val
-        if type & CONST_TYPE
-            emit_const(value)
-        elsif deref
-            if type & FUNC_TYPE
-                emit_call(value)
-            elsif type & VAR_TYPE
-                if type & LOCAL_TYPE
-                    if type & BYTE_TYPE
-                        emit_llb(value + elem_offset)
+        if deref
+            if ref_type & CONST_TYPE
+                emit_const(value)
+                if ref_type & VAR_TYPE
+                    if ref_type & BYTE_TYPE
+                        emit_lb()
                     else
-                        emit_llw(value + elem_offset)
-                    fin
-                else
-                    if type & BYTE_TYPE
-                        emit_lab(value, elem_offset)
-                    else
-                        emit_law(value, elem_offset)
+                        emit_lw()
                     fin
                 fin
-            elsif type & PTR_TYPE
-                if type & BPTR_TYPE
-                    emit_lb
+            elsif ref_type & FUNC_TYPE
+                emit_call(value)
+            elsif ref_type & VAR_TYPE
+                if type & LOCAL_TYPE
+                    if ref_type & BYTE_TYPE
+                        emit_llb(value + ref_offset)
+                    else
+                        emit_llw(value + ref_offset)
+                    fin
                 else
-                    emit_lw
+                    if ref_type & BYTE_TYPE
+                        emit_lab(value, ref_offset)
+                    else
+                        emit_law(value, ref_offset)
+                    fin
                 fin
             fin
         else
-            if type & LOCAL_TYPE
-                emit_localaddr(value + elem_offset)
+            if type & CONST_TYPE
+                emit_const(value)
+            elsif type & LOCAL_TYPE
+                emit_localaddr(value + ref_offset)
             else
-                emit_globaladdr(value, elem_offset)
+                emit_globaladdr(value, ref_offset)
             fin
         fin
     fin // emit_val
     while optos < opsp
         if !emit_unaryop(pop_op); return parse_err(@bad_op); fin
     loop
-    if !type
-        type = WORD_TYPE
+    if !ref_type
+        ref_type = WORD_TYPE
     fin
-    return type
+    return ref_type
 end
 def parse_constexpr(valptr, sizeptr)
     byte type, size1, size2
