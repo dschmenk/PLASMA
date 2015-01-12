@@ -67,22 +67,25 @@ int tos_op_prec(int tos)
 {
     return opsptr <= tos ? 100 : precstack[opsptr];
 }
-int parse_expr(void);
-int parse_term(void)
+/*
+ * Constant expression parsing
+ */
+int parse_constexpr(long *value, int *size);
+int parse_constterm(long *value, int *size)
 {
+    int type;
     /*
      * Parse terminal tokens.
      */
-    switch (scan())
+    switch (type = scan())
     {
         case CHAR_TOKEN:
         case INT_TOKEN:
-        case FLOAT_TOKEN:
         case ID_TOKEN:
         case STRING_TOKEN:
             break;
         case OPEN_PAREN_TOKEN:
-            if (!parse_expr())
+            if (!(type = parse_constexpr(value, size)))
             {
                 parse_error("Bad expression in parenthesis");
                 return (0);
@@ -99,13 +102,13 @@ int parse_term(void)
              */
             return (0);
     }
-    return (1);
+    return (type);
 }
 int parse_constval(long *value, int *size)
 {
-    int mod = 0, type = 0;
-    *value = 0;
-    while (!parse_term())
+    int mod = 0, type;
+
+    while (!(type = parse_constterm(value, size)))
     {
         switch (scantoken)
         {
@@ -133,46 +136,46 @@ int parse_constval(long *value, int *size)
     /*
      * Determine which terminal type.
      */
-    if (scantoken == STRING_TOKEN)
+    switch (scantoken)
     {
-        *value = constval;
-        *size  = tokenlen - 1;
-        type   = STRING_TYPE;
-        if (mod)
-        {
-            parse_error("Invalid string modifiers");
-            return (0);
-        }
-    }
-    else if (scantoken == CHAR_TOKEN)
-    {
-        *value = constval;
-        *size  = 1;
-        type   = CONST_TYPE;
-    }
-    else if (scantoken == INT_TOKEN)
-    {
-        *value = constval;
-        *size  = 2;
-        type   = CONST_TYPE;
-    }
-    else if (scantoken == ID_TOKEN)
-    {
-        type = id_type(tokenstr, tokenlen);
-        if (type & CONST_TYPE)
-            *value = id_const(tokenstr, tokenlen);
-        else if ((type & (FUNC_TYPE | EXTERN_TYPE)) || ((type & ADDR_TYPE) && (mod & 8)))
-            *value = id_tag(tokenstr, tokenlen);
-        else
-        {
+    	case STRING_TOKEN:
+            *size  = tokenlen - 1;
+            *value = constval;
+            type   = STRING_TYPE;
+            if (mod)
+            {
+                parse_error("Invalid string modifiers");
+                return (0);
+            }
+            break;
+        case CHAR_TOKEN:
+            *size  = 1;
+            *value = constval;
+            type   = CONST_TYPE;
+            break;
+        case INT_TOKEN:
+            *size  = 2;
+            *value = constval;
+            type   = CONST_TYPE;
+            break;
+        case ID_TOKEN:
+            *size = 2;
+            type = id_type(tokenstr, tokenlen);
+            if (type & CONST_TYPE)
+                *value = id_const(tokenstr, tokenlen);
+            else if ((type & (FUNC_TYPE | EXTERN_TYPE)) || ((type & ADDR_TYPE) && (mod == 8)))
+                *value = id_tag(tokenstr, tokenlen);
+            else
+            {
+                parse_error("Invalid constant");
+                return (0);
+            }
+            break;
+        case CLOSE_PAREN_TOKEN:
+            break;
+        default:
             parse_error("Invalid constant");
             return (0);
-        }
-    }
-    else
-    {
-        parse_error("Invalid constant");
-        return (0);
     }
     if (mod & 1)
         *value = -*value;
@@ -181,6 +184,101 @@ int parse_constval(long *value, int *size)
     if (mod & 4)
         *value = *value ? 0 : -1;
     return (type);
+}
+int parse_constexpr(long *value, int *size)
+{
+    long val1, val2;
+    int valtype, type, size1, size2;
+
+    if (!(valtype = parse_constval(&val1, &size1)))
+        return (0);
+    do
+    {
+        size2 = 0;
+        switch (scan())
+        {
+            case ADD_TOKEN:
+                if (!(type = parse_constval(&val2, &size2)))
+                    return (0);
+                val1 = val1 + val2;
+                break;
+            case SUB_TOKEN:
+                if (!(type = parse_constval(&val2, &size2)))
+                    return (0);
+                val1 = val1 - val2;
+                break;
+            case MUL_TOKEN:
+                if (!(type = parse_constval(&val2, &size2)))
+                    return (0);
+                val1 = val1 * val2;
+                break;
+            case DIV_TOKEN:
+                if (!(type = parse_constval(&val2, &size2)))
+                    return (0);
+                val1 = val1 / val2;
+                break;
+            case AND_TOKEN:
+                if (!(type = parse_constval(&val2, &size2)))
+                    return (0);
+                val1 = val1 & val2;
+                break;
+            case OR_TOKEN:
+                if (!(type = parse_constval(&val2, &size2)))
+                    return (0);
+                val1 = val1 | val2;
+                break;
+            case EOR_TOKEN:
+                if (!(type = parse_constval(&val2, &size2)))
+                    return (0);
+                val1 = val1 ^ val2;
+                break;
+        }
+        if (size1 > size2)
+            *size = size1;
+        else
+        {
+            valtype = type;
+            *size   = size2;
+        }
+    } while (size2);
+    *value = val1;
+    return (valtype);
+}
+/*
+ * Normal expression parsing
+ */
+int parse_expr(void);
+int parse_term(void)
+{
+    /*
+     * Parse terminal tokens.
+     */
+    switch (scan())
+    {
+        case CHAR_TOKEN:
+        case INT_TOKEN:
+        case ID_TOKEN:
+        case STRING_TOKEN:
+            break;
+        case OPEN_PAREN_TOKEN:
+            if (!parse_expr())
+            {
+                parse_error("Bad expression in parenthesis");
+                return (0);
+            }
+            if (scantoken != CLOSE_PAREN_TOKEN)
+            {
+                parse_error("Missing closing parenthesis");
+                return (0);
+            }
+            break;
+        default:
+            /*
+             * Non-terminal token.
+             */
+            return (0);
+    }
+    return (1);
 }
 int parse_value(int rvalue)
 {
@@ -502,60 +600,6 @@ int parse_value(int rvalue)
         }
     }
     return (ref_type ? ref_type : WORD_TYPE);
-}
-int parse_constexpr(long *value, int *size)
-{
-    long val1, val2;
-    int type, size1, size2 = 0;
-
-    if (!(type = parse_constval(&val1, &size1)))
-        return (0);
-    if (scan() == ADD_TOKEN)
-    {
-        if (!parse_constval(&val2, &size2))
-            return (0);
-        *value = val1 + val2;
-    }
-    else if (scantoken == SUB_TOKEN)
-    {
-        if (!parse_constval(&val2, &size2))
-            return (0);
-        *value = val1 - val2;
-    }
-    else if (scantoken == MUL_TOKEN)
-    {
-        if (!parse_constval(&val2, &size2))
-            return (0);
-        *value = val1 * val2;
-    }
-    else if (scantoken == DIV_TOKEN)
-    {
-        if (!parse_constval(&val2, &size2))
-            return (0);
-        *value = val1 / val2;
-    }
-    else if (scantoken == AND_TOKEN)
-    {
-        if (!parse_constval(&val2, &size2))
-            return (0);
-        *value = val1 & val2;
-    }
-    else if (scantoken == OR_TOKEN)
-    {
-        if (!parse_constval(&val2, &size2))
-            return (0);
-        *value = val1 | val2;
-    }
-    else if (scantoken == EOR_TOKEN)
-    {
-        if (!parse_constval(&val2, &size2))
-            return (0);
-        *value = val1 ^ val2;
-    }
-    else
-        *value = val1;
-    *size = size1 > size2 ? size1 : size2;
-    return (type);
 }
 int parse_expr()
 {

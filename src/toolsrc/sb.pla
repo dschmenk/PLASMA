@@ -389,7 +389,7 @@ byte prevstmnt   = 0
 word retfunc_tag = 0
 word break_tag   = 0
 word cont_tag    = 0
-predef parse_expr, parse_module
+predef parse_constexpr, parse_expr, parse_module
 //
 // ASM utility functions
 //
@@ -2865,18 +2865,22 @@ end
 //
 // Parser
 //
-def parse_term
+//
+// Constant expression parsing
+//
+def parse_constterm(valptr, sizeptr)
+    word type
+    
     when scan
         is OPEN_PAREN_TKN
-            if !parse_expr
-                return FALSE
-            fin
+        	type = parse_constexpr(valptr, sizeptr)
             if token <> CLOSE_PAREN_TKN; return parse_err(@no_close_paren); fin
+            return type
         is ID_TKN
         is INT_TKN
         is CHR_TKN
         is STR_TKN
-            return TRUE
+            return token
     wend
     return FALSE
 end
@@ -2884,52 +2888,57 @@ def parse_constval(valptr, sizeptr)
     byte mod, type
     word idptr, ctag
 
-    mod     = 0
-    type    = 0
-    while !parse_term
-        when token
-            is SUB_TKN
-                mod = mod | 1; break
-            is COMP_TKN
-                mod = mod | 2; break
-            is LOGIC_NOT_TKN
-                mod = mod | 4; break
-            is AT_TKN
-                mod = mod | 8; break
-            is ADD_TKN
-                break
-            otherwise
-                return 0
-        wend
-    loop
+    mod      = 0
+    ^sizeptr = 0
+    repeat
+        type = parse_constterm(valptr, sizeptr)
+        if !type
+            when token
+                is SUB_TKN
+                    mod = mod | 1; break
+                is COMP_TKN
+                    mod = mod | 2; break
+                is LOGIC_NOT_TKN
+                    mod = mod | 4; break
+                is AT_TKN
+                    mod = mod | 8; break
+                is ADD_TKN
+                    break
+                otherwise
+                    return 0
+            wend
+        fin
+    until type
     when token
         is STR_TKN
-            *valptr  = constval
             ^sizeptr = tknlen - 1
+            *valptr  = constval
             type     = STR_TYPE
             if mod; return parse_err(@bad_op); fin
-	    break
+            break
         is CHR_TKN
-            *valptr  = constval
             ^sizeptr = 1
-            type     = BYTE_TYPE
-	    break
-        is INT_TKN
             *valptr  = constval
+            type     = BYTE_TYPE
+            break
+        is INT_TKN
             ^sizeptr = 2
+            *valptr  = constval
             type     = WORD_TYPE
-	    break
+            break
         is ID_TKN
             ^sizeptr = 2
             idptr    = id_lookup(tknptr, tknlen)
             if !idptr; return parse_err(@bad_cnst); fin
             type = idptr->idtype
             if type & ADDR_TYPE
-	        if mod <> 8; return parse_err(@bad_cnst); fin
+	            if mod <> 8; return parse_err(@bad_cnst); fin
                 type = CONSTADDR_TYPE
             fin
-	    *valptr = idptr=>idval
+            *valptr = idptr=>idval
     	    break
+        is CLOSE_PAREN_TKN
+            break
         otherwise
             return parse_err(@bad_cnst)
     wend
@@ -2944,6 +2953,69 @@ def parse_constval(valptr, sizeptr)
     fin
     return type
 end
+def parse_constexpr(valptr, sizeptr)
+    byte valtype, type, size1, size2
+    word val1, val2
+
+    valtype = parse_constval(@val1, @size1)
+    if !valtype; return 0; fin
+    repeat
+        size2 = 0
+        when scan
+            is ADD_TKN
+                type = parse_constval(@val2, @size2)
+                if !type; return 0; fin
+                val1 = val1 + val2
+	            break
+            is SUB_TKN
+                type = parse_constval(@val2, @size2)
+                if !type; return 0; fin
+                val1 = val1 - val2
+                break
+            is MUL_TKN
+                type = parse_constval(@val2, @size2)
+                if !type; return 0; fin
+                val1 = val1 * val2
+                break
+            is DIV_TKN
+                type = parse_constval(@val2, @size2)
+                if !type; return 0; fin
+                val1 = val1 / val2
+                break
+            is MOD_TKN
+                type = parse_constval(@val2, @size2)
+                if !type; return 0; fin
+                val1 = val1 % val2
+                break
+            is AND_TKN
+                type = parse_constval(@val2, @size2)
+                if !type; return 0; fin
+                val1 = val1 & val2
+                break
+            is OR_TKN
+                type = parse_constval(@val2, @size2)
+                if !type; return 0; fin
+                val1 = val1 | val2
+                break
+            is EOR_TKN
+                type = parse_constval(@val2, @size2)
+                if !type; return 0; fin
+                val1 = val1 ^ val2
+                break
+        wend
+        if size1 > size2
+            ^sizeptr = size1
+        else
+            valtype  = type
+            ^sizeptr = size2
+        fin
+    until !size2
+    *valptr = val1
+    return valtype
+end
+//
+// Normal expression parsing
+//
 def ispostop
     when scan
         is OPEN_PAREN_TKN
@@ -2952,6 +3024,21 @@ def ispostop
         is COLON_TKN
         is PTRB_TKN
         is PTRW_TKN
+            return TRUE
+    wend
+    return FALSE
+end
+def parse_term
+    when scan
+        is OPEN_PAREN_TKN
+            if !parse_expr
+                return FALSE
+            fin
+            if token <> CLOSE_PAREN_TKN; return parse_err(@no_close_paren); fin
+        is ID_TKN
+        is INT_TKN
+        is CHR_TKN
+        is STR_TKN
             return TRUE
     wend
     return FALSE
@@ -3274,64 +3361,6 @@ def parse_value(rvalue)
         ref_type = WORD_TYPE
     fin
     return ref_type
-end
-def parse_constexpr(valptr, sizeptr)
-    byte type, size1, size2
-    word val1, val2
-
-    type = parse_constval(@val1, @size1)
-    if !type; return 0; fin
-    size2 = 0
-    when scan
-        is ADD_TKN
-            type = parse_constval(@val2, @size2)
-            if !type; return 0; fin
-            *valptr = val1 + val2
-	    break
-        is SUB_TKN
-            type = parse_constval(@val2, @size2)
-            if !type; return 0; fin
-            *valptr = val1 - val2
-	    break
-        is MUL_TKN
-            type = parse_constval(@val2, @size2)
-            if !type; return 0; fin
-            *valptr = val1 * val2
-	    break
-        is DIV_TKN
-            type = parse_constval(@val2, @size2)
-            if !type; return 0; fin
-            *valptr = val1 / val2
-	    break
-        is MOD_TKN
-            type = parse_constval(@val2, @size2)
-            if !type; return 0; fin
-            *valptr = val1 % val2
-	    break
-        is AND_TKN
-            type = parse_constval(@val2, @size2)
-            if !type; return 0; fin
-            *valptr = val1 & val2
-	    break
-        is OR_TKN
-            type = parse_constval(@val2, @size2)
-            if !type; return 0; fin
-            *valptr = val1 | val2
-	    break
-        is EOR_TKN
-            type = parse_constval(@val2, @size2)
-            if !type; return 0; fin
-            *valptr = val1 ^ val2
-	    break
-        otherwise
-            *valptr = val1
-    wend
-    if size1 > size2
-        ^sizeptr = size1
-    else
-        ^sizeptr = size2
-    fin
-    return type
 end
 def parse_expr
     byte prevmatch, matchop, i
