@@ -67,9 +67,87 @@ int tos_op_prec(int tos)
 {
     return opsptr <= tos ? 100 : precstack[opsptr];
 }
+long valstack[16];
+int typestack[16];
+int sizestack[16];
+int valptr = -1;
+void push_val(long value, int size, int type)
+{
+    if (++valptr == 16)
+    {
+        parse_error("Stack overflow\n");
+        return;
+    }
+    valstack[valptr]  = value;
+    sizestack[valptr] = size;
+    typestack[valptr] = type;
+}
+int pop_val(long *value, int *size, int *type)
+{
+    if (valptr < 0)
+    {
+        parse_error("Stack underflow\n");
+        return (-1);
+    }
+    *value = valstack[valptr];
+    *size  = sizestack[valptr];
+    *type  = typestack[valptr];
+    return valptr--;
+}
 /*
  * Constant expression parsing
  */
+int calc_op(t_token op)
+{
+    long val1, val2;
+    int size1, size2, type1, type2;
+    if (!pop_val(&val2, &size2, &type2))
+        return 0;
+    pop_val(&val1, &size1, &type1);
+    if (type1 != CONST_TYPE || type2 != CONST_TYPE)
+    {
+        parse_error("Bad constant operand");
+        return (0);
+    }
+    switch (op)
+    {
+        case MUL_TOKEN:
+            val1 *= val2;
+            break;
+        case DIV_TOKEN:
+            val1 /= val2;
+            break;
+        case MOD_TOKEN:
+            val1 %= val2;
+            break;
+        case ADD_TOKEN:
+            val1 += val2;
+            break;
+        case SUB_TOKEN:
+            val1 -= val2;
+            break;
+        case SHL_TOKEN:
+            val1 <<= val2;
+            break;
+        case SHR_TOKEN:
+            val1 >>= val2;
+            break;
+        case AND_TOKEN:
+            val1 &= val2;
+            break;
+        case OR_TOKEN:
+            val1 |= val2;
+            break;
+        case EOR_TOKEN:
+            val1 ^= val2;
+            break;
+        default:
+            return (0);
+    }
+    size1 = size1 > size2 ? size1 : size2;
+    push_val(val1, size1, type1);
+    return (1);
+}
 int parse_constexpr(long *value, int *size);
 int parse_constterm(long *value, int *size)
 {
@@ -104,11 +182,14 @@ int parse_constterm(long *value, int *size)
     }
     return (type);
 }
-int parse_constval(long *value, int *size)
+int parse_constval(void)
 {
-    int mod = 0, type;
+    int mod = 0, type, size;
+    long value;
 
-    while (!(type = parse_constterm(value, size)))
+    value = 0;
+    size  = 1;
+    while (!(type = parse_constterm(&value, &size)))
     {
         switch (scantoken)
         {
@@ -138,10 +219,12 @@ int parse_constval(long *value, int *size)
      */
     switch (scantoken)
     {
+        case CLOSE_PAREN_TOKEN:
+            break;
     	case STRING_TOKEN:
-            *size  = tokenlen - 1;
-            *value = constval;
-            type   = STRING_TYPE;
+            size  = tokenlen - 1;
+            value = constval;
+            type  = STRING_TYPE;
             if (mod)
             {
                 parse_error("Invalid string modifiers");
@@ -149,100 +232,110 @@ int parse_constval(long *value, int *size)
             }
             break;
         case CHAR_TOKEN:
-            *size  = 1;
-            *value = constval;
-            type   = CONST_TYPE;
+            size  = 1;
+            value = constval;
+            type  = CONST_TYPE;
             break;
         case INT_TOKEN:
-            *size  = 2;
-            *value = constval;
-            type   = CONST_TYPE;
+            size  = 2;
+            value = constval;
+            type  = CONST_TYPE;
             break;
         case ID_TOKEN:
-            *size = 2;
+            size = 2;
             type = id_type(tokenstr, tokenlen);
             if (type & CONST_TYPE)
-                *value = id_const(tokenstr, tokenlen);
+                value = id_const(tokenstr, tokenlen);
             else if ((type & (FUNC_TYPE | EXTERN_TYPE)) || ((type & ADDR_TYPE) && (mod == 8)))
-                *value = id_tag(tokenstr, tokenlen);
+                value = id_tag(tokenstr, tokenlen);
             else
-            {
-                parse_error("Invalid constant");
                 return (0);
-            }
-            break;
-        case CLOSE_PAREN_TOKEN:
             break;
         default:
-            parse_error("Invalid constant");
             return (0);
     }
     if (mod & 1)
-        *value = -*value;
+        value = -value;
     if (mod & 2)
-        *value = ~*value;
+        value = ~value;
     if (mod & 4)
-        *value = *value ? 0 : -1;
+        value = value ? 0 : -1;
+    push_val(value, size, type);
     return (type);
 }
 int parse_constexpr(long *value, int *size)
 {
-    long val1, val2;
-    int valtype, type, size1, size2;
-
-    if (!(valtype = parse_constval(&val1, &size1)))
-        return (0);
+    int prevmatch;
+    int matchop = 0;
+    int optos = opsptr;
+    int i;
+    int type = CONST_TYPE;
+    *value = 0;
+    *size  = 1;
     do
     {
-        size2 = 0;
-        switch (scan())
+        /*
+         * Parse sequence of double operand operations.
+         */
+        prevmatch = matchop;
+        matchop   = 0;
+        if (parse_constval())
         {
-            case ADD_TOKEN:
-                if (!(type = parse_constval(&val2, &size2)))
-                    return (0);
-                val1 = val1 + val2;
-                break;
-            case SUB_TOKEN:
-                if (!(type = parse_constval(&val2, &size2)))
-                    return (0);
-                val1 = val1 - val2;
-                break;
-            case MUL_TOKEN:
-                if (!(type = parse_constval(&val2, &size2)))
-                    return (0);
-                val1 = val1 * val2;
-                break;
-            case DIV_TOKEN:
-                if (!(type = parse_constval(&val2, &size2)))
-                    return (0);
-                val1 = val1 / val2;
-                break;
-            case AND_TOKEN:
-                if (!(type = parse_constval(&val2, &size2)))
-                    return (0);
-                val1 = val1 & val2;
-                break;
-            case OR_TOKEN:
-                if (!(type = parse_constval(&val2, &size2)))
-                    return (0);
-                val1 = val1 | val2;
-                break;
-            case EOR_TOKEN:
-                if (!(type = parse_constval(&val2, &size2)))
-                    return (0);
-                val1 = val1 ^ val2;
-                break;
+            matchop = 1;
+            scan();
+            for (i = 0; i < sizeof(binary_ops_table); i++)
+                if (scantoken == binary_ops_table[i])
+                {
+                    matchop = 2;
+                    if (binary_ops_precedence[i] >= tos_op_prec(optos))
+                        if (!calc_op(pop_op()))
+                        {
+                            parse_error(": Invalid binary operation");
+                            return (0);
+                        }
+                    push_op(scantoken, binary_ops_precedence[i]);
+                    break;
+                }
         }
-        if (size1 > size2)
-            *size = size1;
-        else
+    } while (matchop == 2);
+    if (matchop == 0 && prevmatch == 0)
+        return (0);
+    if (matchop == 0 && prevmatch == 2)
+    {
+        parse_error("Missing operand");
+        return (0);
+    }
+    while (optos < opsptr)
+        if (!calc_op(pop_op()))
         {
-            valtype = type;
-            *size   = size2;
+            parse_error(": Invalid binary operation");
+            return (0);
         }
-    } while (size2);
-    *value = val1;
-    return (valtype);
+    pop_val(value, size, &type);
+    return (type);
+}
+int parse_const(long *value)
+{
+    /*
+     * Get simple constant.
+     */
+    switch (scan())
+    {
+        case CHAR_TOKEN:
+        case INT_TOKEN:
+            *value = constval;
+            break;
+        case ID_TOKEN:
+            if (id_type(tokenstr, tokenlen) & CONST_TYPE)
+            {
+                *value = id_const(tokenstr, tokenlen);
+                break;
+            }
+        default:
+            *value = 0;
+            return (0);
+    }
+    return (CONST_TYPE);
 }
 /*
  * Normal expression parsing
@@ -509,7 +602,7 @@ int parse_value(int rvalue)
                 }
                 ref_type   = (scantoken == PTRB_TOKEN) ? BPTR_TYPE : WPTR_TYPE;
                 ref_offset = 0;
-                if (!parse_constval(&ref_offset, &const_size))
+                if (!parse_const(&ref_offset))
                     scan_rewind(tokenstr);
                 if (ref_offset != 0)
                 {
@@ -526,7 +619,7 @@ int parse_value(int rvalue)
                 ref_type = (ref_type & (VAR_TYPE | CONST_TYPE)) 
                          ? ((scantoken == DOT_TOKEN) ? BYTE_TYPE : WORD_TYPE)
                          : ((scantoken == DOT_TOKEN) ? BPTR_TYPE : WPTR_TYPE);
-                if (parse_constval(&const_offset, &const_size))
+                if (parse_const(&const_offset))
                     ref_offset += const_offset;
                 else
                     scan_rewind(tokenstr);
@@ -943,7 +1036,7 @@ int parse_stmnt(void)
                      */
                     int elem_size;
                     elem_type = (scantoken == DOT_TOKEN) ? BYTE_TYPE : WORD_TYPE;
-                    if (!parse_constval(&elem_offset, &elem_size))
+                    if (!parse_const(&elem_offset))
                         scantoken = ID_TOKEN;
                     else
                         scan();
