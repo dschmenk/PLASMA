@@ -494,6 +494,12 @@ int parse_value(int rvalue)
                  */
                 if (emit_value)
                 {
+                    if (ref_offset != 0)
+                    {
+                        emit_const(ref_offset);
+                        emit_op(ADD_TOKEN);
+                        ref_offset = 0;
+                    }
                     if (ref_type & PTR_TYPE)
                         (ref_type & BPTR_TYPE) ? emit_lb() : emit_lw();
                     if (scan_lookahead() != CLOSE_PAREN_TOKEN)
@@ -559,6 +565,15 @@ int parse_value(int rvalue)
                     }
                     emit_value = 1;
                 }
+                else
+                {
+                    if (ref_offset != 0)
+                    {
+                        emit_const(ref_offset);
+                        emit_op(ADD_TOKEN);
+                        ref_offset = 0;
+                    }
+                }
                 while (parse_expr())
                 {
                     if (scantoken != COMMA_TOKEN)
@@ -600,16 +615,20 @@ int parse_value(int rvalue)
                     }
                     emit_value = 1;
                 }
-                ref_type   = (scantoken == PTRB_TOKEN) ? BPTR_TYPE : WPTR_TYPE;
-                ref_offset = 0;
-                if (!parse_const(&ref_offset))
-                    scan_rewind(tokenstr);
-                if (ref_offset != 0)
+                else
                 {
-                    emit_const(ref_offset);
-                    emit_op(ADD_TOKEN);
+                    if (ref_offset != 0)
+                    {
+                        emit_const(ref_offset);
+                        emit_op(ADD_TOKEN);
+                    }
+                    if (ref_type & PTR_TYPE)
+                        (ref_type & BPTR_TYPE) ? emit_lb() : emit_lw();
                 }
                 ref_offset = 0;
+                ref_type = (scantoken == PTRB_TOKEN) ? BPTR_TYPE : WPTR_TYPE;
+                if (!parse_const(&ref_offset))
+                    scan_rewind(tokenstr);
                 break;
             case DOT_TOKEN:
             case COLON_TOKEN:
@@ -637,21 +656,18 @@ int parse_value(int rvalue)
                         emit_value = 1;
                     }
                 }
-                else
-                {
-                    if (ref_offset != 0)
-                    {
-                        emit_const(ref_offset);
-                        emit_op(ADD_TOKEN);
-                        ref_offset = 0;
-                    }
-                }
                 break;
         }
     }
     if (emit_value)
     {
-        if (rvalue && deref && (ref_type & PTR_TYPE))
+        if (ref_offset != 0)
+        {
+            emit_const(ref_offset);
+            emit_op(ADD_TOKEN);
+            ref_offset = 0;
+        }
+        if (deref && (ref_type & PTR_TYPE))
             (ref_type & BPTR_TYPE) ? emit_lb() : emit_lw();
     }
     else
@@ -692,6 +708,8 @@ int parse_value(int rvalue)
             return (0);
         }
     }
+    if (type & PTR_TYPE)
+        ref_type = type;
     return (ref_type ? ref_type : WORD_TYPE);
 }
 int parse_expr()

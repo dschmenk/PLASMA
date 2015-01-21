@@ -1,0 +1,775 @@
+//
+// Handle based memory manager
+//
+import STDLIB
+    predef syscall, call, memset, getc, gets, putc, puts, putln
+    predef memset, memcpy, modaddr, modexec
+    predef heapmark, heapallocalign, heapalloc, heaprelease
+    predef isugt, isuge, isult, isule
+    byte MACHID
+end
+const iobuffer = $0800
+struc t_initdata
+    word   volptr
+    word   freeblks
+    word   ramvol
+    word   bestvol
+    word   ramfree
+    word   bestfree
+    word   filecnt
+    word   catentry
+    byte   catref
+    byte   firstblk
+    byte   entrylen
+    byte   entriesblk
+    byte   swapstrlen
+    byte[] info
+    byte[] catalog
+end
+word initdata
+//
+// Access bytes within a word
+//
+struc t_word
+    byte lsb
+    byte msb
+end
+//
+// Alloced memory block structure
+//
+struc t_memblk
+    byte blksiz
+    byte blkref
+    byte blklok
+end
+//
+// Free memory block structure
+//
+struc t_freblk
+    word fresiz
+    word frenxt
+    word freprv
+end
+//
+// Block size
+//
+const MAX_BLK_SIZE = $0FE0
+const MAX_BLK_MASK = $0FF0
+const MIN_BLK_SIZE = $10
+const MIN_BLK_MASK = $0F
+//
+// Block states
+//
+const HMEM_ADDR     = $FFFC
+const HMEM_STATE    = $03
+const HMEM_MOVEABLE = $00 // Many dependencies on this being $00
+const HMEM_AVAIL    = $01
+const HMEM_LOCKED   = $02
+const HMEM_SWAPPED  = $03
+//
+// Block flags
+//
+const HMEM_ACCESSED = $80
+//
+// Handle modifier
+//
+const HMOD = $4321
+//
+// Handle tables/lists
+//
+const PG_SIZE     = 512
+const PG_ENTRIES  = 256
+const PG_TBL_SIZE = 8
+word[PG_TBL_SIZE] hpgtbl // Handle page table
+word pooladdr
+word poolsize
+word frelst              // Free list
+byte sweeppg, sweepen
+byte[64] swapvol = "/"   // Swap volume
+byte swapdir = "/SWAP/"
+byte hexchar = '0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F' 
+//
+// Fill block filename
+//
+def strcharadd(str, char)
+    ^str = ^str + 1
+    str->[^str] = char
+end
+def swapfile(filestr, hmem)
+    memcpy(filestr, @swapvol, swapvol + 1)
+    strcharadd(filestr, 'H')
+    strcharadd(filestr, hexchar[(hmem >> 12) & $0F])
+    strcharadd(filestr, hexchar[(hmem >> 8)  & $0F])
+    strcharadd(filestr, hexchar[(hmem >> 4)  & $0F])
+    strcharadd(filestr, hexchar[ hmem        & $0F])
+end
+def open(path)
+    byte params[6]
+
+    params.0 = 3
+    params:1 = path
+    params:3 = iobuffer
+    params.5 = 0
+    syscall($C8, @params)
+    return params.5
+end
+def close(refnum)
+    byte params[2]
+
+    params.0 = 1
+    params.1 = refnum
+    return syscall($CC, @params)
+end
+def read(refnum, buff, len)
+    byte params[8]
+
+    params.0 = 4
+    params.1 = refnum
+    params:2 = buff
+    params:4 = len
+    params:6 = 0
+    syscall($CA, @params)
+    return params:6
+end
+def write(refnum, buff, len)
+    byte params[8]
+
+    params.0 = 4
+    params.1 = refnum
+    params:2 = buff
+    params:4 = len
+    params:6 = 0
+    syscall($CB, @params)
+    return params:6
+end
+def get_eof(refnum)
+    byte params[5]
+
+    params.0 = 2
+    params.1 = refnum
+    params:2 = 0
+    params.4 = 0
+    syscall($D1, @params)
+    return params:2
+end
+def get_info(path, infoptr)
+    byte params[18]
+    
+    memset(@params, 18, 0)
+    params.0 = 10
+    params:1 = path
+    syscall($C4, @params)
+    return memcpy(infoptr, @params.3, 15)
+end
+def create(path, access, type, aux)
+    byte params[12], kind
+
+    kind = $01
+    if type == $0F
+        kind = $0D
+    fin
+    params.0  = 7
+    params:1  = path
+    params.3  = access
+    params.4  = type
+    params:5  = aux
+    params.7  = kind
+    params:8  = 0
+    params:10 = 0
+    return syscall($C0, @params)
+end
+def destroy(path)
+    byte params[12]
+
+    params.0 = 1
+    params:1 = path
+    return syscall($C1, @params)
+end
+def volumes(unit, buff)
+    byte params[4]
+
+    params.0 = 2
+    params.1 = unit
+    params:2 = buff
+    return syscall($C5, @params)
+end
+//
+// Find exact/best free memory match
+//
+def unlink(freblk)
+    //
+    // Unlink free block
+    //
+    if freblk=>freprv
+        freblk=>freprv=>frenxt = freblk=>frenxt
+    else
+        frelst = freblk=>frenxt
+    fin
+    if freblk=>frenxt
+        freblk=>frenxt=>freprv = freblk=>freprv
+    fin
+    return freblk
+end
+def unfre(freblk, size)
+    word shrink
+    
+    if freblk=>fresiz == size
+        //
+	// Unlink free block
+	//
+        unlink(freblk)
+    elsif freblk=>fresiz > size
+        //
+	// Shrink free block
+	//
+	shrink = freblk + size
+	if freblk=>freprv
+	    freblk=>freprv=>frenxt = shrink
+	else
+	    frelst = shrink
+	fin
+	if freblk=>frenxt
+	    freblk=>frenxt=>freprv = shrink
+	fin
+	shrink=>fresiz = freblk=>fresiz - size
+	shrink=>frenxt = freblk=>frenxt
+	shrink=>freprv = freblk=>freprv
+    else
+        freblk = 0
+    fin
+    return freblk
+end
+def addfre(freblk)
+    word srch
+    
+    freblk=>fresiz = freblk=>blksiz << 4
+    if frelst and frelst < freblk
+        srch = frelst
+        while srch=>frenxt
+            if srch=>frenxt > freblk
+	        //
+		// Insert into list
+		//
+		freblk=>freprv       = srch
+		freblk=>frenxt       = srch=>frenxt
+		srch=>frenxt=>freprv = freblk
+		srch=>frenxt         = freblk
+	    fin
+            srch = srch=>frenxt
+        loop
+	//
+	// Add to end of list
+	//
+	freblk=>freprv = srch
+	freblk=>frenxt = 0
+	srch=>frenxt   = freblk
+    else
+        //
+	// Add to beginning of list
+	//
+	freblk=>freprv = 0
+	freblk=>frenxt = frelst
+	frelst         = freblk
+    fin
+end
+def findexact(size)
+    word srch
+    
+    srch = frelst
+    while srch
+        if srch=>fresiz == size
+	    return unlink(srch)
+	fin
+        srch = srch=>frenxt
+    loop
+end
+def findbest(size)
+    word srch, shrink
+    
+    srch  = frelst
+    while srch
+        if srch=>fresiz >= size
+	    return unfre(srch, size)
+	fin
+        srch = srch=>frenxt
+    loop
+end
+//
+// Memory coallesce/compaction/swap out routines
+//
+def coallesce
+    word srch, combined
+    
+    combined = 0
+    srch = frelst
+    while srch
+        if srch + srch=>fresiz == srch=>frenxt
+	    //
+	    // Combine adjacent free space
+	    //
+	    srch=>frenxt = srch=>frenxt=>frenxt
+	    if srch=>frenxt
+	        srch=>frenxt=>freprv = srch
+	    fin
+	    combined = 1
+	fin
+        srch = srch=>frenxt
+    loop
+    return combined
+end
+def compact
+    word page, entry, memblk, moveblk, size, srch
+    byte moved
+    
+    moved = 0
+    for page = PG_TBL_SIZE - 1 downto 0
+        if hpgtbl[page]
+            for entry = 255 downto 0
+		if hpgtbl:[page, entry].lsb & HMEM_STATE == HMEM_MOVEABLE
+                    memblk = hpgtbl:[page, entry]
+		    size    = memblk=>blksiz << 4
+		    moveblk = 0
+                    srch    = frelst
+		    while srch and srch < memblk
+                        if srch=>fresiz >= size
+			    moveblk = unfre(srch)
+			    break
+			fin
+			srch = srch=>frenxt
+		    loop
+		    if moveblk
+		        memcpy(moveblk, memblk, size)
+			hpgtbl:[page, entry] = moveblk
+			addfre(memblk)
+			moved = 1
+		    fin
+		fin
+            next
+	    break
+	fin
+    next
+    if moved
+        coallesce
+    fin
+    return moved
+end
+//
+// Swap out memory block
+//
+def swapout(accessed)
+    byte[64] filename
+    byte ref
+    word page, entry, memblk, size, hmem
+    byte swapped
+    
+    swapped = 0
+    for page = PG_TBL_SIZE - 1 downto 0
+        if hpgtbl[page]
+            for entry = 255 downto 0
+		if hpgtbl:[page, entry].lsb & HMEM_STATE == HMEM_MOVEABLE
+                    memblk = hpgtbl:[page, entry]
+		    if not memblk->blklok & accessed
+		        //
+			// Swap this block out
+			//
+			size = memblk=>blksiz << 4
+			hmem.lsb = page
+			hmem.msb = entry
+			swapfile(@filename, hmem)
+			create(@filename, $C3, $00, $0000)
+			ref = open(@filename)
+			if ref
+			    //
+			    // Write it out
+			    //
+			    if write(ref, memblk, size) == 0
+			        hpgtbl:[page, entry] = HMEM_SWAPPED
+				addfre(memblk)
+				swapped = 1
+			    fin
+			fin
+			close(ref)
+		    fin
+		fin
+            next
+	    break
+	fin
+    next
+    if swapped
+        coallesce
+        compact
+    fin
+    return swapped
+end
+//
+// Find a memory block
+//
+def getblk(size)
+    word addr
+    
+    size = ((size + t_memblk) | MIN_BLK_MASK) + 1
+    if size > MAX_BLK_SIZE; return 0; fin
+    addr = findexact(size)
+    if !addr
+        coallesce
+	addr = findexact(size)
+	if !addr
+	    compact
+	    addr = findbest(size)
+	    if !addr
+	        swapout(HMEM_ACCESSED)
+		addr = findbest(size)
+		if !addr
+	            swapout(0)
+		    addr = findbest(size)
+		fin
+	    fin
+	fin
+    fin
+    //
+    // Fill in the block
+    //
+    if addr
+        addr->blksiz = size >> 4
+	addr->blkref = 1
+	addr->blklok = 0
+    fin
+    return addr
+end
+//
+// Swap in a memory block
+//
+def swapin(hmem)
+    byte[64] filename
+    byte ref
+    word memblk, size
+    
+    memblk = 0
+    if hpgtbl:[hmem.lsb, hmem.msb].lsb == HMEM_SWAPPED
+        //
+	// Swap this block back in
+	//
+	swapfile(@filename, hmem)
+	ref = open(@filename)
+	if ref
+	    size = get_eof(ref)
+            memblk = getblk(size - t_memblk - 1)
+	    //
+	    // Read it in
+	    //
+	    if memblk
+	        hpgtbl:[hmem.lsb, hmem.msb] = memblk
+	        read(ref, memblk, size)
+	    fin
+	    close(ref)
+	    destroy(@filename)
+	fin
+    fin
+    return memblk
+end
+//
+// Incrementally clear the ACCESSED BIT
+//
+export def sweep
+    word memblk
+    
+    if hpgtbl[sweeppg]
+        memblk = hpgtbl:[sweeppg, sweepen]
+	when memblk.lsb & HMEM_STATE
+	    is HMEM_MOVEABLE
+	    is HMEM_LOCKED
+	        memblk = memblk & HMEM_ADDR
+	        if memblk->blklok & HMEM_ACCESSED
+	            memblk->blklok = memblk->blklok & $7F
+		fin
+	wend
+	if sweepen == 255
+	    sweepen = 0
+	    if sweeppg == PG_TBL_SIZE - 1
+	        sweeppg = 0
+	    else
+	        sweeppg = sweeppg + 1
+	    fin
+	else
+	    sweepen = sweepen + 1
+	fin
+    else
+        if sweeppg == PG_TBL_SIZE - 1
+	    sweeppg = 0
+	else
+	    sweeppg = sweeppg + 1
+	fin
+    fin
+end
+//
+// Set end of memory pool
+//
+export def brk(addr)
+    word brksiz, brkblk, srch
+    
+    //
+    // Check if addr is too high or low
+    //
+    if isugt(addr, @brksiz); return 0; fin
+    if isule(addr, heapmark); return 0; fin
+    brksiz = 0
+    if not pooladdr
+        //
+	// Allocate the memory pool
+	//
+	brksiz = addr - heapmark
+	if isult(brksiz, MAX_BLK_SIZE); return 0; fin // Not enough heap
+	poolsize       = brksiz
+	pooladdr       = heapalloc(poolsize)
+	frelst         = pooladdr
+	frelst=>fresiz = poolsize
+	frelst=>frenxt = 0
+	frelst=>freprv = 0
+    else
+        //
+	// Can we extend the memory pool?
+	//
+	if pooladdr + poolsize == heapmark
+	    brksiz = addr - heapmark
+            if isuge(brksiz, MIN_BLK_SIZE)
+	        brkblk = heapalloc(brksiz)
+	        //
+		// Add block to end of free list
+		//
+		brkblk=>fresiz = brksiz
+		brkblk=>frenxt = 0
+		if frelst
+		    srch = frelst
+		    while srch=>frenxt; srch = srch=>frenxt; loop
+		    srch=>frenxt   = brkblk
+		    brkblk=>freprv = srch
+		else
+		    frelst         = brkblk
+		    brkblk=>freprv = 0
+		fin
+	    fin
+	fin
+    fin
+    return brksiz
+end
+export def sbrk(size)
+    return brk(heapmark + size)
+end
+//
+// Allocate memory block
+//
+export def hmemNew(size)
+    word page, entry, hnew, memblk
+    
+    //
+    // First, find a free handle
+    //
+    for page = PG_TBL_SIZE - 1 downto 0
+        if !hpgtbl[page]
+            //
+            // Allocate a new page table
+            //
+            hpgtbl[page] = heapalloc(PG_SIZE)
+	    memset(hpgtbl[page], PG_SIZE, HMEM_AVAIL)
+	    //
+	    // Check if we need to allocate the memory pool
+	    //
+	    if not pooladdr
+	        //
+		// Allocate 3/4 of available heap on 128K machine, 1/2 on 64K machine
+		//
+		poolsize = ((@page - heapmark) >> 1) & $7FFF
+		if MACHID & $30 == $30
+	            poolsize = poolsize + (poolsize >> 1)
+		fin
+		sbrk(poolsize)
+	    fin
+        fin
+        for entry = 255 downto 0
+            if hpgtbl:[page, entry].lsb == HMEM_AVAIL
+                //
+                // Search for the best match
+                //
+                memblk = getblk(size)
+                if !memblk; return 0; fin
+                hpgtbl:[page, entry] = memblk
+                hnew.lsb = page
+                hnew.msb = entry
+                return hnew
+            fin
+        next
+    next
+end
+//
+// Lock memory block in place
+//
+export def hmemLock(hmem)
+    word memblk
+    
+    memblk = hpgtbl:[hmem.lsb, hmem.msb]
+    when memblk.lsb & HMEM_STATE
+        is HMEM_SWAPPED
+	    memblk = swapin(hmem)
+	    if not memblk; return 0; fin
+	is HMEM_MOVEABLE
+	    hpgtbl:[hmem.lsb, hmem.msb] = memblk | HMEM_LOCKED
+        is HMEM_LOCKED
+	    memblk = memblk & HMEM_ADDR
+	    memblk->blklok = (memblk->blklok + 1) | HMEM_ACCESSED
+	    return memblk + t_memblk
+    wend
+end
+//
+// Unlock memory block
+//
+export def hmemUnlock(hmem)
+    byte lock
+    word memblk
+    
+    memblk = hpgtbl:[hmem.lsb, hmem.msb]
+    if memblk.lsb & HMEM_STATE == HMEM_LOCKED
+        memblk = memblk & HMEM_ADDR
+	lock = memblk->blklok - 1
+	if lock == HMEM_ACCESSED
+	    //
+	    // Block is now moveable
+	    //
+	    hpgtbl:[hmem.lsb, hmem.msb] = memblk
+	fin
+	memblk->blklok = lock
+    fin
+end
+//
+// Increment reference count
+//
+export def hmemRef(hmem)
+    word memblk
+    
+    memblk = hpgtbl:[hmem.lsb, hmem.msb]
+    when memblk.lsb & HMEM_STATE
+        is HMEM_SWAPPED
+	    memblk = swapin(hmem)
+        is HMEM_LOCKED
+	is HMEM_MOVEABLE
+	    memblk = memblk & HMEM_ADDR
+	    if not memblk; return 0; fin
+	    memblk->blkref = memblk->blkref + 1
+    wend
+end
+//
+// Decrement reference count
+//
+export def hmemUnref(hmem)
+    byte ref
+    word memblk
+    
+    memblk = hpgtbl:[hmem.lsb, hmem.msb]
+    when memblk & HMEM_STATE
+        is HMEM_SWAPPED
+	    memblk = swapin(hmem)
+        is HMEM_LOCKED
+	is HMEM_MOVEABLE
+	    memblk = memblk & HMEM_ADDR
+	    if not memblk; return 0; fin
+	    ref = memblk->blkref - 1
+	    if ref == 0
+	        //
+		// No more references, free block
+		//
+		hpgtbl:[hmem.lsb, hmem.msb] = HMEM_AVAIL
+	        addfre(memblk)
+	    else
+	        memblk->blkref = ref
+	    fin
+    wend
+end
+//
+// DEBUG
+//
+def putln
+    return putc($0D)
+end
+def putb(hexb)
+    return call($FDDA, hexb, 0, 0, 0)
+end
+def puth(hex)
+    return call($F941, hex >> 8, hex, 0, 0)
+end
+def puti(i)
+  if i < 0; putc('-'); i = -i; fin
+  if i < 10
+    putc(i + '0')
+  else
+    puti(i / 10)
+    putc(i % 10 + '0')
+  fin
+end
+//
+// Search for best swap volume
+//
+initdata = heapmark // Use data at top of heap for initialization
+volumes(0, iobuffer)
+initdata=>volptr = iobuffer
+initdata=>ramfree  = 0
+initdata=>bestfree = 0
+for sweepen = 0 to 15
+    ^initdata=>volptr = ^initdata=>volptr & $0F
+    if ^initdata=>volptr
+        memcpy(@swapvol + 2, initdata=>volptr + 1, ^initdata=>volptr)
+        swapvol = ^initdata=>volptr + 1
+        get_info(@swapvol, @initdata->info)
+	initdata=>freeblks = initdata=>info:2 - initdata=>info:5
+	if initdata=>volptr:1 == $522F and initdata=>volptr:3 == $4D41 // '/RAM'
+	    if isugt(initdata=>freeblks, initdata=>ramfree)
+	        initdata=>ramvol  = initdata=>volptr
+		initdata=>ramfree = initdata=>freeblks
+	    fin
+	elsif isugt(initdata=>freeblks, initdata=>bestfree)
+	    initdata=>bestvol  = initdata=>volptr
+	    initdata=>bestfree = initdata=>freeblks
+	fin
+    fin
+    initdata=>volptr = initdata=>volptr + 16
+next
+if isugt(initdata=>ramfree, $40) or isugt(initdata=>ramfree, initdata=>bestfree) // RAMdrive greater than 64K? Use it
+    initdata=>bestvol  = initdata=>ramvol
+    initdata=>bestfree = initdata=>ramfree
+fin
+memcpy(@swapvol + 2, initdata=>bestvol + 1, ^initdata=>bestvol)
+swapvol = ^initdata=>bestvol + 1
+memcpy(@swapvol + swapvol + 1, @swapdir + 1, swapdir)
+swapvol = swapvol + swapdir
+create(@swapvol, $C3, $0F, $0000) // Create the swap directory
+//
+// Clear out left over swap files
+//
+initdata->catref     = open(@swapvol)
+initdata->firstblk   = 1
+initdata->swapstrlen = swapvol
+repeat
+    if read(initdata->catref, @initdata->catalog, 512) == 512
+        initdata=>catentry = @initdata->catalog.4
+	if initdata->firstblk
+	    initdata->entrylen   = initdata->catalog.$23
+	    initdata->entriesblk = initdata->catalog.$24
+	    initdata=>filecnt    = initdata=>catalog:$25
+	    initdata=>catentry   = initdata=>catentry + initdata->entrylen
+        fin
+	for sweepen = initdata->firstblk to initdata->entriesblk
+	    ^initdata=>catentry = ^initdata=>catentry & $0F
+	    if ^initdata=>catentry
+                memcpy(@swapvol + swapvol + 1, initdata=>catentry + 1, ^initdata=>catentry)
+                swapvol = swapvol + ^initdata=>catentry
+	        destroy(@swapvol)
+                swapvol = initdata->swapstrlen
+	    fin
+	    initdata=>catentry = initdata=>catentry + initdata->entrylen
+        next
+	initdata->firstblk = 0
+    else
+        initdata->filecnt = 0
+    fin
+until !initdata->filecnt
+close(initdata->catref)
+puts(@swapvol); putln
+done

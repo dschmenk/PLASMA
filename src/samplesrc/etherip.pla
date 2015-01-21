@@ -1,7 +1,7 @@
 import STDLIB
     predef syscall, call, memset, getc, gets, putc, puts, putln
     predef memset, memcpy, modaddr, modexec
-    predef heapmark, heapallocalign, heapalloc, heaprelease, heapavail
+    predef heapmark, heapallocalign, heapalloc, heaprelease
     byte MACHID
 end
 //
@@ -12,9 +12,17 @@ struc t_edrvr
     word fillMAC
     word writeFrame
     word readFrame
-    word nextEvent
+    word recvFrame
 end
 word edrvr
+//
+// Ethernet packet header
+//
+struc t_ether
+    byte[6] hwdst
+    byte[6] hwsrc
+    word    payload
+end
 //
 // IP datagram header
 //
@@ -48,27 +56,29 @@ struc t_arp
     byte[6] arp_senderha
     byte[4] arp_senderip
     byte[6] arp_targha
-    byte[4] arp_ragip
+    byte[4] arp_targip
 end
-byte hARP = $FF,$FF,$FF,$FF,$FF,$FF // BCAST
-byte MAC  = $00,$0A,$99,$1E,$02,$00
-byte      = $08, $06 // ARP payload
-
-byte pARP = $00, $01 // HW TYPE
-byte      = $08, $00 // PROTO TYPE
-byte      = 6        // HLEN
-byte      = 4        // PLEN
-byte      = $00, $01 // OP
-byte[6] senderha = $00,$0A,$99,$1E,$02,$00
-byte[4] senderip = 192,168,123,10
-byte[6] targha
-byte[4] targip   = 192,168,123,1
+//
+// Broadcast address for Ethernet and IP
+//
+byte BCAST = $FF, $FF, $FF, $FF, $FF, $FF
+//
+// Pre-configured ARP packet
+//
+byte ARP = $00, $01 // HW TYPE
+byte     = $08, $00 // PROTO TYPE
+byte     = 6        // HLEN
+byte     = 4        // PLEN
+byte     = $00, $01 // OP
+byte[6] localha
+byte[4] localip  = 192,168,123,10
+byte[6] remoteha
+byte[4] remoteip = 192,168,123,1
+//
+// Max Ethernet frame size
+//
 const maxesize = 1518
-const ehdrsize = 14
-//
-// Receive packet
-//
-byte[maxesize] recvpkt
+word pkt, len
 //
 // Defines for ASM routines
 //
@@ -88,10 +98,10 @@ asm swab
 	RTS
 end
 //
-// CHECKSUM BE format
-// checksum(BUF, LEN)
+// SUM BE format
+// sum(BUF, LEN)
 //
-asm checksum
+export asm sum
 	LDY	#$00
 	LDA	ESTKL+1,X
 	STY	ESTKL+1,X
@@ -126,12 +136,6 @@ CHKLP	LDA	(SRC),Y
 	DEC	ESTKH,X
 	BNE	CHKLP
 	INX
-	LDA	ESTKL,X
-	EOR	#$FF
-	STA	ESTKL,X
-	LDA	ESTKH,X
-	EOR	#$FF
-	STA	ESTKH,X
 	RTS
 end
 //
@@ -145,6 +149,41 @@ def putb(hexb)
 end
 def puth(hex)
     return call($F941, hex >> 8, hex, 0, 0)
+end
+def puti(i)
+  if i < 0; putc('-'); i = -i; fin
+  if i < 10
+    putc(i + '0')
+  else
+    puti(i / 10)
+    putc(i % 10 + '0')
+  fin
+end
+def putha(haptr)
+    byte i
+    
+    for i = 0 to 4
+        putb(haptr->[i]); putc(':')
+    next
+    return putb(haptr->[i])
+end
+def putip(ipptr)
+    byte i
+    
+    for i = 0 to 2
+        puti(ipptr->[i]); putc('.')
+    next
+    return puti(ipptr->[i])
+end
+def dumparp(packet)
+    putha(packet + arp_senderha)
+    putc('=')
+    putip(packet + arp_senderip)
+    putln
+    putha(packet + arp_targha)
+    putc('=')
+    putip(packet + arp_targip)
+    putln
 end
 def dumpfrm(packet, len)
     word i
@@ -161,13 +200,23 @@ def dumpfrm(packet, len)
 	fin
 	putb(^(packet+i))
     next
+    putln
 end
 
 if modexec(@etherlib) == 0
     edrvr = modaddr(@etherlib)
-    edrvr=>writeFrame(@hARP, @pARP, 28)
-    repeat; until edrvr=>nextEvent() or ^$C000 > 127
+    edrvr=>fillMAC(@localha)
+    edrvr=>writeFrame(@BCAST, PAYLOAD_ARP, @ARP, t_arp)
+    repeat; len = edrvr=>recvFrame(); until len or ^$C000 > 127
+    if len
+	pkt = heapalloc(len)
+	if edrvr=>readFrame(pkt) == PAYLOAD_ARP
+	    dumparp(pkt)
+	else
+            dumpfrm(pkt, len)
+	fin
+	heaprelease(pkt)
+    fin
     ^$C010
-    dumpfrm(@recvpkt, edrvr=>readFrame(@recvpkt))
 fin
 done

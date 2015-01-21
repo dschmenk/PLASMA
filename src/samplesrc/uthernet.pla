@@ -16,8 +16,8 @@ const modinitkeep = $4000
 //   word readFrame
 //   word nextEvent
 //
-predef fillmac, writefrm, readfrm, nextevt
-word = @fillmac, @writefrm, @readfrm, @nextevt, 0
+predef fillmac, writefrm, readfrm, recvfrm
+word = @fillmac, @writefrm, @readfrm, @recvfrm, 0
 //
 // Uthernet register offsets
 //
@@ -32,7 +32,7 @@ const AUTO_INC   = $8000
 //
 // Uthernet register addresses
 //
-word slot
+byte slot[]
 byte txcmd
 byte txlen
 byte isq
@@ -41,7 +41,7 @@ byte pregdata
 //
 // MAC address
 //
-byte MAC  = $00,$0A,$99,$1E,$02,$00
+byte MAC = $00,$0A,$99,$1E,$02,$00
 //
 // Ethernet header
 //
@@ -50,6 +50,9 @@ struc t_ehdr
     byte[6] ehdr_srcaddr
     word    ehdr_type
 end
+//
+// Current status an packet len
+word status, len // MUST be in this order!
 //
 // Defines for ASM routines
 //
@@ -195,36 +198,51 @@ def fillmac(pmac)
     pmac=>4 = MAC:4
     return pmac + 6
 end
-def writefrm(header, payload, size)
+def writefrm(destha, payload, packet, size)
+    
     pokeiow(txcmd, $C0)
     pokeiow(txlen, size + t_ehdr)
     repeat; until peekpreg($0138) & $0100
-    pokefrm(header, t_ehdr)
-    pokefrm(payload, size)
+    pokefrm(destha, 6)
+    pokefrm(@MAC, 6)
+    pokefrm(@payload, 2)
+    return pokefrm(packet, size)
 end
 def readfrm(packet)
-    word status, len
-
-    peekfrm(@status, 4)
+    byte[t_ehdr] header
+    word readlen
+    
+    readlen = len
     if status & $0100
+        peekfrm(@header, t_ehdr)
         peekfrm(packet, len)
-    else
-        pokepreg($0102, $0140) // Skip pkt
-	len = 0
+    fin
+    status = 0
+    len    = 0
+    return header:ehdr_type
+end
+def recvfrm
+    if len == 0
+        if peekiow(isq) & $3F == 4
+            peekfrm(@status, 4)
+	    if !(status & $0100)
+                pokepreg($0102, $0140) // Skip pkt
+	        status = 0
+	        len    = 0
+	    else
+	        len = len - t_ehdr
+	    fin
+	fin
     fin
     return len
-end
-def nextevt
-    return peekiow(isq) & $3F
 end
 //
 // Identify Uthernet card and initialize
 //
-for slot = $90 to $F0 step $10
+for slot = $F0 downto $90 step $10
     if (peekiow(slot+TXCMD) & $CC3F) == $09
         pokeiow(slot+PREG_INDEX, 0)
-		if peekiow(slot+PREG_DATA) == $630E
-		    txcmd    = slot + TXCMD
+	if peekiow(slot+PREG_DATA) == $630E
             txlen    = slot + TXLEN
             isq      = slot + INT_STATUS
             pregidx  = slot + PREG_INDEX
@@ -234,6 +252,7 @@ for slot = $90 to $F0 step $10
             _pokefrmh.1 = slot+1
             _peekfrml.1 = slot
             _peekfrmh.1 = slot+1
+	    txcmd = slot + TXCMD // Set this last
             pokepreg($0158, MAC:0) // MAC addr
             pokepreg($015A, MAC:2) // MAC addr
             pokepreg($015C, MAC:4) // MAC addr
