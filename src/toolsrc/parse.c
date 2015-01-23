@@ -692,7 +692,9 @@ int parse_value(int rvalue)
             {
                 if (type & PTR_TYPE)
                 {
-                    if (type & LOCAL_TYPE)
+                    if (type & FUNC_TYPE)
+                        emit_call(value, ref_type);
+                    else if (type & LOCAL_TYPE)
                         (type & BYTE_TYPE) ? emit_llb(value + ref_offset) : emit_llw(value + ref_offset);
                     else
                         (type & BYTE_TYPE) ? emit_lab(value, ref_offset, ref_type) : emit_law(value, ref_offset, ref_type);
