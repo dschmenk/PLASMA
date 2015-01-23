@@ -16,12 +16,14 @@ ROGUEIO = ROGUEIO\#FE1000
 ROGUEMAP= ROGUEMAP\#FE1000
 ROGUECOMBAT= ROGUECOMBAT\#FE1000
 HELLO   = HELLO\#FE1000
+MON     = MON\#FE1000
 HGR1    = HGR1\#FE1000
 HGR1TEST= HGR1TEST\#FE1000
 TEST    = TEST\#FE1000
 TESTLIB = TESTLIB\#FE1000
 PROFILE = PROFILE\#FE1000
 MEMMGR  = MEMMGR\#FE1000
+MEMTEST = MEMTEST\#FE1000
 PLASM   = plasm
 INCS    = toolsrc/tokens.h toolsrc/symbols.h toolsrc/lex.h toolsrc/parse.h toolsrc/codegen.h
 OBJS	= toolsrc/plasm.c toolsrc/parse.o toolsrc/lex.o toolsrc/codegen.o
@@ -41,7 +43,7 @@ TXTTYPE	= .TXT
 #SYSTYPE	= \#FF2000
 #TXTTYPE	= \#040000
 
-all: $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVM03) $(CMD) $(MEMMGR) $(SB) $(ROD) $(SIEVE) $(UTHERNET) $(ETHERIP) $(ROGUE) $(ROGUEMAP) $(ROGUECOMBAT) $(ROGUEIO) $(HGR1)
+all: $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVM03) $(CMD) $(MEMMGR) $(MEMTEST) $(SB) $(MON) $(ROD) $(SIEVE) $(UTHERNET) $(ETHERIP) $(ROGUE) $(ROGUEMAP) $(ROGUECOMBAT) $(ROGUEIO) $(HGR1)
 
 clean:
 	-rm *FE1000 *FF2000 $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVM03)
@@ -101,6 +103,14 @@ $(SB): toolsrc/sb.pla $(PLVM02) $(PLASM) toolsrc/sb.pla
 $(MEMMGR): libsrc/memmgr.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AM < libsrc/memmgr.pla > libsrc/memmgr.a
 	acme --setpc 4094 -o $(MEMMGR) libsrc/memmgr.a
+
+$(MEMTEST): samplesrc/memtest.pla $(PLVM02) $(PLASM)
+	./$(PLASM) -AM < samplesrc/memtest.pla > samplesrc/memtest.a
+	acme --setpc 4094 -o $(MEMTEST) samplesrc/memtest.a
+
+$(MON): samplesrc/mon.pla $(PLVM02) $(PLASM)
+	./$(PLASM) -AM < samplesrc/mon.pla > samplesrc/mon.a
+	acme --setpc 4094 -o $(MON) samplesrc/mon.a
 
 $(ROD): samplesrc/rod.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AM < samplesrc/rod.pla > samplesrc/rod.a

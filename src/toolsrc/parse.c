@@ -397,19 +397,13 @@ int parse_value(int rvalue)
                 if (deref)
                     push_op(scantoken, 0);
                 else
-                {
                     type |= BPTR_TYPE;
-                    deref++;
-                }
                 break;
             case WPTR_TOKEN:
                 if (deref)
                     push_op(scantoken, 0);
                 else
-                {
                     type |= WPTR_TYPE;
-                    deref++;
-                }
                 break;
             case AT_TOKEN:
                 deref--;
@@ -694,10 +688,20 @@ int parse_value(int rvalue)
         {
             if (type & CONST_TYPE)
                 emit_const(value);
-            else if (type & LOCAL_TYPE)
-                emit_localaddr(value + ref_offset);
-            else
-                emit_globaladdr(value, ref_offset, ref_type);
+            else if (type & ADDR_TYPE)
+            {
+                if (type & PTR_TYPE)
+                {
+                    if (type & LOCAL_TYPE)
+                        (type & BYTE_TYPE) ? emit_llb(value + ref_offset) : emit_llw(value + ref_offset);
+                    else
+                        (type & BYTE_TYPE) ? emit_lab(value, ref_offset, ref_type) : emit_law(value, ref_offset, ref_type);
+                }
+                else if (type & LOCAL_TYPE)
+                    emit_localaddr(value + ref_offset);
+                else
+                    emit_globaladdr(value, ref_offset, ref_type);
+            }
         }
     }
     while (optos < opsptr)
