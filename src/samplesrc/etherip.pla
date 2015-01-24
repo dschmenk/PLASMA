@@ -1,27 +1,11 @@
-import STDLIB
+import stdlib
     predef syscall, call, memset, getc, gets, putc, puts, putln
     predef memset, memcpy, modaddr, modexec
     predef heapmark, heapallocalign, heapalloc, heaprelease
     byte MACHID
 end
-//
-// Ethernet adapter driver
-//
-byte etherlib = "UTHERNET", 0
-struc t_edrvr
-    word fillMAC
-    word writeFrame
-    word readFrame
-    word recvFrame
-end
-word edrvr
-//
-// Ethernet packet header
-//
-struc t_ether
-    byte[6] hwdst
-    byte[6] hwsrc
-    word    payload
+import uthernet
+    predef MAC, writeEther, readEther, recvEther
 end
 //
 // IP datagram header
@@ -75,10 +59,13 @@ byte[4] localip  = 192,168,123,10
 byte[6] remoteha
 byte[4] remoteip = 192,168,123,1
 //
+// ARP segment list
+//
+word segARP = @ARP, t_arp
+//
 // Max Ethernet frame size
 //
-const maxesize = 1518
-word pkt, len
+const MAX_FRAME_SIZE = 1518
 //
 // Defines for ASM routines
 //
@@ -202,21 +189,37 @@ def dumpfrm(packet, len)
     next
     putln
 end
-
-if modexec(@etherlib) == 0
-    edrvr = modaddr(@etherlib)
-    edrvr=>fillMAC(@localha)
-    edrvr=>writeFrame(@BCAST, PAYLOAD_ARP, @ARP, t_arp)
-    repeat; len = edrvr=>recvFrame(); until len or ^$C000 > 127
-    if len
-	pkt = heapalloc(len)
-	if edrvr=>readFrame(pkt) == PAYLOAD_ARP
+//
+// Service incoming packets
+//
+def serviceIP
+    word pkt, len
+    
+    when recvEther()
+        is 0
+	    break
+        is PAYLOAD_ARP
+	    pkt = heapalloc(MAX_FRAME_SIZE)
+	    len = readEther(pkt, t_arp)
 	    dumparp(pkt)
-	else
+	    readEther(pkt, len) // read remaining packet data
+	    heaprelease(pkt)
+	    break
+        otherwise
+	    len = readEther(pkt, 0)
+	    pkt = heapalloc(len)
+	    readEther(pkt, len)
             dumpfrm(pkt, len)
-	fin
-	heaprelease(pkt)
-    fin
-    ^$C010
-fin
+	    heaprelease(pkt)
+    wend
+end
+
+localha:0 = MAC:0
+localha:2 = MAC:2
+localha:4 = MAC:4
+writeEther(@BCAST, PAYLOAD_ARP, @segARP, t_arp)
+repeat
+    serviceIP
+until ^$C000 > 127
+^$C010
 done

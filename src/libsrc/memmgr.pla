@@ -48,26 +48,24 @@ end
 struc t_freblk
     word fresiz
     word frenxt
-    word freprv
 end
 //
 // Block size
 //
 const MAX_BLK_SIZE = $2010
 const MAX_BLK_MASK = $1FFF
-const MIN_BLK_SIZE = $08
-const MIN_BLK_MASK = $07
+const MIN_BLK_SIZE = $04
+const MIN_BLK_MASK = $03
 //
 // Block states
 //
-const HMEM_ADDR     = $FFF8
-const HMEM_SIZE     = $FFF8
+const HMEM_ADDR     = $FFFC
+const HMEM_SIZE     = $FFFC
 const HMEM_STATE    = $07
 const HMEM_MOVEABLE = $00 // Many dependencies on this being $00
 const HMEM_AVAIL    = $01
 const HMEM_LOCKED   = $02
 const HMEM_SWAPPED  = $03
-const HMEM_UNINIT   = $04
 //
 // Block flags
 //
@@ -214,44 +212,37 @@ end
 //
 // Find exact/best free memory match
 //
-def unlink(freblk)
+def unlink(freblk, freprv)
     //
     // Unlink free block
     //
-    if freblk=>freprv
-        freblk=>freprv=>frenxt = freblk=>frenxt
+    if freprv
+        freprv=>frenxt = freblk=>frenxt
     else
         frelst = freblk=>frenxt
     fin
-    if freblk=>frenxt
-        freblk=>frenxt=>freprv = freblk=>freprv
-    fin
     return freblk
 end
-def unfre(freblk, size)
+def unfre(freblk, freprv, size)
     word shrink
     
     if freblk=>fresiz == size
         //
 	// Unlink free block
 	//
-        unlink(freblk)
+        unlink(freblk, freprv)
     elsif freblk=>fresiz > size
         //
 	// Shrink free block
 	//
 	shrink = freblk + size
-	if freblk=>freprv
-	    freblk=>freprv=>frenxt = shrink
+	if freprv
+	    freprv=>frenxt = shrink
 	else
 	    frelst = shrink
 	fin
-	if freblk=>frenxt
-	    freblk=>frenxt=>freprv = shrink
-	fin
 	shrink=>fresiz = freblk=>fresiz - size
 	shrink=>frenxt = freblk=>frenxt
-	shrink=>freprv = freblk=>freprv
     else
         freblk = 0
     fin
@@ -268,30 +259,23 @@ def addfre(freblk)
 	        //
 		// Insert into list
 		//
-		freblk=>freprv       = srch
-		freblk=>frenxt       = srch=>frenxt
-		srch=>frenxt=>freprv = freblk
-		srch=>frenxt         = freblk
+		freblk=>frenxt = srch=>frenxt
+		srch=>frenxt   = freblk
                 return
 	    fin
-            srch = srch=>frenxt
+            srch   = srch=>frenxt
         loop
 	//
 	// Add to end of list
 	//
-	freblk=>freprv = srch
 	freblk=>frenxt = 0
 	srch=>frenxt   = freblk
     else
         //
 	// Add to beginning of list
 	//
-	freblk=>freprv = 0
         freblk=>frenxt = frelst
-        if frelst
-            frelst=>freprv = freblk
-        fin
-	frelst = freblk
+	frelst         = freblk
     fin
 end
 //
@@ -309,9 +293,6 @@ def coallesce
 	    //
             srch=>fresiz = srch=>fresiz + srch=>frenxt=>fresiz
 	    srch=>frenxt = srch=>frenxt=>frenxt
-	    if srch=>frenxt
-	        srch=>frenxt=>freprv = srch
-	    fin
             combined = 1
             //putc('C')
         else
@@ -321,7 +302,7 @@ def coallesce
     return combined
 end
 def compact
-    word page, entry, memblk, moveblk, size, srch
+    word page, entry, memblk, moveblk, size, srch, prev
     byte moved
     
     moved = 0
@@ -332,13 +313,15 @@ def compact
                     memblk = hpgtbl:[page, entry]
 		    size    = memblk=>blksiz
 		    moveblk = 0
+		    prev    = 0
                     srch    = frelst
 		    while srch and srch < memblk
                         if srch=>fresiz >= size
-			    moveblk = unfre(srch, size)
+			    moveblk = unfre(srch, prev, size)
                             //putc('M');putc(' ');puth(moveblk);putc('=');puth(memblk);putln
 			    break
 			fin
+			prev = srch
 			srch = srch=>frenxt
 		    loop
 		    if moveblk
@@ -389,6 +372,9 @@ def swapout(accessed)
 			    // Write it out
 			    //
 			    if write(ref, memblk, size) == size
+			        //
+				// Zero size in page table flags swapin to read from disk
+				//
 			        hpgtbl:[page, entry] = HMEM_SWAPPED
 				addfre(memblk)
 				swapped = 1
@@ -412,26 +398,30 @@ end
 // Find a memory block
 //
 def findexact(size)
-    word srch
+    word srch, prev
 
     srch = frelst
+    prev = 0
     while srch
         if srch=>fresiz == size
             //putc('E')
-	    return unlink(srch)
+	    return unlink(srch, prev)
 	fin
+	prev = srch
         srch = srch=>frenxt
     loop
 end
 def findbest(size)
-    word srch, shrink
+    word srch, prev
     
-    srch  = frelst
+    prev = 0
+    srch = frelst
     while srch
         if srch=>fresiz >= size
             //putc('B')
-	    return unfre(srch, size)
+	    return unfre(srch, prev, size)
 	fin
+	prev = srch
         srch = srch=>frenxt
     loop
 end
@@ -476,41 +466,36 @@ def swapin(hmem)
     byte ref
     word memblk, size
     
-    memblk = 0
-    when hpgtbl:[hmem.lsb, hmem.msb].lsb & HMEM_STATE
-        is HMEM_SWAPPED
-            //
-	    // Swap this block back in
+    size = hpgtbl:[hmem.lsb, hmem.msb] & HMEM_SIZE
+    if size
+        //
+	// This was just uninitialized memory, don't bother reading from file
+	//
+        memblk = findblk(size)
+    else
+        //
+	// Swap this block back in
+	//
+	swapfile(@filename, hmem)
+	get_info(@filename, @info)
+	size   = info:2 // Size encoded in aux type
+        memblk = findblk(size)
+	if memblk
 	    //
-	    swapfile(@filename, hmem)
-	    get_info(@filename, @info)
-	    size = info:2 // size encoded in aux type
-	    memblk = findblk(size)
-	    if memblk
-                //
-		// Read it in
-		//
-		ref = open(@filename)
-		if ref
-	            read(ref, memblk, size)
-		    hpgtbl:[hmem.lsb, hmem.msb] = memblk
-		    close(ref)
-		    destroy(@filename)
-                else
-                    memblk = 0
-	        fin
+	    // Read it in
+	    //
+	    ref = open(@filename)
+	    if ref
+	        read(ref, memblk, size)
+		close(ref)
+		destroy(@filename)
 	    fin
-            //puts(@swapinstr);puts(@filename);putc('@');puth(memblk);putc(':');puth(size);putln
-            break
-	is HMEM_UNINIT
-	    //
-	    // Initialize this block
-	    //
-	    memblk = findblk(hpgtbl:[hmem.lsb, hmem.msb] & HMEM_SIZE)
-	    if memblk
-	        hpgtbl:[hmem.lsb, hmem.msb] = memblk
-	    fin
-    wend
+	    //puts(@swapinstr);puts(@filename);putc('@');puth(memblk);putc(':');puth(size);putln
+	fin
+    fin
+    if memblk
+        hpgtbl:[hmem.lsb, hmem.msb] = memblk
+    fin
     return memblk
 end
 //
@@ -567,7 +552,6 @@ export def brk(addr)
 	    frelst         = heapalign
             frelst=>fresiz = brksiz
             frelst=>frenxt = 0
-            frelst=>freprv = 0
         else
             poolsize = 0
         fin
@@ -579,20 +563,18 @@ export def brk(addr)
 	    brksiz = addr - heapmark
             brkblk = heapalloc(brksiz)
             if brkblk
-                poolsize = poolsize + brksiz
 	        //
 		// Add block to end of free list
 		//
+                poolsize       = poolsize + brksiz
 		brkblk=>fresiz = brksiz
 		brkblk=>frenxt = 0
 		if frelst
 		    srch = frelst
 		    while srch=>frenxt; srch = srch=>frenxt; loop
-		    srch=>frenxt   = brkblk
-		    brkblk=>freprv = srch
+		    srch=>frenxt = brkblk
 		else
-		    frelst         = brkblk
-		    brkblk=>freprv = 0
+		    frelst = brkblk
 		fin
                 coallesce // combine adjacent free space
 	    fin
@@ -670,11 +652,12 @@ export def hmemNew(size)
         for entry = 255 downto 0
             if hpgtbl:[page, entry].lsb == HMEM_AVAIL
                 //
-                // Reserve handle as uninitialized memory
+                // Reserve handle as swapped out block
+		// Nonzero size will flag swapin to not read from disk
                 //
                 //putc('N');putc(' ');putb(entry);putb(page);putc('@')
 		size = ((size + t_memblk) | MIN_BLK_MASK) + 1
-                hpgtbl:[page, entry] = size | HMEM_UNINIT
+                hpgtbl:[page, entry] = size | HMEM_SWAPPED
                 hnew.lsb = page
                 hnew.msb = entry
                 return hnew
@@ -690,7 +673,6 @@ export def hmemLock(hmem)
     
     memblk = hpgtbl:[hmem.lsb, hmem.msb]
     when memblk.lsb & HMEM_STATE
-        is HMEM_UNINIT
         is HMEM_SWAPPED
 	    memblk = swapin(hmem)
 	    if not memblk; return 0; fin
@@ -732,7 +714,6 @@ export def hmemRef(hmem)
     
     memblk = hpgtbl:[hmem.lsb, hmem.msb]
     when memblk.lsb & HMEM_STATE
-        is HMEM_UNINIT
         is HMEM_SWAPPED
 	    memblk = swapin(hmem)
         is HMEM_LOCKED
@@ -768,8 +749,6 @@ export def hmemDel(hmem)
 	        memblk->blkref = ref
 	    fin
 	    break
-        is HMEM_UNINIT
-	    hpgtbl:[hmem.lsb, hmem.msb] = HMEM_AVAIL
     wend
 end
 //

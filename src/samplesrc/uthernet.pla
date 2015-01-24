@@ -1,4 +1,4 @@
-import STDLIB
+import stdlib
     predef syscall, call, memset, getc, gets, putc, puts, putln
     predef memset, memcpy, modaddr, modexec
     predef heapmark, heapallocalign, heapalloc, heaprelease, heapavail
@@ -9,15 +9,6 @@ end
 //
 const modkeep     = $2000
 const modinitkeep = $4000
-//
-// Module interface defined by first 4 fields:
-//   word fillMAC
-//   word writeFrame
-//   word readFrame
-//   word nextEvent
-//
-predef fillmac, writefrm, readfrm, recvfrm
-word = @fillmac, @writefrm, @readfrm, @recvfrm, 0
 //
 // Uthernet register offsets
 //
@@ -41,7 +32,7 @@ byte pregdata
 //
 // MAC address
 //
-byte MAC = $00,$0A,$99,$1E,$02,$00
+export byte MAC = $00,$0A,$99,$1E,$02,$00
 //
 // Ethernet header
 //
@@ -51,8 +42,14 @@ struc t_ehdr
     word    ehdr_type
 end
 //
-// Current status an packet len
-word status, len // MUST be in this order!
+// Max Ethernet frame size
+//
+const MAX_FRAME_SIZE = 1518
+//
+// Current receive status and packet size
+//
+word rxstatus, rxsize // MUST be in this order!
+word rxpacket, rxptr
 //
 // Defines for ASM routines
 //
@@ -94,8 +91,8 @@ asm _peekiowh
 	RTS
 end
 //
-// POKE PACKET FRAME INTO I/O SPACE
-// _pokefrm(BUF, LEN)
+// WRITE PACKET FRAME INTO I/O SPACE
+// pokefrm(BUF, LEN)
 //
 asm pokefrm
 	LDY	#$00
@@ -132,8 +129,8 @@ asm _pokefrmh
 	RTS
 end
 //
-// PEEK PACKET FRAME FROM I/O SPACE
-// _peekfrm(BUF, LEN)
+// READ PACKET FRAME FROM I/O SPACE
+// peekfrm(BUF, LEN)
 //
 asm peekfrm
 	LDA	ESTKL+1,X
@@ -192,13 +189,14 @@ end
 //
 // Uthernet interface
 //
-def fillmac(pmac)
-    pmac=>0 = MAC:0
-    pmac=>2 = MAC:2
-    pmac=>4 = MAC:4
-    return pmac + 6
+export def writeEther(packet, size)
+    pokeiow(txcmd, $C0)
+    pokeiow(txlen, size)
+    repeat; until peekpreg($0138) & $0100
+    return pokefrm(packet, size)
 end
-def writefrm(destha, payload, packet, size)
+export def writevEther(destha, payload, seglist, size)
+    word segsize
     
     pokeiow(txcmd, $C0)
     pokeiow(txlen, size + t_ehdr)
@@ -206,35 +204,63 @@ def writefrm(destha, payload, packet, size)
     pokefrm(destha, 6)
     pokefrm(@MAC, 6)
     pokefrm(@payload, 2)
-    return pokefrm(packet, size)
+    while size > 0
+	segsize = seglist=>2
+	if segsize > size
+	    segsize = size
+	fin
+	pokefrm(seglist=>0, segsize)
+	size    = size - segsize
+	seglist = seglist + 4
+    loop
 end
-def readfrm(packet)
-    byte[t_ehdr] header
-    word readlen
+export def readEther(size)
+    word segptr
     
-    readlen = len
-    if status & $0100
-        peekfrm(@header, t_ehdr)
-        peekfrm(packet, len)
+    if rxsize > 0
+	if size > rxsize
+	    size = rxsize
+	fin
+        segptr = rxptr
+	rxptr  = rxptr + size
+	rxsize = rxsize - size
+    else
+        segptr = 0
     fin
-    status = 0
-    len    = 0
-    return header:ehdr_type
+    return segptr
 end
-def recvfrm
-    if len == 0
+export def readvEther(seglist, size)
+    word segsize
+
+    while size > 0
+        segsize = seglist=>2
+	size    = size - segsize
+        if segsize > rxsize
+            segsize = rxsize
+        fin
+        memcpy(seglist=>0, rxptr, segsize)
+	rxptr   = rxptr  + segsize
+	rxsize  = rxsize - segsize
+	seglist = seglist + 4
+    loop
+    return rxsize
+end
+export def recvEther
+    if rxsize == 0
         if peekiow(isq) & $3F == 4
-            peekfrm(@status, 4)
-	    if !(status & $0100)
-                pokepreg($0102, $0140) // Skip pkt
-	        status = 0
-	        len    = 0
+            peekfrm(@rxstatus, 4)
+	    if rxstatus & $0100
+	        if !rxpacket; rxpacket = heapalloc(MAX_FRAME_SIZE); fin
+	        peekfrm(rxpacket, rxsize)
+		rxptr = rxpacket
 	    else
-	        len = len - t_ehdr
+                pokepreg($0102, $0140) // Skip pkt
+	        rxstatus = 0
+	        rxsize   = 0
 	    fin
 	fin
     fin
-    return len
+    return rxsize
 end
 //
 // Identify Uthernet card and initialize
