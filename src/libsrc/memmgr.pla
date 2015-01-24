@@ -10,21 +10,22 @@ import stdlib
 end
 const iobuffer = $0800
 struc t_initdata
-    word   volptr
-    word   freeblks
-    word   ramvol
-    word   bestvol
-    word   ramfree
-    word   bestfree
-    word   filecnt
-    word   catentry
-    byte   catref
-    byte   firstblk
-    byte   entrylen
-    byte   entriesblk
-    byte   swapstrlen
-    byte[] volinfo
-    byte[] catalog
+    word    volptr
+    word    freeblks
+    word    ramvol
+    word    bestvol
+    word    ramfree
+    word    bestfree
+    word    filecnt
+    word    catentry
+    byte    catref
+    byte    firstblk
+    byte    entrylen
+    byte    entriesblk
+    byte    swapstrlen
+    byte[4] volparms
+    byte[]  volinfo
+    byte[]  catalog
 end
 word initdata
 //
@@ -61,7 +62,7 @@ const MIN_BLK_MASK = $03
 //
 const HMEM_ADDR     = $FFFC
 const HMEM_SIZE     = $FFFC
-const HMEM_STATE    = $07
+const HMEM_STATE    = $03
 const HMEM_MOVEABLE = $00 // Many dependencies on this being $00
 const HMEM_AVAIL    = $01
 const HMEM_LOCKED   = $02
@@ -95,7 +96,7 @@ byte hexchar = '0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F'
 //byte swapoutstr = "Swap out:"
 //byte getblkstr = "Get block = "
 //byte allocpgstr = "Alloc page:"
-
+//
 //def putln
 //    return putc($0D)
 //end
@@ -104,15 +105,6 @@ byte hexchar = '0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F'
 //end
 //def puth(hex)
 //    return call($F941, hex >> 8, hex, 0, 0)
-//end
-//def puti(i)
-//  if i < 0; putc('-'); i = -i; fin
-//  if i < 10
-//    putc(i + '0')
-//  else
-//    puti(i / 10)
-//    putc(i % 10 + '0')
-//  fin
 //end
 //
 // Fill block filename
@@ -201,14 +193,6 @@ def destroy(path)
     params:1 = path
     return syscall($C1, @params)
 end
-def volumes(unit, buff)
-    byte params[4]
-
-    params.0 = 2
-    params.1 = unit
-    params:2 = buff
-    return syscall($C5, @params)
-end
 //
 // Find exact/best free memory match
 //
@@ -263,7 +247,7 @@ def addfre(freblk)
 		srch=>frenxt   = freblk
                 return
 	    fin
-            srch   = srch=>frenxt
+            srch = srch=>frenxt
         loop
 	//
 	// Add to end of list
@@ -291,10 +275,10 @@ def coallesce
 	    //
 	    // Combine adjacent free space
 	    //
+	    //putc('C');putc(' ');puth(srch);putc('+');puth(srch=>frenxt);putc(' ')
             srch=>fresiz = srch=>fresiz + srch=>frenxt=>fresiz
 	    srch=>frenxt = srch=>frenxt=>frenxt
             combined = 1
-            //putc('C')
         else
             srch = srch=>frenxt
 	fin
@@ -318,13 +302,13 @@ def compact
 		    while srch and srch < memblk
                         if srch=>fresiz >= size
 			    moveblk = unfre(srch, prev, size)
-                            //putc('M');putc(' ');puth(moveblk);putc('=');puth(memblk);putln
 			    break
 			fin
 			prev = srch
 			srch = srch=>frenxt
 		    loop
 		    if moveblk
+			//putc('M');putc(' ');puth(moveblk);putc('=');puth(memblk);putc(' ')
 		        memcpy(moveblk, memblk, size)
 			hpgtbl:[page, entry] = moveblk
 			addfre(memblk)
@@ -364,8 +348,8 @@ def swapout(accessed)
 			hmem.lsb = page
 			hmem.msb = entry
 			swapfile(@filename, hmem)
-                        //puts(@swapoutstr);puts(@filename);putc('@');puth(memblk);putc(':');puth(size);putln
 			create(@filename, $C3, $00, size) // embed size in aux type
+                        //puts(@swapoutstr);puts(@filename);putc('@');puth(memblk);putc(':');puth(size);putln
 			ref = open(@filename)
 			if ref
 			    //
@@ -480,6 +464,7 @@ def swapin(hmem)
 	get_info(@filename, @info)
 	size   = info:2 // Size encoded in aux type
         memblk = findblk(size)
+	//puts(@swapinstr);puts(@filename);putc('@');puth(memblk);putc(':');puth(size);putln
 	if memblk
 	    //
 	    // Read it in
@@ -490,7 +475,6 @@ def swapin(hmem)
 		close(ref)
 		destroy(@filename)
 	    fin
-	    //puts(@swapinstr);puts(@filename);putc('@');puth(memblk);putc(':');puth(size);putln
 	fin
     fin
     if memblk
@@ -583,37 +567,32 @@ export def brk(addr)
     return poolsize
 end
 export def sbrk(size)
-    return brk(heapmark + size)
+    return brk((heapmark | MIN_BLK_MASK) + 1 + size + MIN_BLK_SIZE)
 end
 //
-// Return the amount of free memory available
+// Return the amount of free memory available, after garbage
+// collection, swaps
 //
-export def hmemAvail
-    word srch, free
-    
-    free = 0
-    srch = frelst
-    while srch
-        free = free + srch=>fresiz
-        srch = srch=>frenxt
-    loop
-    return free
-end
-export def hmemLargestAvail
-    word srch, largest
+export def hmemFre(lptr)
+    word srch, free, largest
     
     coallesce
     while compact; loop
+    free    = 0
     largest = 0
     srch    = frelst
     while srch
         //putc('F'); putc(' '); puth(srch); putc(':'); puth(srch=>fresiz); putln
+        free = free + srch=>fresiz
         if srch=>fresiz > largest
             largest = srch=>fresiz
         fin
         srch = srch=>frenxt
     loop
-    return largest
+    if lptr
+        *lptr = largest - MIN_BLK_SIZE
+    fin
+    return free - MIN_BLK_SIZE
 end
 //
 // Allocate memory block
@@ -643,8 +622,8 @@ export def hmemNew(size)
 		if MACHID & $30 == $30
 	            poolsize = poolsize + (poolsize >> 1)
 		fin
-                if isult(poolsize, MAX_BLK_SIZE + MIN_BLK_SIZE)
-                    poolsize = MAX_BLK_SIZE + MIN_BLK_SIZE
+                if isult(poolsize, MAX_BLK_SIZE)
+                    poolsize = MAX_BLK_SIZE
                 fin
 		sbrk(poolsize)
 	    fin
@@ -757,8 +736,11 @@ end
 // Search for best swap volume
 //
 initdata = heapmark // Use data at top of heap for initialization
-volumes(0, iobuffer)
-initdata=>volptr = iobuffer
+initdata=>volparms.0 = 2
+initdata=>volparms.1 = 0
+initdata=>volparms:2 = iobuffer
+syscall($C5, @initdata=>volparms)
+initdata=>volptr   = iobuffer
 initdata=>ramfree  = 0
 initdata=>bestfree = 0
 for sweepen = 0 to 15
@@ -820,5 +802,5 @@ repeat
     fin
 until !initdata->filecnt
 close(initdata->catref)
-puts(@swapvol); putln
+//puts(@swapvol); putln
 done
