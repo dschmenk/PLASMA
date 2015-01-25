@@ -40,6 +40,17 @@ struc t_ip
     byte[IP_SIZE] ip_dst
     byte[]  ip_options
 end
+const IP_PROTO_ICMP = 1
+const IP_PROTO_UDP  = 2
+const IP_PROTO_TCP  = 3
+//
+// ICMP message format
+//
+struc t_icmp
+    byte icmp_type
+    byte icmp_code
+    word icmp_checksum
+end
 //
 // ARP packet
 //
@@ -211,7 +222,19 @@ end
 //
 // Write IP datagram
 //
-export def writeIP(dst, proto, packet)
+export def writeIP(dstip, proto, packet, len)
+    byte[t_ip] iphdr
+    
+    iphdr.ip_vers_hlen      = 0
+    iphdr.ip_service        = 0
+    iphdr:ip_length         = len
+    iphdr:ip_id             = 0
+    iphdr:ip_flags_fragofst = 0
+    iphdr.ip_ttl            = 1
+    iphdr.ip_proto          = proto
+    iphdr:ip_checksum       = 0
+    memcpy(@iphdr.ip_src, @localip, IP_SIZE)
+    memcpy(@ip_dst, @dstip, IP_SIZE)
 end
 //
 // Read IP datagram
@@ -222,38 +245,46 @@ end
 // Service incoming packets
 //
 def serviceIP
-    word pkt, len
+    word pkt, iphdr, ipopt, len
 
     len = recvEther
     if len
         len = len - t_ehdr
         when readEther(t_ehdr)=>ehdr_payload
-            is PAYLOAD_IP
-	        readEther(len)
-	        break
             is PAYLOAD_ARP
 	        pkt = readEther(len)
-	        if pkt=>arp_op == ARP_REPLY
-		    //
-		    // Fill in ARP cache
-		    //
-		    memcpy(@remoteha, @pkt=>arp_senderha, 10) // copy ha and ip
-		    putha(pkt+arp_senderha);putc('=');putip(pkt+arp_senderip);putln
-		elsif pkt=>arp_op == ARP_REQST
-		    //
-		    // Is this a request for me?
-		    //
-		    if pkt=>arp_targip:0 == localip:0 and pkt=>arp_targip:2 == localip:2
-		        memcpy(@dstMAC, pkt=>arp_senderha, MAC_SIZE)
-		        memcpy(@remoteha, @pkt=>arp_senderha, 10) // copy ha and ip
-		        opARP = ARP_REPLY
-			writeEther(@ARP, t_earp)
-                        putha(pkt+arp_senderha);putc('=');putip(pkt+arp_senderip);putln
-		    fin
-		else
-		    dumparp(pkt)
-		fin
+	        when pkt=>arp_op
+		    is ARP_REPLY
+		        //
+			// Fill in ARP cache
+			//
+			memcpy(@remoteha, @pkt=>arp_senderha, 10) // copy ha and ip
+			putha(pkt+arp_senderha);putc('=');putip(pkt+arp_senderip);putln
+			break
+		    is ARP_REQST
+		        //
+			// Is this a request for me?
+			//
+			if pkt=>arp_targip:0 == localip:0 and pkt=>arp_targip:2 == localip:2
+		            memcpy(@dstMAC, pkt=>arp_senderha, MAC_SIZE)
+			    memcpy(@remoteha, @pkt=>arp_senderha, 10) // copy ha and ip
+			    opARP = ARP_REPLY
+			    writeEther(@ARP, t_earp)
+			    putha(pkt+arp_senderha);putc('=');putip(pkt+arp_senderip);putln
+		        fin
+			break
+		    otherwise
+		        dumparp(pkt)
+		wend
 		break
+            is PAYLOAD_IP
+		len   = len - t_ip
+	        iphdr = readEther(t_ip)
+		if iphdr=>ip_length > t_ip
+		    len = len - (iphdr=>ip_length - t_ip)
+		    ipopt = readEther(iphdr=>ip_length - t_ip)
+		fin
+	        break
             otherwise
 		pkt = readEther(len)
 	        dumpehdr(pkt - t_ehdr)
@@ -261,11 +292,15 @@ def serviceIP
         wend
     fin
 end
+
 //
-// Start things off with an ARP request
+// Fill in MAC
 //
 memcpy(@srcMAC,  @MAC, MAC_SIZE)
 memcpy(@localha, @MAC, MAC_SIZE)
+//
+// Start things off with an ARP request
+//
 memset(@dstMAC,   MAC_SIZE, BROADCAST_MAC)
 memset(@remoteha, MAC_SIZE, 0)
 opARP = ARP_REQST
