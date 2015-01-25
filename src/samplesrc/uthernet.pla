@@ -10,6 +10,22 @@ end
 const modkeep     = $2000
 const modinitkeep = $4000
 //
+// Ethernet header definition
+//
+struc t_ehdr
+    byte[6] ehdr_dstaddr
+    byte[6] ehdr_srcaddr
+    word    ehdr_type
+end
+//
+// Max Ethernet frame size
+//
+const MAX_FRAME_SIZE = 1518
+//
+// MAC address
+//
+export byte MAC = $00,$0A,$99,$1E,$02,$00
+//
 // Uthernet register offsets
 //
 const TXDATA     = $00
@@ -23,28 +39,12 @@ const AUTO_INC   = $8000
 //
 // Uthernet register addresses
 //
-byte slot[]
 byte txcmd
 byte txlen
 byte isq
 byte pregidx
 byte pregdata
-//
-// MAC address
-//
-export byte MAC = $00,$0A,$99,$1E,$02,$00
-//
-// Ethernet header
-//
-struc t_ehdr
-    byte[6] ehdr_dstaddr
-    byte[6] ehdr_srcaddr
-    word    ehdr_type
-end
-//
-// Max Ethernet frame size
-//
-const MAX_FRAME_SIZE = 1518
+byte[] slot           // Init time only
 //
 // Current receive status and packet size
 //
@@ -247,7 +247,7 @@ export def readvEther(seglist, size)
 end
 export def recvEther
     if rxsize == 0
-        if peekiow(isq) & $3F == 4
+        if peekiow(isq) & $3F == $04
             peekfrm(@rxstatus, 4)
 	    if rxstatus & $0100
 	        if !rxpacket; rxpacket = heapalloc(MAX_FRAME_SIZE); fin
@@ -269,16 +269,16 @@ for slot = $F0 downto $90 step $10
     if (peekiow(slot+TXCMD) & $CC3F) == $09
         pokeiow(slot+PREG_INDEX, 0)
 	if peekiow(slot+PREG_DATA) == $630E
-            txlen    = slot + TXLEN
-            isq      = slot + INT_STATUS
-            pregidx  = slot + PREG_INDEX
-            pregdata = slot + PREG_DATA
             pokepreg($0114, $40)   // RESET
+	    txcmd       = slot + TXCMD
+            txlen       = slot + TXLEN
+            isq         = slot + INT_STATUS
+            pregidx     = slot + PREG_INDEX
+            pregdata    = slot + PREG_DATA
             _pokefrml.1 = slot
             _pokefrmh.1 = slot+1
             _peekfrml.1 = slot
             _peekfrmh.1 = slot+1
-	    txcmd = slot + TXCMD // Set this last
             pokepreg($0158, MAC:0) // MAC addr
             pokepreg($015A, MAC:2) // MAC addr
             pokepreg($015C, MAC:4) // MAC addr

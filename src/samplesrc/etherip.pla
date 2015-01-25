@@ -5,13 +5,28 @@ import stdlib
     byte MACHID
 end
 import uthernet
-    predef MAC, writeEther, readEther, recvEther
+    predef MAC, writeEther, writevEther, readEther, readvEther, recvEther
 end
+//
+// Max Ethernet frame size
+//
+const MAX_FRAME_SIZE = 1518
+const BROADCAST_MAC  = $FFFF
+const MAC_SIZE       = 6
+//
+// Ethernet header
+//
+struc t_ehdr
+    byte[MAC_SIZE] ehdr_dstaddr
+    byte[MAC_SIZE] ehdr_srcaddr
+    word    ehdr_payload
+end
+const PAYLOAD_IP  = $0008 // BE format
+const PAYLOAD_ARP = $0608 // BE format
 //
 // IP datagram header
 //
-const HW_ETHER = $0100 // BE format
-const PROTO_IP = $0008 // BE format
+const IP_SIZE = 4
 struc t_ip
     byte ip_vers_hlen
     byte ip_service
@@ -21,14 +36,15 @@ struc t_ip
     byte ip_ttl
     byte ip_proto
     word ip_checksum
-    byte[4] ip_src
-    byte[4] ip_dst
+    byte[IP_SIZE] ip_src
+    byte[IP_SIZE] ip_dst
     byte[]  ip_options
 end
 //
 // ARP packet
 //
-const PAYLOAD_ARP = $0608 // BE format
+const HW_ETHER    = $0100 // BE format
+const ARP_PROTO   = $0008 // BE format
 const ARP_REQST   = $0100 // BE format
 const ARP_REPLY   = $0200 // BE format
 struc t_arp
@@ -37,35 +53,28 @@ struc t_arp
     byte arp_hlen
     byte arp_plen
     word arp_op
-    byte[6] arp_senderha
-    byte[4] arp_senderip
-    byte[6] arp_targha
-    byte[4] arp_targip
+    byte[MAC_SIZE] arp_senderha
+    byte[IP_SIZE] arp_senderip
+    byte[MAC_SIZE] arp_targha
+    byte[IP_SIZE] arp_targip
 end
-//
-// Broadcast address for Ethernet and IP
-//
-byte BCAST = $FF, $FF, $FF, $FF, $FF, $FF
+const t_earp = t_ehdr+t_arp
 //
 // Pre-configured ARP packet
 //
-byte ARP = $00, $01 // HW TYPE
-byte     = $08, $00 // PROTO TYPE
-byte     = 6        // HLEN
-byte     = 4        // PLEN
-byte     = $00, $01 // OP
-byte[6] localha
-byte[4] localip  = 192,168,123,10
-byte[6] remoteha
-byte[4] remoteip = 192,168,123,1
-//
-// ARP segment list
-//
-word segARP = @ARP, t_arp
-//
-// Max Ethernet frame size
-//
-const MAX_FRAME_SIZE = 1518
+byte[] ARP
+byte[MAC_SIZE] dstMAC
+byte[MAC_SIZE] srcMAC
+word       = PAYLOAD_ARP
+word       = HW_ETHER  // HW TYPE
+word       = ARP_PROTO // PROTO TYPE
+byte       = MAC_SIZE  // HLEN
+byte       = IP_SIZE   // PLEN
+word opARP             // OP
+byte[MAC_SIZE] localha
+byte[IP_SIZE ] localip  = 192,168,123,10
+byte[MAC_SIZE] remoteha
+byte[IP_SIZE]  remoteip = 192,168,123,1
 //
 // Defines for ASM routines
 //
@@ -163,6 +172,11 @@ def putip(ipptr)
     return puti(ipptr->[i])
 end
 def dumparp(packet)
+    puth(packet=>arp_hw); putln
+    puth(packet=>arp_proto); putln
+    putb(packet->arp_hlen); putln
+    putb(packet->arp_plen); putln
+    puth(packet=>arp_op); putln
     putha(packet + arp_senderha)
     putc('=')
     putip(packet + arp_senderip)
@@ -171,6 +185,11 @@ def dumparp(packet)
     putc('=')
     putip(packet + arp_targip)
     putln
+end
+def dumpehdr(packet)
+    putha(packet + ehdr_dstaddr); putc(' ')
+    putha(packet + ehdr_srcaddr); putc(' ')
+    puth(packet=>ehdr_payload); putln
 end
 def dumpfrm(packet, len)
     word i
@@ -190,34 +209,67 @@ def dumpfrm(packet, len)
     putln
 end
 //
+// Write IP datagram
+//
+export def writeIP(dst, proto, packet)
+end
+//
+// Read IP datagram
+//
+export def readIP(dst, proto, packet)
+end
+//
 // Service incoming packets
 //
 def serviceIP
     word pkt, len
-    
-    when recvEther()
-        is 0
-	    break
-        is PAYLOAD_ARP
-	    pkt = heapalloc(MAX_FRAME_SIZE)
-	    len = readEther(pkt, t_arp)
-	    dumparp(pkt)
-	    readEther(pkt, len) // read remaining packet data
-	    heaprelease(pkt)
-	    break
-        otherwise
-	    len = readEther(pkt, 0)
-	    pkt = heapalloc(len)
-	    readEther(pkt, len)
-            dumpfrm(pkt, len)
-	    heaprelease(pkt)
-    wend
-end
 
-localha:0 = MAC:0
-localha:2 = MAC:2
-localha:4 = MAC:4
-writeEther(@BCAST, PAYLOAD_ARP, @segARP, t_arp)
+    len = recvEther
+    if len
+        len = len - t_ehdr
+        when readEther(t_ehdr)=>ehdr_payload
+            is PAYLOAD_IP
+	        readEther(len)
+	        break
+            is PAYLOAD_ARP
+	        pkt = readEther(len)
+	        if pkt=>arp_op == ARP_REPLY
+		    //
+		    // Fill in ARP cache
+		    //
+		    memcpy(@remoteha, @pkt=>arp_senderha, 10) // copy ha and ip
+		    putha(pkt+arp_senderha);putc('=');putip(pkt+arp_senderip);putln
+		elsif pkt=>arp_op == ARP_REQST
+		    //
+		    // Is this a request for me?
+		    //
+		    if pkt=>arp_targip:0 == localip:0 and pkt=>arp_targip:2 == localip:2
+		        memcpy(@dstMAC, pkt=>arp_senderha, MAC_SIZE)
+		        memcpy(@remoteha, @pkt=>arp_senderha, 10) // copy ha and ip
+		        opARP = ARP_REPLY
+			writeEther(@ARP, t_earp)
+                        putha(pkt+arp_senderha);putc('=');putip(pkt+arp_senderip);putln
+		    fin
+		else
+		    dumparp(pkt)
+		fin
+		break
+            otherwise
+		pkt = readEther(len)
+	        dumpehdr(pkt - t_ehdr)
+		//dumpfrm(pkt, len)
+        wend
+    fin
+end
+//
+// Start things off with an ARP request
+//
+memcpy(@srcMAC,  @MAC, MAC_SIZE)
+memcpy(@localha, @MAC, MAC_SIZE)
+memset(@dstMAC,   MAC_SIZE, BROADCAST_MAC)
+memset(@remoteha, MAC_SIZE, 0)
+opARP = ARP_REQST
+writeEther(@ARP, t_earp)
 repeat
     serviceIP
 until ^$C000 > 127

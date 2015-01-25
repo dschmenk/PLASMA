@@ -978,6 +978,10 @@ int parse_stmnt(void)
                         return (0);
                     }
                 }
+                else if (scantoken == EOL_TOKEN) 
+                {
+                    next_line();
+                }
                 else
                 {
                     parse_error("Bad CASE clause");
