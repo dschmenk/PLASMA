@@ -379,11 +379,11 @@ putc(char), puts(string), home, gotoxy(x,y), getc() and gets() are other handy u
     puts(@okstr)
 ```
 
-memset(addr, len, val) will fill memory with a 16 bit value.  memcpy(dstaddr, srcaddr, len) will copy memory from one address to another, taking care to copy in the proper direction.
+memset(addr, val, len) will fill memory with a 16 bit value.  memcpy(dstaddr, srcaddr, len) will copy memory from one address to another, taking care to copy in the proper direction.
 
 ```
     byte nullstr[] = ""
-    memset(strlinbuf, maxfill * 2, @nullstr) // fill line buff with pointer to null string
+    memset(strlinbuf, @nullstr, maxfill * 2) // fill line buff with pointer to null string
     memcpy(scrnptr, strptr + ofst + 1, numchars)
 ```
 
