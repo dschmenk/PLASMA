@@ -477,7 +477,7 @@ int parse_value(int rvalue)
     /*
      * Parse post operand operators.
      */
-    ref_type   = type;
+    ref_type   = type & ~PTR_TYPE;
     ref_offset = 0;
     while (scan() == OPEN_PAREN_TOKEN
      || scantoken == OPEN_BRACKET_TOKEN
@@ -667,8 +667,11 @@ int parse_value(int rvalue)
             emit_op(ADD_TOKEN);
             ref_offset = 0;
         }
-        if (deref && (ref_type & PTR_TYPE))
-            (ref_type & BPTR_TYPE) ? emit_lb() : emit_lw();
+        if (deref)
+        {
+            if (ref_type & BPTR_TYPE) emit_lb();
+            else if (ref_type & WPTR_TYPE) emit_lw();
+        }
     }
     else
     {

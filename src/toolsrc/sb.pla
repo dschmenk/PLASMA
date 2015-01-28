@@ -3181,7 +3181,7 @@ def parse_value(rvalue)
     //
     // Parse post-ops
     //
-    ref_type   = type
+    ref_type   = type & ~PTR_TYPE
     ref_offset = 0
     while ispostop
         when token
@@ -3368,10 +3368,10 @@ def parse_value(rvalue)
 	    emit_op($02)
 	    ref_offset = 0
 	fin
-        if deref and ref_type & PTR_TYPE
+        if deref
             if ref_type & BPTR_TYPE
                 emit_lb
-            else
+            elsif ref_type & WPTR_TYPE
                 emit_lw
             fin
         fin
@@ -3613,30 +3613,36 @@ def parse_stmnt
             if !parse_expr; return parse_err(@bad_stmnt); fin
             nextln
             while token <> ENDCASE_TKN
-                if token == OF_TKN
-                    if !parse_expr; return parse_err(@bad_stmnt); fin
-                    emit_brne(tag_choice)
-                    ctag_resolve(tag_of)
-                    while parse_stmnt
+                when token
+		    is OF_TKN
+                        if !parse_expr; return parse_err(@bad_stmnt); fin
+			emit_brne(tag_choice)
+			ctag_resolve(tag_of)
+			while parse_stmnt
+                            nextln
+			loop
+			tag_of = ctag_new
+			if prevstmnt <> BREAK_TKN // Fall through to next OF if no break
+                            emit_branch(tag_of)
+			fin
+			ctag_resolve(tag_choice)
+			tag_choice = ctag_new
+			break
+                    is DEFAULT_TKN
+                        ctag_resolve(tag_of)
+			tag_of = 0
+			scan
+			while parse_stmnt
+                            nextln
+			loop
+			if token <> ENDCASE_TKN; return parse_err(@bad_stmnt); fin
+			break
+		    is EOL_TKN
                         nextln
-                    loop
-                    tag_of = ctag_new
-                    if prevstmnt <> BREAK_TKN // Fall through to next OF if no break
-                        emit_branch(tag_of)
-		    fin
-                    ctag_resolve(tag_choice)
-                    tag_choice = ctag_new
-                elsif token == DEFAULT_TKN
-                    ctag_resolve(tag_of)
-                    tag_of = 0
-                    scan
-                    while parse_stmnt
-                        nextln
-                    loop
-                    if token <> ENDCASE_TKN; return parse_err(@bad_stmnt); fin
-                else
-                    return parse_err(@bad_stmnt)
-                fin
+			break
+                    otherwise
+                        return parse_err(@bad_stmnt)
+		wend
             loop
             if (tag_of)
                 ctag_resolve(tag_of)
