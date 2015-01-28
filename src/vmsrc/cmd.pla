@@ -33,7 +33,7 @@ predef loadmod, execmod, lookupstrmod
 //
 // System variable.
 //
-word version     = $0012 // 00.12
+word version     = $0080 // 00.80
 word systemflags = 0
 word heap
 word xheap       = $0800
@@ -43,7 +43,7 @@ byte cmdln       = "" // Overlay exported strings table
 //
 // Standard Library exported functions.
 //
-byte stdlibstr  = "STDLIB"
+byte syslibstr  = "CMDSYS"
 byte machidstr  = "MACHID"
 byte sysstr     = "SYSCALL"
 byte callstr    = "CALL"
@@ -91,7 +91,7 @@ word              = @modadrstr, @lookupstrmod
 word              = @machidstr, MACHID
 word              = @argstr,    @cmdln
 word              = 0
-word stdlibsym    = @exports
+word syslibsym    = @exports
 //
 // String pool.
 //
@@ -192,7 +192,7 @@ asm reboot
 end
 //
 // SET MEMORY TO VALUE
-// MEMSET(ADDR, SIZE, VALUE)
+// MEMSET(ADDR, VALUE, SIZE)
 //   With optimizations from Peter Ferrie
 //
 asm memset
@@ -200,25 +200,25 @@ asm memset
 	STA     DSTL
 	LDA     ESTKH+2,X
 	STA     DSTH
-	LDY     ESTKL+1,X
+	LDY     ESTKL,X
 	BEQ	+
-	INC     ESTKH+1,X
+	INC     ESTKH,X
 	LDY     #$00
-+       LDA	ESTKH+1,X
++       LDA	ESTKH,X
         BEQ	SETMEX
 SETMLPL	CLC
-	LDA     ESTKL,X
+	LDA     ESTKL+1,X
 SETMLPH	STA     (DST),Y
-	DEC     ESTKL+1,X
+	DEC     ESTKL,X
 	BNE     +
-	DEC     ESTKH+1,X
+	DEC     ESTKH,X
 	BEQ     SETMEX
 +	INY
 	BNE	+
 	INC     DSTH
 +	BCS	SETMLPL
 	SEC
-	LDA     ESTKH,X
+	LDA     ESTKH+1,X
 	BCS	SETMLPH
 SETMEX	INX
 	INX
@@ -1217,7 +1217,7 @@ def resetmemfiles
     //
     // Set memory bitmap
     //
-    memset($BF58, 24, 0)
+    memset($BF58, 0, 24)
     ^$BF58 = $CF
     ^$BF6F = $01
 end
@@ -1273,19 +1273,19 @@ heap = *freemem
 //
 // Init symbol table.
 //
-stodci(@stdlibstr, heap)
+stodci(@syslibstr, heap)
 addmod(heap, @version)
-while *stdlibsym
-    stodci(stdlibsym=>0, heap)
-    addsym(heap, stdlibsym=>2)
-    stdlibsym = stdlibsym + 4
+while *syslibsym
+    stodci(syslibsym=>0, heap)
+    addsym(heap, syslibsym=>2)
+    syslibsym = syslibsym + 4
 loop
 //
 // Try to load autorun.
 //
 autorun = open(@autorun, iobuffer)
 if autorun > 0
-    cmdln = read(autorun, @stdlibstr, 128)
+    cmdln = read(autorun, @syslibstr, 128)
     close(autorun)
 else
     //

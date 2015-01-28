@@ -34,7 +34,7 @@ predef loadmod, execmod, lookupstrmod
 //
 // System variables.
 //
-word version     = $0012 // 00.12
+word version     = $0080 // 00.80
 word systemflags = 0
 byte refcons     = 0
 byte devcons     = 0
@@ -67,7 +67,7 @@ word cmdptr
 //
 // Standard Library exported functions.
 //
-byte stdlibstr[]  = "STDLIB"
+byte syslibstr[]  = "CMDSYS"
 byte machidstr[]  = "MACHID"
 byte sysstr[]     = "SYSCALL"
 byte callstr[]    = "CALL"
@@ -114,7 +114,7 @@ word              = @modadrstr, @lookupstrmod
 word              = @machidstr, @machid
 word              = @argstr,    @cmdptr
 word              = 0
-word stdlibsym    = @exports     
+word syslibsym    = @exports     
 //
 // CALL SOS
 // SYSCALL(CMD, PARAMS)
@@ -179,7 +179,7 @@ JMPTMP	JMP	(TMP)
 end
 //
 // SET MEMORY TO VALUE
-// MEMSET(ADDR, SIZE, VALUE)
+// MEMSET(ADDR, VALUE, SIZE)
 //   With optimizations from Peter Ferrie
 //
 asm memset
@@ -187,25 +187,25 @@ asm memset
 	STA     DSTL
 	LDA     ESTKH+2,X
 	STA     DSTH
-	LDY     ESTKL+1,X
+	LDY     ESTKL,X
 	BEQ	+
-	INC     ESTKH+1,X
+	INC     ESTKH,X
 	LDY     #$00
-+       LDA	ESTKH+1,X
++       LDA	ESTKH,X
         BEQ	SETMEX
 SETMLPL	CLC
-	LDA     ESTKL,X
+	LDA     ESTKL+1,X
 SETMLPH	STA     (DST),Y
-	DEC     ESTKL+1,X
+	DEC     ESTKL,X
 	BNE     +
-	DEC     ESTKH+1,X
+	DEC     ESTKH,X
 	BEQ     SETMEX
 +	INY
 	BNE	+
 	INC     DSTH
 +	BCS	SETMLPL
 	SEC
-	LDA     ESTKH,X
+	LDA     ESTKH+1,X
 	BCS	SETMLPH
 SETMEX	INX
 	INX
@@ -1274,12 +1274,12 @@ init_cons
 seg_find($00, @symtbl, @lastsym, $08, $11)
 lastsym = symtbl & $FF00
 xpokeb(symtbl.0, lastsym, 0)
-stodci(@stdlibstr, heap)
+stodci(@syslibstr, heap)
 addmod(heap, @version)
-while *stdlibsym
-    stodci(stdlibsym=>0, heap)
-    addsym(heap, stdlibsym=>2)
-    stdlibsym = stdlibsym + 4
+while *syslibsym
+    stodci(syslibsym=>0, heap)
+    addsym(heap, syslibsym=>2)
+    syslibsym = syslibsym + 4
 loop
 //
 // Try to load autorun.

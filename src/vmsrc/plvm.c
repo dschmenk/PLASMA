@@ -874,7 +874,7 @@ void interp(code *ip)
     }
 }
 
-char *stdlib_exp[] = {
+char *syslib_exp[] = {
     "PUTC",
     "PUTS",
     "PUTSZ",
@@ -902,12 +902,12 @@ int main(int argc, char **argv)
         /*
          * Add default library.
          */
-        stodci("STDLIB", dci);
+        stodci("CMDSYS", dci);
         add_mod(dci, 0xFFFF);
-        for (i = 0; stdlib_exp[i]; i++)
+        for (i = 0; syslib_exp[i]; i++)
         {
             mem_data[i] = i + 3;
-            stodci(stdlib_exp[i], dci);
+            stodci(syslib_exp[i], dci);
             add_sym(dci, i);
         }
         if (argc)
