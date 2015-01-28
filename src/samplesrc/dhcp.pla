@@ -1,0 +1,210 @@
+//
+// DHCP
+//
+import stdlib
+    predef syscall, call, memset, getc, gets, putc, puts, putln
+    predef memset, memcpy, modaddr, modexec
+    predef heapmark, heapallocalign, heapalloc, heaprelease
+    byte MACHID
+end
+import etherip
+    byte localha, localip, subnet_mask, gateway
+    predef swab, sendUDP, recvUDP, shutUDP, serviceIP
+end
+import icmp
+end
+//
+// Needed to init subnet_mask
+//
+const IP_BROADCAST  = $FFFF
+//
+// DHCP message
+//
+struc t_dhcp
+    byte      dhcp_op
+    byte      dhcp_htype
+    byte      dhcp_hlen
+    byte      dhcp_hops
+    byte[4]   dhcp_xid
+    word      dhcp_secs
+    word      dhcp_flags
+    byte[4]   dhcp_clientip
+    byte[4]   dhcp_yourip
+    byte[4]   dhcp_serverip
+    byte[4]   dhcp_gatewayip
+    byte[16]  dhcp_clientha
+    byte[192] dhcp_bootp
+    byte[4]   dhcp_magic
+    byte[60]  dhcp_opts
+end
+//
+// DHCP messages
+//
+const DHCP_DISCOVER = $01
+const DHCP_OFFER    = $02
+const DHCP_REQUEST  = $03
+const DHCP_DECLINE  = $04
+const DHCP_ACK      = $05
+const DHCP_NACK     = $06
+const DHCP_RELEASE  = $07
+//
+// DHCP ports
+//
+const DHCP_CLIENT_PORT = 68
+const DHCP_SERVER_PORT = 67
+//
+// Pre-configured DHCP packet
+//
+byte DHCP = $01   // OP = DISCOVER
+byte      = $01   // HTYPE = ETHERNET
+byte      = $06   // HLEN  = 6
+byte      = $00   // HOPS
+byte[4]   = $01,$02,$03,$04 // TRANSACTION ID
+word      = $0000 // SECONDS
+word      = 0     // FLAGS
+byte[4]   = 0     // CLIENT IP
+byte[4]   = 0     // YOUR IP
+byte[4]   = 0     // SERVER IP
+byte[4]   = 0     // GATEWAY IP
+byte[16]  = 0     // CLIENT HA
+byte[64]  = 0     // SERVER HOST NAME
+byte[128] = 0     // BOOT FILE NAME
+byte[4]   = $63,$82,$53,$63 // MAGIC
+byte optsDHCP = 53,1,1  // DISCOVER
+byte      = 12, "AppleII"
+byte      = 55,4 ,1,28,3,42
+byte      = 255
+byte optsREQ = 53,1,3     // REQUEST
+byte      = 50,4,0,0,0,0 // IP requested
+byte      = 54,4,0,0,0,0 // DHCP server
+byte      = 255
+//
+// DEBUG
+//
+byte offerstr  = "DHCP server offering IP address "
+byte ackstr = "DHCP acknowledge\n"
+byte boundstr = "Apple II bound to:\n"
+def putln
+    return putc($0D)
+end
+def putb(hexb)
+    return call($FDDA, hexb, 0, 0, 0)
+end
+def puth(hex)
+    return call($F941, hex >> 8, hex, 0, 0)
+end
+def puti(i)
+  if i < 0; putc('-'); i = -i; fin
+  if i < 10
+    putc(i + '0')
+  else
+    puti(i / 10)
+    putc(i % 10 + '0')
+  fin
+end
+def putip(ipptr)
+    byte i
+    
+    for i = 0 to 2
+        puti(ipptr->[i]); putc('.')
+    next
+    return puti(ipptr->[i])
+end
+def dumpbytes(buf, len)
+    word i
+    
+    for i = 0 to len - 1
+        putb(buf->[i])
+	if i & 15 == 15
+	    putln
+	else
+	    putc(' ')
+	fin
+    next
+end
+def dumpdhcp(pkt)
+    putb(pkt->dhcp_op);putln
+    putb(pkt->dhcp_htype);putln
+    putb(pkt->dhcp_hlen);putln
+    putb(pkt->dhcp_hops);putln
+    dumpbytes(@pkt->dhcp_xid, 4);putln
+    putip(@pkt->dhcp_clientip);putln
+    putip(@pkt->dhcp_yourip);putln
+    putip(@pkt->dhcp_serverip);putln
+    putip(@pkt->dhcp_gatewayip);putln
+    dumpbytes(@pkt->dhcp_opts, 32);putln
+end
+def parseopts(opts, match)
+    byte i
+    
+    i = 0
+    while opts->[i] <> $FF and i < 64
+	while !opts->[i] and i < 64
+	    i = i + 1
+	loop
+        if opts->[i] == match
+	    return i
+	fin
+	i = i + opts->[i + 1] + 2
+    loop
+    return -1
+end
+def servdhcp(remip, remport, lclport, pkt, len, param)
+    word optofst
+    
+    //putip(remip);putc(':');puti(remport);putln
+    if pkt=>dhcp_xid:0 == $0201 and pkt=>dhcp_xid:2 = $0403
+        when pkt->dhcp_opts.[parseopts(@pkt->dhcp_opts, 53) + 2]
+	    is DHCP_OFFER
+	        //puts(@offerstr); putip(@pkt->dhcp_yourip); putln
+		//
+		// Copy offer parameters to request
+		//
+		memcpy(@optsDHCP, @optsREQ, 16)
+		memcpy(@optsDHCP.5, @pkt->dhcp_yourip, 4)
+		memcpy(@optsDHCP.11, @pkt->dhcp_serverip, 4)
+		memcpy(@DHCP.dhcp_serverip, @pkt->dhcp_serverip, 4)
+		sendUDP(0, DHCP_SERVER_PORT, DHCP_CLIENT_PORT, @DHCP, t_dhcp)
+		break
+	    is DHCP_ACK
+	        //puts(@ackstr)
+		//
+		// Copy parameters to working copy
+		//
+		memcpy(@localip, @pkt->dhcp_yourip, 4)
+		memcpy(@subnet_mask, @pkt->dhcp_opts.[parseopts(@pkt->dhcp_opts, 1) + 2], 4)
+		puts(@boundstr);putip(@localip);putc('/');putip(@subnet_mask);putln
+	        break
+	    otherwise
+	        dumpdhcp(pkt)
+	wend
+    fin
+end
+//
+// Get the local hardware address into the DHCP packet
+//
+memcpy(@DHCP.dhcp_clientha, @localha, 6)
+//
+// Clear our local IP address
+//
+memset(@localip, 4, 0)
+//
+// Set subnet mask to all 1's
+//
+memset(@subnet_mask, 4, IP_BROADCAST)
+//
+// Prepare to receive DHCP packets from a server
+//
+recvUDP(DHCP_CLIENT_PORT, @servdhcp, 0)
+//
+// Broadcast DHCP DISCOVER message
+//
+sendUDP(0, DHCP_SERVER_PORT, DHCP_CLIENT_PORT, @DHCP, t_dhcp)
+//
+// Service IP
+//
+repeat
+    serviceIP
+until ^$C000 > 127
+^$C010
+done

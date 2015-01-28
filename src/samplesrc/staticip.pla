@@ -1,0 +1,98 @@
+//
+// Static IP
+//
+import stdlib
+    predef syscall, call, memset, getc, gets, putc, puts, putln
+    predef memset, memcpy, modaddr, modexec
+    predef heapmark, heapallocalign, heapalloc, heaprelease
+    byte MACHID
+end
+import etherip
+    byte localha, localip
+    predef sendUDP, recvUDP, shutUDP, sendIP, serviceIP, sum1
+end
+import icmp
+end
+//
+// Segment list element
+//
+struc t_segment
+    word seg_buf
+    word seg_len
+end
+//
+// ICMP type/codes
+//
+const ICMP_ECHO_REQST = 8
+const ICMP_ECHO_REPLY = 0
+//
+// ICMP message format
+//
+struc t_icmp
+    byte icmp_type
+    byte icmp_code
+    word icmp_chksm
+    word[2] icmp_header
+end
+//
+// ICMP echo packet
+//
+const IP_PROTO_ICMP = $01
+byte ECHO = 8 // ECHO request
+byte      = 0 // code
+word      = 0 // checksum
+byte      = 0, 69, 0, 1 // rest of header
+word segecho = 0, 0, @ECHO, 8
+byte serverip   = 192,168,123,129
+byte staticip   = 192,168,123,10
+byte staticmask = 255,255,255,0
+word echo_reply
+//
+// DEBUG
+//
+def putln
+    return putc($0D)
+end
+def putb(hexb)
+    return call($FDDA, hexb, 0, 0, 0)
+end
+def puth(hex)
+    return call($F941, hex >> 8, hex, 0, 0)
+end
+def puti(i)
+  if i < 0; putc('-'); i = -i; fin
+  if i < 10
+    putc(i + '0')
+  else
+    puti(i / 10)
+    putc(i % 10 + '0')
+  fin
+end
+def putip(ipptr)
+    byte i
+    
+    for i = 0 to 2
+        puti(ipptr->[i]); putc('.')
+    next
+    return puti(ipptr->[i])
+end
+//
+// Set our local IP address
+//
+memcpy(@localip, @staticip, 4)
+//
+// Calculate checksum
+//
+ECHO:icmp_chksm = sum1(0, @ECHO, t_icmp) ^ $FFFF
+//
+// Send an echo to the server
+//
+sendIP(@serverip, IP_PROTO_ICMP, @segecho, 0)
+//
+// Service IP
+//
+repeat
+    serviceIP
+until ^$C000 > 127
+^$C010
+done

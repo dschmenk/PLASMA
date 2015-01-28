@@ -1,0 +1,96 @@
+//
+// ICMP service
+//
+import stdlib
+    predef syscall, call, memset, getc, gets, putc, puts, putln
+    predef memset, memcpy, modaddr, modexec
+    predef heapmark, heapallocalign, heapalloc, heaprelease
+    byte MACHID
+end
+import etherip
+    byte localha, localip
+    word serviceICMP
+    predef sendIP
+end
+//
+// Segment list element
+//
+struc t_segment
+    word seg_buf
+    word seg_len
+end
+//
+// ICMP type/codes
+//
+const IP_PROTO_ICMP   = 1
+const ICMP_ECHO_REQST = 8
+const ICMP_ECHO_REPLY = 0
+//
+// ICMP message format
+//
+struc t_icmp
+    byte icmp_type
+    byte icmp_code
+    word icmp_chksm
+    word[2] icmp_header
+end
+//
+// DEBUG
+//
+byte icmpstr = "ICMP "
+def putln
+    return putc($0D)
+end
+def putb(hexb)
+    return call($FDDA, hexb, 0, 0, 0)
+end
+def puth(hex)
+    return call($F941, hex >> 8, hex, 0, 0)
+end
+def puti(i)
+  if i < 0; putc('-'); i = -i; fin
+  if i < 10
+    putc(i + '0')
+  else
+    puti(i / 10)
+    putc(i % 10 + '0')
+  fin
+end
+def putip(ipptr)
+    byte i
+    
+    for i = 0 to 2
+        puti(ipptr->[i]); putc('.')
+    next
+    return puti(ipptr->[i])
+end
+//
+// Service ICMP packets
+//
+def icmp(srcip, pkt, len)
+    byte[4]   echoip
+    word[8]   seglist
+    byte[128] echo_reply
+
+    //puts(@icmpstr);putip(srcip);putc(' ')
+    //puti(pkt->icmp_type);putc(' ');puti(pkt->icmp_code);putln
+
+    if pkt->icmp_type == ICMP_ECHO_REQST
+	if len > 128
+	    len = 128
+	fin
+	memcpy(@echo_reply, pkt, len)
+        echo_reply.icmp_type  = ICMP_ECHO_REPLY
+	echo_reply:icmp_chksm = 0
+	//echo_reply:icmp_chksm = sum1(0, @echo_reply, len) ^ $FFFF
+	memcpy(@echoip, srcip, 4)
+	seglist:4:seg_buf = @echo_reply
+	seglist:4:seg_len = len
+        sendIP(@echoip, IP_PROTO_ICMP, @seglist, len)
+    fin
+end
+//
+// Set to notify on ICMP packets
+//
+serviceICMP = @icmp
+done

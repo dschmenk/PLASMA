@@ -5,29 +5,36 @@ import stdlib
     byte MACHID
 end
 import uthernet
-    predef MAC, writeEther, writevEther, readEther, readvEther, recvEther
+    predef copyMAC, writeEther, writevEther, readEther, recvEther
+end
+//
+// Segment list element
+//
+struc t_segment
+    word seg_buf
+    word seg_len
 end
 //
 // Max Ethernet frame size
 //
 const MAX_FRAME_SIZE = 1518
-const BROADCAST_MAC  = $FFFF
+const MAC_BROADCAST  = $FFFF
 const MAC_SIZE       = 6
 //
 // Ethernet header
 //
-struc t_ehdr
-    byte[MAC_SIZE] ehdr_dstaddr
-    byte[MAC_SIZE] ehdr_srcaddr
-    word    ehdr_payload
+struc t_ethrhdr
+    byte[MAC_SIZE] ethr_dst
+    byte[MAC_SIZE] ethr_src
+    word           ethr_payload
 end
 const PAYLOAD_IP  = $0008 // BE format
 const PAYLOAD_ARP = $0608 // BE format
 //
 // IP datagram header
 //
-const IP_SIZE = 4
-struc t_ip
+const IPADR_SIZE = 4
+struc t_iphdr
     byte ip_vers_hlen
     byte ip_service
     word ip_length
@@ -35,22 +42,15 @@ struc t_ip
     word ip_flags_fragofst
     byte ip_ttl
     byte ip_proto
-    word ip_checksum
-    byte[IP_SIZE] ip_src
-    byte[IP_SIZE] ip_dst
-    byte[]  ip_options
+    word ip_chksm
+    byte[IPADR_SIZE] ip_src
+    byte[IPADR_SIZE] ip_dst
+    byte[] ip_options
 end
-const IP_PROTO_ICMP = 1
-const IP_PROTO_UDP  = 2
-const IP_PROTO_TCP  = 3
-//
-// ICMP message format
-//
-struc t_icmp
-    byte icmp_type
-    byte icmp_code
-    word icmp_checksum
-end
+const IP_BROADCAST  = $FFFF
+const IP_PROTO_ICMP = $01
+const IP_PROTO_UDP  = $11
+const IP_PROTO_TCP  = $06
 //
 // ARP packet
 //
@@ -65,11 +65,11 @@ struc t_arp
     byte arp_plen
     word arp_op
     byte[MAC_SIZE] arp_senderha
-    byte[IP_SIZE] arp_senderip
+    byte[IPADR_SIZE] arp_senderip
     byte[MAC_SIZE] arp_targha
-    byte[IP_SIZE] arp_targip
+    byte[IPADR_SIZE] arp_targip
 end
-const t_earp = t_ehdr+t_arp
+const t_earp = t_ethrhdr+t_arp
 //
 // Pre-configured ARP packet
 //
@@ -77,15 +77,64 @@ byte[] ARP
 byte[MAC_SIZE] dstMAC
 byte[MAC_SIZE] srcMAC
 word       = PAYLOAD_ARP
-word       = HW_ETHER  // HW TYPE
-word       = ARP_PROTO // PROTO TYPE
-byte       = MAC_SIZE  // HLEN
-byte       = IP_SIZE   // PLEN
-word opARP             // OP
-byte[MAC_SIZE] localha
-byte[IP_SIZE ] localip  = 192,168,123,10
-byte[MAC_SIZE] remoteha
-byte[IP_SIZE]  remoteip = 192,168,123,1
+word       = HW_ETHER   // HW TYPE
+word       = ARP_PROTO  // PROTO TYPE
+byte       = MAC_SIZE   // HLEN
+byte       = IPADR_SIZE // PLEN
+word opARP              // OP
+export byte[MAC_SIZE]   localha
+export byte[IPADR_SIZE] localip
+byte[MAC_SIZE]          remoteha
+byte[IPADR_SIZE]        remoteip
+//
+// Local network parameters
+//
+export byte[IPADR_SIZE] subnet_mask
+export byte[IPADR_SIZE] gateway
+//
+// UDP IPv4 psuedo header
+//
+struc t_piphdr
+    byte[IPADR_SIZE] pip_src
+    byte[IPADR_SIZE] pip_dst
+    byte             pip_zero
+    byte             pip_proto
+    word             pip_len
+end
+//
+// UDP header
+//
+struc t_udphdr
+    word udp_src
+    word udp_dst
+    word udp_len
+    word udp_chksm
+end
+//
+// TCP header
+//
+struc t_tcphdr
+    word tcp_src
+    word tcp_dst
+    word tcp_len
+    word tcp_chksm
+end
+//
+// Notify callbacks
+//
+struc t_notify
+    word notify_port
+    word notify_func
+    word notify_parm
+end
+const MAX_UDP_NOTIFIES	= 16
+const MAX_TCP_NOTIFIES	= 8
+word portsUDP
+word portsTCP
+//
+// Service ICMP externally
+//
+export word serviceICMP
 //
 // Defines for ASM routines
 //
@@ -97,7 +146,7 @@ end
 //
 // Swap bytes in word
 //
-asm swab
+export asm swab
 	LDA	ESTKL,X
 	LDY	ESTKH,X
 	STA	ESTKH,X
@@ -105,47 +154,54 @@ asm swab
 	RTS
 end
 //
-// SUM BE format
-// sum(BUF, LEN)
+// 1'S COMPLIMENT SUM BE format
+// sum1(PREVSUM, BUF, LEN)
 //
-export asm sum
+export asm sum1
 	LDY	#$00
 	LDA	ESTKL+1,X
-	STY	ESTKL+1,X
-	STA	SRCL
-	LDA	ESTKH+1,X
-	STY	ESTKH+1,X
-	STA	SRCH
-	LSR	ESTKH,X	; CONVERT BYTE LEN TO WORD LEN
-	LDA	ESTKL,X
+	STA 	SRCL
+	LDA 	ESTKH+1,X
+	STA 	SRCH
+	LSR 	ESTKH,X 	; CONVERT BYTE LEN TO WORD LEN
+	LDA 	ESTKL,X
 	ROR
-	ADC	#$00
-	STA	ESTKL,X
-	BEQ	CHKLP
-	INC     ESTKH,X
-CHKLP	LDA	(SRC),Y
+	ADC 	#$00
+	STA 	ESTKL,X
+	BEQ 	+
+	INC 	ESTKH,X
+	BCC	CHKLP
+	INC 	ESTKH,X
+	CLC
+CHKLP 	LDA 	(SRC),Y
 	PHA
 	INY
-	BNE	+
-	INC	SRCH
-+	LDA	(SRC),Y
-	CLC
-	ADC	ESTKH+1,X
-	STA	ESTKH+1,X
+	BNE 	+
+	INC 	SRCH
++ 	LDA 	(SRC),Y
+	ADC 	ESTKH+2,X
+	STA 	ESTKH+2,X
 	PLA
-	ADC	ESTKL+1,X
-	STA	ESTKL+1,X
+	ADC 	ESTKL+2,X
+	STA 	ESTKL+2,X	
 	INY
-	BNE	+
-    	INC	SRCH
-+	DEC	ESTKL,X
-	BNE	CHKLP
-	DEC	ESTKH,X
-	BNE	CHKLP
+	BNE 	+
+	INC 	SRCH
++ 	DEC 	ESTKL,X
+	BNE 	CHKLP
+	DEC 	ESTKH,X
+	BNE 	CHKLP
+-	LDA	#$00
+	ADC 	ESTKH+2,X
+	STA 	ESTKH+2,X
+	LDA	#$00
+	ADC 	ESTKL+2,X
+	STA 	ESTKL+2,X
+	BCS	-
+	INX
 	INX
 	RTS
-end
-//
+end//
 // DEBUG
 //
 def putln
@@ -182,25 +238,35 @@ def putip(ipptr)
     next
     return puti(ipptr->[i])
 end
+def dumpehdr(packet)
+    putha(packet + ethr_dst); putc(' ')
+    putha(packet + ethr_src); putc(' ')
+    putc('$');puth(packet=>ethr_payload); putln
+end
 def dumparp(packet)
-    puth(packet=>arp_hw); putln
-    puth(packet=>arp_proto); putln
-    putb(packet->arp_hlen); putln
-    putb(packet->arp_plen); putln
-    puth(packet=>arp_op); putln
+    putc('$');puth(packet=>arp_hw); putln
+    putc('$');puth(packet=>arp_proto); putln
+    putc('$');putb(packet->arp_hlen); putln
+    putc('$');putb(packet->arp_plen); putln
+    putc('$');puth(packet=>arp_op); putln
     putha(packet + arp_senderha)
     putc('=')
-    putip(packet + arp_senderip)
-    putln
+    putip(packet + arp_senderip); putln
     putha(packet + arp_targha)
     putc('=')
-    putip(packet + arp_targip)
-    putln
+    putip(packet + arp_targip); putln
 end
-def dumpehdr(packet)
-    putha(packet + ehdr_dstaddr); putc(' ')
-    putha(packet + ehdr_srcaddr); putc(' ')
-    puth(packet=>ehdr_payload); putln
+def dumpip(packet)
+    putc('$');putb(packet->ip_vers_hlen); putln
+    puti(swab(packet=>ip_length)); putln
+    puti(packet->ip_proto); putln
+    putip(packet + ip_src); putln
+    putip(packet + ip_dst); putln
+end
+def dumpudp(packet)
+    puti(swab(packet=>udp_src));putln
+    puti(swab(packet=>udp_dst));putln
+    puti(swab(packet=>udp_len));putln
 end
 def dumpfrm(packet, len)
     word i
@@ -220,93 +286,270 @@ def dumpfrm(packet, len)
     putln
 end
 //
-// Write IP datagram
-//
-export def writeIP(dstip, proto, packet, len)
-    byte[t_ip] iphdr
-    
-    iphdr.ip_vers_hlen      = 0
-    iphdr.ip_service        = 0
-    iphdr:ip_length         = len
-    iphdr:ip_id             = 0
-    iphdr:ip_flags_fragofst = 0
-    iphdr.ip_ttl            = 1
-    iphdr.ip_proto          = proto
-    iphdr:ip_checksum       = 0
-    memcpy(@iphdr.ip_src, @localip, IP_SIZE)
-    memcpy(@ip_dst, @dstip, IP_SIZE)
-end
-//
-// Read IP datagram
-//
-export def readIP(dst, proto, packet)
-end
-//
 // Service incoming packets
 //
-def serviceIP
-    word pkt, iphdr, ipopt, len
+export def serviceIP
+    word pkt, iphdr, hdr, opt, len, optlen, port, lclport, remport
+    byte i
 
     len = recvEther
     if len
-        len = len - t_ehdr
-        when readEther(t_ehdr)=>ehdr_payload
+        len = len - t_ethrhdr
+        when readEther(t_ethrhdr)=>ethr_payload
             is PAYLOAD_ARP
 	        pkt = readEther(len)
+		len = 0
 	        when pkt=>arp_op
 		    is ARP_REPLY
 		        //
 			// Fill in ARP cache
 			//
 			memcpy(@remoteha, @pkt=>arp_senderha, 10) // copy ha and ip
-			putha(pkt+arp_senderha);putc('=');putip(pkt+arp_senderip);putln
+			//putha(pkt+arp_senderha);putc('=');putip(pkt+arp_senderip);putln
 			break
 		    is ARP_REQST
 		        //
 			// Is this a request for me?
 			//
 			if pkt=>arp_targip:0 == localip:0 and pkt=>arp_targip:2 == localip:2
-		            memcpy(@dstMAC, pkt=>arp_senderha, MAC_SIZE)
+		            memcpy(@dstMAC, @pkt=>arp_senderha, MAC_SIZE)
 			    memcpy(@remoteha, @pkt=>arp_senderha, 10) // copy ha and ip
 			    opARP = ARP_REPLY
 			    writeEther(@ARP, t_earp)
-			    putha(pkt+arp_senderha);putc('=');putip(pkt+arp_senderip);putln
+			    //putha(pkt+arp_senderha);putc('=');putip(pkt+arp_senderip);putln
 		        fin
 			break
 		    otherwise
-		        dumparp(pkt)
+		        //dumparp(pkt)
 		wend
 		break
             is PAYLOAD_IP
-		len   = len - t_ip
-	        iphdr = readEther(t_ip)
-		if iphdr=>ip_length > t_ip
-		    len = len - (iphdr=>ip_length - t_ip)
-		    ipopt = readEther(iphdr=>ip_length - t_ip)
+		len = len - t_iphdr
+	        iphdr = readEther(t_iphdr)
+		if iphdr->ip_vers_hlen <> $45
+		    optlen = iphdr=>ip_vers_hlen
+		    if optlen & $F0 <> $40
+		        //
+			// Not IPv4, ignore
+			//
+			break
+		    fin
+		    optlen = (optlen & $0F) << 2
+		    if optlen > t_iphdr
+		        //
+			// Read the options and throw them on the ground!
+			//
+		        opt = readEther(optlen - t_iphdr)
+			len = len - (optlen - t_iphdr)
+		    fin
 		fin
+		//
+		// Filter valid destination address
+		//
+		if iphdr=>ip_dst:2 <> localip:2 // Yes, this is a little lazy
+		    if (iphdr=>ip_dst:0|subnet_mask:0) & (iphdr=>ip_dst:2|subnet_mask:2) <> IP_BROADCAST
+			break
+		    fin
+		fin
+		when iphdr->ip_proto
+		    is IP_PROTO_UDP
+			port = portsUDP
+		        if port
+			    len     = len - t_udphdr
+			    hdr     = readEther(t_udphdr)
+			    lclport = swab(hdr=>udp_dst)
+			    for i = 1 to MAX_UDP_NOTIFIES
+			        if port=>notify_port == lclport)
+				    //dumpip(iphdr)
+				    //dumpudp(hdr)
+				    port=>notify_func(@iphdr=>ip_src,swab(hdr=>udp_src),lclport,readEther(len),swab(hdr=>udp_len),port=>notify_parm)
+				    len = 0
+				    break
+				fin
+				port = port + t_notify
+			    next
+			fin
+		        break
+		    is IP_PROTO_TCP
+			port = portsTCP
+		        if port
+			    len     = len - t_tcphdr
+			    hdr     = readEther(t_tcphdr)
+			    lclport = swab(hdr=>tcp_dst)
+			    remport = swab(hdr=>tcp_src)
+			    for i = 1 to MAX_TCP_NOTIFIES
+			        if port=>notify_port == lclport)
+				    //dumpip(iphdr)
+				    //dumptcp(tcphdr)
+				    port=>notify_func(@iphdr=>ip_src,swab(hdr=>tcp_src),lclport,readEther(len),swab(hdr=>tcp_len),port=>notify_parm)
+				    len = 0
+				    break
+				fin
+				port = port + t_notify
+			    next
+			fin
+		        break
+		    is IP_PROTO_ICMP
+			if serviceICMP
+			    serviceICMP(@iphdr=>ip_src, readEther(len), len)
+			    len = 0
+			fin
+		wend
 	        break
             otherwise
-		pkt = readEther(len)
-	        dumpehdr(pkt - t_ehdr)
-		//dumpfrm(pkt, len)
+	        //dumpehdr(readEther(len) - t_ethrhdr)
+		//len = 0
         wend
+	if len; readEther(len); fin // Drop it
     fin
 end
+//
+// Send IP datagram
+//
+export def sendIP(ipdst, proto, seglist, size)
+    byte[t_iphdr]  hdr
+    byte[MAC_SIZE] dstha
+    byte retry
+    word timeout
+    
+    hdr.ip_vers_hlen      = $45
+    hdr.ip_service        = 0
+    hdr:ip_length         = swab(t_iphdr + size)
+    hdr:ip_id             = 0
+    hdr:ip_flags_fragofst = 0 //$40 // Don't fragment
+    hdr.ip_ttl            = 10 // Is this reasonable?
+    hdr.ip_proto          = proto
+    hdr:ip_chksm          = 0
+    memcpy(@hdr.ip_src, @localip, IPADR_SIZE)
+    if !ipdst // IP_BROADCAST
+	memset(@hdr.ip_dst, IPADR_SIZE, IP_BROADCAST)
+        memset(@dstha, MAC_SIZE, MAC_BROADCAST)
+    else
+        retry = 0
+        while ipdst=>0 <> remoteip:0 and ipdst=>2 <> remoteip:2
+  	    if retry >= 3
+                return -1 // ARP failed
+	    fin
+	    retry = retry + 1
+            memset(@dstMAC,   MAC_SIZE, MAC_BROADCAST)
+	    memset(@remoteha, MAC_SIZE, 0)
+	    memcpy(@remoteip, ipdst, IPADR_SIZE)
+	    opARP = ARP_REQST
+	    writeEther(@ARP, t_earp)
+	    for timeout = 1000 downto 0
+	        serviceIP
+		if remoteha:0 | remoteha:2 | remoteha:4
+		    break
+		fin
+	    next
+	loop
+	memcpy(@hdr.ip_dst, ipdst, IPADR_SIZE)
+        memcpy(@dstha, @remoteha, MAC_SIZE)
+    fin
+    //
+    // Calculate checksum
+    //
+    hdr:ip_chksm = sum1(0, @hdr, t_iphdr) ^ $FFFF
+    //
+    // Fill in remaining segment list for IP header and write it out
+    //
+    seglist=>seg_buf = @hdr
+    seglist=>seg_len = t_iphdr
+    return writevEther(@dstha, PAYLOAD_IP, seglist, t_iphdr + size)
+end
+//
+// Send UDP datagram
+//
+export def sendUDP(ipdst, portdst, portsrc, data, len)
+    word[12] seglist // list of data and header segments
+    //word segsum
+    //byte[t_piphdr] phdr
+    byte[t_udphdr] hdr
+    
+    //memcpy(@phdr.pip_src, @localip, IPADR_SIZE)
+    //memcpy(@phdr.pip_dst, ipdst, IPADR_SIZE)
+    //phdr.pip_zero  = 0
+    //phdr.pip_proto = IP_PROTO_UDP
+    //phdr.pip_len   = swab(t_udphdr + len)
+    hdr:udp_src    = swab(portsrc)
+    hdr:udp_dst    = swab(portdst)
+    hdr:udp_len    = swab(t_udphdr + len)
+    hdr:udp_chksm  = 0
+    //segsum = sum1(0, @phdr, t_piphdr + t_udphdr)
+    //segsum = sum1(segsum, data, len)
+    //hdr:udp_chksm  = segsum ^ $FFFF
+    //seglist:0:seg_buf reserved for IP header
+    //seglist:0:seg_len reserved for IP header
+    seglist:4:seg_buf = @hdr
+    seglist:4:seg_len = t_udphdr
+    seglist:8:seg_buf = data
+    seglist:8:seg_len = len
+    return sendIP(ipdst, IP_PROTO_UDP, @seglist, t_udphdr + len)
+end
+//
+// Notify on UDP datagram received
+//
+export def recvUDP(localport, callback, param)
+    word port
+    byte i
 
+    if !localport; return -1; fin // invalid port
+    //
+    // Allocate the port notify array if needed
+    //
+    if !portsUDP
+        portsUDP = heapalloc(MAX_UDP_NOTIFIES * t_notify)
+	if !portsUDP; return -1; fin
+	memset(portsUDP, MAX_UDP_NOTIFIES * t_notify, 0)
+    fin
+    //
+    // Look for an existing notification on localport
+    //
+    port = portsUDP
+    for i = 1 to MAX_UDP_NOTIFIES
+        if port=>notify_port == localport
+	    port=>notify_func = callback
+	    port=>notify_parm = param
+	    return 0
+	fin
+    next
+    //
+    // Add notification on localport if room
+    //
+    port = portsUDP
+    for i = 1 to MAX_UDP_NOTIFIES
+        if !port=>notify_port
+	    port=>notify_port = localport
+	    port=>notify_func = callback
+	    port=>notify_parm = param
+	    return 0
+	fin
+    next
+    return -1
+end
+//
+// Clear notify on UDP port
+//
+export def shutUDP(localport)
+    word port
+    byte i
+    
+    if !localport; return -1; fin // invalid port
+    //
+    // Look for an existing notification on localport
+    //
+    port = portsUDP
+    for i = 1 to MAX_UDP_NOTIFIES
+        if port=>notify_port == localport
+	    port=>notify_port = 0
+	    return 0
+	fin
+    next
+    return -1
+end
 //
 // Fill in MAC
 //
-memcpy(@srcMAC,  @MAC, MAC_SIZE)
-memcpy(@localha, @MAC, MAC_SIZE)
-//
-// Start things off with an ARP request
-//
-memset(@dstMAC,   MAC_SIZE, BROADCAST_MAC)
-memset(@remoteha, MAC_SIZE, 0)
-opARP = ARP_REQST
-writeEther(@ARP, t_earp)
-repeat
-    serviceIP
-until ^$C000 > 127
-^$C010
+copyMAC(@srcMAC)
+copyMAC(@localha)
 done

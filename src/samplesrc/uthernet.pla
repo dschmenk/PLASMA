@@ -10,12 +10,23 @@ end
 const modkeep     = $2000
 const modinitkeep = $4000
 //
-// Ethernet header definition
+// Segment list element
 //
-struc t_ehdr
-    byte[6] ehdr_dstaddr
-    byte[6] ehdr_srcaddr
-    word    ehdr_type
+struc t_segment
+    word seg_buf
+    word seg_len
+end
+//
+// MAC size
+//
+const MAC_SIZE = 6
+//
+// Ethernet header
+//
+struc t_ethrhdr
+    byte[MAC_SIZE] ethr_dst
+    byte[MAC_SIZE] ethr_src
+    word           ethr_payload
 end
 //
 // Max Ethernet frame size
@@ -24,7 +35,7 @@ const MAX_FRAME_SIZE = 1518
 //
 // MAC address
 //
-export byte MAC = $00,$0A,$99,$1E,$02,$00
+byte MAC = $00,$0A,$99,$1E,$02,$00
 //
 // Uthernet register offsets
 //
@@ -39,17 +50,17 @@ const AUTO_INC   = $8000
 //
 // Uthernet register addresses
 //
+byte[] slot           // Init time only
+byte rxdata_lo, rxdata_hi
 byte txcmd
 byte txlen
 byte isq
 byte pregidx
 byte pregdata
-byte[] slot           // Init time only
 //
 // Current receive status and packet size
 //
-word rxstatus, rxsize // MUST be in this order!
-word rxpacket, rxptr
+word rxsize, rxpacket, rxptr
 //
 // Defines for ASM routines
 //
@@ -59,6 +70,16 @@ end
 //
 // I/O access
 //
+// POKE BYTE INTO I/O SPACE
+// _pokeio(DATA)
+//
+//asm _pokeio
+//	LDA	ESTKL,X
+//end
+//asm _pokeiol
+//	STA	$C000
+//	RTS
+//end
 //
 // POKE WORD INTO I/O SPACE
 // _pokeiow(DATA)
@@ -72,6 +93,20 @@ asm _pokeiowl
 end
 asm _pokeiowh
 	STA	$C000
+	RTS
+end
+//
+// PEEK BYTE FROM I/O SPACE
+// _peekio()
+//
+asm _peekio
+	DEX
+end
+asm _peekiol
+	LDA	$C000
+	STA	ESTKL,X
+	LDA	#$00
+	STA	ESTKH,X
 	RTS
 end
 //
@@ -105,16 +140,16 @@ asm pokefrm
 	ROR
 	ADC	#$00
 	STA	ESTKL,X
-	BEQ	POKELP
+	BEQ	+
+	INC     ESTKH,X
++	BCC	POKELP
 	INC     ESTKH,X
 POKELP	LDA	(SRC),Y
 end
 asm _pokefrml
 	STA	$C000
 	INY
-	BNE	+
-	INC	SRCH
-+	LDA	(SRC),Y
+	LDA	(SRC),Y
 end
 asm _pokefrmh
 	STA	$C000
@@ -133,31 +168,29 @@ end
 // peekfrm(BUF, LEN)
 //
 asm peekfrm
+	LDY	#$00
 	LDA	ESTKL+1,X
 	STA	DSTL
 	LDA	ESTKH+1,X
 	STA	DSTH
-	LDY	ESTKL,X
-	BEQ	PEEKLP
-	LDY	#$00
+	LSR	ESTKH,X	; CONVERT BYTE LEN TO WORD LEN
+	LDA	ESTKL,X
+	ROR
+	ADC	#$00
+	STA	ESTKL,X
+	BEQ	+
+	INC     ESTKH,X
++	BCC	PEEKLP
 	INC     ESTKH,X
 end
-asm _peekfrmh
-PEEKLP	LDA	$C000
-	PHA
-end
 asm _peekfrml
-	LDA	$C000
+PEEKLP	LDA	$C000
 	STA	(DST),Y
-	PLA
 	INY
-	BNE	+
-	INC	DSTH
-+	DEC	ESTKL,X
-	BNE	+
-	DEC	ESTKH,X
-	BEQ	EXPSW
-+	STA	(DST),Y
+end
+asm _peekfrmh
++	LDA	$C000
+        STA	(DST),Y
 	INY
 	BNE	+
     	INC	DSTH
@@ -168,10 +201,18 @@ asm _peekfrml
 EXPSW	INX
 	RTS
 end
+//def pokeio(io, data)
+//    _pokeiowl.1 = io
+//    return _pokeio(data)
+//end
 def pokeiow(io, data)
     _pokeiowl.1 = io
     _pokeiowh.1 = io+1
     return _pokeiow(data)
+end
+def peekio(io)
+    _peekiol.1 = io
+    return _peekio()
 end
 def peekiow(io)
     _peekiowl.1 = io
@@ -189,6 +230,11 @@ end
 //
 // Uthernet interface
 //
+export def copyMAC(ptr)
+    if !rxpacket; rxpacket = heapalloc(MAX_FRAME_SIZE); fin
+    memcpy(ptr, @MAC, MAC_SIZE)
+    return MAC_SIZE
+end
 export def writeEther(packet, size)
     pokeiow(txcmd, $C0)
     pokeiow(txlen, size)
@@ -196,22 +242,16 @@ export def writeEther(packet, size)
     return pokefrm(packet, size)
 end
 export def writevEther(destha, payload, seglist, size)
-    word segsize
-    
     pokeiow(txcmd, $C0)
-    pokeiow(txlen, size + t_ehdr)
+    pokeiow(txlen, size + t_ethrhdr)
     repeat; until peekpreg($0138) & $0100
-    pokefrm(destha, 6)
-    pokefrm(@MAC, 6)
+    pokefrm(destha, MAC_SIZE)
+    pokefrm(@MAC, MAC_SIZE)
     pokefrm(@payload, 2)
     while size > 0
-	segsize = seglist=>2
-	if segsize > size
-	    segsize = size
-	fin
-	pokefrm(seglist=>0, segsize)
-	size    = size - segsize
-	seglist = seglist + 4
+	pokefrm(seglist=>seg_buf, seglist=>seg_len)
+	size    = size - seglist=>seg_len
+	seglist = seglist + t_segment
     loop
 end
 export def readEther(size)
@@ -229,34 +269,18 @@ export def readEther(size)
     fin
     return segptr
 end
-export def readvEther(seglist, size)
-    word segsize
-
-    while size > 0
-        segsize = seglist=>2
-	size    = size - segsize
-        if segsize > rxsize
-            segsize = rxsize
-        fin
-        memcpy(seglist=>0, rxptr, segsize)
-	rxptr   = rxptr  + segsize
-	rxsize  = rxsize - segsize
-	seglist = seglist + 4
-    loop
-    return rxsize
-end
 export def recvEther
     if rxsize == 0
         if peekiow(isq) & $3F == $04
-            peekfrm(@rxstatus, 4)
-	    if rxstatus & $0100
-	        if !rxpacket; rxpacket = heapalloc(MAX_FRAME_SIZE); fin
+	    if peekio(rxdata_hi) & $01
+   	    	peekio(rxdata_lo)
+   	    	rxsize.1 = peekio(rxdata_hi)
+   	    	rxsize.0 = peekio(rxdata_lo)
 	        peekfrm(rxpacket, rxsize)
 		rxptr = rxpacket
 	    else
+   	    	peekio(rxdata_lo)
                 pokepreg($0102, $0140) // Skip pkt
-	        rxstatus = 0
-	        rxsize   = 0
 	    fin
 	fin
     fin
@@ -270,6 +294,7 @@ for slot = $F0 downto $90 step $10
         pokeiow(slot+PREG_INDEX, 0)
 	if peekiow(slot+PREG_DATA) == $630E
             pokepreg($0114, $40)   // RESET
+	    rxdata_hi   = slot + 1
 	    txcmd       = slot + TXCMD
             txlen       = slot + TXLEN
             isq         = slot + INT_STATUS

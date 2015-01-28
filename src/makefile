@@ -11,6 +11,9 @@ ROD     = ROD\#FE1000
 SIEVE   = SIEVE\#FE1000
 UTHERNET= UTHERNET\#FE1000
 ETHERIP = ETHERIP\#FE1000
+ICMP    = ICMP\#FE1000
+DHCP    = DHCP\#FE1000
+STATICIP= STATICIP\#FE1000
 ROGUE   = ROGUE\#FE1000
 ROGUEIO = ROGUEIO\#FE1000
 ROGUEMAP= ROGUEMAP\#FE1000
@@ -43,7 +46,7 @@ TXTTYPE	= .TXT
 #SYSTYPE	= \#FF2000
 #TXTTYPE	= \#040000
 
-all: $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVM03) $(CMD) $(MEMMGR) $(MEMTEST) $(SB) $(MON) $(ROD) $(SIEVE) $(UTHERNET) $(ETHERIP) $(ROGUE) $(ROGUEMAP) $(ROGUECOMBAT) $(ROGUEIO) $(HGR1)
+all: $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVM03) $(CMD) $(MEMMGR) $(MEMTEST) $(SB) $(MON) $(ROD) $(SIEVE) $(UTHERNET) $(ETHERIP) $(ICMP) $(DHCP) $(STATICIP) $(ROGUE) $(ROGUEMAP) $(ROGUECOMBAT) $(ROGUEIO) $(HGR1)
 
 clean:
 	-rm *FE1000 *FF2000 $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVM03)
@@ -127,6 +130,18 @@ $(UTHERNET): samplesrc/uthernet.pla $(PLVM02) $(PLASM)
 $(ETHERIP): samplesrc/etherip.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AM < samplesrc/etherip.pla > samplesrc/etherip.a
 	acme --setpc 4094 -o $(ETHERIP) samplesrc/etherip.a
+
+$(ICMP): samplesrc/icmp.pla $(PLVM02) $(PLASM)
+	./$(PLASM) -AM < samplesrc/icmp.pla > samplesrc/icmp.a
+	acme --setpc 4094 -o $(ICMP) samplesrc/icmp.a
+
+$(DHCP): samplesrc/dhcp.pla $(PLVM02) $(PLASM)
+	./$(PLASM) -AM < samplesrc/dhcp.pla > samplesrc/dhcp.a
+	acme --setpc 4094 -o $(DHCP) samplesrc/dhcp.a
+
+$(STATICIP): samplesrc/staticip.pla $(PLVM02) $(PLASM)
+	./$(PLASM) -AM < samplesrc/staticip.pla > samplesrc/staticip.a
+	acme --setpc 4094 -o $(STATICIP) samplesrc/staticip.a
 
 $(ROGUE): samplesrc/rogue.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AM < samplesrc/rogue.pla > samplesrc/rogue.a
