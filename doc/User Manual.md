@@ -11,7 +11,7 @@ To keep development compartmentalized and easily managed, PLASMA uses relatively
 To start things off, here is the standard introductory program:
 
 ```
-import stdlib
+import cmdsys
     predef puts
 end
     
@@ -62,7 +62,7 @@ The beginning of the source file is the best place for certain declarations. Thi
 Module dependencies will direct the loader to make sure these modules are loaded first, thus resolving any outstanding references.  A module dependency is declared with the `import` statement block with predefined function and data definitions. The `import` block is completed with an `end`. An example:
 
 ```
-import stdlib
+import cmdsys
     const reshgr1 = $0004
     predef putc, puts, getc, gets, cls, gotoxy
 end
@@ -90,7 +90,7 @@ These constants can be used in expressions just like a variable name.
 #### Structure Declarations
 There is a shortcut for defining constant offsets into structures:
 ```
-struc s_entry
+struc t_entry
   word id
   byte[32] name
   word next_entry
@@ -98,7 +98,7 @@ end
 ```
 is equivalent to:
 ```
-const s_entry    = 36 // size of the structure
+const t_entry    = 36 // size of the structure
 const id         = 0  // offset to id element
 const name       = 2  // offset to name element
 const next_entry = 34 // offset to next_entry element
