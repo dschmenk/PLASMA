@@ -11,9 +11,8 @@ ROD     = ROD\#FE1000
 SIEVE   = SIEVE\#FE1000
 UTHERNET= UTHERNET\#FE1000
 ETHERIP = ETHERIP\#FE1000
-ICMP    = ICMP\#FE1000
+INET    = INET\#FE1000
 DHCP    = DHCP\#FE1000
-STATICIP= STATICIP\#FE1000
 ROGUE   = ROGUE\#FE1000
 ROGUEIO = ROGUEIO\#FE1000
 ROGUEMAP= ROGUEMAP\#FE1000
@@ -46,7 +45,7 @@ TXTTYPE	= .TXT
 #SYSTYPE	= \#FF2000
 #TXTTYPE	= \#040000
 
-all: $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVM03) $(CMD) $(MEMMGR) $(MEMTEST) $(SB) $(MON) $(ROD) $(SIEVE) $(UTHERNET) $(ETHERIP) $(ICMP) $(DHCP) $(STATICIP) $(ROGUE) $(ROGUEMAP) $(ROGUECOMBAT) $(ROGUEIO) $(HGR1)
+all: $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVM03) $(CMD) $(MEMMGR) $(MEMTEST) $(SB) $(MON) $(ROD) $(SIEVE) $(UTHERNET) $(ETHERIP) $(INET) $(DHCP) $(ROGUE) $(ROGUEMAP) $(ROGUECOMBAT) $(ROGUEIO) $(HGR1)
 
 clean:
 	-rm *FE1000 *FF2000 $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVM03)
@@ -123,25 +122,21 @@ $(SIEVE): samplesrc/sieve.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AM < samplesrc/sieve.pla > samplesrc/sieve.a
 	acme --setpc 4094 -o $(SIEVE) samplesrc/sieve.a
 
-$(UTHERNET): samplesrc/uthernet.pla $(PLVM02) $(PLASM)
-	./$(PLASM) -AM < samplesrc/uthernet.pla > samplesrc/uthernet.a
-	acme --setpc 4094 -o $(UTHERNET) samplesrc/uthernet.a
+$(UTHERNET): libsrc/uthernet.pla $(PLVM02) $(PLASM)
+	./$(PLASM) -AM < libsrc/uthernet.pla > libsrc/uthernet.a
+	acme --setpc 4094 -o $(UTHERNET) libsrc/uthernet.a
 
-$(ETHERIP): samplesrc/etherip.pla $(PLVM02) $(PLASM)
-	./$(PLASM) -AM < samplesrc/etherip.pla > samplesrc/etherip.a
-	acme --setpc 4094 -o $(ETHERIP) samplesrc/etherip.a
+$(ETHERIP): libsrc/etherip.pla $(PLVM02) $(PLASM)
+	./$(PLASM) -AM < libsrc/etherip.pla > libsrc/etherip.a
+	acme --setpc 4094 -o $(ETHERIP) libsrc/etherip.a
 
-$(ICMP): samplesrc/icmp.pla $(PLVM02) $(PLASM)
-	./$(PLASM) -AM < samplesrc/icmp.pla > samplesrc/icmp.a
-	acme --setpc 4094 -o $(ICMP) samplesrc/icmp.a
+$(INET): libsrc/inet.pla $(PLVM02) $(PLASM)
+	./$(PLASM) -AM < libsrc/inet.pla > libsrc/inet.a
+	acme --setpc 4094 -o $(INET) libsrc/inet.a
 
-$(DHCP): samplesrc/dhcp.pla $(PLVM02) $(PLASM)
-	./$(PLASM) -AM < samplesrc/dhcp.pla > samplesrc/dhcp.a
-	acme --setpc 4094 -o $(DHCP) samplesrc/dhcp.a
-
-$(STATICIP): samplesrc/staticip.pla $(PLVM02) $(PLASM)
-	./$(PLASM) -AM < samplesrc/staticip.pla > samplesrc/staticip.a
-	acme --setpc 4094 -o $(STATICIP) samplesrc/staticip.a
+$(DHCP): libsrc/dhcp.pla $(PLVM02) $(PLASM)
+	./$(PLASM) -AM < libsrc/dhcp.pla > libsrc/dhcp.a
+	acme --setpc 4094 -o $(DHCP) libsrc/dhcp.a
 
 $(ROGUE): samplesrc/rogue.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AM < samplesrc/rogue.pla > samplesrc/rogue.a

@@ -7,14 +7,12 @@ import cmdsys
     predef heapmark, heapallocalign, heapalloc, heaprelease
     byte MACHID
 end
-import etherip
-    byte localha, localip, subnet_mask, gateway
-    predef swab, sendUDP, recvUDP, shutUDP, serviceIP
-end
-import icmp
+import inet
+    byte localha, localip, subnet, gateway
+    predef swab, sendUDP, listenUDP, hangupUDP, serviceIP
 end
 //
-// Needed to init subnet_mask
+// Needed to init subnet
 //
 const IP_BROADCAST  = $FFFF
 //
@@ -47,6 +45,10 @@ const DHCP_DECLINE  = $04
 const DHCP_ACK      = $05
 const DHCP_NACK     = $06
 const DHCP_RELEASE  = $07
+//
+// Track DHCP progress
+//
+byte stateDHCP, retry, timeout
 //
 // DHCP ports
 //
@@ -156,6 +158,7 @@ def servdhcp(remip, remport, lclport, pkt, len, param)
     if pkt=>dhcp_xid:0 == $0201 and pkt=>dhcp_xid:2 = $0403
         when pkt->dhcp_opts.[parseopts(@pkt->dhcp_opts, 53) + 2]
 	    is DHCP_OFFER
+	        stateDHCP = DHCP_OFFER
 	        //puts(@offerstr); putip(@pkt->dhcp_yourip); putln
 		//
 		// Copy offer parameters to request
@@ -167,13 +170,18 @@ def servdhcp(remip, remport, lclport, pkt, len, param)
 		sendUDP(0, DHCP_SERVER_PORT, DHCP_CLIENT_PORT, @DHCP, t_dhcp)
 		break
 	    is DHCP_ACK
+	        stateDHCP = DHCP_ACK
+	        //
+		// Stop listening to UDP port
+		//
+	        hangupUDP(DHCP_CLIENT_PORT)
 	        //puts(@ackstr)
 		//
 		// Copy parameters to working copy
 		//
 		memcpy(@localip, @pkt->dhcp_yourip, 4)
-		memcpy(@subnet_mask, @pkt->dhcp_opts.[parseopts(@pkt->dhcp_opts, 1) + 2], 4)
-		puts(@boundstr);putip(@localip);putc('/');putip(@subnet_mask);putln
+		memcpy(@subnet, @pkt->dhcp_opts.[parseopts(@pkt->dhcp_opts, 1) + 2], 4)
+		puts(@boundstr);putip(@localip);putc('/');putip(@subnet);putln
 	        break
 	    otherwise
 	        dumpdhcp(pkt)
@@ -191,20 +199,30 @@ memset(@localip, 0, 4)
 //
 // Set subnet mask to all 1's
 //
-memset(@subnet_mask, IP_BROADCAST, 4)
+memset(@subnet, IP_BROADCAST, 4)
 //
 // Prepare to receive DHCP packets from a server
 //
-recvUDP(DHCP_CLIENT_PORT, @servdhcp, 0)
-//
-// Broadcast DHCP DISCOVER message
-//
-sendUDP(0, DHCP_SERVER_PORT, DHCP_CLIENT_PORT, @DHCP, t_dhcp)
+listenUDP(DHCP_CLIENT_PORT, @servdhcp, 0)
 //
 // Service IP
 //
-repeat
-    serviceIP
-until ^$C000 > 127
-^$C010
+while retry < 3
+    //
+    // Broadcast DHCP DISCOVER message
+    //
+    sendUDP(0, DHCP_SERVER_PORT, DHCP_CLIENT_PORT, @DHCP, t_dhcp)
+    for timeout = 1 to 1000
+        serviceIP
+	if stateDHCP == DHCP_ACK
+	    return 0
+        fin
+    next
+    retry = retry + 1
+loop
+//
+// Nobody answered
+//
+return -1
+
 done
