@@ -14,7 +14,7 @@ static int  locals   = 0;
 static int  predefs  = 0;
 static int  defs     = 0;
 static int  asmdefs  = 0;
-static int  codetags = 0;
+static int  codetags = 1; // Fix check for break_tag and cont_tag
 static int  fixups   = 0;
 static char idconst_name[1024][17];
 static int  idconst_value[1024];

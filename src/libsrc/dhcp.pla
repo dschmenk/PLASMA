@@ -8,13 +8,14 @@ import cmdsys
     byte MACHID
 end
 import inet
-    byte localha, localip, subnet, gateway
-    predef swab, sendUDP, listenUDP, hangupUDP, serviceIP
+    predef swab, sendUDP, openUDP, closeUDP, serviceIP
+    predef setInterfaceIP, getInterfaceHA
 end
 //
 // Needed to init subnet
 //
-const IP_BROADCAST  = $FFFF
+const IP_BROADCAST = $FFFF
+const IP4ADR_SIZE  = 4
 //
 // DHCP message
 //
@@ -54,6 +55,15 @@ byte stateDHCP, retry, timeout
 //
 const DHCP_CLIENT_PORT = 68
 const DHCP_SERVER_PORT = 67
+word portDHCP
+byte[4] zeros
+byte[4] ones = $FF, $FF, $FF, $FF
+//
+// Default static net IP addresses
+//
+byte localgw  = 192,168,123,1
+byte localip  = 192,168,123,10
+byte localnet = 255,255,255,0
 //
 // Pre-configured DHCP packet
 //
@@ -134,7 +144,7 @@ def dumpdhcp(pkt)
     putip(@pkt->dhcp_yourip);putln
     putip(@pkt->dhcp_serverip);putln
     putip(@pkt->dhcp_gatewayip);putln
-    dumpbytes(@pkt->dhcp_opts, 32);putln
+    dumpbytes(@pkt->dhcp_opts, 48);putln
 end
 def parseopts(opts, match)
     byte i
@@ -151,10 +161,11 @@ def parseopts(opts, match)
     loop
     return -1
 end
-def servdhcp(remip, remport, lclport, pkt, len, param)
-    word optofst
+def recvDHCP(remip, remport, pkt, len, param)
+    word optofst, maskopts, gwopts
     
     //putip(remip);putc(':');puti(remport);putln
+    //dumpdhcp(pkt)
     if pkt=>dhcp_xid:0 == $0201 and pkt=>dhcp_xid:2 = $0403
         when pkt->dhcp_opts.[parseopts(@pkt->dhcp_opts, 53) + 2]
 	    is DHCP_OFFER
@@ -167,21 +178,23 @@ def servdhcp(remip, remport, lclport, pkt, len, param)
 		memcpy(@optsDHCP.5, @pkt->dhcp_yourip, 4)
 		memcpy(@optsDHCP.11, @pkt->dhcp_serverip, 4)
 		memcpy(@DHCP.dhcp_serverip, @pkt->dhcp_serverip, 4)
-		sendUDP(0, DHCP_SERVER_PORT, DHCP_CLIENT_PORT, @DHCP, t_dhcp)
+		sendUDP(portDHCP, 0, DHCP_SERVER_PORT, @DHCP, t_dhcp)
 		break
 	    is DHCP_ACK
 	        stateDHCP = DHCP_ACK
-	        //
-		// Stop listening to UDP port
-		//
-	        hangupUDP(DHCP_CLIENT_PORT)
 	        //puts(@ackstr)
 		//
 		// Copy parameters to working copy
 		//
-		memcpy(@localip, @pkt->dhcp_yourip, 4)
-		memcpy(@subnet, @pkt->dhcp_opts.[parseopts(@pkt->dhcp_opts, 1) + 2], 4)
-		puts(@boundstr);putip(@localip);putc('/');putip(@subnet);putln
+		memcpy(@localip, @pkt->dhcp_yourip, IP4ADR_SIZE)
+		maskopts = parseopts(@pkt->dhcp_opts, 1) + 2
+		if maskopts >= 0
+		    memcpy(@localnet, @pkt->dhcp_opts.[maskopts], IP4ADR_SIZE)
+		fin
+		gwopts = parseopts(@pkt->dhcp_opts, 3) + 2
+		if gwopts >= 0
+		    memcpy(@localgw, @pkt->dhcp_opts.[gwopts], IP4ADR_SIZE)
+		fin
 	        break
 	    otherwise
 	        dumpdhcp(pkt)
@@ -191,39 +204,40 @@ end
 //
 // Get the local hardware address into the DHCP packet
 //
-memcpy(@DHCP.dhcp_clientha, @localha, 6)
+getInterfaceHA(@DHCP.dhcp_clientha)
 //
 // Clear our local IP address
 //
-memset(@localip, 0, 4)
-//
-// Set subnet mask to all 1's
-//
-memset(@subnet, IP_BROADCAST, 4)
+setInterfaceIP(@zeros,@ones, @zeros)
 //
 // Prepare to receive DHCP packets from a server
 //
-listenUDP(DHCP_CLIENT_PORT, @servdhcp, 0)
+portDHCP = openUDP(DHCP_CLIENT_PORT, @recvDHCP, 0)
 //
 // Service IP
 //
-while retry < 3
+while retry < 3 and stateDHCP <> DHCP_ACK
     //
     // Broadcast DHCP DISCOVER message
     //
-    sendUDP(0, DHCP_SERVER_PORT, DHCP_CLIENT_PORT, @DHCP, t_dhcp)
+    sendUDP(portDHCP, 0, DHCP_SERVER_PORT, @DHCP, t_dhcp)
     for timeout = 1 to 1000
         serviceIP
 	if stateDHCP == DHCP_ACK
-	    return 0
+	    break
         fin
     next
     retry = retry + 1
 loop
+closeUDP(portDHCP)
+setInterfaceIP(@localip, @localnet, @localgw)
+puts(@boundstr);putip(@localip);putc('/');putip(@localnet);putln
 //
-// Nobody answered
+// Service IP
 //
-hangupUDP(DHCP_CLIENT_PORT)
-return -1
+repeat
+    serviceIP
+until ^$C000 > 127
+^$C010
 
 done

@@ -1,5 +1,6 @@
 import cmdsys
     predef syscall, call, getc, gets, putc, puts, putln
+    predef isugt, isuge, isult, isule
     predef memset, memcpy, modaddr, modexec
     predef heapmark, heapallocalign, heapalloc, heaprelease, heapavail
     byte MACHID
@@ -39,7 +40,7 @@ const PAYLOAD_ARP = $0608 // BE format
 //
 // IP datagram header
 //
-const IPADR_SIZE = 4
+const IP4ADR_SIZE = 4
 struc t_iphdr
     byte ip_vers_hlen
     byte ip_service
@@ -49,8 +50,8 @@ struc t_iphdr
     byte ip_ttl
     byte ip_proto
     word ip_chksm
-    byte[IPADR_SIZE] ip_src
-    byte[IPADR_SIZE] ip_dst
+    byte[IP4ADR_SIZE] ip_src
+    byte[IP4ADR_SIZE] ip_dst
     byte[] ip_options
 end
 const t_ethriphdr   = t_ethrhdr + t_iphdr
@@ -77,8 +78,8 @@ end
 // UDP IPv4 psuedo header
 //
 struc t_piphdr
-    byte[IPADR_SIZE] pip_src
-    byte[IPADR_SIZE] pip_dst
+    byte[IP4ADR_SIZE] pip_src
+    byte[IP4ADR_SIZE] pip_dst
     byte             pip_zero
     byte             pip_proto
     word             pip_len
@@ -115,9 +116,9 @@ struc t_arp
     byte arp_plen
     word arp_op
     byte[MAC_SIZE] arp_senderha
-    byte[IPADR_SIZE] arp_senderip
+    byte[IP4ADR_SIZE] arp_senderip
     byte[MAC_SIZE] arp_targha
-    byte[IPADR_SIZE] arp_targip
+    byte[IP4ADR_SIZE] arp_targip
 end
 const t_earp = t_ethrhdr+t_arp
 //
@@ -142,19 +143,19 @@ word ePayload = PAYLOAD_ARP
 word ARP   = HW_ETHER   // HW TYPE
 word       = ARP_PROTO  // PROTO TYPE
 byte       = MAC_SIZE   // HLEN
-byte       = IPADR_SIZE // PLEN
+byte       = IP4ADR_SIZE // PLEN
 word opARP              // OP
 export byte[MAC_SIZE]   localha
-export byte[IPADR_SIZE] localip
+export byte[IP4ADR_SIZE] localip
 byte[MAC_SIZE]          remoteha
-byte[IPADR_SIZE]        remoteip
+byte[IP4ADR_SIZE]        remoteip
 //
 // Local network parameters
 //
-export byte[IPADR_SIZE] subnet
-export byte[IPADR_SIZE] gateway
-const MAX_UDP_NOTIFIES	= 16
-const MAX_TCP_NOTIFIES	= 8
+byte[IP4ADR_SIZE] subnet
+byte[IP4ADR_SIZE] gateway
+const MAX_UDP_NOTIFIES	= 4
+const MAX_TCP_NOTIFIES	= 4
 //
 // Notify callbacks
 //
@@ -163,8 +164,8 @@ struc t_notify
     word notify_func
     word notify_parm
 end
-word portsUDP
-word portsTCP
+byte[t_notify * MAX_UDP_NOTIFIES] portsUDP
+byte[t_notify * MAX_TCP_NOTIFIES] portsTCP
 //
 // Service ICMP hook
 //
@@ -254,12 +255,12 @@ export def sendIP(ipdst, proto, seglist, size)
     hdr.ip_ttl            = 10 // Is this reasonable?
     hdr.ip_proto          = proto
     hdr:ip_chksm          = 0
-    memcpy(@hdr.ip_src, @localip, IPADR_SIZE)
+    memcpy(@hdr.ip_src, @localip, IP4ADR_SIZE)
     if !ipdst // IP_BROADCAST
-	memset(@hdr.ip_dst, IP_BROADCAST, IPADR_SIZE)
+	memset(@hdr.ip_dst, IP_BROADCAST, IP4ADR_SIZE)
         memset(@dstMAC, MAC_BROADCAST, MAC_SIZE)
     else
-	memcpy(@hdr.ip_dst, ipdst, IPADR_SIZE)
+	memcpy(@hdr.ip_dst, ipdst, IP4ADR_SIZE)
         retry = 0
         while hdr:ip_dst:0 <> remoteip:0 and hdr:ip_dst:2 <> remoteip:2
   	    if retry >= 3
@@ -268,7 +269,7 @@ export def sendIP(ipdst, proto, seglist, size)
 	    retry = retry + 1
             memset(@dstMAC,   MAC_BROADCAST, MAC_SIZE)
 	    memset(@remoteha, 0,             MAC_SIZE)
-	    memcpy(@remoteip, @hdr.ip_dst,   IPADR_SIZE)
+	    memcpy(@remoteip, @hdr.ip_dst,   IP4ADR_SIZE)
 	    ePayload = PAYLOAD_ARP
 	    opARP    = ARP_REQST
 	    setFrameLen(t_earp)
@@ -311,11 +312,11 @@ end
 //
 // Send UDP datagram
 //
-export def sendUDP(ipdst, portdst, portsrc, data, len)
+export def sendUDP(port, ipdst, portdst, data, len)
     word[8] seglist // list of data and header segments
     byte[t_udphdr] hdr
     
-    hdr:udp_src    = swab(portsrc)
+    hdr:udp_src    = swab(port=>notify_port)
     hdr:udp_dst    = swab(portdst)
     hdr:udp_len    = swab(t_udphdr + len)
     hdr:udp_chksm  = 0
@@ -328,62 +329,56 @@ end
 //
 // Notify on UDP datagram received
 //
-export def listenUDP(localport, callback, param)
+export def openUDP(localport, callback, param)
     word port
     byte i
 
     if !localport; return -1; fin // invalid port
     //
-    // Allocate the port notify array if needed
-    //
-    if !portsUDP
-        portsUDP = heapalloc(MAX_UDP_NOTIFIES * t_notify)
-	if !portsUDP; return -1; fin
-	memset(portsUDP, 0, MAX_UDP_NOTIFIES * t_notify)
-    fin
-    //
     // Look for an existing notification on localport
     //
-    port = portsUDP
+    port = @portsUDP
     for i = 1 to MAX_UDP_NOTIFIES
         if port=>notify_port == localport
 	    port=>notify_func = callback
 	    port=>notify_parm = param
-	    return 0
+	    return port
 	fin
+	port = port + t_notify
     next
     //
     // Add notification on localport if room
     //
-    port = portsUDP
+    port = @portsUDP
     for i = 1 to MAX_UDP_NOTIFIES
         if !port=>notify_port
 	    port=>notify_port = localport
 	    port=>notify_func = callback
 	    port=>notify_parm = param
-	    return 0
+	    return port
 	fin
+	port = port + t_notify
     next
-    return -1
 end
 //
 // Clear notify on UDP port
 //
-export def hangupUDP(localport)
+export def closeUDP(port)
     word port
     byte i
     
-    if !localport; return -1; fin // invalid port
-    //
-    // Look for an existing notification on localport
-    //
-    port = portsUDP
-    for i = 1 to MAX_UDP_NOTIFIES
-        if port=>notify_port == localport
-	    port=>notify_port = 0
+    if isuge(port, @portsUDP) and isult(port, @portsUDP + MAX_UDP_NOTIFIES * t_notify)
+	//
+	// Clear notiications on this port
+	//
+	if port=>notify_port
+            port=>notify_port = 0
 	    return 0
 	fin
-    next
+    fin
+    //
+    // Invalid port
+    //
     return -1
 end
 //
@@ -446,12 +441,12 @@ export def serviceIP
 		//
 		when iphdr->ip_proto
 		    is IP_PROTO_UDP
-		        port = portsUDP
+		        port = @portsUDP
 			if port
 			    lclport = swab(rxptr=>udp_dst)
 			    for i = 1 to MAX_UDP_NOTIFIES
 			        if port=>notify_port == lclport)
-				    port=>notify_func(@iphdr=>ip_src,swab(rxptr=>udp_src),lclport,rxptr+t_udphdr,swab(rxptr=>udp_len),port=>notify_parm)
+				    port=>notify_func(@iphdr=>ip_src,swab(rxptr=>udp_src),rxptr+t_udphdr,swab(rxptr=>udp_len),port=>notify_parm)
 				    break
 				fin
 				port = port + t_notify
@@ -517,6 +512,21 @@ export def setEtherDriver(MAC, getlen, readframe, setlen, writeframe)
     readFrame   = readframe
     setFrameLen = setlen
     writeFrame  = writeframe
+end
+//
+// Set the local IP addresses
+//
+export def setInterfaceIP(newIP, newSubnet, newGateway)
+    if newIP;      memcpy(@localip, newIP,      IP4ADR_SIZE); fin
+    if newSubnet;  memcpy(@subnet,  newSubnet,  IP4ADR_SIZE); fin
+    if newGateway; memcpy(@gateway, newGateway, IP4ADR_SIZE); fin
+end
+//
+// Get the interface hardware address
+//
+export def getInterfaceHA(ha)
+    if ha; memcpy(ha, @myMAC, MAC_SIZE); fin
+    return MAC_SIZE
 end
 
 done
