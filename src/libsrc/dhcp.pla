@@ -7,9 +7,24 @@ import cmdsys
     predef heapmark, heapallocalign, heapalloc, heaprelease
     byte MACHID
 end
+//
+// Net object
+//
 import inet
-    predef swab, sendUDP, openUDP, closeUDP, serviceIP
-    predef setInterfaceIP, getInterfaceHA
+    word iNet
+end
+struc t_inet
+    word initIP
+    word serviceIP
+    word openUDP
+    word sendUDP
+    word closeUDP
+    word listenTCP
+    word connectTCP
+    word sendTCP
+    word closeTCP
+    word setInterfaceIP
+    word getInterfaceHA
 end
 //
 // Needed to init subnet
@@ -178,7 +193,7 @@ def recvDHCP(remip, remport, pkt, len, param)
 		memcpy(@optsDHCP.5, @pkt->dhcp_yourip, 4)
 		memcpy(@optsDHCP.11, @pkt->dhcp_serverip, 4)
 		memcpy(@DHCP.dhcp_serverip, @pkt->dhcp_serverip, 4)
-		sendUDP(portDHCP, 0, DHCP_SERVER_PORT, @DHCP, t_dhcp)
+		iNet:sendUDP(portDHCP, 0, DHCP_SERVER_PORT, @DHCP, t_dhcp)
 		break
 	    is DHCP_ACK
 	        stateDHCP = DHCP_ACK
@@ -204,15 +219,15 @@ end
 //
 // Get the local hardware address into the DHCP packet
 //
-getInterfaceHA(@DHCP.dhcp_clientha)
+iNet:getInterfaceHA(@DHCP.dhcp_clientha)
 //
 // Clear our local IP address
 //
-setInterfaceIP(@zeros,@ones, @zeros)
+iNet:setInterfaceIP(@zeros,@ones, @zeros)
 //
 // Prepare to receive DHCP packets from a server
 //
-portDHCP = openUDP(DHCP_CLIENT_PORT, @recvDHCP, 0)
+portDHCP = iNet:openUDP(DHCP_CLIENT_PORT, @recvDHCP, 0)
 //
 // Service IP
 //
@@ -220,24 +235,17 @@ while retry < 3 and stateDHCP <> DHCP_ACK
     //
     // Broadcast DHCP DISCOVER message
     //
-    sendUDP(portDHCP, 0, DHCP_SERVER_PORT, @DHCP, t_dhcp)
+    iNet:sendUDP(portDHCP, 0, DHCP_SERVER_PORT, @DHCP, t_dhcp)
     for timeout = 1 to 1000
-        serviceIP
+        iNet:serviceIP()
 	if stateDHCP == DHCP_ACK
 	    break
         fin
     next
     retry = retry + 1
 loop
-closeUDP(portDHCP)
-setInterfaceIP(@localip, @localnet, @localgw)
+iNet:closeUDP(portDHCP)
+iNet:setInterfaceIP(@localip, @localnet, @localgw)
 puts(@boundstr);putip(@localip);putc('/');putip(@localnet);putln
-//
-// Service IP
-//
-repeat
-    serviceIP
-until ^$C000 > 127
-^$C010
 
 done

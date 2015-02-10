@@ -4,16 +4,35 @@ import cmdsys
     predef memset, memcpy, modaddr, modexec
     predef heapmark, heapallocalign, heapalloc, heaprelease, heapavail
     byte MACHID
+    //
+    // Module don't free memory
+    //
+    const modkeep     = $2000
+    const modinitkeep = $4000
 end
 //
-// Module don't free memory
+// Net object
 //
-const modkeep     = $2000
-const modinitkeep = $4000
+import inet
+    word iNet
+end
+struc t_inet
+    word initIP
+    word serviceIP
+    word openUDP
+    word sendUDP
+    word closeUDP
+    word listenTCP
+    word connectTCP
+    word sendTCP
+    word closeTCP
+    word setInterfaceIP
+    word getInterfaceHA
+end
 //
 // Predefine service routine
 //
-predef serviceIP
+predef etherServiceIP
 //
 // Segment list element
 //
@@ -183,7 +202,7 @@ end
 //
 // Swap bytes in word
 //
-export asm swab
+asm swab
 	LDA	ESTKL,X
 	LDY	ESTKH,X
 	STA	ESTKH,X
@@ -194,7 +213,7 @@ end
 // 1'S COMPLIMENT SUM BE format
 // sum1(PREVSUM, BUF, LEN)
 //
-export asm sum1
+asm sum1
 	LDY	#$00
 	LDA	ESTKL+1,X
 	STA 	SRCL
@@ -242,7 +261,7 @@ end
 //
 // Send IP datagram
 //
-export def sendIP(ipdst, proto, seglist, size)
+def etherSendIP(ipdst, proto, seglist, size)
     byte[t_iphdr] hdr
     byte retry
     word timeout
@@ -275,7 +294,7 @@ export def sendIP(ipdst, proto, seglist, size)
 	    setFrameLen(t_earp)
 	    writeFrame(@eFrame, t_earp)
 	    for timeout = 1000 downto 0
-	        serviceIP
+	        etherServiceIP
 		if remoteha:0 | remoteha:2 | remoteha:4
 		    break
 		fin
@@ -312,7 +331,7 @@ end
 //
 // Send UDP datagram
 //
-export def sendUDP(port, ipdst, portdst, data, len)
+def etherSendUDP(port, ipdst, portdst, data, len)
     word[8] seglist // list of data and header segments
     byte[t_udphdr] hdr
     
@@ -324,12 +343,12 @@ export def sendUDP(port, ipdst, portdst, data, len)
     seglist:0:seg_len = t_udphdr
     seglist:4:seg_buf = data
     seglist:4:seg_len = len
-    return sendIP(ipdst, IP_PROTO_UDP, @seglist, t_udphdr + len)
+    return etherSendIP(ipdst, IP_PROTO_UDP, @seglist, t_udphdr + len)
 end
 //
 // Notify on UDP datagram received
 //
-export def openUDP(localport, callback, param)
+def etherOpenUDP(localport, callback, param)
     word port
     byte i
 
@@ -363,7 +382,7 @@ end
 //
 // Clear notify on UDP port
 //
-export def closeUDP(port)
+def etherCloseUDP(port)
     word port
     byte i
     
@@ -382,9 +401,29 @@ export def closeUDP(port)
     return -1
 end
 //
+// Open TCP socket in SERVER mode
+//
+def etherListenTCP(lclport, callback, param)
+end
+//
+// Open TCP socket in CLIENT mode
+//
+def etherConnectTCP(remip, remport, lclport, callback, param)
+end
+//
+// Write to TCP socket
+//
+def etherSendTCP(wiz, data, len)
+end
+//
+// Close TCP socket
+//
+def etherCloseTCP(wiz)
+end
+//
 // Service incoming packets
 //
-export def serviceIP
+def etherServiceIP
     word rxsize, rxpacket, rxptr
     word iphdr, opt, optlen, port, lclport, remport
     byte i,   echolen
@@ -470,7 +509,7 @@ export def serviceIP
 			    echo_reply:icmp_chksm = 0
 			    seglist:seg_buf = @echo_reply
 			    seglist:seg_len = echolen
-			    sendIP(@iphdr=>ip_src, IP_PROTO_ICMP, @seglist, echolen)
+			    etherSendIP(@iphdr=>ip_src, IP_PROTO_ICMP, @seglist, echolen)
 			fin
 			if hookICMP
 			    hookICMP(@iphdr=>ip_src, rxptr, rxsize)
@@ -516,7 +555,7 @@ end
 //
 // Set the local IP addresses
 //
-export def setInterfaceIP(newIP, newSubnet, newGateway)
+def setEtherIP(newIP, newSubnet, newGateway)
     if newIP;      memcpy(@localip, newIP,      IP4ADR_SIZE); fin
     if newSubnet;  memcpy(@subnet,  newSubnet,  IP4ADR_SIZE); fin
     if newGateway; memcpy(@gateway, newGateway, IP4ADR_SIZE); fin
@@ -524,9 +563,22 @@ end
 //
 // Get the interface hardware address
 //
-export def getInterfaceHA(ha)
+def getEtherHA(ha)
     if ha; memcpy(ha, @myMAC, MAC_SIZE); fin
     return MAC_SIZE
 end
 
+//
+// Fill in Net class
+//
+iNet:serviceIP      = @etherServiceIP
+iNet:openUDP        = @etherOpenUDP
+iNet:sendUDP        = @etherSendUDP
+iNet:closeUDP       = @etherCloseUDP
+iNet:listenTCP      = @etherListenTCP
+iNet:connectTCP     = @etherConnectTCP
+iNet:sendTCP        = @etherSendTCP
+iNet:closeTCP       = @etherCloseTCP
+iNet:setInterfaceIP = @setEtherIP
+iNet:getInterfaceHA = @getEtherHA
 done

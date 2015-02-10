@@ -1,0 +1,230 @@
+//
+// HTTP Daemon
+//
+import cmdsys
+    predef syscall, call, getc, gets, putc, puts, putln
+    predef memset, memcpy, modaddr, modexec
+    predef heapmark, heapallocalign, heapalloc, heaprelease
+    byte MACHID
+end
+//
+// Net object
+//
+import inet
+    word iNet
+end
+struc t_inet
+    word initIP
+    word serviceIP
+    word openUDP
+    word sendUDP
+    word closeUDP
+    word listenTCP
+    word connectTCP
+    word sendTCP
+    word closeTCP
+    word setInterfaceIP
+    word getInterfaceHA
+end
+
+word socketHTTP
+byte[65] prefix
+byte     perr
+word     filebuff, iobuff
+byte hello = "Apple II Web Server"
+byte defhtml = "INDEX.HTML"
+//
+// HTTP response
+//
+byte httpOK = "HTTP/1.1 200 OK\n"
+byte         = "Content-Type: text/html\n"
+byte         = "Content-Length: "
+byte httpLen = "      \n"
+byte         = ""
+byte httpBAD = "HTTP/1.1 404 NOTFOUND\n"
+byte         = "Content-Type: text/plain\n"
+byte         = "Content-Length: 12\n"
+byte         = "\n"
+byte         = "Bad Request\n"
+byte         = ""
+byte[] httpBAD_end
+//
+// ProDOS routines
+//
+def getpfx(path)
+    byte params[3]
+
+    ^path    = 0
+    params.0 = 1
+    params:1 = path
+    perr     = syscall($C7, @params)
+    return path
+end
+def setpfx(path)
+    byte params[3]
+
+    params.0 = 1
+    params:1 = path
+    perr     = syscall($C6, @params)
+    return path
+end
+def open(path, buff)
+    byte params[6]
+
+    params.0 = 3
+    params:1 = path
+    params:3 = buff
+    params.5 = 0
+    perr     = syscall($C8, @params)
+    return params.5
+end
+def close(refnum)
+    byte params[2]
+
+    params.0 = 1
+    params.1 = refnum
+    perr     = syscall($CC, @params)
+    return perr
+end
+def read(refnum, buff, len)
+    byte params[8]
+
+    params.0 = 4
+    params.1 = refnum
+    params:2 = buff
+    params:4 = len
+    params:6 = 0
+    perr     = syscall($CA, @params)
+    return params:6
+end
+//
+// DEBUG
+//
+def putln
+    return putc($0D)
+end
+def putb(hexb)
+    return call($FDDA, hexb, 0, 0, 0)
+end
+def puth(hex)
+    return call($F941, hex >> 8, hex, 0, 0)
+end
+def puti(i)
+  if i < 0; putc('-'); i = -i; fin
+  if i < 10
+    putc(i + '0')
+  else
+    puti(i / 10)
+    putc(i % 10 + '0')
+  fin
+end
+def putip(ipptr)
+    byte i
+    
+    for i = 0 to 2
+        puti(ipptr->[i]); putc('.')
+    next
+    return puti(ipptr->[i])
+end
+def dumpbytes(buf, len)
+    word i
+    
+    for i = 0 to len - 1
+        putb(buf->[i])
+	if i & 15 == 15
+	    putln
+	else
+	    putc(' ')
+	fin
+    next
+end
+//
+// String functions
+//
+def strcat(dst, src1, src2)
+    memcpy(dst + 1,         src1 + 1, ^src1)
+    memcpy(dst + 1 + ^src1, src2 + 1, ^src2)
+    ^dst = ^src1 + ^src2
+    return dst
+end
+def itos(dst, i)
+    if i < 0; ^dst = '-'; i = -i; dst = dst + 1; fin
+    if i < 10
+        ^dst = i + '0'
+    else  
+        dst = itos(dst, i / 10)
+        ^dst = i % 10 + '0'
+    fin
+    return dst + 1
+end
+//
+// Serve HTTP requests
+//
+def servHTTP(remip, remport, lclport, data, len, param)
+    byte i
+    byte[65] filename
+    word url
+
+    //
+    // Parse HTTP request
+    //
+    if len > 0
+        //
+	// Better be 'GET'
+	//
+        if data->0 == 'G' and data->1 == 'E' and data->2 == 'T' and data=>3 == ' '
+	    len = len - 1
+	    if len > 64
+	        len = 64
+	    fin
+            for i = 4 to len
+                if data->[i] <= ' '
+	            data->3= i - 4
+		    url = data + 3
+		    if url->1 == '/'
+		        if url->0 == 1
+		            url = @defhtml
+			else
+			    url->1 = url->0 - 1
+			    url = url + 1
+			fin
+		    fin 
+		    strcat(@filename, @prefix, url)
+		    puts(@filename);putln
+		    return
+	        fin
+            next
+	else
+	    iNet:sendTCP(socketHTTP, @httpBAD, @httpBAD_end - @httpBAD)
+	fin
+    else
+        iNet:closeTCP(socketHTTP)
+	socketHTTP = 0
+    fin
+end
+
+if !iNet:initIP()
+    return -1
+fin
+puts(@hello)
+getpfx(@prefix)
+//
+// Alloc aligned file/io buffers
+//
+filebuff = heapallocalign(1024, 8, 0) 
+iobuff   = heapallocalign(1024, 8, 0) 
+//
+// Service IP
+//
+repeat
+    //
+    // (Re)Open HTTPD port
+    //
+    if !socketHTTP
+        socketHTTP = iNet:listenTCP(80, @servHTTP, 0)
+    fin
+    iNet:serviceIP()
+until ^$C000 > 127
+^$C010
+
+done
