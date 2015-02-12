@@ -168,7 +168,7 @@ t_token scan(void)
                     constval = 0x0D;
                     break;
                 case 'r':
-                    constval = '\r';
+                    constval = 0x0A;
                     break;
                 case 't':
                     constval = '\t';
@@ -212,7 +212,7 @@ t_token scan(void)
                         *scanpos = 0x0D;
                         break;
                     case 'r':
-                        *scanpos = '\r';
+                        *scanpos = 0x0A;
                         break;
                     case 't':
                         *scanpos = '\t';

@@ -474,27 +474,28 @@ def wizSendUDP(wiz, ipdst, portdst, data, len)
     //
     // Wait for Tx room
     //
-    repeat
-        txrr = peekregw(wizregs + WIZ_SnTXRD)
-        txwr = peekregw(wizregs + WIZ_SnTXWR)
-    until txrr == txwr
+    repeat; until peekregw(wizregs + WIZ_SnFSR) >= len
+    //
+    // Calc new write ptr, check for split
+    //
+    txwr = peekregw(wizregs + WIZ_SnTXWR)
+    txrr = txwr & WIZ_TXMASK
+    if txrr + len > WIZ_TXSIZE
+        splitlen = WIZ_TXSIZE - txrr
+        pokeregs(wizdata + txrr, data,            splitlen)
+        pokeregs(wizdata,        data + splitlen, len - splitlen)
+     else
+        pokeregs(wizdata + txrr, data, len)
+    fin
     //
     // Set destination address/port
     //
     pokeregs(wizregs + WIZ_SnDIPR, ipdst, IP4ADR_SIZE)
     pokeregw(wizregs + WIZ_SnDPORT, portdst)
     //
-    // Calc new write ptr, check for split
+    // Update write pointer and send
     //
-    txwr = txrr + len
-    if txwr >= WIZ_TXSIZE
-        splitlen = WIZ_TXSIZE - txrr
-        pokeregs(wizdata + txrr, data,            splitlen)
-        pokeregs(wizdata,        data + splitlen, len - splitlen)
-    else
-        pokeregs(wizdata + txrr, data, len)
-    fin
-    pokeregw(wizregs + WIZ_SnTXWR, txwr)
+    pokeregw(wizregs + WIZ_SnTXWR, txwr + len)
     pokereg(wizregs + WIZ_SnCR, $20) // SEND
 end
 //
@@ -508,7 +509,7 @@ def wizOpenUDP(localport, callback, param)
     //
     // Look for an existing notification on localport
     //
-    putc('O')
+    //putc('O')
     wiz = @wizChannel
     for i = 1 to MAX_WIZ_CHANNELS
         if wiz->channel_proto == IP_PROTO_UDP and wiz=>channel_lclport == localport
@@ -531,7 +532,7 @@ def wizOpenUDP(localport, callback, param)
             return 0
         fin
     fin
-    putc('0' + i);putln
+    //putc('0' + i);putln
     //
     // Fill in this channel and open it
     //
@@ -548,19 +549,19 @@ end
 // Close UDP port
 //
 def wizCloseUDP(wiz)
-    putc('S')
+    //putc('S')
     if isuge(wiz, @wizChannel) and isult(wiz, @wizChannel + MAX_WIZ_CHANNELS * t_channel)
 	//
 	// Clear notiications on this port
 	//
         if wiz->channel_proto == WIZ_PROTO_UDP
-	    putc('1' + ((wiz=>channel_regs - WIZ_SREGS) >> 8));putln
+	    //putc('1' + ((wiz=>channel_regs - WIZ_SREGS) >> 8));putln
             wiz->channel_proto = WIZ_PROTO_CLOSED
             pokereg(wiz=>channel_regs + WIZ_SnCR, $10) // CLOSE
 	    return 0
 	fin
     fin
-    putc('!');putln
+    //putc('!');putln
     //
     // Invalid port
     //
@@ -576,7 +577,7 @@ def wizListenTCP(lclport, callback, param)
     //
     // Look for an existing notification on localport
     //
-    putc('L')
+    //putc('L')
     wiz = @wizChannel
     for i = 1 to MAX_WIZ_CHANNELS
         if wiz->channel_proto == WIZ_PROTO_TCP and wiz->channel_state == TCP_STATE_LISTEN and wiz=>channel_lclport == lclport
@@ -599,7 +600,7 @@ def wizListenTCP(lclport, callback, param)
             return 0
         fin
     fin
-    putc('0' + i);putln
+    //putc('0' + i);putln
     //
     // Fill in this channel and open it
     //
@@ -611,8 +612,10 @@ def wizListenTCP(lclport, callback, param)
     wiz=>channel_lclport   = lclport
     wiz=>channel_recv_func = callback
     wiz=>channel_recv_parm = param
-    pokeregw(wiz=>channel_regs + WIZ_SnPORT, lclport)
     pokereg(wiz=>channel_regs + WIZ_SnMR, $01) // TCP protocol
+    pokeregw(wiz=>channel_regs + WIZ_SnPORT, lclport)
+    pokereg(wiz=>channel_regs + WIZ_SnCR, $01) // OPEN
+    while peekreg(wiz=>channel_regs + WIZ_SnSR) <> $13; loop // Wait for init
     pokereg(wiz=>channel_regs + WIZ_SnCR, $02) // LISTEN
     return wiz
 end
@@ -659,10 +662,12 @@ def wizConnectTCP(remip, remport, lclport, callback, param)
     wiz=>channel_lclport   = lclport
     wiz=>channel_recv_func = callback
     wiz=>channel_recv_parm = param
+    pokereg(wiz=>channel_regs + WIZ_SnMR, $01) // TCP protocol
     pokeregs(wiz=>channel_regs + WIZ_SnDIPR, remip, IP4ADR_SIZE)
     pokeregw(wiz=>channel_regs + WIZ_SnDPORT, remport)
     pokeregw(wiz=>channel_regs + WIZ_SnPORT, lclport)
-    pokereg(wiz=>channel_regs + WIZ_SnMR, $01) // TCP protocol
+    pokereg(wiz=>channel_regs + WIZ_SnCR, $01) // OPEN
+    while peekreg(wiz=>channel_regs + WIZ_SnSR) <> $13; loop // Wait for init
     pokereg(wiz=>channel_regs + WIZ_SnCR, $04) // CONNECT
     return wiz
 end
@@ -673,27 +678,31 @@ def wizSendTCP(wiz, data, len)
     word wizregs, wizdata, txrr, txwr, splitlen
     
     if wiz->channel_state <> TCP_STATE_OPEN; return -1; fin
+    //putc('W');puti(len);putc(':')
     wizregs = wiz=>channel_regs
     wizdata = wiz=>channel_txmem
     //
     // Wait for Tx room
     //
-    repeat
-        txrr = peekregw(wizregs + WIZ_SnTXRD)
-        txwr = peekregw(wizregs + WIZ_SnTXWR)
-    until txrr == txwr
+    repeat; until peekregw(wizregs + WIZ_SnFSR) >= len
     //
     // Calc new write ptr, check for split
     //
-    txwr = txrr + len
-    if txwr >= WIZ_TXSIZE
+    txwr = peekregw(wizregs + WIZ_SnTXWR)
+    txrr = txwr & WIZ_TXMASK
+    if txrr + len > WIZ_TXSIZE
         splitlen = WIZ_TXSIZE - txrr
         pokeregs(wizdata + txrr, data,            splitlen)
         pokeregs(wizdata,        data + splitlen, len - splitlen)
-    else
+        //putc('(');puti(splitlen);putc(',');puti(len-splitlen);putc(')')
+     else
         pokeregs(wizdata + txrr, data, len)
     fin
-    pokeregw(wizregs + WIZ_SnTXWR, txwr)
+    //puth(txrr);putc('-');putc('>');puth(txwr+len);putln
+    //
+    // Update write pointer and send
+    //
+    pokeregw(wizregs + WIZ_SnTXWR, txwr + len)
     pokereg(wizregs + WIZ_SnCR, $20) // SEND
 end
 //
@@ -728,7 +737,7 @@ def wizServiceIP
     
     ir = peekreg(WIZ_IR)
     if ir and ir <> $FF // Ignore spurious read of IR
-        putc('I');putb(ir)
+        //putc('I');putb(ir)
         wiz = @wizChannel
         for i = 0 to 3
             when ir & (1 << i)
@@ -742,7 +751,7 @@ def wizServiceIP
                     when wiz->channel_proto
                         is WIZ_PROTO_TCP
 			    if sir & $01
-			        putc('C')
+			        //putc('C')
 				//
 				// Connect TCP socket
 				//
@@ -754,34 +763,35 @@ def wizServiceIP
 				        wiz->channel_state = TCP_STATE_OPEN
 					break
 				    otherwise
-				        putc('?')
+				        //putc('?')
 				wend
 			    fin
                             if sir & $04
-                                putc('R')
+                                //putc('R')
                                 //
                                 // Receive TCP packet
                                 //
                                 rxlen = peekregw(wizregs + WIZ_SnRSR)
                                 rxrr  = peekregw(wizregs + WIZ_SnRXRD)
-                                rxwr  = rxrr + rxlen
+                                rxwr  = rxrr & WIZ_RXMASK
                                 rxpkt = heapalloc(rxlen)
-                                if rxwr >= WIZ_RXSIZE
-                                    putc('!')
-                                    splitlen = WIZ_RXSIZE - rxrr
-                                    peekregs(wizdata + rxrr, rxpkt,            splitlen)
+				//puti(rxlen);putc(':')
+				if rxwr + rxlen > WIZ_RXSIZE
+                                    splitlen = WIZ_RXSIZE - rxwr
+                                    peekregs(wizdata + rxwr, rxpkt,            splitlen)
                                     peekregs(wizdata,        rxpkt + splitlen, rxlen - splitlen)
+				    //putc('(');puti(splitlen);putc(',');puti(rxlen-splitlen);putc(')')
                                 else
-                                    peekregs(wizdata + rxrr, rxpkt, rxlen)
+                                    peekregs(wizdata + rxwr, rxpkt, rxlen)
                                 fin
-                                putc('=');putip(@wiz=>channel_remip);putc(':');puti(wiz=>channel_remport);putln
-                                pokeregw(wizregs + WIZ_SnRXRD, rxwr)
+				//puth(rxwr);putc('-');putc('>');puth(rxwr+rxlen);putln
+                                pokeregw(wizregs + WIZ_SnRXRD, rxrr + rxlen)
                                 pokereg(wizregs + WIZ_SnCR, $40) // RECV
                                 wiz=>channel_recv_func(@wiz=>channel_remip,wiz=>channel_remport,wiz=>channel_lclport,rxpkt,rxlen,wiz=>channel_recv_parm)
                                 heaprelease(rxpkt)
                             fin
 			    if sir & $02
-			        putc('S')
+			        //putc('S')
 				//
 				// Close TCP socket
 				//
@@ -795,11 +805,11 @@ def wizServiceIP
 				        pokereg(wiz=>channel_regs + WIZ_SnCR, $10) // CLOSE
 					break
 				    otherwise
-				        putc('?')
+				        //putc('?')
 				wend
 			    fin
 			    if sir & $08
-			        putc('T')
+			        //putc('T')
 				//
 				// Timeout on TCP socket
 				//
@@ -815,10 +825,16 @@ def wizServiceIP
 				        pokereg(wiz=>channel_regs + WIZ_SnCR, $10) // CLOSE
 					break
 				    otherwise
-				        putc('?')
+				        //putc('?')
 				wend
 			    fin
-                            break
+			    //if sir & $10
+			        //putc('W');putc('O');putc('K');puth(peekregw(wiz=>channel_regs+WIZ_SnTXWR));putln
+				//
+				// Write TCP socket OK
+				//
+			    //fin
+                            break			    
                         is WIZ_PROTO_UDP
                             //putc('U');putb(sir)
                             if sir & $04
@@ -828,20 +844,20 @@ def wizServiceIP
                                 //
                                 rxlen = peekregw(wizregs + WIZ_SnRSR)
                                 rxrr  = peekregw(wizregs + WIZ_SnRXRD)
-                                rxwr  = rxrr + rxlen
+                                rxwr  = rxrr & WIZ_RXMASK
                                 rxpkt = heapalloc(rxlen)
-                                if rxwr >= WIZ_RXSIZE
-                                    putc('!')
-                                    splitlen = WIZ_RXSIZE - rxrr
-                                    peekregs(wizdata + rxrr, rxpkt,            splitlen)
+                                if rxwr + rxlen >= WIZ_RXSIZE
+                                    //putc('!')
+                                    splitlen = WIZ_RXSIZE - rxwr
+                                    peekregs(wizdata + rxwr, rxpkt,            splitlen)
                                     peekregs(wizdata,        rxpkt + splitlen, rxlen - splitlen)
                                 else
-                                    peekregs(wizdata + rxrr, rxpkt, rxlen)
+                                    peekregs(wizdata + rxwr, rxpkt, rxlen)
                                 fin
                                 //putc('=');putip(rxpkt);putc(' ');puti(rxlen)
                                 //putc('/');puti(swab(rxpkt=>6))
                                 //putc(' ');puth(rxrr);putc(' ');puth(rxwr);putln
-                                pokeregw(wizregs + WIZ_SnRXRD, rxwr)
+                                pokeregw(wizregs + WIZ_SnRXRD, rxrr + rxlen)
                                 pokereg(wizregs + WIZ_SnCR, $40) // RECV
                                 wiz=>channel_recv_func(rxpkt,swab(rxpkt=>4),rxpkt+8,rxlen-8,wiz=>channel_recv_parm)
                                 heaprelease(rxpkt)
@@ -921,6 +937,8 @@ for slot = $F0 downto $90 step $10
 		//
 		pokeregs(WIZ_SHAR, @wizMAC, 6) // MAC addr
                 pokeregw(WIZ_RTR, 5000) // Timeout period to 500ms
+                pokereg(WIZ_RMSR, $55) // 2K Rx memory/channel
+                pokereg(WIZ_TMSR, $55) // 2K Tx memory/channel
                 //
                 // Fill channel structure
                 //
