@@ -450,6 +450,15 @@ int parse_value(int rvalue)
         // type |= WORD_TYPE;
         emit_value = 1;
     }
+    else if (scantoken == STRING_TOKEN)
+    {
+        /*
+         * This is a special case. Just emit the string and return
+         */
+        emit_conststr(constval, tokenlen - 1);
+        scan();
+        return WORD_TYPE;
+    }
     else
         return (0);
     if (type & CONST_TYPE)

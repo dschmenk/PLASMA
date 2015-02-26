@@ -16,6 +16,7 @@ void emit_def(char *name, int is_bytecode);
 int emit_data(int vartype, int consttype, long constval, int constsize);
 void emit_codetag(int tag);
 void emit_const(int cval);
+void emit_conststr(long conststr, int strsize);
 void emit_lb(void);
 void emit_lw(void);
 void emit_llb(int index);

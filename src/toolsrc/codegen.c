@@ -541,6 +541,11 @@ void emit_const(int cval)
     else
         printf("\t%s\t$2C,$%02X,$%02X\t\t; CW\t%d\n", DB, cval&0xFF,(cval>>8)&0xFF, cval);
 }
+void emit_conststr(long conststr, int strsize)
+{
+    printf("\t%s\t$2E\t\t\t; CS\n", DB);
+    emit_data(0, STRING_TYPE, conststr, strsize);
+}
 void emit_lb(void)
 {
     printf("\t%s\t$60\t\t\t; LB\n", DB);

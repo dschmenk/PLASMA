@@ -508,7 +508,7 @@ void call(uword pc)
  *
 OPTBL:	DW	ZERO,ADD,SUB,MUL,DIV,MOD,INCR,DECR		; 00 02 04 06 08 0A 0C 0E
        	DW	NEG,COMP,AND,IOR,XOR,SHL,SHR,IDXW		; 10 12 14 16 18 1A 1C 1E
-       	DW	NOT,LOR,LAND,LA,LLA,CB,CW,SWAP			; 20 22 24 26 28 2A 2C 2E
+       	DW	NOT,LOR,LAND,LA,LLA,CB,CW,CS			; 20 22 24 26 28 2A 2C 2E
        	DW	DROP,DUP,PUSH,PULL,BRGT,BRLT,BREQ,BRNE		; 30 32 34 36 38 3A 3C 3E
        	DW	ISEQ,ISNE,ISGT,ISLT,ISGE,ISLE,BRFLS,BRTRU	; 40 42 44 46 48 4A 4C 4E
        	DW	BRNCH,IBRNCH,CALL,ICAL,ENTER,LEAVE,RET,??? 	; 50 52 54 56 58 5A 5C 5E
@@ -639,11 +639,9 @@ void interp(code *ip)
                 PUSH(WORD_PTR(ip));
                 ip += 2;
                 break;
-            case 0x2E: // SWAP : TOS = TOS-1, TOS-1 = TOS
-                val = POP;
-                ea  = POP;
-                PUSH(val);
-                PUSH(ea);
+            case 0x2E: // CS: TOS = CONSTANTSTRING (IP)
+                PUSH(ip - mem_data);
+                ip += BYTE_PTR(ip) + 1;
                 break;
                 /*
                  * 0x30-0x3F
