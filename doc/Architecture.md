@@ -16,6 +16,9 @@ Function calls use the call stack to save the return address of the calling code
 #### The Local Frame Stack
 One of the biggest problems to overcome with the 6502 is its very small hardware stack. Algorithms that incorporate recursive procedure calls are very difficult or slow on the 6502. PLASMA takes the middle ground when implementing local frames; a frame pointer on the zero page is indirectly indexed by the Y register. Because the Y register is only eight bits, the local frame size is limited to 256 bytes. 256 bytes really is sufficient for all but the most complex of functions. With a little creative use of dynamic memory allocation, almost anything can be implemented without undue hassle. When a function with parameters is called, the first order of business is to allocate the frame, copy the parameters off the evaluation stack into local variables, and save a link to the previous frame. This is all done automatically with the ENTER opcode. The reverse takes place with the LEAVE opcode when the function exits. Functions that have neither parameters or local variables can forgoe the frame build/destroy process.
 
+#### The Local String Pool
+In-line strings are copied from the bytecode stream into the local string pool during execution. The string pool is deallocated along with the local frame whenthe function exits.
+
 ### The Bytecodes
 The compact code representation comes through the use of opcodes closely matched to the PLASMA compiler. They are:
 
@@ -45,7 +48,7 @@ The compact code representation comes through the use of opcodes closely matched
 | $28    | LLA    | load local address from frame offset
 | $2A    | CB     | constant byte
 | $2C    | CW     | constant word
-| $2E    | SWAP   | swap two topmost stack values
+| $2E    | CS     | constant string
 | $30    | DROP   | drop top stack value
 | $32    | DUP    | duplicate top stack value
 | $34    | PUSH   | push top to call stack
