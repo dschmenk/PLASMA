@@ -14,10 +14,8 @@ To start things off, here is the standard introductory program:
 import cmdsys
     predef puts
 end
-    
-byte hello = "Hello, world.\n"
-    
-puts(@hello)
+
+puts("Hello, world.\n")
 done
 ```
 
@@ -182,6 +180,56 @@ Excaped characters, like the `\n` above are replaces with the Carriage Return ch
 |   \r         |    CR
 |   \\\\       |    \
 |   \\0        |    NUL
+
+#### In-line String Literals
+Strings can be used as literals inside expression or as parameters. The above example can ber written as:
+```
+puts("This is my string; I am very proud of it.\n")
+```
+just like any proper language. This makes coding a much simpler task when it comes to spitting out strings to the screen. However (there always has to be a 'However'), nothing comes for free. Since PLASMA doesn't have garbage collection, memory is allocated on the stack frame for the string every time it is encountered. Translation: you can easily chew up many K of memory if you aren't careful. The memory is recovered when the function exits, just like the rest of the local variables.
+
+Don't do this:
+```
+word i
+
+for i = 0 to 10000
+    puts("I am eating all your memory!")
+next
+```
+
+That string will be allocated anew every time through the loop. Instead, you could either put the string in initialized memory, create a pointer to it before the loop, or put all the string handling in a function that gets called from inside the loop:
+```
+byte nicestr = "This is a nice string"
+word i
+
+for i = 0 to 10000
+    puts(@nicestr)
+next
+```
+
+or:
+```
+word i, nicestr
+
+nicerstr = "This is a nicer string"
+for i = 0 to 10000
+    puts(nicestr)
+next
+```
+
+or:
+```
+word i
+
+def putstr
+    puts("This is the best string")
+end
+
+for i = 0 to 10000
+    putstr
+next
+```
+If you are curious as to why in-line strings behave this way, it is due to putting the string constant right into the bytecode stream, which makes it easy to compile and interpret. Also, when bytecode is placed in AUX memory (or extended memory in the Apple ///), it relieves the pressure of keeping all the in-line strings in precious main memory all the time. A normal compiler would move in-line strings into anonymous data memory and reference it from there. PLASMA now has a string pool associated with each function invocation, just like the local variable frame. It grows dynamically as strings are encountered and gives them an address in main memory until the function exits, freeing the string pool for that function. PLASMA is too dumb (and I'm too lazy) to implement a real string manager inside the compiler/VM. That would make for a nice library module, though.
 
 ### Words
 Words, 16 bit signed values, are the native sized quanta of PLASMA. All calculations, parameters, and return values are words.
