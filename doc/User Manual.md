@@ -153,7 +153,10 @@ The basic architecture of PLASMA relies on different stack based FIFO data struc
 The call stack, where function return addresses are saved, is implemented using the hardware call stack of the CPU. This makes for a fast and efficient implementation of function call/return.
 
 ### Local Frame Stack
-Any function definition that involves parameters or local variables builds a local frame to contain the variables. Often called automatic variables, they only persist during the lifetime of the function. They are a very powerful tool when implementing recursive algorithms. PLASMA puts a limitation of 256 bytes for the size of the frame (2 bytes reserved for previous frame pointer, 254 bytes for local variables), due to the nature of the 6502 CPU (8 bit index register). With careful planning, this shouldn't be too constraining.
+Any function definition that involves parameters or local variables builds a local frame to contain the variables. Often called automatic variables, they only persist during the lifetime of the function. They are a very powerful tool when implementing recursive algorithms. PLASMA puts a limitation of 256 bytes for the size of the frame, due to the nature of the 6502 CPU (8 bit index register). With careful planning, this shouldn't be too constraining.
+
+### Local String Pool
+Any function that uses in-line strings will have those strings copied to the local string pool for usage. This allows string literals to exist in the same memory as the bytecode and only copied to main memory when used. The string pool is deallocated along with the local frame stack when the function exits.
 
 ### Evaluation Stack
 All temporary values are loaded and manipulated on the PLASMA evaluation stack. This is a small (16 element) stack implemeted in high performance memory/registers of the host CPU. Parameters to functions are passed on the evaluation stack, then moved to local variables for named reference inside the funtion.
