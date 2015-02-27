@@ -53,7 +53,7 @@ The PLASMA low level operations are defined as:
 | LLA    | load local address from frame offset
 | CB     | constant byte
 | CW     | constant word
-| SWAP   | swap two topmost stack values
+| CS     | constant string
 | DROP   | drop top stack value
 | DUP    | duplicate top stack value
 | PUSH   | push top to call stack
