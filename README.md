@@ -406,6 +406,8 @@ PLASMA User Manual: https://github.com/dschmenk/PLASMA/blob/master/doc/User%20Ma
 
 PLASMA Architecture: https://github.com/dschmenk/PLASMA/blob/master/doc/Architecture.md
 
+PLASMA KFEST 2015 video: https://www.youtube.com/watch?v=RrR79WVHwJo
+
 BCPL: http://en.wikipedia.org/wiki/BCPL
 
 B Programming Language User Manual  http://cm.bell-labs.com/cm/cs/who/dmr/kbman.html
