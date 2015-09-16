@@ -143,8 +143,7 @@ REGVALS	=	SRC
         LDA     ESTKL,X
         PHA
         INX
-        LDA     ESTKL,X
-        TAY
+        LDY     ESTKL,X
         INX
         LDA     ESTKL+1,X
         PHA
@@ -187,25 +186,26 @@ asm memset
 	LDA     ESTKH+2,X
 	STA     DSTH
 	LDY     ESTKL,X
-	BEQ	+
+	BEQ     +
 	INC     ESTKH,X
 	LDY     #$00
-+       LDA	ESTKH,X
-        BEQ	SETMEX
++	LDA     ESTKH,X
+	BEQ     SETMEX
 SETMLPL	CLC
 	LDA     ESTKL+1,X
 SETMLPH	STA     (DST),Y
 	DEC     ESTKL,X
-	BNE     +
-	DEC     ESTKH,X
-	BEQ     SETMEX
-+	INY
-	BNE	+
-	INC     DSTH
-+	BCS	SETMLPL
+	BEQ     ++
+-	INY
+	BEQ     +
+--	BCS     SETMLPL
 	SEC
 	LDA     ESTKH+1,X
-	BCS	SETMLPH
+	BCS     SETMLPH
++	INC     DSTH
+	BNE     --
+++	DEC     ESTKH,X
+	BNE     -
 SETMEX	INX
 	INX
 	RTS
@@ -291,15 +291,15 @@ end
 // Unsigned word comparisons.
 //
 asm uword_isge
-	LDY	#$00
 	LDA	ESTKL+1,X
 	CMP	ESTKL,X
 	LDA	ESTKH+1,X
 	SBC	ESTKH,X
-	BCC	+
-	DEY
-+ 	STY	ESTKL+1,X
-	STY	ESTKH+1,X
+	LDA	#$FF
+	ADC	#$00
+	EOR	#$FF
+ 	STA	ESTKL+1,X
+	STA	ESTKH+1,X
 	INX
 	RTS
 end
@@ -309,9 +309,10 @@ asm uword_isle
 	CMP	ESTKL+1,X
 	LDA	ESTKH,X
 	SBC	ESTKH+1,X
-	BCC	+
-	DEY
-+ 	STY	ESTKL+1,X
+	LDA	#$FF
+	ADC	#$00
+	EOR	#$FF
+ 	STY	ESTKL+1,X
 	STY	ESTKH+1,X
 	INX
 	RTS
@@ -436,7 +437,7 @@ asm stodci
 end
 asm toupper
 	LDA     ESTKL,X
-TOUPR	AND	#$7F
+TOUPR	AND     #$7F
 	CMP     #'a'
 	BCC     +
 	CMP     #'z'+1
@@ -476,7 +477,7 @@ asm modtosym
 	LDY	#$00
 	LDA	#'#'+$80
 -	STA	(DST),Y
-	CMP	#$80
+	ASL
 	LDA	(SRC),Y
 	INY
 	BCS	-
@@ -517,7 +518,7 @@ asm lookuptbl
 	CMP	(SRC),Y
 	BNE	++
 	INY
-	CMP	#$80
+	ASL
 	BCS	-
 	LDA	(DST),Y
 	PHA
@@ -532,9 +533,8 @@ asm lookuptbl
 ++	LDY	#$00
 --	LDA	(DST),Y
 	INC	DSTL
-	BNE	++
-	INC	DSTH
-++	CMP	#$80
+	BEQ	+
+---	ASL
 	BCS	--
 	LDA	#$02
 	ADC	DSTL
@@ -542,6 +542,8 @@ asm lookuptbl
 	BCC	-
 	INC	DSTH
 	BCS	-
++	INC	DSTH
+	BNE	---
 end
 //
 // CONSOLE I/O
