@@ -90,9 +90,9 @@ $(PLVM03): vmsrc/plvm03.s vmsrc/soscmd.a
 # Sample code
 #
 test:	samplesrc/test.pla samplesrc/testlib.pla $(PLVM) $(PLASM)
-	m4 -I inc < samplesrc/test.pla | ./$(PLASM) -AM  > samplesrc/test.a
+	./$(PLASM) -AM  < samplesrc/test.pla > samplesrc/test.a
 	acme --setpc 4094 -o $(TEST) samplesrc/test.a
-	m4 -I inc < samplesrc/testlib.pla | ./$(PLASM) -AM  > samplesrc/testlib.a
+	./$(PLASM) -AM  < samplesrc/testlib.pla > samplesrc/testlib.a
 	acme --setpc 4094 -o $(TESTLIB) samplesrc/testlib.a
 	./$(PLVM) TEST
 
@@ -164,10 +164,6 @@ $(ROGUEMAP): samplesrc/rogue.map.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AM < samplesrc/rogue.map.pla > samplesrc/rogue.map.a
 	acme --setpc 4094 -o $(ROGUEMAP) samplesrc/rogue.map.a
 
-$(PROFILE): samplesrc/profile.pla $(PLVM02) $(PLASM)
-	m4 -I inc < samplesrc/profile.pla | ./$(PLASM) -AM > samplesrc/profile.a
-	acme --setpc 4094 -o $(PROFILE) samplesrc/profile.a
-
 $(HGR1):	samplesrc/hgr1.pla samplesrc/hgr1test.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AM < samplesrc/hgr1test.pla > samplesrc/hgr1test.a
 	acme --setpc 4094 -o $(HGR1TEST) samplesrc/hgr1test.a
@@ -175,6 +171,6 @@ $(HGR1):	samplesrc/hgr1.pla samplesrc/hgr1test.pla $(PLVM02) $(PLASM)
 	acme --setpc 4094 -o $(HGR1) samplesrc/hgr1.a
 
 hello:	samplesrc/hello.pla $(PLVM) $(PLASM)
-	m4 -I inc < samplesrc/hello.pla | ./$(PLASM) -AM > samplesrc/hello.a
+	./$(PLASM) -AM > samplesrc/hello.a
 	acme --setpc 4094 -o $(HELLO) samplesrc/hello.a
 	./$(PLVM) HELLO

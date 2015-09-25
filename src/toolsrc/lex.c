@@ -1,6 +1,17 @@
+/*
+ * Copyright (C) 2015 The 8-Bit Bunch. Licensed under the Apache License, Version 1.1 
+ * (the "License"); you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at <http://www.apache.org/licenses/LICENSE-1.1>.
+ * Unless required by applicable law or agreed to in writing, software distributed under 
+ * the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF 
+ * ANY KIND, either express or implied. See the License for the specific language 
+ * governing permissions and limitations under the License.
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <ctype.h>
+#include <string.h>
 #include "tokens.h"
 #include "symbols.h"
 
@@ -8,7 +19,12 @@ char *statement, *tokenstr, *scanpos = "";
 t_token scantoken, prevtoken;
 int tokenlen;
 long constval;
+FILE* inputfile;
+char *filename;
 int lineno = 0;
+FILE* outer_inputfile = NULL;
+char* outer_filename;
+int outer_lineno;
 t_token keywords[] = {
     IF_TOKEN,               'I', 'F',
     ELSE_TOKEN,             'E', 'L', 'S', 'E',
@@ -33,6 +49,7 @@ t_token keywords[] = {
     DEF_TOKEN,	            'D', 'E', 'F',
     EXPORT_TOKEN,	    'E', 'X', 'P', 'O', 'R', 'T',
     IMPORT_TOKEN,	    'I', 'M', 'P', 'O', 'R', 'T',
+    INCLUDE_TOKEN,          'I', 'N', 'C', 'L', 'U', 'D', 'E',
     RETURN_TOKEN,           'R', 'E', 'T', 'U', 'R', 'N',
     END_TOKEN,              'E', 'N', 'D',
     DONE_TOKEN,	            'D', 'O', 'N', 'E',
@@ -52,7 +69,7 @@ void parse_error(char *errormsg)
 {
     char *error_carrot = statement;
 
-    fprintf(stderr, "\n%4d: %s\n      ", lineno, statement);
+    fprintf(stderr, "\n%s %4d: %s\n%*s       ", filename, lineno, statement, (int)strlen(filename), "");
     for (error_carrot = statement; error_carrot != tokenstr; error_carrot++)
         putc(*error_carrot == '\t' ? '\t' : ' ', stderr);
     fprintf(stderr, "^\nError: %s\n", errormsg);
@@ -69,7 +86,9 @@ t_token scan(void)
     /*
      * Scan for token based on first character.
      */
-    if (*scanpos == '\0' || *scanpos == '\n' || *scanpos == ';')
+    if (scantoken == EOF_TOKEN)
+        ;
+    else if (*scanpos == '\0' || *scanpos == '\n' || *scanpos == ';')
         scantoken = EOL_TOKEN;
     else if ((scanpos[0] >= 'a' && scanpos[0] <= 'z')
              || (scanpos[0] >= 'A' && scanpos[0] <= 'Z')
@@ -375,6 +394,14 @@ int scan_lookahead(void)
 char inputline[512];
 int next_line(void)
 {
+    int len;
+    t_token token;
+    char* new_filename;
+    if (inputfile == NULL) {
+        // First-time init
+        inputfile = stdin;
+        filename = "<stdin>";
+    }
     if (*scanpos == ';')
     {
         statement = ++scanpos;
@@ -382,12 +409,61 @@ int next_line(void)
     }
     else
     {
-        gets(inputline);
-        lineno++;
         statement = inputline;
         scanpos   = inputline;
+        // Read next line from the current file, and strip newline from the end.
+        if (fgets(inputline, 512, inputfile) == NULL) {
+            inputline[0] = 0;
+            // At end of file, return to previous file if any, else return EOF_TOKEN
+            if (outer_inputfile != NULL) {
+                fclose(inputfile);
+                free(filename);
+                inputfile = outer_inputfile;
+                filename = outer_filename;
+                lineno = outer_lineno - 1; // -1 because we're about to incr again
+                outer_inputfile = NULL;
+            }
+            else {
+                scantoken = EOF_TOKEN;
+                return EOF_TOKEN;
+            }
+        }
+        len = strlen(inputline);
+        if (len > 0 && inputline[len-1] == '\n')
+            inputline[len-1] = '\0';
+        lineno++;
         scantoken = EOL_TOKEN;
-        printf("; %03d: %s\n", lineno, inputline);
+        printf("; %s: %04d: %s\n", filename, lineno, inputline);
     }
-    return (scan());
+    token = scan();
+    // Handle single level of file inclusion
+    if (token == INCLUDE_TOKEN) {
+        token = scan();
+        if (token != STRING_TOKEN) {
+            parse_error("Missing include filename");
+            scantoken = EOF_TOKEN;
+            return EOF_TOKEN;
+        }
+        if (outer_inputfile != NULL) {
+            parse_error("Only one level of includes allowed");
+            scantoken = EOF_TOKEN;
+            return EOF_TOKEN;
+        }
+        outer_inputfile = inputfile;
+        outer_filename = filename;
+        outer_lineno = lineno;
+        new_filename = malloc(tokenlen-1);
+        strncpy(new_filename, (char*)constval, tokenlen-2);
+        new_filename[tokenlen-2] = 0;
+        inputfile = fopen(new_filename, "r");
+        if (inputfile == NULL) {
+            parse_error("Error opening include file");
+            scantoken = EOF_TOKEN;
+            return EOF_TOKEN;
+        }
+        filename = new_filename;
+        lineno = 0;
+        return next_line();
+    }
+    return token;
 }

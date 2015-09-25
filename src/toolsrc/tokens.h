@@ -1,3 +1,12 @@
+/*
+ * Copyright (C) 2015 The 8-Bit Bunch. Licensed under the Apache License, Version 1.1 
+ * (the "License"); you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at <http://www.apache.org/licenses/LICENSE-1.1>.
+ * Unless required by applicable law or agreed to in writing, software distributed under 
+ * the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF 
+ * ANY KIND, either express or implied. See the License for the specific language 
+ * governing permissions and limitations under the License.
+ */
 
 #define TOKEN(c)            (0x80|(c))
 #define IS_TOKEN(c)         (0x80&(c))
@@ -104,6 +113,7 @@
 #define COMMA_TOKEN         TOKEN(',')
 #define COMMENT_TOKEN       TOKEN(';')
 #define EOL_TOKEN           TOKEN(0)
+#define INCLUDE_TOKEN       TOKEN(0x7E)
 #define EOF_TOKEN           TOKEN(0x7F)
 
 typedef unsigned char t_token;
