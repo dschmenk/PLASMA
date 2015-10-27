@@ -1,0 +1,303 @@
+//
+// Cooperative multi-threading (fiber) scheduler
+//
+import cmdsys
+    predef syscall, call, getc, gets, putc, puts, putln
+    predef memset, memcpy, modaddr, modexec
+    predef heapmark, heapallocalign, heapalloc, heaprelease
+    predef isugt, isuge, isult, isule
+    byte MACHID
+end
+//
+// MAximum number of fibers
+//
+const MAX_FIBERS    = 32
+//
+// Fiber states
+//
+const FIBER_UNAVAIL = 0
+const FIBER_FREE    = 1
+const FIBER_HALT    = 2
+const FIBER_RUN     = 3
+byte fbrMax
+byte fbrState[MAX_FIBERS]
+byte fbrNext[MAX_FIBERS]
+word fbrVMState[MAX_FIBERS]
+word fbrPool
+byte fbrRunning = 0
+//
+// Zero Page VM state and 6502 stack
+//
+struc t_vm
+    byte estklo[$10]
+    byte estkhi[$10]
+    word ifp
+    word pp
+    byte esp
+    byte hwsp
+    byte fill[9]
+    byte drop
+    byte nextop[$10]
+    byte hwstk[$C0]
+end
+byte valstr[] = '0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F'
+//
+// Save current VM state and restore another
+//
+asm fbrSwap(saveVM, restoreVM)
+    !SOURCE "vmsrc/plvmzp.inc"
+    HWSP = IPY 
+    LDA ESTKL,X
+    STA SRCL
+    LDA ESTKH,X
+    STA SRCH
+    INX
+    LDA ESTKL,X
+    STA DSTL
+    LDA ESTKH,X
+    STA DSTH
+    STX ESP
+    TSX
+    STX HWSP
+    LDY #$26
+-   LDA ESTK,Y
+    STA (DST),Y
+    LDA (SRC),Y
+    STA ESTK,Y
+    DEY
+    BPL -
+    TXA
+    TAY
+-   LDA $100,Y
+    STA (DST),Y
+    INY
+    BNE -
+    LDY HWSP
+-   LDA (SRC),Y
+    STA $100,Y
+    INY
+    BNE -
+    LDX HWSP
+    TXS
+    LDX ESP
+    LDY IPY
+    RTS
+end
+//
+// Load Zero Page VM state and 6502 stack
+//
+asm fbrLoad(loadVM)
+    LDA ESTKL,X
+    STA SRCL
+    LDA ESTKH,X
+    STA SRCH
+    LDY #$26
+-   LDA (SRC),Y
+    STA ESTK,Y
+    DEY
+    BPL -
+    LDY HWSP
+-   LDA (SRC),Y
+    STA $100,Y
+    INY
+    BNE -
+    LDX HWSP
+    TXS
+    LDX ESP
+    RTS
+end
+//
+// Initialize fiber pool
+//
+export def fbrInit(numPool)
+    byte i
+    word pool
+    
+    if numPool >= MAX_FIBERS
+        numPool = MAX_FIBERS
+    fin
+    fbrMax = numPool - 1
+    //
+    // Allocate the fiber pool and initialize it to FREE
+    //
+    fbrPool = heapalloc(fbrMax * 512 + 256)
+    if fbrPool
+        //
+	// Each fiber gets 256 bytes of stack and 256 bytes
+	// for frame (local) data - except fiber 0 uses original frame data
+	//
+        pool = fbrPool + 256
+	for i = fbrMax downto 1
+	    if i < numPool
+                fbrState[i]   = FIBER_FREE
+                fbrVMState[i] = pool
+	        pool          = pool + 512
+	    fin
+	next
+	//
+	// Set fiber 0 to the RUNning fiber
+	//
+	fbrState   = FIBER_RUN
+	fbrVMState = fbrPool
+    else
+        return -1
+    fin
+end
+//
+// Stop fiber and return it to FREE pool
+//
+export def fbrStop(fid)
+    byte i
+    
+    //
+    // Don't STOP fiber 0 (avoid deadlock)
+    //
+    if fid
+        //
+	// Remove fiber from RUN list and tag as free
+	//
+        fbrState[fid] = FIBER_FREE
+        i = 0
+        while fbrNext[i] <> fid
+	    i = fbrNext[i]
+	loop
+	fbrNext[i] = fbrNext[fid]
+	if fid == fbrRunning
+	    fbrRunning = fbrNext[fbrRunning]
+	    return fbrLoad(fbrVMState[fbrRunning])
+	fin
+    fin
+end
+//
+// Stop current fiber
+//
+export def fbrExit
+    //
+    // Stop running fiber
+    //
+    fbrStop(fbrRunning)
+end
+//
+// Start a fiber RUNning
+//
+export def fbrStart(defaddr, param)
+    byte i
+    word vmstate
+    
+    for i = fbrMax downto 1
+        if fbrState[i] == FIBER_FREE
+	    //
+	    // Allocate fiber from pool
+	    //
+	    fbrState[i]         = FIBER_RUN
+	    vmstate             = fbrVMState[i]
+	    vmstate=>ifp        = vmstate + 512
+            vmstate=>pp         = vmstate + 512
+	    //
+	    // Set fiber parameters to fiber ID and passed-in value
+	    //
+            vmstate->esp        = $0E
+	    vmstate->estklo.$0F = i
+	    vmstate->estkhi.$0F = 0
+	    vmstate->estklo.$0E = param.0 // param lo byte
+	    vmstate->estkhi.$0E = param.1 // param hi byte
+	    //
+	    // Initialize stack to point to fiber def and fbrExit
+	    // This allows a fiber to return and it will fall into fbrExit
+	    //
+            vmstate->hwsp = $FB
+            vmstate=>$FE  = @fbrExit - 1	    
+            vmstate=>$FC  = defaddr  - 1
+	    //
+	    // Link into RUN list
+	    //
+	    fbrNext[i]          = fbrNext[fbrRunning]
+	    fbrNext[fbrRunning] = i
+	    //
+	    // Return fiber ID (index)
+	    //
+	    return i
+	fin
+     next
+     return -1
+end
+//
+// Round-robin schedule RUNning fibers
+//
+export def fbrYield
+    byte prev
+    
+    //
+    // Swap to text fiber if this isn't the only fiber RUNning
+    //
+    if fbrNext[fbrRunning] <> fbrRunning
+        prev      = fbrRunning
+        fbrRunning = fbrNext[fbrRunning]
+	return fbrSwap(fbrVMState[prev], fbrVMState[fbrRunning])
+    fin
+end
+//
+// HALT current fiber and await a RESUME
+//
+export def fbrHalt
+    byte i
+     
+    //
+    // Cannot HALT fiber 0 (avoid deadlock)
+    //
+    if fbrRunning
+        //
+	// Remove fiber from RUN list
+	//
+        i = 0
+        while fbrNext[i] <> fbrRunning
+	    i = fbrNext[i]
+	loop
+	fbrState[fbrRunning] = FIBER_HALT
+	fbrNext[i]           = fbrNext[fbrRunning]
+	i                    = fbrRunning
+	fbrRunning           = fbrNext[fbrRunning]
+	return fbrSwap(fbrVMState[i], fbrVMState[fbrRunning])
+    fin
+end
+//
+// Restore HALTed fiber to RUN list
+//
+export def fbrResume(fid)
+    if fbrState[fid] == FIBER_HALT
+        //
+	// Insert HALTed fiber back into RUN list
+	//
+	fbrState[fid]       = FIBER_RUN
+	fbrNext[fid]        = fbrNext[fbrRunning]
+	fbrNext[fbrRunning] = fid
+    fin
+end
+
+//
+// Test Fiber library
+//
+
+def puth(h)
+    putc('$')
+    putc(valstr[(h >> 12) & $0F])
+    putc(valstr[(h >> 8)  & $0F])
+    putc(valstr[(h >> 4)  & $0F])
+    putc(valstr[ h        & $0F])
+end
+
+def fbrTest(fid, param)
+    byte i
+    
+    for i = 1 to param
+        puth(param); putc($0D)
+	fbrYield
+    next
+end
+
+fbrInit(4)
+fbrStart(@fbrTest, 3)
+fbrStart(@fbrTest, 2)
+fbrStart(@fbrTest, 1)
+fbrYield; fbrYield; fbrYield; fbrYield
+done

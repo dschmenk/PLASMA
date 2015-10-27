@@ -28,6 +28,7 @@ TESTLIB = TESTLIB\#FE1000
 PROFILE = PROFILE\#FE1000
 MEMMGR  = MEMMGR\#FE1000
 MEMTEST = MEMTEST\#FE1000
+FIBER   = FIBER\#FE1000
 PLASM   = plasm
 INCS    = toolsrc/tokens.h toolsrc/symbols.h toolsrc/lex.h toolsrc/parse.h toolsrc/codegen.h
 OBJS	= toolsrc/plasm.c toolsrc/parse.o toolsrc/lex.o toolsrc/codegen.o
@@ -47,7 +48,7 @@ TXTTYPE	= .TXT
 #SYSTYPE	= \#FF2000
 #TXTTYPE	= \#040000
 
-all: $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVM03) $(CMD) $(MEMMGR) $(MEMTEST) $(SB) $(MON) $(ROD) $(SIEVE) $(WIZNET) $(UTHERNET) $(ETHERIP) $(INET) $(DHCP) $(HTTPD) $(ROGUE) $(ROGUEMAP) $(ROGUECOMBAT) $(ROGUEIO) $(HGR1)
+all: $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVM03) $(CMD) $(MEMMGR) $(MEMTEST) $(FIBER) $(SB) $(MON) $(ROD) $(SIEVE) $(WIZNET) $(UTHERNET) $(ETHERIP) $(INET) $(DHCP) $(HTTPD) $(ROGUE) $(ROGUEMAP) $(ROGUECOMBAT) $(ROGUEIO) $(HGR1)
 
 clean:
 	-rm *FE1000 *FF2000 $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVM03)
@@ -111,6 +112,10 @@ $(MEMMGR): libsrc/memmgr.pla $(PLVM02) $(PLASM)
 $(MEMTEST): samplesrc/memtest.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AM < samplesrc/memtest.pla > samplesrc/memtest.a
 	acme --setpc 4094 -o $(MEMTEST) samplesrc/memtest.a
+
+$(FIBER): libsrc/fiber.pla $(PLVM02) $(PLASM)
+	./$(PLASM) -AM < libsrc/fiber.pla > libsrc/fiber.a
+	acme --setpc 4094 -o $(FIBER) libsrc/fiber.a
 
 $(MON): samplesrc/mon.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AM < samplesrc/mon.pla > samplesrc/mon.a
