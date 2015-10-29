@@ -171,6 +171,7 @@ byte[IP4ADR_SIZE]        remoteip
 //
 // Local network parameters
 //
+byte[IP4ADR_SIZE] netmask
 byte[IP4ADR_SIZE] subnet
 byte[IP4ADR_SIZE] gateway
 const MAX_UDP_NOTIFIES	= 4
@@ -279,6 +280,9 @@ def etherSendIP(ipdst, proto, seglist, size)
 	memset(@hdr.ip_dst, IP_BROADCAST, IP4ADR_SIZE)
         memset(@dstMAC, MAC_BROADCAST, MAC_SIZE)
     else
+        if ipdst=>0 & netmask:0 <> subnet:0 or ipdst=>2 & netmask:2 <> subnet:2
+            ipdst = @gateway // External net destination
+	fin
 	memcpy(@hdr.ip_dst, ipdst, IP4ADR_SIZE)
         retry = 0
         while hdr:ip_dst:0 <> remoteip:0 and hdr:ip_dst:2 <> remoteip:2
@@ -471,7 +475,7 @@ def etherServiceIP
 		// Filter valid destination address
 		//
 		if iphdr=>ip_dst:2 <> localip:2 // Yes, this is a little lazy
-		    if (iphdr=>ip_dst:0|subnet:0) & (iphdr=>ip_dst:2|subnet:2) <> IP_BROADCAST
+		    if (iphdr=>ip_dst:0|netmask:0) & (iphdr=>ip_dst:2|netmask:2) <> IP_BROADCAST
 		        break
 		    fin
 		fin
@@ -555,10 +559,12 @@ end
 //
 // Set the local IP addresses
 //
-def setEtherIP(newIP, newSubnet, newGateway)
+def setEtherIP(newIP, newNetmask, newGateway)
     if newIP;      memcpy(@localip, newIP,      IP4ADR_SIZE); fin
-    if newSubnet;  memcpy(@subnet,  newSubnet,  IP4ADR_SIZE); fin
+    if newNetmask; memcpy(@netmask, newNetmask, IP4ADR_SIZE); fin
     if newGateway; memcpy(@gateway, newGateway, IP4ADR_SIZE); fin
+    subnet:0 = netmask:0 & gateway:0
+    subnet:2 = netmask:2 & gateway:2
 end
 //
 // Get the interface hardware address
