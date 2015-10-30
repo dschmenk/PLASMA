@@ -25,7 +25,7 @@ struc t_inet
     word setInterfaceIP
     word getInterfaceHA
     word setDNS
-    word getDNS
+    word resolveIP
 end
 //
 // External interface to net class. Must be first.
@@ -38,10 +38,6 @@ byte netDrivers = "WIZNET"
 byte            = "UTHERNET"
 byte            = ""
 word driver = @netDrivers
-//
-// DHCP module to load
-//
-byte dhcp = "DHCP"
 //
 // DNS address
 //
@@ -64,7 +60,7 @@ export def iNetInit
     //
     // Get an IP address
     //
-    modexec(@dhcp)
+    modexec("DHCP")
     return @iNet
 end
 
@@ -72,12 +68,39 @@ def iNetSetDNS(ipptr)
     return memcpy(@dns, ipptr, 4)
 end
 
-def iNetGetDNS(ipptr)
-    return memcpy(ipptr, @dns, 4)
+def parseIP(ipstr, ipaddr)
+    byte i
+    word endstr
+    
+    endstr = ipstr + ^ipstr
+    for i = 0 to 3
+	ipstr = ipstr + 1
+        while ^ipstr >= '0' and ^ipstr <= '9' and ipstr <= endstr
+	    ipaddr->[i] = ipaddr->[i] * 10 + ^ipstr - '0'
+	    ipstr = ipstr + 1
+	loop
+	if ^ipstr <> '.' and ipstr < endstr
+	    return 0
+	fin
+    next
+    return i == 3
 end
 
-iNet:initIP = @iNetInit
-iNet:setDNS = @iNetSetDNS
-iNet:getDNS = @iNetGetDNS
+def iNetResolve(namestr, ipaddr)
+    ipaddr=>0 = 0
+    ipaddr=>2 = 0
+    if not parseIP(namestr, ipaddr)
+        //
+	// Query Domain Name Server for address
+	//
+    fin
+    return 1
+end
+
+//
+// Fill iNet 
+iNet:initIP    = @iNetInit
+iNet:setDNS    = @iNetSetDNS
+iNet:resolveIP = @iNetResolve
 
 done

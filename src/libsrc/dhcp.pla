@@ -26,7 +26,7 @@ struc t_inet
     word setInterfaceIP
     word getInterfaceHA
     word setDNS
-    word getDNS
+    word resolveIP
 end
 //
 // Needed to init subnet
@@ -78,6 +78,7 @@ byte[4] ones = $FF, $FF, $FF, $FF
 //
 // Default static net IP addresses
 //
+byte localdns = 0,0,0,0
 byte localgw  = 192,168,123,1
 byte localip  = 192,168,123,10
 byte localnet = 255,255,255,0
@@ -101,9 +102,9 @@ byte[128] = 0     // BOOT FILE NAME
 byte[4]   = $63,$82,$53,$63 // MAGIC
 byte optsDHCP = 53,1,1  // DISCOVER
 byte      = 12, "AppleII"
-byte      = 55,4 ,1,28,3,42
+byte      = 55,4 ,1,3,6,42
 byte      = 255
-byte optsREQ = 53,1,3     // REQUEST
+byte optsREQ = 53,1,3    // REQUEST
 byte      = 50,4,0,0,0,0 // IP requested
 byte      = 54,4,0,0,0,0 // DHCP server
 byte      = 255
@@ -113,6 +114,7 @@ byte      = 255
 byte offerstr  = "DHCP server offering IP address "
 byte ackstr = "DHCP acknowledge\n"
 byte boundstr = "Apple II bound to:\n"
+byte dnsstr = "DNS: "
 def putln
     return putc($0D)
 end
@@ -179,7 +181,7 @@ def parseopts(opts, match)
     return -1
 end
 def recvDHCP(remip, remport, pkt, len, param)
-    word optofst, maskopts, gwopts
+    word optofst, maskopts, gwopts, dnsopts
     
     //putip(remip);putc(':');puti(remport);putln
     //dumpdhcp(pkt)
@@ -211,6 +213,10 @@ def recvDHCP(remip, remport, pkt, len, param)
 		gwopts = parseopts(@pkt->dhcp_opts, 3) + 2
 		if gwopts >= 0
 		    memcpy(@localgw, @pkt->dhcp_opts.[gwopts], IP4ADR_SIZE)
+		fin
+		dnsopts = parseopts(@pkt->dhcp_opts, 6) + 2
+		if dnsopts >= 0
+		    memcpy(@localdns, @pkt->dhcp_opts.[dnsopts], IP4ADR_SIZE)
 		fin
 	        break
 	    otherwise
@@ -249,5 +255,7 @@ loop
 iNet:closeUDP(portDHCP)
 iNet:setInterfaceIP(@localip, @localnet, @localgw)
 puts(@boundstr);putip(@localip);putc('/');putip(@localnet);putln
+iNet:setDNS(@localdns)
+puts(@dnsstr);putip(@localdns);putln
 
 done
