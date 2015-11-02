@@ -10,6 +10,7 @@ SB      = SB\#FF2000
 ROD     = ROD\#FE1000
 SIEVE   = SIEVE\#FE1000
 WIZNET  = WIZNET\#FE1000
+UTHERNET2= UTHERNET2\#FE1000
 UTHERNET= UTHERNET\#FE1000
 ETHERIP = ETHERIP\#FE1000
 INET    = INET\#FE1000
@@ -48,7 +49,7 @@ TXTTYPE	= .TXT
 #SYSTYPE	= \#FF2000
 #TXTTYPE	= \#040000
 
-all: $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVM03) $(CMD) $(MEMMGR) $(MEMTEST) $(FIBER) $(SB) $(MON) $(ROD) $(SIEVE) $(WIZNET) $(UTHERNET) $(ETHERIP) $(INET) $(DHCP) $(HTTPD) $(ROGUE) $(ROGUEMAP) $(ROGUECOMBAT) $(ROGUEIO) $(HGR1)
+all: $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVM03) $(CMD) $(MEMMGR) $(MEMTEST) $(FIBER) $(SB) $(MON) $(ROD) $(SIEVE) $(UTHERNET2) $(UTHERNET) $(ETHERIP) $(INET) $(DHCP) $(HTTPD) $(ROGUE) $(ROGUEMAP) $(ROGUECOMBAT) $(ROGUEIO) $(HGR1)
 
 clean:
 	-rm *FE1000 *FF2000 $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVM03)
@@ -129,13 +130,13 @@ $(SIEVE): samplesrc/sieve.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AM < samplesrc/sieve.pla > samplesrc/sieve.a
 	acme --setpc 4094 -o $(SIEVE) samplesrc/sieve.a
 
-$(WIZNET): libsrc/wiznet.pla $(PLVM02) $(PLASM)
-	./$(PLASM) -AM < libsrc/wiznet.pla > libsrc/wiznet.a
-	acme --setpc 4094 -o $(WIZNET) libsrc/wiznet.a
-
 $(UTHERNET): libsrc/uthernet.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AM < libsrc/uthernet.pla > libsrc/uthernet.a
 	acme --setpc 4094 -o $(UTHERNET) libsrc/uthernet.a
+
+$(UTHERNET2): libsrc/uthernet2.pla $(PLVM02) $(PLASM)
+	./$(PLASM) -AM < libsrc/uthernet2.pla > libsrc/uthernet2.a
+	acme --setpc 4094 -o $(UTHERNET2) libsrc/uthernet2.a
 
 $(ETHERIP): libsrc/etherip.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AM < libsrc/etherip.pla > libsrc/etherip.a
