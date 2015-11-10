@@ -27,6 +27,8 @@ struc t_inet
     word getInterfaceHA
     word setDNS
     word resolveIP
+    word setCallback
+    word setParam
 end
 //
 // Needed to init subnet
@@ -66,7 +68,8 @@ const DHCP_RELEASE  = $07
 //
 // Track DHCP progress
 //
-byte stateDHCP, retry, timeout
+byte retry
+word timeout
 //
 // DHCP ports
 //
@@ -85,7 +88,7 @@ byte localnet = 255,255,255,0
 //
 // Pre-configured DHCP packet
 //
-byte DHCP = $01   // OP = DISCOVER
+byte DHCP = $01// OP = BOOT
 byte      = $01   // HTYPE = ETHERNET
 byte      = $06   // HLEN  = 6
 byte      = $00   // HOPS
@@ -100,19 +103,17 @@ byte[16]  = 0     // CLIENT HA
 byte[64]  = 0     // SERVER HOST NAME
 byte[128] = 0     // BOOT FILE NAME
 byte[4]   = $63,$82,$53,$63 // MAGIC
-byte optsDHCP = 53,1,1  // DISCOVER
-byte      = 12, "AppleII"
-byte      = 55,4 ,1,3,6,42
-byte      = 255
-byte optsREQ = 53,1,3    // REQUEST
-byte      = 50,4,0,0,0,0 // IP requested
-byte      = 54,4,0,0,0,0 // DHCP server
-byte      = 255
+byte optsOP  = 53,1,1  // DISCOVER
+byte optsCID = 61,7, $01,$00,$00,$00,$00,$00,$00
+byte         = 12, "AppleII"
+byte optsIP  = 50,4, 0,0,0,0 // IP requested
+byte         = 55,4, 1,3,6,42 // Parameter request list
+byte optsSRV = 54,4, 0,0,0,0 // DHCP server
+byte         = 255
+byte[] endDHCP
 //
 // DEBUG
 //
-byte offerstr  = "DHCP server offering IP address "
-byte ackstr = "DHCP acknowledge\n"
 byte boundstr = "Apple II bound to:\n"
 byte dnsstr = "DNS: "
 def putln
@@ -181,27 +182,27 @@ def parseopts(opts, match)
     return -1
 end
 def recvDHCP(remip, remport, pkt, len, param)
-    word optofst, maskopts, gwopts, dnsopts
+    word servopts, maskopts, gwopts, dnsopts
     
     //putip(remip);putc(':');puti(remport);putln
     //dumpdhcp(pkt)
     if pkt=>dhcp_xid:0 == $0201 and pkt=>dhcp_xid:2 = $0403
         when pkt->dhcp_opts.[parseopts(@pkt->dhcp_opts, 53) + 2]
 	    is DHCP_OFFER
-	        stateDHCP = DHCP_OFFER
-	        //puts(@offerstr); putip(@pkt->dhcp_yourip); putln
 		//
 		// Copy offer parameters to request
 		//
-		memcpy(@optsDHCP, @optsREQ, 16)
-		memcpy(@optsDHCP.5, @pkt->dhcp_yourip, 4)
-		memcpy(@optsDHCP.11, @pkt->dhcp_serverip, 4)
-		memcpy(@DHCP.dhcp_serverip, @pkt->dhcp_serverip, 4)
-		iNet:sendUDP(portDHCP, 0, DHCP_SERVER_PORT, @DHCP, t_dhcp)
+		optsOP.2 = DHCP_REQUEST
+		memcpy(@optsIP.2, @pkt->dhcp_yourip, IP4ADR_SIZE)
+		servopts = parseopts(@pkt->dhcp_opts, 54) + 2
+		if servopts >= 0
+		    optsSRV = 54
+		    memcpy(@optsSRV.2, @pkt->dhcp_opts.[servopts], IP4ADR_SIZE)
+		fin
+		iNet:sendUDP(portDHCP, 0, DHCP_SERVER_PORT, @DHCP, @endDHCP - @DHCP)
 		break
 	    is DHCP_ACK
-	        stateDHCP = DHCP_ACK
-	        //puts(@ackstr)
+		optsOP.2 = DHCP_ACK
 		//
 		// Copy parameters to working copy
 		//
@@ -228,6 +229,7 @@ end
 // Get the local hardware address into the DHCP packet
 //
 iNet:getInterfaceHA(@DHCP.dhcp_clientha)
+iNet:getInterfaceHA(@optsSRV.3)
 //
 // Clear our local IP address
 //
@@ -239,26 +241,30 @@ portDHCP = iNet:openUDP(DHCP_CLIENT_PORT, @recvDHCP, 0)
 //
 // Service IP
 //
-while retry < 5 and stateDHCP <> DHCP_ACK
+retry = 0
+repeat
     //
     // Broadcast DHCP DISCOVER message
     //
-    iNet:sendUDP(portDHCP, 0, DHCP_SERVER_PORT, @DHCP, t_dhcp)
+    optsOP.2  = DHCP_DISCOVER
+    optsIP:2  = 0
+    optsIP:4  = 0
+    optsSRV   = 255
+    DHCP.dhcp_secs.1 = retry
+    iNet:sendUDP(portDHCP, 0, DHCP_SERVER_PORT, @DHCP, @optsSRV - @DHCP + 1)
     for timeout = 1 to 1000
         iNet:serviceIP()
-	if stateDHCP == DHCP_ACK
+	if optsOP.2 == DHCP_ACK
 	    break
         fin
     next
-    DHCP.dhcp_secs.1 = DHCP.dhcp_secs.1 + 1
     retry = retry + 1
-loop
+until retry > 4 or optsOP.2 == DHCP_ACK
 iNet:closeUDP(portDHCP)
 iNet:setInterfaceIP(@localip, @localnet, @localgw)
 puts(@boundstr);putip(@localip);putc('/');putip(@localnet);putln
 if localdns:0 | localdns:2
     iNet:setDNS(@localdns)
+    puts(@dnsstr);putip(@localdns);putln
 fin
-puts(@dnsstr);putip(@localdns);putln
-
 done

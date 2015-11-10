@@ -29,6 +29,10 @@ struc t_inet
     word closeTCP
     word setInterfaceIP
     word getInterfaceHA
+    word setDNS
+    word resolveIP
+    word setCallback
+    word setParam
 end
 //
 // Module don't free memory
@@ -100,8 +104,8 @@ const WIZ_RXMEM3 = $7800
 //
 // Wiznet indirect registers
 //
-byte slot, regidx, regdata
-word saveidx
+byte regidx, regdata
+word slot, saveidx
 //
 // Wiznet MAC address
 //
@@ -716,6 +720,38 @@ def wizCloseTCP(wiz)
     return -1
 end
 //
+// Update notify callback
+//
+def wizSetCallback(wiz, callback)
+    if wiz->channel_proto == WIZ_PROTO_UDP or wiz->channel_proto == WIZ_PROTO_TCP
+        //
+	// Update callback on this port
+	//
+	wiz=>channel_recv_func = callback
+	return 0
+    fin
+    //
+    // Invalid port
+    //
+    return -1
+end
+//
+// Update notify param
+//
+def wizSetParam(wiz, param)
+    if wiz->channel_proto == WIZ_PROTO_UDP or wiz->channel_proto == WIZ_PROTO_TCP
+        //
+	// Update param on this port
+	//
+	wiz=>channel_recv_parm = param
+	return 0
+    fin
+    //
+    // Invalid port
+    //
+    return -1
+end
+//
 // Service incoming packets
 //
 def wizServiceIP
@@ -736,6 +772,34 @@ def wizServiceIP
                     wizdata = wiz=>channel_rxmem
                     sir = peekreg(wizregs + WIZ_SnIR)
                     when wiz->channel_proto
+                        is WIZ_PROTO_UDP
+                            //putc('U');putb(sir)
+                            if sir & $04
+                                //putc('R')
+                                //
+                                // Receive UDP packet
+                                //
+                                rxlen = peekregw(wizregs + WIZ_SnRSR)
+                                rxrr  = peekregw(wizregs + WIZ_SnRXRD)
+                                rxwr  = rxrr & WIZ_RXMASK
+                                rxpkt = heapalloc(rxlen)
+                                if rxwr + rxlen >= WIZ_RXSIZE
+                                    //putc('!')
+                                    splitlen = WIZ_RXSIZE - rxwr
+                                    peekregs(wizdata + rxwr, rxpkt,            splitlen)
+                                    peekregs(wizdata,        rxpkt + splitlen, rxlen - splitlen)
+                                else
+                                    peekregs(wizdata + rxwr, rxpkt, rxlen)
+                                fin
+                                //putc('=');putip(rxpkt);putc(' ');puti(rxlen)
+                                //putc('/');puti(swab(rxpkt=>6))
+                                //putc(' ');puth(rxrr);putc(' ');puth(rxwr);putln
+                                pokeregw(wizregs + WIZ_SnRXRD, rxrr + rxlen)
+                                pokereg(wizregs + WIZ_SnCR, $40) // RECV
+                                wiz=>channel_recv_func(rxpkt,swab(rxpkt=>4),rxpkt+8,rxlen-8,wiz=>channel_recv_parm)
+                                heaprelease(rxpkt)
+                            fin
+                            break
                         is WIZ_PROTO_TCP
 			    if sir & $01
 			        //putc('C')
@@ -822,34 +886,6 @@ def wizServiceIP
 				//
 			    //fin
                             break			    
-                        is WIZ_PROTO_UDP
-                            //putc('U');putb(sir)
-                            if sir & $04
-                                //putc('R')
-                                //
-                                // Receive UDP packet
-                                //
-                                rxlen = peekregw(wizregs + WIZ_SnRSR)
-                                rxrr  = peekregw(wizregs + WIZ_SnRXRD)
-                                rxwr  = rxrr & WIZ_RXMASK
-                                rxpkt = heapalloc(rxlen)
-                                if rxwr + rxlen >= WIZ_RXSIZE
-                                    //putc('!')
-                                    splitlen = WIZ_RXSIZE - rxwr
-                                    peekregs(wizdata + rxwr, rxpkt,            splitlen)
-                                    peekregs(wizdata,        rxpkt + splitlen, rxlen - splitlen)
-                                else
-                                    peekregs(wizdata + rxwr, rxpkt, rxlen)
-                                fin
-                                //putc('=');putip(rxpkt);putc(' ');puti(rxlen)
-                                //putc('/');puti(swab(rxpkt=>6))
-                                //putc(' ');puth(rxrr);putc(' ');puth(rxwr);putln
-                                pokeregw(wizregs + WIZ_SnRXRD, rxrr + rxlen)
-                                pokereg(wizregs + WIZ_SnCR, $40) // RECV
-                                wiz=>channel_recv_func(rxpkt,swab(rxpkt=>4),rxpkt+8,rxlen-8,wiz=>channel_recv_parm)
-                                heaprelease(rxpkt)
-                            fin
-                            break
                         otherwise
                     wend
                     pokereg(wiz=>channel_regs + WIZ_SnIR, sir) // Clear SnIR
@@ -895,7 +931,7 @@ end
 //
 // Identify Uthernet II card and initialize
 //
-for slot = $F0 downto $90 step $10
+for slot = $90 to $F0 step $10
     regdata = peekio(slot)
     if (regdata & $E4) == $00
         pokeio(slot, $03) // Try setting auto-increment indirect I/F
@@ -949,6 +985,8 @@ for slot = $F0 downto $90 step $10
 		iNet:closeTCP       = @wizCloseTCP
 		iNet:setInterfaceIP = @setWizIP
 		iNet:getInterfaceHA = @getWizHA
+		iNet:setCallback    = @wizSetCallback
+		iNet:setParam       = @wizSetParam
                 return modkeep
 	    fin
         fin

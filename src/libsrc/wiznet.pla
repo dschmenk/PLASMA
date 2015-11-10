@@ -29,6 +29,8 @@ struc t_inet
     word closeTCP
     word setInterfaceIP
     word getInterfaceHA
+    word setCallback
+    word setParam
 end
 //
 // Module don't free memory
@@ -100,8 +102,8 @@ const WIZ_RXMEM3 = $7800
 //
 // Wiznet indirect registers
 //
-byte slot, regidx, regdata
-word saveidx
+byte regidx, regdata
+word slot, saveidx
 //
 // Wiznet MAC address
 //
@@ -397,25 +399,25 @@ def peekreg(reg)
     return _peekio()
 end
 def pokeregs(reg, buf, len)
-    _pokeiow(reg)
-    return pokedata(buf, len)
-//    word i
-//    len = len - 1
-//    for i = 0 to len
-//        _pokeiow(reg + i)
-//	_pokeio(buf->[i])
-//    next
+//    _pokeiow(reg)
+//    return pokedata(buf, len)
+    word i
+    len = len - 1
+    for i = 0 to len
+        _pokeiow(reg + i)
+	_pokeio(buf->[i])
+    next
 end
 def peekregs(reg, buf, len)
-    _pokeiow(reg)
-    return peekdata(buf, len)
+//    _pokeiow(reg)
+//    return peekdata(buf, len)
 // There is an issue missing data on back-to-back reads
-//    word i
-//    len = len - 1
-//    for i = 0 to len
-//        _pokeiow(reg + i)
-//	buf->[i] = _peekio()
-//    next
+    word i
+    len = len - 1
+    for i = 0 to len
+        _pokeiow(reg + i)
+	buf->[i] = _peekio()
+    next
 end
 def pokeregw(reg, dataw)
     _pokeiow(reg)
@@ -729,6 +731,38 @@ def wizCloseTCP(wiz)
     return -1
 end
 //
+// Update notify callback
+//
+def wizSetCallback(wiz, callback)
+    if wiz->channel_proto == WIZ_PROTO_UDP or wiz->channel_proto == WIZ_PROTO_TCP
+        //
+	// Update callback on this port
+	//
+	wiz=>channel_recv_func = callback
+	return 0
+    fin
+    //
+    // Invalid port
+    //
+    return -1
+end
+//
+// Update notify param
+//
+def wizSetParam(wiz, param)
+    if wiz->channel_proto == WIZ_PROTO_UDP or wiz->channel_proto == WIZ_PROTO_TCP
+        //
+	// Update param on this port
+	//
+	wiz=>channel_recv_parm = param
+	return 0
+    fin
+    //
+    // Invalid port
+    //
+    return -1
+end
+//
 // Service incoming packets
 //
 def wizServiceIP
@@ -908,7 +942,7 @@ end
 //
 // Identify Wiznet card and initialize
 //
-for slot = $F0 downto $90 step $10
+for slot = $90 to $F0 step $10
     regdata = peekio(slot)
     if (regdata & $E4) == $00
         pokeio(slot, $03) // Try setting auto-increment indirect I/F
@@ -962,6 +996,8 @@ for slot = $F0 downto $90 step $10
 		iNet:closeTCP       = @wizCloseTCP
 		iNet:setInterfaceIP = @setWizIP
 		iNet:getInterfaceHA = @getWizHA
+		iNet:setCallback    = @wizSetCallback
+		iNet:setParam       = @wizSetParam
                 return modkeep
 	    fin
         fin
