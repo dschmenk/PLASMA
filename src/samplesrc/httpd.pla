@@ -33,6 +33,10 @@ struc t_inet
     word closeTCP
     word setInterfaceIP
     word getInterfaceHA
+    word setDNS
+    word resolveIP
+    word setCallback
+    word setParam
 end
 
 word socketHTTP
@@ -245,64 +249,60 @@ def servHTTP(remip, remport, lclport, data, len, param)
 			fin
 		    fin 
 		    strcat(@filename, @prefix, url)
-		    putc('G');putc('E');putc('T');putc(':')
-		    puts(@filename);putln
-
-			// Get file info
-			//puts("getting file info "); // debug
-			get_file_info(@filename)
-
-				
-		  	  refnum = open(@filename, iobuff) // try to open this file with ProDOS
-		  	  if refnum // file was opened OK
-		  	      filelen = get_eof(refnum) // get length of file for Content-Length
-		  	      lenstr = itos(@lenstr + 1, filelen) - (@lenstr + 1)
-				strcat(@okhdr, @httpOK, @httpContentLen)
-				strcat(@okhdr, @okhdr, @lenstr)
-				strcat(@okhdr, @okhdr, "\n\r")
-
-				// Content type header
-				// is this a text file?
-				if fileInfo.4 == $03 OR fileInfo.4 == $04
-					//puts(@mimeTextHtml) // debug
-					strcat(@okhdr, @okhdr, @httpContentType)
-					strcat(@okhdr, @okhdr, @mimeTextHtml)	
-
-				else // send as binary attachment
-					//puts(@mimeOctetStream) // debug
-
-					strcat(@okhdr, @okhdr, @httpContentType)
-					strcat(@okhdr, @okhdr, @mimeOctetStream)
-					strcat(@okhdr, @okhdr, "\n\r")
-
-					// and send filename too
-					strcat(@okhdr, @okhdr, @httpContentAttach)
-
-					// todo: get the base filename...
-	
-				fin 
-
-				strcat(@okhdr, @okhdr, @httpEnd)
-
-				//dumpchars(@okhdr + 1, okhdr) // debug
-
-				iNet:sendTCP(socketHTTP, @okhdr + 1, okhdr) // send HTTP response header to client
-				sendFile(refnum, socketHTTP, filelen) // send file data to client
-				close(refnum)
-			    else // file couldn't be opened, so return 404 on this
-				puts("404 Not Found");putln // debug
-				iNet:sendTCP(socketHTTP, @httpNOTFOUND + 1, httpNOTFOUND)
-			    fin // if refnum
-		    return
+		    puts("GET:"); puts(@filename);putln
+		    //
+		    // Get file info
+		    //
+		    //puts("getting file info "); // debug
+		    get_file_info(@filename)
+		    refnum = open(@filename, iobuff) // try to open this file with ProDOS
+		    if refnum // file was opened OK
+		        filelen = get_eof(refnum) // get length of file for Content-Length
+			lenstr = itos(@lenstr + 1, filelen) - (@lenstr + 1)
+			strcat(@okhdr, @httpOK, @httpContentLen)
+			strcat(@okhdr, @okhdr, @lenstr)
+			strcat(@okhdr, @okhdr, "\n\r")
+			//
+			// Content type header
+			//
+			if fileInfo.4 == $03 OR fileInfo.4 == $04
+			    //
+			    // this a text file
+			    //
+			    //puts(@mimeTextHtml) // debug
+			    strcat(@okhdr, @okhdr, @httpContentType)
+			    strcat(@okhdr, @okhdr, @mimeTextHtml)	
+			else
+			    //
+			    // send as binary attachment
+			    //
+			    //puts(@mimeOctetStream) // debug
+			    strcat(@okhdr, @okhdr, @httpContentType)
+			    strcat(@okhdr, @okhdr, @mimeOctetStream)
+			    strcat(@okhdr, @okhdr, "\n\r")
+			    //
+			    // and send filename too
+			    //
+			    strcat(@okhdr, @okhdr, @httpContentAttach)
+			    // todo: get the base filename...
+			fin 			
+			strcat(@okhdr, @okhdr, @httpEnd)
+			//dumpchars(@okhdr + 1, okhdr) // debug
+			iNet:sendTCP(socketHTTP, @okhdr + 1, okhdr) // send HTTP response header to client
+			sendFile(refnum, socketHTTP, filelen) // send file data to client
+			close(refnum)
+		    else // file couldn't be opened, so return 404 on this
+		        puts("404 Not Found");putln // debug
+			iNet:sendTCP(socketHTTP, @httpNOTFOUND + 1, httpNOTFOUND)
+		    fin // if refnum
+		    break // return
 	        fin
             next
 	else
 	    iNet:sendTCP(socketHTTP, @httpBAD + 1, httpBAD)
 	fin
-    else
-        iNet:closeTCP(socketHTTP)
-	socketHTTP = 0
     fin
+    socketHTTP = iNet:closeTCP(socketHTTP)
 end
 
 if !iNet:initIP()
