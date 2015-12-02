@@ -1,0 +1,231 @@
+//
+// HTTP Daemon
+//
+import cmdsys
+    predef syscall, call, getc, gets, putc, puts, putln
+    predef memset, memcpy, modaddr, modexec
+    predef isugt, isuge, isult, isule
+    predef heapmark, heapallocalign, heapalloc, heaprelease
+    byte MACHID
+end
+//
+// Net object
+//
+import inet
+    word iNet
+    struc t_inet
+        word initIP
+	word serviceIP
+	word openUDP
+	word sendUDP
+	word closeUDP
+	word listenTCP
+	word connectTCP
+	word sendTCP
+	word closeTCP
+	word setInterfaceIP
+	word getInterfaceHA
+	word setDNS
+	word resolveIP
+	word setCallback
+	word setParam
+    end
+end
+
+const VERSION = 1
+
+byte[4] serverIP
+word serverPort
+word updateList
+word portUDP, timeout
+byte response
+byte perr
+byte dlFile = "DOWNLOAD"
+byte dlRef
+byte rdreqpkt  = $DA, $7E, VERSION, VERSION >> 8, $00, $00, $A2, 'F'
+byte[17] filename = ""
+word fileblock
+word xferlen
+
+asm reboot
+	BIT	$C082		; ENABLE ROM
+	DEC	$03F4		; INVALIDATE POWER-UP BYTE
+	JMP	($FFFC)		; RESET
+end
+//
+// ProDOS routines
+//
+def getpfx(path)
+    byte params[3]
+
+    ^path    = 0
+    params.0 = 1
+    params:1 = path
+    perr     = syscall($C7, @params)
+    return path
+end
+def setpfx(path)
+    byte params[3]
+
+    params.0 = 1
+    params:1 = path
+    perr     = syscall($C6, @params)
+    return path
+end
+def open(path, buff)
+    byte params[6]
+
+    params.0 = 3
+    params:1 = path
+    params:3 = buff
+    params.5 = 0
+    perr     = syscall($C8, @params)
+    return params.5
+end
+def close(refnum)
+    byte params[2]
+
+    params.0 = 1
+    params.1 = refnum
+    perr     = syscall($CC, @params)
+    return perr
+end
+def read(refnum, buff, len)
+    byte params[8]
+
+    params.0 = 4
+    params.1 = refnum
+    params:2 = buff
+    params:4 = len
+    params:6 = 0
+    perr     = syscall($CA, @params)
+    return params:6
+end
+def write(refnum, buff, len)
+    byte params[8]
+
+    params.0 = 4
+    params.1 = refnum
+    params:2 = buff
+    params:4 = len
+    params:6 = 0
+    perr     = syscall($CB, @params)
+    return params:6
+end
+def create(path, access, type, aux)
+    byte params[12]
+
+    params.0  = 7
+    params:1  = path
+    params.3  = access
+    params.4  = type
+    params:5  = aux
+    params.7  = $1
+    params:8  = 0
+    params:10 = 0
+    perr      = syscall($C0, @params)
+    return perr
+end
+def destroy(path)
+    byte params[3]
+
+    params.0 = 1
+    params:1 = path
+    perr     = syscall($C1, @params)
+    return perr
+end
+def rename(path, newpath)
+    byte params[5]
+
+    params.0 = 2
+    params:1 = path
+    params:3 = newpath
+    perr     = syscall($C2, @params)
+    return perr
+end
+//
+// Restart
+//
+def restart
+    puts("Press any key to reboot...")
+    getc()
+    reboot()
+end
+//
+// Error
+//
+def dl_error(errstr)
+    puts("Update Error: "); puts(errstr); putln
+    restart()
+end
+//
+// Receive UDP packet
+//
+def recvUDP(ipsrc, portsrc, data, len, param)
+    when data->7
+	is 'F'
+	    if data=>4 == rdreqpkt:4 // Sequence numbers match
+	        xferlen = len - 8
+		if xferlen > 0
+		    if write(dlRef, data + 8, xferlen) <> xferlen or perr
+		        dl_error("Write download file")
+		    fin
+		fin
+		response = 'F'
+	    fin
+	    break
+        is 'E'
+	    dl_error("Server error")
+	    break
+	otherwise
+	    dl_error("Unexpected packet")
+    wend
+end
+//
+// Main update loop
+//
+memcpy(@serverIP, $0300, 4) // Passed in IP
+serverPort = *$0304         // Passed in port
+updateList = *$0306         // Passed in update list
+portUDP    = iNet:openUDP($6500, @recvUDP, 0)
+while ^updateList
+    puts("Updating: "); puts(updateList)
+    destroy(@dlFile)
+    if create(@dlFile, $C3, updateList->17, updateList=>18)
+        dl_error("Unable to create download file")
+    fin
+    dlRef = open(@dlFile, $0800) // Use system io_buffer
+    if not dlRef
+        dl_error("Unable to open download file")
+    fin
+    rdreqpkt:4 = 2 // Init sequence number
+    memcpy(@filename, updateList, 17)
+    fileblock = 0
+    repeat
+        iNet:sendUDP(portUDP, @serverIP, serverPort, @rdreqpkt, 27)
+	timeout = 1000
+	response = 0
+	while not response and timeout
+            iNet:serviceIP()
+	    timeout = timeout - 1
+        loop
+        if not response
+            dl_error("No response from server")
+        fin
+	putc('.')
+	fileblock = fileblock + 1
+	rdreqpkt:4 = rdreqpkt:4 + 1 // Increment sequence
+    until xferlen <> 1024
+    close(dlRef)
+    destroy(updateList)
+    rename(@dlFile, updateList)
+    if perr
+        dl_error("Rename download file")
+    fin
+    updateList = updateList + 20
+    putln
+loop
+iNet:closeUDP(portUDP)
+puts("Update complete.\n")
+restart()
+done

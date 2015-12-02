@@ -1,0 +1,233 @@
+//
+// HTTP Daemon
+//
+import cmdsys
+    predef syscall, call, getc, gets, putc, puts, putln, gotoxy
+    predef memset, memcpy, modaddr, modexec
+    predef isugt, isuge, isult, isule
+    predef heapmark, heapallocalign, heapalloc, heaprelease
+    byte MACHID
+end
+//
+// Net object
+//
+import inet
+    word iNet
+    struc t_inet
+        word initIP
+	word serviceIP
+	word openUDP
+	word sendUDP
+	word closeUDP
+	word listenTCP
+	word connectTCP
+	word sendTCP
+	word closeTCP
+	word setInterfaceIP
+	word getInterfaceHA
+	word setDNS
+	word resolveIP
+	word setCallback
+	word setParam
+    end
+end
+
+const VERSION = 3
+const txtline = $07D0
+const inbuf   = $0200
+const instr   = $01FF
+
+byte[4] serverIP
+word port, timeout
+word update_list, update_len
+byte response
+byte hellopkt  = $DA, $7E, VERSION, VERSION >> 8, $00, $00, $A2, 'H'
+byte[9] handle = ""
+byte chatpkt   = $DA, $7E, VERSION, VERSION >> 8, $00, $01, $A2, 'C'
+byte[33] msg
+//
+// DEBUG
+//
+def putln
+    return putc($0D)
+end
+def putb(hexb)
+    return call($FDDA, hexb, 0, 0, 0)
+end
+def puth(hex)
+    return call($F941, hex >> 8, hex, 0, 0)
+end
+def puti(i)
+    if i < 0; putc('-'); i = -i; fin
+    if i < 10
+        putc(i + '0')
+    else
+        puti(i / 10)
+	putc(i % 10 + '0')
+    fin
+end
+def putip(ipptr)
+    byte i
+    
+    for i = 0 to 2
+        puti(ipptr->[i]); putc('.')
+    next
+    return puti(ipptr->[i])
+end
+
+def toupper(c)
+    if c >= 'a'
+        c = c - $20
+    fin
+    return c
+end
+							    
+def recvUDP(ipsrc, portsrc, data, len, param)
+    byte t
+
+    response = data->7
+    when response
+	is 'C'
+	    putln
+	    if data->16
+	        ^$32 = $3F // Inverse
+	        for t = 0 to data->8
+	            putc(toupper(^(data + t + 9)))
+	        next
+		^$32 = $FF // Normal
+		for t = data->8 to 7
+	            putc(' ')
+		next
+		puts(data + 16)
+	    else
+	        puts("Welcome, "); puts(data + 8)
+	    fin
+	    break
+	is 'W'
+    	    //puts("Connected to ")
+	    //puts(instr); putc('='); putip(@serverIP)
+	    break
+	is 'U'
+	    update_list = data
+	    update_len  = len
+	    break;
+	is 'E'
+	    puts("Server error!"); putln
+    wend
+end
+
+def gotoxy(x, y)
+    ^$24 = x + ^$20
+    return call($FB5B, y + ^$22, 0, 0, 0)
+end
+
+def txtwin(left, top, width, height)
+    if !width or !height
+        left   = 0
+	top    = 0
+	width  = 40
+	height = 24
+    fin
+    ^$20 = left
+    ^$21 = width
+    ^$22 = top
+    ^$23 = height + top
+    return gotoxy(0, 0)
+end
+
+def txtclr
+    ^$20 = 0
+    ^$21 = 40
+    ^$22 = 0
+    ^$23 = 24
+    return call($FC58, $00, $00, $00, $00)
+end
+
+def kbstr
+    byte key, inlen
+    
+    ^$C010
+    inlen = 0
+    repeat
+        ^(txtline + inlen) = $DF
+        key = ^$C000
+	if key & $80
+            ^(txtline + inlen) = $A0
+	    ^$C010
+	    if key == $88
+	        if inlen > 0
+	            inlen = inlen - 1
+		fin
+	    elsif key == $9B
+	        while inlen
+		    ^(txtline + inlen) = $A0
+	            inlen = inlen - 1
+		loop
+	    elsif key >= $A0 and inlen < 39
+	        ^(txtline + inlen) = key
+	        ^(inbuf + inlen) = key & $7F
+		inlen = inlen + 1
+	    fin
+	fin
+	iNet:serviceIP()
+    until key == $8D
+    ^instr = inlen
+    repeat
+        ^(txtline + inlen) = $A0
+	inlen = inlen - 1
+    until inlen == $FF
+    return instr
+end
+if !iNet:initIP()
+    return -1
+fin
+repeat
+    puts("Enter chat server address\n")
+    gets(':'+$80)
+    if ^instr
+        if iNet:resolveIP(instr, @serverIP)
+            repeat
+                puts("Enter chat handle (7 characters or less)\n")
+		gets(':'+$80)
+	    until ^instr > 0 and ^instr < 8
+	    memcpy(@handle, instr, ^instr + 1)
+	    port = iNet:openUDP($6501, @recvUDP, 0)
+	    iNet:sendUDP(port, @serverIP, $6502, @hellopkt, 16)
+	    timeout = 1000
+	    while !response and timeout
+                iNet:serviceIP()
+		timeout = timeout - 1
+	    loop
+	    if response == 'W'
+	        txtclr()
+		gotoxy(0, 22)
+		puts("========================================")
+		txtwin(0, 0, 40, 22)
+		gotoxy(0, 0)
+	        repeat
+	            kbstr()
+		    if ^instr
+		        if ^instr > 31
+			    ^instr = 31
+			fin
+		        memcpy(@msg, instr, ^instr + 1)
+			iNet:sendUDP(port, @serverIP, $6502, @chatpkt, 40)
+		    fin
+		until ^instr == 0
+		txtclr()
+	    elsif response == 'U'
+	        heaprelease(update_list + update_len) // Set top of heap to end of update list
+		memcpy($0300, @serverIP, 4)           // Pass serverIP to UPDATE
+		*$0304 = $6502                        // Pass server port to UPDATE
+		*$0306 = update_list + 8              // Pass list pointer to UPDATE
+		^instr = 0
+	        modexec("UPDATE")
+	    else
+	        puts("Welcome timed out."); putln
+	    fin
+	else
+	    puts("Unable to resolve."); puts(instr); putln
+	fin
+    fin
+until not ^instr
+done 

@@ -104,8 +104,10 @@ const WIZ_RXMEM3 = $7800
 //
 // Wiznet indirect registers
 //
-byte regidx, regdata
-word slot, saveidx
+byte slot
+word saveidx
+byte regidx
+byte regdata
 //
 // Wiznet MAC address
 //
@@ -720,108 +722,99 @@ def wizServiceIP
     if ir
         wiz = @wizChannel
         for i = 0 to 3
-            when ir & (1 << i)
-                is 1
-                is 2
-                is 4
-                is 8
-                    wizregs = wiz=>channel_regs
-                    wizdata = wiz=>channel_rxmem
-                    sir = peekreg(wizregs + WIZ_SnIR)
-                    when wiz->channel_proto
-                        is WIZ_PROTO_UDP
-                            if sir & $04
-                                //
-                                // Receive UDP packet
-                                //
-                                rxlen = peekregw(wizregs + WIZ_SnRSR)
-                                rxrr  = peekregw(wizregs + WIZ_SnRXRD)
-                                rxwr  = rxrr & WIZ_RXMASK
-                                rxpkt = heapalloc(rxlen)
-                                if rxwr + rxlen >= WIZ_RXSIZE
-                                    splitlen = WIZ_RXSIZE - rxwr
-                                    peekregs(wizdata + rxwr, rxpkt,            splitlen)
-                                    peekregs(wizdata,        rxpkt + splitlen, rxlen - splitlen)
-                                else
-                                    peekregs(wizdata + rxwr, rxpkt, rxlen)
-                                fin
-                                pokeregw(wizregs + WIZ_SnRXRD, rxrr + rxlen)
-                                pokereg(wizregs + WIZ_SnCR, $40) // RECV
-                                wiz=>channel_recv_func(rxpkt,swab(rxpkt=>4),rxpkt+8,rxlen-8,wiz=>channel_recv_parm)
-                                heaprelease(rxpkt)
-                            fin
-                            break
-                        is WIZ_PROTO_TCP
-			    if sir & $01
-				//
-				// Connect TCP socket
-				//
-				when wiz->channel_state
-				    is TCP_STATE_LISTEN
-				        peekregs(wiz=>channel_regs + WIZ_SnDIPR, @wiz=>channel_remip, IP4ADR_SIZE)
-					wiz=>channel_remport = peekregw(wiz=>channel_regs + WIZ_SnDPORT)
-				    is TCP_STATE_CONNECT
-				        wiz->channel_state = TCP_STATE_OPEN
-				wend
+            if ir & (1 << i)
+                wizregs = wiz=>channel_regs
+		wizdata = wiz=>channel_rxmem
+		sir = peekreg(wizregs + WIZ_SnIR)
+		pokereg(wiz=>channel_regs + WIZ_SnIR, sir) // Clear SnIR
+		when wiz->channel_proto
+                    is WIZ_PROTO_UDP
+                        if sir & $04
+                            //
+			    // Receive UDP packet
+			    //
+			    rxlen = peekregw(wizregs + WIZ_SnRSR)
+			    rxrr  = peekregw(wizregs + WIZ_SnRXRD)
+			    rxwr  = rxrr & WIZ_RXMASK
+			    rxpkt = heapalloc(rxlen)
+			    if rxwr + rxlen >= WIZ_RXSIZE
+			        splitlen = WIZ_RXSIZE - rxwr
+				peekregs(wizdata + rxwr, rxpkt,            splitlen)
+				peekregs(wizdata,        rxpkt + splitlen, rxlen - splitlen)
+			    else
+			        peekregs(wizdata + rxwr, rxpkt, rxlen)
 			    fin
-                            if sir & $04
-                                //
-                                // Receive TCP packet
-                                //
-				if wiz->channel_state == TCP_STATE_OPEN
-                                    rxlen = peekregw(wizregs + WIZ_SnRSR)
-				    rxrr  = peekregw(wizregs + WIZ_SnRXRD)
-				    rxwr  = rxrr & WIZ_RXMASK
-				    rxpkt = heapalloc(rxlen)
-				    if rxwr + rxlen > WIZ_RXSIZE
-                                        splitlen = WIZ_RXSIZE - rxwr
-					peekregs(wizdata + rxwr, rxpkt,            splitlen)
-					peekregs(wizdata,        rxpkt + splitlen, rxlen - splitlen)
-                                    else
-                                        peekregs(wizdata + rxwr, rxpkt, rxlen)
-                                    fin
-				    pokeregw(wizregs + WIZ_SnRXRD, rxrr + rxlen)
-				    pokereg(wizregs + WIZ_SnCR, $40) // RECV
-				    wiz=>channel_recv_func(@wiz=>channel_remip,wiz=>channel_remport,wiz=>channel_lclport,rxpkt,rxlen,wiz=>channel_recv_parm)
-				    heaprelease(rxpkt)
+			    pokeregw(wizregs + WIZ_SnRXRD, rxrr + rxlen)
+			    pokereg(wizregs + WIZ_SnCR, $40) // RECV
+			    wiz=>channel_recv_func(rxpkt,swab(rxpkt=>4),rxpkt+8,rxlen-8,wiz=>channel_recv_parm)
+			    heaprelease(rxpkt)
+                        fin
+			break
+		    is WIZ_PROTO_TCP
+		        if sir & $01
+			    //
+			    // Connect TCP socket
+			    //
+			    when wiz->channel_state
+			        is TCP_STATE_LISTEN
+				    peekregs(wiz=>channel_regs + WIZ_SnDIPR, @wiz=>channel_remip, IP4ADR_SIZE)
+				    wiz=>channel_remport = peekregw(wiz=>channel_regs + WIZ_SnDPORT)
+				is TCP_STATE_CONNECT
+				    wiz->channel_state = TCP_STATE_OPEN
+			    wend
+			fin
+			if sir & $04
+			    //
+			    // Receive TCP packet
+			    //
+			    if wiz->channel_state == TCP_STATE_OPEN
+			        rxlen = peekregw(wizregs + WIZ_SnRSR)
+				rxrr  = peekregw(wizregs + WIZ_SnRXRD)
+				rxwr  = rxrr & WIZ_RXMASK
+				rxpkt = heapalloc(rxlen)
+				if rxwr + rxlen > WIZ_RXSIZE
+				    splitlen = WIZ_RXSIZE - rxwr
+				    peekregs(wizdata + rxwr, rxpkt,            splitlen)
+				    peekregs(wizdata,        rxpkt + splitlen, rxlen - splitlen)
+				else
+				    peekregs(wizdata + rxwr, rxpkt, rxlen)
 				fin
-                            fin
-			    if sir & $02
-				//
-				// Close TCP socket
-				//
-				if wiz->channel_state == TCP_STATE_OPEN // Notify callback w/ len = 0
-				    wiz=>channel_recv_func(@wiz=>channel_remip,wiz=>channel_remport,0,wiz=>channel_lclport,0,wiz=>channel_recv_parm)
-				fin
-				wiz->channel_state = TCP_STATE_CLOSED
-				pokereg(wiz=>channel_regs + WIZ_SnCR, $10) // CLOSE
+				pokeregw(wizregs + WIZ_SnRXRD, rxrr + rxlen)
+				pokereg(wizregs + WIZ_SnCR, $40) // RECV
+				wiz=>channel_recv_func(@wiz=>channel_remip,wiz=>channel_remport,wiz=>channel_lclport,rxpkt,rxlen,wiz=>channel_recv_parm)
+				heaprelease(rxpkt)
 			    fin
-			    if sir & $08
-				//
-				// Timeout on TCP socket
-				//
-				when wiz->channel_state
-				    is TCP_STATE_OPEN
-				        wiz->channel_state = TCP_STATE_CLOSING
-					wiz=>channel_recv_func(@wiz=>channel_remip,wiz=>channel_remport,wiz=>channel_lclport,0,0,wiz=>channel_recv_parm)
-					break
-				    is TCP_STATE_CONNECT
-					wiz=>channel_recv_func(@wiz=>channel_remip,wiz=>channel_remport,wiz=>channel_lclport,0,0,wiz=>channel_recv_parm)
-				    is TCP_STATE_CLOSING
-				        wiz->channel_state = TCP_STATE_CLOSED
-				        pokereg(wiz=>channel_regs + WIZ_SnCR, $10) // CLOSE
-				wend
+                        fin
+			if sir & $02
+			    //
+			    // Close TCP socket
+			    //
+			    if wiz->channel_state == TCP_STATE_OPEN // Notify callback w/ len = 0
+			        wiz=>channel_recv_func(@wiz=>channel_remip,wiz=>channel_remport,0,wiz=>channel_lclport,0,wiz=>channel_recv_parm)
 			    fin
+			    wiz->channel_state = TCP_STATE_CLOSED
+			    pokereg(wiz=>channel_regs + WIZ_SnCR, $10) // CLOSE
+			fin
+			if sir & $08
+			    //
+			    // Timeout on TCP socket
+			    //
+			    when wiz->channel_state
+			        is TCP_STATE_OPEN
+				    wiz->channel_state = TCP_STATE_CLOSING
+				    wiz=>channel_recv_func(@wiz=>channel_remip,wiz=>channel_remport,wiz=>channel_lclport,0,0,wiz=>channel_recv_parm)
+				    break
+				is TCP_STATE_CONNECT
+				    wiz=>channel_recv_func(@wiz=>channel_remip,wiz=>channel_remport,wiz=>channel_lclport,0,0,wiz=>channel_recv_parm)
+				is TCP_STATE_CLOSING
+				    wiz->channel_state = TCP_STATE_CLOSED
+				    pokereg(wiz=>channel_regs + WIZ_SnCR, $10) // CLOSE
+			    wend
+			fin
                     wend
-                    pokereg(wiz=>channel_regs + WIZ_SnIR, sir) // Clear SnIR
-                    ir = ir ^ (1 << i)
-            wend
+            fin
             wiz = wiz + t_channel
         next
-	//
-	// Clear IR
-	//
-	pokereg(WIZ_IR, ir)
     fin    
 end
 //
@@ -884,6 +877,12 @@ for slot = $90 to $F0 step $10
                 pokeregw(WIZ_RTR, 5000)        // Timeout period to 500ms
                 pokereg(WIZ_RMSR, $55)         // 2K Rx memory/channel
                 pokereg(WIZ_TMSR, $55)         // 2K Tx memory/channel
+		//
+		// Print settings
+		//
+		puts("Found Uthernet II in slot #")
+		putc('0' + ((slot - $80) >> 4))
+		putln
                 //
                 // Fill channel structure
                 //
