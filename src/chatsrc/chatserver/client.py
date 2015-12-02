@@ -5,7 +5,10 @@ server = ("localhost", 0x6502)
 myhandle = "Python"
 VERSION = 3
 
-# SOCK_DGRAM is the socket type to use for UDP sockets
+if len(sys.argv) > 1:
+    server = (sys.argv[1], 0x6502)
+if len(sys.argv) > 2:
+    myhandle = sys.argv[2]
 s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 s.sendto(struct.pack('<HHHBc8p', 0x7EDA, VERSION, 1, 0xFF, 'H', myhandle), server)
 data, server = s.recvfrom(2048)
