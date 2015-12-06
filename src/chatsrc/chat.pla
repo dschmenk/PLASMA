@@ -32,18 +32,19 @@ import inet
     end
 end
 
-const VERSION = 3
 const txtline = $07D0
 const inbuf   = $0200
 const instr   = $01FF
 
 byte[4] serverIP
+word[] fileinfo
+word version
 word port, timeout
 word update_list, update_len
 byte response
-byte hellopkt  = $DA, $7E, VERSION, VERSION >> 8, $00, $00, $A2, 'H'
+byte hellopkt  = $DA, $7E, 0, 0, $00, $00, $A2, 'H'
 byte[9] handle = ""
-byte chatpkt   = $DA, $7E, VERSION, VERSION >> 8, $00, $01, $A2, 'C'
+byte chatpkt   = $DA, $7E, 0, 0, $00, $01, $A2, 'C'
 byte[33] msg
 //
 // DEBUG
@@ -113,6 +114,9 @@ def recvUDP(ipsrc, portsrc, data, len, param)
 	    break;
 	is 'E'
 	    puts("Server error!"); putln
+	    break
+	otherwise
+	    puts("Unkwown server packet:"); putc(response)
     wend
 end
 
@@ -178,6 +182,21 @@ def kbstr
     until inlen == $FF
     return instr
 end
+
+//
+// CHAT session
+//
+fileinfo = heapmark()
+fileinfo->0 = $0A
+fileinfo=>1 = "VERSION"
+if !syscall($C4, fileinfo)
+    version = fileinfo=>5 // AUX type has version #
+else
+    version = 1
+fin
+hellopkt:2 = version
+chatpkt:2  = version
+puts("CHAT cliet version:"); puti(version); putln
 if !iNet:initIP()
     return -1
 fin
@@ -187,7 +206,7 @@ repeat
     if ^instr
         if iNet:resolveIP(instr, @serverIP)
             repeat
-                puts("Enter chat handle (7 characters or less)\n")
+                puts("Enter chat handle (7 characters or less)")
 		gets(':'+$80)
 	    until ^instr > 0 and ^instr < 8
 	    memcpy(@handle, instr, ^instr + 1)
