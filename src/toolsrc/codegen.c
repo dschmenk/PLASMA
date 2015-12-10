@@ -684,10 +684,18 @@ void emit_brlt(int tag)
 }
 void emit_call(int tag, int type)
 {
-    int fixup = fixup_new(tag, type, FIXUP_WORD);
-    char *taglbl = tag_string(tag, type);
-    printf("\t%s\t$54\t\t\t; CALL\t%s\n", DB, taglbl);
-    printf("_F%03d%c\t%s\t%s\t\t\n", fixup, LBL, DW, type & EXTERN_TYPE ? "0" : taglbl);
+    if (type == CONST_TYPE)
+    {
+        printf("\t%s\t$54\t\t\t; CALL\t%i\n", DB, tag);
+        printf("\t%s\t%i\t\t\n", DW, tag);
+    }
+    else
+    {
+        int fixup = fixup_new(tag, type, FIXUP_WORD);
+        char *taglbl = tag_string(tag, type);
+        printf("\t%s\t$54\t\t\t; CALL\t%s\n", DB, taglbl);
+        printf("_F%03d%c\t%s\t%s\t\t\n", fixup, LBL, DW, type & EXTERN_TYPE ? "0" : taglbl);
+    }
 }
 void emit_ical(void)
 {
