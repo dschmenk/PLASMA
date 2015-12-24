@@ -13,13 +13,12 @@ chat_vers  = []
 def client_add(address, port, handle):
 	global client_list
 	client_list[address] = (port, handle)
+	print "Welcome, ", handle, "@", address, ":", port
 
 def broadcast(handle, msg):
 	global client_list
 	if msg:
 		print handle, ": ", msg
-	else:
-		print "Welcome, ", handle
 	bcastmsg = struct.pack('<HHHBc8p32p', 0x7EDA, VERSION, 0, 0xCA, 'C', handle, msg)
 	for c in client_list:
 	       	client = (c, client_list[c][0])

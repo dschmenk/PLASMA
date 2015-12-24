@@ -3,7 +3,7 @@ import sys, struct, socket, select
 
 server = ("localhost", 0x6502)
 myhandle = "Python"
-VERSION = 4
+VERSION = 6
 
 if len(sys.argv) > 1:
     server = (sys.argv[1], 0x6502)
