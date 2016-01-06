@@ -497,18 +497,6 @@ Address operators can work on any value, i.e. anything can be an address. Parent
 | &#124;&#124;    |  logical OR (alt)
 | &&   |  logical AND (alt)
 
-#### Increment and Decrement
-PLASMA has an increment and decrement statement. This is different than the increment and decrement operations in languages like C and Java. Instead, they cannot be part of an expression and only exist as a statement in postfix:
-
-```
-byte i
-
-i = 0
-while i < 100
-    i++
-loop
-```
-
 ### Statements
 PLASMA definitions are a list of statements the carry out the algorithm. Statements are generally assignment or control flow in nature. Generally there is one statement per line. The ';' symbol seperates multiple statements on a single line. It is considered bad form to have multiple statements per line unless they are very short.
 
@@ -525,6 +513,18 @@ byte keypress
 
 keypress = ^$C000 // read keyboard
 ^$C010 // read keyboard strobe, throw away value
+```
+
+#### Increment and Decrement
+PLASMA has an increment and decrement statement. This is different than the increment and decrement operations in languages like C and Java. Instead, they cannot be part of an expression and only exist as a statement in postfix:
+
+```
+byte i
+
+i = 0
+while i < 100
+    i++
+loop
 ```
 
 #### Control Flow
