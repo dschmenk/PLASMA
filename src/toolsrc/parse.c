@@ -1091,6 +1091,32 @@ int parse_stmnt(void)
                         (elem_type & BYTE_TYPE) ? emit_sab(addr, elem_offset, type) : emit_saw(addr, elem_offset, type);
                     break;
                 }
+                else if (scantoken == INC_TOKEN || scantoken == DEC_TOKEN)
+                {
+                    if (type & LOCAL_TYPE)
+                    {
+                        if (elem_type & BYTE_TYPE)
+                        {
+                            emit_llb(addr + elem_offset); emit_unaryop(scantoken); emit_slb(addr + elem_offset);
+                        }
+                        else
+                        {
+                            emit_llw(addr + elem_offset); emit_unaryop(scantoken); emit_slw(addr + elem_offset);
+                        }
+                    }
+                    else
+                    {
+                        if (elem_type & BYTE_TYPE)
+                        {
+                            emit_lab(addr, elem_offset, type); emit_unaryop(scantoken); emit_sab(addr, elem_offset, type);
+                        }
+                        else
+                        {
+                            emit_law(addr, elem_offset, type); emit_unaryop(scantoken); emit_saw(addr, elem_offset, type);
+                        }
+                    }
+                    break;
+                }                
             }
             else if (type & FUNC_TYPE)
             {
@@ -1117,6 +1143,23 @@ int parse_stmnt(void)
                         (type & (BYTE_TYPE | BPTR_TYPE)) ? emit_sb() : emit_sw();
                     else
                         (type & (BYTE_TYPE | BPTR_TYPE)) ? emit_sb() : emit_sw();
+                }
+                else if (scantoken == INC_TOKEN || scantoken == DEC_TOKEN)
+                {
+                    if (type & (BYTE_TYPE | BPTR_TYPE))
+                   {
+                       emit_dup();
+                       emit_lb();
+                       emit_unaryop(scantoken);
+                       emit_sb();
+                   }
+                   else
+                   {
+                       emit_dup();
+                       emit_lw();
+                       emit_unaryop(scantoken);
+                       emit_sw();
+                   }
                 }
                 else
                 {

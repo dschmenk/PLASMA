@@ -90,7 +90,7 @@ word              = $0450,$04D0,$0550,$05D0,$0650,$06D0,$0750,$07D0
 // Editor variables
 //
 byte nullstr      = ""
-byte version      = "PLASMA ][ SANDBOX VERSION 00.92"
+byte version      = "PLASMA ][ SANDBOX VERSION 00.93"
 byte errorstr     = "ERROR: $"
 byte okstr        = "OK"
 byte outofmem     = "OUT OF MEMORY!"
@@ -2169,6 +2169,9 @@ def emit_slw(offset)
     emit_op($76)
     return emit_byte(offset)
 end
+def emit_dup
+    return emit_op($32)
+end
 def emit_dlb(offset)
     emit_op($6C)
     return emit_byte(offset)
@@ -2714,8 +2717,20 @@ def scan
                 if ^(scanptr + 1) == '>'
                     token   = PTRB_TKN
                     scanptr = scanptr + 2
+                elsif ^(scanptr + 1) == '-'
+                    token   = DEC_TKN
+                    scanptr = scanptr + 2
                 else
                     token   = SUB_TKN
+                    scanptr = scanptr + 1
+                fin
+		break
+            is '+'
+                if ^(scanptr + 1) == '+'
+                    token   = INC_TKN
+                    scanptr = scanptr + 2
+                else
+                    token   = ADD_TKN
                     scanptr = scanptr + 1
                 fin
 		break
@@ -3745,6 +3760,29 @@ def parse_stmnt
                         fin
                     fin
                     break
+                elsif token == INC_TKN or token == DEC_TKN
+                    if type & LOCAL_TYPE
+                        if elem_type & BYTE_TYPE
+                            emit_llb(addr + elem_offset)
+                            emit_unaryop(token)
+                            emit_slb(addr + elem_offset)
+                        else
+                            emit_llw(addr + elem_offset)
+                            emit_unaryop(token)
+                            emit_slw(addr + elem_offset)
+                        fin
+                    else
+                        if elem_type & BYTE_TYPE
+                            emit_lab(addr, elem_offset)
+                            emit_unaryop(token)
+                            emit_sab(addr, elem_offset)
+                        else
+                            emit_law(addr, elem_offset)
+                            emit_unaryop(token)
+                            emit_saw(addr, elem_offset)
+                        fin
+                    fin
+                    break
                 fin
             elsif type & FUNC_TYPE
                 if scan == EOL_TKN
@@ -3763,6 +3801,17 @@ def parse_stmnt
                     if type & XBYTE_TYPE
                         emit_sb
                     else
+                        emit_sw
+                    fin
+                elsif token == INC_TKN or token == DEC_TKN
+                    emit_dup
+                    if type & XBYTE_TYPE
+                        emit_lb
+                        emit_unaryop(token)
+                        emit_sb
+                    else
+                        emit_lw
+                        emit_unaryop(token)
                         emit_sw
                     fin
                 else
