@@ -521,10 +521,11 @@ PLASMA has an increment and decrement statement. This is different than the incr
 ```
 byte i
 
-i = 0
-while i < 100
-    i++
-loop
+i = 4
+i++ // increment i by 1
+puti(i) // print 5
+i-- // decrement i by 1
+puti(i) // print 4
 ```
 
 #### Control Flow
