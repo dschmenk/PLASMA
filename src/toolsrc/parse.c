@@ -1270,8 +1270,10 @@ int parse_struc(void)
         for (idlen = 0; idlen < struclen; idlen++)
             strucid[idlen] = tokenstr[idlen];
     }
-    while (next_line() == BYTE_TOKEN || scantoken == WORD_TOKEN)
+    while (next_line() == BYTE_TOKEN || scantoken == WORD_TOKEN || scantoken == EOL_TOKEN)
     {
+        if (scantoken == EOL_TOKEN)
+            continue;
         size = 1;
         type = scantoken == BYTE_TOKEN ? BYTE_TYPE : WORD_TYPE;
         if (scan() == OPEN_BRACKET_TOKEN)
