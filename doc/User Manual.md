@@ -498,7 +498,7 @@ Address operators can work on any value, i.e. anything can be an address. Parent
 | &&   |  logical AND (alt)
 
 #### Increment and Decrement
-PLASMA has an increment and decrement statement. This is different than the increment and decrement operations in languages like C and Java. Instead, they cannot be part of an expression and only exist as a statement as postfix:
+PLASMA has an increment and decrement statement. This is different than the increment and decrement operations in languages like C and Java. Instead, they cannot be part of an expression and only exist as a statement in postfix:
 
 ```
 byte i
