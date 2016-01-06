@@ -7,6 +7,7 @@
 /*
  * Symbol table and fixup information.
  */
+#define ID_LEN	32
 static int  consts   = 0;
 static int  externs  = 0;
 static int  globals  = 0;
@@ -16,13 +17,13 @@ static int  defs     = 0;
 static int  asmdefs  = 0;
 static int  codetags = 1; // Fix check for break_tag and cont_tag
 static int  fixups   = 0;
-static char idconst_name[1024][17];
+static char idconst_name[1024][ID_LEN+1];
 static int  idconst_value[1024];
-static char idglobal_name[1024][17];
+static char idglobal_name[1024][ID_LEN+1];
 static int  idglobal_type[1024];
 static int  idglobal_tag[1024];
 static int  localsize = 0;
-static char idlocal_name[128][17];
+static char idlocal_name[128][ID_LEN+1];
 static int  idlocal_type[128];
 static int  idlocal_offset[128];
 static char fixup_size[2048];
@@ -80,7 +81,7 @@ int idconst_add(char *name, int len, int value)
     emit_idconst(name, value);
     name[len] = c;
     idconst_name[consts][0] = len;
-    if (len > 16) len = 16;
+    if (len > ID_LEN) len = ID_LEN;
     while (len--)
         idconst_name[consts][1 + len] = name[len];
     idconst_value[consts] = value;
@@ -109,7 +110,7 @@ int idlocal_add(char *name, int len, int type, int size)
     emit_idlocal(name, localsize);
     name[len] = c;
     idlocal_name[locals][0] = len;
-    if (len > 16) len = 16;
+    if (len > ID_LEN) len = ID_LEN;
     while (len--)
         idlocal_name[locals][1 + len] = name[len];
     idlocal_type[locals]   = type | LOCAL_TYPE;
@@ -139,7 +140,7 @@ int idglobal_add(char *name, int len, int type, int size)
     name[len] = '\0';
     name[len] = c;
     idglobal_name[globals][0] = len;
-    if (len > 16) len = 16;
+    if (len > ID_LEN) len = ID_LEN;
     while (len--)
         idglobal_name[globals][1 + len] = name[len];
     idglobal_type[globals] = type;
@@ -168,7 +169,7 @@ int idfunc_add(char *name, int len, int type, int tag)
         return (0);
     }
     idglobal_name[globals][0] = len;
-    if (len > 16) len = 16;
+    if (len > ID_LEN) len = ID_LEN;
     while (len--)
         idglobal_name[globals][1 + len] = name[len];
     idglobal_type[globals]  = type;
