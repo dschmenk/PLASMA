@@ -1,6 +1,6 @@
 # <a name="title"></a>The PLASMA Programming Language
 
-PLASMA is a medium level programming language targetting the 8 bit 6502 processor. Historically, there were simple languages developed in the early history of computers that improved on the tedium of assembly language programming while still being low level enough for system coding. Languages like B, FORTH, and PLASMA fall into this category.
+PLASMA is a medium level programming language targetting the 8 bit 6502 processor. Historically, there were simple languages developed in the early years of computers that improved on the tedium of assembly language programming while still being low level enough for system coding. Languages like B, FORTH, and PLASMA fall into this category.
 
 PLASMA is a combination of virtual machine and assembler/compiler matched closely to the 6502 architecture.  It is an attempt to satisfy a few challenges surrounding code size, efficient execution, small runtime and flexible code location.  By architecting a unique bytecode that maps nearly one-to-one to the higher level representation, the compiler/assembler can be very simple and execute quickly on the Apple II for a self-hosted environment.  A modular approach provides for incremental development and code reuse.  Different projects have led to the architecture of PLASMA, most notably Apple Pascal, FORTH, and my own Java VM for the 6502: VM02. Each has tried to map a generic VM to the 6502 with varying levels of success.  Apple Pascal, based on the USCD Pascal using the p-code interpreter, was a very powerful system and ran fast enough on the Apple II to be interactive but didn't win any speed contests. FORTH was the poster child for efficiency and obtuse syntax. Commonly referred to as a write only language, it was difficult to come up to speed as a developer, especially when using other's code. My own project in creating a Java VM for the Apple II uncovered the folly of shoehorning a large, 32-bit virtual memory environment into 8-bit, 64K hardware.
 
@@ -92,7 +92,7 @@ Strings, sequences of characters, are represented by the list of characters surr
 
 ### Organization of a PLASMA Source File
 
-The source code of a PLASMA module first defines imports, constants, variables and data, then functions.  Constants must be initialized with a value. Variables can have sizes associated with them to declare storage space. Data can be declared with or without a variable name associated with it. Arrays, tables, strings and any predeclared data can be created and accessed in multiple ways. Arrays can be defined with a size to reserve a minimum storage amount, and the brackets can be after the type declaration or after the identifier.
+The source code of a PLASMA module first defines imports, constants, variables and data, then functions.  Constants must be initialized with a value. Variables can have sizes associated with them to declare storage space. Data can be declared with or without a label associated with it. Arrays, tables, strings and any predeclared data can be created and accessed in multiple ways. Arrays can be defined with a size to reserve a minimum storage amount, and the brackets can be after the type declaration or after the identifier.
 
 #### Module Dependencies
 
@@ -177,6 +177,13 @@ const speaker     = $C030
 const changed     = 1
 const insmode     = 2
 //
+// Global variables
+//
+byte  flags       = 0
+word  numlines    = 0
+byte  cursx, cursy
+word  cursrow, scrntop, cursptr
+//
 // Array declaration of screen row addresses. All variations are allowed.
 //
 word  txtscrn[]   = $0400,$0480,$0500,$0580,$0600,$0680,$0700,$0780
@@ -185,18 +192,11 @@ word              = $0450,$04D0,$0550,$05D0,$0650,$06D0,$0750,$07D0
 word txt2scrn[8]  = $0800,$0880,$0900,$0980,$0A00,$0A80,$0B00,$0B80
 word[8] txt2scrna = $0828,$08A8,$0928,$09A8,$0A28,$0AA8,$0B28,$0BA8
 word txt2scrnb    = $0850,$08D0,$0950,$09D0,$0A50,$0AD0,$0B50,$0BD0
-//
-// Misc global variables
-//
-byte  flags       = 0
-word  numlines    = 0
-byte  cursx, cursy
-word  cursrow, scrntop, cursptr
 ```
 
 Variables can have optional brackets; empty brackets don’t reserve any space for the variable but are useful as a label for data that is defined following the variable.  Brackets with a constant inside defines a minimum size reserved for the variable.  Any data following the variable will take at least the amount of reserved space, but potentially more.
 
-Strings are defined like Pascal strings, a length byte followed by the string characters so they can be a maximum of 255 characters long.  Strings can only appear in the variable definitions of a module.  String constants can’t be used in expressions or statements.
+Strings are defined like Pascal strings, a length byte followed by the string characters so they can be a maximum of 255 characters long.
 
 ```
 //
@@ -207,11 +207,11 @@ byte[64] txtfile = "UNTITLED"
 
 #### Function Definitions
 
-Functions are defined after all constants, variables and data.  Functions can be forward declared with a `predef` type in the constant and variable declarations.  Functions have optional parameters and always return a value.   Functions can have their own variable declarations.  However, unlike the global declarations, no data can be predeclared, only storage space.  There is also a limit of 254 bytes of local storage.  Each parameter takes two bytes of local storage, plus two bytes for the previous frame pointer.  If a function has no parameters or local variables, no local frame will be created, improving performance.  A function can specify a value to return.  If no return value is specified, a default of 0 will be returned.
+Functions are defined after all constants, variables and data. Function definitions can be `export`ed for inclusion in other modules and can be forward declared with a `predef` type in the constant and variable declarations. Functions can take parameters, passed on the evaluation stack, then copied to the local frame for easy access They can have their own variable declarations, however, unlike the global declarations, no data can be predeclared - only storage space.  There is also a limit of 254 bytes of local storage.  Each parameter takes two bytes of local storage, plus two bytes for the previous frame pointer.  If a function has no parameters or local variables, no local frame will be created, improving performance.  A function can specify a value to return.  If no return value is specified, a default of 0 will be returned.
+
+Note: there is no mechanism to ensure caller and callee agree on the number of parameters. Historically, programmers have used Hungarian Notation (http://en.wikipedia.org/wiki/Hungarian_notation) to embedd the parameter number and type in the function name itself. This is a notational aid; the compiler enforces nothing.
 
 After functions are defined, the main code for the module follows. The main code will be executed as soon as the module is loaded.  For library modules, this is a good place to do any runtime initialization, before any of the exported functions are called. The last statement in the module must be done, or else a compile error is issued.
-
-Function definitions **must** come after all other declarations. Once a function definition is written, no other global declarations are allowed. Function definitions can be `export`ed for inclusion in other modules. Functions can take parameters, passed on the evaluation stack, then copied to the local frame for easy access. Note: there is no mechanism to ensure caller and callee agree on the number of parameters. Historically, programmers have used Hungarian Notation (http://en.wikipedia.org/wiki/Hungarian_notation) to embedd the parameter number and type in the function name itself. This is a notational aid; the compiler enforces nothing.
 
 ##### Statments and Expressions
 
@@ -247,13 +247,16 @@ word           = $2080,$2480,$2880,$2C80,$3080,$3480,$3880,$3C80
 hgrscan.[yscan, xscan] = fillval
 ```
 
-Values can be treated as pointers by preceding them with a ‘^’ for byte pointers, ‘*’ for word pointers.
+Values can be treated as pointers by preceding them with a `^` for byte pointers, `*` for word pointers. Addresses of variables and functions can be taken with a preceding ‘@’, address-of operator. Parenthesis can surround an expression to be used as a pointer, but not address-of.
+
 
 ```
-strlen = ^srcstr
-```
+char[] hellostr = "Hello"
+word srcstr, strlen
 
-Addresses of variables and functions can be taken with a preceding ‘@’, address-of operator. Parenthesis can surround an expression to be used as a pointer, but not address-of.
+srcstr = @hellostr // srcstr points to address of hellostr
+strlen = ^srcstr // the first byte srcstr points to is the string length
+```
 
 Functions with parameters or expressions to be used as a function address to call must use parenthesis, even if empty.
 
@@ -282,7 +285,7 @@ else
 fin
 ```
 
-The when/is/otherwise/wend statement is similar to the if/elsif/else/fin construct except that it is more efficient.  It selects one path based on the evaluated expressions, then merges the code path back together at the end.  However only the 'when' value is compared against a list of expressions.  The expressions do not need to be constants, they can be any valid expression.  The list of expressions is evaluated in order, so for efficiency sake, place the most common cases earlier in the list. Just as in C programs, a 'break' statement is required to keep one clause from falling through to the next. Falling through from one clause to the next can have it's uses, so this behavior has been added to PLASMA.
+The when/is/otherwise/wend statement is similar to the if/elsif/else/fin construct except that it is more efficient.  It selects one path based on the evaluated expressions, then merges the code path back together at the end.  However only the `when` value is compared against a list of expressions.  The expressions do not need to be constants, they can be any valid expression.  The list of expressions is evaluated in order, so for efficiency sake, place the most common cases earlier in the list. Just as in C programs, a `break` statement is required to keep one clause from falling through to the next. Falling through from one clause to the next can have it's uses, so this behavior has been added to PLASMA.
 
 ```
 when keypressed
@@ -314,7 +317,7 @@ when keypressed
 wend
 ```
 
-The most common looping statement is the for/next construct.
+The most common looping statement is the `for`/`next` construct.
 
 ```
 for xscan = 0 to 19
@@ -322,7 +325,7 @@ for xscan = 0 to 19
 next
 ```
 
-The for/next statement will efficiently increment or decrement a variable form the starting value to the ending value.  The increment/decrement amount can be set with the step option after the ending value; the default is one.  If the ending value is less than the starting value, use downto instead of to to progress in the negative direction.  Only use positive step values.  The `to` or `downto` will add or subtract the step value appropriately.
+The `for`/`next` statement will efficiently increment or decrement a variable form the starting value to the ending value.  The increment/decrement amount can be set with the step option after the ending value; the default is one.  If the ending value is less than the starting value, use downto instead of to to progress in the negative direction.  Only use positive step values.  The `to` or `downto` will add or subtract the step value appropriately.
 
 ```
 for i = heapmapsz - 1 downto 0
@@ -332,7 +335,7 @@ for i = heapmapsz - 1 downto 0
 next
 ```
 
-while/loop statements will continue looping as long as the while expression is non-zero.
+`while`/`loop` statements will continue looping as long as the `while` expression is non-zero.
 
 ```
 while !(mask & 1)
@@ -341,7 +344,7 @@ while !(mask & 1)
 loop
 ```
 
-Lastly, the repeat/until statement will continue looping as long as the until expression is zero.
+Lastly, the `repeat`/`until` statement will continue looping as long as the `until` expression is zero.
 
 ```
 repeat
@@ -349,9 +352,7 @@ repeat
     numlines = numlines + 1
 until txtbuf == 0 or numlines == maxlines
 ```
-Function definitions are completed with the `end` statement. All definitions return a value, even if not specified in the source. A return value of zero will be inserted by the compiler at the `end` of a definition (or a `return` statement without a value).
-
-Functions can have optional parameters when called and local variables.  Defined functions without parameters can be called simply, without any paranthesis.
+Function definitions are completed with the `end` statement. All definitions return a value, even if not specified in the source. A return value of zero will be inserted by the compiler at the `end` of a definition (or a `return` statement without a value). Defined functions without parameters can be called simply, without any parenthesis.
 
 ```
 def drawscrn(topline, leftpos)
@@ -389,7 +390,7 @@ export def plot(x, y)
 end
 ```
 
-#### Module Initialization Function
+#### Module Main Initialization Function
 
 After all the function definitions are complete, an optional module initiialization routine follows. This is an un-named defintion an is written in-line without a definition declaration. As such, it doesn't have parameters or local variables. Function definitions can be called from within the initialization code.
 
