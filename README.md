@@ -1,16 +1,26 @@
-# The PLASMA Programming Language
-
-## Introduction
+# <a name="title"></a>The PLASMA Programming Language
 
 PLASMA is a medium level programming language targetting the 8 bit 6502 processor. Historically, there were simple languages developed in the early history of computers that improved on the tedium of assembly language programming while still being low level enough for system coding. Languages like B, FORTH, and PLASMA fall into this category.
 
-PLASMA is a combination of virtual machine and assembler/compiler matched closely to the 6502 architecture.  It is an attempt to satisfy a few challenges surrounding code size, efficient execution, small runtime and flexible code location.  By architecting a unique bytecode that maps nearly one-to-one to the higher level representation, the compiler/assembler can be very simple and execute quickly on the Apple II for a self-hosted environment.  A modular approach provides for incremental development and code reuse.  Different projects have led to the architecture of PLASMA, most notably Apple Pascal, FORTH, and my own Java VM for the 6502, VM02. Each has tried to map a generic VM to the 6502 with varying levels of success.  Apple Pascal, based on the USCD Pascal using the p-code interpreter, was a very powerful system and ran fast enough on the Apple II to be interactive but didn't win any speed contests. FORTH was the poster child for efficiency and obtuse syntax. Commonly referred to as a write only language, it was difficult to come up to speed as a developer, especially when using other's code. My own project in creating a Java VM for the Apple II uncovered the folly of shoehorning a large system into something never intended to run 32 bit applications.
+PLASMA is a combination of virtual machine and assembler/compiler matched closely to the 6502 architecture.  It is an attempt to satisfy a few challenges surrounding code size, efficient execution, small runtime and flexible code location.  By architecting a unique bytecode that maps nearly one-to-one to the higher level representation, the compiler/assembler can be very simple and execute quickly on the Apple II for a self-hosted environment.  A modular approach provides for incremental development and code reuse.  Different projects have led to the architecture of PLASMA, most notably Apple Pascal, FORTH, and my own Java VM for the 6502: VM02. Each has tried to map a generic VM to the 6502 with varying levels of success.  Apple Pascal, based on the USCD Pascal using the p-code interpreter, was a very powerful system and ran fast enough on the Apple II to be interactive but didn't win any speed contests. FORTH was the poster child for efficiency and obtuse syntax. Commonly referred to as a write only language, it was difficult to come up to speed as a developer, especially when using other's code. My own project in creating a Java VM for the Apple II uncovered the folly of shoehorning a large, 32-bit virtual memory environment into 8-bit, 64K hardware.
 
-##Tutorial
+## Contents
+
+[Introduction](#title)
+
+[Tutorial](#tutorial)
+
+[Reference](#reference)
+
+[Implemetation](#implementation)
+
+[Links](#links)
+
+## <a name="tutorial"></a>Tutorial
 
 ### PLASMA Compiler/Assembler
 
-Although the low-level PLASMA operations could easily by coded by hand, they were chosen to be an easy target for a simple compiler. Think along the lines of an advanced assembler or stripped down C compiler ( C--).  Taking concepts from BASIC, Pascal, C and assembler, the PLASMA compiler is simple yet expressive. The syntax is line oriented; generally there is one statement per line. However, a semicolon, `;`, can seperate multiple statements on a single line.
+Although the low-level PLASMA VM operations could easily by coded by hand, they were chosen to be an easy target for a simple compiler. Think along the lines of an advanced assembler or stripped down C compiler ( C-- ).  Taking concepts from BASIC, Pascal, C and assembler, the PLASMA compiler is simple yet expressive. The syntax is line oriented; generally there is one statement per line. However, a semicolon, `;`, can seperate multiple statements on a single line. This tutorial will focus on the cross-compiler running under a UNIX-like environment.
 
 ### PLASMA Modules
 
@@ -18,7 +28,7 @@ To keep development compartmentalized and easily managed, PLASMA uses relatively
 
 ### Data Types
 
-PLASMA only defines two data types: `byte`, `word`. All operations take place on word sized quantities, with the exception of loads and stores to byte sized addresses. The interpretation of a value can be an interger, an address, or anything that fits in 16 bits. There are a number of address operators to identify how an address value is to be interpreted.
+PLASMA only defines two data types: `byte` and `word`. All operations take place on word sized quantities, with the exception of loads and stores to byte sized addresses. The interpretation of a value can be an interger, an address, or anything that fits in 16 bits. There are a number of address operators to identify how an address value is to be interpreted.
 
 ### Obligatory 'Hello World'
 
@@ -33,18 +43,18 @@ puts("Hello, world.\n")
 done
 ```
 
-Three tools are required to build and run this program: **plasm**, **acme**, and **plvm**. The PLASMA compiler, **plasm**, will convert the PLASMA source code (usually with an extension of .pla) into an assembly language source file. **acme**, the portable 6502 assembler, will convert the assembly source into a binary ready for loading. To execute the module, the PLASMA portable VM, **plvm**, can load and interpret the bytecode. The same binary can be loaded onto the target platform and run there with the appropriate VM. On Linux/Unix from lawless-legends/PLASMA/src, the steps would be entered as:
+Three tools are required to build and run this program: **plasm**, **acme**, and **plvm**. The PLASMA compiler, **plasm**, will convert the PLASMA source code (usually with an extension of .pla) into an assembly language source file. **acme**, the portable 6502 assembler, will convert the assembly source into a binary ready for loading. To execute the module, the PLASMA portable VM, **plvm**, can load and interpret the bytecode. The same binary can be loaded onto the target platform and run there with the appropriate VM. On Linux/Unix from PLASMA/src, the steps would be entered as:
 
 ```
 ./plasm -AM < hello.pla > hello.a
-acme --setpc 4094 -o HELLO.REL hello.a
-./plvm HELLO.REL
+acme --setpc 4094 -o HELLO hello.a
+./plvm HELLO
 ```
 
 The computer will respond with:
 
 ```
-Load module HELLO.REL
+Load module HELLO
 Hello, world.
 ```
 
@@ -70,61 +80,19 @@ Comments are allowed throughout a PLASMA source file. The format follows that of
 
 ### Numbers
 
-Hexadecimal constants are preceded with a `$` to identify them as such. 
-
-```
-$C030 // Speaker address
-```
+Decimal numbers (using digits 0 through 9) are written just as you would expect them. The numer **42** would be written as `42`. PLASMA only knowaout integer numbers; no decimal points. Negative numbers are preceded by a `-`. Hexadecimal constants are preceded with a `$` to identify them, such as `$C030`.
 
 ### Characters
 
+Characters are byte values represented by a character surrounded by `'`(single quotation mark). The letter **A** would be encoded as `'A'`.
+
 ### Strings
+
+Strings, sequences of characters, are represented by the list of characters surrounded by `"`(double quotation mark). The string **Hello** would be encoded as `"Hello"`.
 
 ### Organization of a PLASMA Source File
 
-### Declarations
-
-The beginning of the source file is the best place for certain declarations. This will help when reading others' code as well as returning to your own after a time.
-
-#### Predefined Functions & Data
-
-Sometimes a function needs to be referenced before it is defined. The `predef` declaration reserves the label for a function. The `import` declaration block also uses the `predef` declaration to reserve an external function. Outside of an `import` block, `predef` will only predefine a function that must be declared later in the source file, otherwise an error will occur.
-
-```
-predef exec_file, mydef
-```
-
-#### Constant Declarations
-
-Constants help with the readability of source code where hard-coded numbers might not be very descriptive.
-
-```
-const MACHID  = $BF98
-const speaker = $C030
-const bufflen = 2048
-```
-
-These constants can be used in expressions just like a variable name.
-
-#### Structure Declarations
-
-There is a shortcut for defining constant offsets into structures:
-```
-struc t_entry
-  word id
-  byte[32] name
-  word next_entry
-end
-```
-is equivalent to:
-```
-const t_entry    = 36 // size of the structure
-const id         = 0  // offset to id element
-const name       = 2  // offset to name element
-const next_entry = 34 // offset to next_entry element
-```
-
-The source code of a PLASMA module first defines imports, constants, variables and data.  Constants must be initialized with a value.  Variables can have sizes associated with them to declare storage space.  Data can be declared with or without a variable name associated with it.  Arrays, tables, strings and any predeclared data can be created and accessed in multiple ways. Arrays can be defined with a size to reserve a minimum storage amount, and the brackets can be after the type declaration or after the identifier.
+The source code of a PLASMA module first defines imports, constants, variables and data, then functions.  Constants must be initialized with a value. Variables can have sizes associated with them to declare storage space. Data can be declared with or without a variable name associated with it. Arrays, tables, strings and any predeclared data can be created and accessed in multiple ways. Arrays can be defined with a size to reserve a minimum storage amount, and the brackets can be after the type declaration or after the identifier.
 
 #### Module Dependencies
 
@@ -148,6 +116,48 @@ The `predef` pre-defines functions that can be called throughout the module.  Th
 ##### m4 Pre-Processor
 
 The m4 pre-processor can be very helpful when managing module imports and macro facilities. The easiest way to use the pre-processor is to write a module import header for each library module. Any module that depends on a given library can `include()` the shared header file. See the GNU m4 documentation for more information: https://www.gnu.org/software/m4/manual/
+
+#### Predefined Functions
+
+Sometimes a function needs to be referenced before it is defined. The `predef` declaration reserves the label for a function. The `import` declaration block also uses the `predef` declaration to reserve an external function. Outside of an `import` block, `predef` will only predefine a function that must be declared later in the source file, otherwise an error will occur.
+
+```
+predef exec_file, mydef
+```
+
+#### Constant Declarations
+
+Constants help with the readability of source code where hard-coded numbers might not be very descriptive.
+
+```
+const MACHID   = $BF98
+const speaker  = $C030
+const bufflen  = 2048
+const exec_cmd = 'X'
+```
+
+These constants can be used in expressions just like a variable name.
+
+#### Structure Declarations
+
+There is a shortcut for defining constant offsets into structures:
+
+```
+struc t_entry
+  word id
+  byte[32] name
+  word next_entry
+end
+```
+
+is equivalent to:
+
+```
+const t_entry    = 36 // size of the structure
+const id         = 0  // offset to id element
+const name       = 2  // offset to name element
+const next_entry = 34 // offset to next_entry element
+```
 
 #### Global Data & Variables Declarations
 
@@ -195,9 +205,38 @@ Strings are defined like Pascal strings, a length byte followed by the string ch
 byte[64] txtfile = "UNTITLED"
 ```
 
+#### Function Definitions
+
 Functions are defined after all constants, variables and data.  Functions can be forward declared with a `predef` type in the constant and variable declarations.  Functions have optional parameters and always return a value.   Functions can have their own variable declarations.  However, unlike the global declarations, no data can be predeclared, only storage space.  There is also a limit of 254 bytes of local storage.  Each parameter takes two bytes of local storage, plus two bytes for the previous frame pointer.  If a function has no parameters or local variables, no local frame will be created, improving performance.  A function can specify a value to return.  If no return value is specified, a default of 0 will be returned.
 
 After functions are defined, the main code for the module follows. The main code will be executed as soon as the module is loaded.  For library modules, this is a good place to do any runtime initialization, before any of the exported functions are called. The last statement in the module must be done, or else a compile error is issued.
+
+Function definitions **must** come after all other declarations. Once a function definition is written, no other global declarations are allowed. Function definitions can be `export`ed for inclusion in other modules. Functions can take parameters, passed on the evaluation stack, then copied to the local frame for easy access. Note: there is no mechanism to ensure caller and callee agree on the number of parameters. Historically, programmers have used Hungarian Notation (http://en.wikipedia.org/wiki/Hungarian_notation) to embedd the parameter number and type in the function name itself. This is a notational aid; the compiler enforces nothing.
+
+##### Statments and Expressions
+
+Expressions are algebraic.  Data is free-form, but all operations on the evaluation stack use 16 bits of precision with the exception of byte load and stores.  A stand-alone expression will be evaluated and read from or called.  This allows for easy access to the Apple’s soft switches and other memory mapped hardware. The value of the expression is dropped.
+
+```
+const speaker=$C030
+
+^speaker // click speaker
+```
+
+Calling a function without looking at the result silently drops it:
+
+```
+close(refnum) // return value ignored
+```
+
+Statements are built up from expressions and control flow keywords.  Simplicity of syntax took precedence over flexibility and complexity.  The simplest statement is the basic assignment using ‘=’.
+
+```
+byte numchars
+numchars = 0
+```
+
+Expressions can be built up with constants, variables, function calls, addresses, and pointers/arrays.  Comparison operators evaluate to 0 or -1 instead of the more traditional 0 or 1.  The use of -1 allows binary operations to be applied to other non-zero values and still retain a non-zero result.  Any conditional tests check only for zero and non-zero values.
 
 There are four basic types of data that can be manipulated: constants, variables, addresses, and functions.  Memory can only be read or written as either a byte or a word.  Bytes are unsigned 8 bit quantities, words are signed 16 bit quantities.  Everything on the evaluation stack is treated as a word.  Other than that, any value can be treated as a pointer, address, function, character, integer, etc.  There are convenience operations in PLASMA to easily manipulate addresses and expressions as pointers, arrays, structures, functions, or combinations thereof.  If a variable is declared as a byte, it can be accessed as a simple, single dimension byte array by using brackets to indicate the offset.  Any expression can calculate the indexed offset.  A word variable can be accessed as a word array in the same fashion.  In order to access expressions or constants as arrays, a type identifier has to be inserted before the brackets.  a `.` character denotes a byte type, a `:` character denotes a word type.  Along with brackets to calculate an indexed offset, a constant can be used after the `.` or `:` and will be added to the base address.  The constant can be a defined const to allow for structure style syntax.  If the offset is a known constant, using the constant offset is a much more efficient way to address the elements over an array index.  Multidimensional arrays are treated as arrays of array pointers.
 
@@ -216,30 +255,6 @@ strlen = ^srcstr
 
 Addresses of variables and functions can be taken with a preceding ‘@’, address-of operator. Parenthesis can surround an expression to be used as a pointer, but not address-of.
 
-#### Function Definitions
-
-Function definitions **must** come after all other declarations. Once a function definition is written, no other global declarations are allowed. Function definitions can be `export`ed for inclusion in other modules. Functions can take parameters, passed on the evaluation stack, then copied to the local frame for easy access. Note: there is no mechanism to ensure caller and callee agree on the number of parameters. Historically, programmers have used Hungarian Notation (http://en.wikipedia.org/wiki/Hungarian_notation) to embedd the parameter number and type in the function name itself. This is a notational aid; the compiler enforces nothing.
-
-Function definitions are completed with the `end` statement. All definitions return a value, even if not specified in the source. A return value of zero will be inserted by the compiler at the `end` of a definition (or a `return` statement without a value).
-
-Functions can have optional parameters when called and local variables.  Defined functions without parameters can be called simply, without any paranthesis.
-
-```
-def drawscrn(topline, leftpos)
-    byte i
-    for i = 0 to 23
-        drawline(textbuff[i + topline], leftpos)
-    next
-end
-def redraw
-    cursoff
-    drawscrn(scrntop, scrnleft)
-    curson
-end
-
-redraw
-```
-
 Functions with parameters or expressions to be used as a function address to call must use parenthesis, even if empty.
 
 ```
@@ -250,58 +265,6 @@ byte key
 keyin = @keyin2plus // address-of keyin2plus function
 key   = keyin()
 ```
-
-#### Exported Declarations
-
-Data and function labels can be exported so other modules may access this modules data and code. By prepending `export` to the data or functions declaration, the label will become available to the loader for inter-module resolution. Exported labels are converted to uppercase with 16 significant characters.  Although the label will have to match the local version, external modules will match the case-insignificant, short version. Thus, "ThisIsAVeryLongLabelName" would be exported as: "THISISAVERYLONGL".
-
-Here is an example using the `import`s from the previous examples to export an initialized array of 10 elements (2 defined + null delimiter):
-
-```
-predef mydef
-
-export word[10] myfuncs = @putc, @mydef, $0000
-```
-
-Exporting functions is simple:
-
-```
-export def plot(x, y)
-    romcall(y, 0, x, 0, $F800)
-end
-```
-
-#### Module Initialization Function
-
-After all the function definitions are complete, an optional module initiialization routine follows. This is an un-named defintion an is written in-line without a definition declaration. As such, it doesn't have parameters or local variables. Function definitions can be called from within the initialization code.
-
-For libraries or class modules, the initialization routine can perform any up-front work needed before the module is called. For program modules, the initialization routine is the "main" routine, called after all the other module dependencies are loaded and initialized.
-
-A return value is system specific. The default of zero should mean "no error". Negative values should mean "error", and positive values can instruct the system to do extra work, perhaps leaving the module in memory (terminate and stay resident).
-
-#### Module Done
-
-The final declaration of a module source file is the `done` statement. This declares the end of the source file. Anything following this statement is ignored.
-
-#### Statments and Expressions
-
-Expressions are algebraic.  Data is free-form, but all operations on the evaluation stack use 16 bits of precision with the exception of byte load and stores.  A stand-alone expression will be evaluated and read from or called.  This allows for easy access to the Apple’s soft switches and other memory mapped hardware. The value of the expression is dropped.
-
-```
-const speaker=$C030
-
-^speaker // click speaker
-close(refnum)
-```
-
-Statements are built up from expressions and control flow keywords.  Simplicity of syntax took precedence over flexibility and complexity.  The simplest statement is the basic assignment using ‘=’.
-
-```
-byte numchars
-numchars = 0
-```
-
-Expressions can be built up with constants, variables, function calls, addresses, and pointers/arrays.  Comparison operators evaluate to 0 or -1 instead of the more traditional 0 or 1.  The use of -1 allows binary operations to be applied to other non-zero values and still retain a non-zero result.  Any conditional tests check only for zero and non-zero values.
 
 Control statements affect the flow of control through the program.  There are conditional and looping constructs.  The most widely used is probably the if/elsif/else/fin construct.
 
@@ -359,7 +322,7 @@ for xscan = 0 to 19
 next
 ```
 
-The for/next statement will efficiently increment or decrement a variable form the starting value to the ending value.  The increment/decrement amount can be set with the step option after the ending value; the default is one.  If the ending value is less than the starting value, use downto instead of to to progress in the negative direction.  Only use positive step values.  The to or downto will add or subtract the step value appropriately.
+The for/next statement will efficiently increment or decrement a variable form the starting value to the ending value.  The increment/decrement amount can be set with the step option after the ending value; the default is one.  If the ending value is less than the starting value, use downto instead of to to progress in the negative direction.  Only use positive step values.  The `to` or `downto` will add or subtract the step value appropriately.
 
 ```
 for i = heapmapsz - 1 downto 0
@@ -386,7 +349,57 @@ repeat
     numlines = numlines + 1
 until txtbuf == 0 or numlines == maxlines
 ```
+Function definitions are completed with the `end` statement. All definitions return a value, even if not specified in the source. A return value of zero will be inserted by the compiler at the `end` of a definition (or a `return` statement without a value).
 
+Functions can have optional parameters when called and local variables.  Defined functions without parameters can be called simply, without any paranthesis.
+
+```
+def drawscrn(topline, leftpos)
+    byte i
+    for i = 0 to 23
+        drawline(textbuff[i + topline], leftpos)
+    next
+end
+def redraw
+    cursoff
+    drawscrn(scrntop, scrnleft)
+    curson
+end
+
+redraw
+```
+
+#### Exported Declarations
+
+Data and function labels can be exported so other modules may access this modules data and code. By prepending `export` to the data or functions declaration, the label will become available to the loader for inter-module resolution. Exported labels are converted to uppercase with 16 significant characters.  Although the label will have to match the local version, external modules will match the case-insignificant, short version. Thus, "ThisIsAVeryLongLabelName" would be exported as: "THISISAVERYLONGL".
+
+Here is an example using the `import`s from the previous examples to export an initialized array of 10 elements (2 defined + null delimiter):
+
+```
+predef mydef
+
+export word[10] myfuncs = @putc, @mydef, $0000
+```
+
+Exporting functions is simple:
+
+```
+export def plot(x, y)
+    romcall(y, 0, x, 0, $F800)
+end
+```
+
+#### Module Initialization Function
+
+After all the function definitions are complete, an optional module initiialization routine follows. This is an un-named defintion an is written in-line without a definition declaration. As such, it doesn't have parameters or local variables. Function definitions can be called from within the initialization code.
+
+For libraries or class modules, the initialization routine can perform any up-front work needed before the module is called. For program modules, the initialization routine is the "main" routine, called after all the other module dependencies are loaded and initialized.
+
+A return value is system specific. The default of zero should mean "no error". Negative values should mean "error", and positive values can instruct the system to do extra work, perhaps leaving the module in memory (terminate and stay resident).
+
+#### Module Done
+
+The final declaration of a module source file is the `done` statement. This declares the end of the source file. Anything following this statement is ignored.
 
 ### Runtime
 
@@ -431,7 +444,7 @@ byte nullstr[] = ""
 memset(strlinbuf, @nullstr, maxfill * 2) // fill line buff with pointer to null string
 memcpy(scrnptr, strptr + ofst + 1, numchars)
 ```
-## Reference
+## <a name="reference"></a>Reference
 
 #### Decimal and Hexadecimal Numbers
 
@@ -442,9 +455,12 @@ Numbers can be represented in either decimal (base 10), or hexadecimal (base 16)
 A character literal, represented by a single character or an escaped character enclosed in single quotes `'`, can be used wherever a number is used. String literals, a character sequence enclosed in double quotes `"`, can only appear in a data definition. A length byte will be calculated and prepended to the character data. This is the Pascal style of string definition used throughout PLASMA and ProDOS. When referencing the string, it's address is used:
 
 ```
-char mystring[] = "This is my string; I am very proud of it.\n"
+char mystring[] = "This is my string; I am very proud of it."
     
+putc('[') // enclose string in square brackets
 puts(@mystring)
+putc(']')
+putc('\n')
 ```
 
 Excaped characters, like the `\n` above are replaces with the Carriage Return character.  The list of escaped characters is:
@@ -459,10 +475,10 @@ Excaped characters, like the `\n` above are replaces with the Carriage Return ch
 
 ##### In-line String Literals
 
-Strings can be used as literals inside expression or as parameters. The above example can ber written as:
+Strings can be used as literals inside expression or as parameters. The above puts() call can be written as:
 
 ```
-puts("This is my string; I am very proud of it.\n")
+puts("This is my string; I am very proud of it.")
 ```
 
 just like any proper language. This makes coding a much simpler task when it comes to spitting out strings to the screen. However (there always has to be a 'However'), nothing comes for free. Since PLASMA doesn't have garbage collection, memory is allocated on the stack frame for the string every time it is encountered. Translation: you can easily chew up many K of memory if you aren't careful. The memory is recovered when the function exits, just like the rest of the local variables.
@@ -505,7 +521,7 @@ or:
 word i
 
 def putstr
-    puts("This is the best string")
+    puts("This is a nice string, too")
 end
 
 for i = 0 to 10000
@@ -973,10 +989,6 @@ To exit early from one of the looping constructs or `when`, the `break` statemen
 
 There are some things about PLASMA that aren't necessary to know, but can add to it's effectiveness in a tight situation. Usually you can just code along, and the system will do a pretty reasonable job of carrying out your task. However, a little knowledge in the way to implement small assembly language routines or some coding practices just might be the ticket.
 
-### Native Assembly Functions
-
-Assembly code in PLASMA is implemented strictly as a pass-through to the assembler. No syntax checking, or checking at all, is made. All assembly routines *must* come after all data has been declared, and before any PLASMA function definitions. Native assemlbly functions can't see PLASMA labels and definitions, so they are pretty much relegated to leaf functions. Lasltly, PLASMA modules are relocatable, but labels inside assembly functions don't get flagged for fixups. The assembly code must use all relative branches and only accessing data/code at a fixed address. Data passed in on the PLASMA evalution stack is readily accessed with the X register and the zero page address of the ESTK. The X register must be properly saved, incremented, and/or decremented to remain consistent with the rest of PLASMA. Parameters are "popped" off the evaluation stack with `INX`, and the return value is "pushed" with `DEX`.
-
 ### Code Optimizations
 
 #### Functions Without Parameters Or Local Variables
@@ -1012,7 +1024,11 @@ def mydef
 end
 ```
 
-## Low Level Implementation
+### Native Assembly Functions
+
+Assembly code in PLASMA is implemented strictly as a pass-through to the assembler. No syntax checking, or checking at all, is made. All assembly routines *must* come after all data has been declared, and before any PLASMA function definitions. Native assemlbly functions can't see PLASMA labels and definitions, so they are pretty much relegated to leaf functions. Lasltly, PLASMA modules are relocatable, but labels inside assembly functions don't get flagged for fixups. The assembly code must use all relative branches and only accessing data/code at a fixed address. Data passed in on the PLASMA evalution stack is readily accessed with the X register and the zero page address of the ESTK. The X register must be properly saved, incremented, and/or decremented to remain consistent with the rest of PLASMA. Parameters are **popped** off the evaluation stack with `INX`, and the return value is **pushed** with `DEX`.
+
+## <a name="implementation"></a>Implementation
 
 Both the Pascal and Java VMs used a bytecode to hide the underlying CPU architecture and offer platform agnostic application execution. The application and tool chains were easily moved from platform to platform by simply writing a bytecode interpreter and small runtime to translate the higher level constructs to the underlying hardware. The performance of the system was dependent on the actual hardware and efficiency of the interpreter. Just-in-time compilation wasn't really an option on small, 8 bit systems. FORTH, on the other hand, was usually implemented as a threaded interpreter. A threaded interpreter will use the address of functions to call as the code stream instead of a bytecode, eliminating one level of indirection with a slight increase in code size.  The threaded approach can be made faster at the expense of another slight increase in size by inserting an actual Jump SubRoutine opcode before each address, thus removing the interpreter's inner loop altogether. 
 
@@ -1148,22 +1164,22 @@ The Apple II support covers the full range of the Apple II family. From the Rev 
 Probably the most exciting development is the support for the Apple ///. PLASMA on the Apple /// provides 32K for global data and 6502 code, and the rest of the memory for bytecode and extended data.
 
 
-## References
+## <a name="links"></a>Links
 
-PLASMA KFEST 2015 video: https://www.youtube.com/watch?v=RrR79WVHwJo
+[PLASMA KFEST 2015 video](https://www.youtube.com/watch?v=RrR79WVHwJo)
 
-BCPL: http://en.wikipedia.org/wiki/BCPL
+[BCPL Programming Language](http://en.wikipedia.org/wiki/BCPL)
 
-B Programming Language User Manual  http://cm.bell-labs.com/cm/cs/who/dmr/kbman.html
+[B Programming Language User Manual](http://cm.bell-labs.com/cm/cs/who/dmr/kbman.html)
 
-FORTH   http://en.wikipedia.org/wiki/Forth_(programming_language)
+[FORTH Programming Language](http://en.wikipedia.org/wiki/Forth_(programming_language))
 
-UCSD Pascal http://wiki.freepascal.org/UCSD_Pascal
+[UCSD Pascal](http://wiki.freepascal.org/UCSD_Pascal)
 
-p-code  https://www.princeton.edu/~achaney/tmve/wiki100k/docs/P-code_machine.html
+[Pascal Psuedo Machine (p-code)](https://www.princeton.edu/~achaney/tmve/wiki100k/docs/P-code_machine.html)
 
-VM02: Apple II Java VM  http://sourceforge.net/projects/vm02/
+[VM02: Apple II Java VM](http://sourceforge.net/projects/vm02/)
 
-Threaded code   http://en.wikipedia.org/wiki/Threaded_code
+[Threaded code](http://en.wikipedia.org/wiki/Threaded_code)
 
 

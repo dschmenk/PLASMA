@@ -177,6 +177,6 @@ $(HGR1):	samplesrc/hgr1.pla samplesrc/hgr1test.pla $(PLVM02) $(PLASM)
 	acme --setpc 4094 -o $(HGR1) samplesrc/hgr1.a
 
 hello:	samplesrc/hello.pla $(PLVM) $(PLASM)
-	./$(PLASM) -AM > samplesrc/hello.a
+	./$(PLASM) -AM < samplesrc/hello.pla > samplesrc/hello.a
 	acme --setpc 4094 -o $(HELLO) samplesrc/hello.a
 	./$(PLVM) HELLO
