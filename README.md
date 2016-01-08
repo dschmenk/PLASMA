@@ -1,6 +1,6 @@
 # <a name="title"></a>The PLASMA Programming Language
 
-->PLASMA: Proto Language AsSeMbler for Apple<-
+-> PLASMA: Proto Language AsSeMbler for Apple <-
 
 PLASMA is a medium level programming language targetting the 8 bit 6502 processor. Historically, there were simple languages developed in the early years of computers that improved on the tedium of assembly language programming while still being low level enough for system coding. Languages like B, FORTH, and PLASMA fall into this category.
 
