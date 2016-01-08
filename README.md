@@ -2,9 +2,9 @@
 
 PLASMA: Proto Language AsSeMbler for Apple
 
-PLASMA is a medium level programming language targetting the 8 bit 6502 processor. Historically, there were simple languages developed in the early years of computers that improved on the tedium of assembly language programming while still being low level enough for system coding. Languages like B, FORTH, and PLASMA fall into this category.
+PLASMA is a medium level programming language targeting the 8-bit 6502 processor. Historically, there were simple languages developed in the early years of computers that improved on the tedium of assembly language programming while still being low level enough for system coding. Languages like B, FORTH, and PLASMA fall into this category.
 
-PLASMA is a combination of virtual machine and assembler/compiler matched closely to the 6502 architecture.  It is an attempt to satisfy a few challenges surrounding code size, efficient execution, small runtime and flexible code location.  By architecting a unique bytecode that maps nearly one-to-one to the higher level representation, the compiler/assembler can be very simple and execute quickly on the Apple II for a self-hosted environment.  A modular approach provides for incremental development and code reuse.  Different projects have led to the architecture of PLASMA, most notably Apple Pascal, FORTH, and my own Java VM for the 6502: VM02. Each has tried to map a generic VM to the 6502 with varying levels of success.  Apple Pascal, based on the USCD Pascal using the p-code interpreter, was a very powerful system and ran fast enough on the Apple II to be interactive but didn't win any speed contests. FORTH was the poster child for efficiency and obtuse syntax. Commonly referred to as a write only language, it was difficult to come up to speed as a developer, especially when using other's code. My own project in creating a Java VM for the Apple II uncovered the folly of shoehorning a large, 32-bit virtual memory environment into 8-bit, 64K hardware.
+PLASMA is a combination of virtual machine and assembler/compiler matched closely to the 6502 architecture.  It is an attempt to satisfy a few challenges surrounding code size, efficient execution, small runtime and flexible code location.  By architecting a unique bytecode that maps nearly one-to-one to the higher-level representation, the compiler/assembler can be very simple and execute quickly on the Apple II for a self-hosted environment.  A modular approach provides for incremental development and code reuse.  Different projects have led to the architecture of PLASMA, most notably Apple Pascal, FORTH, and my own Java VM for the 6502: VM02. Each has tried to map a generic VM to the 6502 with varying levels of success.  Apple Pascal, based on the USCD Pascal using the p-code interpreter, was a very powerful system and ran fast enough on the Apple II to be interactive but didn't win any speed contests. FORTH was the poster child for efficiency and obtuse syntax. Commonly referred to as a write only language, it was difficult to come up to speed as a developer, especially when using other's code. My own project in creating a Java VM for the Apple II uncovered the folly of shoehorning a large, 32-bit virtual memory environment into 8-bit, 64K hardware.
 
 ## Contents
 
@@ -24,15 +24,15 @@ PLASMA is a combination of virtual machine and assembler/compiler matched closel
 
 ### PLASMA Compiler/Assembler
 
-Although the low-level PLASMA VM operations could easily by coded by hand, they were chosen to be an easy target for a simple compiler. Think along the lines of an advanced assembler or stripped down C compiler ( C-- ).  Taking concepts from BASIC, Pascal, C and assembler, the PLASMA compiler is simple yet expressive. The syntax is line oriented; generally there is one statement per line. However, a semicolon, `;`, can seperate multiple statements on a single line. This tutorial will focus on the cross-compiler running under a UNIX-like environment.
+Although the low-level PLASMA VM operations could easily by coded by hand, they were chosen to be an easy target for a simple compiler. Think along the lines of an advanced assembler or stripped down C compiler ( C-- ).  Taking concepts from BASIC, Pascal, C and assembler, the PLASMA compiler is simple yet expressive. The syntax is line oriented; generally there is one statement per line. However, a semicolon, `;`, can separate multiple statements on a single line. This tutorial will focus on the cross-compiler running under an UNIX-like environment.
 
 ### PLASMA Modules
 
-To keep development compartmentalized and easily managed, PLASMA uses relatively small, dynamically loaded and linked modules. The module format extends the .REL filetype originally defined by the EDASM assembler from the DOS/ProDOS Toolkit from Apple Computer, Inc. PLASMA extends the file format through a backwards compatible extension that the PLASMA loader recognizes to locate the PLASMA bytecode and provide for advanced dynamic loading of module dependencies.
+To keep development compartmentalized and easily managed, PLASMA uses relatively small, dynamically loaded and linked modules. The module format extends the .REL file type originally defined by the EDASM assembler from the DOS/ProDOS Toolkit from Apple Computer, Inc. PLASMA extends the file format through a backwards compatible extension that the PLASMA loader recognizes to locate the PLASMA bytecode and provide for advanced dynamic loading of module dependencies.
 
 ### Data Types
 
-PLASMA only defines two data types: `byte` and `word`. All operations take place on word sized quantities, with the exception of loads and stores to byte sized addresses. The interpretation of a value can be an interger, an address, or anything that fits in 16 bits. There are a number of address operators to identify how an address value is to be interpreted.
+PLASMA only defines two data types: `byte` and `word`. All operations take place on word-sized quantities, with the exception of loads and stores to byte sized addresses. The interpretation of a value can be an integer, an address, or anything that fits in 16 bits. There are a number of address operators to identify how an address value is to be interpreted.
 
 ### Obligatory 'Hello World'
 
@@ -47,7 +47,7 @@ puts("Hello, world.\n")
 done
 ```
 
-Three tools are required to build and run this program: **acme**, **plasm**, and **plvm**. **acme**, the portable 6502 assembler, can be dowloaded here: https://sourceforge.net/projects/acme-crossass/. The PLASMA compiler, **plasm**, will convert the PLASMA source code (usually with an extension of .pla) into an assembly language source file. **acme** will convert the assembly source into a binary ready for loading. To execute the module, the PLASMA portable VM, **plvm**, can load and interpret the bytecode. The same binary can be loaded onto the target platform and run there with the appropriate VM. On Linux/Unix from PLASMA/src, the steps would be entered as:
+Three tools are required to build and run this program: **acme**, **plasm**, and **plvm**. **acme**, the portable 6502 assembler, can be downloaded here: https://sourceforge.net/projects/acme-crossass/. The PLASMA compiler, **plasm**, will convert the PLASMA source code (usually with an extension of .pla) into an assembly language source file. **acme** will convert the assembly source into a binary ready for loading. To execute the module, the PLASMA portable VM, **plvm**, can load and interpret the bytecode. The same binary can be loaded onto the target platform and run there with the appropriate VM. On Linux/Unix from PLASMA/src, the steps would be entered as:
 
 ```
 ./plasm -AM < hello.pla > hello.a
@@ -84,7 +84,7 @@ Comments are allowed throughout a PLASMA source file. The format follows that of
 
 ### Numbers
 
-Decimal numbers (using digits 0 through 9) are written just as you would expect them. The numer **42** would be written as `42`. PLASMA only knowaout integer numbers; no decimal points. Negative numbers are preceded by a `-`. Hexadecimal constants are preceded with a `$` to identify them, such as `$C030`.
+Decimal numbers (using digits 0 through 9) are written just as you would expect them. The number **42** would be written as `42`. PLASMA only knows about integer numbers; no decimal points. Negative numbers are preceded by a `-`. Hexadecimal constants are preceded with a `$` to identify them, such as `$C030`.
 
 ### Characters
 
@@ -115,11 +115,16 @@ import testlib
 end
 ```
 
-The `predef` pre-defines functions that can be called throughout the module.  The data declarations, `byte` and `word` will refer to data in those modules. `const` can appear in an `import` block, although not required. It does keep values associated with the imported module in a well-contained block for readability and useful with pre-processor file inclusion. Case is not significant for either the module name nor the pre-defined function/data labels. They are all converted to uppercase with 16 characters significant when the loader resolves them.
+The `predef` pre-defines functions that can be called throughout the module.  The data declarations, `byte` and `word` will refer to data in those modules. `const` can appear in an `import` block, although not required. It does keep values associated with the imported module in a well-contained block for readability and useful with pre-processor file inclusion. Case is not significant for either the module name or the pre-defined function/data labels. They are all converted to uppercase with 16 characters significant when the loader resolves them.
 
-##### m4 Pre-Processor
+#### File Inclusion
 
-The m4 pre-processor can be very helpful when managing module imports and macro facilities. The easiest way to use the pre-processor is to write a module import header for each library module. Any module that depends on a given library can `include()` the shared header file. See the GNU m4 documentation for more information: https://www.gnu.org/software/m4/manual/
+Other files containing PLASMA code can be inserted directly into the code with the `include` statement. This statement is usually how external module information is referenced, without having to add it directly into the source code. The above code could be written as:
+
+```
+include "inc/cmdsys.plh"
+include "inc/testlib.plh
+```
 
 #### Predefined Functions
 
@@ -165,13 +170,13 @@ const next_entry = 34 // offset to next_entry element
 
 #### Global Data & Variables Declarations
 
-One of the most powerful features in PLASMA is the flexible data declarations. Data must be defined after all the `import` declarations and before any function definitions, `asm` or `def`. Global labels and data can be defined in multiple ways, and exported for inclusion in other modules. Data can be initialized with constant values, addresses, calculated values (must resolve to a constant), and addresses from imported modules.
+One of the most powerful features in PLASMA is the flexible data declaration. Data must be defined after all the `import` declarations and before any function definitions, `asm` or `def`. Global labels and data can be defined in multiple ways, and exported for inclusion in other modules. Data can be initialized with constant values, addresses, calculated values (must resolve to a constant), and addresses from imported modules.
 
 ```
 //
 // Import standard library functions.
 //
-import stdlib
+import cmdlib
     predef putc, puts, getc, gets, cls, memcpy, memset, memclr
 end
 //
@@ -198,7 +203,7 @@ word[8] txt2scrna = $0828,$08A8,$0928,$09A8,$0A28,$0AA8,$0B28,$0BA8
 word txt2scrnb    = $0850,$08D0,$0950,$09D0,$0A50,$0AD0,$0B50,$0BD0
 ```
 
-Variables can have optional brackets; empty brackets don’t reserve any space for the variable but are useful as a label for data that is defined following the variable.  Brackets with a constant inside defines a minimum size reserved for the variable.  Any data following the variable will take at least the amount of reserved space, but potentially more.
+Variables can have optional brackets; empty brackets don't reserve any space for the variable but are useful as a label for data that is defined following the variable.  Brackets with a constant inside define a minimum size reserved for the variable.  Any data following the variable will take at least the amount of reserved space, but potentially more.
 
 Strings are defined like Pascal strings, a length byte followed by the string characters so they can be a maximum of 255 characters long.
 
@@ -213,13 +218,13 @@ byte[64] txtfile = "UNTITLED"
 
 Functions are defined after all constants, variables and data. Function definitions can be `export`ed for inclusion in other modules and can be forward declared with a `predef` type in the constant and variable declarations. Functions can take parameters, passed on the evaluation stack, then copied to the local frame for easy access They can have their own variable declarations, however, unlike the global declarations, no data can be predeclared - only storage space.  There is also a limit of 254 bytes of local storage.  Each parameter takes two bytes of local storage, plus two bytes for the previous frame pointer.  If a function has no parameters or local variables, no local frame will be created, improving performance.  A function can specify a value to return.  If no return value is specified, a default of 0 will be returned.
 
-Note: there is no mechanism to ensure caller and callee agree on the number of parameters. Historically, programmers have used Hungarian Notation (http://en.wikipedia.org/wiki/Hungarian_notation) to embedd the parameter number and type in the function name itself. This is a notational aid; the compiler enforces nothing.
+Note: there is no mechanism to ensure caller and callee agree on the number of parameters. Historically, programmers have used Hungarian Notation (http://en.wikipedia.org/wiki/Hungarian_notation) to embed the parameter number and type in the function name itself. This is a notational aid; the compiler enforces nothing.
 
 After functions are defined, the main code for the module follows. The main code will be executed as soon as the module is loaded.  For library modules, this is a good place to do any runtime initialization, before any of the exported functions are called. The last statement in the module must be done, or else a compile error is issued.
 
-##### Statments and Expressions
+##### Statements and Expressions
 
-Expressions are algebraic.  Data is free-form, but all operations on the evaluation stack use 16 bits of precision with the exception of byte load and stores.  A stand-alone expression will be evaluated and read from or called.  This allows for easy access to the Apple’s soft switches and other memory mapped hardware. The value of the expression is dropped.
+Expressions are algebraic.  Data is free form, but all operations on the evaluation stack use 16 bits of precision with the exception of byte load and stores.  A stand-alone expression will be evaluated and read from or called.  This allows for easy access to the Apple’s soft switches and other memory mapped hardware. The value of the expression is dropped.
 
 ```
 const speaker=$C030
@@ -233,7 +238,7 @@ Calling a function without looking at the result silently drops it:
 close(refnum) // return value ignored
 ```
 
-Statements are built up from expressions and control flow keywords.  Simplicity of syntax took precedence over flexibility and complexity.  The simplest statement is the basic assignment using ‘=’.
+Statements are built up from expressions and control flow keywords.  Simplicity of syntax took precedence over flexibility and complexity.  The simplest statement is the basic assignment using `=`.
 
 ```
 byte numchars
@@ -242,7 +247,7 @@ numchars = 0
 
 Expressions can be built up with constants, variables, function calls, addresses, and pointers/arrays.  Comparison operators evaluate to 0 or -1 instead of the more traditional 0 or 1.  The use of -1 allows binary operations to be applied to other non-zero values and still retain a non-zero result.  Any conditional tests check only for zero and non-zero values.
 
-There are four basic types of data that can be manipulated: constants, variables, addresses, and functions.  Memory can only be read or written as either a byte or a word.  Bytes are unsigned 8 bit quantities, words are signed 16 bit quantities.  Everything on the evaluation stack is treated as a word.  Other than that, any value can be treated as a pointer, address, function, character, integer, etc.  There are convenience operations in PLASMA to easily manipulate addresses and expressions as pointers, arrays, structures, functions, or combinations thereof.  If a variable is declared as a byte, it can be accessed as a simple, single dimension byte array by using brackets to indicate the offset.  Any expression can calculate the indexed offset.  A word variable can be accessed as a word array in the same fashion.  In order to access expressions or constants as arrays, a type identifier has to be inserted before the brackets.  a `.` character denotes a byte type, a `:` character denotes a word type.  Along with brackets to calculate an indexed offset, a constant can be used after the `.` or `:` and will be added to the base address.  The constant can be a defined const to allow for structure style syntax.  If the offset is a known constant, using the constant offset is a much more efficient way to address the elements over an array index.  Multidimensional arrays are treated as arrays of array pointers.
+There are four basic types of data that can be manipulated: constants, variables, addresses, and functions.  Memory can only be read or written as either a byte or a word.  Bytes are unsigned 8-bit quantities, words are signed 16-bit quantities.  Everything on the evaluation stack is treated as a word.  Other than that, any value can be treated as a pointer, address, function, character, integer, etc.  There are convenience operations in PLASMA to easily manipulate addresses and expressions as pointers, arrays, structures, functions, or combinations thereof.  If a variable is declared as a byte, it can be accessed as a simple, single dimension byte array by using brackets to indicate the offset.  Any expression can calculate the indexed offset.  A word variable can be accessed as a word array in the same fashion.  In order to access expressions or constants as arrays, a type identifier has to be inserted before the brackets.  a `.` character denotes a byte type, a `:` character denotes a word type.  Along with brackets to calculate an indexed offset, a constant can be used after the `.` or `:` and will be added to the base address.  The constant can be a defined const to allow for structure style syntax.  If the offset is a known constant, using the constant offset is a much more efficient way to address the elements over an array index.  Multidimensional arrays are treated as arrays of array pointers.
 
 ```
 word hgrscan[] = $2000,$2400,$2800,$2C00,$3000,$3400,$3800,$3C00
@@ -251,7 +256,7 @@ word           = $2080,$2480,$2880,$2C80,$3080,$3480,$3880,$3C80
 hgrscan.[yscan, xscan] = fillval
 ```
 
-Values can be treated as pointers by preceding them with a `^` for byte pointers, `*` for word pointers. Addresses of variables and functions can be taken with a preceding ‘@’, address-of operator. Parenthesis can surround an expression to be used as a pointer, but not address-of.
+Values can be treated as pointers by preceding them with a `^` for byte pointers, `*` for word pointers. Addresses of variables and functions can be taken with a proceeding `@`, address-of operator. Parenthesis can surround an expression to be used as a pointer, but not address-of.
 
 
 ```
@@ -289,7 +294,7 @@ else
 fin
 ```
 
-The when/is/otherwise/wend statement is similar to the if/elsif/else/fin construct except that it is more efficient.  It selects one path based on the evaluated expressions, then merges the code path back together at the end.  However only the `when` value is compared against a list of expressions.  The expressions do not need to be constants, they can be any valid expression.  The list of expressions is evaluated in order, so for efficiency sake, place the most common cases earlier in the list. Just as in C programs, a `break` statement is required to keep one clause from falling through to the next. Falling through from one clause to the next can have it's uses, so this behavior has been added to PLASMA.
+The when/is/otherwise/wend statement is similar to the if/elsif/else/fin construct except that it is more efficient.  It selects one path based on the evaluated expressions, then merges the code path back together at the end.  Only the `when` value is compared against a list of expressions.  The expressions do not need to be constants, they can be any valid expression.  The list of expressions is evaluated in order, so for efficiency sake, place the most common cases earlier in the list. Just as in C programs, a `break` statement is required to keep one clause from falling through to the next. Falling through from one clause to the next can have its uses, so this behavior has been added to PLASMA.
 
 ```
 when keypressed
@@ -329,7 +334,7 @@ for xscan = 0 to 19
 next
 ```
 
-The `for`/`next` statement will efficiently increment or decrement a variable form the starting value to the ending value.  The increment/decrement amount can be set with the step option after the ending value; the default is one.  If the ending value is less than the starting value, use downto instead of to to progress in the negative direction.  Only use positive step values.  The `to` or `downto` will add or subtract the step value appropriately.
+The `for`/`next` statement will efficiently increment or decrement a variable form the starting value to the ending value.  The increment/decrement amount can be set with the step option after the ending value; the default is one.  If the ending value is less than the starting value, use downto instead of `to` to progress in the negative direction.  Only use positive step values.  The `to` or `downto` will add or subtract the step value appropriately.
 
 ```
 for i = heapmapsz - 1 downto 0
@@ -396,7 +401,7 @@ end
 
 #### Module Main Initialization Function
 
-After all the function definitions are complete, an optional module initiialization routine follows. This is an un-named defintion an is written in-line without a definition declaration. As such, it doesn't have parameters or local variables. Function definitions can be called from within the initialization code.
+After all the function definitions are complete, an optional module initialization routine follows. This is an un-named definition and is written without a definition declaration. As such, it doesn't have parameters or local variables. Function definitions can be called from within the initialization code.
 
 For libraries or class modules, the initialization routine can perform any up-front work needed before the module is called. For program modules, the initialization routine is the "main" routine, called after all the other module dependencies are loaded and initialized.
 
@@ -410,7 +415,7 @@ The final declaration of a module source file is the `done` statement. This decl
 
 PLASMA includes a very minimal runtime that nevertheless provides a great deal of functionality to the system.  Two system calls are provided to access native 6502 routines (usually in ROM) and ProDOS.
 
-call(aReg, xReg, yReg, statusReg, addr) returns a pointer to a four byte structure containing the A,X,Y and STATUS register results.
+call(aReg, xReg, yReg, statusReg, addr) returns a pointer to a four-byte structure containing the A,X,Y and STATUS register results.
 
 ```
 const xreg = 1
@@ -442,7 +447,7 @@ byte okstr[] = "OK"
 puts(@okstr)
 ```
 
-memset(addr, val, len) will fill memory with a 16 bit value.  memcpy(dstaddr, srcaddr, len) will copy memory from one address to another, taking care to copy in the proper direction.
+memset(addr, val, len) will fill memory with a 16-bit value.  memcpy(dstaddr, srcaddr, len) will copy memory from one address to another, taking care to copy in the proper direction.
 
 ```
 byte nullstr[] = ""
@@ -457,7 +462,7 @@ Numbers can be represented in either decimal (base 10), or hexadecimal (base 16)
 
 #### Character and String Literals
 
-A character literal, represented by a single character or an escaped character enclosed in single quotes `'`, can be used wherever a number is used. String literals, a character sequence enclosed in double quotes `"`, can only appear in a data definition. A length byte will be calculated and prepended to the character data. This is the Pascal style of string definition used throughout PLASMA and ProDOS. When referencing the string, it's address is used:
+A character literal, represented by a single character or an escaped character enclosed in single quotes `'`, can be used wherever a number is used. String literals, a character sequence enclosed in double quotes `"`, can only appear in a data definition. A length byte will be calculated and prepended to the character data. This is the Pascal style of string definition used throughout PLASMA and ProDOS. When referencing the string, its address is used:
 
 ```
 char mystring[] = "This is my string; I am very proud of it."
@@ -468,7 +473,7 @@ putc(']')
 putc('\n')
 ```
 
-Excaped characters, like the `\n` above are replaces with the Carriage Return character.  The list of escaped characters is:
+Escaped characters, like the `\n` above are replaces with the Carriage Return character.  The list of escaped characters is:
 
 | Escaped Char | ASCII Value
 |:------------:|------------
@@ -498,7 +503,7 @@ for i = 0 to 10000
 next
 ```
 
-That string will be allocated anew every time through the loop. Instead, you could either put the string in initialized memory, create a pointer to it before the loop, or put all the string handling in a function that gets called from inside the loop:
+That string will be allocated anew every time through the loop. Instead, you could put the string in initialized memory, create a pointer to it before the loop, or put all the string handling in a function that gets called from inside the loop:
 
 ```
 byte nicestr = "This is a nice string"
@@ -538,15 +543,15 @@ If you are curious as to why in-line strings behave this way, it is due to putti
 
 #### Words
 
-Words, 16 bit signed values, are the native sized quanta of PLASMA. All calculations, parameters, and return values are words.
+Words, 16-bit signed values, are the native sized quanta of PLASMA. All calculations, parameters, and return values are words.
 
 #### Bytes
 
-Bytes are unsigned, 8 bit values, stored at an address.  Bytes cannot be manipulated as bytes, but are promoted to words as soon as they are read onto the evaluation stack. When written to a byte addres, the low order byte of a word is used.
+Bytes are unsigned, 8-bit values, stored at an address.  Bytes cannot be manipulated as bytes, but are promoted to words as soon as they are read onto the evaluation stack. When written to a byte address, the low order byte of a word is used.
 
 #### Addresses
 
-Words can represent many things in PLASMA, including addresses. PLASMA uses a 16 bit address space for data and function entrypoints. There are many operators in PLASMA to help with address calculation and access. Due to the signed implementation of word in PLASMA, the Standard Library has some unsigned comparison functions to help with address comparisons.
+Words can represent many things in PLASMA, including addresses. PLASMA uses a 16-bit address space for data and function entry points. There are many operators in PLASMA to help with address calculation and access. Due to the signed implementation of word in PLASMA, the Standard Library has some unsigned comparison functions to help with address comparisons.
 
 ##### Arrays
 
@@ -580,7 +585,7 @@ word = 1000, 2000, 3000, 4000 // Anonymous array
 word funclist = @myfunc, $0000
 ```
 
-Arrays can be uninitialized and reserve a size, as in `smallarray` above.  Initilized arrays without a size specifier in the definition will take up as much data as is present, as in `initbarray` above. Strings are special arrays that include a hidden length byte in the beginning (Pascal strings). When specified with a size, a minimum size is reserved for the string value. Labels can be defined as arrays without size or initializers; this can be useful when overlapping labels with other arrays or defining the actual array data as anonymous arrays in following lines as in `wlabel` and following lines. Addresses of other data (must be defined previously) or function definitions (pre-defined with predef), including imported references, can be initializers.
+Arrays can be uninitialized and reserve a size, as in `smallarray` above.  Initialized arrays without a size specified in the definition will take up as much data as is present, as in `initbarray` above. Strings are special arrays that include a hidden length byte in the beginning (Pascal strings). When specified with a size, a minimum size is reserved for the string value. Labels can be defined as arrays without size or initializers; this can be useful when overlapping labels with other arrays or defining the actual array data as anonymous arrays in following lines as in `wlabel` and following lines. Addresses of other data (must be defined previously) or function definitions (pre-defined with predef), including imported references, can be initializers.
 
 ###### Type Overrides
 
@@ -597,7 +602,7 @@ def prarray
 end
 ```
 
-The override operator becomes more useful when multi-dimenstional arrays are used.
+The override operator becomes more useful when multi-dimensional arrays are used.
 
 ###### Multi-Dimensional Arrays
 
@@ -709,7 +714,7 @@ end
 def addentry(entry, new_id, new_addr)
     entry->id   = new_id   // set ID      (byte)
     entry=>addr = new_addr // set address (word)
-    return entry + record  // return next enry address
+    return entry + record  // return next entry address
 end
 ```
 
@@ -723,7 +728,7 @@ const record_size = 3
 def addentry(entry, new_id, new_addr)
     (entry).elem_id   = new_id   // set ID byte
     (entry):elem_addr = new_addr // set address
-    return entry + record_size   // return next enry address
+    return entry + record_size   // return next entry address
 end
 ```
 
@@ -755,7 +760,7 @@ funcptr = @subvals
 puti(funcptr(5, 2)) // Outputs 3
 ```
 
-These concepts can be combined with the structure offsets to create a function table that can be easily changed on the fly. Virtual functions in object oriented languages are implemented this way.
+These concepts can be combined with the structure offsets to create a function table that can be easily changed on the fly. Virtual functions in object-oriented languages are implemented this way.
 
 ```
 predef myinit, mynew, mydelete
@@ -783,13 +788,13 @@ myobject_class:delete(an_obj)
 
 ### Function Definitions
 
-Function definitions in PLASMA is what really seperates PLASMA from a low level language like assembly, or even a language like FORTH. The ability to pass in arguments and declare local variables provides PLASMA with a higher language feel and the ability to easily implement recursive functions.
+Function definitions in PLASMA are what really separate PLASMA from a low level language like assembly, or even a language like FORTH. The ability to pass in arguments and declare local variables provides PLASMA with a higher language feel and the ability to easily implement recursive functions.
 
 ### Expressions and Statements
 
 #### Expressions
 
-Exressions are comprised of operators and operations. Operator precedence follows address, arithmatic, binary, and logical from highest to lowest. Parantheses can be used to force operations to happen in a specific order.
+Expressions are comprised of operators and operations. Operator precedence follows address, arithmetic, binary, and logical from highest to lowest. Parentheses can be used to force operations to happen in a specific order.
 
 ##### Address Operators
 
@@ -845,7 +850,7 @@ Address operators can work on any value, i.e. anything can be an address. Parent
 
 ### Statements
 
-PLASMA definitions are a list of statements the carry out the algorithm. Statements are generally assignment or control flow in nature. Generally there is one statement per line. The ';' symbol seperates multiple statements on a single line. It is considered bad form to have multiple statements per line unless they are very short.
+PLASMA definitions are a list of statements the carry out the algorithm. Statements are generally assignment or control flow in nature. Generally there is one statement per line. The ';' symbol separates multiple statements on a single line. It is considered bad form to have multiple statements per line unless they are very short.
 
 #### Assignment
 
@@ -858,7 +863,7 @@ a = 0
 
 ##### Empty Assignments
 
-An assignment doesn't even have to save the expression into memory, although the expression will be avaluated. This can be useful when referencing hardware that responds just to being accessed. On the Apple II, the keyboard is read from location $C000, then the strobe, telling the hardware to prepare for another keypress is cleared by just reading the address $C010. In PLASMA, this looks like:
+An assignment doesn't even have to save the expression into memory, although the expression will be evaluated. This can be useful when referencing hardware that responds just to being accessed. On the Apple II, the keyboard is read from location $C000, then the strobe, telling the hardware to prepare for another key press is cleared by just reading the address $C010. In PLASMA, this looks like:
 
 ```
 byte keypress
@@ -883,7 +888,7 @@ puti(i) // print 4
 
 #### Control Flow
 
-PLASMA implements most of the control flow that most higher level languages provide. It may do it in a slightly different way, though. One thing you won't find in PLASMA is GOTO - there are other ways around it.
+PLASMA implements most of the control flow that most high-level languages provide. It may do it in a slightly different way, though. One thing you won't find in PLASMA is GOTO - there are other ways around it.
 
 ##### CALL
 
@@ -899,7 +904,7 @@ The common `if` test can have optional `elsif` and/or `else` clauses. Any expres
 
 ##### WHEN/IS/[OTHERWISE]/WEND
 
-The complex test case is handled with `when`. Basically a `if`, `elsifF`, `else` list of comparisons, it is gernerally more efficient. The `is` value can be any expression. It is evaluated and tested for equality to the `when` value. 
+The complex test case is handled with `when`. Basically an `if`, `elsif`, `else` list of comparisons, it is generally more efficient. The `is` value can be any expression. It is evaluated and tested for equality to the `when` value. 
 
 ```
 when key
@@ -965,7 +970,7 @@ An optional stepping value can be used to change the default iteration step from
 For loops that test at the top of the loop, use `while`. The loop will run zero or more times.
 
 ```
-a = c // Who knows what c could be
+a = c // who knows what c could be
 while a < 10
     // do something
     a = b * 2 // b is something special, I'm sure
@@ -1020,7 +1025,7 @@ def mydef
 end
 ```
 
-PLASMA will effectively add a RETURN 0 to the end of your function, as well as add code to ignore the result of `calldef(10)`. As long as you don't care about the return value from `mydef` or want to use its return as the return value fromyour function (cascade the return), you can save some code bytes with:
+PLASMA will effectively add a RETURN 0 to the end of your function, as well as add code to ignore the result of `calldef(10)`. As long as you don't care about the return value from `mydef` or want to use its return as the return value from your function (cascade the return), you can save some code bytes with:
 
 ```
 def mydef
@@ -1031,41 +1036,41 @@ end
 
 ### Native Assembly Functions
 
-Assembly code in PLASMA is implemented strictly as a pass-through to the assembler. No syntax checking, or checking at all, is made. All assembly routines *must* come after all data has been declared, and before any PLASMA function definitions. Native assemlbly functions can't see PLASMA labels and definitions, so they are pretty much relegated to leaf functions. Lasltly, PLASMA modules are relocatable, but labels inside assembly functions don't get flagged for fixups. The assembly code must use all relative branches and only accessing data/code at a fixed address. Data passed in on the PLASMA evalution stack is readily accessed with the X register and the zero page address of the ESTK. The X register must be properly saved, incremented, and/or decremented to remain consistent with the rest of PLASMA. Parameters are **popped** off the evaluation stack with `INX`, and the return value is **pushed** with `DEX`.
+Assembly code in PLASMA is implemented strictly as a pass-through to the assembler. No syntax checking, or checking at all, is made. All assembly routines *must* come after all data has been declared, and before any PLASMA function definitions. Native assembly functions can't see PLASMA labels and definitions, so they are pretty much relegated to leaf functions. Lastly, PLASMA modules are re-locatable, but labels inside assembly functions don't get flagged for fix-ups. The assembly code must use all relative branches and only accessing data/code at a fixed address. Data passed in on the PLASMA evaluation stack is readily accessed with the X register and the zero page address of the ESTK. The X register must be properly saved, incremented, and/or decremented to remain consistent with the rest of PLASMA. Parameters are **popped** off the evaluation stack with `INX`, and the return value is **pushed** with `DEX`.
 
 ## <a name="implementation"></a>Implementation
 
-Both the Pascal and Java VMs used a bytecode to hide the underlying CPU architecture and offer platform agnostic application execution. The application and tool chains were easily moved from platform to platform by simply writing a bytecode interpreter and small runtime to translate the higher level constructs to the underlying hardware. The performance of the system was dependent on the actual hardware and efficiency of the interpreter. Just-in-time compilation wasn't really an option on small, 8 bit systems. FORTH, on the other hand, was usually implemented as a threaded interpreter. A threaded interpreter will use the address of functions to call as the code stream instead of a bytecode, eliminating one level of indirection with a slight increase in code size.  The threaded approach can be made faster at the expense of another slight increase in size by inserting an actual Jump SubRoutine opcode before each address, thus removing the interpreter's inner loop altogether. 
+Both the Pascal and Java VMs used a bytecode to hide the underlying CPU architecture and offer platform agnostic application execution. The application and tool chains were easily moved from platform to platform by simply writing a bytecode interpreter and small runtime to translate the higher level constructs to the underlying hardware. The performance of the system was dependent on the actual hardware and efficiency of the interpreter. Just-in-time compilation wasn't really an option on small, 8-bit systems. FORTH, on the other hand, was usually implemented as a threaded interpreter. A threaded interpreter will use the address of functions to call as the code stream instead of a bytecode, eliminating one level of indirection with a slight increase in code size.  The threaded approach can be made faster at the expense of another slight increase in size by inserting an actual Jump SubRoutine opcode before each address, thus removing the interpreter's inner loop altogether. 
 
-All three systems were implemented using stack architecture.  Pascal and Java were meant to be compiled high level languages, using a stack machine as a simple compilation target.  FORTH was meant to be written directly as a stack oriented language, similar to RPN on HP calculators. The 6502 is a challenging target due to it's unusual architecture so writing a bytecode interpreter for Pascal and Java results in some inefficiencies and limitations.  FORTH's inner interpreter loop on the 6502 tends to be less efficient than most other CPUs.  Another difference is how each system creates and manipulates it's stack. Pascal and Java use the 6502 hardware stack for all stack operations. Unfortunately the 6502 stack is hard-limited to 256 bytes. However, in normal usage this isn't too much of a problem as the compilers don't put undue pressure on the stack size by keeping most values in global or local variables.  FORTH creates a small stack using a portion of the 6502's zero page, a 256 byte area of low memory that can be accessed with only a byte address and indexed using either of the X or Y registers. With zero page, the X register can be used as an indexed, indirect address and the Y register can be used as an indirect, indexed address.
+All three systems were implemented using stack architecture.  Pascal and Java were meant to be compiled high-level languages, using a stack machine as a simple compilation target.  FORTH was meant to be written directly as a stack-oriented language, similar to RPN on HP calculators. The 6502 is a challenging target due to its unusual architecture so writing a bytecode interpreter for Pascal and Java results in some inefficiencies and limitations.  FORTH's inner interpreter loop on the 6502 tends to be less efficient than most other CPUs.  Another difference is how each system creates and manipulates its stack. Pascal and Java use the 6502 hardware stack for all stack operations. Unfortunately the 6502 stack is hard-limited to 256 bytes. However, in normal usage this isn't too much of a problem as the compilers don't put undue pressure on the stack size by keeping most values in global or local variables.  FORTH creates a small stack using a portion of the 6502's zero page, a 256 byte area of low memory that can be accessed with only a byte address and indexed using either of the X or Y registers. With zero page, the X register can be used as an indexed, indirect address and the Y register can be used as an indirect, indexed address.
 
 ### A New Approach
 
-PLASMA takes an approach that uses the best of all the above implementations to create a unique, powerful and efficient platform for developing new applications on the Apple I, II, and III. One goal was to create a very small VM runtime, bytecode interpreter, and module loader. The decision was made early on to implement a stack based architecture duplicating the approach taken by FORTH. Space in the zero page would be assigned to a 16 bit, 16 element evaluation stack, indexed by the X register.
+PLASMA takes an approach that uses the best of all the above implementations to create a unique, powerful and efficient platform for developing new applications on the Apple I, II, and III. One goal was to create a very small VM runtime, bytecode interpreter, and module loader. The decision was made early on to implement a stack-based architecture duplicating the approach taken by FORTH. Space in the zero page would be assigned to a 16-bit, 16-element evaluation stack, indexed by the X register.
 
-A simple compiler was written so that higher level constructs could be used and global/local variables would hold values instead of using clever stack manipulation. Function/procedure frames would allow for local variables, but with a limitation - the frame could be no larger than 256 bytes. By enforcing this limitation, the function frame could easily be accessed through a frame pointer value in zero page, indexed by the Y register. The call stack uses the 6502's hardware stack resulting in the same 256 byte limitation imposed by the hardware. However, this limitation could be lifted by extending the call sequence to save and restore the return address in the function frame. This was not done initially for performance reasons and simplicity of implementation. Even with these limitations, recursive functions can be effectively implemented.
+A simple compiler was written so that higher-level constructs could be used and global/local variables would hold values instead of using clever stack manipulation. Function/procedure frames would allow for local variables, but with a limitation - the frame could be no larger than 256 bytes. By enforcing this limitation, the function frame could easily be accessed through a frame pointer value in zero page, indexed by the Y register. The call stack uses the 6502's hardware stack resulting in the same 256-byte limitation imposed by the hardware. However, extending the call sequence to save and restore the return address in the function frame could lift this limitation. This was not done initially for performance reasons and simplicity of implementation. Even with these limitations, recursive functions can be effectively implemented.
 
-One of the goals of PLASMA was to allow for intermixing of functions implemented as bytecode, or native code. Taking a page from the FORTH play book, a function call is implemented as a native subroutine call to an address. If the function is in bytecode, the first thing it does is call back into the interpreter to execute the following bytecode (or a pointer to the bytecode). Function call parameters are pushed onto the evaluation stack in order they are written. The first operation inside of the function call is to pull the parameters off the evaluation stack and put them in local frame storage. Function callers and callees must agree on the number of parameters to avoid stack underflow/overflow. All functions return a value on the evaluation stack regardless of it being used or not.
+One of the goals of PLASMA was to allow for intermixing of functions implemented as bytecode, or native code. Taking a page from the FORTH playbook, a function call is implemented as a native subroutine call to an address. If the function is in bytecode, the first thing it does is call back into the interpreter to execute the following bytecode (or a pointer to the bytecode). Function call parameters are pushed onto the evaluation stack in order they are written. The first operation inside of the function call is to pull the parameters off the evaluation stack and put them in local frame storage. Function callers and callees must agree on the number of parameters to avoid stack underflow/overflow. All functions return a value on the evaluation stack regardless of it being used or not.
 
-The bytecode interpreter is capable of executing code in main memory or banked/extended memory, increasing the available code space and relieving pressure on the limited 64K of addressable data memory. In the Apple IIe with 64K expansion card, the IIc, and the IIgs, there is an auxiliary memory that swaps in and out for the main memory in chunks.  The interpreter resides in the Language Card memory area that can easily swap in and out the $0200 to $BFFF memory bank.  The module loader will move the bytecode into the auxiliary memory and fix up the entrypoints to reflect the bytecode location. The Apple /// has a sophisticated extended addressing architecture where bytecode is located and interpreted.
+The bytecode interpreter is capable of executing code in main memory or banked/extended memory, increasing the available code space and relieving pressure on the limited 64K of addressable data memory. In the Apple IIe with 64K expansion card, the IIc, and the IIgs, there is an auxiliary memory that swaps in and out for the main memory in chunks.  The interpreter resides in the Language Card memory area that can easily swap in and out the $0200 to $BFFF memory bank.  The module loader will move the bytecode into the auxiliary memory and fix up the entry points to reflect the bytecode location. The Apple /// has a sophisticated extended addressing architecture where bytecode is located and interpreted.
 
-Lastly, PLASMA is not a typed language. Just like assembly, any value can represent a character, integer, or address. It's the programmer's job to know the type. Only bytes and words are known to PLASMA. Bytes are unsigned 8 bit quantities, words are signed 16 bit quantities. All stack operations involve 16 bits of precision.
+Lastly, PLASMA is not a typed language. Just like assembly, any value can represent a character, integer, or address. It's the programmer's job to know the type. Only bytes and words are known to PLASMA. Bytes are unsigned 8-bit quantities, words are signed 16-bit quantities. All stack operations involve 16 bits of precision.
 
 ### The Virtual Machine
 
-The 6502 processor is a challenging target for a compiler. Most high level languages do have a compiler avialable targetting the 6502, but none are particularly efficient at code generation. Usually a series of calls into routines that do much of the work, not too dissimlar to a threaded interpreter. Generating inline 6502 leads quickly to code bloat and unwieldy binaries. The trick is to find a happy medium between efficient code execution and small code size. To this end, the PLASMA VM enforces some restrictions that are a result of the 6502 architecture, yet don't hamper the expressiveness of the PLASMA language.
+The 6502 processor is a challenging target for a compiler. Most high-level languages do have a compiler available targeting the 6502, but none are particularly efficient at code generation. Usually a series of calls into routines that do much of the work, not too dissimilar to a threaded interpreter. Generating inline 6502 leads quickly to code bloat and unwieldy binaries. The trick is to find a happy medium between efficient code execution and small code size. To this end, the PLASMA VM enforces some restrictions that are a result of the 6502 architecture, yet don't hamper the expressiveness of the PLASMA language.
 
 #### The Stacks
 
 The basic architecture of PLASMA relies on different stack based FIFO data structures. The stacks aren't directly manipulated from PLASMA, but almost every PLASMA operation involves one or more of the stacks. A stack architecture is a very flexible and convenient way to manage an interpreted language, even if it isn't the highest performance.
 
-The PLASMA VM is architected around three stacks: the evaluation stack, the call stack, and the local frame stack. These stacks provide the PLASMA VM with foundation for efficient operation and compact bytecode. The stack architecure also creates a simple target for the PLASMA compiler.
+The PLASMA VM is architected around three stacks: the evaluation stack, the call stack, and the local frame stack. These stacks provide the PLASMA VM with foundation for efficient operation and compact bytecode. The stack architecture also creates a simple target for the PLASMA compiler.
 
 ##### Evaluation Stack
 
-All temporary values are loaded and manipulated on the PLASMA evaluation stack. This is a small (16 element) stack implemeted in high performance memory/registers of the host CPU. Parameters to functions are passed on the evaluation stack, then moved to local variables for named reference inside the funtion.
+All temporary values are loaded and manipulated on the PLASMA evaluation stack. This is a small (16 element) stack implemented in high performance memory/registers of the host CPU. Parameters to functions are passed on the evaluation stack, then moved to local variables for named reference inside the function.
 
-All calculations, data moves, and paramter passing is done on the evaluation stack. This stack is located on the zero page of the 6502; an efficient section of memory that can be addressed with only an eight bit address. As a structure that is accessed more than any other on PLASMA, it makes sense to put it in fastest memory. The evaluation stack is a 16 entry stack that is split into low bytes and high bytes. The 6502's X register is used to index into the evaluation stack. It *always* points to the top of the evaluation stack, so care must be taken to save/restore its value when calling native 6502 code. Parameters and results are also passed on the evaluation stack. Caller and callee must agree on the number of parameters: PLASMA does no error checking. Native functions can pull values from the evaluation stack by using the zero page indexed addressing using the X register.
+All calculations, data moves, and parameter passing are done on the evaluation stack. This stack is located on the zero page of the 6502; an efficient section of memory that can be addressed with only an eight bit address. As a structure that is accessed more than any other on PLASMA, it makes sense to put it in fastest memory. The evaluation stack is a 16-entry stack that is split into low bytes and high bytes. The 6502's X register is used to index into the evaluation stack. It *always* points to the top of the evaluation stack, so care must be taken to save/restore its value when calling native 6502 code. Parameters and results are also passed on the evaluation stack. Caller and callee must agree on the number of parameters: PLASMA does no error checking. Native functions can pull values from the evaluation stack by using the zero page indexed addressing using the X register.
 
 ##### Call Stack
 
@@ -1075,9 +1080,9 @@ Function calls use the call stack to save the return address of the calling code
 
 ##### Local Frame Stack
 
-Any function definition that involves parameters or local variables builds a local frame to contain the variables. Often called automatic variables, they only persist during the lifetime of the function. They are a very powerful tool when implementing recursive algorithms. PLASMA puts a limitation of 256 bytes for the size of the frame, due to the nature of the 6502 CPU (8 bit index register). With careful planning, this shouldn't be too constraining.
+Any function definition that involves parameters or local variables builds a local frame to contain the variables. Often called automatic variables, they only persist during the lifetime of the function. They are a very powerful tool when implementing recursive algorithms. PLASMA puts a limitation of 256 bytes for the size of the frame, due to the nature of the 6502 CPU (8-bit index register). With careful planning, this shouldn't be too constraining.
 
-One of the biggest problems to overcome with the 6502 is its very small hardware stack. Algorithms that incorporate recursive procedure calls are very difficult or slow on the 6502. PLASMA takes the middle ground when implementing local frames; a frame pointer on the zero page is indirectly indexed by the Y register. Because the Y register is only eight bits, the local frame size is limited to 256 bytes. 256 bytes really is sufficient for all but the most complex of functions. With a little creative use of dynamic memory allocation, almost anything can be implemented without undue hassle. When a function with parameters is called, the first order of business is to allocate the frame, copy the parameters off the evaluation stack into local variables, and save a link to the previous frame. This is all done automatically with the ENTER opcode. The reverse takes place with the LEAVE opcode when the function exits. Functions that have neither parameters or local variables can forgoe the frame build/destroy process.
+One of the biggest problems to overcome with the 6502 is its very small hardware stack. Algorithms that incorporate recursive procedure calls are very difficult or slow on the 6502. PLASMA takes the middle ground when implementing local frames; a frame pointer on the zero page is indirectly indexed by the Y register. Because the Y register is only eight bits, the local frame size is limited to 256 bytes. 256 bytes really are sufficient for all but the most complex of functions. With a little creative use of dynamic memory allocation, almost anything can be implemented without undue hassle. When a function with parameters is called, the first order of business is to allocate the frame, copy the parameters off the evaluation stack into local variables, and save a link to the previous frame. This is all done automatically with the ENTER opcode. The reverse takes place with the LEAVE opcode when the function exits. Functions that have neither parameters nor local variables forgo the frame build/destroy process.
 
 ##### Local String Pool
 
@@ -1158,11 +1163,11 @@ The opcodes were developed over time by starting with a very basic set of operat
 
 ### Apple 1 PLASMA
 
-Obviously the Apple 1 is a little more constrained than most machines PLASMA is targetting. But, with the required addition of the CFFA1 (http://dreher.net/?s=projects/CFforApple1&c=projects/CFforApple1/main.php), the Apple 1 gets 32K of RAM and a mass storage device. Enough to run PLASMA and load/execute modules.
+Obviously the Apple 1 is a little more constrained than most machines PLASMA is targeting. But, with the required addition of the CFFA1 (http://dreher.net/?s=projects/CFforApple1&c=projects/CFforApple1/main.php), the Apple 1 gets 32K of RAM and a mass storage device. Enough to run PLASMA and load/execute modules.
 
 ### Apple ][ PLASMA
 
-The Apple II support covers the full range of the Apple II family. From the Rev 0 Apple II to the ROM3 Apple IIgs. The only requirement is 64K of RAM. If 128K is present, it will be automatically used to load and interpret bytecode, freeing up the main 40K for data and native 6502 code. The IIgs is currently operated in the compatibilty 8 bit mode.
+The Apple II support covers the full range of the Apple II family. From the Rev 0 Apple II to the ROM3 Apple IIgs. The only requirement is 64K of RAM. If 128K is present, it will be automatically used to load and interpret bytecode, freeing up the main 40K for data and native 6502 code. The IIgs is currently operated in the compatibility 8-bit mode.
 
 ### Apple /// PLASMA
 
@@ -1183,10 +1188,11 @@ Probably the most exciting development is the support for the Apple ///. PLASMA 
 
 [UCSD Pascal](http://wiki.freepascal.org/UCSD_Pascal)
 
-[Pascal Psuedo Machine (p-code)](https://www.princeton.edu/~achaney/tmve/wiki100k/docs/P-code_machine.html)
+[Pascal Pseudo Machine (p-code)](https://www.princeton.edu/~achaney/tmve/wiki100k/docs/P-code_machine.html)
 
 [VM02: Apple II Java VM](http://sourceforge.net/projects/vm02/)
 
 [Threaded code](http://en.wikipedia.org/wiki/Threaded_code)
+
 
 
