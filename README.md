@@ -12,7 +12,9 @@ PLASMA is a combination of virtual machine and assembler/compiler matched closel
 
 [Reference](#reference)
 
-[Implemetation](#implementation)
+[Implementation](#implementation)
+
+[KansasFest PLASMA Program-along video](https://www.youtube.com/watch?v=RrR79WVHwJo)
 
 [Links](#links)
 
