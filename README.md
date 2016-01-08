@@ -14,7 +14,7 @@ PLASMA is a combination of virtual machine and assembler/compiler matched closel
 
 [Implementation](#implementation)
 
-[KansasFest PLASMA Program-along video](https://www.youtube.com/watch?v=RrR79WVHwJo)
+[KansasFest PLASMA Program-along video](https://www.youtube.com/watch?v=RrR79WVHwJo?t=11m24s)
 
 [Links](#links)
 
@@ -1169,7 +1169,7 @@ Probably the most exciting development is the support for the Apple ///. PLASMA 
 
 ## <a name="links"></a>Links
 
-[PLASMA KFEST 2015 video](https://www.youtube.com/watch?v=RrR79WVHwJo)
+[PLASMA KFEST 2015 video](https://www.youtube.com/watch?v=RrR79WVHwJo?t=11m24s)
 
 [BCPL Programming Language](http://en.wikipedia.org/wiki/BCPL)
 
