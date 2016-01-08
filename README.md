@@ -1171,7 +1171,7 @@ Probably the most exciting development is the support for the Apple ///. PLASMA 
 
 [BCPL Programming Language](http://en.wikipedia.org/wiki/BCPL)
 
-[B Programming Language User Manual](http://cm.bell-labs.com/cm/cs/who/dmr/kbman.html)
+[B Programming Language User Manual](https://www.bell-labs.com/usr/dmr/www/bintro.html)
 
 [FORTH Programming Language](http://en.wikipedia.org/wiki/Forth_(programming_language))
 
