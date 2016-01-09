@@ -255,7 +255,7 @@ There are four basic types of data that can be manipulated: constants, variables
 word hgrscan[] = $2000,$2400,$2800,$2C00,$3000,$3400,$3800,$3C00
 word           = $2080,$2480,$2880,$2C80,$3080,$3480,$3880,$3C80
 
-hgrscan.[yscan, xscan] = fillval
+hgrscan.[ypos, xpos] = fillval
 ```
 
 Values can be treated as pointers by preceding them with a `^` for byte pointers, `*` for word pointers. Addresses of variables and functions can be taken with a proceeding `@`, address-of operator. Parenthesis can surround an expression to be used as a pointer, but not address-of.
@@ -280,7 +280,7 @@ keyin = @keyin2plus // address-of keyin2plus function
 key   = keyin()
 ```
 
-Control statements affect the flow of control through the program.  There are conditional and looping constructs.  The most widely used is probably the if/elsif/else/fin construct.
+Control statements affect the flow of control through the program.  There are conditional and looping constructs.  The most widely used is probably the `if`/`elsif`/`else`/`fin` construct.
 
 ```
 if ^pushbttn3 < 128
@@ -296,7 +296,7 @@ else
 fin
 ```
 
-The when/is/otherwise/wend statement is similar to the if/elsif/else/fin construct except that it is more efficient.  It selects one path based on the evaluated expressions, then merges the code path back together at the end.  Only the `when` value is compared against a list of expressions.  The expressions do not need to be constants, they can be any valid expression.  The list of expressions is evaluated in order, so for efficiency sake, place the most common cases earlier in the list. Just as in C programs, a `break` statement is required to keep one clause from falling through to the next. Falling through from one clause to the next can have its uses, so this behavior has been added to PLASMA.
+The `when`/`is`/`otherwise`/`wend` statement is similar to the `if`/`elsif`/`else`/`fin` construct except that it is more efficient.  It selects one path based on the evaluated expressions, then merges the code path back together at the end.  Only the `when` value is compared against a list of expressions.  The expressions do not need to be constants, they can be any valid expression.  The list of expressions is evaluated in order, so for efficiency sake, place the most common cases earlier in the list. Just as in C programs, a `break` statement is required to keep one clause from falling through to the next. Falling through from one clause to the next can have its uses, so this behavior has been added to PLASMA.
 
 ```
 when keypressed
