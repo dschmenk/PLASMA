@@ -1180,7 +1180,7 @@ Probably the most exciting development is the support for the Apple ///. PLASMA 
 
 [ACME 6502 assembler](https://sourceforge.net/projects/acme-crossass/)
 
-[PLASMA KFEST 2015 video](https://www.youtube.com/watch?v=RrR79WVHwJo?t=11m24s)
+[HiDef PLASMA KFEST 2015 video](https://archive.org/details/Kansasfest2015ThePlasmaLanguage)
 
 [BCPL Programming Language](http://en.wikipedia.org/wiki/BCPL)
 
