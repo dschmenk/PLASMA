@@ -13,7 +13,6 @@ Different projects have led to the architecture of PLASMA, most notably Apple Pa
 <!-- TOC depthFrom:1 depthTo:6 withLinks:1 updateOnSave:1 orderedList:0 -->
 
 - [The PLASMA Programming Language](#the-plasma-programming-language)
-	- [Contents](#contents)
 	- [Tutorial](#tutorial)
 		- [PLASMA Compiler/Assembler](#plasma-compilerassembler)
 		- [PLASMA Modules](#plasma-modules)
