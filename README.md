@@ -1,4 +1,4 @@
-# <a name="title"></a>The PLASMA Programming Language
+# The PLASMA Programming Language
 
 PLASMA: Proto Language AsSeMbler for Apple
 
@@ -10,19 +10,90 @@ Different projects have led to the architecture of PLASMA, most notably Apple Pa
 
 ## Contents
 
-[Introduction](#title)
+<!-- TOC depthFrom:1 depthTo:6 withLinks:1 updateOnSave:1 orderedList:0 -->
 
-[Tutorial](#tutorial)
+- [The PLASMA Programming Language](#the-plasma-programming-language)
+	- [Contents](#contents)
+	- [Tutorial](#tutorial)
+		- [PLASMA Compiler/Assembler](#plasma-compilerassembler)
+		- [PLASMA Modules](#plasma-modules)
+		- [Data Types](#data-types)
+		- [Obligatory 'Hello World'](#obligatory-hello-world)
+		- [Character Case](#character-case)
+		- [Comments](#comments)
+		- [Numbers](#numbers)
+		- [Characters](#characters)
+		- [Strings](#strings)
+		- [Organization of a PLASMA Source File](#organization-of-a-plasma-source-file)
+			- [Module Dependencies](#module-dependencies)
+			- [File Inclusion](#file-inclusion)
+			- [Predefined Functions](#predefined-functions)
+			- [Constant Declarations](#constant-declarations)
+			- [Structure Declarations](#structure-declarations)
+			- [Global Data & Variables Declarations](#global-data-variables-declarations)
+			- [Function Definitions](#function-definitions)
+				- [Statements and Expressions](#statements-and-expressions)
+			- [Exported Declarations](#exported-declarations)
+			- [Module Main Initialization Function](#module-main-initialization-function)
+			- [Module Done](#module-done)
+		- [Runtime](#runtime)
+	- [Reference](#reference)
+		- [Decimal and Hexadecimal Numbers](#decimal-and-hexadecimal-numbers)
+		- [Character and String Literals](#character-and-string-literals)
+			- [In-line String Literals](#in-line-string-literals)
+		- [Words](#words)
+		- [Bytes](#bytes)
+		- [Addresses](#addresses)
+			- [Arrays](#arrays)
+				- [Type Overrides](#type-overrides)
+				- [Multi-Dimensional Arrays](#multi-dimensional-arrays)
+			- [Offsets (Structure Elements)](#offsets-structure-elements)
+			- [Defining Structures](#defining-structures)
+			- [Pointers](#pointers)
+			- [Pointer Dereferencing](#pointer-dereferencing)
+			- [Addresses of Data/Code](#addresses-of-datacode)
+				- [Function Pointers](#function-pointers)
+		- [Function Definitions](#function-definitions)
+			- [Expressions and Statements](#expressions-and-statements)
+				- [Address Operators](#address-operators)
+				- [Arithmetic, Bitwise, and Logical Operators](#arithmetic-bitwise-and-logical-operators)
+			- [Assignment](#assignment)
+				- [Empty Assignments](#empty-assignments)
+			- [Increment and Decrement](#increment-and-decrement)
+			- [Control Flow](#control-flow)
+				- [CALL](#call)
+				- [RETURN](#return)
+				- [IF/[ELSIF]/[ELSE]/FIN](#ifelsifelsefin)
+				- [WHEN/IS/[OTHERWISE]/WEND](#whenisotherwisewend)
+				- [FOR \<TO,DOWNTO\> [STEP]/NEXT](#for-todownto-stepnext)
+				- [WHILE/LOOP](#whileloop)
+				- [REPEAT/UNTIL](#repeatuntil)
+				- [CONTINUE](#continue)
+				- [BREAK](#break)
+	- [Advanced Topics](#advanced-topics)
+		- [Code Optimizations](#code-optimizations)
+			- [Functions Without Parameters Or Local Variables](#functions-without-parameters-or-local-variables)
+			- [Return Values](#return-values)
+		- [Native Assembly Functions](#native-assembly-functions)
+	- [Implementation](#implementation)
+		- [A New Approach](#a-new-approach)
+		- [The Virtual Machine](#the-virtual-machine)
+			- [The Stacks](#the-stacks)
+				- [Evaluation Stack](#evaluation-stack)
+				- [Call Stack](#call-stack)
+				- [Local Frame Stack](#local-frame-stack)
+				- [Local String Pool](#local-string-pool)
+			- [The Bytecodes](#the-bytecodes)
+		- [Apple I PLASMA](#apple-i-plasma)
+		- [Apple II PLASMA](#apple-ii-plasma)
+		- [Apple III PLASMA](#apple-iii-plasma)
+	- [Links](#links)
 
-[Reference](#reference)
+<!-- /TOC -->
 
-[Implementation](#implementation)
+## Tutorial
 
-[KansasFest PLASMA Code-along video](https://www.youtube.com/watch?v=RrR79WVHwJo?t=11m24s)
-
-[Links](#links)
-
-## <a name="tutorial"></a>Tutorial
+During KansasFest 2015, I gave a PLASMA introduction using the Apple II PLASMA sandbox IDE. You can play along using your favorite Apple II emulator, or one that runs directly in your browser: [Apple II Emulator in Javascript](https://www.scullinsteel.com/apple/e). Download [SANDBOX.PO](https://github.com/dschmenk/PLASMA/blob/master/SANDBOX.PO?raw=true) and load it into Drive 1 of the emulator. Start the [KansasFest PLASMA Code-along video](https://www.youtube.com/watch?v=RrR79WVHwJo?t=11m24s) and follow along.
 
 ### PLASMA Compiler/Assembler
 
@@ -275,7 +346,7 @@ Functions with parameters or expressions to be used as a function address to cal
 predef keyin2plus
 word keyin
 byte key
-	
+
 keyin = @keyin2plus // address-of keyin2plus function
 key   = keyin()
 ```
@@ -456,19 +527,19 @@ byte nullstr[] = ""
 memset(strlinbuf, @nullstr, maxfill * 2) // fill line buff with pointer to null string
 memcpy(scrnptr, strptr + ofst + 1, numchars)
 ```
-## <a name="reference"></a>Reference
+## Reference
 
-#### Decimal and Hexadecimal Numbers
+### Decimal and Hexadecimal Numbers
 
 Numbers can be represented in either decimal (base 10), or hexadecimal (base 16). Values beginning with a `$` will be parsed as hexadecimal, in keeping with 6502 assembler syntax.
 
-#### Character and String Literals
+### Character and String Literals
 
 A character literal, represented by a single character or an escaped character enclosed in single quotes `'`, can be used wherever a number is used. String literals, a character sequence enclosed in double quotes `"`, can only appear in a data definition. A length byte will be calculated and prepended to the character data. This is the Pascal style of string definition used throughout PLASMA and ProDOS. When referencing the string, its address is used:
 
 ```
 char mystring[] = "This is my string; I am very proud of it."
-    
+
 putc('[') // enclose string in square brackets
 puts(@mystring)
 putc(']')
@@ -485,7 +556,7 @@ Escaped characters, like the `\n` above are replaces with the Carriage Return ch
 |   \\\\       |    \
 |   \\0        |    NUL
 
-##### In-line String Literals
+#### In-line String Literals
 
 Strings can be used as literals inside expression or as parameters. The above puts() call can be written as:
 
@@ -543,19 +614,19 @@ next
 
 If you are curious as to why in-line strings behave this way, it is due to putting the string constant right into the bytecode stream, which makes it easy to compile and interpret. Also, when bytecode is placed in AUX memory (or extended memory in the Apple ///), it relieves the pressure of keeping all the in-line strings in precious main memory all the time. A normal compiler would move in-line strings into anonymous data memory and reference it from there. PLASMA now has a string pool associated with each function invocation, just like the local variable frame. It grows dynamically as strings are encountered and gives them an address in main memory until the function exits, freeing the string pool for that function. PLASMA is too dumb (and I'm too lazy) to implement a real string manager inside the compiler/VM. That would make for a nice library module, though.
 
-#### Words
+### Words
 
 Words, 16-bit signed values, are the native sized quanta of PLASMA. All calculations, parameters, and return values are words.
 
-#### Bytes
+### Bytes
 
 Bytes are unsigned, 8-bit values, stored at an address.  Bytes cannot be manipulated as bytes, but are promoted to words as soon as they are read onto the evaluation stack. When written to a byte address, the low order byte of a word is used.
 
-#### Addresses
+### Addresses
 
 Words can represent many things in PLASMA, including addresses. PLASMA uses a 16-bit address space for data and function entry points. There are many operators in PLASMA to help with address calculation and access. Due to the signed implementation of word in PLASMA, the Standard Library has some unsigned comparison functions to help with address comparisons.
 
-##### Arrays
+#### Arrays
 
 Arrays are the most useful data structure in PLASMA. Using an index into a list of values is indispensible. PLASMA has a flexible array operator. Arrays can be defined in many ways, usually as:
 
@@ -565,7 +636,7 @@ For example:
 
 ```
 predef myfunc
-    
+
 byte smallarray[4]
 byte initbarray[] = 1, 2, 3, 4, 5, 6, 7, 8, 9, 10
 byte string[64] = "Initialized string"
@@ -578,7 +649,7 @@ Equivalently written as:
 
 ```
 predef myfunc
-    
+
 byte[4] smallarray
 byte[] initbarray = 1, 2, 3, 4, 5, 6, 7, 8, 9, 10
 byte[64] string = "Initialized string"
@@ -589,13 +660,13 @@ word funclist = @myfunc, $0000
 
 Arrays can be uninitialized and reserve a size, as in `smallarray` above.  Initialized arrays without a size specified in the definition will take up as much data as is present, as in `initbarray` above. Strings are special arrays that include a hidden length byte in the beginning (Pascal strings). When specified with a size, a minimum size is reserved for the string value. Labels can be defined as arrays without size or initializers; this can be useful when overlapping labels with other arrays or defining the actual array data as anonymous arrays in following lines as in `wlabel` and following lines. Addresses of other data (must be defined previously) or function definitions (pre-defined with predef), including imported references, can be initializers.
 
-###### Type Overrides
+##### Type Overrides
 
 Arrays are usually identified by the data type specifier, `byte` or `word` when the array is defined. However, this can be overridden with the type override specifiers: `:` and `.`. `:` overrides the type to be `word`, `.` overrides the type to be `byte`. An example of accessing a `word` array as `bytes`:
 
 ```
 word myarray = $AABB, $CCDD, $EEFF
-    
+
 def prarray
     byte i
     for i = 0 to 5
@@ -606,7 +677,7 @@ end
 
 The override operator becomes more useful when multi-dimensional arrays are used.
 
-###### Multi-Dimensional Arrays
+##### Multi-Dimensional Arrays
 
 Multi-dimensional arrays are implemented as arrays of arrays, not as a single block of memory. This allows constructs such as:
 
@@ -648,7 +719,7 @@ end
 
 Notice how xscan goes to 39 instead of 19 in the byte accessed version.
 
-##### Offsets (Structure Elements)
+#### Offsets (Structure Elements)
 
 Structures are another fundamental construct when accessing in-common data. Using fixed element offsets from a given address means you only have to pass one address around to access the entire record. Offsets are specified with a constant expression following the type override specifier.
 
@@ -657,7 +728,7 @@ predef puti // print an integer
 byte myrec[]
 word = 2
 byte = "PLASMA"
-    
+
 puti(myrec:0) // ID = 2
 putc($8D) // Carriage return
 puti(myrec.2) // Name length = 6 (Pascal string puts length byte first)
@@ -665,7 +736,7 @@ puti(myrec.2) // Name length = 6 (Pascal string puts length byte first)
 
 This contrived example shows how one can access offsets from a variable as either `byte`s or `word`s regardless of how they were defined. This operator becomes more powerful when combined with pointers, defined next.
 
-##### Defining Structures
+#### Defining Structures
 
 Structures can be defined so that the offsets are calculated for you. The previous example can be written as:
 
@@ -679,7 +750,7 @@ end
 byte myrec[]
 word = 2
 byte = "PLASMA"
-    
+
 puti(mystruc) // This will print '3', the size of the structure as defined
 putc($8D) // Carriage return
 puti(myrec:id) // ID = 2
@@ -687,11 +758,11 @@ putc($8D) // Carriage return
 puti(myrec.name) // Name length = 6 (Pascal string puts length byte first)
 ```
 
-##### Pointers
+#### Pointers
 
 Pointers are values that represent addresses. In order to get the value pointed to by the address, one must 'dereference' the pointer. All data and code memory has a unique address, all 65536 of them (16 bits). In the Apple II, many addresses are actually connected to hardware instead of memory. Accessing these addresses can make thing happen in the Apple II, or read external inputs like the keyboard and joystick.
 
-##### Pointer Dereferencing
+#### Pointer Dereferencing
 
 Just as there are type override for arrays and offsets, there is a `byte` and `word` type override for pointers. Prepending a value with `^` dereferences a `byte`. Prepending a value with `*` dereferences a `word`. These are unary operators, so they won't be confused with the binary operators using the same symbol. An example getting the length of a Pascal string (length byte at the beginning of character array):
 
@@ -734,7 +805,7 @@ def addentry(entry, new_id, new_addr)
 end
 ```
 
-##### Addresses of Data/Code
+#### Addresses of Data/Code
 
 Along with dereferencing a pointer, there is the question of getting the address of a variable. The `@` operator prepended to a variable name or a function definition name, will return the address of the variable/definition. From the previous example, the call to `strlen` would look like:
 
@@ -748,16 +819,16 @@ One very powerful combination of operations is the function pointer. This involv
 
 ```
 word funcptr
-    
+
 def addvals(a, b)
     return a + b
 end
 def subvals(a, b)
     return a - b
 end
-    
+
 funcptr = @addvals
-puti(funcptr(5, 2)) // Outputs 7 
+puti(funcptr(5, 2)) // Outputs 7
 funcptr = @subvals
 puti(funcptr(5, 2)) // Outputs 3
 ```
@@ -766,7 +837,7 @@ These concepts can be combined with the structure offsets to create a function t
 
 ```
 predef myinit, mynew, mydelete
-    
+
 export word myobject_class = @myinit, @mynew, @mydelete
 // Rest of class data/code follows...
 ```
@@ -780,9 +851,9 @@ import myclass
     const delete = 4
     word myobject_class
 end
-    
+
 word an_obj // an object pointer
-    
+
 myobject_class:init()
 an_obj = myobject_class:new()
 myobject_class:delete(an_obj)
@@ -792,11 +863,9 @@ myobject_class:delete(an_obj)
 
 Function definitions in PLASMA are what really separate PLASMA from a low level language like assembly, or even a language like FORTH. The ability to pass in arguments and declare local variables provides PLASMA with a higher language feel and the ability to easily implement recursive functions.
 
-### Expressions and Statements
+#### Expressions and Statements
 
-#### Expressions
-
-Expressions are comprised of operators and operations. Operator precedence follows address, arithmetic, binary, and logical from highest to lowest. Parentheses can be used to force operations to happen in a specific order.
+PLASMA definitions are a list of statements the carry out the algorithm. Statements are generally assignment or control flow in nature. Generally there is one statement per line. The ';' symbol separates multiple statements on a single line. It is considered bad form to have multiple statements per line unless they are very short. Expressions are comprised of operators and operations. Operator precedence follows address, arithmetic, binary, and logical from highest to lowest. Parentheses can be used to force operations to happen in a specific order.
 
 ##### Address Operators
 
@@ -850,10 +919,6 @@ Address operators can work on any value, i.e. anything can be an address. Parent
 | &#124;&#124;    |  logical OR (alt)
 | &&   |  logical AND (alt)
 
-### Statements
-
-PLASMA definitions are a list of statements the carry out the algorithm. Statements are generally assignment or control flow in nature. Generally there is one statement per line. The ';' symbol separates multiple statements on a single line. It is considered bad form to have multiple statements per line unless they are very short.
-
 #### Assignment
 
 Assignments evaluate an expression and save the result into memory. They can be very simple or quite complex. A simple example:
@@ -873,6 +938,7 @@ byte keypress
 keypress = ^$C000 // read keyboard
 ^$C010 // read keyboard strobe, throw away value
 ```
+
 
 #### Increment and Decrement
 
@@ -906,7 +972,7 @@ The common `if` test can have optional `elsif` and/or `else` clauses. Any expres
 
 ##### WHEN/IS/[OTHERWISE]/WEND
 
-The complex test case is handled with `when`. Basically an `if`, `elsif`, `else` list of comparisons, it is generally more efficient. The `is` value can be any expression. It is evaluated and tested for equality to the `when` value. 
+The complex test case is handled with `when`. Basically an `if`, `elsif`, `else` list of comparisons, it is generally more efficient. The `is` value can be any expression. It is evaluated and tested for equality to the `when` value.
 
 ```
 when key
@@ -1040,9 +1106,9 @@ end
 
 Assembly code in PLASMA is implemented strictly as a pass-through to the assembler. No syntax checking, or checking at all, is made. All assembly routines *must* come after all data has been declared, and before any PLASMA function definitions. Native assembly functions can't see PLASMA labels and definitions, so they are pretty much relegated to leaf functions. Lastly, PLASMA modules are re-locatable, but labels inside assembly functions don't get flagged for fix-ups. The assembly code must use all relative branches and only accessing data/code at a fixed address. Data passed in on the PLASMA evaluation stack is readily accessed with the X register and the zero page address of the ESTK. The X register must be properly saved, incremented, and/or decremented to remain consistent with the rest of PLASMA. Parameters are **popped** off the evaluation stack with `INX`, and the return value is **pushed** with `DEX`.
 
-## <a name="implementation"></a>Implementation
+## Implementation
 
-Both the Pascal and Java VMs used a bytecode to hide the underlying CPU architecture and offer platform agnostic application execution. The application and tool chains were easily moved from platform to platform by simply writing a bytecode interpreter and small runtime to translate the higher level constructs to the underlying hardware. The performance of the system was dependent on the actual hardware and efficiency of the interpreter. Just-in-time compilation wasn't really an option on small, 8-bit systems. FORTH, on the other hand, was usually implemented as a threaded interpreter. A threaded interpreter will use the address of functions to call as the code stream instead of a bytecode, eliminating one level of indirection with a slight increase in code size.  The threaded approach can be made faster at the expense of another slight increase in size by inserting an actual Jump SubRoutine opcode before each address, thus removing the interpreter's inner loop altogether. 
+Both the Pascal and Java VMs used a bytecode to hide the underlying CPU architecture and offer platform agnostic application execution. The application and tool chains were easily moved from platform to platform by simply writing a bytecode interpreter and small runtime to translate the higher level constructs to the underlying hardware. The performance of the system was dependent on the actual hardware and efficiency of the interpreter. Just-in-time compilation wasn't really an option on small, 8-bit systems. FORTH, on the other hand, was usually implemented as a threaded interpreter. A threaded interpreter will use the address of functions to call as the code stream instead of a bytecode, eliminating one level of indirection with a slight increase in code size.  The threaded approach can be made faster at the expense of another slight increase in size by inserting an actual Jump SubRoutine opcode before each address, thus removing the interpreter's inner loop altogether.
 
 All three systems were implemented using stack architecture.  Pascal and Java were meant to be compiled high-level languages, using a stack machine as a simple compilation target.  FORTH was meant to be written directly as a stack-oriented language, similar to RPN on HP calculators. The 6502 is a challenging target due to its unusual architecture so writing a bytecode interpreter for Pascal and Java results in some inefficiencies and limitations.  FORTH's inner interpreter loop on the 6502 tends to be less efficient than most other CPUs.  Another difference is how each system creates and manipulates its stack. Pascal and Java use the 6502 hardware stack for all stack operations. Unfortunately the 6502 stack is hard-limited to 256 bytes. However, in normal usage this isn't too much of a problem as the compilers don't put undue pressure on the stack size by keeping most values in global or local variables.  FORTH creates a small stack using a portion of the 6502's zero page, a 256 byte area of low memory that can be accessed with only a byte address and indexed using either of the X or Y registers. With zero page, the X register can be used as an indexed, indirect address and the Y register can be used as an indirect, indexed address.
 
@@ -1163,20 +1229,20 @@ The compact code representation comes through the use of opcodes closely matched
 
 The opcodes were developed over time by starting with a very basic set of operations and slowly adding opcodes when the PLASMA compiler could improve code density or performance.
 
-### Apple 1 PLASMA
+### Apple I PLASMA
 
 Obviously the Apple 1 is a little more constrained than most machines PLASMA is targeting. But, with the required addition of the CFFA1 (http://dreher.net/?s=projects/CFforApple1&c=projects/CFforApple1/main.php), the Apple 1 gets 32K of RAM and a mass storage device. Enough to run PLASMA and load/execute modules.
 
-### Apple ][ PLASMA
+### Apple II PLASMA
 
-The Apple II support covers the full range of the Apple II family. From the Rev 0 Apple II to the ROM3 Apple IIgs. The only requirement is 64K of RAM. If 128K is present, it will be automatically used to load and interpret bytecode, freeing up the main 40K for data and native 6502 code. The IIgs is currently operated in the compatibility 8-bit mode.
+The Apple ][ support covers the full range of the Apple II family. From the Rev 0 Apple II to the ROM3 Apple IIgs. The only requirement is 64K of RAM. If 128K is present, it will be automatically used to load and interpret bytecode, freeing up the main 40K for data and native 6502 code. The IIgs is currently operated in the compatibility 8-bit mode.
 
-### Apple /// PLASMA
+### Apple III PLASMA
 
 Probably the most exciting development is the support for the Apple ///. PLASMA on the Apple /// provides 32K for global data and 6502 code, and the rest of the memory for bytecode and extended data.
 
 
-## <a name="links"></a>Links
+## Links
 
 [ACME 6502 assembler](https://sourceforge.net/projects/acme-crossass/)
 
@@ -1195,6 +1261,3 @@ Probably the most exciting development is the support for the Apple ///. PLASMA 
 [VM02: Apple II Java VM](http://sourceforge.net/projects/vm02/)
 
 [Threaded code](http://en.wikipedia.org/wiki/Threaded_code)
-
-
-
