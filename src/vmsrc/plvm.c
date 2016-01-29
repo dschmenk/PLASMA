@@ -604,8 +604,10 @@ void interp(code *ip)
                 ea  = POP;
                 PUSH(ea >> val);
                 break;
-            case 0x1E: // IDXW : TOS = TOS * 2
-                TOS *= 2;
+            case 0x1E: // IDXW : TOS = TOS * 2 + TOS-1
+                val = POP;
+                ea  = POP;
+                PUSH(ea + val * 2);
                 break;
                 /*
                  * 0x20-0x2F
