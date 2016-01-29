@@ -75,6 +75,18 @@ void parse_error(char *errormsg)
     fprintf(stderr, "^\nError: %s\n", errormsg);
     exit(1);
 }
+
+int hexdigit(char ch)
+{
+    ch = toupper(ch);
+    if (ch >= '0' && ch <= '9')
+        return ch - '0';
+    else if (ch >= 'A' && ch <= 'F')
+        return ch - 'A' + 10;
+    else
+        return -1;
+}
+
 t_token scan(void)
 {
     prevtoken = scantoken;
@@ -152,12 +164,8 @@ t_token scan(void)
         constval = 0;
         while (scanpos++)
         {
-            if (*scanpos >= '0' && *scanpos <= '9')
-                constval = constval * 16 + *scanpos - '0';
-            else if (*scanpos >= 'A' && *scanpos <= 'F')
-                constval = constval * 16 + *scanpos - 'A' + 10;
-            else if (*scanpos >= 'a' && *scanpos <= 'f')
-                constval = constval * 16 + *scanpos - 'a' + 10;
+            if (hexdigit(*scanpos) >= 0)
+                constval = constval * 16 + hexdigit(*scanpos);
             else
                 break;
         }
@@ -216,6 +224,7 @@ t_token scan(void)
     else if (scanpos[0] == '\"')
     {
         char *scanshift;
+        int scanoffset;
         /*
          * String constant.
          */
@@ -225,6 +234,7 @@ t_token scan(void)
         {
             if (*scanpos == '\\')
             {
+                scanoffset = 1;
                 switch (scanpos[1])
                 {
                     case 'n':
@@ -248,12 +258,20 @@ t_token scan(void)
                     case '0':
                         *scanpos = '\0';
                         break;
+                    case '$':
+                        if (hexdigit(scanpos[2]) < 0 || hexdigit(scanpos[3]) < 0) {
+                            parse_error("Bad string constant");
+                            return (-1);
+                        }
+                        *scanpos = hexdigit(scanpos[2]) * 16 + hexdigit(scanpos[3]);
+                        scanoffset = 3;
+                        break;
                     default:
                         parse_error("Bad string constant");
                         return (-1);
                 }
                 for (scanshift = scanpos + 1; *scanshift; scanshift++)
-                    scanshift[0] = scanshift[1];
+                    scanshift[0] = scanshift[scanoffset];
             }
             scanpos++;
         }
