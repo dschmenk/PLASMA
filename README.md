@@ -169,6 +169,8 @@ and you should see the same screenful of gibberish you saw from the portable VM,
 
 During KansasFest 2015, I gave a PLASMA introduction using the Apple II PLASMA sandbox IDE. You can play along using your favorite Apple II emulator, or one that runs directly in your browser: [Apple II Emulator in Javascript](https://www.scullinsteel.com/apple/e). Download [SANDBOX.PO](https://github.com/dschmenk/PLASMA/blob/master/SANDBOX.PO?raw=true) and load it into Drive 1 of the emulator. Start the [KansasFest PLASMA Code-along video](https://www.youtube.com/watch?v=RrR79WVHwJo?t=11m24s) and follow along.
 
+To use this tutorial, make sure you have a working PLASMA installation as described in the previous section.
+
 ## PLASMA Compiler/Assembler
 
 Although the low-level PLASMA VM operations could easily by coded by hand, they were chosen to be an easy target for a simple compiler. Think along the lines of an advanced assembler or stripped down C compiler ( C-- ).  Taking concepts from BASIC, Pascal, C and assembler, the PLASMA compiler is simple yet expressive. The syntax is line oriented; generally there is one statement per line. However, a semicolon, `;`, can separate multiple statements on a single line. This tutorial will focus on the cross-compiler running under an UNIX-like environment.
