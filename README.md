@@ -13,7 +13,7 @@ Different projects have led to the architecture of PLASMA, most notably Apple Pa
 <!-- TOC depthFrom:1 depthTo:6 withLinks:1 updateOnSave:1 orderedList:0 -->
 
 - [Build Environment](#build-environment)
-	- [acme Cross-Assembler](#acme-crossassembler)
+	- [acme Cross-Assembler](#acme-cross-assembler)
 	- [PLASMA Source](#plasma-source)
 		- [Portable VM](#portable-vm)
 		- [Target VM](#target-vm)
