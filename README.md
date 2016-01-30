@@ -1,4 +1,8 @@
+<center>
 # The PLASMA Programming Language
+![Luc Viatour / www.Lucnix.be](https://upload.wikimedia.org/wikipedia/commons/thumb/2/26/Plasma-lamp_2.jpg/1280px-Plasma-lamp_2.jpg)
+image credit: Luc Viatour / www.Lucnix.be
+</center>
 
 PLASMA: **P**roto **L**anguage **A**s**S**e**M**bler for **A**pple
 
