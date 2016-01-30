@@ -122,7 +122,7 @@ cp acme /usr/local/bin
 cd ../..
 ```
 
-Under Unix that last command may have to be preceded by sudo to elevate the privileges to copy into '/usr/local/bin'.
+Under Unix that `cp` command may have to be preceded by `sudo` to elevate the privileges to copy into `/usr/local/bin`.
 
 ## PLASMA Source
 
