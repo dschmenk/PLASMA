@@ -147,7 +147,7 @@ and you should be rewarded with the classic `Hello, world.` being printed out to
 make test
 ```
 
-There should be a screenful of gibberish. This is a test suite to run through a large chunk of PLASMA's functionality for a quick sannity check, including dynamic module loading: `TESTLIB` in this case.
+There should be a screenful of gibberish. This is a test suite to run through a large chunk of PLASMA's functionality for a quick sanity check, including dynamic module loading: `TESTLIB` in this case.
 
 ### Target VM
 
