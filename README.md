@@ -12,6 +12,11 @@ Different projects have led to the architecture of PLASMA, most notably Apple Pa
 
 <!-- TOC depthFrom:1 depthTo:6 withLinks:1 updateOnSave:1 orderedList:0 -->
 
+- [Build Environment](#build-environment)
+	- [acme Cross-Assembler](#acme-crossassembler)
+	- [PLASMA Source](#plasma-source)
+		- [Portable VM](#portable-vm)
+		- [Target VM](#target-vm)
 - [Tutorial](#tutorial)
 	- [PLASMA Compiler/Assembler](#plasma-compilerassembler)
 	- [PLASMA Modules](#plasma-modules)
@@ -89,6 +94,46 @@ Different projects have led to the architecture of PLASMA, most notably Apple Pa
 
 <!-- /TOC -->
 
+## The Build Environment
+The first step in writing PLASMA code is to get a build environment working. If you have Unix-like environment, then this is a fairly easy exercise. Windows users may want to install the [CygWin](https://www.cygwin.com/) environment to replicate a Unix-like environment under Windows. When installing CygWin, make sure *gcc-core*, *make*, and *git* are installed under the *Devel* packages. Mac OS X users may have to install the *Xcode* from the App Store.
+
+Launch the command-line/terminal application for your environment to download and build PLASMA. Create a source code directory, something like 'Src', then 'cd' into that directory.
+
+### acme Cross-Assembler
+There are two source projects you need to download: the first is a nice cross-platform 6502 assembler called [acme](http://sourceforge.net/p/acme-crossass/code-0/6/tree/trunk/docs/QuickRef.txt). Download the acme assembler by typing:
+```
+git clone https://github.com/meonwax/acme
+```
+This will create a directory structure from acme on down. To build acme, type:
+```
+cd acme/src
+make
+cp acme /usr/local/bin
+```
+Under Unix that last command may have to be preceded by sudo to elevate the privileges to copy into '/usr/local/bin'.
+
+### PLASMA Source
+Now, to download PLASMA and build it, type:
+```
+cd ../..
+git clone https://github.com/dschmenk/PLASMA
+cd PLASMA/src
+make
+```
+#### Portable VM
+To see if everything built correctly, type:
+```
+make hello
+```
+and you should be rewarded with the classic "Hello, world" being printed out to the terminal from the portable PLASMA VM, which is able to directly execute simple PLASMA modules.
+
+#### Target VM
+You will notice the name of the `HELLO` module shows up as `HELLO#FE1000` in the directory listing. This follows the naming scheme used by the [CiderPress](https://github.com/fadden/ciderpress) program used to transfer files into and out of Apple II disk images. The `#` character separates the base filename from the metadata used for the file type and auxiliary information. In order to run the HELLO module on a real or emulated Apple II requires copying the `PLASMA.SYSTEM#FF2000`, `CMD#FF2000`, and the module and it's dependencies to a ProDOS disk image. You can find the ProDOS 1.9 system in the `PLASMA/sysfiles/PRODOS#FF0000` file. This is a convenience for building a bootable disk image from scratch. On the real or emulated Apple II, boot the ProDOS disk image. You will see a PLASMA introduction, then a command prompt. For this example, type:
+```
++HELLO
+```
+to run the module. You will be rewarded with `Hello, world.` printed to the screen, or `HELLO, WORLD.` on an uppercase-only Apple ][.
+
 ## Tutorial
 
 During KansasFest 2015, I gave a PLASMA introduction using the Apple II PLASMA sandbox IDE. You can play along using your favorite Apple II emulator, or one that runs directly in your browser: [Apple II Emulator in Javascript](https://www.scullinsteel.com/apple/e). Download [SANDBOX.PO](https://github.com/dschmenk/PLASMA/blob/master/SANDBOX.PO?raw=true) and load it into Drive 1 of the emulator. Start the [KansasFest PLASMA Code-along video](https://www.youtube.com/watch?v=RrR79WVHwJo?t=11m24s) and follow along.
@@ -99,7 +144,7 @@ Although the low-level PLASMA VM operations could easily by coded by hand, they 
 
 ### PLASMA Modules
 
-To keep development compartmentalized and easily managed, PLASMA uses relatively small, dynamically loaded and linked modules. The module format extends the .REL file type originally defined by the EDASM assembler from the DOS/ProDOS Toolkit from Apple Computer, Inc. PLASMA extends the file format through a backwards compatible extension that the PLASMA loader recognizes to locate the PLASMA bytecode and provide for advanced dynamic loading of module dependencies.
+PLASMA programs are built up around modules: small, self contained, dynamically loaded and linked software components that provide a well defined interface to other modules. The module format extends the .REL file type originally defined by the EDASM assembler from the DOS/ProDOS Toolkit from Apple Computer, Inc. PLASMA extends the file format through a backwards compatible extension that the PLASMA loader recognizes to locate the PLASMA bytecode and provide for advanced dynamic loading of module dependencies.
 
 ### Data Types
 
