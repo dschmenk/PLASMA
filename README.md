@@ -163,7 +163,7 @@ puts("Hello, world.\n")
 done
 ```
 
-Three tools are required to build and run this program: **acme**, **plasm**, and **plvm**. **acme**, the portable 6502 assembler, can be downloaded here: https://sourceforge.net/projects/acme-crossass/. The PLASMA compiler, **plasm**, will convert the PLASMA source code (usually with an extension of .pla) into an assembly language source file. **acme** will convert the assembly source into a binary ready for loading. To execute the module, the PLASMA portable VM, **plvm**, can load and interpret the bytecode. The same binary can be loaded onto the target platform and run there with the appropriate VM. On Linux/Unix from PLASMA/src, the steps would be entered as:
+Three tools are required to build and run this program: **acme**, **plasm**, and **plvm**. The PLASMA compiler, **plasm**, will convert the PLASMA source code (usually with an extension of .pla) into an assembly language source file. **acme** will convert the assembly source into a binary ready for loading. To execute the module, the PLASMA portable VM, **plvm**, can load and interpret the bytecode. The same binary can be loaded onto the target platform and run there with the appropriate VM. On Linux/Unix from PLASMA/src, the steps would be entered as:
 
 ```
 ./plasm -AM < hello.pla > hello.a
