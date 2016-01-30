@@ -111,15 +111,10 @@ cd Src
 
 ## acme Cross-Assembler
 
-There are two source projects you need to download: the first is a nice cross-platform 6502 assembler called [acme](http://sourceforge.net/p/acme-crossass/code-0/6/tree/trunk/docs/QuickRef.txt). Download the acme assembler by typing:
+There are two source projects you need to download: the first is a nice cross-platform 6502 assembler called [acme](http://sourceforge.net/p/acme-crossass/code-0/6/tree/trunk/docs/QuickRef.txt). Download, build, and install the acme assembler by typing:
 
 ```
 git clone https://github.com/meonwax/acme
-```
-
-This will create a directory structure from acme on down. To build acme, type:
-
-```
 cd acme/src
 make
 cp acme /usr/local/bin
