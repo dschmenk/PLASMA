@@ -137,11 +137,11 @@ To see if everything built correctly, type:
 make hello
 ```
 
-and you should be rewarded with the classic "Hello, world" being printed out to the terminal from the portable PLASMA VM, which is able to directly execute simple PLASMA modules.
+and you should be rewarded with the classic `Hello, world.` being printed out to the terminal from the portable PLASMA VM, which is able to directly execute simple PLASMA modules.
 
 ### Target VM
 
-You will notice the name of the `HELLO` module shows up as `HELLO#FE1000` in the directory listing. This follows the naming scheme used by the [CiderPress](https://github.com/fadden/ciderpress) program used to transfer files into and out of Apple II disk images. The `#` character separates the base filename from the metadata used for the file type and auxiliary information. In order to run the HELLO module on a real or emulated Apple II requires copying the `PLASMA.SYSTEM#FF2000`, `CMD#FF2000`, and `HELLO#FE1000` to a ProDOS disk image. You can find the ProDOS 1.9 system in the `PLASMA/sysfiles/PRODOS#FF0000` file. This is a convenience for building a bootable disk image from scratch. On the real or emulated Apple II, boot the ProDOS disk image. You will see a PLASMA introduction, then a command prompt. For this example, type:
+You will notice the name of the `HELLO` module shows up as `HELLO#FE1000` in the directory listing. This follows the naming scheme used by the [CiderPress](https://github.com/fadden/ciderpress) program used to transfer files into and out of Apple II disk images. The `#` character separates the base filename from the metadata used for the file type and auxiliary information. In order to run the HELLO module on a real or emulated Apple II requires copying the `PLASMA.SYSTEM#FF2000`, `CMD#FF2000`, and `HELLO#FE1000` to a ProDOS disk image. You can find the ProDOS 1.9 system in the `PLASMA/sysfiles/PRODOS#FF0000` file; this is a convenience for building a bootable disk image from scratch. On the real or emulated Apple II, boot the ProDOS disk image. You will see a PLASMA introduction, then a command prompt. For this example, type:
 
 ```
 +HELLO
