@@ -163,7 +163,7 @@ to run the module. You will be rewarded with `Hello, world.` printed to the scre
 +TEST
 ```
 
-and you should see the same screenful of gibberish you saw from the portable VM, but on the Apple II this time. Both VMs are running the exact same module binaries. To view the source of these modules refer to `PLASMA/src/samplesrc/hello.pla`, `PLASMA/src/samplesrc/test.pla`, and `PLASMA/src/sammplesrc/testlib.pla`. To get even more insight into the compiled source, view the corresponding `.a` files.
+and you should see the same screenful of gibberish you saw from the portable VM, but on the Apple II this time. Both VMs are running the exact same module binaries. To view the source of these modules refer to `PLASMA/src/samplesrc/hello.pla`, `PLASMA/src/samplesrc/test.pla`, and `PLASMA/src/samplesrc/testlib.pla`. To get even more insight into the compiled source, view the corresponding `.a` files.
 
 # Tutorial
 
