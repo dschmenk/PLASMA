@@ -98,7 +98,12 @@ Different projects have led to the architecture of PLASMA, most notably Apple Pa
 
 The first step in writing PLASMA code is to get a build environment working. If you have Unix-like environment, then this is a fairly easy exercise. Windows users may want to install the [CygWin](https://www.cygwin.com/) environment to replicate a Unix-like environment under Windows. When installing CygWin, make sure **gcc-core**, **make**, and **git** are installed under the **Devel** packages. Mac OS X users may have to install the **Xcode** from the App Store.
 
-Launch the command-line/terminal application for your environment to download and build PLASMA. Create a source code directory, something like 'Src', then 'cd' into that directory.
+Launch the command-line/terminal application for your environment to download and build PLASMA. Create a source code directory and change the working directory to it, something like:
+
+```
+mkdir Src
+cd Src
+```
 
 ## acme Cross-Assembler
 
@@ -114,6 +119,7 @@ This will create a directory structure from acme on down. To build acme, type:
 cd acme/src
 make
 cp acme /usr/local/bin
+cd ../..
 ```
 
 Under Unix that last command may have to be preceded by sudo to elevate the privileges to copy into '/usr/local/bin'.
@@ -123,7 +129,6 @@ Under Unix that last command may have to be preceded by sudo to elevate the priv
 Now, to download PLASMA and build it, type:
 
 ```
-cd ../..
 git clone https://github.com/dschmenk/PLASMA
 cd PLASMA/src
 make
