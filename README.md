@@ -1324,6 +1324,8 @@ Probably the most exciting development is the support for the Apple ///. PLASMA 
 
 [HiDef PLASMA KFEST 2015 video](https://archive.org/details/Kansasfest2015ThePlasmaLanguage)
 
+[Mike Finger's PLASMA blog](http://retro2neo.org/2016/04/02/working-with-plasma)
+
 [BCPL Programming Language](http://en.wikipedia.org/wiki/BCPL)
 
 [B Programming Language User Manual](https://www.bell-labs.com/usr/dmr/www/bintro.html)
