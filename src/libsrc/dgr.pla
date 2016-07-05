@@ -1,0 +1,192 @@
+import cmdsys
+	predef memset, memcpy, heapmark, heapalloc, heaprelease
+	byte MACHID
+end
+//
+// Apple II hardware constants.
+//
+const showgraphics = $C050
+const showtext     = $C051
+const showfull     = $C052
+const showmix      = $C053
+const showpage1    = $C054
+const showpage2    = $C055
+const showlores    = $C056
+const showhires    = $C057
+const show40       = $C00C
+const show80       = $C00D
+const mapmain      = $C000
+const mapaux       = $C001
+const an3on        = $C05E
+const an3off       = $C05F
+const dis80        = $C07E
+const ena80        = $C07F
+const page1        = 0
+const page2        = 1
+//
+// Color mapping.
+//
+byte[] evnclr = $00,$88,$11,$99,$22,$AA,$33,$BB
+byte[]        = $44,$CC,$55,$DD,$66,$EE,$77,$FF
+byte[] oddclr = $00,$11,$22,$33,$44,$55,$66,$77
+byte[]        = $88,$99,$AA,$BB,$CC,$DD,$EE,$FF
+
+asm dgrUpdate(buff)
+!SOURCE	"vmsrc/plvmzp.inc"
+!MACRO	FILLROW .rowaddr {
+	LDX	#39
+	LDY	#79
+-	BIT	$C054	; PAGE 1 (MAIN MEM)
+	LDA	(SRC),Y
+	STA	.rowaddr,X
+	DEY
+	BIT	$C055	; PAGE 2 (AUX MEM)
+	LDA	(SRC),Y
+	STA	.rowaddr,X
+	DEY
+	DEX
+	BPL	-
+}
+	LDA	ESTKL,X
+	STA	SRCL
+	LDA	ESTKH,X
+	STA	SRCH
+	STX	ESP
+	PHP
+	SEI
+	+FILLROW $0400
+	INC	SRCH
+	+FILLROW $0480
+	INC	SRCH
+	+FILLROW $0500
+	INC	SRCH
+	+FILLROW $0580
+	INC	SRCH
+	+FILLROW $0600
+	INC	SRCH
+	+FILLROW $0680
+	INC	SRCH
+	+FILLROW $0700
+	INC	SRCH
+	+FILLROW $0780
+	INC	SRCH
+	+FILLROW $0428
+	INC	SRCH
+	+FILLROW $04A8
+	INC	SRCH
+	+FILLROW $0528
+	INC	SRCH
+	+FILLROW $05A8
+	INC	SRCH
+	+FILLROW $0628
+	INC	SRCH
+	+FILLROW $06A8
+	INC	SRCH
+	+FILLROW $0728
+	INC	SRCH
+	+FILLROW $07A8
+	INC	SRCH
+	+FILLROW $0450
+	INC	SRCH
+	+FILLROW $04D0
+	INC	SRCH
+	+FILLROW $0550
+	INC	SRCH
+	+FILLROW $05D0
+	INC	SRCH
+	+FILLROW $0650
+	INC	SRCH
+	+FILLROW $06D0
+	INC	SRCH
+	+FILLROW $0750
+	INC	SRCH
+	+FILLROW $07D0
+	BIT	$C054	; PAGE 1 (MAIN MEM)
+	PLP
+	LDX	ESP
+	RTS
+end
+
+asm vlbWait
+	DEX
+-	LDA	$C019
+	BMI	-
+-	LDA	$C019
+	BPL	-
+	RTS
+end
+
+def dgrMode
+	^showlores
+	^showfull
+	^showgraphics
+	^showpage1
+	^ena80  = 0
+	^show80 = 0
+	^mapaux = 0
+	^an3on
+end
+
+def txtMode
+	^showtext
+	^showpage1
+	^ena80    = 0
+	^show40   = 0
+	^^mapmain = 0
+	^an3on
+end
+
+def dgrPlot(buff, x, y, clr)
+	word pixptr
+	
+	pixptr = buff + ((y >> 1) << 8) + (x >> 1)
+	if x & 1
+		clr = oddclr[clr & $0F]
+	else
+		clr = evnclr[clr & $0F]
+	fin
+	if y & 1
+		^pixptr = (^pixptr & $0F) | (clr & $F0)
+	else
+		^pixptr = (^pixptr & $F0) | (clr & $0F)
+	fin
+end
+
+def dgrClr(buff, clr)
+	byte row
+	word fillclr
+	
+	clr = clr & $0F
+	fillclr = (oddclr[clr] << 8) | evnclr[clr]
+	for row = 0 to 5
+		memset(buff, fillclr, 80)
+		buff.1++
+		memset(buff, fillclr, 80)
+		buff.1++
+		memset(buff, fillclr, 80)
+		buff.1++
+		memset(buff, fillclr, 80)
+		buff.1++
+	next
+end
+
+def dgrTest
+	word dgrbuff
+	byte clsclr
+  
+	dgrMode
+	dgrbuff = heapalloc(256*24)
+	^$C010
+	while ^$C000 < 128
+		dgrClr(dgrbuff, clsclr)
+		//vlbWait
+		dgrUpdate(dgrbuff)
+		clsclr++
+	loop
+	heaprelease(dgrbuff)
+	^$C010
+	txtMode
+end
+
+dgrTest
+done

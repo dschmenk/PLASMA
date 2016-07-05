@@ -16,6 +16,7 @@ ETHERIP = ETHERIP\#FE1000
 INET    = INET\#FE1000
 DHCP    = DHCP\#FE1000
 HTTPD   = HTTPD\#FE1000
+DGR     = DGR\#FE1000
 ROGUE   = ROGUE\#FE1000
 ROGUEIO = ROGUEIO\#FE1000
 ROGUEMAP= ROGUEMAP\#FE1000
@@ -49,7 +50,7 @@ TXTTYPE	= .TXT
 #SYSTYPE	= \#FF2000
 #TXTTYPE	= \#040000
 
-all: $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVM03) $(CMD) $(MEMMGR) $(MEMTEST) $(FIBER) $(SB) $(MON) $(ROD) $(SIEVE) $(UTHERNET2) $(UTHERNET) $(ETHERIP) $(INET) $(DHCP) $(HTTPD) $(ROGUE) $(ROGUEMAP) $(ROGUECOMBAT) $(ROGUEIO) $(HGR1)
+all: $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVM03) $(CMD) $(MEMMGR) $(MEMTEST) $(FIBER) $(SB) $(MON) $(ROD) $(SIEVE) $(UTHERNET2) $(UTHERNET) $(ETHERIP) $(INET) $(DHCP) $(HTTPD) $(ROGUE) $(ROGUEMAP) $(ROGUECOMBAT) $(ROGUEIO) $(HGR1) $(DGR)
 
 clean:
 	-rm *FE1000 *FF2000 $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVM03)
@@ -153,6 +154,10 @@ $(DHCP): libsrc/dhcp.pla $(PLVM02) $(PLASM)
 $(HTTPD): samplesrc/httpd.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AM < samplesrc/httpd.pla > samplesrc/httpd.a
 	acme --setpc 4094 -o $(HTTPD) samplesrc/httpd.a
+
+$(DGR): libsrc/dgr.pla $(PLVM02) $(PLASM)
+	./$(PLASM) -AM < libsrc/dgr.pla > libsrc/dgr.a
+	acme --setpc 4094 -o $(DGR) libsrc/dgr.a
 
 $(ROGUE): samplesrc/rogue.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AM < samplesrc/rogue.pla > samplesrc/rogue.a
