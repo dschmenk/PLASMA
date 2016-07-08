@@ -116,6 +116,90 @@ asm dgrUpdate(buff)
 	RTS
 end
 
+asm drgPlot(buff, x, y, clr)
+	; Get buffer address
+	STX	ESP
+	LDA	ESTKL+3,X
+	STA	SRCL
+	LDA	ESTKH+3,X
+	STA	SRCH
+	LDA	ESTKL+1,X		; Y coord
+	LSR
+	LDA	(SRC),Y
+	STA	DSTL
+	INY
+	LDA	(SRC),Y
+	STA	DSTH
+	PHP
+	SEI
+	BCS	++
+	LDA	ESTKL+2,X
+	LSR
+	PHA
+	BCS	+
+	LDY	ESTKL,X
+end
+asm dgrPlotEvnEvn
+	LDA	$100,Y
+	AND	#$0F
+	STA	TMPL
+	PLA
+	TAY
+	LDA	(DST),Y
+	AND	#$F0
+	ORA	TMPL
+	STA	(DST),Y
+	BCC	++++
++	LDY	ESTKL,X
+end
+asm dgrPlotEvnOdd
+	LDA	$1000,Y
+	AND	#$F0
+	STA	TMPL
+	PLA
+	TAY
+	LDA	(DST),Y
+	AND	#$0F
+	ORA	TMPL
+	STA	(DST),Y
+	BCS	++++
+++	LDA	ESTKL+2,X
+	LSR
+	PHA
+	BCS	+++
+	LDY	ESTKL,X
+end
+asm dgrPlotOddEvn
+	LDA	$1000,Y
+	AND	#$0F
+	STA	TMPL
+	PLA
+	TAY
+	LDA	(DST),Y
+	AND	#$F0
+	ORA	TMPL
+	STA	(DST),Y
+	BCC	++++
++++	LDY	ESTKL,X
+end
+asm dgrPlotOddOdd
+	LDA	$1000,Y
+	AND	#$F0
+	STA	TMPL
+	PLA
+	TAY
+	LDA	(DST),Y
+	AND	#$0F
+	ORA	TMPL
+	STA	(DST),Y
+++++	PLP
+	LDX	ESP
+	INX
+	INX
+	INX
+	RTS
+end
+
 asm vlbWait
 	DEX
 -	LDA	$C019
@@ -143,22 +227,6 @@ def txtMode
 	^show40   = 0
 	^^mapmain = 0
 	^an3on
-end
-
-def dgrPlot(buff, x, y, clr)
-	word pixptr
-	
-	pixptr = buff + ((y >> 1) << 8) + (x >> 1)
-	if x & 1
-		clr = oddclr[clr & $0F]
-	else
-		clr = evnclr[clr & $0F]
-	fin
-	if y & 1
-		^pixptr = (^pixptr & $0F) | (clr & $F0)
-	else
-		^pixptr = (^pixptr & $F0) | (clr & $0F)
-	fin
 end
 
 def dgrClr(buff, clr)
@@ -197,5 +265,10 @@ def dgrTest
 	txtMode
 end
 
+// Assembly fixups
+dgrPlotEvnEvn:1 = @evnclr
+dgrPlotEvnOdd:1 = @oddclr
+dgrPlotOddEvn:1 = @evnclr
+dgrPlotOddOdd:1 = @oddclr
 dgrTest
 done
