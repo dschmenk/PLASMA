@@ -1,7 +1,19 @@
 import cmdsys
 	predef memset, memcpy, heapmark, heapalloc, heaprelease
 	byte MACHID
+	//
+	// System flags: memory allocator screen holes.
+	//
+	const restxt1     = $0001
+	const restxt2     = $0002
+	const resxtxt1    = $0004
+	const resxtxt2    = $0008
+	const reshgr1     = $0010
+	const reshgr2     = $0020
+	const resxhgr1    = $0040
+	const resxhgr2    = $0080
 end
+sysflags $000F	// Reserve all text pages
 //
 // Apple II hardware constants.
 //
@@ -36,170 +48,348 @@ word[] dgrbuff      = @dgr1rows, @dgr2rows
 //
 // Color mapping.
 //
-byte[] evnclr = $00,$88,$11,$99,$22,$AA,$33,$BB
+byte[] evnclr = $00,$88,$11,$99,$22,$00,$33,$BB
 byte[]        = $44,$CC,$55,$DD,$66,$EE,$77,$FF
-byte[] oddclr = $00,$11,$22,$33,$44,$55,$66,$77
+byte[] oddclr = $00,$11,$22,$33,$44,$00,$66,$77
 byte[]        = $88,$99,$AA,$BB,$CC,$DD,$EE,$FF
 
-asm dgrUpdate(buff)
+byte[] sprite1 = $0,$0,$5,$5,$5,$5,$0,$0
+byte[]         = $0,$5,$A,$A,$A,$A,$5,$0
+byte[]         = $5,$A,$F,$F,$F,$F,$A,$5
+byte[]         = $5,$A,$F,$F,$F,$F,$A,$5
+byte[]         = $5,$A,$F,$F,$F,$F,$A,$5
+byte[]         = $5,$A,$F,$F,$F,$F,$A,$5
+byte[]         = $0,$5,$A,$A,$A,$A,$5,$0
+byte[]         = $0,$0,$5,$5,$5,$5,$0,$0
+
+byte[] tile1 = $88,$11,$88,$11,$88,$11,$88,$11
+byte[]       = $88,$11,$88,$11,$88,$11,$88,$11
+byte[]       = $88,$11,$88,$11,$88,$11,$88,$11
+byte[]       = $88,$11,$88,$11,$88,$11,$88,$11
+
+asm dgrInc(buff)
 !SOURCE	"vmsrc/plvmzp.inc"
-!MACRO	FILLROW .rowaddr {
-	LDX	#39
-	LDY	#79
--	LDA	(SRC),Y
-	STA	.rowaddr,X
-	DEY
-	LDA	(SRC),Y
-	STA	$C005	; WRITE AUX MEM
-	STA	.rowaddr,X
-	STA	$C004	; WRITE MAIN MEM
-	DEY
-	DEX
-	BPL	-
-}
-	LDA	ESTKL,X
-	STA	SRCL
-	LDA	ESTKH,X
-	STA	SRCH
+GBASL	=	$26
+GBASH	=	$27
+GBASE	=	GBASL
+end
+//
+// Plot pixel
+//
+asm dgrPlot(buff, x, y)
+	; GET BUFFER ADDRESS
 	STX	ESP
+	LDA	ESTKL+2,X
+	STA	SRCL
+	LDA	ESTKH+2,X
+	STA	SRCH
+	LDA	ESTKL,X		; Y COORD
+	AND	#$FE
+	TAY
+	LDA	(SRC),Y
+	STA	GBASL
+	INY
+	LDA	(SRC),Y
+	STA	GBASH
+	LDA	ESTKL+1,X	; X COORD
+	LSR	ESTKL,X
+	LDX	$30		; COLOR
 	PHP
 	SEI
-	+FILLROW $0400
-	INC	SRCH
-	+FILLROW $0480
-	INC	SRCH
-	+FILLROW $0500
-	INC	SRCH
-	+FILLROW $0580
-	INC	SRCH
-	+FILLROW $0600
-	INC	SRCH
-	+FILLROW $0680
-	INC	SRCH
-	+FILLROW $0700
-	INC	SRCH
-	+FILLROW $0780
-	INC	SRCH
-	+FILLROW $0428
-	INC	SRCH
-	+FILLROW $04A8
-	INC	SRCH
-	+FILLROW $0528
-	INC	SRCH
-	+FILLROW $05A8
-	INC	SRCH
-	+FILLROW $0628
-	INC	SRCH
-	+FILLROW $06A8
-	INC	SRCH
-	+FILLROW $0728
-	INC	SRCH
-	+FILLROW $07A8
-	INC	SRCH
-	+FILLROW $0450
-	INC	SRCH
-	+FILLROW $04D0
-	INC	SRCH
-	+FILLROW $0550
-	INC	SRCH
-	+FILLROW $05D0
-	INC	SRCH
-	+FILLROW $0650
-	INC	SRCH
-	+FILLROW $06D0
-	INC	SRCH
-	+FILLROW $0750
-	INC	SRCH
-	+FILLROW $07D0
+end
+asm _dgrPlotPix
+	JSR	$3000
 	PLP
 	LDX	ESP
+	INX
+	INX
 	RTS
 end
-
-asm drgPlot(buff, x, y, clr)
-	; Get buffer address
+//
+// Plot horizontal row of pixels
+//
+asm dgrHLin(buff, x1, x2, y)
+	; GET BUFFER ADDRESS
 	STX	ESP
 	LDA	ESTKL+3,X
 	STA	SRCL
 	LDA	ESTKH+3,X
 	STA	SRCH
-	LDA	ESTKL+1,X		; Y coord
-	LSR
+	LDA	ESTKL,X		; Y COORD
+	AND	#$FE
+	TAY
 	LDA	(SRC),Y
-	STA	DSTL
+	STA	GBASL
 	INY
 	LDA	(SRC),Y
-	STA	DSTH
+	STA	GBASH
+	LDA	ESTKL+2,X	; X1 COORD
+	LSR	ESTKL,X
+	PHP
+-	PLP
 	PHP
 	SEI
-	BCS	++
-	LDA	ESTKL+2,X
-	LSR
-	PHA
-	BCS	+
-	LDY	ESTKL,X
+	LDX	$30		; COLOR
 end
-asm dgrPlotEvnEvn
-	LDA	$100,Y
-	AND	#$0F
-	STA	TMPL
-	PLA
-	TAY
-	LDA	(DST),Y
-	AND	#$F0
-	ORA	TMPL
-	STA	(DST),Y
-	BCC	++++
-+	LDY	ESTKL,X
-end
-asm dgrPlotEvnOdd
-	LDA	$1000,Y
-	AND	#$F0
-	STA	TMPL
-	PLA
-	TAY
-	LDA	(DST),Y
-	AND	#$0F
-	ORA	TMPL
-	STA	(DST),Y
-	BCS	++++
-++	LDA	ESTKL+2,X
-	LSR
-	PHA
-	BCS	+++
-	LDY	ESTKL,X
-end
-asm dgrPlotOddEvn
-	LDA	$1000,Y
-	AND	#$0F
-	STA	TMPL
-	PLA
-	TAY
-	LDA	(DST),Y
-	AND	#$F0
-	ORA	TMPL
-	STA	(DST),Y
-	BCC	++++
-+++	LDY	ESTKL,X
-end
-asm dgrPlotOddOdd
-	LDA	$1000,Y
-	AND	#$F0
-	STA	TMPL
-	PLA
-	TAY
-	LDA	(DST),Y
-	AND	#$0F
-	ORA	TMPL
-	STA	(DST),Y
-++++	PLP
+asm _dgrHLinPix
+	JSR	$3000
 	LDX	ESP
+	INC	ESTKL+2,X	; X1 COORD
+	LDA	ESTKL+2,X
+	CMP	ESTKL+1,X	; X2 COORD
+	BCC	-
+	BEQ	-
+	PLP
 	INX
 	INX
 	INX
 	RTS
 end
-
+//
+// Plot horizontal row of pixels
+//
+asm dgrVLin(buff, x, y1, y2)
+	; GET BUFFER ADDRESS
+	STX	ESP
+	LDA	ESTKL+3,X
+	STA	SRCL
+	LDA	ESTKH+3,X
+	STA	SRCH
+	LDA	ESTKL+1,X	; Y1 COORD
+-	AND	#$FE
+	TAY
+	LDA	(SRC),Y
+	STA	GBASL
+	INY
+	LDA	(SRC),Y
+	STA	GBASH
+	LDA	ESTKL+1,X
+	LSR
+	LDA	ESTKL+2,X	; X COORD
+	LDX	$30		; COLOR
+	PHP
+	SEI
+end
+asm _dgrVLinPix
+	JSR	$3000
+	PLP
+	LDX	ESP
+	INC	ESTKL+1,X	; Y1 COORD
+	LDA	ESTKL+1,X
+	CMP	ESTKL,X		; Y2 COORD
+	BCC	-
+	BEQ	-
+	INX
+	INX
+	INX
+	RTS
+end
+//
+// Plot horizontal row of pixels
+//
+asm dgrBLT(buff, x1, x2, y1, y2, src)
+	; GET BUFFER ADDRESS
+	STX	ESP
+	LDA	ESTKL,X		; SPRITE
+	STA	SRCL
+	LDA	ESTKH,X
+	STA	SRCH
+	LDA	ESTKL+5,X
+	STA	DSTL
+	LDA	ESTKH+5,X
+	STA	DSTH
+	LDA	ESTKL+2,X	; Y1 COORD
+	STA	ESTKH+2,X	; Y COORD
+-	CMP	#48
+	BCC	+++
+	AND	#$FE
+	TAY
+	LDA	(DST),Y
+	STA	GBASL
+	INY
+	LDA	(DST),Y
+	STA	GBASH
+	LDA	ESTKL+4,X	; X1 COORD
+	STA	ESTKH+4,X
+--	CMP	#80
+	BCC	++
+	STA	TMP
+	LDA	ESTKH+2,X	; Y COORD
+	LSR
+	LDY	#$00
+	LDA	(SRC),Y
+	INC	SRCL
+	BNE	+
+	INC	SRCH
++	TAX
+	BEQ	++
+	LDA	TMP
+	PHP
+	SEI
+end
+asm _dgrBLTPix
+	JSR	$4000
+	PLP
+++	LDX	ESP
+	INC	ESTKH+4,X	; X COORD
+	LDA	ESTKH+4,X
+	CMP	ESTKL+3,X	; X2 COORD
+	BCC	--
+	BEQ	--
++++	INC	ESTKH+2,X	; Y COORD
+	LDA	ESTKH+2,X
+	CMP	ESTKL+1,X	; Y2 COORD
+	BCC	-
+	BEQ	-
+	INX
+	INX
+	INX
+	INX
+	INX
+	RTS
+end
+//
+// Internal set pixel routine
+//
+asm _dgrSetPix
+	BCS	++
+	; EVEN ROW
+	LSR
+	TAY
+	BCS	+
+end
+asm _dgrSetEvnEvn
+	; EVEN PIXEL
+	LDA	$2000,X
+	AND	#$0F
+	STA	TMP
+	JSR	$0100		; LDA AUX (DST),Y
+	AND	#$F0
+	ORA	TMP
+	STA	$C005		; WRITE AUX MEM
+	STA	(GBASE),Y
+	STA	$C004		; WRITE MAIN MEM
+	BCC	++++
+end
+asm _dgrSetEvnOdd
+	; ODD PIXEL
++	LDA	$1000,X
+	AND	#$0F
+	STA	TMP
+	LDA	(GBASE),Y
+	AND	#$F0
+	ORA	TMP
+	STA	(GBASE),Y
+	BCS	++++
+	; ODD ROW
+++	LSR
+	TAY
+	BCS	+++
+end
+asm _dgrSetOddEvn
+	; EVEN PIXEL
+	LDA	$2000,X
+	AND	#$F0
+	STA	TMP
+	JSR	$0100		; LDA AUX (DST),Y
+	AND	#$0F
+	ORA	TMP
+	STA	$C005		; WRITE AUX MEM
+	STA	(GBASE),Y
+	STA	$C004		; WRITE MAIN MEM
+	BCC	++++
+end
+asm _dgrSetOddOdd
+	; ODD PIXEL
++++	LDA	$1000,X
+	AND	#$F0
+	STA	TMP
+	LDA	(GBASE),Y
+	AND	#$0F
+	ORA	TMP
+	STA	(GBASE),Y
+++++	RTS
+end
+asm auxRead
+	STA	$C003		; READ AUX MEM
+	LDA	(GBASE),Y
+	STA	$C002		; READ MAIN MEM
+	RTS
+end
+//
+// Plot horizontal row of pixels
+//
+asm dgrTile(buff, x, y, src)
+	; GET BUFFER ADDRESS
+	STX	ESP
+	LDA	ESTKL,X		; TILE
+	STA	SRCL
+	LDA	ESTKH,X
+	STA	SRCH
+	LDA	ESTKL+3,X
+	STA	DSTL
+	LDA	ESTKH+3,X
+	STA	DSTH
+	LDA	ESTKL+1,X	; Y COORD
+	CLC
+	ADC	#$08
+	STA	ESTKH+1,X
+	LDA	ESTKL+1,X	; Y COORD
+-	CMP	#48
+	BCC	+++
+	AND	#$FE
+	TAY
+	LDA	(DST),Y
+	STA	GBASL
+	INY
+	LDA	(DST),Y
+	STA	GBASH
+	LDA	ESTKL+2,X	; X COORD
+	CLC
+	ADC	#$08
+	STA	ESTKH+2,X
+	LDA	ESTKL+2,X	; X COORD
+--	CMP	#80
+	BCC	++
+	LSR
+	TAY
+	PHP
+	SEI
+	LDX	#$00
+	LDA	(SRC,X)
+	INC	SRCL
+	BNE	+
+	INC	SRCH
++	STA	$C005		; WRITE AUX MEM
+	STA	(GBASE),Y
+	STA	$C004		; WRITE MAIN MEM
+	LDA	(SRC,X)
+	INC	SRCL
+	BNE	+
+	INC	SRCH
++	STA	(GBASE),Y
+	PLP
+	LDX	ESP
+++	INC	ESTKL+2,X	; X COORD
+	INC	ESTKL+2,X	; X COORD
+	LDA	ESTKL+2,X
+	CMP	ESTKH+2,X	; X2 COORD
+	BCC	--
+	BEQ	--
++++	INC	ESTKL+1,X	; Y1 COORD
+	INC	ESTKL+1,X	; Y1 COORD
+	LDA	ESTKL+1,X
+	CMP	ESTKH+1,X	; Y2 COORD
+	BCC	-
+	BEQ	-
+	INX
+	INX
+	INX
+	RTS
+end
+//
+// Wait for VLB
+//
 asm vlbWait
 	DEX
 -	LDA	$C019
@@ -208,7 +398,9 @@ asm vlbWait
 	BPL	-
 	RTS
 end
-
+//
+// Set double lores graphics
+//
 def dgrMode
 	^showlores
 	^showfull
@@ -219,7 +411,9 @@ def dgrMode
 //	^mapaux = 0
 	^an3on
 end
-
+//
+// Set text mode
+//
 def txtMode
 	^showtext
 	^showpage1
@@ -228,47 +422,69 @@ def txtMode
 	^^mapmain = 0
 	^an3on
 end
-
-def dgrClr(buff, clr)
-	byte row
-	word fillclr
+//
+// Set color for cear & plot routines
+//
+def dgrColor(clr)
+	^$30 = clr & $0F
+end
+//
+// Clear the buffer
+//
+def dgrClear(buff, clr)
+	byte y
 	
-	clr = clr & $0F
-	fillclr = (oddclr[clr] << 8) | evnclr[clr]
-	for row = 0 to 5
-		memset(buff, fillclr, 80)
-		buff.1++
-		memset(buff, fillclr, 80)
-		buff.1++
-		memset(buff, fillclr, 80)
-		buff.1++
-		memset(buff, fillclr, 80)
-		buff.1++
+	^$30 = clr & $0F
+	for y = 0 to 47
+		dgrHLin(buff, 0, 79, y)
 	next
 end
-
+def dgrFill(buff, tile)
+	byte x, y
+	
+	for y = 0 to 47 step 8
+		for x = 0 to 79 step 8
+			dgrTile(buff, x, y, @tile)
+		next
+	next
+end
+//
+// Test routine
+//
 def dgrTest
-	word dgrbuff
-	byte clsclr
-  
+	byte i, j
+	
 	dgrMode
-	dgrbuff = heapalloc(256*24)
+	^showpage2
 	^$C010
+	j = 0
 	while ^$C000 < 128
-		dgrClr(dgrbuff, clsclr)
-		//vlbWait
-		dgrUpdate(dgrbuff)
-		clsclr++
+		//dgrClear(dgrbuff[1], j)
+		j++
+		if j > 40
+			j = 0
+		fin
+		dgrFill(dgrbuff[1], @tile1)
+		dgrBLT(dgrbuff[1], 8, 15, j, j + 7, @sprite1)
+		for i = 0 to 47
+			dgrColor(i)
+			dgrPlot(dgrbuff[1], i, i)
+		next
 	loop
-	heaprelease(dgrbuff)
 	^$C010
 	txtMode
 end
 
 // Assembly fixups
-dgrPlotEvnEvn:1 = @evnclr
-dgrPlotEvnOdd:1 = @oddclr
-dgrPlotOddEvn:1 = @evnclr
-dgrPlotOddOdd:1 = @oddclr
+_dgrPlotPix:1 = @_dgrSetPix
+_dgrHLinPix:1 = @_dgrSetPix
+_dgrVLinPix:1 = @_dgrSetPix
+_dgrBLTPix:1  = @_dgrSetPix
+_dgrSetEvnEvn:1 = @evnclr
+_dgrSetEvnOdd:1 = @oddclr
+_dgrSetOddEvn:1 = @evnclr
+_dgrSetOddOdd:1 = @oddclr
+// Put read AUX mem routine in scary location
+memcpy($0100, @auxRead, 9)
 dgrTest
 done
