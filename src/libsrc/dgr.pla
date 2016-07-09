@@ -77,7 +77,7 @@ end
 //
 // Plot pixel
 //
-asm dgrPlot(buff, x, y)
+export asm dgrPlot(buff, x, y)
 	; GET BUFFER ADDRESS
 	STX	ESP
 	LDA	ESTKL+2,X
@@ -109,7 +109,7 @@ end
 //
 // Plot horizontal row of pixels
 //
-asm dgrHLin(buff, x1, x2, y)
+export asm dgrHLin(buff, x1, x2, y)
 	; GET BUFFER ADDRESS
 	STX	ESP
 	LDA	ESTKL+3,X
@@ -149,7 +149,7 @@ end
 //
 // Plot horizontal row of pixels
 //
-asm dgrVLin(buff, x, y1, y2)
+export asm dgrVLin(buff, x, y1, y2)
 	; GET BUFFER ADDRESS
 	STX	ESP
 	LDA	ESTKL+3,X
@@ -188,9 +188,7 @@ end
 //
 // Plot horizontal row of pixels
 //
-asm dgrBLT(buff, x, y, width, height, src)
-	; GET BUFFER ADDRESS
-	STX	ESP
+export asm dgrBLT(buff, x, y, width, height, src)
 	LDA	ESTKL,X		; SPRITE
 	STA	SRCL
 	LDA	ESTKH,X
@@ -214,6 +212,7 @@ asm dgrBLT(buff, x, y, width, height, src)
 	ADC	ESTKL+1,X
 	BMI	++++
 	STA	ESTKH+1,X	; Y2 COORD
+	STX	ESP
 	LDA	ESTKH+3,X
 -	CMP	#48
 	BCC	+
@@ -234,6 +233,8 @@ asm dgrBLT(buff, x, y, width, height, src)
 	STA	GBASH
 	LDA	ESTKL+4,X	; X1 COORD
 	STA	ESTKH+4,X	; X COORD
+	PHP
+	SEI
 --	CMP	#80
 	BCS	++
 	STA	TMP
@@ -244,12 +245,9 @@ asm dgrBLT(buff, x, y, width, height, src)
 	BEQ	++
 	TAX
 	LDA	TMP
-	PHP
-	SEI
 end
 asm _dgrBLTPix
 	JSR	$4000
-	PLP
 	LDX	ESP
 ++	INC	SRCL
 	BNE	+
@@ -259,6 +257,7 @@ asm _dgrBLTPix
 	BMI	--
 	CMP	ESTKH+2,X	; X2 COORD
 	BCC	--
+	PLP
 +++	INC	ESTKH+3,X	; Y COORD
 	LDA	ESTKH+3,X
 	BMI	-
@@ -292,7 +291,7 @@ asm _dgrSetEvnEvn
 	STA	$C005		; WRITE AUX MEM
 	STA	(GBASE),Y
 	STA	$C004		; WRITE MAIN MEM
-	BCC	++++
+	RTS
 end
 asm _dgrSetEvnOdd
 	; ODD PIXEL
@@ -303,7 +302,7 @@ asm _dgrSetEvnOdd
 	AND	#$F0
 	ORA	TMP
 	STA	(GBASE),Y
-	BCS	++++
+	RTS
 	; ODD ROW
 ++	LSR
 	TAY
@@ -320,7 +319,7 @@ asm _dgrSetOddEvn
 	STA	$C005		; WRITE AUX MEM
 	STA	(GBASE),Y
 	STA	$C004		; WRITE MAIN MEM
-	BCC	++++
+	RTS
 end
 asm _dgrSetOddOdd
 	; ODD PIXEL
@@ -331,7 +330,7 @@ asm _dgrSetOddOdd
 	AND	#$0F
 	ORA	TMP
 	STA	(GBASE),Y
-++++	RTS
+	RTS
 end
 asm auxRead
 	STA	$C003		; READ AUX MEM
@@ -342,8 +341,7 @@ end
 //
 // Plot horizontal row of pixels
 //
-asm dgrTile(buff, x, y, src)
-	; GET BUFFER ADDRESS
+export asm dgrTile(buff, x, y, src)
 	STX	ESP
 	LDA	ESTKL,X		; TILE
 	STA	SRCL
@@ -387,11 +385,11 @@ asm dgrTile(buff, x, y, src)
 	STA	GBASH
 	LDA	ESTKL+2,X	; X1 COORD
 	STA	TMPH		; X COORD
+	PHP
+	SEI
 --	LSR
 	TAY
 	CMP	#40
-	PHP
-	SEI
 	LDX	#$00
 	LDA	(SRC,X)
 	INC	SRCL
@@ -405,16 +403,16 @@ asm dgrTile(buff, x, y, src)
 	INC	SRCL
 	BNE	+
 	INC	SRCH
-+	BCS	+
++	BCS	++
 	STA	(GBASE),Y
-+	PLP
-	LDX	ESP
 ++	INC	TMPH		; X COORD
 	INC	TMPH		; X COORD
+	LDX	ESP
 	LDA	TMPH
 	BMI	--
 	CMP	ESTKH+2,X	; X2 COORD
 	BCC	--
+	PLP
 +++	INC	TMPL		; Y COORD
 	INC	TMPL		; Y COORD
 	LDA	TMPL
@@ -422,6 +420,103 @@ asm dgrTile(buff, x, y, src)
 	CMP	ESTKH+1,X	; Y2 COORD
 	BCC	-
 ++++	INX
+	INX
+	INX
+	RTS
+end
+//
+// Draw a string of tiles
+//
+export asm dgrTileStr(buff, x, y, tilestr, strlen, tilebuff)
+	DEX
+-	DEX
+	DEX
+	DEX
+	LDA	ESTKL+9,X	; BUFF
+	STA	ESTKL+3,X
+	LDA	ESTKH+9,X
+	STA	ESTKH+3,X
+	LDA	ESTKL+8,X	; X COORD
+	STA	ESTKL+2,X
+	LDA	ESTKL+7,X	; Y COORD
+	STA	ESTKL+1,X
+	LDA	ESTKL+4,X	; TILE
+	STA	ESTKL,X
+	LDA	ESTKH+4,X	; TILE
+	STA	ESTKH,X
+end
+asm _dgrTileTile
+	JSR	$5000
+	LDA	ESTKL+5,X	; UPDATE X COORD
+	CLC
+	ADC	#$08
+	CMP	#80		; OFF RIGHT SIDE
+	BPL	+
+	STA	ESTKL+5,X
+	DEC	ESTKL+2,X	; DEC STRLEN
+	BNE	-
++	INX
+	INX
+	INX
+	INX
+	INX
+	INX
+	RTS
+end
+//
+// Draw a string of tiles
+//
+export asm dgrFill(buff, x, y, tile)
+	LDA	ESTKL+2,X
+	AND	#$0F
+	STA	ESTKL+2,X
+	LDA	ESTKL+1,X
+	AND	#$0F
+	STA	ESTKL+1,X
+	LDA	#$00
+	SEC
+	SBC	ESTKL+2,X	; ORIGINAL X
+	STA	ESTKL+2,X
+	STA	ESTKH+2,X
+	LDA	#$00
+	SEC
+	SBC	ESTKL+1,X
+	STA	ESTKL+1,X
+	DEX
+-	DEX
+	DEX
+	DEX
+	LDA	ESTKL+7,X	; BUFF
+	STA	ESTKL+3,X
+	LDA	ESTKH+7,X
+	STA	ESTKH+3,X
+	LDA	ESTKL+6,X	; X COORD
+	STA	ESTKL+2,X
+	LDA	ESTKL+5,X	; Y COORD
+	STA	ESTKL+1,X
+	LDA	ESTKL+4,X	; TILE
+	STA	ESTKL,X
+	LDA	ESTKH+4,X	; TILE
+	STA	ESTKH,X
+end
+asm _dgrFillTile
+	JSR	$5000
+	LDA	ESTKL+3,X	; UPDATE X COORD
+	CLC
+	ADC	#$08
+	STA	ESTKL+3,X
+	CMP	#80		; OFF RIGHT SIDE?
+	BMI	-
+	LDA	ESTKH+3,X	; RESTORE X COORD
+	STA	ESTKL+3,X
+	LDA	ESTKL+2,X	; UPDATE Y COORD
+	CLC
+	ADC	#$08
+	STA	ESTKL+2,X
+	CMP	#48		; OFF BOTTOM?
+	BMI	-
+	INX
+	INX
 	INX
 	INX
 	RTS
@@ -440,7 +535,7 @@ end
 //
 // Set double lores graphics, return draw buffer
 //
-def dgrMode
+export def dgrMode
 	^showlores
 	^showfull
 	^showgraphics
@@ -454,7 +549,7 @@ end
 //
 // Set text mode
 //
-def txtMode
+export def txtMode
 	^showtext
 	^showpage1
 	^ena80    = 0
@@ -466,7 +561,7 @@ end
 //
 // Set display page, return other page
 //
-def dgrShow(page)
+export def dgrShow(page)
 	page = page & 1
 	^(showpage1 + page)
 	return page ^ 1
@@ -474,13 +569,13 @@ end
 //
 // Set color for cear & plot routines
 //
-def dgrColor(clr)
+export def dgrColor(clr)
 	^$30 = clr & $0F
 end
 //
 // Draw line
 //
-def dgrLine(buff, x1, y1, x2, y2)
+export def dgrLine(buff, x1, y1, x2, y2)
 	byte dx, dy, dx2, dy2, pp
 	word sx, sy, err, dd2
 	
@@ -565,22 +660,12 @@ end
 //
 // Clear the buffer
 //
-def dgrClear(buff, clr)
-	byte y
+export def dgrClear(buff, clr)
+	byte[32] clrtile
 	
-	^$30 = clr & $0F
-	for y = 0 to 47
-		dgrHLin(buff, 0, 79, y)
-	next
-end
-def dgrFill(buff, ox, oy, tile)
-	byte x, y
-	
-	for y = -oy to 47 step 8
-		for x = -ox to 79 step 8
-			dgrTile(buff, x, y, tile)
-		next
-	next
+	clr = evnclr[clr&$0F] | (oddclr[clr&$0F] << 8)
+	memset(@clrtile, clr, 32)
+	return dgrFill(buff, 0, 0, @clrtile)
 end
 //
 // Test routine
@@ -590,6 +675,9 @@ def dgrTest
 	word i, j, ii, ij
 	
 	b = dgrMode
+	for k = 15 downto 0
+		dgrClear(dgrbuff[0], k)
+	next
 	for l = 0 to 79
 		dgrColor(l)
 		dgrLine(dgrbuff[0], 0, 0, l, 47)
@@ -598,7 +686,6 @@ def dgrTest
 		dgrColor(l)
 		dgrLine(dgrbuff[0], 0, 0, 79, l)
 	next
-	k = 0
 	ii = 2
 	ij = -1
 	i = 40
@@ -608,7 +695,7 @@ def dgrTest
 		dgrFill(dgrbuff[b], k, k, @tile1)
 		dgrBLT(dgrbuff[b], i, j, 8, 8, @sprite1)
 		b = dgrShow(b)
-		k = (k + 1) & $07
+		k++
 		i = i + ii
 		if i < -3 or i > 75
 			ii = -ii
@@ -623,10 +710,12 @@ def dgrTest
 end
 
 // Assembly fixups
-_dgrPlotPix:1 = @_dgrSetPix
-_dgrHLinPix:1 = @_dgrSetPix
-_dgrVLinPix:1 = @_dgrSetPix
-_dgrBLTPix:1  = @_dgrSetPix
+_dgrPlotPix:1   = @_dgrSetPix
+_dgrHLinPix:1   = @_dgrSetPix
+_dgrVLinPix:1   = @_dgrSetPix
+_dgrBLTPix:1    = @_dgrSetPix
+_dgrTileTile:1  = @dgrTile
+_dgrFillTile:1  = @dgrTile
 _dgrSetEvnEvn:1 = @evnclr
 _dgrSetEvnOdd:1 = @oddclr
 _dgrSetOddEvn:1 = @evnclr
