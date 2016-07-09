@@ -56,22 +56,23 @@ byte[]        = $88,$99,$AA,$BB,$CC,$DD,$EE,$FF
 byte[] sprite1 = $0,$0,$5,$5,$5,$5,$0,$0
 byte[]         = $0,$5,$A,$A,$A,$A,$5,$0
 byte[]         = $5,$A,$F,$F,$F,$F,$A,$5
-byte[]         = $5,$A,$F,$F,$F,$F,$A,$5
-byte[]         = $5,$A,$F,$F,$F,$F,$A,$5
+byte[]         = $5,$A,$F,$0,$0,$F,$A,$5
+byte[]         = $5,$A,$F,$0,$0,$F,$A,$5
 byte[]         = $5,$A,$F,$F,$F,$F,$A,$5
 byte[]         = $0,$5,$A,$A,$A,$A,$5,$0
 byte[]         = $0,$0,$5,$5,$5,$5,$0,$0
 
-byte[] tile1 = $88,$11,$88,$11,$88,$11,$88,$11
-byte[]       = $88,$11,$88,$11,$88,$11,$88,$11
-byte[]       = $88,$11,$88,$11,$88,$11,$88,$11
-byte[]       = $88,$11,$88,$11,$88,$11,$88,$11
+byte[] tile1 = $81,$12,$81,$12,$81,$12,$81,$12
+byte[]       = $98,$13,$98,$13,$98,$13,$98,$13
+byte[]       = $8E,$DB,$8E,$DB,$8E,$DB,$8E,$DB
+byte[]       = $A8,$57,$A8,$57,$A8,$57,$A8,$57
 
 asm dgrInc(buff)
 !SOURCE	"vmsrc/plvmzp.inc"
 GBASL	=	$26
 GBASH	=	$27
 GBASE	=	GBASL
+GCLR    =       $30
 end
 //
 // Plot pixel
@@ -93,7 +94,7 @@ asm dgrPlot(buff, x, y)
 	STA	GBASH
 	LDA	ESTKL+1,X	; X COORD
 	LSR	ESTKL,X
-	LDX	$30		; COLOR
+	LDX	GCLR		; COLOR
 	PHP
 	SEI
 end
@@ -129,7 +130,7 @@ asm dgrHLin(buff, x1, x2, y)
 -	PLP
 	PHP
 	SEI
-	LDX	$30		; COLOR
+	LDX	GCLR		; COLOR
 end
 asm _dgrHLinPix
 	JSR	$3000
@@ -166,7 +167,7 @@ asm dgrVLin(buff, x, y1, y2)
 	LDA	ESTKL+1,X
 	LSR
 	LDA	ESTKL+2,X	; X COORD
-	LDX	$30		; COLOR
+	LDX	GCLR		; COLOR
 	PHP
 	SEI
 end
@@ -187,7 +188,7 @@ end
 //
 // Plot horizontal row of pixels
 //
-asm dgrBLT(buff, x1, x2, y1, y2, src)
+asm dgrBLT(buff, x, y, width, height, src)
 	; GET BUFFER ADDRESS
 	STX	ESP
 	LDA	ESTKL,X		; SPRITE
@@ -198,11 +199,29 @@ asm dgrBLT(buff, x1, x2, y1, y2, src)
 	STA	DSTL
 	LDA	ESTKH+5,X
 	STA	DSTH
-	LDA	ESTKL+2,X	; Y1 COORD
-	STA	ESTKH+2,X	; Y COORD
+	LDA	ESTKL+4,X	; X1 COORD
+	CLC
+	ADC	ESTKL+2,X
+	BMI	++++
+	STA	ESTKH+2,X	; X2 COORD
+	LDA	ESTKL+3,X	; Y1 COORD
+	STA	ESTKH+3,X	; Y COORD
+	CLC
+	ADC	ESTKL+1,X
+	BMI	++++
+	STA	ESTKH+1,X	; Y2 COORD
+	LDA	ESTKH+3,X
 -	CMP	#48
-	BCS	+++
-	AND	#$FE
+	BCC	+
+	LDA	SRCL		; SKIP TO NEXT ROW
+	CLC
+	ADC	ESTKL+2,X	; WIDTH
+	STA	SRCL
+	LDA	SRCH
+	ADC	#$00
+	STA	SRCH
+	BNE	+++
++	AND	#$FE
 	TAY
 	LDA	(DST),Y
 	STA	GBASL
@@ -210,19 +229,16 @@ asm dgrBLT(buff, x1, x2, y1, y2, src)
 	LDA	(DST),Y
 	STA	GBASH
 	LDA	ESTKL+4,X	; X1 COORD
-	STA	ESTKH+4,X
+	STA	ESTKH+4,X	; X COORD
 --	CMP	#80
 	BCS	++
 	STA	TMP
-	LDA	ESTKH+2,X	; Y COORD
+	LDA	ESTKH+3,X	; Y COORD
 	LSR
 	LDY	#$00
 	LDA	(SRC),Y
-	INC	SRCL
-	BNE	+
-	INC	SRCH
-+	TAX
 	BEQ	++
+	TAX
 	LDA	TMP
 	PHP
 	SEI
@@ -230,18 +246,21 @@ end
 asm _dgrBLTPix
 	JSR	$4000
 	PLP
-++	LDX	ESP
-	INC	ESTKH+4,X	; X COORD
+	LDX	ESP
+++	INC	SRCL
+	BNE	+
+	INC	SRCH
++	INC	ESTKH+4,X	; X COORD
 	LDA	ESTKH+4,X
-	CMP	ESTKL+3,X	; X2 COORD
+	BMI	--
+	CMP	ESTKH+2,X	; X2 COORD
 	BCC	--
-	BEQ	--
-+++	INC	ESTKH+2,X	; Y COORD
-	LDA	ESTKH+2,X
-	CMP	ESTKL+1,X	; Y2 COORD
++++	INC	ESTKH+3,X	; Y COORD
+	LDA	ESTKH+3,X
+	BMI	-
+	CMP	ESTKH+1,X	; Y2 COORD
 	BCC	-
-	BEQ	-
-	INX
+++++	INX
 	INX
 	INX
 	INX
@@ -333,16 +352,25 @@ asm dgrTile(buff, x, y, src)
 	LDA	ESTKL+2,X	; X1 COORD
 	CLC
 	ADC	#$08
+	BMI	++++
 	STA	ESTKH+2,X	; X2 COORD
 	LDA	ESTKL+1,X	; Y1 COORD
 	STA	TMPL		; Y COORD
 	CLC
 	ADC	#$08
+	BMI	++++
 	STA	ESTKH+1,X	; Y2 COORD
 	LDA	TMPL		; Y COORD
 -	CMP	#48
-	BCS	+++
-	AND	#$FE
+	BCC	+
+	LDA	SRCL		; SKIP TO NEXT ROW
+	ADC	#$07		; CARRY = 1
+	STA	SRCL
+	LDA	SRCH
+	ADC	#$00
+	STA	SRCH
+	BNE	+++
++	AND	#$FE
 	TAY
 	LDA	(DST),Y
 	STA	GBASL
@@ -352,7 +380,6 @@ asm dgrTile(buff, x, y, src)
 	LDA	ESTKL+2,X	; X1 COORD
 	STA	TMPH		; X COORD
 --	CMP	#80
-	BCS	++
 	LSR
 	TAY
 	PHP
@@ -362,27 +389,31 @@ asm dgrTile(buff, x, y, src)
 	INC	SRCL
 	BNE	+
 	INC	SRCH
-+	STA	$C005		; WRITE AUX MEM
++	BCS	+
+	STA	$C005		; WRITE AUX MEM
 	STA	(GBASE),Y
 	STA	$C004		; WRITE MAIN MEM
-	LDA	(SRC,X)
++	LDA	(SRC,X)
 	INC	SRCL
 	BNE	+
 	INC	SRCH
-+	STA	(GBASE),Y
-	PLP
++	BCS	+
+	STA	(GBASE),Y
++	PLP
 	LDX	ESP
 ++	INC	TMPH		; X COORD
 	INC	TMPH		; X COORD
 	LDA	TMPH
+	BMI	--
 	CMP	ESTKH+2,X	; X2 COORD
 	BCC	--
 +++	INC	TMPL		; Y COORD
 	INC	TMPL		; Y COORD
 	LDA	TMPL
+	BMI	-
 	CMP	ESTKH+1,X	; Y2 COORD
 	BCC	-
-	INX
+++++	INX
 	INX
 	INX
 	RTS
@@ -399,7 +430,7 @@ asm vlbWait
 	RTS
 end
 //
-// Set double lores graphics
+// Set double lores graphics, return draw buffer
 //
 def dgrMode
 	^showlores
@@ -410,6 +441,7 @@ def dgrMode
 	^show80 = 0
 //	^mapaux = 0
 	^an3on
+	return 1
 end
 //
 // Set text mode
@@ -421,6 +453,14 @@ def txtMode
 	^show40   = 0
 	^^mapmain = 0
 	^an3on
+end
+//
+// Set display page, return other page
+//
+def dgrShow(page)
+	page = page & 1
+	^(showpage1 + page)
+	return page ^ 1
 end
 //
 // Set color for cear & plot routines
@@ -452,24 +492,32 @@ end
 // Test routine
 //
 def dgrTest
-	byte i, j
+	byte b, l
+	word i, j, ii, ij
 	
-	dgrMode
-	^showpage2
+	b = dgrMode
+	ii = 1
+	ij = -1
+	i = 40
+	j = 10
 	^$C010
-	j = 0
 	while ^$C000 < 128
-		//dgrClear(dgrbuff[1], j)
-		j++
-		if j > 40
-			j = 0
+		//dgrClear(dgrbuff[b], j)
+		dgrFill(dgrbuff[b], @tile1)
+		dgrBLT(dgrbuff[b], i, j, 8, 8, @sprite1)
+		i = i + ii
+		if i < -3 or i > 75
+			ii = -ii
 		fin
-		dgrFill(dgrbuff[1], @tile1)
-		dgrBLT(dgrbuff[1], 20, 27, j, j + 7, @sprite1)
-		for i = 0 to 47
-			dgrColor(i)
-			dgrPlot(dgrbuff[1], i, i)
+		j = j + ij
+		if j < -3 or j > 43
+			ij = -ij
+		fin
+		for l = 0 to 47
+			dgrColor(l)
+			dgrPlot(dgrbuff[b], l, l)
 		next
+		b = dgrShow(b)
 	loop
 	^$C010
 	txtMode
