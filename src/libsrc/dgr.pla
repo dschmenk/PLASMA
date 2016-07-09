@@ -1,5 +1,5 @@
 import cmdsys
-	predef memset, memcpy, heapmark, heapalloc, heaprelease
+	predef memset, memcpy, heapmark, heapalloc, heaprelease, call
 	byte MACHID
 	//
 	// System flags: memory allocator screen holes.
@@ -62,10 +62,10 @@ byte[]         = $5,$A,$F,$F,$F,$F,$A,$5
 byte[]         = $0,$5,$A,$A,$A,$A,$5,$0
 byte[]         = $0,$0,$5,$5,$5,$5,$0,$0
 
-byte[] tile1 = $81,$12,$81,$12,$81,$12,$81,$12
-byte[]       = $98,$13,$98,$13,$98,$13,$98,$13
-byte[]       = $8E,$DB,$8E,$DB,$8E,$DB,$8E,$DB
-byte[]       = $A8,$57,$A8,$57,$A8,$57,$A8,$57
+byte[] tile1 = $88,$11,$88,$11,$88,$11,$AA,$00
+byte[]       = $88,$11,$88,$11,$88,$11,$AA,$00
+byte[]       = $88,$11,$88,$11,$88,$11,$AA,$00
+byte[]       = $0A,$05,$0A,$05,$0A,$05,$0A,$00
 
 asm dgrInc(buff)
 !SOURCE	"vmsrc/plvmzp.inc"
@@ -200,11 +200,15 @@ asm dgrBLT(buff, x, y, width, height, src)
 	LDA	ESTKH+5,X
 	STA	DSTH
 	LDA	ESTKL+4,X	; X1 COORD
+	CMP	#80
+	BPL	++++
 	CLC
 	ADC	ESTKL+2,X
 	BMI	++++
 	STA	ESTKH+2,X	; X2 COORD
 	LDA	ESTKL+3,X	; Y1 COORD
+	CMP	#48
+	BPL	++++
 	STA	ESTKH+3,X	; Y COORD
 	CLC
 	ADC	ESTKL+1,X
@@ -350,11 +354,15 @@ asm dgrTile(buff, x, y, src)
 	LDA	ESTKH+3,X
 	STA	DSTH
 	LDA	ESTKL+2,X	; X1 COORD
+	CMP	#80
+	BPL	++++
 	CLC
 	ADC	#$08
 	BMI	++++
 	STA	ESTKH+2,X	; X2 COORD
 	LDA	ESTKL+1,X	; Y1 COORD
+	CMP	#48
+	BPL	++++
 	STA	TMPL		; Y COORD
 	CLC
 	ADC	#$08
@@ -379,9 +387,9 @@ asm dgrTile(buff, x, y, src)
 	STA	GBASH
 	LDA	ESTKL+2,X	; X1 COORD
 	STA	TMPH		; X COORD
---	CMP	#80
-	LSR
+--	LSR
 	TAY
+	CMP	#40
 	PHP
 	SEI
 	LDX	#$00
@@ -453,6 +461,7 @@ def txtMode
 	^show40   = 0
 	^^mapmain = 0
 	^an3on
+	return call($FC58, 0, 0, 0, 0) // home()
 end
 //
 // Set display page, return other page
@@ -469,6 +478,91 @@ def dgrColor(clr)
 	^$30 = clr & $0F
 end
 //
+// Draw line
+//
+def dgrLine(buff, x1, y1, x2, y2)
+	byte dx, dy, dx2, dy2, pp
+	word sx, sy, err, dd2
+	
+	if x1 < x2
+		sx = 1
+		dx = x2 - x1
+	else
+		sx = -1
+		dx = x1 - x2
+	fin
+	if y1 < y2
+		sy = 1
+		dy = y2 - y1
+	else
+		sy = -1
+		dy = y1 - y2
+	fin
+	dx2 = dx << 1
+	dy2 = dy << 1
+	if dx >= dy
+		// Horizontal line
+		if sx < 0
+			pp = x1
+			x1 = x2
+			x2 = pp
+			pp = y1
+			y1 = y2
+			y2 = pp
+			sy = -sy
+		fin
+		dd2 = dx2 - dy2
+		err = dx - dy2
+		sx = 1
+		while dy
+			if err < 0
+				dgrHLin(buff, x1, x1 + sx - 1, y1)
+				x1 = x1 + sx
+				y1 = y1 + sy
+				sx = 1
+				dy--
+				err = err + dd2
+		        else
+				sx++
+				err = err - dy2
+			fin
+		loop
+		if y2 == y1
+			dgrHLin(buff, x1, x2, y1)
+		fin
+	else
+		// Vertical line
+		if sy < 0
+			pp = x1
+			x1 = x2
+			x2 = pp
+			pp = y1
+			y1 = y2
+			y2 = pp
+			sx = -sx
+		fin
+		dd2 = dy2 - dx2
+		err = dy - dx2
+		sy = 1
+		while dx
+			if err < 0
+				dgrVLin(buff, x1, y1, y1 + sy - 1)
+				x1 = x1 + sx
+				y1 = y1 + sy
+				sy = 1
+				dx--
+				err = err + dd2
+		        else
+				sy++
+				err = err - dx2
+			fin
+		loop
+		if x2 == x1
+			dgrVLin(buff, x1, y1, y2)
+		fin
+	fin
+end
+//
 // Clear the buffer
 //
 def dgrClear(buff, clr)
@@ -479,11 +573,11 @@ def dgrClear(buff, clr)
 		dgrHLin(buff, 0, 79, y)
 	next
 end
-def dgrFill(buff, tile)
+def dgrFill(buff, ox, oy, tile)
 	byte x, y
 	
-	for y = 0 to 47 step 8
-		for x = 0 to 79 step 8
+	for y = -oy to 47 step 8
+		for x = -ox to 79 step 8
 			dgrTile(buff, x, y, tile)
 		next
 	next
@@ -492,19 +586,29 @@ end
 // Test routine
 //
 def dgrTest
-	byte b, l
+	byte b, l, k
 	word i, j, ii, ij
 	
 	b = dgrMode
-	ii = 1
+	for l = 0 to 79
+		dgrColor(l)
+		dgrLine(dgrbuff[0], 0, 0, l, 47)
+	next
+	for l = 47 downto 0
+		dgrColor(l)
+		dgrLine(dgrbuff[0], 0, 0, 79, l)
+	next
+	k = 0
+	ii = 2
 	ij = -1
 	i = 40
 	j = 10
 	^$C010
 	while ^$C000 < 128
-		//dgrClear(dgrbuff[b], j)
-		dgrFill(dgrbuff[b], @tile1)
+		dgrFill(dgrbuff[b], k, k, @tile1)
 		dgrBLT(dgrbuff[b], i, j, 8, 8, @sprite1)
+		b = dgrShow(b)
+		k = (k + 1) & $07
 		i = i + ii
 		if i < -3 or i > 75
 			ii = -ii
@@ -513,11 +617,6 @@ def dgrTest
 		if j < -3 or j > 43
 			ij = -ij
 		fin
-		for l = 0 to 47
-			dgrColor(l)
-			dgrPlot(dgrbuff[b], l, l)
-		next
-		b = dgrShow(b)
 	loop
 	^$C010
 	txtMode
