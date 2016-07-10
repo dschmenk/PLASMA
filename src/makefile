@@ -25,6 +25,7 @@ HELLO   = HELLO\#FE1000
 MON     = MON\#FE1000
 HGR1    = HGR1\#FE1000
 HGR1TEST= HGR1TEST\#FE1000
+DGRTEST = DGRTEST\#FE1000
 TEST    = TEST\#FE1000
 TESTLIB = TESTLIB\#FE1000
 PROFILE = PROFILE\#FE1000
@@ -50,7 +51,7 @@ TXTTYPE	= .TXT
 #SYSTYPE	= \#FF2000
 #TXTTYPE	= \#040000
 
-all: $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVM03) $(CMD) $(MEMMGR) $(MEMTEST) $(FIBER) $(SB) $(MON) $(ROD) $(SIEVE) $(UTHERNET2) $(UTHERNET) $(ETHERIP) $(INET) $(DHCP) $(HTTPD) $(ROGUE) $(ROGUEMAP) $(ROGUECOMBAT) $(ROGUEIO) $(HGR1) $(DGR)
+all: $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVM03) $(CMD) $(MEMMGR) $(MEMTEST) $(FIBER) $(SB) $(MON) $(ROD) $(SIEVE) $(UTHERNET2) $(UTHERNET) $(ETHERIP) $(INET) $(DHCP) $(HTTPD) $(ROGUE) $(ROGUEMAP) $(ROGUECOMBAT) $(ROGUEIO) $(HGR1) $(DGR) $(DGRTEST)
 
 clean:
 	-rm *FE1000 *FF2000 $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVM03)
@@ -158,6 +159,10 @@ $(HTTPD): samplesrc/httpd.pla $(PLVM02) $(PLASM)
 $(DGR): libsrc/dgr.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AM < libsrc/dgr.pla > libsrc/dgr.a
 	acme --setpc 4094 -o $(DGR) libsrc/dgr.a
+
+$(DGRTEST): samplesrc/dgrtest.pla $(PLVM02) $(PLASM)
+	./$(PLASM) -AM < samplesrc/dgrtest.pla > samplesrc/dgrtest.a
+	acme --setpc 4094 -o $(DGRTEST) samplesrc/dgrtest.a
 
 $(ROGUE): samplesrc/rogue.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AM < samplesrc/rogue.pla > samplesrc/rogue.a
