@@ -18,6 +18,7 @@ DHCP    = DHCP\#FE1000
 HTTPD   = HTTPD\#FE1000
 DGR     = DGR\#FE1000
 TONE    = TONE\#FE1000
+PORTIO  = PORTIO\#FE1000
 ROGUE   = ROGUE\#FE1000
 ROGUEIO = ROGUEIO\#FE1000
 ROGUEMAP= ROGUEMAP\#FE1000
@@ -52,7 +53,7 @@ TXTTYPE	= .TXT
 #SYSTYPE	= \#FF2000
 #TXTTYPE	= \#040000
 
-all: $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVM03) $(CMD) $(MEMMGR) $(MEMTEST) $(FIBER) $(SB) $(MON) $(ROD) $(SIEVE) $(UTHERNET2) $(UTHERNET) $(ETHERIP) $(INET) $(DHCP) $(HTTPD) $(ROGUE) $(ROGUEMAP) $(ROGUECOMBAT) $(ROGUEIO) $(HGR1) $(TONE) $(DGR) $(DGRTEST)
+all: $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVM03) $(CMD) $(MEMMGR) $(MEMTEST) $(FIBER) $(SB) $(MON) $(ROD) $(SIEVE) $(UTHERNET2) $(UTHERNET) $(ETHERIP) $(INET) $(DHCP) $(HTTPD) $(ROGUE) $(ROGUEMAP) $(ROGUECOMBAT) $(ROGUEIO) $(HGR1) $(TONE) $(DGR) $(DGRTEST) $(PORTIO)
 
 clean:
 	-rm *FE1000 *FF2000 $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVM03)
@@ -160,6 +161,10 @@ $(HTTPD): samplesrc/httpd.pla $(PLVM02) $(PLASM)
 $(TONE): libsrc/tone.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AM < libsrc/tone.pla > libsrc/tone.a
 	acme --setpc 4094 -o $(TONE) libsrc/tone.a
+
+$(PORTIO): libsrc/portio.pla $(PLVM02) $(PLASM)
+	./$(PLASM) -AM < libsrc/portio.pla > libsrc/portio.a
+	acme --setpc 4094 -o $(PORTIO) libsrc/portio.a
 
 $(DGR): libsrc/dgr.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AM < libsrc/dgr.pla > libsrc/dgr.a
