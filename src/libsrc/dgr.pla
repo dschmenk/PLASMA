@@ -112,21 +112,19 @@ export asm dgrHLin(buff, x1, x2, y)
 	STA	GBASH
 	LDA	ESTKL+2,X	; X1 COORD
 	LSR	ESTKL,X
-	PHP
--	PLP
-	PHP
+-	PHP
 	SEI
 	LDX	GCLR		; COLOR
 end
 asm _dgrHLinPix
 	JSR	$3000
+	PLP
 	LDX	ESP
 	INC	ESTKL+2,X	; X1 COORD
 	LDA	ESTKL+2,X
 	CMP	ESTKL+1,X	; X2 COORD
 	BCC	-
 	BEQ	-
-	PLP
 	INX
 	INX
 	INX
@@ -186,7 +184,6 @@ export asm dgrBLT(buff, x, y, width, height, src)
 	LDA	ESTKL+4,X	; X1 COORD
 	CMP	#80
 	BPL	++++
-	CLC
 	ADC	ESTKL+2,X
 	BMI	++++
 	STA	ESTKH+2,X	; X2 COORD
@@ -194,7 +191,6 @@ export asm dgrBLT(buff, x, y, width, height, src)
 	CMP	#48
 	BPL	++++
 	STA	ESTKH+3,X	; Y COORD
-	CLC
 	ADC	ESTKL+1,X
 	BMI	++++
 	STA	ESTKH+1,X	; Y2 COORD
@@ -340,7 +336,6 @@ export asm dgrTile(buff, x, y, src)
 	LDA	ESTKL+2,X	; X1 COORD
 	CMP	#80
 	BPL	++++
-	CLC
 	ADC	#$08
 	BMI	++++
 	STA	ESTKH+2,X	; X2 COORD
@@ -348,7 +343,6 @@ export asm dgrTile(buff, x, y, src)
 	CMP	#48
 	BPL	++++
 	STA	TMPL		; Y COORD
-	CLC
 	ADC	#$08
 	BMI	++++
 	STA	ESTKH+1,X	; Y2 COORD
@@ -376,22 +370,23 @@ export asm dgrTile(buff, x, y, src)
 --	LSR
 	TAY
 	CMP	#40
-	LDX	#$00
-	LDA	(SRC,X)
-	INC	SRCL
+	LDX	#$01
+-	LDA	(SRC,X)
+	PHA
+	DEX
+	BPL	-
+	LDX	#$01
+-	INC	SRCL
 	BNE	+
 	INC	SRCH
-+	BCS	+
-	STA	$C005		; WRITE AUX MEM
++	PLA
+	BCS	+
+	STA	$C004,X		; WRITE AUX or MAIN MEM, depending on pass
 	STA	(GBASE),Y
 	STA	$C004		; WRITE MAIN MEM
-+	LDA	(SRC,X)
-	INC	SRCL
-	BNE	+
-	INC	SRCH
-+	BCS	++
-	STA	(GBASE),Y
-++	INC	TMPH		; X COORD
++	DEX
+	BPL	-
+	INC	TMPH		; X COORD
 	INC	TMPH		; X COORD
 	LDX	ESP
 	LDA	TMPH
@@ -496,8 +491,7 @@ asm _dgrFillTile
 	LDA	ESTKH+3,X	; RESTORE X COORD
 	STA	ESTKL+3,X
 	LDA	ESTKL+2,X	; UPDATE Y COORD
-	CLC
-	ADC	#$08
+	ADC	#$07
 	STA	ESTKL+2,X
 	CMP	#48		; OFF BOTTOM?
 	BMI	-
