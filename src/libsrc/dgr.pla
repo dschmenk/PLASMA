@@ -112,19 +112,21 @@ export asm dgrHLin(buff, x1, x2, y)
 	STA	GBASH
 	LDA	ESTKL+2,X	; X1 COORD
 	LSR	ESTKL,X
--	PHP
+	PHP
+-	PLP
+	PHP
 	SEI
 	LDX	GCLR		; COLOR
 end
 asm _dgrHLinPix
 	JSR	$3000
-	PLP
 	LDX	ESP
 	INC	ESTKL+2,X	; X1 COORD
 	LDA	ESTKL+2,X
 	CMP	ESTKL+1,X	; X2 COORD
 	BCC	-
 	BEQ	-
+	PLP
 	INX
 	INX
 	INX
@@ -184,6 +186,7 @@ export asm dgrBLT(buff, x, y, width, height, src)
 	LDA	ESTKL+4,X	; X1 COORD
 	CMP	#80
 	BPL	++++
+	CLC
 	ADC	ESTKL+2,X
 	BMI	++++
 	STA	ESTKH+2,X	; X2 COORD
@@ -191,6 +194,7 @@ export asm dgrBLT(buff, x, y, width, height, src)
 	CMP	#48
 	BPL	++++
 	STA	ESTKH+3,X	; Y COORD
+	CLC
 	ADC	ESTKL+1,X
 	BMI	++++
 	STA	ESTKH+1,X	; Y2 COORD
@@ -263,51 +267,53 @@ asm _dgrSetPix
 	BCS	+
 end
 asm _dgrSetEvnEvn
-	SEC
-	!byte	$90		; mask CLC
-end
-asm _dgrSetOddEvn
-	CLC
 	; EVEN PIXEL
--	JSR	$0100		; LDA AUX (DST),Y
+	LDA	$2000,X
+	AND	#$0F
 	STA	TMP
-	LDA	#$FF
-	ADC	#$00
-	EOR	#$F0			; #$F0 if even, #$0F if odd
-	PHA
-	AND	TMP
-	STA	TMP
-	PLA
-	EOR	#$FF			; #$0F if even, #$F0 if odd
-	AND	$2000,X
+	JSR	$0100		; LDA AUX (DST),Y
+	AND	#$F0
 	ORA	TMP
 	STA	$C005		; WRITE AUX MEM
 	STA	(GBASE),Y
 	STA	$C004		; WRITE MAIN MEM
 	RTS
-
+end
+asm _dgrSetEvnOdd
+	; ODD PIXEL
++	LDA	$1000,X
+	AND	#$0F
+	STA	TMP
+	LDA	(GBASE),Y
+	AND	#$F0
+	ORA	TMP
+	STA	(GBASE),Y
+	RTS
 	; ODD ROW
 ++	LSR
 	TAY
-	BCC	-
+	BCS	+++
 end
-
-asm _dgrSetOddOdd
-	CLC
-	!byte	$B0		; mask SEC
-end
-asm _dgrSetEvnOdd
-	SEC
-	; ODD PIXEL
-+	LDA	#$FF
-	ADC	#$00
-	EOR	#$0F			; #$F0 if odd, #$0F if even
-	PHA
-	AND	$1000,X
+asm _dgrSetOddEvn
+	; EVEN PIXEL
+	LDA	$2000,X
+	AND	#$F0
 	STA	TMP
-	PLA
-	EOR	#$FF			; #$0F if odd, #$F0 if even
-	AND	(GBASE),Y
+	JSR	$0100		; LDA AUX (DST),Y
+	AND	#$0F
+	ORA	TMP
+	STA	$C005		; WRITE AUX MEM
+	STA	(GBASE),Y
+	STA	$C004		; WRITE MAIN MEM
+	RTS
+end
+asm _dgrSetOddOdd
+	; ODD PIXEL
++++	LDA	$1000,X
+	AND	#$F0
+	STA	TMP
+	LDA	(GBASE),Y
+	AND	#$0F
 	ORA	TMP
 	STA	(GBASE),Y
 	RTS
@@ -334,6 +340,7 @@ export asm dgrTile(buff, x, y, src)
 	LDA	ESTKL+2,X	; X1 COORD
 	CMP	#80
 	BPL	++++
+	CLC
 	ADC	#$08
 	BMI	++++
 	STA	ESTKH+2,X	; X2 COORD
@@ -341,6 +348,7 @@ export asm dgrTile(buff, x, y, src)
 	CMP	#48
 	BPL	++++
 	STA	TMPL		; Y COORD
+	CLC
 	ADC	#$08
 	BMI	++++
 	STA	ESTKH+1,X	; Y2 COORD
@@ -368,23 +376,22 @@ export asm dgrTile(buff, x, y, src)
 --	LSR
 	TAY
 	CMP	#40
-	LDX	#$01
--	LDA	(SRC,X)
-	PHA
-	DEX
-	BPL	-
-	LDX	#$01
--	INC	SRCL
+	LDX	#$00
+	LDA	(SRC,X)
+	INC	SRCL
 	BNE	+
 	INC	SRCH
-+	PLA
-	BCS	+
-	STA	$C004,X		; WRITE AUX or MAIN MEM, depending on pass
++	BCS	+
+	STA	$C005		; WRITE AUX MEM
 	STA	(GBASE),Y
 	STA	$C004		; WRITE MAIN MEM
-+	DEX
-	BPL	-
-	INC	TMPH		; X COORD
++	LDA	(SRC,X)
+	INC	SRCL
+	BNE	+
+	INC	SRCH
++	BCS	++
+	STA	(GBASE),Y
+++	INC	TMPH		; X COORD
 	INC	TMPH		; X COORD
 	LDX	ESP
 	LDA	TMPH
@@ -489,7 +496,8 @@ asm _dgrFillTile
 	LDA	ESTKH+3,X	; RESTORE X COORD
 	STA	ESTKL+3,X
 	LDA	ESTKL+2,X	; UPDATE Y COORD
-	ADC	#$07
+	CLC
+	ADC	#$08
 	STA	ESTKL+2,X
 	CMP	#48		; OFF BOTTOM?
 	BMI	-
@@ -505,10 +513,10 @@ end
 asm vlbWait
 	DEX
 -	LDA	$C019
-	BPL	-		; wait for current one to end
+	BMI	-
 -	LDA	$C019
-	BMI	-		; wait for next one to start
-	RTS			; yes, the flag is saying !vblank
+	BPL	-
+	RTS
 end
 //
 // Set double lores graphics, return draw buffer
@@ -556,7 +564,7 @@ end
 export def dgrLine(buff, x1, y1, x2, y2)
 	byte dx, dy, dx2, dy2, pp
 	word sx, sy, err, dd2
-	
+
 	if x1 < x2
 		sx = 1
 		dx = x2 - x1
@@ -640,7 +648,7 @@ end
 //
 export def dgrClear(buff, clr)
 	byte[32] clrtile
-	
+
 	clr = evnclr[clr&$0F] | (oddclr[clr&$0F] << 8)
 	memset(@clrtile, clr, 32)
 	return dgrFill(buff, 0, 0, @clrtile)
