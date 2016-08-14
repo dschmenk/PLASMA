@@ -9,6 +9,10 @@ ED      = ED\#FF2000
 SB      = SB\#FF2000
 ROD     = ROD\#FE1000
 SIEVE   = SIEVE\#FE1000
+ARGS    = ARGS\#FE1000
+SPIPORT = SPIPORT\#FE1000
+SDFAT   = SDFAT\#FE1000
+FATCAT  = FATCAT\#FE1000
 WIZNET  = WIZNET\#FE1000
 UTHERNET2= UTHERNET2\#FE1000
 UTHERNET= UTHERNET\#FE1000
@@ -53,7 +57,7 @@ TXTTYPE	= .TXT
 #SYSTYPE	= \#FF2000
 #TXTTYPE	= \#040000
 
-all: $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVM03) $(CMD) $(MEMMGR) $(MEMTEST) $(FIBER) $(SB) $(MON) $(ROD) $(SIEVE) $(UTHERNET2) $(UTHERNET) $(ETHERIP) $(INET) $(DHCP) $(HTTPD) $(ROGUE) $(ROGUEMAP) $(ROGUECOMBAT) $(ROGUEIO) $(HGR1) $(TONE) $(DGR) $(DGRTEST) $(PORTIO)
+all: $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVM03) $(CMD) $(ARGS) $(MEMMGR) $(MEMTEST) $(FIBER) $(SB) $(MON) $(ROD) $(SIEVE) $(UTHERNET2) $(UTHERNET) $(ETHERIP) $(INET) $(DHCP) $(HTTPD) $(ROGUE) $(ROGUEMAP) $(ROGUECOMBAT) $(ROGUEIO) $(HGR1) $(TONE) $(DGR) $(DGRTEST) $(PORTIO) $(SPIPORT) $(SDFAT) $(FATCAT)
 
 clean:
 	-rm *FE1000 *FF2000 $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVM03)
@@ -110,6 +114,10 @@ $(SB): toolsrc/sb.pla $(PLVM02) $(PLASM) toolsrc/sb.pla
 	./$(PLASM) -A < toolsrc/sb.pla > toolsrc/sb.a
 	acme --setpc 8192 -o $(SB) toolsrc/sb.a
 
+$(ARGS): libsrc/args.pla $(PLVM02) $(PLASM)
+	./$(PLASM) -AM < libsrc/args.pla > libsrc/args.a
+	acme --setpc 4094 -o $(ARGS) libsrc/args.a
+
 $(MEMMGR): libsrc/memmgr.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AM < libsrc/memmgr.pla > libsrc/memmgr.a
 	acme --setpc 4094 -o $(MEMMGR) libsrc/memmgr.a
@@ -161,6 +169,18 @@ $(HTTPD): samplesrc/httpd.pla $(PLVM02) $(PLASM)
 $(TONE): libsrc/tone.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AM < libsrc/tone.pla > libsrc/tone.a
 	acme --setpc 4094 -o $(TONE) libsrc/tone.a
+
+$(FATCAT): samplesrc/fatcat.pla $(PLVM02) $(PLASM)
+	./$(PLASM) -AM < samplesrc/fatcat.pla > samplesrc/fatcat.a
+	acme --setpc 4094 -o $(FATCAT) samplesrc/fatcat.a
+
+$(SDFAT): libsrc/sdfat.pla $(PLVM02) $(PLASM)
+	./$(PLASM) -AM < libsrc/sdfat.pla > libsrc/sdfat.a
+	acme --setpc 4094 -o $(SDFAT) libsrc/sdfat.a
+
+$(SPIPORT): libsrc/spiport.pla $(PLVM02) $(PLASM)
+	./$(PLASM) -AM < libsrc/spiport.pla > libsrc/spiport.a
+	acme --setpc 4094 -o $(SPIPORT) libsrc/spiport.a
 
 $(PORTIO): libsrc/portio.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AM < libsrc/portio.pla > libsrc/portio.a

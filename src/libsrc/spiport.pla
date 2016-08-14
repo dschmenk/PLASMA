@@ -1,0 +1,240 @@
+import cmdsys
+    predef call, putc
+end
+//
+// Bit banged spi over gameport
+//
+asm spiInc
+!SOURCE	"vmsrc/plvmzp.inc"
+end
+
+export asm spiXferByte(outbyte)
+    STA $C05A       ; ENABLE SLAVE
+    LDY #0          ; ASSUME MSB IS ZERO
+    LDA ESTKL,X     ; GET ARGUMENT
+    BPL +           ; CHECK MSB
+    INY             ; IT'S A ONE
++   STA $C058,Y     ; WRITE BIT 7
+    STA $C040       ; CLOCK
+    LDY #0          ; DOING THIS HERE GIVES TIME FOR OUTPUT TO BECOME STABLE - NOT REALLY NEEDEDd
+    ASL $C061       ; READ BIT 7 INTO CARRY
+    ROL             ; ROTATE INTO ACC
+    BPL +           ; REPEAT FOR ALL BITS
+    INY
++   STA $C058,Y
+    STA $C040
+    LDY #0
+    ASL $C061
+    ROL
+    BPL +
+    INY
++   STA $C058,Y
+    STA $C040
+    LDY #0
+    ASL $C061
+    ROL
+    BPL +
+    INY
++   STA $C058,Y
+    STA $C040
+    LDY #0
+    ASL $C061
+    ROL
+    BPL +
+    INY
++   STA $C058,Y
+    STA $C040
+    LDY #0
+    ASL $C061
+    ROL
+    BPL +
+    INY
++   STA $C058,Y
+    STA $C040
+    LDY #0
+    ASL $C061
+    ROL
+    BPL +
+    INY
++   STA $C058,Y
+    STA $C040
+    LDY #0
+    ASL $C061
+    ROL
+    BPL +
+    INY
++   STA $C058,Y
+    STA $C040
+    ASL $C061
+    STA $C05B       ; DISABLE SLAVE
+    ROL
+    STA ESTKL,X     ; SAVE RETURN PARAMETER
+    RTS
+end
+
+asm spiReadBytes(buf, len)
+    LDA ESTKL+1,X
+    STA DSTL
+    LDA ESTKH+1,X
+    STA DSTH
+    LDA ESTKL,X
+    BEQ +
+    INC ESTKH,X
++   LDY #$00
+-   STA $C05A       ; ENABLE SLAVE
+    STA $C040       ; CLOCK
+    ASL $C061       ; SHIFT IN ALL BITS STARTING WITH MSB
+    STA $C040
+    ROL
+    ASL $C061
+    STA $C040
+    ROL
+    ASL $C061
+    STA $C040
+    ROL
+    ASL $C061
+    STA $C040
+    ROL
+    ASL $C061
+    STA $C040
+    ROL
+    ASL $C061
+    STA $C040
+    ROL
+    ASL $C061
+    STA $C040
+    ROL
+    ASL $C061
+    STA $C05B       ; DISABLE SLAVE
+    ROL
+    STA (DST),Y     ; SAVE TO BUFFER
+    INY
+    BNE +
+    INC DSTH
++   DEC ESTKL,X
+    BNE -
+    DEC ESTKH,X
+    BNE -
+    INX             ; REMOVE AN ARGUMENT
+    RTS
+end
+
+asm spiWriteBytes(buf, len)
+    LDA ESTKL+1,X
+    STA SRCL
+    LDA ESTKH+1,X
+    STA SRCH
+    LDA ESTKL,X
+    BEQ +
+    INC ESTKH,X
++
+-   STA $C05A       ; ENABLE SLAVE
+    LDY #0          ; ASSUME MSB IS ZERO
+    LDA (SRC),Y     ; GET BYTE
+    BPL +           ; CHECK MSB
+    INY             ; IT'S A ONE
++   STA $C058,Y     ; WRITE BIT 7
+    STA $C040       ; CLOCK
+    LDY #0          ; DOING THIS HERE GIVES TIME FOR OUTPUT TO BECOME STABLE
+    ROL             ; ROTATE NEXT BIT TO SEND
+    BPL +           ; REPEAT FOR ALL BITS
+    INY
++   STA $C058,Y
+    STA $C040
+    LDY #0
+    ROL
+    BPL +
+    INY
++   STA $C058,Y
+    STA $C040
+    LDY #0
+    ROL
+    BPL +
+    INY
++   STA $C058,Y
+    STA $C040
+    LDY #0
+    ROL
+    BPL +
+    INY
++   STA $C058,Y
+    STA $C040
+    LDY #0
+    ROL
+    BPL +
+    INY
++   STA $C058,Y
+    STA $C040
+    LDY #0
+    ROL
+    BPL +
+    INY
++   STA $C058,Y
+    STA $C040
+    LDY #0
+    ROL
+    BPL +
+    INY
++   STA $C058,Y
+    STA $C040
+    STA $C05B       ; DISABLE SLAVE
+    INC	SRCL
+    BNE +
+    INC SRCH
++   DEC ESTKL,X
+    BNE -
+    DEC ESTKH,X
+    BNE -
+    INX             ; REMOVE AN ARGUMENT
+    RTS
+end
+
+export def spiDelay(time)
+    return call($fca8, time, 0, 0, 0) // DELAY
+end
+
+export def spiSend(data)
+    byte timeout, status
+
+    for timeout = 0 to 50 step 10
+        status = spiXferByte(data)
+        if status <> $ff
+            return status
+        fin
+        spiDelay(timeout)
+    next
+    putc(status);putc('0'+data/10);putc('0'+data%10)
+    return status
+end
+
+export def spiRecv
+    return spiSend(0)
+end
+
+export def spiWriteBuf(buf, len)
+    spiSend(13)        // CMD_BUF_WRITE
+    spiSend(len>>8)    // LEN_HI
+    spiSend(len)       // LEN_LO
+    return spiWriteBytes(buf, len)
+end
+
+export def spiReadBuf(buf, len)
+    spiSend(12)        // CMD_BUF_READ
+    spiSend(len>>8)    // LEN_HI
+    spiSend(len)       // LEN_LO
+    return spiReadBytes(buf, len)
+end
+
+export def spiReset
+    byte timeout, status
+    ^$C05B
+    timeout = $FF
+    repeat
+        status = spiSend(0)
+        timeout--
+    until status == '@' or !timeout // WAIT FOR READY
+    return status <> '@'
+end
+
+return spiReset
+done
