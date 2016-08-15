@@ -19,8 +19,8 @@ def cwd(pathname)
     byte namelen
     
     namelen = 0
-    spiSend(15)
-    namelen = spiSend(15)//spiRecv
+    spiSend(15) // CWD
+    namelen = spiRecv
     if namelen
         spiReadBuf(pathname+1, namelen)
     fin
@@ -31,7 +31,7 @@ end
 def chdir(path)
     spiWriteBuf(path + 1, ^path)
     spiSend(16) // CHGDIR
-    return spiSend(16)//spiRecv
+    return spiRecv
 end
 
 def mkdir(path)
@@ -54,7 +54,7 @@ def openDir(cmd, filename)
     
     namelen = 0
     spiSend(cmd)
-    namelen = spiSend(cmd)//spiRecv
+    namelen = spiRecv
     if namelen == 0xFF
         namelen = 0
     fin
@@ -75,17 +75,39 @@ end
 //
 // File related functions
 //
-def open(path)
+def open(path, mode)
+    spiWriteBuf(path + 1, ^path) // send filename
+    spiSend(21) // OPEN
+    spiSend(mode)
+    return spiRecv // status
 end
 
 def close
-    spiSend(24) // CLOSE
+    return spiSend(24) // CLOSE
 end
 
 def read(buf, len)
+    if len > 512
+        len = 512
+    fin
+    spiSend(25) // READ
+    spiSend(len >> 8); spiSend(len)
+    len = (spiRecv << 8) | spiRecv
+    if len > 0 and len <= 512
+        spiReadBuf(buf, len)
+    fin
+    return len
 end
 
 def write(buf, len)
+    if len > 512
+        len = 512
+    fin
+    spiWriteBuf(buf, len)
+    spiSend(26) // WRITE
+    spiSend(len >> 8); spiSend(len)
+    len = (spiRecv << 8) | spiRecv
+    return len
 end
 
 def sync
@@ -111,7 +133,7 @@ end
 
 def isDir
     spiSend(35) // ISDIR
-    return spiSend(35)//spiRecv
+    return spiRecv
 end
 
 def isFile
@@ -122,5 +144,5 @@ end
 //
 spiSend(14) // SDINIT
 spiDelay(100)
-return spiRecv <> '@' // Is Arduino READY?
+return spiRecv <> SPI_SLAVE_READY // Is Arduino READY?
 done
