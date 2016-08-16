@@ -14,7 +14,7 @@ SPIPORT = SPIPORT\#FE1000
 SDFAT   = SDFAT\#FE1000
 FATCAT  = FATCAT\#FE1000
 FATGET  = FATGET\#FE1000
-PRODOS  = PRODOS\#FE1000
+FILEIO  = FILEIO\#FE1000
 WIZNET  = WIZNET\#FE1000
 UTHERNET2= UTHERNET2\#FE1000
 UTHERNET= UTHERNET\#FE1000
@@ -59,7 +59,7 @@ TXTTYPE	= .TXT
 #SYSTYPE	= \#FF2000
 #TXTTYPE	= \#040000
 
-all: $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVM03) $(CMD) $(ARGS) $(MEMMGR) $(MEMTEST) $(FIBER) $(SB) $(MON) $(ROD) $(SIEVE) $(UTHERNET2) $(UTHERNET) $(ETHERIP) $(INET) $(DHCP) $(HTTPD) $(ROGUE) $(ROGUEMAP) $(ROGUECOMBAT) $(ROGUEIO) $(HGR1) $(TONE) $(DGR) $(DGRTEST) $(PRODOS) $(PORTIO) $(SPIPORT) $(SDFAT) $(FATCAT) $(FATGET)
+all: $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVM03) $(CMD) $(ARGS) $(MEMMGR) $(MEMTEST) $(FIBER) $(SB) $(MON) $(ROD) $(SIEVE) $(UTHERNET2) $(UTHERNET) $(ETHERIP) $(INET) $(DHCP) $(HTTPD) $(ROGUE) $(ROGUEMAP) $(ROGUECOMBAT) $(ROGUEIO) $(HGR1) $(TONE) $(DGR) $(DGRTEST) $(FILEIO) $(PORTIO) $(SPIPORT) $(SDFAT) $(FATCAT) $(FATGET)
 
 clean:
 	-rm *FE1000 *FF2000 $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVM03)
@@ -168,9 +168,9 @@ $(HTTPD): samplesrc/httpd.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AM < samplesrc/httpd.pla > samplesrc/httpd.a
 	acme --setpc 4094 -o $(HTTPD) samplesrc/httpd.a
 
-$(PRODOS): libsrc/prodos.pla $(PLVM02) $(PLASM)
-	./$(PLASM) -AM < libsrc/prodos.pla > libsrc/prodos.a
-	acme --setpc 4094 -o $(PRODOS) libsrc/prodos.a
+$(FILEIO): libsrc/fileio.pla $(PLVM02) $(PLASM)
+	./$(PLASM) -AM < libsrc/fileio.pla > libsrc/fileio.a
+	acme --setpc 4094 -o $(FILEIO) libsrc/fileio.a
 
 $(TONE): libsrc/tone.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AM < libsrc/tone.pla > libsrc/tone.a
