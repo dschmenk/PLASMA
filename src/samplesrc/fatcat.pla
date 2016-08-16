@@ -1,0 +1,49 @@
+include "inc/cmdsys.plh"
+include "inc/args.plh"
+include "inc/sdfat.plh"
+
+word arg
+byte[64] cwd
+byte[64] pathname
+
+def fatCat(path)
+    byte filename[32]
+    
+    sdFAT:dirSet(path)
+    puts("Directory of "); puts(path); puts(":\n")
+    sdFAT:fileOpenFirst(@filename)
+    while filename
+        puts("    "); puts(@filename)
+        if sdFAT:fileIsDir(); putc('/'); fin
+        putln
+        sdFAT:fileClose()
+        sdFAT:fileOpenNext(@filename)
+    loop
+end
+
+sdFAT:dirGet(@cwd)
+if cwd[cwd] <> '/' // append '/' to cwd if needed
+    cwd++
+    cwd[cwd] = '/'
+fin
+arg = argNext(argFirst)
+if ^arg
+    while ^arg
+        if ^(arg + 1) <> '/' // relative path argument - append to cwd
+            memcpy(@pathname, @cwd, cwd + 1)
+        else
+            pathname = 0 // absolute path
+        fin
+        memcpy(@pathname + pathname + 1, arg + 1, ^arg) // append path argument
+        pathname = pathname + ^arg
+        if pathname[pathname] <> '/'
+            pathname++
+            pathname[pathname] = '/'
+        fin
+        fatCat(@pathname)
+        arg = argNext(arg)
+    loop
+else
+    fatCat(@cwd)
+fin
+done

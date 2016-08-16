@@ -200,7 +200,7 @@ Three tools are required to build and run this program: **acme**, **plasm**, and
 
 ```
 ./plasm -AM < hello.pla > hello.a
-acme --setpc 4094 -o HELLO hello.a
+acme --setpc 4094 -o HELLO#FE1000 hello.a
 ./plvm HELLO
 ```
 
