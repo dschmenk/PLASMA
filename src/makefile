@@ -14,6 +14,8 @@ SPIPORT = SPIPORT\#FE1000
 SDFAT   = SDFAT\#FE1000
 FATCAT  = FATCAT\#FE1000
 FATGET  = FATGET\#FE1000
+FATWDSK = FATWRITEDSK\#FE1000
+FATRDSK = FATREADDSK\#FE1000
 FILEIO  = FILEIO\#FE1000
 WIZNET  = WIZNET\#FE1000
 UTHERNET2= UTHERNET2\#FE1000
@@ -59,7 +61,7 @@ TXTTYPE	= .TXT
 #SYSTYPE	= \#FF2000
 #TXTTYPE	= \#040000
 
-all: $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVM03) $(CMD) $(ARGS) $(MEMMGR) $(MEMTEST) $(FIBER) $(SB) $(MON) $(ROD) $(SIEVE) $(UTHERNET2) $(UTHERNET) $(ETHERIP) $(INET) $(DHCP) $(HTTPD) $(ROGUE) $(ROGUEMAP) $(ROGUECOMBAT) $(ROGUEIO) $(HGR1) $(TONE) $(DGR) $(DGRTEST) $(FILEIO) $(PORTIO) $(SPIPORT) $(SDFAT) $(FATCAT) $(FATGET)
+all: $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVM03) $(CMD) $(ARGS) $(MEMMGR) $(MEMTEST) $(FIBER) $(SB) $(MON) $(ROD) $(SIEVE) $(UTHERNET2) $(UTHERNET) $(ETHERIP) $(INET) $(DHCP) $(HTTPD) $(ROGUE) $(ROGUEMAP) $(ROGUECOMBAT) $(ROGUEIO) $(HGR1) $(TONE) $(DGR) $(DGRTEST) $(FILEIO) $(PORTIO) $(SPIPORT) $(SDFAT) $(FATCAT) $(FATGET) $(FATWDSK) $(FATRDSK)
 
 clean:
 	-rm *FE1000 *FF2000 $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVM03)
@@ -183,6 +185,14 @@ $(FATCAT): samplesrc/fatcat.pla $(PLVM02) $(PLASM)
 $(FATGET): samplesrc/fatget.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AM < samplesrc/fatget.pla > samplesrc/fatget.a
 	acme --setpc 4094 -o $(FATGET) samplesrc/fatget.a
+
+$(FATWDSK): samplesrc/fatwritedsk.pla $(PLVM02) $(PLASM)
+	./$(PLASM) -AM < samplesrc/fatwritedsk.pla > samplesrc/fatwritedsk.a
+	acme --setpc 4094 -o $(FATWDSK) samplesrc/fatwritedsk.a
+
+$(FATRDSK): samplesrc/fatreaddsk.pla $(PLVM02) $(PLASM)
+	./$(PLASM) -AM < samplesrc/fatreaddsk.pla > samplesrc/fatreaddsk.a
+	acme --setpc 4094 -o $(FATRDSK) samplesrc/fatreaddsk.a
 
 $(SDFAT): libsrc/sdfat.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AM < libsrc/sdfat.pla > libsrc/sdfat.a
