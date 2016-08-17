@@ -12,6 +12,10 @@ const LOWER_DIFF = 'a' - 'A'
 
 word arg, image
 byte unit = DRIVE1
+//
+// DOS to ProDOS sector ordering
+//
+byte[] secOrder = $0,$E,$D,$C,$B,$A,$9,$8,$7,$6,$5,$4,$3,$2,$1,$F
 
 def putb(b)
     byte c
@@ -75,6 +79,14 @@ def getYN(prompt)
     return yn == 'Y' or yn == 'y'
 end
 
+def trkSecToBlk(bufSec, bufBlk)
+    byte sector
+    
+    for sector = 0 to 15
+        memcpy(bufBlk + (sector << 8), bufSec + (secOrder[sector] << 8), 256)
+    next
+end
+
 def bigFatWrite(buf, len)
     word xferLen, fatLen
     
@@ -98,14 +110,15 @@ def bigFatWrite(buf, len)
 end
 
 def fatReadImage(src, drv)
-    word copyBuf, copyLen, freeAddr
+    word inBuf, outBuf, copyLen, freeAddr
     word blocknum, bufblk
     
-    copyBuf = heapallocalign(COPY_BUF_SIZE, 8, @freeAddr)
-    if not copyBuf
+    inBuf = heapallocalign(COPY_BUF_SIZE * 2, 8, @freeAddr)
+    if not inBuf
         puts("Not enough free memory!\n"); putln
         return -1
     fin
+    outBuf = inBuf + COPY_BUF_SIZE
     //
     // Copy FAT image over one track at a time
     //
@@ -116,13 +129,14 @@ def fatReadImage(src, drv)
                 ^$24=^$20 // Move cursor to left edge
                 puts("Reading blocks: "); puti(blocknum)
                     for bufblk = 0 to COPY_BLK_CNT
-                        if readblock(drv, copyBuf + (bufblk << 9), blocknum + bufblk)
+                        if readblock(drv, inBuf + (bufblk << 9), blocknum + bufblk)
                             puts("Read disk error: $"); putb(perr); putln
                             break
                         fin
                     next
             fin
-            copyLen = bigFatWrite(copyBuf, COPY_BUF_SIZE)
+            trkSecToBlk(inBuf, outBuf)
+            copyLen = bigFatWrite(outBuf, COPY_BUF_SIZE)
             if copyLen <> COPY_BUF_SIZE
                 puts("Write image file error\n");
             fin
