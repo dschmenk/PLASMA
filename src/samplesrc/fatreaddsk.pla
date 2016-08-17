@@ -9,9 +9,15 @@ const COPY_BLK_CNT  = COPY_BLK_SIZE-1
 const DRIVE1 = $60 // drive 1, slot 6
 const DRIVE2 = $D0 // drive 2, slot 6
 const LOWER_DIFF = 'a' - 'A'
+//
+// Track sector order
+//
+const ORDER_DOS = 0
+const ORDER_PRODOS = 1
 
 word arg, image
 byte unit = DRIVE1
+byte order
 //
 // DOS to ProDOS sector ordering
 //
@@ -109,7 +115,7 @@ def bigFatWrite(buf, len)
     return xferLen
 end
 
-def fatReadImage(src, drv)
+def fatReadImage(src, drv, order)
     word inBuf, outBuf, copyLen, freeAddr
     word blocknum, bufblk
     
@@ -118,7 +124,11 @@ def fatReadImage(src, drv)
         puts("Not enough free memory!\n"); putln
         return -1
     fin
-    outBuf = inBuf + COPY_BUF_SIZE
+    if order == ORDER_DOS
+        outBuf = inBuf + COPY_BUF_SIZE
+    else
+        outBuf = inBuf
+    fin
     //
     // Copy FAT image over one track at a time
     //
@@ -135,7 +145,9 @@ def fatReadImage(src, drv)
                         fin
                     next
             fin
-            trkSecToBlk(inBuf, outBuf)
+            if order == ORDER_DOS
+                trkSecToBlk(inBuf, outBuf)
+            fin
             copyLen = bigFatWrite(outBuf, COPY_BUF_SIZE)
             if copyLen <> COPY_BUF_SIZE
                 puts("Write image file error\n");
@@ -174,8 +186,19 @@ if ^arg
     else
         puts("Speed test writing 143K to SD card");
     fin
-    if getYN("\nContinue? (Y/N)")
-        fatReadImage(image, unit)
+    //
+    // Figure sector ordering from filename
+    //
+    puts("\nUsing ")
+    if charUpper(^(image + ^image)) == 'O' and charUpper(^(image + ^image - 1)) == 'P'
+        order = ORDER_PRODOS
+        puts("ProDOS")
+    else
+        order = ORDER_DOS
+        puts("DOS 3.3")
+    fin
+    if getYN(" order. Continue? (Y/N)")
+        fatReadImage(image, unit, order)
     fin
 else
     puts("Read DSK image from floppy disk drive\n")
