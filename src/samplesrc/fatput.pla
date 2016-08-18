@@ -1,0 +1,147 @@
+include "inc/cmdsys.plh"
+include "inc/fileio.plh"
+include "inc/args.plh"
+include "inc/sdfat.plh"
+
+const COPY_BUF_SIZE = 8192 // 8K
+const LOWER_DIFF = 'a' - 'A'
+
+word arg
+byte[24] fatName
+
+def putByte(val)
+    byte c
+    c = ((val >> 4) & $0F) + '0'
+    if c > '9'
+        c = c + 7
+    fin
+    putc(c)
+    c = (val & $0F) + '0'
+    if c > '9'
+        c = c + 7
+    fin
+    return putc(c)
+end
+
+def hexChars(cptr, b)
+    byte h
+    
+    h = ((b >> 4) & $0F) + '0'
+    if h > '9'
+        h = h + 7
+    fin
+    ^cptr = h
+    cptr++
+    h = (b & $0F) + '0'
+    if h > '9'
+        h = h + 7
+    fin
+    ^cptr = h
+end
+
+def mkFatName(proName, fatName)
+    word l, n
+    byte fileinfo[t_fileinfo]
+    
+    if !getfileinfo(proName, @fileinfo)
+        //
+        // Scan backward looking for dir seperator
+        //
+        l = ^proName
+        for n = l downto 1
+            if ^(proName + n) == '/'
+                break
+            fin
+        next
+        memcpy(fatName + 1, proName + 1 + n, l - n)
+        ^fatName = l - n + 7
+        //
+        // Build CiderPress style extension
+        //
+        n = fatName + ^fatName - 6
+        ^n = '#'
+        hexChars(n + 1, fileinfo.file_type)
+        hexChars(n + 3, fileinfo.aux_type.1)
+        hexChars(n + 5, fileinfo.aux_type)
+    else
+        //
+        // Error getting info on file
+        //
+        puts("Error reading "); puts(proName); putln
+    fin
+end
+
+def getYN(prompt)
+    byte yn
+    
+    puts(prompt)
+    yn = getc
+    return yn == 'Y' or yn == 'y'
+end
+
+def bigFatWrite(buf, len)
+    word xferLen, fatLen
+    
+    xferLen = 0
+    repeat
+        if len > MAX_FAT_BUF_SIZE
+            fatLen = MAX_FAT_BUF_SIZE
+        else
+            fatLen = len
+        fin
+        fatLen = sdFAT:fileWrite(buf, fatLen)
+        if fatLen > 0
+            xferLen = xferLen + fatLen
+            len     = len     - fatLen
+            buf     = buf     + fatLen
+        else
+            len = 0
+        fin
+    until len == 0
+    return xferLen
+end
+
+def fatCopyTo(src, dst)
+    word copyBuf, copyLen, freeAddr
+    byte ref
+    
+    copyBuf = heapallocalign(COPY_BUF_SIZE, 8, @freeAddr)
+    if not copyBuf
+        puts("Not enough free memory!\n"); putln
+        return -1
+    fin
+    ref = open(src, sysbuf)
+    if not ref
+        puts("Error opening file: "); puts(src); putln
+        puts("Open file error: "); putByte(perr); putln
+        return -1
+    fin
+    //
+    // Copy file over in big chunks
+    //
+    if sdFAT:fileOpen(dst, O_READ | O_WRITE | O_CREAT)
+        repeat
+            copyLen = read(ref, copyBuf, COPY_BUF_SIZE)
+            if copyLen
+                copyLen = bigFatWrite(copyBuf, copyLen)
+                if !copyLen
+                fin
+            fin
+        until copyLen == 0
+        sdFAT:fileClose()
+    else
+        puts("Error opening FAT file:"); puts(dst); putln
+    fin
+    close(ref)
+    heaprelease(freeAddr)
+end
+
+arg = argNext(argFirst)
+if ^arg
+    mkFatName(arg, @fatName)
+    puts(arg); puts(" ==> "); puts(@fatName); putln
+    fatCopyTo(arg, @fatName)
+else
+    puts("Usage: +FATPUT <filename>"); putln
+fin
+done
