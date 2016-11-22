@@ -1,0 +1,209 @@
+include "inc/cmdsys.plh"
+include "inc/fileio.plh"
+include "inc/args.plh"
+include "inc/sdfat.plh"
+
+const COPY_BUF_SIZE = 4096 // 4K
+const COPY_BLK_SIZE = COPY_BUF_SIZE/512
+const COPY_BLK_CNT  = COPY_BLK_SIZE-1
+const DRIVE1 = $60 // drive 1, slot 6
+const DRIVE2 = $D0 // drive 2, slot 6
+const LOWER_DIFF = 'a' - 'A'
+//
+// Track sector order
+//
+const ORDER_DOS = 0
+const ORDER_PRODOS = 1
+
+word arg, image
+byte unit = DRIVE1
+byte order
+
+//
+// DOS to ProDOS sector ordering
+//
+byte[] secOrder = $0,$E,$D,$C,$B,$A,$9,$8,$7,$6,$5,$4,$3,$2,$1,$F
+
+def putb(b)
+    byte c
+    c = ((b >> 4) & $0F) + '0'
+    if c > '9'
+        c = c + 7
+    fin
+    putc(c)
+    c = (b & $0F) + '0'
+    if c > '9'
+        c = c + 7
+    fin
+    return putc(c)
+end
+
+def puti(i)
+    word tt, th, h, t
+    byte  p
+
+    p =0
+    if i < 0
+        putc('-')
+        i = -i
+    fin
+    tt = i / 10000
+    i  = i % 10000
+    th = i / 1000
+    i  = i % 1000
+    h  = i / 100
+    i  = i % 100
+    t  = i / 10
+    i  = i % 10
+    if tt > 0
+        putc(tt + '0'); p = 1
+    fin
+    if p or th > 0
+        putc(th + '0'); p = 1
+    fin
+    if p or h > 0
+        putc(h + '0'); p = 1
+    fin
+    if p or t > 0
+        putc(t + '0'); p = 1
+    fin
+    return putc(i + '0')
+end
+
+def charUpper(c)
+    if c >= 'a' and c <= 'z'
+        return c - LOWER_DIFF
+    fin
+    return c
+end
+
+def getYN(prompt)
+    byte yn
+    
+    puts(prompt)
+    yn = getc
+    putln
+    return yn == 'Y' or yn == 'y'
+end
+
+def trkSecToBlk(bufSec, bufBlk)
+    byte sector
+    
+    for sector = 0 to 15
+        memcpy(bufBlk + (sector << 8), bufSec + (secOrder[sector] << 8), 256)
+    next
+end
+
+def bigFatRead(buf, len)
+    word xferLen, fatLen
+    
+    xferLen = 0
+    repeat
+        if len > MAX_FAT_BUF_SIZE
+            fatLen = MAX_FAT_BUF_SIZE
+        else
+            fatLen = len
+        fin
+        fatLen = sdFAT:fileRead(buf, fatLen)
+        if fatLen > 0
+            xferLen = xferLen + fatLen
+            len     = len     - fatLen
+            buf     = buf     + fatLen
+        else
+            len = 0
+        fin
+    until len == 0
+    return xferLen
+end
+
+def fatWriteImage(src, drv, order)
+    word inBuf, outBuf, copyLen, freeAddr
+    word blocknum, bufblk
+    
+    outBuf = heapallocalign(COPY_BUF_SIZE * 2, 8, @freeAddr)
+    if not outBuf
+        puts("Not enough free memory!\n"); putln
+        return -1
+    fin
+    if order == ORDER_DOS
+        inBuf = outBuf + COPY_BUF_SIZE
+    else
+        inBuf = outBuf
+    fin
+    //
+    // Copy FAT image over one track at a time
+    //
+    if sdFAT:fileOpen(src, O_READ)
+        if !drv; putc(7); fin
+        for blocknum = 0 to 279 step COPY_BLK_SIZE
+            copyLen = bigFatRead(inBuf, COPY_BUF_SIZE)
+            if copyLen == COPY_BUF_SIZE
+                if drv
+                    ^$24=^$20 // Move cursor to left edge
+                    puts("Writing blocks: "); puti(blocknum)
+                    if order == ORDER_DOS
+                        trkSecToBlk(inBuf, outBuf)
+                    fin
+                    for bufblk = 0 to COPY_BLK_CNT
+                        if writeblock(drv, outBuf + (bufblk << 9), blocknum + bufblk)
+                            puts("Write disk error: $"); putb(perr); putln
+                            break
+                        fin
+                    next
+                fin
+            else
+                puts("Read image file error\n");
+            fin
+            if copyLen < COPY_BUF_SIZE or perr
+                puts("Error creating floppy: "); puts(src); putln
+                break
+            fin
+        next
+        if !drv; putc(7);fin
+        putln
+        sdFAT:fileClose()
+    else
+        puts("Error opening image file:"); puts(src); putln
+    fin
+    heaprelease(freeAddr)
+end
+
+arg = argNext(argFirst)
+if ^arg
+    image = arg
+    arg = argNext(arg)
+    if ^arg 
+        when ^(arg + 1)
+            is '2' // Drive 2 option
+                unit = DRIVE2
+                break
+            is 'T' // Test speed option
+            is 't'
+                unit = 0
+                break
+        wend
+    fin
+    if unit
+        puts("Writing "); puts(image); puts(" to Drive "); putc((unit >> 7) + '1')
+    else
+        puts("Speed test reading 143K from SD card");
+    fin
+    //
+    // Figure sector ordering from filename
+    //
+    puts("\nUsing ")
+    if charUpper(^(image + ^image)) == 'O' and charUpper(^(image + ^image - 1)) == 'P'
+        order = ORDER_PRODOS
+        puts("ProDOS")
+    else
+        order = ORDER_DOS
+        puts("DOS 3.3")
+    fin
+    if getYN(" order. Continue? (Y/N)")
+        fatWriteImage(image, unit, order)
+    fin
+else
+    puts("Write DSK image to floppy disk drive\n")
+    puts("Usage: +FATWRITEDSK <DSK image file> [1,2,T]\n")
+fin
+done

@@ -9,6 +9,15 @@ ED      = ED\#FF2000
 SB      = SB\#FF2000
 ROD     = ROD\#FE1000
 SIEVE   = SIEVE\#FE1000
+ARGS    = ARGS\#FE1000
+SPIPORT = SPIPORT\#FE1000
+SDFAT   = SDFAT\#FE1000
+FATCAT  = FATCAT\#FE1000
+FATGET  = FATGET\#FE1000
+FATPUT  = FATPUT\#FE1000
+FATWDSK = FATWRITEDSK\#FE1000
+FATRDSK = FATREADDSK\#FE1000
+FILEIO  = FILEIO\#FE1000
 WIZNET  = WIZNET\#FE1000
 UTHERNET2= UTHERNET2\#FE1000
 UTHERNET= UTHERNET\#FE1000
@@ -53,7 +62,7 @@ TXTTYPE	= .TXT
 #SYSTYPE	= \#FF2000
 #TXTTYPE	= \#040000
 
-all: $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVM03) $(CMD) $(MEMMGR) $(MEMTEST) $(FIBER) $(SB) $(MON) $(ROD) $(SIEVE) $(UTHERNET2) $(UTHERNET) $(ETHERIP) $(INET) $(DHCP) $(HTTPD) $(ROGUE) $(ROGUEMAP) $(ROGUECOMBAT) $(ROGUEIO) $(HGR1) $(TONE) $(DGR) $(DGRTEST) $(PORTIO)
+all: $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVM03) $(CMD) $(ARGS) $(MEMMGR) $(MEMTEST) $(FIBER) $(SB) $(MON) $(ROD) $(SIEVE) $(UTHERNET2) $(UTHERNET) $(ETHERIP) $(INET) $(DHCP) $(HTTPD) $(ROGUE) $(ROGUEMAP) $(ROGUECOMBAT) $(ROGUEIO) $(HGR1) $(TONE) $(DGR) $(DGRTEST) $(FILEIO) $(PORTIO) $(SPIPORT) $(SDFAT) $(FATCAT) $(FATGET) $(FATPUT) $(FATWDSK) $(FATRDSK)
 
 clean:
 	-rm *FE1000 *FF2000 $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVM03)
@@ -110,6 +119,10 @@ $(SB): toolsrc/sb.pla $(PLVM02) $(PLASM) toolsrc/sb.pla
 	./$(PLASM) -A < toolsrc/sb.pla > toolsrc/sb.a
 	acme --setpc 8192 -o $(SB) toolsrc/sb.a
 
+$(ARGS): libsrc/args.pla $(PLVM02) $(PLASM)
+	./$(PLASM) -AM < libsrc/args.pla > libsrc/args.a
+	acme --setpc 4094 -o $(ARGS) libsrc/args.a
+
 $(MEMMGR): libsrc/memmgr.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AM < libsrc/memmgr.pla > libsrc/memmgr.a
 	acme --setpc 4094 -o $(MEMMGR) libsrc/memmgr.a
@@ -158,9 +171,41 @@ $(HTTPD): samplesrc/httpd.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AM < samplesrc/httpd.pla > samplesrc/httpd.a
 	acme --setpc 4094 -o $(HTTPD) samplesrc/httpd.a
 
+$(FILEIO): libsrc/fileio.pla $(PLVM02) $(PLASM)
+	./$(PLASM) -AM < libsrc/fileio.pla > libsrc/fileio.a
+	acme --setpc 4094 -o $(FILEIO) libsrc/fileio.a
+
 $(TONE): libsrc/tone.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AM < libsrc/tone.pla > libsrc/tone.a
 	acme --setpc 4094 -o $(TONE) libsrc/tone.a
+
+$(FATCAT): samplesrc/fatcat.pla $(PLVM02) $(PLASM)
+	./$(PLASM) -AM < samplesrc/fatcat.pla > samplesrc/fatcat.a
+	acme --setpc 4094 -o $(FATCAT) samplesrc/fatcat.a
+
+$(FATGET): samplesrc/fatget.pla $(PLVM02) $(PLASM)
+	./$(PLASM) -AM < samplesrc/fatget.pla > samplesrc/fatget.a
+	acme --setpc 4094 -o $(FATGET) samplesrc/fatget.a
+
+$(FATPUT): samplesrc/fatput.pla $(PLVM02) $(PLASM)
+	./$(PLASM) -AM < samplesrc/fatput.pla > samplesrc/fatput.a
+	acme --setpc 4094 -o $(FATPUT) samplesrc/fatput.a
+
+$(FATWDSK): samplesrc/fatwritedsk.pla $(PLVM02) $(PLASM)
+	./$(PLASM) -AM < samplesrc/fatwritedsk.pla > samplesrc/fatwritedsk.a
+	acme --setpc 4094 -o $(FATWDSK) samplesrc/fatwritedsk.a
+
+$(FATRDSK): samplesrc/fatreaddsk.pla $(PLVM02) $(PLASM)
+	./$(PLASM) -AM < samplesrc/fatreaddsk.pla > samplesrc/fatreaddsk.a
+	acme --setpc 4094 -o $(FATRDSK) samplesrc/fatreaddsk.a
+
+$(SDFAT): libsrc/sdfat.pla $(PLVM02) $(PLASM)
+	./$(PLASM) -AM < libsrc/sdfat.pla > libsrc/sdfat.a
+	acme --setpc 4094 -o $(SDFAT) libsrc/sdfat.a
+
+$(SPIPORT): libsrc/spiport.pla $(PLVM02) $(PLASM)
+	./$(PLASM) -AM < libsrc/spiport.pla > libsrc/spiport.a
+	acme --setpc 4094 -o $(SPIPORT) libsrc/spiport.a
 
 $(PORTIO): libsrc/portio.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AM < libsrc/portio.pla > libsrc/portio.a

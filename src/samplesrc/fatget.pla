@@ -1,0 +1,183 @@
+include "inc/cmdsys.plh"
+include "inc/fileio.plh"
+include "inc/args.plh"
+include "inc/sdfat.plh"
+
+const COPY_BUF_SIZE = 8192 // 8K
+const LOWER_DIFF = 'a' - 'A'
+
+byte[17] proname
+byte     protype
+word     proaux
+word     arg
+
+def putByte(val)
+    byte c
+    c = ((val >> 4) & $0F) + '0'
+    if c > '9'
+        c = c + 7
+    fin
+    putc(c)
+    c = (val & $0F) + '0'
+    if c > '9'
+        c = c + 7
+    fin
+    return putc(c)
+end
+
+def putWord(val)
+    putByte(val.1)
+    return putByte(val.0)
+end
+
+def charUpper(c)
+    if c >= 'a' and c <= 'z'
+        return c - LOWER_DIFF
+    fin
+    return c
+end
+
+def hexByte(hexChars)
+    byte lo, hi
+    
+    lo = charUpper(^(hexChars + 1)) - '0'
+    if lo > 9
+        lo = lo - 7
+    fin
+    hi = charUpper(^hexChars) - '0'
+    if hi > 9
+        hi = hi - 7
+    fin
+    return (hi << 4) | lo
+end
+
+def hexWord(hexChars)
+    return (hexByte(hexChars) << 8) | hexByte(hexChars + 2)
+end
+
+def mkProName(fatName, proName, proType, proAux)
+    byte n, l
+    
+    ^proType = $02   // default to BIN
+    *proAux  = $0000 // default to 0
+    //
+    // Check for CiderPress style extension
+    //
+    l = ^fatName
+    if l > 7 and ^(fatName + l - 6) == '#'
+        ^proType = hexByte(fatName + l - 5)
+        *proAux  = hexWord(fatName + l - 3)
+        l = l - 7
+    fin
+    //
+    // Scan backward looking for dir seperator
+    //
+    for n = l downto 1
+        if ^(fatName + n) == '/'
+            break
+        fin
+    next
+    if l - n > 15
+        l = n + 15
+    fin
+    memcpy(proName + 1, fatName + 1 + n, l - n)
+    ^proName = l - n
+end
+
+def getYN(prompt)
+    byte yn
+    
+    puts(prompt)
+    yn = getc
+    return yn == 'Y' or yn == 'y'
+end
+
+def bigFatRead(buf, len)
+    word xferLen, fatLen
+    
+    xferLen = 0
+    repeat
+        if len > MAX_FAT_BUF_SIZE
+            fatLen = MAX_FAT_BUF_SIZE
+        else
+            fatLen = len
+        fin
+        fatLen = sdFAT:fileRead(buf, fatLen)
+        if fatLen > 0
+            xferLen = xferLen + fatLen
+            len     = len     - fatLen
+            buf     = buf     + fatLen
+        else
+            len = 0
+        fin
+    until len == 0
+    return xferLen
+end
+
+def fatCopyFrom(src, dst, type, aux)
+    word copyBuf, copyLen, freeAddr
+    byte ref
+    
+    copyBuf = heapallocalign(COPY_BUF_SIZE, 8, @freeAddr)
+    if not copyBuf
+        puts("Not enough free memory!\n"); putln
+        return -1
+    fin
+    //
+    // Check if dst already exists
+    //
+    ref = open(dst, sysbuf)
+    if ref
+        close(ref)
+        puts("Overwrite "); puts(dst)
+        if not getYN("(Y/N)?")
+            heaprelease(freeAddr)
+            return -1
+        fin
+        putln
+        destroy(dst)
+    fin
+    //
+    // Create dst file
+    //
+    if create(dst, $C3, type, aux)
+        puts("Create file error: "); putByte(perr); putln
+    fin
+    ref = open(dst, sysbuf)
+    if not ref
+        puts("Error opening file: "); puts(dst); putln
+        puts("Open file error: "); putByte(perr); putln
+        return -1
+    fin
+    //
+    // Copy FAT file over in big chunks
+    //
+    if sdFAT:fileOpen(src, O_READ)
+        repeat
+            copyLen = bigFatRead(copyBuf, COPY_BUF_SIZE)
+            if copyLen
+                if write(ref, copyBuf, copyLen) <> copyLen
+                    puts("Error writing file:"); puts(dst); putln
+                    puts("Write file error: "); putByte(perr); putln
+                    copyLen = 0 // Force end of copy
+                fin
+            fin
+        until copyLen == 0
+        sdFAT:fileClose()
+    else
+        puts("Error opening FAT file:"); puts(src); putln
+    fin
+    close(ref)
+    heaprelease(freeAddr)
+end
+
+arg = argNext(argFirst)
+if ^arg
+    mkProName(arg, @proname, @protype, @proaux)
+    puts(arg);puts(" ==> ");puts(@proname)
+    putc(' ');putByte(protype);putc(',');putWord(proaux);putln
+    fatCopyFrom(arg, @proname, protype, proaux)
+else
+    puts("Usage: +FATGET <FAT filename>"); putln
+fin
+done
