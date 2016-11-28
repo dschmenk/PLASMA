@@ -638,13 +638,19 @@ int parse_value(int rvalue)
                 ref_type = (scantoken == PTRB_TOKEN) ? BPTR_TYPE : WPTR_TYPE;
                 if (!parse_const(&ref_offset))
                     scan_rewind(tokenstr);
+                if (ref_offset != 0)
+                {
+                    emit_const(ref_offset);
+                    emit_op(ADD_TOKEN);
+                    ref_offset = 0;
+                }
                 break;
             case DOT_TOKEN:
             case COLON_TOKEN:
                 /*
                  * Structure member offset
                  */
-                ref_type = (ref_type & (VAR_TYPE | CONST_TYPE)) 
+                ref_type = (ref_type & (VAR_TYPE | CONST_TYPE))
                          ? ((scantoken == DOT_TOKEN) ? BYTE_TYPE : WORD_TYPE)
                          : ((scantoken == DOT_TOKEN) ? BPTR_TYPE : WPTR_TYPE);
                 if (parse_const(&const_offset))
@@ -990,7 +996,7 @@ int parse_stmnt(void)
                         return (0);
                     }
                 }
-                else if (scantoken == EOL_TOKEN) 
+                else if (scantoken == EOL_TOKEN)
                 {
                     next_line();
                 }
@@ -1087,7 +1093,7 @@ int parse_stmnt(void)
                     }
                     if (type & LOCAL_TYPE)
                         (elem_type & BYTE_TYPE) ? emit_slb(addr + elem_offset) : emit_slw(addr + elem_offset);
-                    else 
+                    else
                         (elem_type & BYTE_TYPE) ? emit_sab(addr, elem_offset, type) : emit_saw(addr, elem_offset, type);
                     break;
                 }
@@ -1116,7 +1122,7 @@ int parse_stmnt(void)
                         }
                     }
                     break;
-                }                
+                }
             }
             else if (type & FUNC_TYPE)
             {
@@ -1189,7 +1195,7 @@ int parse_var(int type)
     long constval;
     int  consttype, constsize, arraysize, idlen = 0;
     long size = 1;
-    
+
     if (scan() == OPEN_BRACKET_TOKEN)
     {
         size = 0;
@@ -1303,7 +1309,7 @@ int parse_struc(void)
                         return (0);
                     }
                     scan();
-                }                   
+                }
             }
             if (type & WORD_TYPE)
                 size *= 2;
@@ -1323,7 +1329,7 @@ int parse_vars(int type)
     long value;
     int idlen, size;
     char *idstr;
-    
+
     switch (scantoken)
     {
         case SYSFLAGS_TOKEN:
