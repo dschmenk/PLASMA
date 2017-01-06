@@ -15,7 +15,7 @@
 #include "tokens.h"
 #include "symbols.h"
 
-char *statement, *tokenstr, *scanpos = "";
+char *statement, *tokenstr, *scanpos = (char*) "";
 t_token scantoken, prevtoken;
 int tokenlen;
 long constval;
@@ -65,7 +65,7 @@ t_token keywords[] = {
     EOL_TOKEN
 };
 
-void parse_error(char *errormsg)
+void parse_error(const char *errormsg)
 {
     char *error_carrot = statement;
 
@@ -229,7 +229,7 @@ t_token scan(void)
          * String constant.
          */
         scantoken = STRING_TOKEN;
-        constval = (long)++scanpos;
+        constval = (long)(uintptr_t)(++scanpos);
         while (*scanpos &&  *scanpos != '\"')
         {
             if (*scanpos == '\\')
@@ -418,7 +418,7 @@ int next_line(void)
     if (inputfile == NULL) {
         // First-time init
         inputfile = stdin;
-        filename = "<stdin>";
+        filename = (char*) "<stdin>";
     }
     if (*scanpos == ';')
     {
@@ -470,8 +470,8 @@ int next_line(void)
         outer_inputfile = inputfile;
         outer_filename = filename;
         outer_lineno = lineno;
-        new_filename = malloc(tokenlen-1);
-        strncpy(new_filename, (char*)constval, tokenlen-2);
+        new_filename = (char*) malloc(tokenlen-1);
+        strncpy(new_filename, (char*)(uintptr_t)constval, tokenlen-2);
         new_filename[tokenlen-2] = 0;
         inputfile = fopen(new_filename, "r");
         if (inputfile == NULL) {

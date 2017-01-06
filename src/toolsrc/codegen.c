@@ -258,10 +258,10 @@ int fixup_new(int tag, int type, int size)
 #define INIT		16
 #define SYSFLAGS        32
 static int outflags = 0;
-static char *DB = ".BYTE";
-static char *DW = ".WORD";
-static char *DS = ".RES";
-static char LBL = ':';
+static const char *DB = ".BYTE";
+static const char *DW = ".WORD";
+static const char *DS = ".RES";
+static char LBL = (char) ':';
 char *supper(char *s)
 {
     static char su[80];
@@ -467,7 +467,7 @@ int emit_data(int vartype, int consttype, long constval, int constsize)
     else if (consttype & STRING_TYPE)
     {
         datasize = constsize;
-        str = (char *)constval;
+        str = (char *)(uintptr_t)constval;
         printf("\t%s\t$%02X\n", DB, --constsize);
         while (constsize-- > 0)
         {
@@ -518,7 +518,7 @@ int emit_data(int vartype, int consttype, long constval, int constsize)
     }
     return (datasize);
 }
-void emit_def(char *name, int is_bytecode)
+void emit_def(const char *name, int is_bytecode)
 {
     if (!(outflags & MODULE))
     {
