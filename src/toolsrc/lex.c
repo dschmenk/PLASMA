@@ -11,8 +11,8 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <ctype.h>
 #include <string.h>
+#include <ctype.h>
 #include "tokens.h"
 #include "symbols.h"
 
@@ -230,7 +230,7 @@ t_token scan(void)
          * String constant.
          */
         scantoken = STRING_TOKEN;
-        constval = (long)(uintptr_t)(++scanpos);
+        constval = (long)++scanpos;
         while (*scanpos &&  *scanpos != '\"')
         {
             if (*scanpos == '\\')
@@ -472,7 +472,7 @@ int next_line(void)
         outer_filename = filename;
         outer_lineno = lineno;
         new_filename = (char*) malloc(tokenlen-1);
-        strncpy(new_filename, (char*)(uintptr_t)constval, tokenlen-2);
+        strncpy(new_filename, (char*)constval, tokenlen-2);
         new_filename[tokenlen-2] = 0;
         inputfile = fopen(new_filename, "r");
         if (inputfile == NULL) {

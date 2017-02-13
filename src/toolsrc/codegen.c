@@ -468,7 +468,7 @@ int emit_data(int vartype, int consttype, long constval, int constsize)
     else if (consttype & STRING_TYPE)
     {
         datasize = constsize;
-        str = (char *)(uintptr_t)constval;
+        str = (char *)constval;
         printf("\t%s\t$%02X\n", DB, --constsize);
         while (constsize-- > 0)
         {
