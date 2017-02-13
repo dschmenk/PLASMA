@@ -38,31 +38,31 @@ t_token keywords[] = {
     DEFAULT_TOKEN,          'O', 'T', 'H', 'E', 'R', 'W', 'I', 'S', 'E',
     ENDCASE_TOKEN,          'W', 'E', 'N', 'D',
     FOR_TOKEN,              'F', 'O', 'R',
-    TO_TOKEN,	            'T', 'O',
-    DOWNTO_TOKEN,	    'D', 'O', 'W', 'N', 'T', 'O',
-    STEP_TOKEN,	            'S', 'T', 'E', 'P',
+    TO_TOKEN,                'T', 'O',
+    DOWNTO_TOKEN,            'D', 'O', 'W', 'N', 'T', 'O',
+    STEP_TOKEN,                'S', 'T', 'E', 'P',
     NEXT_TOKEN,             'N', 'E', 'X', 'T',
     REPEAT_TOKEN,           'R', 'E', 'P', 'E', 'A', 'T',
-    UNTIL_TOKEN,	    'U', 'N', 'T', 'I', 'L',
-    BREAK_TOKEN,	    'B', 'R', 'E', 'A', 'K',
-    CONTINUE_TOKEN,	    'C', 'O', 'N', 'T', 'I', 'N', 'U', 'E',
-    ASM_TOKEN,	            'A', 'S', 'M',
-    DEF_TOKEN,	            'D', 'E', 'F',
-    EXPORT_TOKEN,	    'E', 'X', 'P', 'O', 'R', 'T',
-    IMPORT_TOKEN,	    'I', 'M', 'P', 'O', 'R', 'T',
+    UNTIL_TOKEN,            'U', 'N', 'T', 'I', 'L',
+    BREAK_TOKEN,            'B', 'R', 'E', 'A', 'K',
+    CONTINUE_TOKEN,            'C', 'O', 'N', 'T', 'I', 'N', 'U', 'E',
+    ASM_TOKEN,                'A', 'S', 'M',
+    DEF_TOKEN,                'D', 'E', 'F',
+    EXPORT_TOKEN,            'E', 'X', 'P', 'O', 'R', 'T',
+    IMPORT_TOKEN,            'I', 'M', 'P', 'O', 'R', 'T',
     INCLUDE_TOKEN,          'I', 'N', 'C', 'L', 'U', 'D', 'E',
     RETURN_TOKEN,           'R', 'E', 'T', 'U', 'R', 'N',
     END_TOKEN,              'E', 'N', 'D',
-    DONE_TOKEN,	            'D', 'O', 'N', 'E',
+    DONE_TOKEN,                'D', 'O', 'N', 'E',
     LOGIC_NOT_TOKEN,        'N', 'O', 'T',
     LOGIC_AND_TOKEN,        'A', 'N', 'D',
-    LOGIC_OR_TOKEN,	    'O', 'R',
+    LOGIC_OR_TOKEN,            'O', 'R',
     BYTE_TOKEN,             'B', 'Y', 'T', 'E',
-    WORD_TOKEN,	            'W', 'O', 'R', 'D',
+    WORD_TOKEN,                'W', 'O', 'R', 'D',
     CONST_TOKEN,            'C', 'O', 'N', 'S', 'T',
     STRUC_TOKEN,            'S', 'T', 'R', 'U', 'C',
     PREDEF_TOKEN,           'P', 'R', 'E', 'D', 'E', 'F',
-    SYSFLAGS_TOKEN,	    'S', 'Y', 'S', 'F', 'L', 'A', 'G', 'S',
+    SYSFLAGS_TOKEN,            'S', 'Y', 'S', 'F', 'L', 'A', 'G', 'S',
     EOL_TOKEN
 };
 
@@ -104,8 +104,8 @@ t_token scan(void)
     else if (*scanpos == '\0' || *scanpos == '\n' || *scanpos == ';')
         scantoken = EOL_TOKEN;
     else if ((scanpos[0] >= 'a' && scanpos[0] <= 'z')
-             || (scanpos[0] >= 'A' && scanpos[0] <= 'Z')
-             || (scanpos[0] == '_'))
+          || (scanpos[0] >= 'A' && scanpos[0] <= 'Z')
+          || (scanpos[0] == '_'))
     {
         /*
          * ID,  either variable name or reserved word.
@@ -117,9 +117,9 @@ t_token scan(void)
             scanpos++;
         }
         while ((*scanpos >= 'a' && *scanpos <= 'z')
-               || (*scanpos >= 'A' && *scanpos <= 'Z')
-               || (*scanpos == '_')
-               || (*scanpos >= '0' && *scanpos <= '9'));
+            || (*scanpos >= 'A' && *scanpos <= 'Z')
+            || (*scanpos == '_')
+            || (*scanpos >= '0' && *scanpos <= '9'));
         scantoken = ID_TOKEN;
         tokenlen = scanpos - tokenstr;
         /*
@@ -402,7 +402,7 @@ int scan_lookahead(void)
     char *backpos  = scanpos;
     char *backstr  = tokenstr;
     int prevtoken  = scantoken;
-    int prevlen	   = tokenlen;
+    int prevlen       = tokenlen;
     int look       = scan();
     scanpos        = backpos;
     tokenstr       = backstr;

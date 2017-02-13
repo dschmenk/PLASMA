@@ -8,7 +8,7 @@
 /*
  * Symbol table and fixup information.
  */
-#define ID_LEN	32
+#define ID_LEN    32
 static int  consts   = 0;
 static int  externs  = 0;
 static int  globals  = 0;
@@ -30,8 +30,8 @@ static int  idlocal_offset[128];
 static char fixup_size[2048];
 static int  fixup_type[2048];
 static int  fixup_tag[2048];
-#define FIXUP_BYTE	0x00
-#define FIXUP_WORD	0x80
+#define FIXUP_BYTE    0x00
+#define FIXUP_WORD    0x80
 int id_match(char *name, int len, char *id)
 {
     if (len == id[0])
@@ -148,13 +148,13 @@ int idglobal_add(char *name, int len, int type, int size)
     if (!(type & EXTERN_TYPE))
     {
         emit_idglobal(globals, size, name);
-    	idglobal_tag[globals] = globals;
-    	globals++;
+        idglobal_tag[globals] = globals;
+        globals++;
     }
     else
     {
         printf("\t\t\t\t\t; %s -> X%03d\n", &idglobal_name[globals][1], externs);
-    	idglobal_tag[globals++] = externs++;
+        idglobal_tag[globals++] = externs++;
     }
     return (1);
 }
@@ -255,8 +255,8 @@ int fixup_new(int tag, int type, int size)
 /*
  * Emit assembly code.
  */
-#define BYTECODE_SEG	8
-#define INIT		16
+#define BYTECODE_SEG    8
+#define INIT        16
 #define SYSFLAGS        32
 static int outflags = 0;
 static const char *DB = ".BYTE";
