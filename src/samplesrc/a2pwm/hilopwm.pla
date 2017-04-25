@@ -1,0 +1,267 @@
+const inbuff       = $200
+const freemem      = $0002
+const FALSE        = 0
+const TRUE         = !FALSE
+//
+// System variables.
+//
+word heap
+//
+// Periods of scale in second octave
+//
+byte scale[] = 166, 156, 148, 139, 132, 124, 117, 111, 104, 99, 93, 88, 83, 78
+//
+// Key mapping to note
+//
+byte keytone[] = 'A','S','E','D','R','F','G','Y','H','U','J','I','K','L'
+//
+// Which octave are we in
+//
+byte octave = 1
+//
+// FLO period and waveform
+//
+byte LFO, LFOmap
+//
+// Note duration
+//
+byte duration = 22
+//
+// Envelope parameters
+//
+byte atkLen = 2
+byte dcyLen = 0
+byte susLen = 4
+byte relLen = 16
+word atkRate = $07FF
+word dcyRate = $0000
+word relRate = $00FF
+//
+// Import utility routines
+//
+include "util.pla"
+//
+// Clear viewport to white
+//
+def clearWin
+    byte i, j
+    inverse
+    home
+    for j = 0 to 3
+        for i = 0 to 39; putc(' '); next
+    next
+    return gotoxy(0,0)
+end
+//
+// Display LFO bar
+//
+def showLFO
+    byte LFObar
+
+    LFObar = (LFO+7)/8
+    grcolor(WHITE)
+    rect(34, 39, 6, 39, FALSE)
+    if LFObar < 32
+        grcolor(ORANGE)
+        rect(35, 38, 7, 38-LFObar, TRUE)
+    fin
+    if LFObar
+        grcolor(DRKBLU)
+        rect(35, 38, 39-LFObar, 38, TRUE)
+    fin
+    putsxy(36, 0, "   ")
+    gotoxy(36, 0)
+    puti(LFO)
+end
+//
+// Display LFO waveform
+//
+def showWaveform
+    byte i, mapBar
+    word mapPtr
+    //
+    // Get pointer to LFO waveform by calling PWM with zero note
+    //
+    envelope(0, 0, 0, 0, atkRate, dcyRate, relRate)
+    hilopwm(0, LFO, LFOmap)
+    mapPtr = *0 // Pointer at address 0
+    grcolor(WHITE)
+    rect(0, 33, 6, 39, FALSE)
+    for i = 0 to 31
+        mapBar = ^(mapPtr + i) >> 3
+        grcolor(BLACK)
+        vlin(7, 38-mapBar, i + 1)
+        grcolor(MAGENTA)
+        vlin(38 - mapBar, 38, i + 1)
+        grcolor(PURPLE)
+        vlin(37-mapBar, 38-mapBar, i + 1)
+    next
+    //
+    // Restore envelope
+    //
+    envelope(atkLen, dcyLen, susLen, relLen, atkRate, dcyRate, relRate)
+end
+//
+// Display duration
+//
+def showDuration
+    byte left, right
+
+    if duration == 40
+        left = 0
+        right = 39
+    else
+        left = 19-duration/2
+        right = left + duration
+    fin
+    grcolor(BLACK)
+    if left > 0
+        rect(0, left-1, 0, 5, TRUE)
+    fin
+    if right < 39
+        rect(right+1, 39, 0, 5, TRUE)
+    fin
+    grcolor(AQUA)
+    rect(left, right, 0, 5, TRUE)
+end
+//
+// Display octave
+//
+def showOctave
+    inverse
+    putsxy(0, 1, "----------------------------------------")
+    normal
+    putsxy(octave*10, 1, "----------")
+    inverse
+end
+//
+// Recalc envelope parameters
+//
+def recalcEnv
+    atkLen = duration/8
+    relLen = duration/2
+    susLen = duration - atkLen - relLen
+    atkRate = $0FFF/atkLen
+    relRate = $0FFF/relLen
+end
+//
+// Main loop
+//
+def main
+    byte quit, key, i
+
+
+    envelope(atkLen, dcyLen, susLen, relLen, atkRate, dcyRate, relRate)
+    quit = FALSE
+    repeat
+        if keypressed
+            key = toupper(getc)
+            when key
+                is $1B // ESC
+                    quit = TRUE
+                    break
+                is $15 // ->
+                    if octave < 3
+                        octave++
+                        showOctave
+                    fin
+                    break
+                is $08 // <-
+                    if octave > 0
+                        octave--
+                        showOctave
+                    fin
+                    break
+                is '1'
+                is '2'
+                is '3'
+                is '4'
+                is '5'
+                is '6'
+                is '7'
+                is '8'
+                    LFOmap = key - '1'
+                    showWaveform
+                    break
+                is '<'
+                is ','
+                    LFO--
+                    showLFO
+                    break
+                is '>'
+                is '.'
+                    LFO++
+                    showLFO
+                    break
+                is '+'
+                is $0B // UP
+                    if duration < 40
+                        duration++
+                        recalcEnv
+                        envelope(atkLen, dcyLen, susLen, relLen, atkRate, dcyRate, relRate)
+                        showDuration
+                    fin
+                    break
+                is '-'
+                is $0A // DOWN
+                    if duration > 2
+                        duration--
+                        recalcEnv
+                        envelope(atkLen, dcyLen, susLen, relLen, atkRate, dcyRate, relRate)
+                        showDuration
+                    fin
+                    break
+                otherwise
+                    for i = 0 to 13
+                        if keytone[i] == key
+                            if LFO == 0
+                                hilopwm(scale[i]>>octave, LFO, 0)
+                            else
+                                hilopwm(scale[i]>>octave, LFO, LFOmap)
+                            fin
+                            break
+                        fin
+                    next
+            wend
+        fin
+        //LFO = pdl(0)
+    until quit
+end
+//
+// Get heap start.
+//
+heap = *freemem
+call($FDED, $8D, 0, 0, 0)
+call($FDED, $91, 0, 0, 0)// CTRL-Q = turn off 80 column
+call($FDED, $8D, 0, 0, 0)
+^$C000 = 0 // Turn off 80STORE
+grmode
+clearview
+showDuration
+showWaveform
+showLFO
+putsxy(8, 0, "OSCILLATION OVERTHRUSTER")
+normal
+putsxy(2, 0, "1..8")
+gotoxy(34, 0); putc('<')
+gotoxy(39, 0); putc('>')
+gotoxy(6, 3); putc('-')
+gotoxy(32, 3); putc('+')
+inverse
+showOctave
+normal
+putsxy(0, 2, "<-")
+putsxy(38, 2, "->")
+inverse
+putsxy(11, 3, "A S D F G H J K L")
+normal
+gotoxy(14, 2); putc('E')
+gotoxy(16, 2); putc('R')
+gotoxy(20, 2); putc('Y')
+gotoxy(22, 2); putc('U')
+gotoxy(24, 2); putc('I')
+inverse
+main
+normal
+textmode
+done
