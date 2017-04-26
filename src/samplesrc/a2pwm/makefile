@@ -24,5 +24,5 @@ clean:
 	-rm *.o *~ *.a *.bin
 
 $(HILOPWM): a2pwm.s util.pla hilopwm.pla pwmvm.s $(PLASM)
-	./$(PLASM) -A < hilopwm.pla > hilopwm.a
+	$(PLASM) -A < hilopwm.pla > hilopwm.a
 	acme -o $(HILOPWM) pwmvm.s
