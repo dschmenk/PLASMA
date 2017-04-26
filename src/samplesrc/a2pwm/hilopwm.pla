@@ -1,14 +1,13 @@
 const inbuff       = $200
 const freemem      = $0002
-const iobuffer     = 0x1800
+const iobuffer     = $1C00
 const NMACROS      = 7
 const FALSE        = 0
 const TRUE         = !FALSE
 //
-// Macro sequence structure
+// Patch state
 //
-struc t_macro
-    byte absStart
+struc t_state
     byte durAtk
     byte durDcy
     byte durSus
@@ -16,14 +15,23 @@ struc t_macro
     word rateAtk
     word rateDcy
     word rateRel
-    byte idxOctave
-    byte perLFO
+    byte octave
+    byte LFO
     byte idxLFO
-    byte[256] sequence
 end
+//
+// Macro sequence structure
+//
+struc t_macro
+    byte absStart
+    byte stateStart[t_state]
+    byte sequence[256]
+end
+byte current[t_state]   // Current state
 word macros             // Pointer to macros
 byte record[t_macro]    // Recording buffer
 word recording = FALSE  // Recording key/flag
+byte playing   = 0      // Keep track of active macros
 //
 // System variables.
 //
@@ -45,27 +53,9 @@ byte keymacro[] = 'Z', 'X', 'C', 'V', 'B', 'N', 'M'
 //
 byte keyrecord[] = $1A, $18, $03, $16, $02, $0E, $0D
 //
-// Which octave are we in
-//
-byte octave = 1
-//
-// FLO period and waveform
-//
-byte LFO, LFOmap
-//
 // Note duration
 //
-byte duration = 22
-//
-// Envelope parameters
-//
-byte atkLen = 2
-byte dcyLen = 0
-byte susLen = 4
-byte relLen = 16
-word atkRate = $07FF
-word dcyRate = $0000
-word relRate = $00FF
+byte duration = 16
 //
 // Patch filename
 //
@@ -80,33 +70,35 @@ include "util.pla"
 //
 def loadPatch
     byte refnum
-    
+
     refnum = open(@patch, iobuffer)
     if refnum
         read(refnum, macros, t_macro * NMACROS) // Macros
-        read(refnum, @octave, @patch - @octave) // Initial values
+        read(refnum, @current, t_state)         // Initial values
         close(refnum)
     fin
+    return refnum <> 0
 end
 def savePatch
     byte refnum
-    
+
     destroy(@patch)
     create(@patch, $C3, $06, $00) // full access, BIN file
     refnum = open(@patch, iobuffer)
     if refnum
         write(refnum, macros, t_macro * NMACROS) // Macros
-        write(refnum, @octave, @patch - @octave) // Initial values
+        write(refnum, @current, t_state)         // Initial values
         close(refnum)
         modPatch = FALSE
     fin
+    return refnum <> 0
 end
 //
 // Query routines
 //
 def query(str)
     byte c
-    
+
     inverse
     clearview
     putsxy(20 - ^str / 2, 2, str)
@@ -119,7 +111,7 @@ end
 def showLFO
     byte LFObar
 
-    LFObar = (LFO+7)/8
+    LFObar = (current.LFO+7)/8
     grcolor(WHITE)
     rect(33, 39, 6, 39, FALSE)
     if LFObar < 32
@@ -135,7 +127,7 @@ def showLFO
     //
     putsxy(35, 0, "   ")
     gotoxy(35, 0)
-    return puti(LFO)
+    return puti(current.LFO)
 end
 //
 // Display LFO waveform
@@ -146,8 +138,8 @@ def showWaveform
     //
     // Get pointer to LFO waveform by calling PWM with zero note
     //
-    envelope(0, 0, 0, 0, atkRate, dcyRate, relRate)
-    hilopwm(0, LFO, LFOmap)
+    envelope(0, 0, 0, 0, current:rateAtk, current:rateDcy, current:rateRel)
+    hilopwm(0, current.LFO, current.idxLFO)
     mapPtr = *0 // Pointer at address 0
     grcolor(WHITE)
     rect(0, 33, 6, 39, FALSE)
@@ -163,7 +155,7 @@ def showWaveform
     //
     // Restore envelope
     //
-    return envelope(atkLen, dcyLen, susLen, relLen, atkRate, dcyRate, relRate)
+    return envelope(current.durAtk, current.durDcy, current.durSus, current.durRel, current:rateAtk, current:rateDcy, current:rateRel)
 end
 //
 // Display duration
@@ -190,8 +182,8 @@ def showDuration
     //
     // Show actual value
     //
-    putsxy(5, 3, "  ")
-    gotoxy(5, 3)
+    putsxy(4, 3, "  ")
+    gotoxy(4, 3)
     return puti(duration)
 end
 //
@@ -201,7 +193,7 @@ def showOctave
     inverse
     putsxy(0, 1, "----------------------------------------")
     normal
-    putsxy(octave*10, 1, "----------")
+    putsxy(current.octave*10, 1, "----------")
     return inverse
 end
 def showMainPanel
@@ -216,7 +208,7 @@ def showMainPanel
     gotoxy(34, 0); putc('<')
     gotoxy(38, 0); putc('>')
     gotoxy(3, 3); putc('-')
-    gotoxy(8, 3); putc('+')
+    gotoxy(6, 3); putc('+')
     inverse
     showOctave
     normal
@@ -232,22 +224,47 @@ def showMainPanel
     gotoxy(24, 2); putc('I')
     return inverse
 end
+def showHelp
+    normal
+    home
+    putsxy(15, 0, "HELP")
+    putsxy(0, 1,  "=======================================")
+    putsxy(2, 3,  "KEY            COMMAND")
+    putsxy(2, 4,  "-------------- --------------------")
+    putsxy(2, 5,  "ESC            HELP/CANCEL RECORD")
+    putsxy(2, 6,  "CTRL-Q         QUIT")
+    putsxy(2, 7,  "1..8           LFO WAVEFORM")
+    putsxy(2, 8,  "< ,            INCREASE LFO")
+    putsxy(2, 9,  "> .            DECREASE LFO")
+    putsxy(2, 10, "LEFT-ARROW     PREV OCTAVE")
+    putsxy(2, 11, "RIGHT-ARROW    NEXT OCTAVE")
+    putsxy(2, 12, "+ UP-ARROW     INCREASE DURATION")
+    putsxy(2, 13, "- DOWN-ARROW   DECREASE DURATION")
+    putsxy(2, 14, "CTRL-Z..M      RECORD MACRO")
+    putsxy(2, 15, "/              SAVE ABS MACRO")
+    putsxy(2, 16, "?              SAVE REL MACRO")
+    putsxy(2, 17, "P              PERSISTANT STATE")
+    putsxy(8, 23, "PRESS A KEY TO RETURN")
+    return getc
+end
 //
 // Recalc envelope parameters
 //
 def recalcEnv
-    atkLen = duration/8
-    relLen = duration/2
-    susLen = duration - atkLen - relLen
-    atkRate = $0FFF/atkLen
-    relRate = $0FFF/relLen
+    current.durAtk = duration/8
+    current.durDcy = 0
+    current.durRel = duration/2
+    current.durSus = duration - current.durAtk - current.durRel
+    current:rateAtk = $0FFF/current.durAtk
+    current:rateDcy = 0
+    current:rateRel = $0FFF/current.durRel
 end
 //
 // Rest
 //
 def restnote
     byte d
-    
+
     for d = duration downto 1
         call($FCA8, $6A, 0, 0, 0)
     next
@@ -255,33 +272,30 @@ end
 //
 // playback a sequence
 //
-def playback(seq)
+def playback(idx)
     word macro
-    byte seq, key, i, showUpdate
-    
-    macro = macros + t_macro * seq
+    byte seq, key, i
+    byte save[t_state]
+
+    //
+    // Check for recursive playback
+    //
+    if playing & (1 << idx)
+        return
+    fin
+    playing = playing | (1 << idx)
+    macro = macros + t_macro * idx
+    //
+    // Save current state
+    //
+    memcpy(@save, @current, t_state)
     //
     // Start off with initial conditions
     //
-    showUpdate = 0
     if macro->absStart
-        if macro->idxOctave <> octave
-            octave = macro->idxOctave
-            showUpdate = showUpdate | 1
-        fin
-        if macro->idxLFO <> LFOmap
-            LFOmap = macro->idxLFO
-            showUpdate = showUpdate | 2
-        fin
-        if macro->perLFO <> LFO
-            LFO = macro->perLFO
-            showUpdate = showUpdate | 4
-        fin
-        if macro->durAtk + macro->durDcy + macro->durSus + macro->durRel <> duration
-            envelope(macro->durAtk, macro->durDcy, macro->durSus, macro->durRel, macro=>rateAtk, macro=>rateDcy, macro=>rateRel)
-            duration = macro->durAtk + macro->durDcy + macro->durSus + macro->durRel
-            showUpdate = showUpdate | 8
-        fin
+        memcpy(@current, macro + stateStart, t_state)
+        duration = current.durAtk + current.durDcy + current.durSus + current.durRel
+        envelope(current.durAtk, current.durDcy, current.durSus, current.durRel, current:rateAtk, current:rateDcy, current:rateRel)
     fin
     //
     // Run throught the sequence
@@ -294,9 +308,9 @@ def playback(seq)
         for i = 0 to 13
             if keytone[i] == key
                 if LFO == 0
-                    hilopwm(scale[i]>>octave, LFO, 0)
+                    hilopwm(scale[i] >> current.octave, current.LFO, 0)
                 else
-                    hilopwm(scale[i]>>octave, LFO, LFOmap)
+                    hilopwm(scale[i] >> current.octave, current.LFO, current.idxLFO)
                 fin
                 break
             fin
@@ -317,12 +331,14 @@ def playback(seq)
                         restnote
                         break
                     is $15 // ->
-                        octave++
-                        showUpdate = showUpdate | 1
+                        if current.octave < 3
+                            current.octave++
+                        fin
                         break
                     is $08 // <-
-                        showUpdate = showUpdate | 1
-                        octave--
+                        if current.octave > 1
+                            current.octave--
+                        fin
                         break
                     is '1'
                     is '2'
@@ -332,44 +348,47 @@ def playback(seq)
                     is '6'
                     is '7'
                     is '8'
-                        LFOmap = key - '1'
-                        showUpdate = showUpdate | 2
+                        current.idxLFO = key - '1'
                         break
                     is '<'
                     is ','
-                        LFO--
-                        showUpdate = showUpdate | 4
+                        if current.LFO > 0
+                            current.LFO--
+                        fin
                         break
                     is '>'
                     is '.'
-                        LFO++
-                        showUpdate = showUpdate | 4
+                        if current.LFO < 255
+                            current.LFO++
+                        fin
                         break
                     is '+'
                     is $0B // UP
-                        duration++
+                        if duration < 40
+                            duration++
+                        fin
                         recalcEnv
-                        envelope(atkLen, dcyLen, susLen, relLen, atkRate, dcyRate, relRate)
-                        showUpdate = showUpdate | 8
+                        envelope(current.durAtk, current.durDcy, current.durSus, current.durRel, current:rateAtk, current:rateDcy, current:rateRel)
                         break
                     is '-'
                     is $0A // DOWN
-                        duration--
+                        if duration > 1
+                            duration--
+                        fin
                         recalcEnv
-                        envelope(atkLen, dcyLen, susLen, relLen, atkRate, dcyRate, relRate)
-                        showUpdate = showUpdate | 8
+                        envelope(current.durAtk, current.durDcy, current.durSus, current.durRel, current:rateAtk, current:rateDcy, current:rateRel)
                         break
                 wend
             fin
         fin
     next
     //
-    // Udate display
+    // Restore state
     //
-    if showUpdate & 1; showOctave;   fin
-    if showUpdate & 2; showWaveform; fin
-    if showUpdate & 4; showLFO;      fin
-    if showUpdate & 8; showDuration; fin
+    memcpy(@current, @save, t_state)
+    duration = current.durAtk + current.durDcy + current.durSus + current.durRel
+    envelope(current.durAtk, current.durDcy, current.durSus, current.durRel, current:rateAtk, current:rateDcy, current:rateRel)
+    playing = playing & ~(1 << idx)
 end
 //
 // Main loop
@@ -377,7 +396,6 @@ end
 def main
     byte quit, key, i
 
-    envelope(atkLen, dcyLen, susLen, relLen, atkRate, dcyRate, relRate)
     quit = FALSE
     repeat
         if keypressed
@@ -387,10 +405,10 @@ def main
             //
             for i = 0 to 13
                 if keytone[i] == key
-                    if LFO == 0
-                        hilopwm(scale[i]>>octave, LFO, 0)
+                    if current.LFO == 0
+                        hilopwm(scale[i] >> current.octave, current.LFO, 0)
                     else
-                        hilopwm(scale[i]>>octave, LFO, LFOmap)
+                        hilopwm(scale[i] >> current.octave, current.LFO, current.idxLFO)
                     fin
                     break
                 fin
@@ -413,17 +431,8 @@ def main
                                 //
                                 // Save current state
                                 //
+                                memcpy(@record.stateStart, @current, t_state)
                                 record.absStart  = TRUE
-                                record.durAtk    = atkLen
-                                record.durDcy    = dcyLen
-                                record.durSus    = susLen
-                                record.durRel    = relLen
-                                record.rateAtk   = atkRate
-                                record.rateDcy   = dcyRate
-                                record.rateRel   = relRate
-                                record.idxOctave = octave
-                                record.perLFO    = LFO
-                                record.idxLFO    = LFOmap
                                 record.sequence  = 0
                                 flash
                                 putsxy(29, 3, "RECORDING")
@@ -440,10 +449,16 @@ def main
                                     recording = FALSE
                                     putsxy(29, 3, "         ")
                                 else
-                                    quit = query("QUIT (Y/N)?")
-                                    if not quit
-                                        showMainPanel
-                                    fin
+                                    textmode
+                                    showHelp
+                                    grmode
+                                    showMainPanel
+                                fin
+                                break
+                            is $11 // CTRL-Q
+                                quit = query("QUIT (Y/N)?")
+                                if not quit
+                                    showMainPanel
                                 fin
                                 break
                             is '?'
@@ -457,16 +472,16 @@ def main
                                 fin
                                 break
                             is $15 // ->
-                                if octave < 3
-                                    octave++
+                                if current.octave < 3
+                                    current.octave++
                                     showOctave
                                 else
                                     key = 0
                                 fin
                                 break
                             is $08 // <-
-                                if octave > 0
-                                    octave--
+                                if current.octave > 0
+                                    current.octave--
                                     showOctave
                                 else
                                     key = 0
@@ -480,17 +495,21 @@ def main
                             is '6'
                             is '7'
                             is '8'
-                                LFOmap = key - '1'
+                                current.idxLFO = key - '1'
                                 showWaveform
                                 break
                             is '<'
                             is ','
-                                LFO--
+                                if current.LFO > 0
+                                    current.LFO--
+                                fin
                                 showLFO
                                 break
                             is '>'
                             is '.'
-                                LFO++
+                                if current.LFO < 255
+                                    current.LFO++
+                                fin
                                 showLFO
                                 break
                             is '+'
@@ -498,7 +517,7 @@ def main
                                 if duration < 40
                                     duration++
                                     recalcEnv
-                                    envelope(atkLen, dcyLen, susLen, relLen, atkRate, dcyRate, relRate)
+                                    envelope(current.durAtk, current.durDcy, current.durSus, current.durRel, current:rateAtk, current:rateDcy, current:rateRel)
                                     showDuration
                                 else
                                     key = 0
@@ -509,7 +528,7 @@ def main
                                 if duration > 1
                                     duration--
                                     recalcEnv
-                                    envelope(atkLen, dcyLen, susLen, relLen, atkRate, dcyRate, relRate)
+                                    envelope(current.durAtk, current.durDcy, current.durSus, current.durRel, current:rateAtk, current:rateDcy, current:rateRel)
                                     showDuration
                                 else
                                     key = 0
@@ -528,6 +547,8 @@ def main
                 if record.sequence < 255
                     record.sequence++
                     record.sequence[record.sequence] = key
+                else
+                    beep
                 fin
             fin
         fin
@@ -538,8 +559,12 @@ end
 //
 macros = *freemem
 heap = macros + t_macro * NMACROS
-loadPatch
 memset(macros, 0, t_macro * NMACROS)
+if not loadPatch
+    showHelp
+fin
+recalcEnv
+envelope(current.durAtk, current.durDcy, current.durSus, current.durRel, current:rateAtk, current:rateDcy, current:rateRel)
 call($FDED, $8D, 0, 0, 0)
 call($FDED, $91, 0, 0, 0)// CTRL-Q = turn off 80 column
 call($FDED, $8D, 0, 0, 0)
