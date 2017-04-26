@@ -57,43 +57,15 @@ HIMEM   =       $73
 ;* INTERPRETER HEADER+INITIALIZATION
 ;*
         *=      $2000
-        STY     IFPL            ; INIT FRAME POINTER
-        LDA     #$BF
-        STA     IFPH
-        LDA     #<SEGEND        ; SAVE HEAP START
-        STA     SRCL
-        LDA     #>SEGEND
-        STA     SRCH
-        LDA     #$4C
-        CMP     $BE00           ; CHECK FOR BASIC.SYSTEM
-        BNE     +
-        CMP     $BE03
-        BNE     +
-        LDA     HIMEM
-        STA     IFPL
-        LDA     HIMEM+1
-        STA     IFPH
-        LDX    #$00            ; SAVE PAGE ZERO
--       LDA     $00,X
-        STA     ZPSAVE,X
-        INX
-        BNE     -
-        JSR     VMINIT
-        LDX     #$00            ; RESTORE ZP
--       LDA     ZPSAVE,X
-        STA     $00,X
-        INX
-        BNE     -
-        RTS
-+       LDX     #$FE
+        LDX     #$FE
         TXS
         JSR     VMINIT
         JSR     $BF00
         !BYTE   $65
         !WORD   EXITTBL
 EXITTBL:
-        !BYTE	  4
-        !BYTE	  0
+        !BYTE     4
+        !BYTE     0
 ;*
 ;* SYSTEM INTERPRETER ENTRYPOINT
 ;*
@@ -990,6 +962,14 @@ VMINIT  LDY     #$10            ; INSTALL PAGE 0 FETCHOP ROUTINE
         STA     DROP-1,Y
         DEY
         BNE     -
+        STY     IFPL            ; INIT FRAME POINTER
+        LDA     #$BF
+        STA     IFPH
+        LDA     #<SEGEND        ; SAVE HEAP START
+        STA     SRCL
+        LDA     #>SEGEND
+        STA     SRCH
+        LDA     #$4C
         JMP     START
 PAGE0   =       *
         !PSEUDOPC       $00EF {
