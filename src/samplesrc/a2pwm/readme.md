@@ -4,7 +4,25 @@ Oscillation Overthruster (HiLoPWM) is a synthesizer/sequencer for playing around
 ## Running
 The HILOPWM.SYSTEM file can be launched by booting the lfo.po disk image. The first time, the help screen will be presented with a list of the available commands. Once a PATCH file has been saved, the help screen will only show up by pressing the ESCape key. The main screen displays a graphical representation of the LFO waveform, LFO period and tone duration. The lower panel displays the textual representation of the LFO period, duration, and octave. The Apple II keyboard keys that map a piano keyboard octave is shown in the middle. Macros can be recorded and played back along with playing tones and changing parameters. The macros and parameters can be made persistent by saving them to disk. The next time HILOPWM.SYSTEM is run, the help screen will be skipped and the macros and settings from the previous session will be present. When quitting (CTRL-Q), you will be prompted if want to quit in case it was an accidental keypress, then optionally prompted to save the current state if it has changed since the last save.
 ## Playing Tones
-The Apple II keyboard is mapped to a one octave piano keyboard, plus one note on either side of the octave; from Bn-1 to An+1.
+The Apple II keyboard is mapped to a one octave piano keyboard, from Bn-1 to Cn+1.
+
+    KEY NOTE ('n' is current octave)
+    --- ----
+     A  Bn-1
+     S  Cn
+     E  C#n
+     D  Dn
+     R  D#n
+     F  En
+     G  Fn
+     Y  F#n
+     H  Gn
+     U  G#n
+     J  An
+     I  A#n
+     K  Bn
+     L  Cn+1
+     
 ## Command keys
     KEY            COMMAND
     -------------- --------------------
