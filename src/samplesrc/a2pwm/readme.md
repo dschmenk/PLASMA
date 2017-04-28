@@ -22,7 +22,9 @@ The Apple II keyboard is mapped to a one octave piano keyboard, from Bn-1 to Cn+
      I  A#n
      K  Bn
      L  Cn+1
-     
+
+The duration of the note is in increments of 0.0255 seconds (the PWM loop is 100 cycles and runs 255 times at ~1.022 MHz). The maximum note length is slight longer than 1 second.    
+
 ## Command keys
     KEY            COMMAND
     -------------- --------------------
