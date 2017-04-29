@@ -5,6 +5,40 @@ const NMACROS      = 7
 const FALSE        = 0
 const TRUE         = !FALSE
 //
+// Sequence values
+//
+const SEQ_MACRO    = 0
+const SEQ_NOTE     = 7
+const SEQ_LFO      = 21
+const SEQ_LFO_INC  = 29
+const SEQ_LFO_DEC  = 30
+const SEQ_OCT_INC  = 31
+const SEQ_OCT_DEC  = 32
+const SEQ_DUR_INC  = 33
+const SEQ_DUR_DEC  = 34
+const SEQ_REST     = 35
+//
+// Predefine replay functions
+//
+predef playback, replaynote, replayrest
+predef replaylfo, replaylfoinc, replaylfodec
+predef replayoctinc, replayoctdec, replaydurinc, replaydurdec
+//
+// Replay function pointers
+//
+word replay[] = @playback, @playback, @playback, @playback, @playback, @playback
+word          = @playback
+word          = @replaynote, @replaynote, @replaynote, @replaynote, @replaynote, @replaynote
+word          = @replaynote, @replaynote, @replaynote, @replaynote, @replaynote, @replaynote
+word          = @replaynote, @replaynote
+word          = @replaylfo, @replaylfo, @replaylfo, @replaylfo, @replaylfo, @replaylfo
+word          = @replaylfo, @replaylfo
+word          = @replaylfoinc, @replaylfodec
+word          = @replayoctinc, @replayoctdec
+word          = @replaydurinc, @replaydurdec
+word          = @replayrest
+
+//
 // Patch state
 //
 struc t_state
@@ -32,6 +66,7 @@ word macros             // Pointer to macros
 byte record[t_macro]    // Recording buffer
 word recording = FALSE  // Recording key/flag
 byte playing   = 0      // Keep track of active macros
+byte recalc = FALSE     // Recalc envelope flag
 //
 // System variables.
 //
@@ -260,23 +295,15 @@ def recalcEnv
     current:rateAtk = $0FFF/current.durAtk
     current:rateDcy = 0
     current:rateRel = $0FFF/current.durRel
+    recalc = FALSE
+    return envelope(current.durAtk, current.durDcy, current.durSus, current.durRel, current:rateAtk, current:rateDcy, current:rateRel)
 end
 //
-// Rest
-//
-def restnote
-    byte d
-
-    for d = duration downto 1
-        call($FCA8, $6A, 0, 0, 0)
-    next
-end
-//
-// playback a sequence
+// Playback a sequence
 //
 def playback(idx)
     word macro
-    byte seq, key, i
+    byte seq, i
     byte save[t_state]
 
     //
@@ -298,91 +325,14 @@ def playback(idx)
         memcpy(@current, macro + stateStart, t_state)
         duration = current.durAtk + current.durDcy + current.durSus + current.durRel
         envelope(current.durAtk, current.durDcy, current.durSus, current.durRel, current:rateAtk, current:rateDcy, current:rateRel)
+        recalc = FALSE
     fin
     //
     // Run throught the sequence
     //
-    for seq = 1 to macro->sequence
-        key = macro->sequence[seq]
-        //
-        // Check for tone keys
-        //
-        for i = 0 to 13
-            if keytone[i] == key
-                if current.LFO == 0
-                    hilopwm(scale.[current.octave, i], 0, 0)
-                else
-                    hilopwm(scale.[current.octave, i], current.LFO, current.idxLFO)
-                fin
-                break
-            fin
-        next
-        //
-        // Check for macro keys
-        //
-        if i > 13
-            for i = 0 to 6
-                if keymacro[i] == key
-                    playback(i)
-                    break
-                fin
-            next
-            if i > 6
-                when key
-                    is ' '
-                        restnote
-                        break
-                    is $15 // ->
-                        if current.octave < 3
-                            current.octave++
-                        fin
-                        break
-                    is $08 // <-
-                        if current.octave > 0
-                            current.octave--
-                        fin
-                        break
-                    is '1'
-                    is '2'
-                    is '3'
-                    is '4'
-                    is '5'
-                    is '6'
-                    is '7'
-                    is '8'
-                        current.idxLFO = key - '1'
-                        break
-                    is '<'
-                    is ','
-                        if current.LFO > 0
-                            current.LFO--
-                        fin
-                        break
-                    is '>'
-                    is '.'
-                        if current.LFO < 32
-                            current.LFO++
-                        fin
-                        break
-                    is '+'
-                    is $0B // UP
-                        if duration < 40
-                            duration++
-                        fin
-                        recalcEnv
-                        envelope(current.durAtk, current.durDcy, current.durSus, current.durRel, current:rateAtk, current:rateDcy, current:rateRel)
-                        break
-                    is '-'
-                    is $0A // DOWN
-                        if duration > 1
-                            duration--
-                        fin
-                        recalcEnv
-                        envelope(current.durAtk, current.durDcy, current.durSus, current.durRel, current:rateAtk, current:rateDcy, current:rateRel)
-                        break
-                wend
-            fin
-        fin
+    for i = 1 to macro->sequence
+        seq = macro->sequence[i]
+        (replay[seq])(seq)
     next
     //
     // Restore state
@@ -391,17 +341,87 @@ def playback(idx)
     duration = current.durAtk + current.durDcy + current.durSus + current.durRel
     envelope(current.durAtk, current.durDcy, current.durSus, current.durRel, current:rateAtk, current:rateDcy, current:rateRel)
     playing = playing & ~(1 << idx)
+    return recalcEnv
+end
+//
+// Replay rest
+//
+def replayrest(idx)
+    byte d
+
+    for d = duration downto 1
+        call($FCA8, $6A, 0, 0, 0)
+    next
+end
+//
+// Replay note
+//
+def replaynote(idx)
+    if recalc
+        recalcEnv
+    fin
+    if current.LFO == 0
+        hilopwm(scale.[current.octave, idx - SEQ_NOTE], 0, 0)
+    else
+        hilopwm(scale.[current.octave, idx - SEQ_NOTE], current.LFO, current.idxLFO)
+    fin
+end
+//
+// Replay duration
+//
+def replaydurinc(idx)
+    if duration < 40
+        duration++
+        recalc = TRUE;
+    fin
+end
+def replaydurdec(idx)
+    if duration > 1
+        duration--
+        recalc = TRUE;
+    fin
+end
+//
+// Replay octave
+//
+def replayoctinc(idx)
+    if current.octave < 3
+        current.octave++
+    fin
+end
+def replayoctdec(idx)
+    if current.octave > 0
+        current.octave--
+    fin
+end
+//
+// Replay LFO
+//
+def replaylfoinc(idx)
+    if current.LFO > 0
+        current.LFO--
+    fin
+end
+def replaylfodec(idx)
+    if current.LFO < 32
+        current.LFO++
+    fin
+end
+def replaylfo(idx)
+    current.idxLFO = idx - SEQ_LFO
 end
 //
 // Main loop
 //
 def main
     byte quit, key, i
-
+    word seq
+    
     quit = FALSE
     repeat
         if keypressed
             key = toupper(getc)
+            seq = -1
             //
             // Check for tone keys
             //
@@ -412,6 +432,7 @@ def main
                     else
                         hilopwm(scale.[current.octave, i], current.LFO, current.idxLFO)
                     fin
+                    seq = SEQ_NOTE + i
                     break
                 fin
             next
@@ -422,6 +443,7 @@ def main
                 for i = 0 to 6
                     if keymacro[i] == key
                         playback(i)
+                        seq = SEQ_MACRO + i
                         break
                     fin
                 next
@@ -439,7 +461,6 @@ def main
                                 normal
                                 putsxy(29, 3, "RECORDING")
                                 inverse
-                                key = 0
                                 break
                             fin
                         next
@@ -473,21 +494,36 @@ def main
                                     putsxy(29, 3, "         ")
                                 fin
                                 break
+                            is $0B // UP
+                                if duration < 40
+                                    duration++
+                                    recalcEnv
+                                    showDuration
+                                fin
+                                seq = SEQ_DUR_INC
+                                break
+                            is '-'
+                            is $0A // DOWN
+                                if duration > 1
+                                    duration--
+                                    recalcEnv
+                                    showDuration
+                                fin
+                                seq = SEQ_DUR_DEC
+                                break
                             is $15 // ->
                                 if current.octave < 3
                                     current.octave++
                                     showOctave
-                                else
-                                    key = 0
                                 fin
+                                seq = SEQ_OCT_INC
                                 break
                             is $08 // <-
                                 if current.octave > 0
                                     current.octave--
                                     showOctave
-                                else
-                                    key = 0
                                 fin
+                                seq = SEQ_OCT_DEC
                                 break
                             is '1'
                             is '2'
@@ -499,13 +535,7 @@ def main
                             is '8'
                                 current.idxLFO = key - '1'
                                 showWaveform
-                                break
-                            is '<'
-                            is ','
-                                if current.LFO > 0
-                                    current.LFO--
-                                fin
-                                showLFO
+                                seq = SEQ_LFO + current.idxLFO
                                 break
                             is '>'
                             is '.'
@@ -513,45 +543,33 @@ def main
                                     current.LFO++
                                 fin
                                 showLFO
+                                seq = SEQ_LFO_INC
+                                break
+                            is '<'
+                            is ','
+                                if current.LFO > 0
+                                    current.LFO--
+                                fin
+                                showLFO
+                                seq = SEQ_LFO_DEC
                                 break
                             is '+'
-                            is $0B // UP
-                                if duration < 40
-                                    duration++
-                                    recalcEnv
-                                    envelope(current.durAtk, current.durDcy, current.durSus, current.durRel, current:rateAtk, current:rateDcy, current:rateRel)
-                                    showDuration
-                                else
-                                    key = 0
-                                fin
-                                break
-                            is '-'
-                            is $0A // DOWN
-                                if duration > 1
-                                    duration--
-                                    recalcEnv
-                                    envelope(current.durAtk, current.durDcy, current.durSus, current.durRel, current:rateAtk, current:rateDcy, current:rateRel)
-                                    showDuration
-                                else
-                                    key = 0
-                                fin
-                                break
                             is 'P'
                                 if modPatch
                                     savePatch
                                 fin
                                 break
-                is '0' // Toggle speaker phase
-                    ^$C030
-                break
+                            is '0' // Toggle speaker phase
+                                ^$C030
+                                break
                         wend
                     fin
                 fin
             fin
-            if recording and key
+            if recording and seq >= 0
                 if record.sequence < 255
                     record.sequence++
-                    record.sequence[record.sequence] = key
+                    record.sequence[record.sequence] = seq
                 else
                     beep
                 fin
