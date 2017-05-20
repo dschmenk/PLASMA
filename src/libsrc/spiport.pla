@@ -8,11 +8,16 @@ const SPI_SLAVE_READY = '@'
 const SPI_SLAVE_ERROR = '!'
 const SPI_SLAVE_BUSY  = $FF
 
+word spiReadWriteByte, spiWriteBytes, spiReadBytes
+
 asm spiInc
-!SOURCE	"vmsrc/plvmzp.inc"
+!SOURCE "vmsrc/plvmzp.inc"
+!CPU    65C02
 end
 
-export asm spiXferByte(outbyte)
+asm spiXferByteStd(outbyte)
+    PHP             ; DISABLE INTS
+    SEI
     STA $C05A       ; ENABLE SLAVE
     LDY #0          ; ASSUME MSB IS ZERO
     LDA ESTKL,X     ; GET ARGUMENT
@@ -20,7 +25,7 @@ export asm spiXferByte(outbyte)
     INY             ; IT'S A ONE
 +   STA $C058,Y     ; WRITE BIT 7
     STA $C040       ; CLOCK
-    LDY #0          ; DOING THIS HERE GIVES TIME FOR OUTPUT TO BECOME STABLE - NOT REALLY NEEDEDd
+    LDY #0          ; DOING THIS HERE GIVES TIME FOR OUTPUT TO BECOME STABLE - NOT REALLY NEEDED
     ASL $C061       ; READ BIT 7 INTO CARRY
     ROL             ; ROTATE INTO ACC
     BPL +           ; REPEAT FOR ALL BITS
@@ -74,10 +79,93 @@ export asm spiXferByte(outbyte)
     STA $C05B       ; DISABLE SLAVE
     ROL
     STA ESTKL,X     ; SAVE RETURN PARAMETER
+    PLP
     RTS
 end
 
-asm spiReadBytes(buf, len)
+asm spiXferByteGS(outbyte)
+    PHP             ; DISABLE INTS
+    SEI
+    LDA $C036       ; SET 1 MHZ
+    PHA
+    AND #$7F
+    STA $C036
+    STA $C05A       ; ENABLE SLAVE
+    LDY #0          ; ASSUME MSB IS ZERO
+    LDA ESTKL,X     ; GET ARGUMENT
+    BPL +           ; CHECK MSB
+    INY             ; IT'S A ONE
++   STA $C058,Y     ; WRITE BIT 7
+    STA $C05C       ; CLOCK FALLING EDGE
+    LDY #0          ; DOING THIS HERE GIVES TIME FOR OUTPUT TO BECOME STABLE - NOT REALLY NEEDED
+    STA $C05D       ; CLOCK RISING EDGE
+    ASL $C061       ; READ BIT 7 INTO CARRY
+    ROL             ; ROTATE INTO ACC
+    BPL +           ; REPEAT FOR ALL BITS
+    INY
++   STA $C058,Y
+    STA $C05C       ; CLOCK FALLING EDGE
+    LDY #0
+    STA $C05D       ; CLOCK RISING EDGE
+    ASL $C061
+    ROL
+    BPL +
+    INY
++   STA $C058,Y
+    STA $C05C       ; CLOCK FALLING EDGE
+    LDY #0
+    STA $C05D       ; CLOCK RISING EDGE
+    ASL $C061
+    ROL
+    BPL +
+    INY
++   STA $C058,Y
+    STA $C05C       ; CLOCK FALLING EDGE
+    LDY #0
+    STA $C05D       ; CLOCK RISING EDGE
+    ASL $C061
+    ROL
+    BPL +
+    INY
++   STA $C058,Y
+    STA $C05C       ; CLOCK FALLING EDGE
+    LDY #0
+    STA $C05D       ; CLOCK RISING EDGE
+    ASL $C061
+    ROL
+    BPL +
+    INY
++   STA $C058,Y
+    STA $C05C       ; CLOCK FALLING EDGE
+    LDY #0
+    STA $C05D       ; CLOCK RISING EDGE
+    ASL $C061
+    ROL
+    BPL +
+    INY
++   STA $C058,Y
+    STA $C05C       ; CLOCK FALLING EDGE
+    LDY #0
+    STA $C05D       ; CLOCK RISING EDGE
+    ASL $C061
+    ROL
+    BPL +
+    INY
++   STA $C058,Y
+    STA $C05C       ; CLOCK FALLING EDGE
+    STA $C05D       ; CLOCK RISING EDGE
+    ASL $C061
+    STA $C05B       ; DISABLE SLAVE
+    ROL
+    STA ESTKL,X     ; SAVE RETURN PARAMETER
+    PLA
+    STA $C036
+    PLP
+    RTS
+end
+asm spiReadBytesStd(buf, len)
+    PHP             ; DISABLE INTS
+    SEI
     LDA ESTKL+1,X
     STA DSTL
     LDA ESTKH+1,X
@@ -122,10 +210,77 @@ asm spiReadBytes(buf, len)
     DEC ESTKH,X
     BNE -
     INX             ; REMOVE AN ARGUMENT
+    PLP
     RTS
 end
 
-asm spiWriteBytes(buf, len)
+asm spiReadBytesGS(buf, len)
+    PHP             ; DISABLE INTS
+    SEI
+    LDA $C036       ; SET 1 MHZ
+    PHA
+    AND #$7F
+    STA $C036
+    LDA ESTKL+1,X
+    STA DSTL
+    LDA ESTKH+1,X
+    STA DSTH
+    LDA ESTKL,X
+    BEQ +
+    INC ESTKH,X
++   LDY #$00
+-   STA $C05A       ; ENABLE SLAVE
+    STA $C05C       ; CLOCK FALLING EDGE
+    STA $C05D       ; CLOCK RISING EDGE
+    ASL $C061       ; SHIFT IN ALL BITS STARTING WITH MSB
+    ROL
+    STA $C05C       ; CLOCK FALLING EDGE
+    STA $C05D       ; CLOCK RISING EDGE
+    ASL $C061
+    ROL
+    STA $C05C       ; CLOCK FALLING EDGE
+    STA $C05D       ; CLOCK RISING EDGE
+    ASL $C061
+    ROL
+    STA $C05C       ; CLOCK FALLING EDGE
+    STA $C05D       ; CLOCK RISING EDGE
+    ASL $C061
+    ROL
+    STA $C05C       ; CLOCK FALLING EDGE
+    STA $C05D       ; CLOCK RISING EDGE
+    ASL $C061
+    ROL
+    STA $C05C       ; CLOCK FALLING EDGE
+    STA $C05D       ; CLOCK RISING EDGE
+    ASL $C061
+    ROL
+    STA $C05C       ; CLOCK FALLING EDGE
+    STA $C05D       ; CLOCK RISING EDGE
+    ASL $C061
+    ROL
+    STA $C05C       ; CLOCK FALLING EDGE
+    STA $C05D       ; CLOCK RISING EDGE
+    ASL $C061
+    STA $C05B       ; DISABLE SLAVE
+    ROL
+    STA (DST),Y     ; SAVE TO BUFFER
+    INY
+    BNE +
+    INC DSTH
++   DEC ESTKL,X
+    BNE -
+    DEC ESTKH,X
+    BNE -
+    INX             ; REMOVE AN ARGUMENT
+    PLA
+    STA $C036
+    PLP
+    RTS
+end
+
+asm spiWriteBytesStd(buf, len)
+    PHP             ; DISABLE INTS
+    SEI
     LDA ESTKL+1,X
     STA SRCL
     LDA ESTKH+1,X
@@ -142,49 +297,49 @@ asm spiWriteBytes(buf, len)
 +   STA $C058,Y     ; WRITE BIT 7
     STA $C040       ; CLOCK
     LDY #0          ; DOING THIS HERE GIVES TIME FOR OUTPUT TO BECOME STABLE
-    ROL             ; ROTATE NEXT BIT TO SEND
+    ASL             ; ROTATE NEXT BIT TO SEND
     BPL +           ; REPEAT FOR ALL BITS
     INY
 +   STA $C058,Y
     STA $C040
     LDY #0
-    ROL
+    ASL
     BPL +
     INY
 +   STA $C058,Y
     STA $C040
     LDY #0
-    ROL
+    ASL
     BPL +
     INY
 +   STA $C058,Y
     STA $C040
     LDY #0
-    ROL
+    ASL
     BPL +
     INY
 +   STA $C058,Y
     STA $C040
     LDY #0
-    ROL
+    ASL
     BPL +
     INY
 +   STA $C058,Y
     STA $C040
     LDY #0
-    ROL
+    ASL
     BPL +
     INY
 +   STA $C058,Y
     STA $C040
     LDY #0
-    ROL
+    ASL
     BPL +
     INY
 +   STA $C058,Y
     STA $C040
     STA $C05B       ; DISABLE SLAVE
-    INC	SRCL
+    INC SRCL
     BNE +
     INC SRCH
 +   DEC ESTKL,X
@@ -192,7 +347,57 @@ asm spiWriteBytes(buf, len)
     DEC ESTKH,X
     BNE -
     INX             ; REMOVE AN ARGUMENT
+    PLP
     RTS
+end
+
+asm spiWriteBytesGS(buf, len)
+    PHP             ; DISABLE INTS
+    SEI
+    LDA $C036       ; SET 1 MHZ
+    PHA
+    AND #$7F
+    STA $C036
+    LDA ESTKL+1,X
+    STA SRCL
+    LDA ESTKH+1,X
+    STA SRCH
+    LDA ESTKL,X
+    BEQ +
+    INC ESTKH,X
++
+--  STA $C05A       ; ENABLE SLAVE
+    PHX
+    LDX #8
+    LDY #0          ; ASSUME MSB IS ZERO
+    LDA (SRC),Y     ; GET BYTE
+-   ASL
+    BCC +           ; CHECK MSB
+    INY             ; IT'S A ONE
++   STA $C058,Y     ; WRITE BIT 7
+    STA $C05C       ; CLOCK FALLING EDGE
+    STA $C05D       ; CLOCK RISING EDGE
+    LDY #0
+    DEX
+    BNE -
+    STA $C05B       ; DISABLE SLAVE
+    INC SRCL
+    BNE +
+    INC SRCH
++   PLX
+    DEC ESTKL,X
+    BNE --
+    DEC ESTKH,X
+    BNE --
+    INX             ; REMOVE AN ARGUMENT
+    PLA
+    STA $C036
+    PLP
+    RTS
+end
+
+export def spiXferByte(outbyte)
+    return (spiReadWriteByte)(outbyte)
 end
 
 export def spiDelay(time)
@@ -203,7 +408,7 @@ export def spiSend(data)
     byte timeout, status
 
     for timeout = 1 to 100 step 10
-        status = spiXferByte(data)
+        status = (spiReadWriteByte)(data)
         if status <> SPI_SLAVE_BUSY
             return status
         fin
@@ -220,20 +425,20 @@ end
 export def spiWriteBuf(buf, len)
     spiSend(13)        // CMD_BUF_WRITE
     spiSend(len >> 8); spiSend(len)
-   return spiWriteBytes(buf, len)
+   return (spiWriteBytes)(buf, len)
 end
 
 export def spiReadBuf(buf, len)
     spiSend(12)        // CMD_BUF_READ
     spiSend(len >> 8); spiSend(len)
-    return spiReadBytes(buf, len)
+    return (spiReadBytes)(buf, len)
 end
 
 export def spiReady
     byte timeout
 
     timeout = 0xFF
-    while spiXferByte(0) <> SPI_SLAVE_READY and timeout // WAIT FOR READY
+    while (spiReadWriteByte)(0) <> SPI_SLAVE_READY and timeout // WAIT FOR READY
         timeout--
         spiDelay(10)
     loop
@@ -241,9 +446,19 @@ export def spiReady
 end
 
 export def spiReset
-    ^$C05B
+    ^$C05B // DISABLE SLAVE SELECT
+    ^$C05D // CLOCK RAISE (GS ONLY)
     return spiReady
 end
 
+if call($FE1F, 0, 0, 0, 1).3 & 1 // GS ID ROUTINE
+    spiReadWriteByte = @spiXferByteStd
+    spiReadBytes     = @spiReadBytesStd
+    spiWriteBytes    = @spiWriteBytesStd
+else
+    spiReadWriteByte = @spiXferByteGS
+    spiReadBytes     = @spiReadBytesGS
+    spiWriteBytes    = @spiWriteBytesGS
+fin
 return spiReset <> 0
 done
