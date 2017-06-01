@@ -914,12 +914,13 @@ int crunch_seq(t_opseq *seq)
     t_opseq *op = seq;
     int crunched = 0;
     int freeops  = 0;
+    int shiftcnt;
+    
     while (op && (opnext = op->nextop))
     {
         switch (op->code)
         {
             case CONST_CODE:
-                //fprintf(stderr, "CONST -> $%04X", opnext->code);
                 if (op->val == 1)
                 {
                     if (opnext->code == BINARY_CODE(ADD_TOKEN))
@@ -970,6 +971,28 @@ int crunch_seq(t_opseq *seq)
                         op->offsz = op->val;
                         op->code  = SAW_CODE;
                         freeops   = 1;
+                        break;
+                    case BINARY_CODE(MUL_TOKEN):
+                        for (shiftcnt = 0; shiftcnt < 16; shiftcnt++)
+                        {
+                            if (op->val == (1 << shiftcnt))
+                            {
+                                op->val = shiftcnt;
+                                opnext->code = BINARY_CODE(SHL_TOKEN);
+                                break;
+                            }
+                        }
+                        break;
+                    case BINARY_CODE(DIV_TOKEN):
+                       for (shiftcnt = 0; shiftcnt < 16; shiftcnt++)
+                        {
+                            if (op->val == (1 << shiftcnt))
+                            {
+                                op->val = shiftcnt;
+                                opnext->code = BINARY_CODE(SHR_TOKEN);
+                                break;
+                            }
+                        }
                         break;
                     case CONST_CODE: // Collapse constant operation
                         if ((opnextnext = opnext->nextop))
