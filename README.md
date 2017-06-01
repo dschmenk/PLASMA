@@ -17,83 +17,83 @@ Different projects have led to the architecture of PLASMA, most notably Apple Pa
 <!-- TOC depthFrom:1 depthTo:6 withLinks:1 updateOnSave:1 orderedList:0 -->
 
 - [Build Environment](#build-environment)
-	- [acme Cross-Assembler](#acme-cross-assembler)
-	- [PLASMA Source](#plasma-source)
-		- [Portable VM](#portable-vm)
-		- [Target VM](#target-vm)
+    - [acme Cross-Assembler](#acme-cross-assembler)
+    - [PLASMA Source](#plasma-source)
+        - [Portable VM](#portable-vm)
+        - [Target VM](#target-vm)
 - [Tutorial](#tutorial)
-	- [PLASMA Compiler/Assembler](#plasma-compilerassembler)
-	- [PLASMA Modules](#plasma-modules)
-	- [Data Types](#data-types)
-	- [Obligatory 'Hello World'](#obligatory-hello-world)
-	- [Character Case](#character-case)
-	- [Comments](#comments)
-	- [Numbers](#numbers)
-	- [Characters](#characters)
-	- [Strings](#strings)
-	- [Organization of a PLASMA Source File](#organization-of-a-plasma-source-file)
-		- [Module Dependencies](#module-dependencies)
-		- [File Inclusion](#file-inclusion)
-		- [Predefined Functions](#predefined-functions)
-		- [Constant Declarations](#constant-declarations)
-		- [Structure Declarations](#structure-declarations)
-		- [Global Data & Variables Declarations](#global-data-variables-declarations)
-		- [Function Definitions](#function-definitions)
-			- [Statements and Expressions](#statements-and-expressions)
-		- [Exported Declarations](#exported-declarations)
-		- [Module Main Initialization Function](#module-main-initialization-function)
-		- [Module Done](#module-done)
-	- [Runtime](#runtime)
+    - [PLASMA Compiler/Assembler](#plasma-compilerassembler)
+    - [PLASMA Modules](#plasma-modules)
+    - [Data Types](#data-types)
+    - [Obligatory 'Hello World'](#obligatory-hello-world)
+    - [Character Case](#character-case)
+    - [Comments](#comments)
+    - [Numbers](#numbers)
+    - [Characters](#characters)
+    - [Strings](#strings)
+    - [Organization of a PLASMA Source File](#organization-of-a-plasma-source-file)
+        - [Module Dependencies](#module-dependencies)
+        - [File Inclusion](#file-inclusion)
+        - [Predefined Functions](#predefined-functions)
+        - [Constant Declarations](#constant-declarations)
+        - [Structure Declarations](#structure-declarations)
+        - [Global Data & Variables Declarations](#global-data-variables-declarations)
+        - [Function Definitions](#function-definitions)
+            - [Statements and Expressions](#statements-and-expressions)
+        - [Exported Declarations](#exported-declarations)
+        - [Module Main Initialization Function](#module-main-initialization-function)
+        - [Module Done](#module-done)
+    - [Runtime](#runtime)
 - [Reference](#reference)
-	- [Decimal and Hexadecimal Numbers](#decimal-and-hexadecimal-numbers)
-	- [Character and String Literals](#character-and-string-literals)
-		- [In-line String Literals](#in-line-string-literals)
-	- [Words](#words)
-	- [Bytes](#bytes)
-	- [Addresses](#addresses)
-		- [Arrays](#arrays)
-			- [Type Overrides](#type-overrides)
-			- [Multi-Dimensional Arrays](#multi-dimensional-arrays)
-		- [Offsets (Structure Elements)](#offsets-structure-elements)
-		- [Defining Structures](#defining-structures)
-		- [Pointers](#pointers)
-		- [Pointer Dereferencing](#pointer-dereferencing)
-		- [Addresses of Data/Code](#addresses-of-datacode)
-			- [Function Pointers](#function-pointers)
-	- [Function Definitions](#function-definitions)
-		- [Expressions and Statements](#expressions-and-statements)
-			- [Address Operators](#address-operators)
-			- [Arithmetic, Bitwise, and Logical Operators](#arithmetic-bitwise-and-logical-operators)
-		- [Assignment](#assignment)
-			- [Empty Assignments](#empty-assignments)
-		- [Increment and Decrement](#increment-and-decrement)
-		- [Control Flow](#control-flow)
-			- [CALL](#call)
-			- [RETURN](#return)
-			- [IF/[ELSIF]/[ELSE]/FIN](#ifelsifelsefin)
-			- [WHEN/IS/[OTHERWISE]/WEND](#whenisotherwisewend)
-			- [FOR \<TO,DOWNTO\> [STEP]/NEXT](#for-todownto-stepnext)
-			- [WHILE/LOOP](#whileloop)
-			- [REPEAT/UNTIL](#repeatuntil)
-			- [CONTINUE](#continue)
-			- [BREAK](#break)
+    - [Decimal and Hexadecimal Numbers](#decimal-and-hexadecimal-numbers)
+    - [Character and String Literals](#character-and-string-literals)
+        - [In-line String Literals](#in-line-string-literals)
+    - [Words](#words)
+    - [Bytes](#bytes)
+    - [Addresses](#addresses)
+        - [Arrays](#arrays)
+            - [Type Overrides](#type-overrides)
+            - [Multi-Dimensional Arrays](#multi-dimensional-arrays)
+        - [Offsets (Structure Elements)](#offsets-structure-elements)
+        - [Defining Structures](#defining-structures)
+        - [Pointers](#pointers)
+        - [Pointer Dereferencing](#pointer-dereferencing)
+        - [Addresses of Data/Code](#addresses-of-datacode)
+            - [Function Pointers](#function-pointers)
+    - [Function Definitions](#function-definitions)
+        - [Expressions and Statements](#expressions-and-statements)
+            - [Address Operators](#address-operators)
+            - [Arithmetic, Bitwise, and Logical Operators](#arithmetic-bitwise-and-logical-operators)
+        - [Assignment](#assignment)
+            - [Empty Assignments](#empty-assignments)
+        - [Increment and Decrement](#increment-and-decrement)
+        - [Control Flow](#control-flow)
+            - [CALL](#call)
+            - [RETURN](#return)
+            - [IF/[ELSIF]/[ELSE]/FIN](#ifelsifelsefin)
+            - [WHEN/IS/[OTHERWISE]/WEND](#whenisotherwisewend)
+            - [FOR \<TO,DOWNTO\> [STEP]/NEXT](#for-todownto-stepnext)
+            - [WHILE/LOOP](#whileloop)
+            - [REPEAT/UNTIL](#repeatuntil)
+            - [CONTINUE](#continue)
+            - [BREAK](#break)
 - [Advanced Topics](#advanced-topics)
-	- [Code Optimizations](#code-optimizations)
-		- [Functions Without Parameters Or Local Variables](#functions-without-parameters-or-local-variables)
-		- [Return Values](#return-values)
-	- [Native Assembly Functions](#native-assembly-functions)
+    - [Code Optimizations](#code-optimizations)
+        - [Functions Without Parameters Or Local Variables](#functions-without-parameters-or-local-variables)
+        - [Return Values](#return-values)
+    - [Native Assembly Functions](#native-assembly-functions)
 - [Implementation](#implementation)
-	- [A New Approach](#a-new-approach)
-	- [The Virtual Machine](#the-virtual-machine)
-		- [The Stacks](#the-stacks)
-			- [Evaluation Stack](#evaluation-stack)
-			- [Call Stack](#call-stack)
-			- [Local Frame Stack](#local-frame-stack)
-			- [Local String Pool](#local-string-pool)
-		- [The Bytecodes](#the-bytecodes)
-	- [Apple I PLASMA](#apple-i-plasma)
-	- [Apple II PLASMA](#apple-ii-plasma)
-	- [Apple III PLASMA](#apple-iii-plasma)
+    - [A New Approach](#a-new-approach)
+    - [The Virtual Machine](#the-virtual-machine)
+        - [The Stacks](#the-stacks)
+            - [Evaluation Stack](#evaluation-stack)
+            - [Call Stack](#call-stack)
+            - [Local Frame Stack](#local-frame-stack)
+            - [Local String Pool](#local-string-pool)
+        - [The Bytecodes](#the-bytecodes)
+    - [Apple I PLASMA](#apple-i-plasma)
+    - [Apple II PLASMA](#apple-ii-plasma)
+    - [Apple III PLASMA](#apple-iii-plasma)
 - [Links](#links)
 
 <!-- /TOC -->
@@ -365,7 +365,29 @@ byte[64] txtfile = "UNTITLED"
 
 ### Function Definitions
 
-Functions are defined after all constants, variables and data. Function definitions can be `export`ed for inclusion in other modules and can be forward declared with a `predef` type in the constant and variable declarations. Functions can take parameters, passed on the evaluation stack, then copied to the local frame for easy access. They can have their own variable declarations, however, unlike the global declarations, no data can be predeclared - only storage space.  A local frame is built for every function invocation and there is also a limit of 254 bytes of local storage.  Each parameter takes two bytes of local storage, plus two bytes for the previous frame pointer.  If a function has no parameters or local variables, no local frame will be created, improving performance.  Functions always return a value; a function can specify a value to return or, if no return value is specified, a default of 0 will be returned.
+Functions are defined after all constants, variables and data. Function definitions can be `export`ed for inclusion in other modules and can be forward declared with a `predef` type in the constant and variable declarations. Functions can take parameters, passed on the evaluation stack, then copied to the local frame for easy access. They can have their own variable declarations, however, unlike the global declarations, no data can be predeclared - only storage space.  A local frame is built for every function invocation and there is also a limit of 254 bytes of local storage.  Each parameter takes two bytes of local storage, plus two bytes for the previous frame pointer.  If a function has no parameters or local variables, no local frame will be created, improving performance.  Functions always return a single value by default.
+```
+def myfunc(a, b) // Two parameters and defaults to one returned value
+```
+The number of values to return can be set by appending the number of values after the function definition with the '#' syntax, such as:
+
+```
+def myfuncA(a, b)#3 // Two parameters and three returned values
+```
+A definition with no parameters but with return values can be written as:
+```
+def myfuncB#2 //  No parameters and two returned values
+```
+A pre-defined definition should include the same number of parameters and return values as the definition:
+```
+predef myfuncA(a, b)#3
+```
+A value used as a function pointer doesn't have the parameter/return value count associated with it. It can be overridden in-line:
+```
+word funcptr = @myfuncA
+funcptr(2, 4)#3
+```
+If fewer values are returned, the remaining values will be padded with zero. It is an error to return more values than specified. Returning zero paramaters is ok, and can save some stack clean-up if the definition is called stand-alone (i.e. as a procedure).
 
 Note: there is no mechanism to ensure caller and callee agree on the number of parameters. Historically, programmers have used Hungarian Notation (http://en.wikipedia.org/wiki/Hungarian_notation) to embed the parameter number and type in the function name itself. This is a notational aid; the compiler enforces nothing.
 
@@ -392,6 +414,23 @@ Statements are built up from expressions and control flow keywords.  Simplicity 
 ```
 byte numchars
 numchars = 0
+```
+
+Multi-value assignments are written with lvalues separated by commas, and the same number of rvalues separated by commas:
+```
+a, b, c = 2, 4, 6
+```
+Definitions can return values that contribute to the rvalue count:
+```
+def myfuncC(p1, p2)#2
+    return p1+p2, p1-p2
+end
+
+a, b, c = 2, myfuncC(6, 7)  // Note: myfuncA returns 2 values
+```
+A quick way to swap variables could be written:
+```
+a, b = b, a
 ```
 
 Expressions can be built up with constants, variables, function calls, addresses, and pointers/arrays.  Comparison operators evaluate to 0 or -1 instead of the more traditional 0 or 1.  The use of -1 allows binary operations to be applied to other non-zero values and still retain a non-zero result.  Any conditional tests check only for zero and non-zero values.
@@ -721,13 +760,13 @@ word         = $2080,$2480,$2880,$2C80,$3080,$3480,$3880,$3C80
 
 ```
 def hgrfill(val)
-	byte yscan, xscan
+    byte yscan, xscan
 
-	for yscan = 0 to 191
-		for xscan = 0 to 19
-			hgrscan:[yscan, xscan] = val
-		next
-	next
+    for yscan = 0 to 191
+        for xscan = 0 to 19
+            hgrscan:[yscan, xscan] = val
+        next
+    next
 end
 ```
 
@@ -735,13 +774,13 @@ Every array dimension except the last is a pointer to another array of pointers,
 
 ```
 def hgrfill(val)
-	byte yscan, xscan
+    byte yscan, xscan
 
-	for yscan = 0 to 191
-		for xscan = 0 to 39
-			hgrscan.[yscan, xscan] = val
-		next
-	next
+    for yscan = 0 to 191
+        for xscan = 0 to 39
+            hgrscan.[yscan, xscan] = val
+        next
+    next
 end
 ```
 
