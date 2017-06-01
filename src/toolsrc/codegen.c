@@ -1,10 +1,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <ctype.h>
-#include "tokens.h"
-#include "lex.h"
-#include "symbols.h"
-#include "codegen.h"
+#include "plasm.h"
 /*
  * Symbol table and fixup information.
  */
@@ -30,6 +27,8 @@ static int  idlocal_offset[128];
 static char fixup_size[2048];
 static int  fixup_type[2048];
 static int  fixup_tag[2048];
+static t_opseq optbl[256];
+static t_opseq *freeop_lst = &optbl[0];
 #define FIXUP_BYTE    0x00
 #define FIXUP_WORD    0x80
 int id_match(char *name, int len, char *id)
@@ -162,6 +161,11 @@ int id_add(char *name, int len, int type, int size)
 {
     return ((type & LOCAL_TYPE) ? idlocal_add(name, len, type, size) : idglobal_add(name, len, type, size));
 }
+void idlocal_reset(void)
+{
+    locals    = 0;
+    localsize = 0;
+}
 int idfunc_add(char *name, int len, int type, int tag)
 {
     if (globals > 1024)
@@ -255,10 +259,6 @@ int fixup_new(int tag, int type, int size)
 /*
  * Emit assembly code.
  */
-#define BYTECODE_SEG    8
-#define INIT        16
-#define SYSFLAGS        32
-static int outflags = 0;
 static const char *DB = ".BYTE";
 static const char *DW = ".WORD";
 static const char *DS = ".RES";
@@ -305,8 +305,7 @@ void emit_dci(char *str, int len)
 }
 void emit_flags(int flags)
 {
-    outflags = flags;
-    if (outflags & ACME)
+    if (flags & ACME)
     {
         DB = "!BYTE";
         DW = "!WORD";
@@ -316,6 +315,8 @@ void emit_flags(int flags)
 }
 void emit_header(void)
 {
+    int i;
+
     if (outflags & ACME)
         printf("; ACME COMPATIBLE OUTPUT\n");
     else
@@ -324,7 +325,7 @@ void emit_header(void)
     {
         printf("\t%s\t_SEGEND-_SEGBEGIN\t; LENGTH OF HEADER + CODE/DATA + BYTECODE SEGMENT\n", DW);
         printf("_SEGBEGIN%c\n", LBL);
-        printf("\t%s\t$DA7E\t\t\t; MAGIC #\n", DW);
+        printf("\t%s\t$DA7F\t\t\t; MAGIC #\n", DW);
         printf("\t%s\t_SYSFLAGS\t\t\t; SYSTEM FLAGS\n", DW);
         printf("\t%s\t_SUBSEG\t\t\t; BYTECODE SUB-SEGMENT\n", DW);
         printf("\t%s\t_DEFCNT\t\t\t; BYTECODE DEF COUNT\n", DW);
@@ -334,6 +335,12 @@ void emit_header(void)
     {
         printf("\tJMP\t_INIT\t\t\t; MODULE INITIALIZATION ROUTINE\n");
     }
+    /*
+     * Init free op sequence table
+     */
+    for (i = 0; i < sizeof(optbl)/sizeof(t_opseq)-1; i++)
+        optbl[i].nextop = &optbl[i+1];
+    optbl[i].nextop = NULL;
 }
 void emit_rld(void)
 {
@@ -448,9 +455,16 @@ void emit_idglobal(int tag, int size, char *name)
     else
         printf("_D%03d%c\t%s\t%d\t\t\t; %s\n", tag, LBL, DS, size, name);
 }
-void emit_idfunc(int tag, int type, char *name)
+void emit_idfunc(int tag, int type, char *name, int is_bytecode)
 {
-    printf("%s%c\t\t\t\t\t; %s()\n", tag_string(tag, type), LBL, name);
+    if (name)
+        printf("%s%c\t\t\t\t\t; %s()\n", tag_string(tag, type), LBL, name);
+    if (!(outflags & MODULE))
+    {
+        //printf("%s%c\n", name, LBL);
+        if (is_bytecode)
+            printf("\tJSR\tINTERP\n");
+    }
 }
 void emit_idconst(char *name, int value)
 {
@@ -519,17 +533,6 @@ int emit_data(int vartype, int consttype, long constval, int constsize)
     }
     return (datasize);
 }
-void emit_def(const char *name, int is_bytecode)
-{
-    if (!(outflags & MODULE))
-    {
-        //printf("%s%c\n", name, LBL);
-        if (is_bytecode)
-            printf("\tJSR\tINTERP\n");
-    }
-    locals    = 0;
-    localsize = 0;
-}
 void emit_codetag(int tag)
 {
     printf("_B%03d%c\n", tag, LBL);
@@ -566,17 +569,31 @@ void emit_llw(int index)
 }
 void emit_lab(int tag, int offset, int type)
 {
-    int fixup = fixup_new(tag, type, FIXUP_WORD);
-    char *taglbl = tag_string(tag, type);
-    printf("\t%s\t$68\t\t\t; LAB\t%s+%d\n", DB, taglbl, offset);
-    printf("_F%03d%c\t%s\t%s+%d\t\t\n", fixup, LBL, DW, type & EXTERN_TYPE ? "0" : taglbl, offset);
+    if (type)
+    {
+        int fixup = fixup_new(tag, type, FIXUP_WORD);
+        char *taglbl = tag_string(tag, type);
+        printf("\t%s\t$68\t\t\t; LAB\t%s+%d\n", DB, taglbl, offset);
+        printf("_F%03d%c\t%s\t%s+%d\t\t\n", fixup, LBL, DW, type & EXTERN_TYPE ? "0" : taglbl, offset);
+    }
+    else
+    {
+        printf("\t%s\t$68,$%02X,$%02X\t\t; LAB\t%d\n", DB, offset&0xFF,(offset>>8)&0xFF, offset);
+    }
 }
 void emit_law(int tag, int offset, int type)
 {
-    int fixup = fixup_new(tag, type, FIXUP_WORD);
-    char *taglbl = tag_string(tag, type);
-    printf("\t%s\t$6A\t\t\t; LAW\t%s+%d\n", DB, taglbl, offset);
-    printf("_F%03d%c\t%s\t%s+%d\t\t\n", fixup, LBL, DW, type & EXTERN_TYPE ? "0" : taglbl, offset);
+    if (type)
+    {
+        int fixup = fixup_new(tag, type, FIXUP_WORD);
+        char *taglbl = tag_string(tag, type);
+        printf("\t%s\t$6A\t\t\t; LAW\t%s+%d\n", DB, taglbl, offset);
+        printf("_F%03d%c\t%s\t%s+%d\t\t\n", fixup, LBL, DW, type & EXTERN_TYPE ? "0" : taglbl, offset);
+    }
+    else
+    {
+        printf("\t%s\t$6A,$%02X,$%02X\t\t; LAW\t%d\n", DB, offset&0xFF,(offset>>8)&0xFF, offset);
+    }
 }
 void emit_sb(void)
 {
@@ -604,31 +621,45 @@ void emit_dlw(int index)
 }
 void emit_sab(int tag, int offset, int type)
 {
-    int fixup = fixup_new(tag, type, FIXUP_WORD);
-    char *taglbl = tag_string(tag, type);
-    printf("\t%s\t$78\t\t\t; SAB\t%s+%d\n", DB, taglbl, offset);
-    printf("_F%03d%c\t%s\t%s+%d\t\t\n", fixup, LBL, DW, type & EXTERN_TYPE ? "0" : taglbl, offset);
+    if (type)
+    {
+        int fixup = fixup_new(tag, type, FIXUP_WORD);
+        char *taglbl = tag_string(tag, type);
+        printf("\t%s\t$78\t\t\t; SAB\t%s+%d\n", DB, taglbl, offset);
+        printf("_F%03d%c\t%s\t%s+%d\t\t\n", fixup, LBL, DW, type & EXTERN_TYPE ? "0" : taglbl, offset);
+    }
+    else
+    {
+        printf("\t%s\t$78,$%02X,$%02X\t\t; SAB\t%d\n", DB, offset&0xFF,(offset>>8)&0xFF, offset);
+    }
 }
 void emit_saw(int tag, int offset, int type)
 {
+    if (type)
+    {
+        int fixup = fixup_new(tag, type, FIXUP_WORD);
+        char *taglbl = tag_string(tag, type);
+        printf("\t%s\t$7A\t\t\t; SAW\t%s+%d\n", DB, taglbl, offset);
+        printf("_F%03d%c\t%s\t%s+%d\t\t\n", fixup, LBL, DW, type & EXTERN_TYPE ? "0" : taglbl, offset);
+    }
+    else
+    {
+        printf("\t%s\t$7A,$%02X,$%02X\t\t; SAW\t%d\n", DB, offset&0xFF,(offset>>8)&0xFF, offset);
+    }
+}
+void emit_dab(int tag, int offset, int type)
+{
     int fixup = fixup_new(tag, type, FIXUP_WORD);
     char *taglbl = tag_string(tag, type);
-    printf("\t%s\t$7A\t\t\t; SAW\t%s+%d\n", DB, taglbl, offset);
+    printf("\t%s\t$7C\t\t\t; DAB\t%s+%d\n", DB, taglbl, offset);
     printf("_F%03d%c\t%s\t%s+%d\t\t\n", fixup, LBL, DW, type & EXTERN_TYPE ? "0" : taglbl, offset);
 }
-void emit_dab(int tag, int type)
+void emit_daw(int tag, int offset, int type)
 {
     int fixup = fixup_new(tag, type, FIXUP_WORD);
     char *taglbl = tag_string(tag, type);
-    printf("\t%s\t$7C\t\t\t; DAB\t%s\n", DB, taglbl);
-    printf("_F%03d%c\t%s\t%s\t\t\n", fixup, LBL, DW, type & EXTERN_TYPE ? "0" : taglbl);
-}
-void emit_daw(int tag, int type)
-{
-    int fixup = fixup_new(tag, type, FIXUP_WORD);
-    char *taglbl = tag_string(tag, type);
-    printf("\t%s\t$7E\t\t\t; DAW\t%s\n", DB, taglbl);
-    printf("_F%03d%c\t%s\t%s\t\t\n", fixup, LBL, DW, type & EXTERN_TYPE ? "0" : taglbl);
+    printf("\t%s\t$7E\t\t\t; DAW\t%s+%d\n", DB, taglbl, offset);
+    printf("_F%03d%c\t%s\t%s+%d\t\t\n", fixup, LBL, DW, type & EXTERN_TYPE ? "0" : taglbl, offset);
 }
 void emit_localaddr(int index)
 {
@@ -725,27 +756,23 @@ void emit_start(void)
     outflags |= INIT;
     defs++;
 }
-void emit_dup(void)
+void emit_push_exp(void)
 {
-    printf("\t%s\t$32\t\t\t; DUP\n", DB);
+    printf("\t%s\t$34\t\t\t; PUSH EXP\n", DB);
 }
-void emit_push(void)
+void emit_pull_exp(void)
 {
-    printf("\t%s\t$34\t\t\t; PUSH\n", DB);
-}
-void emit_pull(void)
-{
-    printf("\t%s\t$36\t\t\t; PULL\n", DB);
-}
-void emit_swap(void)
-{
-    printf("\t%s\t$2E\t\t\t; SWAP\n", DB);
+    printf("\t%s\t$36\t\t\t; PULL EXP\n", DB);
 }
 void emit_drop(void)
 {
     printf("\t%s\t$30\t\t\t; DROP\n", DB);
 }
-int emit_unaryop(int op)
+void emit_dup(void)
+{
+    printf("\t%s\t$32\t\t\t; DUP\n", DB);
+}
+int emit_unaryop(t_token op)
 {
     switch (op)
     {
@@ -838,6 +865,462 @@ int emit_op(t_token op)
             break;
         default:
             return (0);
+    }
+    return (1);
+}
+/*
+ * New/release sequence ops
+ */
+t_opseq *new_op(void)
+{
+    t_opseq* op = freeop_lst;
+    if (!op)
+    {
+        fprintf(stderr, "Compiler out of sequence ops!\n");
+        return (NULL);
+    }
+    freeop_lst = freeop_lst->nextop;
+    op->nextop = NULL;
+    return (op);
+}
+void release_op(t_opseq *op)
+{
+    if (op)
+    {
+        op->nextop = freeop_lst;
+        freeop_lst = op;
+    }
+}
+void release_seq(t_opseq *seq)
+{
+    t_opseq *op;
+    while (seq)
+    {
+        op = seq;
+        seq = seq->nextop;
+        /*
+         * Free this op
+         */
+        op->nextop = freeop_lst;
+        freeop_lst = op;
+    }
+}
+/*
+ * Crunch sequence (peephole optimize)
+ */
+int crunch_seq(t_opseq *seq)
+{
+    t_opseq *opnext, *opnextnext;
+    t_opseq *op = seq;
+    int crunched = 0;
+    int freeops  = 0;
+    while (op && (opnext = op->nextop))
+    {
+        switch (op->code)
+        {
+            case CONST_CODE:
+                //fprintf(stderr, "CONST -> $%04X", opnext->code);
+                if (op->val == 1)
+                {
+                    if (opnext->code == BINARY_CODE(ADD_TOKEN))
+                    {
+                        op->code = INC_CODE;
+                        freeops = 1;
+                        break;
+                    }
+                    if (opnext->code == BINARY_CODE(SUB_TOKEN))
+                    {
+                        op->code = DEC_CODE;
+                        freeops = 1;
+                        break;
+                    }
+                }
+                switch (opnext->code)
+                {
+                    case NEG_CODE:
+                        op->val = -(op->val);
+                        freeops = 1;
+                        break;
+                    case COMP_CODE:
+                        op->val = ~(op->val);
+                        freeops = 1;
+                        break;
+                    case LOGIC_NOT_CODE:
+                        op->val = op->val ? 0 : 1;
+                        freeops = 1;
+                        break;
+                    case UNARY_CODE(BPTR_TOKEN):
+                    case LB_CODE:
+                        op->offsz = op->val;
+                        op->code  = LAB_CODE;
+                        freeops   = 1;
+                        break;
+                    case UNARY_CODE(WPTR_TOKEN):
+                    case LW_CODE:
+                        op->offsz = op->val;
+                        op->code  = LAW_CODE;
+                        freeops   = 1;
+                        break;
+                    case SB_CODE:
+                        op->offsz = op->val;
+                        op->code  = SAB_CODE;
+                        freeops   = 1;
+                        break;
+                    case SW_CODE:
+                        op->offsz = op->val;
+                        op->code  = SAW_CODE;
+                        freeops   = 1;
+                        break;
+                    case CONST_CODE: // Collapse constant operation
+                        if ((opnextnext = opnext->nextop))
+                            switch (opnextnext->code)
+                            {
+                                case BINARY_CODE(MUL_TOKEN):
+                                    op->val *= opnext->val;
+                                    freeops  = 2;
+                                    break;
+                                case BINARY_CODE(DIV_TOKEN):
+                                    op->val /= opnext->val;
+                                    freeops  = 2;
+                                    break;
+                                case BINARY_CODE(MOD_TOKEN):
+                                    op->val %= opnext->val;
+                                    freeops  = 2;
+                                    break;
+                                case BINARY_CODE(ADD_TOKEN):
+                                    op->val += opnext->val;
+                                    freeops  = 2;
+                                    break;
+                                case BINARY_CODE(SUB_TOKEN):
+                                    op->val -= opnext->val;
+                                    freeops  = 2;
+                                    break;
+                                case BINARY_CODE(SHL_TOKEN):
+                                    op->val <<= opnext->val;
+                                    freeops  = 2;
+                                    break;
+                                case BINARY_CODE(SHR_TOKEN):
+                                    op->val >>= opnext->val;
+                                    freeops  = 2;
+                                    break;
+                                case BINARY_CODE(AND_TOKEN):
+                                    op->val &= opnext->val;
+                                    freeops  = 2;
+                                    break;
+                                case BINARY_CODE(OR_TOKEN):
+                                    op->val |= opnext->val;
+                                    freeops  = 2;
+                                    break;
+                                case BINARY_CODE(EOR_TOKEN):
+                                    op->val ^= opnext->val;
+                                    freeops  = 2;
+                                    break;
+                                case BINARY_CODE(EQ_TOKEN):
+                                    op->val = op->val == opnext->val ? 1 : 0;
+                                    freeops  = 2;
+                                    break;
+                                case BINARY_CODE(NE_TOKEN):
+                                    op->val = op->val != opnext->val ? 1 : 0;
+                                    freeops  = 2;
+                                    break;
+                                case BINARY_CODE(GE_TOKEN):
+                                    op->val = op->val >= opnext->val ? 1 : 0;
+                                    freeops  = 2;
+                                    break;
+                                case BINARY_CODE(LT_TOKEN):
+                                    op->val = op->val < opnext->val ? 1 : 0;
+                                    freeops  = 2;
+                                    break;
+                                case BINARY_CODE(GT_TOKEN):
+                                    op->val = op->val > opnext->val ? 1 : 0;
+                                    freeops  = 2;
+                                    break;
+                                case BINARY_CODE(LE_TOKEN):
+                                    op->val = op->val <= opnext->val ? 1 : 0;
+                                    freeops  = 2;
+                                    break;
+                                case BINARY_CODE(LOGIC_OR_TOKEN):
+                                    op->val = op->val || opnext->val ? 1 : 0;
+                                    freeops  = 2;
+                                    break;
+                                case BINARY_CODE(LOGIC_AND_TOKEN):
+                                    op->val = op->val && opnext->val ? 1 : 0;
+                                    freeops  = 2;
+                                    break;
+                            }
+                        break; // CONST_CODE
+                }
+                break; // CONST_CODE
+            case LADDR_CODE:
+                switch (opnext->code)
+                {
+                    case CONST_CODE:
+                        if ((opnextnext = opnext->nextop))
+                            switch (opnextnext->code)
+                            {
+                                case ADD_CODE:
+                                case INDEXB_CODE:
+                                    op->offsz += opnext->val;
+                                    freeops = 2;
+                                    break;
+                                case INDEXW_CODE:
+                                    op->offsz += opnext->val * 2;
+                                    freeops = 2;
+                                    break;
+                            }
+                        break;
+                    case LB_CODE:
+                        op->code  = LLB_CODE;
+                        freeops   = 1;
+                        break;
+                    case LW_CODE:
+                        op->code  = LLW_CODE;
+                        freeops   = 1;
+                        break;
+                    case SB_CODE:
+                        op->code  = SLB_CODE;
+                        freeops   = 1;
+                        break;
+                    case SW_CODE:
+                        op->code  = SLW_CODE;
+                        freeops   = 1;
+                        break;
+                }
+                break; // LADDR_CODE
+            case GADDR_CODE:
+                switch (opnext->code)
+                {
+                    case CONST_CODE:
+                        if ((opnextnext = opnext->nextop))
+                            switch (opnextnext->code)
+                            {
+                                case ADD_CODE:
+                                case INDEXB_CODE:
+                                    op->offsz += opnext->val;
+                                    freeops = 2;
+                                    break;
+                                case INDEXW_CODE:
+                                    op->offsz += opnext->val * 2;
+                                    freeops = 2;
+                                    break;
+                            }
+                        break;
+                    case LB_CODE:
+                        op->code  = LAB_CODE;
+                        freeops   = 1;
+                        break;
+                    case LW_CODE:
+                        op->code  = LAW_CODE;
+                        freeops   = 1;
+                        break;
+                    case SB_CODE:
+                        op->code  = SAB_CODE;
+                        freeops   = 1;
+                        break;
+                    case SW_CODE:
+                        op->code  = SAW_CODE;
+                        freeops   = 1;
+                        break;
+                    case ICAL_CODE:
+                        op->code  = CALL_CODE;
+                        freeops   = 1;
+                        break;
+                }
+                break; // GADDR_CODE
+        }
+        //
+        // Free up crunched ops
+        //
+        while (freeops)
+        {
+            op->nextop     = opnext->nextop;
+            opnext->nextop = freeop_lst;
+            freeop_lst     = opnext;
+            opnext         = op->nextop;
+            crunched       = 1;
+            freeops--;
+        }
+        op = opnext;
+    }
+    return (crunched);
+}
+/*
+ * Generate a sequence of code
+ */
+t_opseq *gen_seq(t_opseq *seq, int opcode, long cval, int tag, int offsz, int type)
+{
+    t_opseq *op;
+
+    if (!seq)
+    {
+        op = seq = new_op();
+    }
+    else
+    {
+        op = seq;
+        while (op->nextop)
+            op = op->nextop;
+        op->nextop = new_op();
+        op = op->nextop;
+    }
+    op->code  = opcode;
+    op->val   = cval;
+    op->tag   = tag;
+    op->offsz = offsz;
+    op->type  = type;
+    return (seq);
+}
+/*
+ * Append one sequence to the end of another
+ */
+t_opseq *cat_seq(t_opseq *seq1, t_opseq *seq2)
+{
+    t_opseq *op;
+
+    if (!seq1)
+        return (seq2);
+    for (op = seq1; op->nextop; op = op->nextop);
+    op->nextop = seq2;
+    return (seq1);
+}
+/*
+ * Emit a sequence of ops
+ */
+int emit_seq(t_opseq *seq)
+{
+    t_opseq *op;
+
+    if (!seq)
+        return (0);
+    if (outflags & OPTIMIZE)
+        while (crunch_seq(seq));
+    while (seq)
+    {
+        op = seq;
+        switch (op->code)
+        {
+            case NEG_CODE:
+            case COMP_CODE:
+            case LOGIC_NOT_CODE:
+            case INC_CODE:
+            case DEC_CODE:
+            case BPTR_CODE:
+            case WPTR_CODE:
+                emit_unaryop(op->code);
+                break;
+            case MUL_CODE:
+            case DIV_CODE:
+            case MOD_CODE:
+            case ADD_CODE:
+            case SUB_CODE:
+            case SHL_CODE:
+            case SHR_CODE:
+            case AND_CODE:
+            case OR_CODE:
+            case EOR_CODE:
+            case EQ_CODE:
+            case NE_CODE:
+            case GE_CODE:
+            case LT_CODE:
+            case GT_CODE:
+            case LE_CODE:
+            case LOGIC_OR_CODE:
+            case LOGIC_AND_CODE:
+                emit_op(op->code);
+                break;
+            case CONST_CODE:
+                emit_const(op->val);
+                break;
+            case STR_CODE:
+                emit_conststr(op->val, op->offsz);
+                break;
+            case LB_CODE:
+                emit_lb();
+                break;
+            case LW_CODE:
+                emit_lw();
+                break;
+            case LLB_CODE:
+                emit_llb(op->offsz);
+                break;
+            case LLW_CODE:
+                emit_llw(op->offsz);
+                break;
+            case LAB_CODE:
+                emit_lab(op->tag, op->offsz, op->type);
+                break;
+            case LAW_CODE:
+                emit_law(op->tag, op->offsz, op->type);
+                break;
+            case SB_CODE:
+                emit_sb();
+                break;
+            case SW_CODE:
+                emit_sw();
+                break;
+            case SLB_CODE:
+                emit_slb(op->offsz);
+                break;
+            case SLW_CODE:
+                emit_slw(op->offsz);
+                break;
+            case DLB_CODE:
+                emit_dlb(op->offsz);
+                break;
+            case DLW_CODE:
+                emit_dlw(op->offsz);
+                break;
+            case SAB_CODE:
+                emit_sab(op->tag, op->offsz, op->type);
+                break;
+            case SAW_CODE:
+                emit_saw(op->tag, op->offsz, op->type);
+                break;
+            case DAB_CODE:
+                emit_dab(op->tag, op->offsz, op->type);
+                break;
+            case DAW_CODE:
+                emit_daw(op->tag, op->offsz, op->type);
+                break;
+            case CALL_CODE:
+                emit_call(op->tag, op->type);
+                break;
+            case ICAL_CODE:
+                emit_ical();
+                break;
+            case LADDR_CODE:
+                emit_localaddr(op->offsz);
+                break;
+            case GADDR_CODE:
+                emit_globaladdr(op->tag, op->offsz, op->type);
+                break;
+            case INDEXB_CODE:
+                emit_indexbyte();
+                break;
+            case INDEXW_CODE:
+                emit_indexword();
+                break;
+            case DROP_CODE:
+                emit_drop();
+                break;
+            case DUP_CODE:
+                emit_dup();
+                break;
+            case PUSH_EXP_CODE:
+                emit_push_exp();
+                break;
+            case PULL_EXP_CODE:
+                emit_pull_exp();
+                break;
+            default:
+                return (0);
+        }
+        seq = seq->nextop;
+        /*
+         * Free this op
+         */
+        op->nextop = freeop_lst;
+        freeop_lst = op;
     }
     return (1);
 }

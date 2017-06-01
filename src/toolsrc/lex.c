@@ -13,8 +13,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
-#include "tokens.h"
-#include "symbols.h"
+#include "plasm.h"
 
 char *statement, *tokenstr, *scanpos = (char*) "";
 t_token scantoken, prevtoken;
@@ -66,6 +65,8 @@ t_token keywords[] = {
     EOL_TOKEN
 };
 
+extern int outflags;
+
 void parse_error(const char *errormsg)
 {
     char *error_carrot = statement;
@@ -76,7 +77,18 @@ void parse_error(const char *errormsg)
     fprintf(stderr, "^\nError: %s\n", errormsg);
     exit(1);
 }
+void parse_warn(const char *warnmsg)
+{
+    if (outflags & WARNINGS)
+    {
+        char *error_carrot = statement;
 
+        fprintf(stderr, "\n%s %4d: %s\n%*s       ", filename, lineno, statement, (int)strlen(filename), "");
+        for (error_carrot = statement; error_carrot != tokenstr; error_carrot++)
+            putc(*error_carrot == '\t' ? '\t' : ' ', stderr);
+        fprintf(stderr, "^\nWarning: %s\n", warnmsg);
+    }
+}
 int hexdigit(char ch)
 {
     ch = toupper(ch);

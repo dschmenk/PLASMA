@@ -39,7 +39,7 @@ predef loadmod, execmod, lookupstrmod
 //
 // System variables.
 //
-word version     = $0094 // 00.94
+word version     = $0099 // 00.99
 word systemflags = 0
 word heap
 word symtbl, lastsym
@@ -90,18 +90,18 @@ byte execstr[]    = "MODEXEC"
 byte modadrstr[]  = "MODADDR"
 byte argstr[]     = "ARGS"
 word exports[]    = @sysstr,    @syscall
-word          = @callstr,   @call
-word          = @putcstr,   @cout
+word              = @callstr,   @call
+word              = @putcstr,   @cout
 word              = @putlnstr,  @crout
-word          = @putsstr,   @prstr
-word          = @getcstr,   @cin
-word          = @getsstr,   @rdstr
-word          = @hpmarkstr, @markheap
-word          = @hpallocstr,@allocheap
-word          = @hpalignstr,@allocalignheap
-word          = @hprelstr,  @releaseheap
-word          = @memsetstr, @memset
-word          = @memcpystr, @memcpy
+word              = @putsstr,   @prstr
+word              = @getcstr,   @cin
+word              = @getsstr,   @rdstr
+word              = @hpmarkstr, @markheap
+word              = @hpallocstr,@allocheap
+word              = @hpalignstr,@allocalignheap
+word              = @hprelstr,  @releaseheap
+word              = @memsetstr, @memset
+word              = @memcpystr, @memcpy
 word              = @uisgtstr,  @uword_isgt
 word              = @uisgestr,  @uword_isge
 word              = @uisltstr,  @uword_islt
@@ -112,21 +112,21 @@ word              = @modadrstr, @lookupstrmod
 word              = @machidstr, @machid
 word              = @argstr,    @cmdptr
 word              = 0
-word syslibsym    = @exports     
+word syslibsym    = @exports
 //
 // CALL CFFA1 API ENTRYPOINT
 // SYSCALL(CMD)
 //
 asm syscall
-    LDA ESTKL,X
-    STX ESP
-    TAX
-    JSR $900C
-    LDX ESP
-    LDY     #$00
-    STA ESTKL,X
-    STY ESTKH,X 
-    RTS
+        LDA     ESTKL,X
+        STX     ESP
+        TAX
+        JSR     $900C
+        LDX     ESP
+        LDY     #$00
+        STA     ESTKL,X
+        STY     ESTKH,X
+        RTS
 end
 //
 // CALL 6502 ROUTINE
@@ -351,7 +351,7 @@ asm interp
     STA ESTKH,X
     RTS
 end
-// 
+//
 // A DCI string is one that has the high bit set for every character except the last.
 // More efficient than C or Pascal strings.
 //
@@ -650,7 +650,7 @@ end
 def finddirentry(filename)
     *CFFAFileName = filename
     perr = syscall($14)
-    return *CFFAEntryPtr    
+    return *CFFAEntryPtr
 end
 def readfile(filename, buffer)
     *CFFADest     = buffer
@@ -783,12 +783,12 @@ def loadmod(mod)
     fin
     if rdlen > 0
         readfile(@filename, heap)
-    memcpy(@header, heap, 128)
-    modsize = header:0
-    moddep  = @header.1
-    defofst = modsize
+        memcpy(@header, heap, 128)
+        modsize = header:0
+        moddep  = @header.1
+        defofst = modsize
         init    = 0
-        if rdlen > 4 and heap=>2 == $DA7E // DAVE = magic number :-)
+        if rdlen > 4 and heap=>2 == $DA7F // DAVE+1 = magic number :-)
             //
             // This is an EXTended RELocatable (data+bytecode) module.
             //
@@ -796,44 +796,46 @@ def loadmod(mod)
             defcnt   = header:8
             init     = header:10
             moddep   = @header.12
-        //
-        // Load module dependencies.
-        //
+            //
+            // Load module dependencies.
+            //
             while ^moddep
                 if !lookupmod(moddep)
                     if loadmod(moddep) < 0
-                    return -perr
-            fin
+                        return -perr
+                    fin
                 fin
                 moddep = moddep + dcitos(moddep, @str)
             loop
-        //
-        // Init def table.
-        //
-        deftbl   = allocheap(defcnt * 5 + 1)
-        deflast  = deftbl
-        ^deflast = 0
-        //
-        // Re-read file
-        //
-        readfile(@filename, heap)
+            //
+            // Init def table.
+            //
+            deftbl   = allocheap(defcnt * 5 + 1)
+            deflast  = deftbl
+            ^deflast = 0
+            //
+            // Re-read file
+            //
+            readfile(@filename, heap)
+        else
+            return -69
         fin
-    //
-    // Alloc heap space for relocated module (data + bytecode).
-    //
-    moddep  = moddep  + 1 - @header + heap
-    modfix  = moddep  - (heap + 2) // Adjust to skip header
-    modsize = modsize - modfix
-    rdlen   = rdlen   - modfix - 2
-    modaddr = allocheap(modsize)
-    memcpy(modaddr, moddep, rdlen)
-    //
-    // Add module to symbol table.
-    //
-    addmod(mod, modaddr)
-    //
-    // Apply all fixups and symbol import/export.
-    //
+        //
+        // Alloc heap space for relocated module (data + bytecode).
+        //
+        moddep  = moddep  + 1 - @header + heap
+        modfix  = moddep  - (heap + 2) // Adjust to skip header
+        modsize = modsize - modfix
+        rdlen   = rdlen   - modfix - 2
+        modaddr = allocheap(modsize)
+        memcpy(modaddr, moddep, rdlen)
+        //
+        // Add module to symbol table.
+        //
+        addmod(mod, modaddr)
+        //
+        // Apply all fixups and symbol import/export.
+        //
         modfix   = modaddr - modfix
         bytecode = defofst + modfix - MODADDR
         modend   = modaddr + modsize
@@ -841,16 +843,16 @@ def loadmod(mod)
         esd      = rld     // Extern+Entry Symbol Directory
         while ^esd         // Scan to end of ESD
             esd = esd + 4
-    loop
+        loop
         esd = esd + 1
         //
         // Run through the Re-Location Dictionary.
         //
         while ^rld
             if ^rld == $02
-            //
-        // This is a bytcode def entry - add it to the def directory.
-        //
+                //
+                // This is a bytcode def entry - add it to the def directory.
+                //
                 adddef(rld=>1 - defofst + bytecode, @deflast)
             else
                 addr = rld=>1 + modfix
@@ -880,21 +882,21 @@ def loadmod(mod)
             fin
             rld = rld + 4
         loop
-    //
+        //
         // Run through the External/Entry Symbol Directory.
-    //
+        //
         while ^esd
             sym = esd
             esd = esd + dcitos(esd, @str)
             if ^esd & $08
-        //
+                //
                 // EXPORT symbol - add it to the global symbol table.
-        //
+                //
                 addr = esd=>1 + modfix - MODADDR
                 if uword_isge(addr, bytecode)
-            //
-            // Use the def directory address for bytecode.
-            //
+                    //
+                    // Use the def directory address for bytecode.
+                    //
                     addr = lookupdef(addr - bytecode + bytecode, deftbl)
                 fin
                 addsym(sym, addr)
@@ -910,13 +912,13 @@ def loadmod(mod)
     //
     fixup = 0
     if init
-    fixup = adddef(init - defofst + bytecode, @deflast)()
-    if fixup < 0
-        perr = -fixup
-    fin
-    if !(systemflags & modinitkeep)
+        fixup = adddef(init - defofst + bytecode, @deflast)()
+        if fixup < 0
+            perr = -fixup
+        fin
+        if !(systemflags & modinitkeep)
             modend = init - defofst + bytecode
-    fin
+        fin
     fin
     //
     // Free up the end-of-module in main memory.

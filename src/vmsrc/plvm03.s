@@ -218,7 +218,7 @@ _DIVEX  INX
 OPTBL   !WORD   ZERO,ADD,SUB,MUL,DIV,MOD,INCR,DECR              ; 00 02 04 06 08 0A 0C 0E
         !WORD   NEG,COMP,BAND,IOR,XOR,SHL,SHR,IDXW              ; 10 12 14 16 18 1A 1C 1E
         !WORD   LNOT,LOR,LAND,LA,LLA,CB,CW,CS                   ; 20 22 24 26 28 2A 2C 2E
-        !WORD   DROP,DUP,PUSH,PULL,BRGT,BRLT,BREQ,BRNE          ; 30 32 34 36 38 3A 3C 3E
+        !WORD   DROP,DUP,PUSHEP,PULLEP,BRGT,BRLT,BREQ,BRNE          ; 30 32 34 36 38 3A 3C 3E
         !WORD   ISEQ,ISNE,ISGT,ISLT,ISGE,ISLE,BRFLS,BRTRU       ; 40 42 44 46 48 4A 4C 4E
         !WORD   BRNCH,IBRNCH,CALL,ICAL,ENTER,LEAVE,RET,NEXTOP   ; 50 52 54 56 58 5A 5C 5E
         !WORD   LB,LW,LLB,LLW,LAB,LAW,DLB,DLW                   ; 60 62 64 66 68 6A 6C 6E
@@ -488,23 +488,16 @@ DUP     DEX
         STA     ESTKH,X
         JMP     NEXTOP
 ;*
-;* PUSH FROM EVAL STACK TO CALL STACK
+;* PUSH EVAL STACK POINTER TO CALL STACK
 ;*
-PUSH    LDA     ESTKL,X
+PUSHEP    TXA
         PHA
-        LDA     ESTKH,X
-        PHA
-;       INX
-;       JMP     NEXTOP
-        JMP     DROP
+        JMP     NEXTOP
 ;*
 ;* PULL FROM CALL STACK TO EVAL STACK
 ;*
-PULL    DEX
-        PLA
-        STA     ESTKH,X
-        PLA
-        STA     ESTKL,X
+PULLEP    PLA
+        TAX
         JMP     NEXTOP
 ;*
 ;* CONSTANT
@@ -702,11 +695,11 @@ LAW     +INC_IP
 ;*
 ;* STORE VALUE TO ADDRESS
 ;*
-SB      LDA     ESTKL+1,X
+SB      LDA     ESTKL,X
         STA     TMPL
-        LDA     ESTKH+1,X
+        LDA     ESTKH,X
         STA     TMPH
-        LDA     ESTKL,X
+        LDA     ESTKL+1,X
         STY     IPY
         LDY     #$00
         STA     (TMP),Y
@@ -715,16 +708,16 @@ SB      LDA     ESTKL+1,X
 ;       INX
 ;       JMP     NEXTOP
         JMP     DROP
-SW      LDA     ESTKL+1,X
+SW      LDA     ESTKL,X
         STA     TMPL
-        LDA     ESTKH+1,X
+        LDA     ESTKH,X
         STA     TMPH
         STY     IPY
         LDY     #$00
-        LDA     ESTKL,X
+        LDA     ESTKL+1,X
         STA     (TMP),Y
         INY
-        LDA     ESTKH,X
+        LDA     ESTKH+1,X
         STA     (TMP),Y
         LDY     IPY
         INX

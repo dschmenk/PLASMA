@@ -17,32 +17,32 @@ int show_state = 0;
 /*
  * Bytecode memory
  */
-#define BYTE_PTR(bp)	((byte)((bp)[0]))
-#define WORD_PTR(bp)	((word)((bp)[0]  | ((bp)[1] << 8)))
-#define UWORD_PTR(bp)	((uword)((bp)[0] | ((bp)[1] << 8)))
-#define TO_UWORD(w)	((uword)((w)))
-#define MOD_ADDR	0x1000
-#define DEF_CALL	0x0800
-#define DEF_CALLSZ	0x0800
-#define DEF_ENTRYSZ	6
-#define MEM_SIZE	65536
+#define BYTE_PTR(bp)    ((byte)((bp)[0]))
+#define WORD_PTR(bp)    ((word)((bp)[0]  | ((bp)[1] << 8)))
+#define UWORD_PTR(bp)   ((uword)((bp)[0] | ((bp)[1] << 8)))
+#define TO_UWORD(w) ((uword)((w)))
+#define MOD_ADDR    0x1000
+#define DEF_CALL    0x0800
+#define DEF_CALLSZ  0x0800
+#define DEF_ENTRYSZ 6
+#define MEM_SIZE    65536
 byte mem_data[MEM_SIZE];
 uword sp = 0x01FE, fp = 0xFFFF, heap = 0x0200, deftbl = DEF_CALL, lastdef = DEF_CALL;
-#define PHA(b)		(mem_data[sp--]=(b))
-#define PLA()		(mem_data[++sp])
-#define EVAL_STACKSZ	16
-#define PUSH(v)	(*(--esp))=(v)
-#define POP		((word)(*(esp++)))
-#define UPOP		((uword)(*(esp++)))
-#define TOS		(esp[0])
+#define PHA(b)      (mem_data[sp--]=(b))
+#define PLA     (mem_data[++sp])
+#define EVAL_STACKSZ    16
+#define PUSH(v) (*(--esp))=(v)
+#define POP     ((word)(*(esp++)))
+#define UPOP        ((uword)(*(esp++)))
+#define TOS     (esp[0])
 word eval_stack[EVAL_STACKSZ];
 word *esp = eval_stack + EVAL_STACKSZ;
 
-#define SYMTBLSZ	1024
-#define SYMSZ		16
-#define MODTBLSZ	128
-#define MODSZ		16
-#define MODLSTSZ	32
+#define SYMTBLSZ    1024
+#define SYMSZ       16
+#define MODTBLSZ    128
+#define MODSZ       16
+#define MODLSTSZ    32
 byte symtbl[SYMTBLSZ];
 byte *lastsym = symtbl;
 byte modtbl[MODTBLSZ];
@@ -53,7 +53,7 @@ byte *lastmod = modtbl;
 void interp(code *ip);
 /*
  * Utility routines.
- * 
+ *
  * A DCI string is one that has the high bit set for every character except the last.
  * More efficient than C or Pascal strings.
  */
@@ -126,7 +126,7 @@ void dump_tbl(byte *tbl)
         putchar(':');
         while (len++ < 15)
             putchar(' ');
-        printf("$%04X\n", tbl[0] | (tbl[1] << 8)); 
+        printf("$%04X\n", tbl[0] | (tbl[1] << 8));
         tbl += 2;
     }
 }
@@ -248,7 +248,7 @@ int load_mod(byte *mod)
         moddep  = header + 1;
         modsize = header[0] | (header[1] << 8);
         magic   = header[2] | (header[3] << 8);
-        if (magic == 0xDA7E)
+        if (magic == 0xDA7F)
         {
             /*
              * This is a relocatable bytecode module.
@@ -282,7 +282,7 @@ int load_mod(byte *mod)
         }
         /*
          * Alloc heap space for relocated module (data + bytecode).
-         */           
+         */
         moddep += 1;
         hdrlen  = moddep - header;
         len    -= hdrlen;
@@ -381,7 +381,7 @@ int load_mod(byte *mod)
                     {
                         if (show_state) printf("BYTE");
                         mem_data[addr] = fixup;
-                    }                
+                    }
                 }
                 else
                 {
@@ -502,18 +502,18 @@ void call(uword pc)
             exit(1);
     }
 }
-    
+
 /*
  * OPCODE TABLE
  *
-OPTBL:	DW	ZERO,ADD,SUB,MUL,DIV,MOD,INCR,DECR		; 00 02 04 06 08 0A 0C 0E
-       	DW	NEG,COMP,AND,IOR,XOR,SHL,SHR,IDXW		; 10 12 14 16 18 1A 1C 1E
-       	DW	NOT,LOR,LAND,LA,LLA,CB,CW,CS			; 20 22 24 26 28 2A 2C 2E
-       	DW	DROP,DUP,PUSH,PULL,BRGT,BRLT,BREQ,BRNE		; 30 32 34 36 38 3A 3C 3E
-       	DW	ISEQ,ISNE,ISGT,ISLT,ISGE,ISLE,BRFLS,BRTRU	; 40 42 44 46 48 4A 4C 4E
-       	DW	BRNCH,IBRNCH,CALL,ICAL,ENTER,LEAVE,RET,??? 	; 50 52 54 56 58 5A 5C 5E
-       	DW	LB,LW,LLB,LLW,LAB,LAW,DLB,DLW			; 60 62 64 66 68 6A 6C 6E
-       	DW	SB,SW,SLB,SLW,SAB,SAW,DAB,DAW			; 70 72 74 76 78 7A 7C 7E
+OPTBL:  DW  ZERO,ADD,SUB,MUL,DIV,MOD,INCR,DECR      ; 00 02 04 06 08 0A 0C 0E
+        DW  NEG,COMP,AND,IOR,XOR,SHL,SHR,IDXW       ; 10 12 14 16 18 1A 1C 1E
+        DW  NOT,LOR,LAND,LA,LLA,CB,CW,CS            ; 20 22 24 26 28 2A 2C 2E
+        DW  DROP,DUP,PUSH,PULL,BRGT,BRLT,BREQ,BRNE      ; 30 32 34 36 38 3A 3C 3E
+        DW  ISEQ,ISNE,ISGT,ISLT,ISGE,ISLE,BRFLS,BRTRU   ; 40 42 44 46 48 4A 4C 4E
+        DW  BRNCH,IBRNCH,CALL,ICAL,ENTER,LEAVE,RET,???  ; 50 52 54 56 58 5A 5C 5E
+        DW  LB,LW,LLB,LLW,LAB,LAW,DLB,DLW           ; 60 62 64 66 68 6A 6C 6E
+        DW  SB,SW,SLB,SLW,SAB,SAW,DAB,DAW           ; 70 72 74 76 78 7A 7C 7E
 */
 void interp(code *ip)
 {
@@ -533,9 +533,9 @@ void interp(code *ip)
         }
         switch (*ip++)
         {
-	    /*
-	     * 0x00-0x0F
-	     */
+        /*
+         * 0x00-0x0F
+         */
             case 0x00: // ZERO : TOS = 0
                 PUSH(0);
                 break;
@@ -656,13 +656,11 @@ void interp(code *ip)
                 PUSH(val);
                 break;
             case 0x34: // PUSH : TOSP = TOS
-                val = POP;
-                PHA(val >> 8);
+                val = esp - eval_stack;
                 PHA(val);
                 break;
             case 0x36: // PULL : TOS = TOSP
-                PUSH(mem_data[sp] | (mem_data[sp + 1] << 8));
-                sp += 2;
+                esp = eval_stack + PLA;
                 break;
             case 0x38: // BRGT : TOS-1 > TOS ? IP += (IP)
                 val = POP;
@@ -775,7 +773,7 @@ void interp(code *ip)
                     printf("\n");
                 break;
             case 0x5A: // LEAVE : DEL FRAME, IP = TOFP
-                fp += PLA();
+                fp += PLA;
             case 0x5C: // RET : IP = TOFP
                 return;
             case 0x5E: // ???
@@ -822,14 +820,14 @@ void interp(code *ip)
                 /*
                  * 0x70-0x7F
                  */
-            case 0x70: // SB : BYTE (TOS) = TOS-1
-                val = POP;
+            case 0x70: // SB : BYTE (TOS-1) = TOS
                 ea  = UPOP;
+                val = POP;
                 mem_data[ea] = val;
                 break;
-            case 0x72: // SW : WORD (TOS) = TOS-1
-                val = POP;
+            case 0x72: // SW : WORD (TOS-1) = TOS
                 ea  = UPOP;
+                val = POP;
                 mem_data[ea]     = val;
                 mem_data[ea + 1] = val >> 8;
                 break;
@@ -889,7 +887,7 @@ int main(int argc, char **argv)
 {
     byte dci[32];
     int i;
-    
+
     if (--argc)
     {
         argv++;
