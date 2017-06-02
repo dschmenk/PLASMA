@@ -387,7 +387,7 @@ A value used as a function pointer doesn't have the parameter/return value count
 word funcptr = @myfuncA
 funcptr(2, 4)#3
 ```
-If fewer values are returned, the remaining values will be padded with zero. It is an error to return more values than specified. Returning zero values is ok, and can save some stack clean-up if the definition is called stand-alone (i.e. as a procedure).
+If fewer values are returned, the remaining values will be padded with zero. It is an error to return more values than specified. Definitions returning zero values are ok and can save some stack clean-up if the definitions are called stand-alone (i.e. as a procedure).
 
 After functions are defined, the main code for the module follows. The main code will be executed as soon as the module is loaded.  For library modules, this is a good place to do any runtime initialization, before any of the exported functions are called. The last statement in the module must be done, or else a compile error is issued.
 
@@ -424,7 +424,7 @@ def myfuncC(p1, p2)#2
     return p1+p2, p1-p2
 end
 
-a, b, c = 2, myfuncC(6, 7)  // Note: myfuncA returns 2 values
+a, b, c = 2, myfuncC(6, 7)  // Note: myfuncC returns 2 values
 ```
 A quick way to swap variables could be written:
 ```
