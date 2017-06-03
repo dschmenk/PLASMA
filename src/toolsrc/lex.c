@@ -1,10 +1,10 @@
 /*
- * Copyright (C) 2015 The 8-Bit Bunch. Licensed under the Apache License, Version 1.1 
+ * Copyright (C) 2015 The 8-Bit Bunch. Licensed under the Apache License, Version 1.1
  * (the "License"); you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at <http://www.apache.org/licenses/LICENSE-1.1>.
- * Unless required by applicable law or agreed to in writing, software distributed under 
- * the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF 
- * ANY KIND, either express or implied. See the License for the specific language 
+ * Unless required by applicable law or agreed to in writing, software distributed under
+ * the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF
+ * ANY KIND, either express or implied. See the License for the specific language
  * governing permissions and limitations under the License.
  */
 
@@ -37,31 +37,31 @@ t_token keywords[] = {
     DEFAULT_TOKEN,          'O', 'T', 'H', 'E', 'R', 'W', 'I', 'S', 'E',
     ENDCASE_TOKEN,          'W', 'E', 'N', 'D',
     FOR_TOKEN,              'F', 'O', 'R',
-    TO_TOKEN,                'T', 'O',
-    DOWNTO_TOKEN,            'D', 'O', 'W', 'N', 'T', 'O',
-    STEP_TOKEN,                'S', 'T', 'E', 'P',
+    TO_TOKEN,               'T', 'O',
+    DOWNTO_TOKEN,           'D', 'O', 'W', 'N', 'T', 'O',
+    STEP_TOKEN,             'S', 'T', 'E', 'P',
     NEXT_TOKEN,             'N', 'E', 'X', 'T',
     REPEAT_TOKEN,           'R', 'E', 'P', 'E', 'A', 'T',
     UNTIL_TOKEN,            'U', 'N', 'T', 'I', 'L',
     BREAK_TOKEN,            'B', 'R', 'E', 'A', 'K',
-    CONTINUE_TOKEN,            'C', 'O', 'N', 'T', 'I', 'N', 'U', 'E',
-    ASM_TOKEN,                'A', 'S', 'M',
-    DEF_TOKEN,                'D', 'E', 'F',
-    EXPORT_TOKEN,            'E', 'X', 'P', 'O', 'R', 'T',
-    IMPORT_TOKEN,            'I', 'M', 'P', 'O', 'R', 'T',
+    CONTINUE_TOKEN,         'C', 'O', 'N', 'T', 'I', 'N', 'U', 'E',
+    ASM_TOKEN,              'A', 'S', 'M',
+    DEF_TOKEN,              'D', 'E', 'F',
+    EXPORT_TOKEN,           'E', 'X', 'P', 'O', 'R', 'T',
+    IMPORT_TOKEN,           'I', 'M', 'P', 'O', 'R', 'T',
     INCLUDE_TOKEN,          'I', 'N', 'C', 'L', 'U', 'D', 'E',
     RETURN_TOKEN,           'R', 'E', 'T', 'U', 'R', 'N',
     END_TOKEN,              'E', 'N', 'D',
-    DONE_TOKEN,                'D', 'O', 'N', 'E',
+    DONE_TOKEN,             'D', 'O', 'N', 'E',
     LOGIC_NOT_TOKEN,        'N', 'O', 'T',
     LOGIC_AND_TOKEN,        'A', 'N', 'D',
-    LOGIC_OR_TOKEN,            'O', 'R',
+    LOGIC_OR_TOKEN,         'O', 'R',
     BYTE_TOKEN,             'B', 'Y', 'T', 'E',
-    WORD_TOKEN,                'W', 'O', 'R', 'D',
+    WORD_TOKEN,             'W', 'O', 'R', 'D',
     CONST_TOKEN,            'C', 'O', 'N', 'S', 'T',
     STRUC_TOKEN,            'S', 'T', 'R', 'U', 'C',
     PREDEF_TOKEN,           'P', 'R', 'E', 'D', 'E', 'F',
-    SYSFLAGS_TOKEN,            'S', 'Y', 'S', 'F', 'L', 'A', 'G', 'S',
+    SYSFLAGS_TOKEN,         'S', 'Y', 'S', 'F', 'L', 'A', 'G', 'S',
     EOL_TOKEN
 };
 
@@ -428,8 +428,11 @@ int next_line(void)
     int len;
     t_token token;
     char* new_filename;
-    if (inputfile == NULL) {
-        // First-time init
+    if (inputfile == NULL)
+    {
+        /*
+         * First-time init
+         */
         inputfile = stdin;
         filename = (char*) "<stdin>";
     }
@@ -442,11 +445,17 @@ int next_line(void)
     {
         statement = inputline;
         scanpos   = inputline;
-        // Read next line from the current file, and strip newline from the end.
-        if (fgets(inputline, 512, inputfile) == NULL) {
+        /*
+         * Read next line from the current file, and strip newline from the end.
+         */
+        if (fgets(inputline, 512, inputfile) == NULL)
+        {
             inputline[0] = 0;
-            // At end of file, return to previous file if any, else return EOF_TOKEN
-            if (outer_inputfile != NULL) {
+            /*
+             * At end of file, return to previous file if any, else return EOF_TOKEN
+             */
+            if (outer_inputfile != NULL)
+            {
                 fclose(inputfile);
                 free(filename);
                 inputfile = outer_inputfile;
@@ -454,7 +463,8 @@ int next_line(void)
                 lineno = outer_lineno - 1; // -1 because we're about to incr again
                 outer_inputfile = NULL;
             }
-            else {
+            else
+            {
                 scantoken = EOF_TOKEN;
                 return EOF_TOKEN;
             }
@@ -467,15 +477,20 @@ int next_line(void)
         printf("; %s: %04d: %s\n", filename, lineno, inputline);
     }
     token = scan();
-    // Handle single level of file inclusion
-    if (token == INCLUDE_TOKEN) {
+    /*
+     * Handle single level of file inclusion
+     */
+    if (token == INCLUDE_TOKEN)
+    {
         token = scan();
-        if (token != STRING_TOKEN) {
+        if (token != STRING_TOKEN)
+        {
             parse_error("Missing include filename");
             scantoken = EOF_TOKEN;
             return EOF_TOKEN;
         }
-        if (outer_inputfile != NULL) {
+        if (outer_inputfile != NULL)
+        {
             parse_error("Only one level of includes allowed");
             scantoken = EOF_TOKEN;
             return EOF_TOKEN;
@@ -487,7 +502,8 @@ int next_line(void)
         strncpy(new_filename, (char*)constval, tokenlen-2);
         new_filename[tokenlen-2] = 0;
         inputfile = fopen(new_filename, "r");
-        if (inputfile == NULL) {
+        if (inputfile == NULL)
+        {
             parse_error("Error opening include file");
             scantoken = EOF_TOKEN;
             return EOF_TOKEN;
