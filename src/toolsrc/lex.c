@@ -234,16 +234,18 @@ t_token scan(void)
             scanpos += 4;
         }
     }
-    else if (scanpos[0] == '\"')
+    else if ((scanpos[0] & 0x7F) == '\"') // Hack for string quote char in case we have to rewind later
     {
-        char *scanshift;
+        char *scanshift, quotechar;
         int scanoffset;
         /*
          * String constant.
          */
+        quotechar = scanpos[0];
+        *scanpos |= 0x80; // Set high bit in case of rewind
         scantoken = STRING_TOKEN;
         constval = (long)++scanpos;
-        while (*scanpos &&  *scanpos != '\"')
+        while (*scanpos &&  *scanpos != quotechar)
         {
             if (*scanpos == '\\')
             {
@@ -288,11 +290,12 @@ t_token scan(void)
             }
             scanpos++;
         }
-        if (!*scanpos++)
+        if (!*scanpos)
         {
             parse_error("Unterminated string");
             return (-1);
         }
+        *scanpos++ |= 0x80; // Set high bit in case of rewind
     }
     else
     {

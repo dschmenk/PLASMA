@@ -501,7 +501,7 @@ t_opseq *parse_value(t_opseq *codeseq, int rvalue, int *stackdepth)
             if (stackdepth)
                 *stackdepth = cfnvals;
             cfnvals = 1;
-            type &= ~FUNC_TYPE;
+            type &= ~(FUNC_TYPE | VAR_TYPE);
         }
         else if (scantoken == OPEN_BRACKET_TOKEN)
         {
@@ -556,7 +556,7 @@ t_opseq *parse_value(t_opseq *codeseq, int rvalue, int *stackdepth)
                     *stackdepth = cfnvals;
                 type &= ~FUNC_TYPE;
             }
-            else if (type & VAR_TYPE)
+            else if (type & (VAR_TYPE | PTR_TYPE))
             {
                 /*
                  * Pointer dereference
