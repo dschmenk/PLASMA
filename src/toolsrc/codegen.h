@@ -61,11 +61,14 @@ typedef struct _opseq {
 #define DUP_CODE    0x0319
 #define PUSH_EXP_CODE 0x031A
 #define PULL_EXP_CODE 0x031B
+#define BRNCH_CODE  0x031C
+#define BRFALSE_CODE 0x031D
+#define BRTRUE_CODE 0x031E
 
 #define gen_uop(seq,op)     gen_seq(seq,UNARY_CODE(op),0,0,0,0)
 #define gen_op(seq,op)      gen_seq(seq,BINARY_CODE(op),0,0,0,0)
 #define gen_const(seq,val)  gen_seq(seq,CONST_CODE,val,0,0,0)
-#define gen_str(seq,str,len) gen_seq(seq,STR_CODE,str,0,len,0)
+#define gen_str(seq,str)    gen_seq(seq,STR_CODE,str,0,0,0)
 #define gen_lcladr(seq,idx) gen_seq(seq,LADDR_CODE,0,0,idx,0)
 #define gen_gbladr(seq,tag,typ) gen_seq(seq,GADDR_CODE,0,tag,0,typ)
 #define gen_idxb(seq)       gen_seq(seq,ADD_CODE,0,0,0,0)
@@ -78,6 +81,8 @@ typedef struct _opseq {
 #define gen_pushexp(seq)    gen_seq(seq,PUSH_EXP_CODE,0,0,0,0)
 #define gen_pullexp(seq)    gen_seq(seq,PULL_EXP_CODE,0,0,0,0)
 #define gen_drop(seq)       gen_seq(seq,DROP_CODE,0,0,0,0)
+#define gen_brfls(seq,tag)  gen_seq(seq,BRFALSE_CODE,0,tag,0,0)
+#define gen_brtru(seq,tag)  gen_seq(seq,BRTRUE_CODE,0,tag,0,0)
 
 void emit_flags(int flags);
 void emit_header(void);
@@ -94,7 +99,7 @@ void emit_idconst(char *name, int value);
 int emit_data(int vartype, int consttype, long constval, int constsize);
 void emit_codetag(int tag);
 void emit_const(int cval);
-void emit_conststr(long conststr, int strsize);
+void emit_conststr(long conststr);
 void emit_lb(void);
 void emit_lw(void);
 void emit_llb(int index);
@@ -137,7 +142,7 @@ void emit_start(void);
 void emit_rld(void);
 void emit_esd(void);
 void release_seq(t_opseq *seq);
-int crunch_seq(t_opseq *seq);
+int crunch_seq(t_opseq **seq);
 t_opseq *gen_seq(t_opseq *seq, int opcode, long cval, int tag, int offsz, int type);
 t_opseq *cat_seq(t_opseq *seq1, t_opseq *seq2);
 int emit_seq(t_opseq *seq);

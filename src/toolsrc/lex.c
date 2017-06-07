@@ -5,7 +5,7 @@
 #include <ctype.h>
 #include "plasm.h"
 
-char *statement, *tokenstr, *scanpos = (char*) "";
+char *statement, *tokenstr, *scanpos = "", *strpos = "";
 t_token scantoken, prevtoken;
 int tokenlen;
 long constval;
@@ -224,68 +224,68 @@ t_token scan(void)
             scanpos += 4;
         }
     }
-    else if ((scanpos[0] & 0x7F) == '\"') // Hack for string quote char in case we have to rewind later
+    else if (scanpos[0] == '\"') // Hack for string quote char in case we have to rewind later
     {
-        char *scanshift, quotechar;
         int scanoffset;
         /*
          * String constant.
          */
-        quotechar = scanpos[0];
-        *scanpos |= 0x80; // Set high bit in case of rewind
-        scantoken = STRING_TOKEN;
-        constval = (long)++scanpos;
-        while (*scanpos &&  *scanpos != quotechar)
+        scantoken   = STRING_TOKEN;
+        constval    = (long)strpos++;
+        scanpos++;
+        while (*scanpos &&  *scanpos != '\"')
         {
             if (*scanpos == '\\')
             {
-                scanoffset = 1;
+                scanoffset = 2;
                 switch (scanpos[1])
                 {
                     case 'n':
-                        *scanpos = 0x0D;
+                        *strpos++ = 0x0D;
                         break;
                     case 'r':
-                        *scanpos = 0x0A;
+                        *strpos++ = 0x0A;
                         break;
                     case 't':
-                        *scanpos = '\t';
+                        *strpos++ = '\t';
                         break;
                     case '\'':
-                        *scanpos = '\'';
+                        *strpos++ = '\'';
                         break;
                     case '\"':
-                        *scanpos = '\"';
+                        *strpos++ = '\"';
                         break;
                     case '\\':
-                        *scanpos = '\\';
+                        *strpos++ = '\\';
                         break;
                     case '0':
-                        *scanpos = '\0';
+                        *strpos++ = '\0';
                         break;
                     case '$':
                         if (hexdigit(scanpos[2]) < 0 || hexdigit(scanpos[3]) < 0) {
                             parse_error("Bad string constant");
                             return (-1);
                         }
-                        *scanpos = hexdigit(scanpos[2]) * 16 + hexdigit(scanpos[3]);
-                        scanoffset = 3;
+                        *strpos++ = hexdigit(scanpos[2]) * 16 + hexdigit(scanpos[3]);
+                        scanoffset = 4;
                         break;
                     default:
                         parse_error("Bad string constant");
                         return (-1);
                 }
-                for (scanshift = scanpos + 1; *scanshift; scanshift++)
-                    scanshift[0] = scanshift[scanoffset];
+                scanpos += scanoffset;
             }
-            scanpos++;
+            else
+                *strpos++ = *scanpos++;
         }
         if (!*scanpos)
         {
             parse_error("Unterminated string");
             return (-1);
         }
-        *scanpos++ |= 0x80; // Set high bit in case of rewind
+        *((unsigned char *)constval) = (long)strpos - constval - 1;
+        *strpos++ = '\0';
+        scanpos++;
     }
     else
     {
@@ -404,30 +404,34 @@ void scan_rewind(char *backptr)
 }
 int scan_lookahead(void)
 {
-    char *backpos  = scanpos;
-    char *backstr  = tokenstr;
+    char *backscan = scanpos;
+    char *backtkn  = tokenstr;
+    char *backstr  = strpos;
     int prevtoken  = scantoken;
-    int prevlen       = tokenlen;
+    int prevlen    = tokenlen;
     int look       = scan();
-    scanpos        = backpos;
-    tokenstr       = backstr;
+    scanpos        = backscan;
+    tokenstr       = backtkn;
+    strpos         = backstr;
     scantoken      = prevtoken;
     tokenlen       = prevlen;
     return (look);
 }
 char inputline[512];
+char conststr[1024];
 int next_line(void)
 {
     int len;
     t_token token;
     char* new_filename;
+    strpos = conststr;
     if (inputfile == NULL)
     {
         /*
          * First-time init
          */
         inputfile = stdin;
-        filename = (char*) "<stdin>";
+        filename = "<stdin>";
     }
     if (*scanpos == ';')
     {
@@ -491,9 +495,8 @@ int next_line(void)
         outer_inputfile = inputfile;
         outer_filename = filename;
         outer_lineno = lineno;
-        new_filename = (char*) malloc(tokenlen-1);
-        strncpy(new_filename, (char*)constval, tokenlen-2);
-        new_filename[tokenlen-2] = 0;
+        new_filename = (char *) malloc(*((unsigned char *)constval) + 1);
+        strncpy(new_filename, (char *)(constval + 1), *((unsigned char *)constval) + 1);
         inputfile = fopen(new_filename, "r");
         if (inputfile == NULL)
         {

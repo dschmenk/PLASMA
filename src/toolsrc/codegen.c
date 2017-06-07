@@ -473,7 +473,7 @@ void emit_idconst(char *name, int value)
 int emit_data(int vartype, int consttype, long constval, int constsize)
 {
     int datasize, i;
-    char *str;
+    unsigned char *str;
     if (consttype == 0)
     {
         datasize = constsize;
@@ -481,9 +481,10 @@ int emit_data(int vartype, int consttype, long constval, int constsize)
     }
     else if (consttype & STRING_TYPE)
     {
-        datasize = constsize;
-        str = (char *)constval;
-        printf("\t%s\t$%02X\n", DB, --constsize);
+        str = (unsigned char *)constval;
+        constsize = *str++;
+        datasize = constsize + 1;
+        printf("\t%s\t$%02X\n", DB, constsize);
         while (constsize-- > 0)
         {
             printf("\t%s\t$%02X", DB, *str++);
@@ -546,10 +547,10 @@ void emit_const(int cval)
     else
         printf("\t%s\t$2C,$%02X,$%02X\t\t; CW\t%d\n", DB, cval&0xFF,(cval>>8)&0xFF, cval);
 }
-void emit_conststr(long conststr, int strsize)
+void emit_conststr(long conststr)
 {
     printf("\t%s\t$2E\t\t\t; CS\n", DB);
-    emit_data(0, STRING_TYPE, conststr, strsize);
+    emit_data(0, STRING_TYPE, conststr, 0);
 }
 void emit_lb(void)
 {
@@ -908,14 +909,14 @@ void release_seq(t_opseq *seq)
 /*
  * Crunch sequence (peephole optimize)
  */
-int crunch_seq(t_opseq *seq)
+int crunch_seq(t_opseq **seq)
 {
     t_opseq *opnext, *opnextnext;
-    t_opseq *op = seq;
+    t_opseq *op = *seq;
     int crunched = 0;
     int freeops  = 0;
     int shiftcnt;
-    
+
     while (op && (opnext = op->nextop))
     {
         switch (op->code)
@@ -972,26 +973,40 @@ int crunch_seq(t_opseq *seq)
                         op->code  = SAW_CODE;
                         freeops   = 1;
                         break;
-                    case BINARY_CODE(MUL_TOKEN):
-                        for (shiftcnt = 0; shiftcnt < 16; shiftcnt++)
+                    case BRFALSE_CODE:
+                        if (op->val)
                         {
-                            if (op->val == (1 << shiftcnt))
-                            {
-                                op->val = shiftcnt;
-                                opnext->code = BINARY_CODE(SHL_TOKEN);
-                                break;
-                            }
+                            opnextnext = opnext->nextop; // Remove never taken branch
+                            if (op == *seq)
+                                *seq = opnextnext;
+                            opnext->nextop = NULL;
+                            release_seq(op);
+                            opnext = opnextnext;
+                            crunched = 1;
+                        }
+                        else
+                        {
+                            op->code = BRNCH_CODE; // Always taken branch
+                            op->tag  = opnext->tag;
+                            freeops  = 1;
                         }
                         break;
-                    case BINARY_CODE(DIV_TOKEN):
-                       for (shiftcnt = 0; shiftcnt < 16; shiftcnt++)
+                    case BRTRUE_CODE:
+                        if (!op->val)
                         {
-                            if (op->val == (1 << shiftcnt))
-                            {
-                                op->val = shiftcnt;
-                                opnext->code = BINARY_CODE(SHR_TOKEN);
-                                break;
-                            }
+                            opnextnext = opnext->nextop; // Remove never taken branch
+                            if (op == *seq)
+                                *seq = opnextnext;
+                            opnext->nextop = NULL;
+                            release_seq(op);
+                            opnext = opnextnext;
+                            crunched = 1;
+                        }
+                        else
+                        {
+                            op->code = BRNCH_CODE; // Always taken branch
+                            op->tag  = opnext->tag;
+                            freeops  = 1;
                         }
                         break;
                     case CONST_CODE: // Collapse constant operation
@@ -1072,6 +1087,28 @@ int crunch_seq(t_opseq *seq)
                                     break;
                             }
                         break; // CONST_CODE
+                    case BINARY_CODE(MUL_TOKEN):
+                        for (shiftcnt = 0; shiftcnt < 16; shiftcnt++)
+                        {
+                            if (op->val == (1 << shiftcnt))
+                            {
+                                op->val = shiftcnt;
+                                opnext->code = BINARY_CODE(SHL_TOKEN);
+                                break;
+                            }
+                        }
+                        break;
+                    case BINARY_CODE(DIV_TOKEN):
+                       for (shiftcnt = 0; shiftcnt < 16; shiftcnt++)
+                        {
+                            if (op->val == (1 << shiftcnt))
+                            {
+                                op->val = shiftcnt;
+                                opnext->code = BINARY_CODE(SHR_TOKEN);
+                                break;
+                            }
+                        }
+                        break;
                 }
                 break; // CONST_CODE
             case LADDR_CODE:
@@ -1212,11 +1249,10 @@ t_opseq *cat_seq(t_opseq *seq1, t_opseq *seq2)
 int emit_seq(t_opseq *seq)
 {
     t_opseq *op;
+    int emitted = 0;
 
-    if (!seq)
-        return (0);
     if (outflags & OPTIMIZE)
-        while (crunch_seq(seq));
+        while (crunch_seq(&seq));
     while (seq)
     {
         op = seq;
@@ -1255,7 +1291,7 @@ int emit_seq(t_opseq *seq)
                 emit_const(op->val);
                 break;
             case STR_CODE:
-                emit_conststr(op->val, op->offsz);
+                emit_conststr(op->val);
                 break;
             case LB_CODE:
                 emit_lb();
@@ -1329,15 +1365,26 @@ int emit_seq(t_opseq *seq)
             case DUP_CODE:
                 emit_dup();
                 break;
+                break;
             case PUSH_EXP_CODE:
                 emit_push_exp();
                 break;
             case PULL_EXP_CODE:
                 emit_pull_exp();
                 break;
+            case BRNCH_CODE:
+                emit_brnch(op->tag);
+                break;
+            case BRFALSE_CODE:
+                emit_brfls(op->tag);
+                break;
+            case BRTRUE_CODE:
+                emit_brtru(op->tag);
+                break;
             default:
                 return (0);
         }
+        emitted++;
         seq = seq->nextop;
         /*
          * Free this op
@@ -1345,5 +1392,5 @@ int emit_seq(t_opseq *seq)
         op->nextop = freeop_lst;
         freeop_lst = op;
     }
-    return (1);
+    return (emitted);
 }
