@@ -1,5 +1,5 @@
 import cmdsys
-    predef syscall, call, memset, getc, putc, puts, modaddr
+    predef syscall(f,p)#1, call(adr,a,x,y,p)#1, memset(d,s,l)#1, getc#1, putc(c)#1, puts(s)#1, modaddr(a)#1
     byte MACHID
 end
 //
@@ -30,7 +30,7 @@ const page2        = 1
 //
 // Predefined functions.
 //
-predef a2keypressed, a2gotoxy, a2grmode, a2textmode
+predef a2keypressed#1, a2gotoxy(x,y)#0, a2grmode(m)#0, a2textmode#0
 //
 // String data.
 //
@@ -71,7 +71,7 @@ end
 //
 // def grscrn(rowaddrs)
 //
-asm grscrn
+asm grscrn(rowaddrs)#0
 GRSCRN	=	$26
 GRSCRNL	=	GRSCRN
 GRSCRNH	=	GRSCRNL+1
@@ -79,12 +79,13 @@ GRSCRNH	=	GRSCRNL+1
 	STA	GRSCRNL
 	LDA	ESTKH,X
 	STA	GRSCRNH
+	INX
 	RTS
 end
 //
 // def grcolor(color)
 //
-asm grcolor
+asm grcolor(color)#0
 GRCLR	=	$30
 	LDA	#$0F
 	AND	ESTKL,X
@@ -95,12 +96,13 @@ GRCLR	=	$30
 	ASL
 	ORA	GRCLR
 	STA	GRCLR
+	INX
 	RTS
 end
 //
 // def grplot(x, y)
 //
-asm grplot
+asm grplot(x, y)#0
 	STY	IPY
 	LDA	ESTKL,X
 	AND	#$FE
@@ -125,56 +127,57 @@ asm grplot
 	STA	(DST),Y
 	LDY	IPY
 	INX
+	INX
 	RTS
 end
 //
 // Apple II routines.
 //
-def a2keypressed
+def a2keypressed#1
     if ^keyboard >= 128
         return ^keystrobe
     fin
     return FALSE
 end
-def a2gotoxy(x, y)
+def a2gotoxy(x, y)#0
     ^$24 = x + ^$20
-    return call($FB5B, y + ^$22, 0, 0, 0)
+    call($FB5B, y + ^$22, 0, 0, 0)
 end
-def a2grmode(mix)
+def a2grmode(mix)#0
     call($FB2F, 0, 0, 0, 0) // initmode()
     call($FB40, 0, 0, 0, 0) // grmode()
     if !mix
         ^showfull
     fin
     call($FC58, 0, 0, 0, 0)  // home()
-    return grscrn(@txt1scrn) // point to lo-res screen
+    grscrn(@txt1scrn) // point to lo-res screen
 end
-def a2textmode
+def a2textmode#0
     call($FB39, 0, 0, 0, 0)        // textmode()
-    return call($FC58, 0, 0, 0, 0) // home()
+    call($FC58, 0, 0, 0, 0) // home()
 end
 //
 // Apple III routines.
 //
-def dev_control(devnum, code, list)
+def dev_control(devnum, code, list)#1
     byte params[5]
-    
+
     params.0 = 3
     params.1 = devnum
     params.2 = code
     params:3 = list
     return syscall($83, @params)
 end
-def dev_status(devnum, code, list)
+def dev_status(devnum, code, list)#1
     byte params[5]
-    
+
     params.0 = 3
     params.1 = devnum
     params.2 = code
     params:3 = list
     return syscall($82, @params)
 end
-def a3keypressed
+def a3keypressed#1
     byte count
     dev_status(devcons, 5, @count)
     if count
@@ -182,13 +185,13 @@ def a3keypressed
     fin
     return FALSE
 end
-def a3gotoxy(x, y)
+def a3gotoxy(x, y)#0
     putc(24)
     putc(x)
     putc(25)
-    return putc(y)
+    putc(y)
 end
-def a3viewport(left, top, width, height)
+def a3viewport(left, top, width, height)#0
     putc(1) // Reset viewport
     putc(26)
     putc(left)
@@ -198,9 +201,9 @@ def a3viewport(left, top, width, height)
     putc(left + width  - 1)
     putc(top  + height - 1)
     putc(3)
-    return a3gotoxy(0, 0)
+    a3gotoxy(0, 0)
 end
-def a3grmode(mix)
+def a3grmode(mix)#0
     byte i
     if mix
         mix = 19
@@ -214,17 +217,17 @@ def a3grmode(mix)
         memset(txt1scrn[i], $0000, 40) // text  screen
         memset(txt2scrn[i], $0000, 40) // color screen
     next
-    return grscrn(@txt2scrn) // point to color screen
+    grscrn(@txt2scrn) // point to color screen
 end
-def a3textmode
+def a3textmode#0
     puts(@textbwmode)
     a3viewport(0, 0, 40, 24)
-    return putc(28)
+    putc(28)
 end
 //
 // Rod's Colors.
 //
-def rod
+def rod#0
     byte i, j, k, w, fmi, fmk, color
     while TRUE
         for w = 3 to 50
@@ -234,16 +237,16 @@ def rod
 		    color = (j * 3) / (i + 3) + i * w / 12
 		    fmi = 40 - i
 		    fmk = 40 - k
-		    grcolor(color)
-		    grplot(i, k)
-		    grplot(k, i)
-		    grplot(fmi, fmk)
-		    grplot(fmk, fmi)
-		    grplot(k, fmi)
-		    grplot(fmi, k)
-		    grplot(i, fmk)
-		    grplot(fmk, i)
-		    if keypressed()
+		    grcolor(color)#0
+		    grplot(i, k)#0
+		    grplot(k, i)#0
+		    grplot(fmi, fmk)#0
+		    grplot(fmk, fmi)#0
+		    grplot(k, fmi)#0
+		    grplot(fmi, k)#0
+		    grplot(i, fmk)#0
+		    grplot(fmk, i)#0
+		    if keypressed()#1
 		        return
 		    fin
 		next
@@ -271,10 +274,10 @@ when MACHID & $C8
 	fin
     otherwise // Apple ][
 wend
-grmode(MIXMODE)
-gotoxy(11, 1)
+grmode(MIXMODE)#0
+gotoxy(11, 1)#0
 puts(@exitmsg)
 rod
-textmode()
+textmode()#0
 puts(@goodbye)
 done
