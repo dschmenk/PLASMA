@@ -1187,6 +1187,21 @@ int crunch_seq(t_opseq **seq)
                         break;
                 }
                 break; // GADDR_CODE
+            case LOGIC_NOT_CODE:
+                switch (opnext->code)
+                {
+                    case BRFALSE_CODE:
+                        op->code = BRTRUE_CODE;
+                        op->tag  = opnext->tag;
+                        freeops  = 1;
+                        break;
+                    case BRTRUE_CODE:
+                        op->code = BRFALSE_CODE;
+                        op->tag  = opnext->tag;
+                        freeops  = 1;
+                        break;
+                }
+                break; // LOGIC_NOT_CODE
         }
         //
         // Free up crunched ops
