@@ -1,0 +1,496 @@
+//
+// Colors
+//
+const BLACK   = 0
+const MAGENTA = 1
+const DRKBLU  = 2
+const PURPLE  = 3
+const DRKGRN  = 4
+const GREY    = 5
+const MEDBLU  = 6
+const LGTBLU  = 7
+const BROWN   = 8
+const ORANGE  = 9
+const GRAY    = 10
+const PINK    = 11
+const LGTGRN  = 12
+const YELLOW  = 13
+const AQUA    = 14
+const WHITE   = 15
+
+word txt1scrn[]     = $0400,$0480,$0500,$0580,$0600,$0680,$0700,$0780
+word                = $0428,$04A8,$0528,$05A8,$0628,$06A8,$0728,$07A8
+word                = $0450,$04D0,$0550,$05D0,$0650,$06D0,$0750,$07D0
+//
+// ProDOS error
+//
+byte perr
+//
+// CALL 6502 ROUTINE
+// CALL(ADDR, AREG, XREG, YREG, STATUS)
+//
+asm call
+        PHP
+        LDA     ESTKL+4,X
+        STA     CALL6502+1
+        LDA     ESTKH+4,X
+        STA     CALL6502+2
+        LDA     ESTKL,X
+        PHA
+        LDA     ESTKL+1,X
+        TAY
+        LDA     ESTKL+3,X
+        PHA
+        LDA     ESTKL+2,X
+        INX
+        INX
+        INX
+        INX
+        STX     ESP
+        TAX
+        PLA
+        PLP
+CALL6502 JSR    $FFFF
+        PHP
+        STA     REGVALS+0
+        STX     REGVALS+1
+        STY     REGVALS+2
+        PLA
+        STA     REGVALS+3
+        LDX     ESP
+        LDA     #<REGVALS
+        LDY     #>REGVALS
+        STA     ESTKL,X
+        STY     ESTKH,X
+        PLP
+        RTS
+REGVALS !FILL   4
+end
+//
+// CALL PRODOS
+// SYSCALL(CMD, PARAMS)
+//
+asm syscall
+        LDA     ESTKL,X
+        LDY     ESTKH,X
+        STA     PARAMS
+        STY     PARAMS+1
+        INX
+        LDA     ESTKL,X
+        STA     CMD
+        JSR     $BF00
+CMD:    !BYTE   00
+PARAMS: !WORD   0000
+        LDY     #$00
+        STA     ESTKL,X
+        STY     ESTKH,X
+        RTS
+end
+//
+// SET MEMORY TO VALUE
+// MEMSET(ADDR, VALUE, SIZE)
+//   With optimizations from Peter Ferrie
+//
+asm memset
+        LDA     ESTKL+2,X
+        STA     DSTL
+        LDA     ESTKH+2,X
+        STA     DSTH
+        LDY     ESTKL,X
+        BEQ     +
+        INC     ESTKH,X
+        LDY     #$00
++       LDA     ESTKH,X
+        BEQ     SETMEX
+SETMLPL CLC
+        LDA     ESTKL+1,X
+SETMLPH STA     (DST),Y
+        DEC     ESTKL,X
+        BEQ     ++
+-       INY
+        BEQ     +
+--      BCS     SETMLPL
+        SEC
+        LDA     ESTKH+1,X
+        BCS     SETMLPH
++       INC     DSTH
+        BNE     --
+++      DEC     ESTKH,X
+        BNE     -
+SETMEX  INX
+        INX
+        RTS
+end
+//
+// COPY MEMORY
+// MEMCPY(DSTADDR, SRCADDR, SIZE)
+//
+asm memcpy
+        INX
+        INX
+        LDA     ESTKL-2,X
+        ORA     ESTKH-2,X
+        BEQ     CPYMEX
+        LDA     ESTKL-1,X
+        CMP     ESTKL,X
+        LDA     ESTKH-1,X
+        SBC     ESTKH,X
+        BCC     REVCPY
+;
+; FORWARD COPY
+;
+        LDA     ESTKL,X
+        STA     DSTL
+        LDA     ESTKH,X
+        STA     DSTH
+        LDA     ESTKL-1,X
+        STA     SRCL
+        LDA     ESTKH-1,X
+        STA     SRCH
+        LDY     ESTKL-2,X
+        BEQ     FORCPYLP
+        INC     ESTKH-2,X
+        LDY     #$00
+FORCPYLP LDA    (SRC),Y
+        STA     (DST),Y
+        INY
+        BNE     +
+        INC     DSTH
+        INC     SRCH
++       DEC     ESTKL-2,X
+        BNE     FORCPYLP
+        DEC     ESTKH-2,X
+        BNE     FORCPYLP
+        RTS
+;
+; REVERSE COPY
+;
+REVCPY  ;CLC
+        LDA     ESTKL-2,X
+        ADC     ESTKL,X
+        STA     DSTL
+        LDA     ESTKH-2,X
+        ADC     ESTKH,X
+        STA     DSTH
+        CLC
+        LDA     ESTKL-2,X
+        ADC     ESTKL-1,X
+        STA     SRCL
+        LDA     ESTKH-2,X
+        ADC     ESTKH-1,X
+        STA     SRCH
+        DEC     DSTH
+        DEC     SRCH
+        LDY     #$FF
+        LDA     ESTKL-2,X
+        BEQ     REVCPYLP
+        INC     ESTKH-2,X
+REVCPYLP LDA    (SRC),Y
+        STA     (DST),Y
+        DEY
+        CPY     #$FF
+        BNE     +
+        DEC     DSTH
+        DEC     SRCH
++       DEC     ESTKL-2,X
+        BNE     REVCPYLP
+        DEC     ESTKH-2,X
+        BNE     REVCPYLP
+CPYMEX  RTS
+end
+//
+// Unsigned word comparisons.
+//
+asm uword_isge
+        LDA     ESTKL+1,X
+        CMP     ESTKL,X
+        LDA     ESTKH+1,X
+        SBC     ESTKH,X
+        LDA     #$FF
+        ADC     #$00
+        EOR     #$FF
+        STA     ESTKL+1,X
+        STA     ESTKH+1,X
+        INX
+        RTS
+end
+asm uword_isle
+        LDA     ESTKL,X
+        CMP     ESTKL+1,X
+        LDA     ESTKH,X
+        SBC     ESTKH+1,X
+        LDA     #$FF
+        ADC     #$00
+        EOR     #$FF
+        STA     ESTKL+1,X
+        STA     ESTKH+1,X
+        INX
+        RTS
+end
+asm uword_isgt
+        LDA     ESTKL,X
+        CMP     ESTKL+1,X
+        LDA     ESTKH,X
+        SBC     ESTKH+1,X
+        LDA     #$FF
+        ADC     #$00
+        STA     ESTKL+1,X
+        STA     ESTKH+1,X
+        INX
+        RTS
+end
+asm uword_islt
+        LDA     ESTKL+1,X
+        CMP     ESTKL,X
+        LDA     ESTKH+1,X
+        SBC     ESTKH,X
+        LDA     #$FF
+        ADC     #$00
+        STA     ESTKL+1,X
+        STA     ESTKH+1,X
+        INX
+        RTS
+end
+//
+// Addresses of internal routines.
+//
+asm _hilopwm
+        TXA
+        PHA
+        JSR     HILOPWM
+        PLA
+        TAX
+        DEX
+        RTS
+end
+asm toupper
+        LDA     ESTKL,X
+TOUPR   AND     #$7F
+        CMP     #'a'
+        BCC     +
+        CMP     #'z'+1
+        BCS     +
+        SBC     #$1F
++       STA     ESTKL,X
+        RTS
+end
+//
+// CONSOLE I/O
+//
+asm putc
+        LDA     ESTKL,X
+;       JSR     TOUPR
+        ORA     #$80
+        JMP     $FDF0
+end
+asm getc
+        DEX
+-       LDA     $C000
+        BPL     -
+        BIT     $C010
+        AND     #$7F
+        STA     ESTKL,X
+        LDA     #$00
+        STA     ESTKH,X
+        RTS
+end
+def keypressed
+    return ^$C000 >= 128
+end
+def pdl(num)
+    return call($FB1E, 0, num, 0, 0)->2
+end 
+def bttn(num)
+    return (^$C061+num) >= 128
+end
+def putln
+    return putc($0D)
+end
+def beep
+    return putc($07)
+end
+def puts(str)
+    byte i
+    
+    for i = 1 to ^str
+        putc(^(str+i))
+    next
+end
+def puti(i)
+    byte numstr[7]
+    byte place, sign
+
+    place = 6
+    if i < 0
+        sign = 1
+        i    = -i
+    else
+        sign = 0
+    fin
+    while i >= 10
+        numstr[place] = i % 10 + '0'
+        i             = i / 10
+        place--
+    loop
+    numstr[place] = i + '0'
+    place--
+    if sign
+        numstr[place] = '-'
+        place--
+    fin
+    numstr[place] = 6 - place
+    return puts(@numstr[place])
+end
+def normal
+    ^$32 = $FF
+end
+def inverse
+    ^$32 = $3F
+end
+def gotoxy(x, y)
+    ^$24 = x + ^$20
+    return call($FB5B, y + ^$22, 0, 0, 0)
+end
+def home
+    return call($FC58, 0, 0, 0, 0)
+end
+def putsxy(x, y, str)
+    gotoxy(x, y)
+    return puts(str)
+end
+def textmode
+    call($FB39, 0, 0, 0, 0) // textmode()
+    return home 
+end
+//
+// Clear viewport to white
+//
+def clearview
+    byte i
+    word c
+
+    c = ' ' | $80 & ^$32
+    c = c | (c << 8)
+    for i = ^$22 to ^$23
+        memset(txt1scrn[i] + ^$20, c, ^$21)
+    next
+    return gotoxy(0,0)
+end
+def grmode
+    call($FB2F, 0, 0, 0, 0) // initmode()
+    call($FB40, 0, 0, 0, 0) // grmode()
+    return home
+end
+def grcolor(color)
+    return call($F864, color, 0, 0, 0)
+end
+def plot(x, y)
+    return call($F800, y, 0, x, 0)
+end
+def hlin(left, right, y)
+    ^$2C = right;
+    return call($F819, y, 0, left, 0)
+end
+def vlin(top, bottom, x)
+    ^$2D = bottom;
+    return call($F828, top, 0, x, 0)
+end
+def rect(left, right, top, bottom, fill)
+    byte y
+    
+    hlin(left, right, top)
+    hlin(left, right, bottom)
+    top++
+    bottom--
+    if fill
+        for y = top to bottom
+            hlin(left, right, y)
+        next
+    else
+        vlin(top, bottom, left)
+        vlin(top, bottom, right)
+    fin
+end
+//
+// ProDOS routines
+//
+def open(path, buff)
+    byte params[6]
+
+    params.0 = 3
+    params:1 = path
+    params:3 = buff
+    params.5 = 0
+    perr     = syscall($C8, @params)
+    return params.5
+end
+def close(refnum)
+    byte params[2]
+
+    params.0 = 1
+    params.1 = refnum
+    perr     = syscall($CC, @params)
+    return perr
+end
+def read(refnum, buff, len)
+    byte params[8]
+
+    params.0 = 4
+    params.1 = refnum
+    params:2 = buff
+    params:4 = len
+    params:6 = 0
+    perr     = syscall($CA, @params)
+    return params:6
+end
+def write(refnum, buff, len)
+    byte params[8]
+
+    params.0 = 4
+    params.1 = refnum
+    params:2 = buff
+    params:4 = len
+    params:6 = 0
+    perr     = syscall($CB, @params)
+    return params:6
+end
+def create(path, access, type, aux)
+    byte params[12]
+
+    params.0  = 7
+    params:1  = path
+    params.3  = access
+    params.4  = type
+    params:5  = aux
+    params.7  = $1
+    params:8  = 0
+    params:10 = 0
+    perr      = syscall($C0, @params)
+    return perr
+end
+def destroy(path)
+    byte params[3]
+
+    params.0 = 1
+    params:1 = path
+    perr     = syscall($C1, @params)
+    return perr
+end
+//
+// HFO/LFO PWM sound routines
+//
+def envelope(attack, decay, sustain, release, ainc, dinc, rinc)
+    ^$0C = attack
+    ^$0D = decay
+    ^$0E = sustain
+    ^$0F = release
+    *$10 = ainc
+    *$12 = dinc
+    *$14 = rinc
+end
+def hilopwm(hfo, lfo, usr)
+    ^$08 = hfo
+    ^$09 = lfo
+    *$0A = usr
+    return _hilopwm
+end

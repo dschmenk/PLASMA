@@ -1,0 +1,608 @@
+const inbuff       = $200
+const freemem      = $0002
+const iobuffer     = $1C00
+const NMACROS      = 7
+const FALSE        = 0
+const TRUE         = !FALSE
+//
+// Sequence values
+//
+const SEQ_MACRO    = 0
+const SEQ_NOTE     = 7
+const SEQ_LFO      = 21
+const SEQ_LFO_INC  = 29
+const SEQ_LFO_DEC  = 30
+const SEQ_OCT_INC  = 31
+const SEQ_OCT_DEC  = 32
+const SEQ_DUR_INC  = 33
+const SEQ_DUR_DEC  = 34
+const SEQ_REST     = 35
+//
+// Predefine replay functions
+//
+predef playback, replaynote, replayrest
+predef replaylfo, replaylfoinc, replaylfodec
+predef replayoctinc, replayoctdec, replaydurinc, replaydurdec
+//
+// Replay function pointers
+//
+word replay[] = @playback, @playback, @playback, @playback, @playback, @playback
+word          = @playback
+word          = @replaynote, @replaynote, @replaynote, @replaynote, @replaynote, @replaynote
+word          = @replaynote, @replaynote, @replaynote, @replaynote, @replaynote, @replaynote
+word          = @replaynote, @replaynote
+word          = @replaylfo, @replaylfo, @replaylfo, @replaylfo, @replaylfo, @replaylfo
+word          = @replaylfo, @replaylfo
+word          = @replaylfoinc, @replaylfodec
+word          = @replayoctinc, @replayoctdec
+word          = @replaydurinc, @replaydurdec
+word          = @replayrest
+
+//
+// Patch state
+//
+struc t_state
+    byte durAtk
+    byte durDcy
+    byte durSus
+    byte durRel
+    word rateAtk
+    word rateDcy
+    word rateRel
+    byte octave
+    byte LFO
+    byte idxLFO
+end
+//
+// Macro sequence structure
+//
+struc t_macro
+    byte absStart
+    byte stateStart[t_state]
+    byte sequence[256]
+end
+byte current[t_state]   // Current state
+word macros             // Pointer to macros
+byte record[t_macro]    // Recording buffer
+word recording = FALSE  // Recording key/flag
+byte playing   = 0      // Keep track of active macros
+byte recalc = FALSE     // Recalc envelope flag
+//
+// System variables.
+//
+word heap
+//
+// Periods of scale in second octave
+//
+byte scale0[] = 163, 154, 146, 137, 130, 122, 116, 109, 103, 97, 92, 87, 82, 77
+byte scale1[] =  82,  77,  73,  69,  65,  61,  58,  55,  52, 49, 46, 43, 41, 39
+byte scale2[] =  41,  39,  37,  34,  33,  31,  29,  27,  26, 24, 23, 22, 21, 19
+byte scale3[] =  21,  19,  18,  17,  16,  15,  14,  14,  13, 12, 11, 11, 10, 10
+word scale[]  = @scale0, @scale1, @scale2, @scale3
+//
+// Key mapping to note
+//
+byte keytone[] = 'A','S','E','D','R','F','G','Y','H','U','J','I','K','L'
+//
+// Macro sequence keys
+//
+byte keymacro[] = 'Z', 'X', 'C', 'V', 'B', 'N', 'M'
+//
+// Macro record keys
+//
+byte keyrecord[] = $1A, $18, $03, $16, $02, $0E, $0D
+//
+// Note duration
+//
+byte duration = 16
+//
+// Patch filename
+//
+byte patch = "PATCH"
+byte modPatch = FALSE
+//
+// Import utility routines
+//
+include "util.pla"
+//
+// Load/Save PATCH
+//
+def loadPatch
+    byte refnum
+
+    refnum = open(@patch, iobuffer)
+    if refnum
+        read(refnum, macros, t_macro * NMACROS) // Macros
+        read(refnum, @current, t_state)         // Initial values
+        close(refnum)
+    fin
+    return refnum <> 0
+end
+def savePatch
+    byte refnum
+
+    destroy(@patch)
+    create(@patch, $C3, $06, $00) // full access, BIN file
+    refnum = open(@patch, iobuffer)
+    if refnum
+        write(refnum, macros, t_macro * NMACROS) // Macros
+        write(refnum, @current, t_state)         // Initial values
+        close(refnum)
+        modPatch = FALSE
+    fin
+    return refnum <> 0
+end
+//
+// Query routines
+//
+def query(str)
+    byte c
+
+    inverse
+    clearview
+    putsxy(20 - ^str / 2, 2, str)
+    c = toupper(getc)
+    return c == 'Y'
+end
+//
+// Display LFO bar
+//
+def showLFO
+    grcolor(WHITE)
+    rect(33, 39, 6, 39, FALSE)
+    if current.LFO < 32
+        grcolor(ORANGE)
+        rect(34, 38, 7, 38-current.LFO, TRUE)
+    fin
+    if current.LFO
+        grcolor(DRKBLU)
+        rect(34, 38, 39-current.LFO, 38, TRUE)
+    fin
+    //
+    //Show actual value
+    //
+    putsxy(35, 0, "   ")
+    gotoxy(35, 0)
+    return puti(current.LFO)
+end
+//
+// Display LFO waveform
+//
+def showWaveform
+    byte i, mapBar
+    word mapPtr
+    //
+    // Get pointer to LFO waveform by calling PWM with zero note
+    //
+    envelope(0, 0, 0, 0, current:rateAtk, current:rateDcy, current:rateRel)
+    hilopwm(0, current.LFO, current.idxLFO)
+    mapPtr = *0 // Pointer at address 0
+    grcolor(WHITE)
+    rect(0, 33, 6, 39, FALSE)
+    for i = 0 to 31
+        mapBar = ^(mapPtr + i) >> 3
+        grcolor(BLACK)
+        vlin(7, 38-mapBar, i + 1)
+        grcolor(MAGENTA)
+        vlin(38 - mapBar, 38, i + 1)
+        grcolor(PURPLE)
+        vlin(37-mapBar, 38-mapBar, i + 1)
+    next
+    //
+    // Restore envelope
+    //
+    return envelope(current.durAtk, current.durDcy, current.durSus, current.durRel, current:rateAtk, current:rateDcy, current:rateRel)
+end
+//
+// Display duration
+//
+def showDuration
+    byte left, right
+
+    if duration == 40
+        left = 0
+        right = 39
+    else
+        left = 19-duration/2
+        right = left + duration
+    fin
+    grcolor(BLACK)
+    if left > 0
+        rect(0, left-1, 0, 5, TRUE)
+    fin
+    if right < 39
+        rect(right+1, 39, 0, 5, TRUE)
+    fin
+    grcolor(AQUA)
+    rect(left, right, 0, 5, TRUE)
+    //
+    // Show actual value
+    //
+    putsxy(4, 3, "  ")
+    gotoxy(4, 3)
+    return puti(duration)
+end
+//
+// Display octave
+//
+def showOctave
+    inverse
+    putsxy(0, 1, "----------------------------------------")
+    normal
+    putsxy(current.octave*10, 1, "----------")
+    return inverse
+end
+def showMainPanel
+    inverse
+    clearview
+    showDuration
+    showWaveform
+    showLFO
+    putsxy(5, 0, "OSCILLATION OVERTHRUSTER 1.3")
+    normal
+    putsxy(1, 0, "1-8")
+    gotoxy(34, 0); putc('<')
+    gotoxy(38, 0); putc('>')
+    gotoxy(3, 3); putc('-')
+    gotoxy(6, 3); putc('+')
+    inverse
+    showOctave
+    normal
+    putsxy(0, 2, "<-")
+    putsxy(38, 2, "->")
+    inverse
+    putsxy(11, 3, "A S D F G H J K L")
+    normal
+    gotoxy(14, 2); putc('E')
+    gotoxy(16, 2); putc('R')
+    gotoxy(20, 2); putc('Y')
+    gotoxy(22, 2); putc('U')
+    gotoxy(24, 2); putc('I')
+    return inverse
+end
+def showHelp
+    normal
+    home
+    putsxy(15, 0, "HELP")
+    putsxy(0, 1,  "=======================================")
+    putsxy(2, 3,  "KEY            COMMAND")
+    putsxy(2, 4,  "-------------- --------------------")
+    putsxy(2, 5,  "ESC            HELP/CANCEL RECORD")
+    putsxy(2, 6,  "CTRL-Q         QUIT")
+    putsxy(2, 7,  "1..8           LFO WAVEFORM")
+    putsxy(2, 8,  "< ,            INCREASE LFO")
+    putsxy(2, 9,  "> .            DECREASE LFO")
+    putsxy(2, 10, "LEFT-ARROW     PREV OCTAVE")
+    putsxy(2, 11, "RIGHT-ARROW    NEXT OCTAVE")
+    putsxy(2, 12, "+ UP-ARROW     INCREASE DURATION")
+    putsxy(2, 13, "- DOWN-ARROW   DECREASE DURATION")
+    putsxy(2, 14, "CTRL-Z..M      RECORD MACRO")
+    putsxy(2, 15, "/              SAVE ABS MACRO")
+    putsxy(2, 16, "?              SAVE REL MACRO")
+    putsxy(2, 17, "P              PERSISTANT STATE")
+    putsxy(2, 18, "0              TOGGLE PHASE")
+    putsxy(8, 23, "PRESS A KEY TO RETURN")
+    return getc
+end
+//
+// Recalc envelope parameters
+//
+def recalcEnv
+    current.durAtk = duration/8
+    current.durDcy = 0
+    current.durRel = duration/2
+    current.durSus = duration - current.durAtk - current.durRel
+    current:rateAtk = $0FFF/current.durAtk
+    current:rateDcy = 0
+    current:rateRel = $0FFF/current.durRel
+    recalc = FALSE
+    return envelope(current.durAtk, current.durDcy, current.durSus, current.durRel, current:rateAtk, current:rateDcy, current:rateRel)
+end
+//
+// Playback a sequence
+//
+def playback(idx)
+    word macro
+    byte seq, i
+    byte save[t_state]
+
+    //
+    // Check for recursive playback
+    //
+    if playing & (1 << idx)
+        return
+    fin
+    playing = playing | (1 << idx)
+    macro = macros + t_macro * idx
+    //
+    // Save current state
+    //
+    memcpy(@save, @current, t_state)
+    //
+    // Start off with initial conditions
+    //
+    if macro->absStart
+        memcpy(@current, macro + stateStart, t_state)
+        duration = current.durAtk + current.durDcy + current.durSus + current.durRel
+        envelope(current.durAtk, current.durDcy, current.durSus, current.durRel, current:rateAtk, current:rateDcy, current:rateRel)
+        recalc = FALSE
+    fin
+    //
+    // Run throught the sequence
+    //
+    for i = 1 to macro->sequence
+        seq = macro->sequence[i]
+        (replay[seq])(seq)
+    next
+    //
+    // Restore state
+    //
+    memcpy(@current, @save, t_state)
+    duration = current.durAtk + current.durDcy + current.durSus + current.durRel
+    envelope(current.durAtk, current.durDcy, current.durSus, current.durRel, current:rateAtk, current:rateDcy, current:rateRel)
+    playing = playing & ~(1 << idx)
+    return recalcEnv
+end
+//
+// Replay rest
+//
+def replayrest(idx)
+    byte d
+
+    for d = duration downto 1
+        call($FCA8, $6A, 0, 0, 0)
+    next
+end
+//
+// Replay note
+//
+def replaynote(idx)
+    if recalc
+        recalcEnv
+    fin
+    if current.LFO == 0
+        hilopwm(scale.[current.octave, idx - SEQ_NOTE], 0, 0)
+    else
+        hilopwm(scale.[current.octave, idx - SEQ_NOTE], current.LFO, current.idxLFO)
+    fin
+end
+//
+// Replay duration
+//
+def replaydurinc(idx)
+    if duration < 40
+        duration++
+        recalc = TRUE;
+    fin
+end
+def replaydurdec(idx)
+    if duration > 1
+        duration--
+        recalc = TRUE;
+    fin
+end
+//
+// Replay octave
+//
+def replayoctinc(idx)
+    if current.octave < 3
+        current.octave++
+    fin
+end
+def replayoctdec(idx)
+    if current.octave > 0
+        current.octave--
+    fin
+end
+//
+// Replay LFO
+//
+def replaylfoinc(idx)
+    if current.LFO > 0
+        current.LFO--
+    fin
+end
+def replaylfodec(idx)
+    if current.LFO < 32
+        current.LFO++
+    fin
+end
+def replaylfo(idx)
+    current.idxLFO = idx - SEQ_LFO
+end
+//
+// Main loop
+//
+def main
+    byte quit, key, i
+    word seq
+    
+    quit = FALSE
+    repeat
+        if keypressed
+            key = toupper(getc)
+            seq = -1
+            //
+            // Check for tone keys
+            //
+            for i = 0 to 13
+                if keytone[i] == key
+                    if current.LFO == 0
+                        hilopwm(scale.[current.octave, i], 0, 0)
+                    else
+                        hilopwm(scale.[current.octave, i], current.LFO, current.idxLFO)
+                    fin
+                    seq = SEQ_NOTE + i
+                    break
+                fin
+            next
+            //
+            // Check for macro keys
+            //
+            if i > 13
+                for i = 0 to 6
+                    if keymacro[i] == key
+                        playback(i)
+                        seq = SEQ_MACRO + i
+                        break
+                    fin
+                next
+                if i > 6
+                    if not recording
+                        for i = 0  to 6
+                            if keyrecord[i] == key
+                                recording = (key << 8) | i
+                                //
+                                // Save current state
+                                //
+                                memcpy(@record.stateStart, @current, t_state)
+                                record.absStart  = TRUE
+                                record.sequence  = 0
+                                normal
+                                putsxy(29, 3, "RECORDING")
+                                inverse
+                                break
+                            fin
+                        next
+                    fin
+                    if i > 6
+                        when key
+                            is $1B // ESC
+                                if recording // Cancel recording
+                                    recording = FALSE
+                                    putsxy(29, 3, "         ")
+                                else
+                                    textmode
+                                    showHelp
+                                    grmode
+                                    showMainPanel
+                                fin
+                                break
+                            is $11 // CTRL-Q
+                                quit = query("QUIT (Y/N)?")
+                                if not quit
+                                    showMainPanel
+                                fin
+                                break
+                            is '?'
+                                record.absStart = FALSE
+                            is '/'
+                                if recording // Copy recorded macro to key macro
+                                    memcpy(macros + t_macro * (recording & $FF), @record, t_macro)
+                                    recording = FALSE
+                                    modPatch = TRUE
+                                    putsxy(29, 3, "         ")
+                                fin
+                                break
+                            is '+'
+                            is $0B // UP
+                                if duration < 40
+                                    duration++
+                                    recalcEnv
+                                    showDuration
+                                fin
+                                seq = SEQ_DUR_INC
+                                break
+                            is '-'
+                            is $0A // DOWN
+                                if duration > 1
+                                    duration--
+                                    recalcEnv
+                                    showDuration
+                                fin
+                                seq = SEQ_DUR_DEC
+                                break
+                            is $15 // ->
+                                if current.octave < 3
+                                    current.octave++
+                                    showOctave
+                                fin
+                                seq = SEQ_OCT_INC
+                                break
+                            is $08 // <-
+                                if current.octave > 0
+                                    current.octave--
+                                    showOctave
+                                fin
+                                seq = SEQ_OCT_DEC
+                                break
+                            is '1'
+                            is '2'
+                            is '3'
+                            is '4'
+                            is '5'
+                            is '6'
+                            is '7'
+                            is '8'
+                                current.idxLFO = key - '1'
+                                showWaveform
+                                seq = SEQ_LFO + current.idxLFO
+                                break
+                            is '>'
+                            is '.'
+                                if current.LFO < 32
+                                    current.LFO++
+                                fin
+                                showLFO
+                                seq = SEQ_LFO_INC
+                                break
+                            is '<'
+                            is ','
+                                if current.LFO > 0
+                                    current.LFO--
+                                fin
+                                showLFO
+                                seq = SEQ_LFO_DEC
+                                break
+                            is 'P'
+                                if modPatch
+                                    savePatch
+                                fin
+                                break
+                            is '0' // Toggle speaker phase
+                                ^$C030
+                                break
+                        wend
+                    fin
+                fin
+            fin
+            if recording and seq >= 0
+                if record.sequence < 255
+                    record.sequence++
+                    record.sequence[record.sequence] = seq
+                else
+                    beep
+                fin
+            fin
+        fin
+    until quit
+end
+//
+// Get us into a standard 40 column video mode
+//
+call($FDED, $8D, 0, 0, 0)
+call($FDED, $91, 0, 0, 0)// CTRL-Q = turn off 80 column
+call($FDED, $8D, 0, 0, 0)
+^$C000 = 0 // Turn off 80STORE
+//
+// Get heap start.
+//
+macros = *freemem
+heap = macros + t_macro * NMACROS
+memset(macros, 0, t_macro * NMACROS)
+if not loadPatch
+    showHelp
+fin
+recalcEnv
+envelope(current.durAtk, current.durDcy, current.durSus, current.durRel, current:rateAtk, current:rateDcy, current:rateRel)
+grmode
+showMainPanel
+main   // Main program
+if modPatch
+    if query("SAVE PATCH (Y/N)?")
+        savePatch
+    fin
+fin
+normal
+textmode
+done
