@@ -1254,8 +1254,8 @@ The compact code representation comes through the use of opcodes closely matched
 | $2E    | CS     | constant string
 | $30    | DROP   | drop top stack value
 | $32    | DUP    | duplicate top stack value
-| $34    | PUSH   | push top to call stack
-| $36    | PULL   | pull from call stack
+| $34    | PUSHEP | push eval stack pointer call stack
+| $36    | PULLEP | pull eval stack pointer from call stack
 | $38    | BRGT   | branch next from top greater than top
 | $3A    | BRLT   | branch next from top less than top
 | $3C    | BREQ   | branch next from top equal to top
@@ -1283,8 +1283,8 @@ The compact code representation comes through the use of opcodes closely matched
 | $6A    | LAW    | load word from absolute address
 | $6C    | DLB    | duplicate top of stack into local byte at frame offset
 | $6E    | DLW    | duplicate top of stack into local word at frame offset
-| $70    | SB     | store top of stack byte into next from top address
-| $72    | SW     | store top of stack word into next from top address
+| $70    | SB     | store next from top of stack byte into top address
+| $72    | SW     | store next from top of stack word into top address
 | $74    | SLB    | store top of stack into local byte at frame offset
 | $76    | SLW    | store top of stack into local word at frame offset
 | $78    | SAB    | store top of stack into byte at absolute address

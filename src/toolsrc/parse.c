@@ -390,7 +390,10 @@ t_opseq *parse_value(t_opseq *codeseq, int rvalue, int *stackdepth)
         else if (scantoken == BPTR_TOKEN || scantoken == WPTR_TOKEN)
         {
             deref++;
-            type |= scantoken == BPTR_TOKEN ? BPTR_TYPE : WPTR_TYPE;
+            if (!type)
+                type |= scantoken == BPTR_TOKEN ? BPTR_TYPE : WPTR_TYPE;
+            else if (scantoken == BPTR_TOKEN)
+                parse_error("Byte value used as pointer");
         }
         else if (scantoken == NEG_TOKEN || scantoken == COMP_TOKEN || scantoken == LOGIC_NOT_TOKEN)
         {
@@ -533,12 +536,12 @@ t_opseq *parse_value(t_opseq *codeseq, int rvalue, int *stackdepth)
             if (type & (WPTR_TYPE | WORD_TYPE))
             {
                 valseq = gen_idxw(valseq);
-                type = WPTR_TYPE;
+                type = (type & PTR_TYPE) | WORD_TYPE;
             }
             else
             {
                 valseq = gen_idxb(valseq);
-                type = BPTR_TYPE;
+                type = (type & PTR_TYPE) | BYTE_TYPE;
             }
         }
         else if (scantoken == PTRB_TOKEN || scantoken == PTRW_TOKEN)
