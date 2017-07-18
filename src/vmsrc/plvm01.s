@@ -118,6 +118,7 @@ OPTBL   !WORD   ZERO,ADD,SUB,MUL,DIV,MOD,INCR,DECR      ; 00 02 04 06 08 0A 0C 0
     !WORD   BRNCH,IBRNCH,CALL,ICAL,ENTER,LEAVE,RET,NEXTOP   ; 50 52 54 56 58 5A 5C 5E
     !WORD   LB,LW,LLB,LLW,LAB,LAW,DLB,DLW           ; 60 62 64 66 68 6A 6C 6E
     !WORD   SB,SW,SLB,SLW,SAB,SAW,DAB,DAW           ; 70 72 74 76 78 7A 7C 7E
+    !WORD   CFFB                                    ; 80 82 84 86 88 8A 8C 8E
 ;*
 ;* DIV TOS-1 BY TOS
 ;*
@@ -399,12 +400,14 @@ ZERO    DEX
     STA ESTKL,X
     STA ESTKH,X
     JMP NEXTOP
-CB  DEX
+CFFB    LDA #$FF
+    !BYTE $2C	; BIT $00A9 - effectively skips LDA #$00, no harm in reading this address
+CB  LDA #$00
+    DEX
+    STA ESTKH,X
     +INC_IP
     LDA (IP),Y
     STA ESTKL,X
-    LDA #$00
-    STA ESTKH,X
     JMP NEXTOP
 ;*
 ;* LOAD ADDRESS & LOAD CONSTANT WORD (SAME THING, WITH OR WITHOUT FIXUP)
