@@ -545,7 +545,7 @@ void emit_const(int cval)
     else if (cval > 0 && cval < 256)
         printf("\t%s\t$2A,$%02X\t\t\t; CB\t%d\n", DB, cval, cval);
     else if ((cval&0xFF00) >= 0xFF00)
-        printf("\t%s\t$80,$%02X\t\t\t; CFFB\t%d\n", DB, cval&0xFF, cval&0xFF);
+        printf("\t%s\t$5E,$%02X\t\t\t; CFFB\t%d\n", DB, cval&0xFF, cval&0xFF);
     else
         printf("\t%s\t$2C,$%02X,$%02X\t\t; CW\t%d\n", DB, cval&0xFF,(cval>>8)&0xFF, cval);
 }
