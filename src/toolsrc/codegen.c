@@ -655,17 +655,27 @@ void emit_saw(int tag, int offset, int type)
 }
 void emit_dab(int tag, int offset, int type)
 {
-    int fixup = fixup_new(tag, type, FIXUP_WORD);
-    char *taglbl = tag_string(tag, type);
-    printf("\t%s\t$7C\t\t\t; DAB\t%s+%d\n", DB, taglbl, offset);
-    printf("_F%03d%c\t%s\t%s+%d\t\t\n", fixup, LBL, DW, type & EXTERN_TYPE ? "0" : taglbl, offset);
+    if (type)
+    {
+        int fixup = fixup_new(tag, type, FIXUP_WORD);
+        char *taglbl = tag_string(tag, type);
+        printf("\t%s\t$7C\t\t\t; DAB\t%s+%d\n", DB, taglbl, offset);
+        printf("_F%03d%c\t%s\t%s+%d\t\t\n", fixup, LBL, DW, type & EXTERN_TYPE ? "0" : taglbl, offset);
+    }
+    else
+        printf("\t%s\t$7C,$%02X,$%02X\t\t; DAB\t%d\n", DB, offset&0xFF,(offset>>8)&0xFF, offset);
 }
 void emit_daw(int tag, int offset, int type)
 {
-    int fixup = fixup_new(tag, type, FIXUP_WORD);
-    char *taglbl = tag_string(tag, type);
-    printf("\t%s\t$7E\t\t\t; DAW\t%s+%d\n", DB, taglbl, offset);
-    printf("_F%03d%c\t%s\t%s+%d\t\t\n", fixup, LBL, DW, type & EXTERN_TYPE ? "0" : taglbl, offset);
+    if (type)
+    {
+        int fixup = fixup_new(tag, type, FIXUP_WORD);
+        char *taglbl = tag_string(tag, type);
+        printf("\t%s\t$7E\t\t\t; DAW\t%s+%d\n", DB, taglbl, offset);
+        printf("_F%03d%c\t%s\t%s+%d\t\t\n", fixup, LBL, DW, type & EXTERN_TYPE ? "0" : taglbl, offset);
+    }
+    else
+        printf("\t%s\t$7E,$%02X,$%02X\t\t; DAW\t%d\n", DB, offset&0xFF,(offset>>8)&0xFF, offset);
 }
 void emit_localaddr(int index)
 {
