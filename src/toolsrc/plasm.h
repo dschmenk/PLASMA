@@ -8,6 +8,7 @@
 #define INIT            (1<<4)
 #define SYSFLAGS        (1<<5)
 #define WARNINGS        (1<<6)
+#define NO_COMBINE      (1<<7)
 extern int outflags;
 #include "tokens.h"
 #include "lex.h"
