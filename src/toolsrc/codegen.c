@@ -995,6 +995,17 @@ int crunch_seq(t_opseq **seq)
                             freeops  = 1;
                         }
                         break;
+                    case NE_CODE:
+                        if (!op->val)
+                            freeops = -2; // Remove ZERO:ISNE
+                        break;
+                    case EQ_CODE:
+                        if (!op->val)
+                        {
+                            op->code = LOGIC_NOT_CODE;
+                            freeops = 1;
+                        }
+                        break;
                     case CONST_CODE: // Collapse constant operation
                         if ((opnextnext = opnext->nextop))
                             switch (opnextnext->code)
@@ -1173,6 +1184,38 @@ int crunch_seq(t_opseq **seq)
                         break;
                 }
                 break; // GADDR_CODE
+            case LLW_CODE:
+                // LLW [n]:CB 8:SHR -> LLB [n+1]
+                if ((opnext->code == CONST_CODE) && (opnext->val == 8))
+                {
+                    if ((opnextnext = opnext->nextop))
+                    {
+                        if (opnextnext->code == SHR_CODE)
+                        {
+                            op->code = LLB_CODE;
+                            op->offsz++;
+                            freeops = 2;
+                            break;
+                        }
+                    }
+                }
+                break; // LLW_CODE
+            case LAW_CODE:
+                // LAW x:CB 8:SHR -> LAB x+1
+                if ((opnext->code == CONST_CODE) && (opnext->val == 8))
+                {
+                    if ((opnextnext = opnext->nextop))
+                    {
+                        if (opnextnext->code == SHR_CODE)
+                        {
+                            op->code = LAB_CODE;
+                            op->offsz++;
+                            freeops = 2;
+                            break;
+                        }
+                    }
+                }
+                break; // LAW_CODE
             case LOGIC_NOT_CODE:
                 switch (opnext->code)
                 {
@@ -1188,6 +1231,36 @@ int crunch_seq(t_opseq **seq)
                         break;
                 }
                 break; // LOGIC_NOT_CODE
+            case SLB_CODE:
+                if ((opnext->code == LLB_CODE) && (op->offsz == opnext->offsz))
+                {
+                    op->code = DLB_CODE;
+                    freeops = 1;
+                }
+                break; // SLB_CODE
+            case SLW_CODE:
+                if ((opnext->code == LLW_CODE) && (op->offsz == opnext->offsz))
+                {
+                    op->code = DLW_CODE;
+                    freeops = 1;
+                }
+                break; // SLW_CODE
+            case SAB_CODE:
+                if ((opnext->code == LAB_CODE) && (op->tag == opnext->tag) &&
+                    (op->offsz == opnext->offsz) && (op->type == opnext->type))
+                {
+                    op->code = DAB_CODE;
+                    freeops = 1;
+                }
+                break; // SAB_CODE
+            case SAW_CODE:
+                if ((opnext->code == LAW_CODE) && (op->tag == opnext->tag) &&
+                    (op->offsz == opnext->offsz) && (op->type == opnext->type))
+                {
+                    op->code = DAW_CODE;
+                    freeops = 1;
+                }
+                break; // SAW_CODE
         }
         //
         // Free up crunched ops. If freeops is positive we free up that many ops
