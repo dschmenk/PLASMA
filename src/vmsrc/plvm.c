@@ -776,7 +776,9 @@ void interp(code *ip)
                 fp += PLA;
             case 0x5C: // RET : IP = TOFP
                 return;
-            case 0x5E: // ???
+            case 0x5E: // CFFB : TOS = CONSTANTBYTE(IP) | 0xFF00
+                PUSH(BYTE_PTR(ip) | 0xFF00);
+                ip++;
                 break;
                 /*
                  * 0x60-0x6F
