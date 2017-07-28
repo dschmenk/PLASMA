@@ -540,10 +540,12 @@ void emit_codetag(int tag)
 }
 void emit_const(int cval)
 {
-    if (cval == 0)
+    if (cval == 0x0000)
         printf("\t%s\t$00\t\t\t; ZERO\n", DB);
-    else if (cval > 0 && cval < 256)
+    else if ((cval & 0xFF00) == 0x0000)
         printf("\t%s\t$2A,$%02X\t\t\t; CB\t%d\n", DB, cval, cval);
+    else if ((cval & 0xFF00) == 0xFF00)
+        printf("\t%s\t$5E,$%02X\t\t\t; CFFB\t%d\n", DB, cval&0xFF, cval);
     else
         printf("\t%s\t$2C,$%02X,$%02X\t\t; CW\t%d\n", DB, cval&0xFF,(cval>>8)&0xFF, cval);
 }
