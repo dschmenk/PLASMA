@@ -142,7 +142,7 @@ void emit_start(void);
 void emit_rld(void);
 void emit_esd(void);
 void release_seq(t_opseq *seq);
-int crunch_seq(t_opseq **seq);
+int crunch_seq(t_opseq **seq, int pass);
 t_opseq *gen_seq(t_opseq *seq, int opcode, long cval, int tag, int offsz, int type);
 t_opseq *cat_seq(t_opseq *seq1, t_opseq *seq2);
 int emit_seq(t_opseq *seq);

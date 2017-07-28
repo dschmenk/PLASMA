@@ -909,9 +909,66 @@ void release_seq(t_opseq *seq)
     }
 }
 /*
+ * Indicate if an address is (or might be) memory-mapped hardware; used to avoid
+ * optimising away accesses to such addresses.
+ */
+int is_hardware_address(int addr)
+{
+    // TODO: I think this is reasonable for Apple hardware but I'm not sure.
+    // It's a bit too strong for Acorn hardware but code is unlikely to try to
+    // read from high addresses anyway, so there's no real harm in not
+    // optimising such accesses anyway.
+    return addr >= 0xC000;
+}
+/*
+ * Replace all but the first of a series of identical load opcodes by DUP. This
+ * doesn't reduce the number of opcodes but does reduce their size in bytes.
+ * This is only called on the second optimisation pass because the DUP opcodes
+ * may inhibit other peephole optimisations which are more valuable.
+ */
+int try_dupify(t_opseq *op)
+{
+    int crunched = 0;
+    t_opseq *opn = op->nextop;
+    for (; opn; opn = opn->nextop)
+    {
+        if (op->code != opn->code)
+            return crunched;
+
+        switch (op->code)
+        {
+            case CONST_CODE:
+                if (op->val != opn->val)
+                    return crunched;
+                break;
+            case LADDR_CODE:
+            case LLB_CODE:
+            case LLW_CODE:
+                if (op->offsz != opn->offsz)
+                    return crunched;
+                break;
+            case GADDR_CODE:
+            case LAB_CODE:
+            case LAW_CODE:
+                if ((op->tag != opn->tag) || (op->offsz != opn->offsz) ||
+                    (op->type != opn->type))
+                    return crunched;
+                break;
+
+            default:
+                return crunched;
+        }
+
+        opn->code = DUP_CODE;
+        crunched = 1;
+    }
+
+    return crunched;
+}
+/*
  * Crunch sequence (peephole optimize)
  */
-int crunch_seq(t_opseq **seq)
+int crunch_seq(t_opseq **seq, int pass)
 {
     t_opseq *opnext, *opnextnext, *opprev = 0;
     t_opseq *op = *seq;
@@ -1006,7 +1063,8 @@ int crunch_seq(t_opseq **seq)
                             freeops = 1;
                         }
                         break;
-                    case CONST_CODE: // Collapse constant operation
+                    case CONST_CODE:
+                        // Collapse constant operation
                         if ((opnextnext = opnext->nextop))
                             switch (opnextnext->code)
                             {
@@ -1083,6 +1141,9 @@ int crunch_seq(t_opseq **seq)
                                     freeops  = 2;
                                     break;
                             }
+                        // End of collapse constant operation
+                        if ((pass > 0) && (freeops == 0) && (op->val != 0))
+                            crunched = try_dupify(op);
                         break; // CONST_CODE
                     case BINARY_CODE(MUL_TOKEN):
                         for (shiftcnt = 0; shiftcnt < 16; shiftcnt++)
@@ -1143,6 +1204,8 @@ int crunch_seq(t_opseq **seq)
                         freeops   = 1;
                         break;
                 }
+                if ((pass > 0) && (freeops == 0))
+                    crunched = try_dupify(op);
                 break; // LADDR_CODE
             case GADDR_CODE:
                 switch (opnext->code)
@@ -1183,7 +1246,13 @@ int crunch_seq(t_opseq **seq)
                         freeops   = 1;
                         break;
                 }
+                if ((pass > 0) && (freeops == 0))
+                    crunched = try_dupify(op);
                 break; // GADDR_CODE
+            case LLB_CODE:
+                if (pass > 0)
+                    crunched = try_dupify(op);
+                break; // LLB_CODE
             case LLW_CODE:
                 // LLW [n]:CB 8:SHR -> LLB [n+1]
                 if ((opnext->code == CONST_CODE) && (opnext->val == 8))
@@ -1199,7 +1268,13 @@ int crunch_seq(t_opseq **seq)
                         }
                     }
                 }
+                if ((pass > 0) && (freeops == 0))
+                    crunched = try_dupify(op);
                 break; // LLW_CODE
+            case LAB_CODE:
+                if ((pass > 0) && (op->type || !is_hardware_address(op->offsz)))
+                    crunched = try_dupify(op);
+                break; // LAB_CODE
             case LAW_CODE:
                 // LAW x:CB 8:SHR -> LAB x+1
                 if ((opnext->code == CONST_CODE) && (opnext->val == 8))
@@ -1215,6 +1290,9 @@ int crunch_seq(t_opseq **seq)
                         }
                     }
                 }
+                if ((pass > 0) && (freeops == 0) &&
+                    (op->type || !is_hardware_address(op->offsz)))
+                    crunched = try_dupify(op);
                 break; // LAW_CODE
             case LOGIC_NOT_CODE:
                 switch (opnext->code)
@@ -1351,7 +1429,8 @@ int emit_seq(t_opseq *seq)
     int emitted = 0;
 
     if (outflags & OPTIMIZE)
-        while (crunch_seq(&seq));
+        for (int pass = 0; pass < 2; pass++)
+            while (crunch_seq(&seq, pass));
     while (seq)
     {
         op = seq;
