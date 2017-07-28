@@ -24,6 +24,9 @@ int main(int argc, char **argv)
                     case 'O':
                         outflags |= OPTIMIZE;
                         break;
+                    case 'N':
+                        outflags |= NO_COMBINE;
+                        break;
                     case 'W':
                         outflags |= WARNINGS;
                 }

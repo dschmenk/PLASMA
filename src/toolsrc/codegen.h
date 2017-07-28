@@ -146,3 +146,4 @@ int crunch_seq(t_opseq **seq, int pass);
 t_opseq *gen_seq(t_opseq *seq, int opcode, long cval, int tag, int offsz, int type);
 t_opseq *cat_seq(t_opseq *seq1, t_opseq *seq2);
 int emit_seq(t_opseq *seq);
+int emit_pending_seq();

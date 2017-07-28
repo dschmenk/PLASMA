@@ -27,8 +27,9 @@ static int  idlocal_offset[128];
 static char fixup_size[2048];
 static int  fixup_type[2048];
 static int  fixup_tag[2048];
-static t_opseq optbl[256];
+static t_opseq optbl[2048];
 static t_opseq *freeop_lst = &optbl[0];
+static t_opseq *pending_seq = 0;
 #define FIXUP_BYTE    0x00
 #define FIXUP_WORD    0x80
 int id_match(char *name, int len, char *id)
@@ -536,10 +537,12 @@ int emit_data(int vartype, int consttype, long constval, int constsize)
 }
 void emit_codetag(int tag)
 {
+    emit_pending_seq();
     printf("_B%03d%c\n", tag, LBL);
 }
 void emit_const(int cval)
 {
+    emit_pending_seq();
     if (cval == 0x0000)
         printf("\t%s\t$00\t\t\t; ZERO\n", DB);
     else if ((cval & 0xFF00) == 0x0000)
@@ -695,6 +698,7 @@ void emit_brtru(int tag)
 }
 void emit_brnch(int tag)
 {
+    emit_pending_seq();
     printf("\t%s\t$50\t\t\t; BRNCH\t_B%03d\n", DB, tag);
     printf("\t%s\t_B%03d-*\n", DW, tag);
 }
@@ -705,16 +709,19 @@ void emit_breq(int tag)
 }
 void emit_brne(int tag)
 {
+    emit_pending_seq();
     printf("\t%s\t$3E\t\t\t; BRNE\t_B%03d\n", DB, tag);
     printf("\t%s\t_B%03d-*\n", DW, tag);
 }
 void emit_brgt(int tag)
 {
+    emit_pending_seq();
     printf("\t%s\t$38\t\t\t; BRGT\t_B%03d\n", DB, tag);
     printf("\t%s\t_B%03d-*\n", DW, tag);
 }
 void emit_brlt(int tag)
 {
+    emit_pending_seq();
     printf("\t%s\t$3A\t\t\t; BRLT\t_B%03d\n", DB, tag);
     printf("\t%s\t_B%03d-*\n", DW, tag);
 }
@@ -739,6 +746,7 @@ void emit_ical(void)
 }
 void emit_leave(void)
 {
+    emit_pending_seq();
     if (localsize)
         printf("\t%s\t$5A\t\t\t; LEAVE\n", DB);
     else
@@ -746,6 +754,7 @@ void emit_leave(void)
 }
 void emit_ret(void)
 {
+    emit_pending_seq();
     printf("\t%s\t$5C\t\t\t; RET\n", DB);
 }
 void emit_enter(int cparams)
@@ -769,6 +778,7 @@ void emit_pull_exp(void)
 }
 void emit_drop(void)
 {
+    emit_pending_seq();
     printf("\t%s\t$30\t\t\t; DROP\n", DB);
 }
 void emit_dup(void)
@@ -777,6 +787,7 @@ void emit_dup(void)
 }
 int emit_unaryop(t_token op)
 {
+    emit_pending_seq();
     switch (op)
     {
         case NEG_TOKEN:
@@ -808,6 +819,7 @@ int emit_unaryop(t_token op)
 }
 int emit_op(t_token op)
 {
+    emit_pending_seq();
     switch (op)
     {
         case MUL_TOKEN:
@@ -1421,19 +1433,57 @@ t_opseq *cat_seq(t_opseq *seq1, t_opseq *seq2)
     return (seq1);
 }
 /*
- * Emit a sequence of ops
+ * Emit a sequence of ops (into the pending sequence)
  */
 int emit_seq(t_opseq *seq)
 {
     t_opseq *op;
     int emitted = 0;
+    int string = 0;
+    for (op = seq; op; op = op->nextop)
+    {
+        if (op->code == STR_CODE)
+            string = 1;
+        emitted++;
+    }
+    pending_seq = cat_seq(pending_seq, seq);
+    // The source code comments in the output are much more logical if we don't
+    // merge multiple sequences together. There's no value in doing this merging
+    // if we're not optimizing, and we optionally allow it to be prevented even
+    // when we are optimizing by specifing the -N (NO_COMBINE) flag.
+    //
+    // We must also force output if the sequence includes a CS opcode, as the
+    // associated 'constant' is only temporarily valid.
+    if (!(outflags & OPTIMIZE) || (outflags & NO_COMBINE) || string)
+        return emit_pending_seq();
+    return (emitted);
+}
+/*
+ * Emit the pending sequence
+ */
+int emit_pending_seq()
+{
+    // This is called by some of the emit_*() functions to ensure that any
+    // pending ops are emitted before they emit their own op when they are
+    // called from the parser. However, this function itself calls some of those
+    // emit_*() functions to emit instructions from the pending sequence, which
+    // would cause an infinite loop if we weren't careful. We therefore set
+    // pending_seq to null on entry and work with a local copy, so if this
+    // function calls back into itself it is a no-op.
+    if (!pending_seq)
+        return 0;
+    t_opseq *local_pending_seq = pending_seq;
+    pending_seq = 0;
+
+    t_opseq *op;
+    int emitted = 0;
 
     if (outflags & OPTIMIZE)
         for (int pass = 0; pass < 2; pass++)
-            while (crunch_seq(&seq, pass));
-    while (seq)
+            while (crunch_seq(&local_pending_seq, pass));
+    while (local_pending_seq)
     {
-        op = seq;
+        op = local_pending_seq;
         switch (op->code)
         {
             case NEG_CODE:
@@ -1563,7 +1613,7 @@ int emit_seq(t_opseq *seq)
                 return (0);
         }
         emitted++;
-        seq = seq->nextop;
+        local_pending_seq = local_pending_seq->nextop;
         /*
          * Free this op
          */
