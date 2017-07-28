@@ -913,7 +913,7 @@ void release_seq(t_opseq *seq)
  */
 int crunch_seq(t_opseq **seq)
 {
-    t_opseq *opnext, *opnextnext;
+    t_opseq *opnext, *opnextnext, *opprev = 0;
     t_opseq *op = *seq;
     int crunched = 0;
     int freeops  = 0;
@@ -977,15 +977,7 @@ int crunch_seq(t_opseq **seq)
                         break;
                     case BRFALSE_CODE:
                         if (op->val)
-                        {
-                            opnextnext = opnext->nextop; // Remove never taken branch
-                            if (op == *seq)
-                                *seq = opnextnext;
-                            opnext->nextop = NULL;
-                            release_seq(op);
-                            opnext = opnextnext;
-                            crunched = 1;
-                        }
+                            freeops = -2; // Remove constant and never taken branch
                         else
                         {
                             op->code = BRNCH_CODE; // Always taken branch
@@ -995,15 +987,7 @@ int crunch_seq(t_opseq **seq)
                         break;
                     case BRTRUE_CODE:
                         if (!op->val)
-                        {
-                            opnextnext = opnext->nextop; // Remove never taken branch
-                            if (op == *seq)
-                                *seq = opnextnext;
-                            opnext->nextop = NULL;
-                            release_seq(op);
-                            opnext = opnextnext;
-                            crunched = 1;
-                        }
+                            freeops = -2; // Remove constant never taken branch
                         else
                         {
                             op->code = BRNCH_CODE; // Always taken branch
@@ -1206,8 +1190,32 @@ int crunch_seq(t_opseq **seq)
                 break; // LOGIC_NOT_CODE
         }
         //
-        // Free up crunched ops
-        //
+        // Free up crunched ops. If freeops is positive we free up that many ops
+        // *after* op; if it's negative, we free up abs(freeops) ops *starting
+        // with* op.
+        if (freeops < 0)
+        {
+            freeops = -freeops;
+            // If op is at the start of the sequence, we treat this as a special
+            // case.
+            if (op == *seq)
+            {
+                for (; freeops > 0; --freeops)
+                {
+                    opnext = op->nextop;
+                    release_op(op);
+                    op = *seq = opnext;
+                }
+                crunched = 1;
+            }
+            // Otherwise we just move op back to point to the previous op and
+            // let the following loop remove the required number of ops.
+            else
+            {
+                op      = opprev;
+                opnext  = op->nextop;
+            }
+        }
         while (freeops)
         {
             op->nextop     = opnext->nextop;
@@ -1217,6 +1225,7 @@ int crunch_seq(t_opseq **seq)
             crunched       = 1;
             freeops--;
         }
+        opprev = op;
         op = opnext;
     }
     return (crunched);
