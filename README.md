@@ -1309,6 +1309,8 @@ Probably the most exciting development is the support for the Apple ///. PLASMA 
 
 # Links
 
+[PLASMA on Acorn Beeb](http://stardot.org.uk/forums/viewtopic.php?f=55&t=12306&p=163288#p163288)
+
 [ACME 6502 assembler](https://sourceforge.net/projects/acme-crossass/)
 
 [HiDef PLASMA KFEST 2015 video](https://archive.org/details/Kansasfest2015ThePlasmaLanguage)
