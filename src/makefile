@@ -220,19 +220,19 @@ $(DGRTEST): samplesrc/dgrtest.pla $(PLVM02) $(PLASM)
 	acme --setpc 4094 -o $(DGRTEST) samplesrc/dgrtest.a
 
 $(ROGUE): samplesrc/rogue.pla $(PLVM02) $(PLASM)
-	./$(PLASM) -AM < samplesrc/rogue.pla > samplesrc/rogue.a
+	./$(PLASM) -AMO < samplesrc/rogue.pla > samplesrc/rogue.a
 	acme --setpc 4094 -o $(ROGUE) samplesrc/rogue.a
 
 $(ROGUEIO): samplesrc/rogue.io.pla $(PLVM02) $(PLASM)
-	./$(PLASM) -AM < samplesrc/rogue.io.pla > samplesrc/rogue.io.a
+	./$(PLASM) -AMO < samplesrc/rogue.io.pla > samplesrc/rogue.io.a
 	acme --setpc 4094 -o $(ROGUEIO) samplesrc/rogue.io.a
 
 $(ROGUECOMBAT): samplesrc/rogue.combat.pla $(PLVM02) $(PLASM)
-	./$(PLASM) -AM < samplesrc/rogue.combat.pla > samplesrc/rogue.combat.a
+	./$(PLASM) -AMO < samplesrc/rogue.combat.pla > samplesrc/rogue.combat.a
 	acme --setpc 4094 -o $(ROGUECOMBAT) samplesrc/rogue.combat.a
 
 $(ROGUEMAP): samplesrc/rogue.map.pla $(PLVM02) $(PLASM)
-	./$(PLASM) -AM < samplesrc/rogue.map.pla > samplesrc/rogue.map.a
+	./$(PLASM) -AMO < samplesrc/rogue.map.pla > samplesrc/rogue.map.a
 	acme --setpc 4094 -o $(ROGUEMAP) samplesrc/rogue.map.a
 
 $(HGR1):	samplesrc/hgr1.pla samplesrc/hgr1test.pla $(PLVM02) $(PLASM)
