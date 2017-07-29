@@ -1275,6 +1275,7 @@ The compact code representation comes through the use of opcodes closely matched
 | $58    | ENTER  | allocate frame size and copy stack parameters to local frame
 | $5A    | LEAVE  | deallocate frame and return from sub routine call
 | $5C    | RET    | return from sub routine call
+| $5E    | CFFB   | constant with $FF MSB
 | $60    | LB     | load byte from top of stack address
 | $62    | LW     | load word from top of stack address
 | $64    | LLB    | load byte from frame offset
