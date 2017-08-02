@@ -1,32 +1,38 @@
 #include <stdint.h>
 #include <stdio.h>
+#include <string.h>
 #include <ctype.h>
 #include "plasm.h"
 /*
  * Symbol table and fixup information.
  */
 #define ID_LEN    32
-static int  consts   = 0;
-static int  externs  = 0;
-static int  globals  = 0;
-static int  locals   = 0;
-static int  predefs  = 0;
-static int  defs     = 0;
-static int  asmdefs  = 0;
-static int  codetags = 1; // Fix check for break_tag and cont_tag
-static int  fixups   = 0;
+static int  consts    = 0;
+static int  externs   = 0;
+static int  globals   = 0;
+static int  locals    = 0;
+static int  localsize = 0;
+static int  predefs   = 0;
+static int  defs      = 0;
+static int  asmdefs   = 0;
+static int  codetags  = 1; // Fix check for break_tag and cont_tag
+static int  fixups    = 0;
 static char idconst_name[1024][ID_LEN+1];
 static int  idconst_value[1024];
 static char idglobal_name[1024][ID_LEN+1];
 static int  idglobal_type[1024];
 static int  idglobal_tag[1024];
-static int  localsize = 0;
 static char idlocal_name[128][ID_LEN+1];
 static int  idlocal_type[128];
 static int  idlocal_offset[128];
 static char fixup_size[2048];
 static int  fixup_type[2048];
 static int  fixup_tag[2048];
+static int  savelocalsize = 0;
+static int  savelocals    = 0;
+static char savelocal_name[128][ID_LEN+1];
+static int  savelocal_type[128];
+static int  savelocal_offset[128];
 static t_opseq optbl[2048];
 static t_opseq *freeop_lst = &optbl[0];
 static t_opseq *pending_seq = 0;
@@ -166,6 +172,24 @@ void idlocal_reset(void)
 {
     locals    = 0;
     localsize = 0;
+}
+void idlocal_save(void)
+{
+    savelocals    = locals;
+    savelocalsize = localsize;
+    memcpy(savelocal_name,   idlocal_name,   locals*(ID_LEN+1));
+    memcpy(savelocal_type,   idlocal_type,   locals*sizeof(int));
+    memcpy(savelocal_offset, idlocal_offset, locals*sizeof(int));
+    locals    = 0;
+    localsize = 0;
+}
+void idlocal_restore(void)
+{
+    locals    = savelocals;
+    localsize = savelocalsize;
+    memcpy(idlocal_name,   savelocal_name,   locals*(ID_LEN+1));
+    memcpy(idlocal_type,   savelocal_type,   locals*sizeof(int));
+    memcpy(idlocal_offset, savelocal_offset, locals*sizeof(int));
 }
 int idfunc_add(char *name, int len, int type, int tag)
 {
@@ -466,6 +490,18 @@ void emit_idfunc(int tag, int type, char *name, int is_bytecode)
         if (is_bytecode)
             printf("\tJSR\tINTERP\n");
     }
+}
+void emit_lambdafunc(int tag, char *name, int cparams, t_opseq *lambda_seq)
+{
+    emit_idfunc(tag, DEF_TYPE, name, 1);
+    if (cparams)
+        printf("\t%s\t$58,$%02X,$%02X\t\t; ENTER\t%d,%d\n", DB, 0, cparams, 0, cparams);
+    emit_seq(lambda_seq);
+    emit_pending_seq();
+    if (cparams)
+        printf("\t%s\t$5A\t\t\t; LEAVE\n", DB);
+    else
+        printf("\t%s\t$5C\t\t\t; RET\n", DB);
 }
 void emit_idconst(char *name, int value)
 {

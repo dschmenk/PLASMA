@@ -1,16 +1,19 @@
 #include <stdio.h>
+#include <string.h>
 #include "plasm.h"
 #define LVALUE      0
 #define RVALUE      1
-#define LAMBDA_CNT  256
+#define MAX_LAMBDA  64
 
 int infunc = 0, break_tag = 0, cont_tag = 0, stack_loop = 0;
 long infuncvals = 0;
 t_token prevstmnt;
-int lambda_num = 0;
-int lambda_cnt = 0;
-*opseq lambda_seq[MAX_LAMBDA];
-
+static int      lambda_num = 0;
+static int      lambda_cnt = 0;
+static t_opseq *lambda_seq[MAX_LAMBDA];
+static char     lambda_id[MAX_LAMBDA][16];
+static int      lambda_tag[MAX_LAMBDA];
+static int      lambda_cparams[MAX_LAMBDA];
 t_token binary_ops_table[] = {
     /* Highest precedence */
     MUL_TOKEN, DIV_TOKEN, MOD_TOKEN,
@@ -454,9 +457,9 @@ t_opseq *parse_value(t_opseq *codeseq, int rvalue, int *stackdepth)
     }
     else if (scantoken == LAMBDA_TOKEN)
     {
-        type |= WPTR_TYPE;
+        type |= CONST_TYPE;
         value = parse_lambda();
-        valseq = gen_gbladr(NULL, value, type);
+        valseq = gen_gbladr(NULL, value, FUNC_TYPE);
     }
     else if (scantoken == OPEN_PAREN_TOKEN)
     {
@@ -486,7 +489,7 @@ t_opseq *parse_value(t_opseq *codeseq, int rvalue, int *stackdepth)
             valseq = cat_seq(parse_list(NULL, &value), valseq);
             if (scantoken != CLOSE_PAREN_TOKEN)
             {
-                parse_error("Missing closing parenthesis");
+                parse_error("Missing function call closing parenthesis");
                 return (NULL);
             }
             if (scan() == POUND_TOKEN)
@@ -1461,16 +1464,21 @@ int parse_mods(void)
 }
 int parse_lambda(void)
 {
-    char lambda_id[16];
+    int func_tag;
+    int cfnparms;
+    char *expr;
 
     if (!infunc)
     {
-        parse_error("Lambda functions only allowed in definitions");
+        parse_error("Lambda functions only allowed inside definitions");
         return (0);
     }
+    idlocal_save();
     /*
      * Parse parameters and return value count
      */
+    cfnparms = 0;
+    func_tag = tag_new(DEF_TYPE);
     if (scan() == OPEN_PAREN_TOKEN)
     {
         do
@@ -1487,28 +1495,37 @@ int parse_lambda(void)
             parse_error("Bad function parameter list");
             return (0);
         }
-        scan();
     }
-    if (scantoken == OPEN_PAREN_TOKEN)
+    else
+    {
+        parse_error("Missing parameter list in lambda function");
+        return (0);
+    }
+    expr = scanpos;
+    if (scan_lookahead() == OPEN_PAREN_TOKEN)
     {
         /*
          * Function call - parameters generate before call address
          */
-        valseq = parse_list(NULL, NULL);
+        scan();
+        lambda_seq[lambda_cnt] = parse_list(NULL, NULL);
         if (scantoken != CLOSE_PAREN_TOKEN)
         {
-            parse_error("Missing closing parenthesis");
-            return (NULL);
+            parse_error("Missing closing lambda function parenthesis");
+            return (0);
         }
     }
     else
     {
-        valseq = parse_expr(NULL, NULL);
+        lambda_seq[lambda_cnt] = parse_expr(NULL, NULL);
+        scan_rewind(tokenstr);
     }
-    lambda_seq[lambda_cnt++] = valseq;
-    func_tag = tag_new(DEF_TYPE);
-    sprintf(lambda_id, "_LAMBDA%04d", lambda_num++);
-    idfunc_add(idstr, strlen(idstr), DEF_TYPE | funcparms_type(cfnparms), func_tag);
+    lambda_cparams[lambda_cnt] = cfnparms;
+    lambda_tag[lambda_cnt]     = func_tag;
+    sprintf(lambda_id[lambda_cnt], "_LAMBDA%04d", lambda_num++);
+    idfunc_add(lambda_id[lambda_cnt], strlen(lambda_id[lambda_cnt]), DEF_TYPE | funcparms_type(cfnparms), func_tag);
+    lambda_cnt++;
+    idlocal_restore();
     return (func_tag);
 }
 int parse_defs(void)
@@ -1622,6 +1639,8 @@ int parse_defs(void)
                 emit_const(0);
             emit_leave();
         }
+        while (lambda_cnt--)
+            emit_lambdafunc(lambda_tag[lambda_cnt], lambda_id[lambda_cnt], lambda_cparams[lambda_cnt], lambda_seq[lambda_cnt]);
         return (1);
     }
     else if (scantoken == ASM_TOKEN)

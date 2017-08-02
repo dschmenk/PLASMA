@@ -36,6 +36,8 @@ int idlocal_add(char *name, int len, int type, int size);
 int idglobal_add(char *name, int len, int type, int size);
 int id_add(char *name, int len, int type, int size);
 void idlocal_reset(void);
+void idlocal_save(void);
+void idlocal_restore(void);
 int idfunc_set(char *name, int len, int type, int tag);
 int idfunc_add(char *name, int len, int type, int tag);
 int idconst_add(char *name, int len, int value);

@@ -95,6 +95,7 @@ void emit_asm(char *s);
 void emit_idlocal(char *name, int value);
 void emit_idglobal(int value, int size, char *name);
 void emit_idfunc(int tag, int type, char *name, int is_bytecode);
+void emit_lambdafunc(int tag, char *name, int cparams, t_opseq *lambda_seq);
 void emit_idconst(char *name, int value);
 int emit_data(int vartype, int consttype, long constval, int constsize);
 void emit_codetag(int tag);
