@@ -1037,7 +1037,7 @@ puti(i) // print 4
 
 ### Lambda Functions
 
-A Lambda function is a simple, anonymous function that can be passed to a function or assigned to a variable. It is called as a function pointer. The function can take a number of parameters and return a value based on the parameters and/or global values. By enclosing the expression of the lambda function in paranthesis, multiple values can be returned.
+A Lambda function is a simple, anonymous function that can be passed to a function or assigned to a variable. It is called as a function pointer. The function can take a number of parameters and return a value based on the parameters and/or global values. By enclosing the expression of the lambda function in parenthesis, multiple values can be returned.
 
 ```
 
