@@ -1063,6 +1063,7 @@ def lambdas
     return &(x, y, z) x * z / y    // You can even return lambdas from definitions (these x, y are different from the locally defined x, y)
 end
 ````
+There are some limitations to lambda functions. They don't have any local variables except for the parameters. They can only return an expression; there are no control flow statements allowed. Lastly, they can only be defined inside another definition. They cannot be defined in global data space or in the module main function (it gets deallocated after initialization).
 
 ### Control Flow
 
