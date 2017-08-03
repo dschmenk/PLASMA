@@ -743,6 +743,7 @@ t_opseq *parse_set(t_opseq *codeseq)
     char *setptr = tokenstr;
     int lparms = 0, rparms = 0;
     int i;
+    int lambda_set = lambda_cnt;
     t_opseq *setseq[16], *rseq = NULL;
 
     while ((setseq[lparms] = parse_value(NULL, LVALUE, NULL)))
@@ -757,6 +758,12 @@ t_opseq *parse_set(t_opseq *codeseq)
         scan_rewind(tokenstr);
         while (lparms--)
             release_seq(setseq[lparms]);
+        while (lambda_cnt > lambda_set)
+        {
+            lambda_cnt--;
+            lambda_num--;
+            release_seq(lambda_seq[lambda_cnt]);
+        }
         return (NULL);
     }
     rseq = parse_list(NULL, &rparms);
@@ -1523,7 +1530,10 @@ int parse_lambda(void)
     lambda_cparams[lambda_cnt] = cfnparms;
     lambda_tag[lambda_cnt]     = func_tag;
     sprintf(lambda_id[lambda_cnt], "_LAMBDA%04d", lambda_num++);
-    idfunc_add(lambda_id[lambda_cnt], strlen(lambda_id[lambda_cnt]), DEF_TYPE | funcparms_type(cfnparms), func_tag);
+    if (idglobal_lookup(lambda_id[lambda_cnt], strlen(lambda_id[lambda_cnt])) >= 0)
+        idfunc_set(lambda_id[lambda_cnt], strlen(lambda_id[lambda_cnt]), DEF_TYPE | funcparms_type(cfnparms), func_tag); // Override any predef type & tag
+    else
+        idfunc_add(lambda_id[lambda_cnt], strlen(lambda_id[lambda_cnt]), DEF_TYPE | funcparms_type(cfnparms), func_tag);
     lambda_cnt++;
     idlocal_restore();
     return (func_tag);
