@@ -1040,7 +1040,13 @@ puti(i) // print 4
 A Lambda function is a simple, anonymous function that can be passed to a function or assigned to a variable. It is called as a function pointer. The function can take a number of parameters and return a value based on the parameters and global values. By enclosing the expression of the lambda function in paranthesis, multiple values can be returned.
 
 ```
-def lambdas#0
+
+def whatop(a, b, op)
+    puti(a); puts(" ? "); puti(b); puts(" = ")
+    puti(op(a, b); putln
+end
+
+def lambdas
     word lambda1
     word lambda2
     word x, y
@@ -1049,6 +1055,8 @@ def lambdas#0
     lambda2 = &(a, b) (a + b, a - b)
     x = lambda1(1, 2)#1 // This will return 3
     x, y = lambda2(3, 4)#2 // This will return 7, -1
+    whatop(10, 20, &(a, b) a * b) // This will print 10 ? 20 = 200
+    return &(x, y, z) x * z / y // You can even return lambdas from definitions
 end
 ````
 
