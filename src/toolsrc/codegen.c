@@ -1525,8 +1525,11 @@ int emit_pending_seq()
     int emitted = 0;
 
     if (outflags & OPTIMIZE)
-        for (int pass = 0; pass < 2; pass++)
+    {
+        int pass;
+        for (pass = 0; pass < 2; pass++)
             while (crunch_seq(&local_pending_seq, pass));
+    }
     while (local_pending_seq)
     {
         op = local_pending_seq;
