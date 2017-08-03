@@ -1047,8 +1047,8 @@ def lambdas#0
   
     lambda1 = &(a, b) a + b
     lambda2 = &(a, b) (a + b, a - b)
-    x = lambda1(1, 2)#1
-    x, y = lambda2(3, 4)#2
+    x = lambda1(1, 2)#1 // This will return 3
+    x, y = lambda2(3, 4)#2 // This will return 7, -1
 end
 ````
 
