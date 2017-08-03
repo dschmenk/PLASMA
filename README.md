@@ -67,6 +67,7 @@ Different projects have led to the architecture of PLASMA, most notably Apple Pa
         - [Assignment](#assignment)
             - [Empty Assignments](#empty-assignments)
         - [Increment and Decrement](#increment-and-decrement)
+        - [Lambda Function](#lambda_function)
         - [Control Flow](#control-flow)
             - [CALL](#call)
             - [RETURN](#return)
@@ -464,6 +465,22 @@ keyin = @keyin2plus // address-of keyin2plus function
 key   = keyin()
 ```
 
+Lambda functions are anonymous functions that can be used to return a value (or multiple values). They can be used as function pointers to routines that need a quick and dirty expression. They are written an '&' (a poor man's lambda symbol) followed by parameters in parentheses, and the resultant expression. There are no local variables allowed.
+
+```
+word result
+
+def eval_op(x, y, op)
+    result = result + op(x, y)
+    return result
+end
+
+def keyin(x, y, key)
+    if key == '+'
+        eval(x, y, &(x, y) x + y)
+    fin
+end
+````
 Control statements affect the flow of control through the program.  There are conditional and looping constructs.  The most widely used is probably the `if`/`elsif`/`else`/`fin` construct.
 
 ```
@@ -1004,7 +1021,6 @@ keypress = ^$C000 // read keyboard
 ^$C010 // read keyboard strobe, throw away value
 ```
 
-
 ### Increment and Decrement
 
 PLASMA has an increment and decrement statement. This is different than the increment and decrement operations in languages like C and Java. Instead, they cannot be part of an expression and only exist as a statement in postfix:
@@ -1018,6 +1034,23 @@ puti(i) // print 5
 i-- // decrement i by 1
 puti(i) // print 4
 ```
+
+### Lambda Functions
+
+A Lambda function is a simple, anonymous function that can be passed to a function or assigned to a variable. It is called as a function pointer. The function can take a number of parameters and return a value based on the parameters and global values. By enclosing the expression of the lambda function in paranthesis, multiple values can be returned.
+
+```
+def lambdas#0
+    word lambda1
+    word lambda2
+    word x, y
+  
+    lambda1 = &(a, b) a + b
+    lambda2 = &(a, b) (a + b, a - b)
+    x = lambda1(1, 2)#1
+    x, y = lambda2(3, 4)#2
+end
+````
 
 ### Control Flow
 
