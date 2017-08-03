@@ -67,7 +67,7 @@ Different projects have led to the architecture of PLASMA, most notably Apple Pa
         - [Assignment](#assignment)
             - [Empty Assignments](#empty-assignments)
         - [Increment and Decrement](#increment-and-decrement)
-        - [Lambda Functions](#lambda-functions)
+        - [Lambda (Anonymous) Functions](#lambda-functions)
         - [Control Flow](#control-flow)
             - [CALL](#call)
             - [RETURN](#return)
@@ -477,7 +477,7 @@ end
 
 def keyin(x, y, key)
     if key == '+'
-        eval(x, y, &(x, y) x + y)
+        eval_op(x, y, &(x, y) x + y)
     fin
 end
 ````
@@ -1037,11 +1037,11 @@ puti(i) // print 4
 
 ### Lambda Functions
 
-A Lambda function is a simple, anonymous function that can be passed to a function or assigned to a variable. It is called as a function pointer. The function can take a number of parameters and return a value based on the parameters and global values. By enclosing the expression of the lambda function in paranthesis, multiple values can be returned.
+A Lambda function is a simple, anonymous function that can be passed to a function or assigned to a variable. It is called as a function pointer. The function can take a number of parameters and return a value based on the parameters and/or global values. By enclosing the expression of the lambda function in paranthesis, multiple values can be returned.
 
 ```
 
-def whatop(a, b, op)
+def what_op(a, b, op)
     puti(a)
     puts(" ? ")
     puti(b)
@@ -1057,10 +1057,10 @@ def lambdas
   
     lambda1 = &(a, b) a + b
     lambda2 = &(a, b) (a + b, a - b)
-    x    = lambda1(1, 2)#1        // This will return 3
-    x, y = lambda2(3, 4)#2        // This will return 7, -1
-    whatop(10, 20, &(a, b) a * b) // This will print 10 ? 20 = 200
-    return &(x, y, z) x * z / y   // You can even return lambdas from definitions
+    x    = lambda1(1, 2)           // This will return 3
+    x, y = lambda2(3, 4)#2         // This will return 7, -1 (the #2 denotes two returned values instead of the default of one)
+    what_op(10, 20, &(a, b) a * b) // This will print 10 ? 20 = 200
+    return &(x, y, z) x * z / y    // You can even return lambdas from definitions (these x, y are different from the locally defined x, y)
 end
 ````
 
