@@ -1042,8 +1042,12 @@ A Lambda function is a simple, anonymous function that can be passed to a functi
 ```
 
 def whatop(a, b, op)
-    puti(a); puts(" ? "); puti(b); puts(" = ")
-    puti(op(a, b); putln
+    puti(a)
+    puts(" ? ")
+    puti(b)
+    puts(" = ")
+    puti(op(a, b))
+    putln
 end
 
 def lambdas
@@ -1053,10 +1057,10 @@ def lambdas
   
     lambda1 = &(a, b) a + b
     lambda2 = &(a, b) (a + b, a - b)
-    x = lambda1(1, 2)#1 // This will return 3
-    x, y = lambda2(3, 4)#2 // This will return 7, -1
+    x    = lambda1(1, 2)#1        // This will return 3
+    x, y = lambda2(3, 4)#2        // This will return 7, -1
     whatop(10, 20, &(a, b) a * b) // This will print 10 ? 20 = 200
-    return &(x, y, z) x * z / y // You can even return lambdas from definitions
+    return &(x, y, z) x * z / y   // You can even return lambdas from definitions
 end
 ````
 
