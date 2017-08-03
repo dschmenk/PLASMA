@@ -67,7 +67,7 @@ Different projects have led to the architecture of PLASMA, most notably Apple Pa
         - [Assignment](#assignment)
             - [Empty Assignments](#empty-assignments)
         - [Increment and Decrement](#increment-and-decrement)
-        - [Lambda Functions](#lambda_functions)
+        - [Lambda Functions](#lambda-functions)
         - [Control Flow](#control-flow)
             - [CALL](#call)
             - [RETURN](#return)
