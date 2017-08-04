@@ -1,9 +1,10 @@
-#PLASMA goes ROGUE
-##Introduction
+# PLASMA goes ROGUE
+
+## Introduction
 
 This version of ROGUE is somewhat different than others. It is very simple in most ways, but I have developed a (I think) unique visibility algorithm that runs extremely fast. Fast enough to run interpreted by the PLASMA VM on a 1 MHz 6502, and space efficient enough to allow for large (in the future) dungeons. The unique feature of this ROGUE is that lighting becomes critical and strategic. You are in dark catacombs, after all. You enter with a lit lamp, throwing off a circle of light. There are also torches throughout the catacombs that light up a small surrounding circle of light. Other items in the catacombs are mana (health+energy increase), a key, a raft, and gold. You will also encounter a number of enemies that will track you down to try and kill you. You will also encounter doors, locked doors, windows, water, and crevasses.
 
-##Strategy
+## Strategy
 
 As you travel through the catacombs, you must watch your health, energy, and lamp oil levels. Once health reaches zero, you are dead. As energy reaches zero, your vision will narrow and you will no longer be able to run. When the lamp oil runs out, you will be cast into darkness. If you see any torches in your field of vision, you can navigate to them. Taking the torch will extinguish the torch and replenish some of your lamp oil. Note that as you travel through the catacombs, your map of what you have seen will automatically fill in. But, if you are in the dark, you cannot read your map. You must turn on your lamp or get next to a torch before you can read the map again. If you are in the dark and can’t see any torches in your field of vision, you are in complete darkness. It is easy to lose your bearings. As such, the absolute direction movements no longer work (NSEW) - you will end up in a random direction if you try. However, the relative turns, left/right and forward/backward controls continue to work (that you can do in the dark).
 
@@ -11,7 +12,7 @@ Being in the dark can be advantageous, however. All the enemies in the catacombs
 
 Health will slowly improve as you move around. However, energy is depleted as you move. Mana will increase both health and energy. If health is already at 100, it won’t go any higher. Same for energy, but it is important to keep both high. When energy goes low, you can no longer move quickly and your field-of-vision narrows. When health goes to zero, you are dead.
 
-##Tile Description
+## Tile Description
 
 As ROGUE uses the text screen for display, a little creativity is required to interpret the map. These are the characters you will see and what the represent. Once you get the hang of it, it will be just like looking at the unencoded Matrix.
 ```
@@ -50,7 +51,7 @@ Flashing               Entity
 ```
 Tiles in light are inverse. Entities are displayed only when lit and in field of view. The map is only visible when lit, i.e lamp is on or standing next to a torch.
 
-##Interaction
+## Interaction
 ```
 Keyboard commands        Action
    Q                    Run (Quick)
@@ -76,7 +77,7 @@ If you should die, restart the game by typing:
 +rogue
 ```
 
-##Map Levels
+## Map Levels
 
 Level maps are up to 62x62 in size (plus a wall boundary for an effective 64x64 map size). They can be smaller than this. The game will end when it tries to load an non-existent level. Levels start at file name “LEVEL0“ and can go all the way to “LEVEL9“, but must be sequential.
 
