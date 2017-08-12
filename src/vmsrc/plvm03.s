@@ -5,6 +5,7 @@
 ;*             SYSTEM ROUTINES AND LOCATIONS
 ;*
 ;**********************************************************
+SELFMODIFY  =   1
 ;
 ; HARDWARE REGISTERS
 ;
@@ -598,6 +599,17 @@ _CEXS   LDA     (IP),Y          ; SKIP TO NEXT OP ADDR AFTER STRING
 ;*
 ;* LOAD VALUE FROM ADDRESS TAG
 ;*
+!IF SELFMODIFY {
+LB      LDA     ESTKL,X
+        STA     LBLDA+1
+        LDA     ESTKH,X
+        STA     LBLDA+2
+LBLDA	LDA     $FFFF
+        STA     ESTKL,X
+        LDA     #$00
+        STA     ESTKH,X
+        JMP     NEXTOP
+} ELSE {
 LB      LDA     ESTKL,X
         STA     TMPL
         LDA     ESTKH,X
@@ -609,6 +621,7 @@ LB      LDA     ESTKL,X
         STY     ESTKH,X
         LDY     IPY
         JMP     NEXTOP
+}
 LW      LDA     ESTKL,X
         STA     TMPL
         LDA     ESTKH,X
@@ -664,6 +677,20 @@ LLW     +INC_IP
 ;*
 ;* LOAD VALUE FROM ABSOLUTE ADDRESS
 ;*
+!IF SELFMODIFY {
+LAB     +INC_IP
+        LDA     (IP),Y
+        STA     LABLDA+1
+        +INC_IP
+        LDA     (IP),Y
+        STA     LABLDA+2
+LABLDA	LDA      $FFFF
+        DEX
+        STA     ESTKL,X
+        LDA     #$00
+        STA     ESTKH,X
+        JMP     NEXTOP
+} ELSE {
 LAB     +INC_IP
         LDA     (IP),Y
         STA     TMPL
@@ -678,6 +705,7 @@ LAB     +INC_IP
         STY     ESTKH,X
         LDY     IPY
         JMP     NEXTOP
+}
 LAW     +INC_IP
         LDA     (IP),Y
         STA     TMPL
@@ -697,6 +725,18 @@ LAW     +INC_IP
 ;*
 ;* STORE VALUE TO ADDRESS
 ;*
+!IF SELFMODIFY {
+SB      LDA     ESTKL,X
+        STA     SBSTA+1
+        LDA     ESTKH,X
+        STA     SBSTA+2
+        LDA     ESTKL+1,X
+SBSTA   STA     $FFFF
+        INX
+;       INX
+;       JMP     NEXTOP
+        JMP     DROP
+} ELSE {
 SB      LDA     ESTKL,X
         STA     TMPL
         LDA     ESTKH,X
@@ -710,6 +750,7 @@ SB      LDA     ESTKL,X
 ;       INX
 ;       JMP     NEXTOP
         JMP     DROP
+}
 SW      LDA     ESTKL,X
         STA     TMPL
         LDA     ESTKH,X
@@ -777,6 +818,19 @@ DLW     +INC_IP
 ;*
 ;* STORE VALUE TO ABSOLUTE ADDRESS
 ;*
+!IF SELFMODIFY {
+SAB     +INC_IP
+        LDA     (IP),Y
+        STA     SABSTA+1
+        +INC_IP
+        LDA     (IP),Y
+        STA     SABSTA+2
+        LDA     ESTKL,X
+SABSTA  STA     $FFFF
+;       INX
+;       JMP     NEXTOP
+        JMP     DROP
+} ELSE {
 SAB     +INC_IP
         LDA     (IP),Y
         STA     TMPL
@@ -791,6 +845,7 @@ SAB     +INC_IP
 ;       INX
 ;       JMP     NEXTOP
         JMP     DROP
+}
 SAW     +INC_IP
         LDA     (IP),Y
         STA     TMPL
@@ -811,6 +866,17 @@ SAW     +INC_IP
 ;*
 ;* STORE VALUE TO ABSOLUTE ADDRESS WITHOUT POPPING STACK
 ;*
+!IF SELFMODIFY {
+DAB     +INC_IP
+        LDA     (IP),Y
+        STA     DABSTA+1
+        +INC_IP
+        LDA     (IP),Y
+        STA     DABSTA+2
+        LDA     ESTKL,X
+DABSTA  STA     $FFFF
+        JMP     NEXTOP
+} ELSE {
 DAB     +INC_IP
         LDA     (IP),Y
         STA     TMPL
@@ -823,6 +889,7 @@ DAB     +INC_IP
         STA     (TMP),Y
         LDY     IPY
         JMP     NEXTOP
+}
 DAW     +INC_IP
         LDA     (IP),Y
         STA     TMPL
