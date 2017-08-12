@@ -584,6 +584,11 @@ t_opseq *parse_value(t_opseq *codeseq, int rvalue, int *stackdepth)
             type = (scantoken == PTRB_TOKEN) ? BPTR_TYPE : WPTR_TYPE;
             if (!parse_const(&const_offset))
             {
+                if (scantoken == EOL_TOKEN || scantoken == CLOSE_PAREN_TOKEN)
+                {
+                    parse_error("Syntax");
+                    return (NULL);
+                }
                 /*
                  * Setting type override for following operations
                  */
@@ -618,6 +623,11 @@ t_opseq *parse_value(t_opseq *codeseq, int rvalue, int *stackdepth)
                  : ((scantoken == DOT_TOKEN) ? BPTR_TYPE : WPTR_TYPE);
             if (!parse_const(&const_offset))
             {
+                if (scantoken == EOL_TOKEN || scantoken == CLOSE_PAREN_TOKEN)
+                {
+                    parse_error("Syntax");
+                    return (NULL);
+                }
                 /*
                  * Setting type override for following operations
                  */
