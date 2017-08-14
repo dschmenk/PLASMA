@@ -63,7 +63,7 @@ end
 //
 // Plot pixel
 //
-export asm dgrPlot(buff, x, y)
+export asm dgrPlot(buff, x, y)#0
 	; GET BUFFER ADDRESS
 	STX	ESP
 	LDA	ESTKL+2,X
@@ -90,12 +90,13 @@ asm _dgrPlotPix
 	LDX	ESP
 	INX
 	INX
+    INX
 	RTS
 end
 //
 // Plot horizontal row of pixels
 //
-export asm dgrHLin(buff, x1, x2, y)
+export asm dgrHLin(buff, x1, x2, y)#0
 	; GET BUFFER ADDRESS
 	STX	ESP
 	LDA	ESTKL+3,X
@@ -130,12 +131,13 @@ asm _dgrHLinPix
 	INX
 	INX
 	INX
+    INX
 	RTS
 end
 //
 // Plot horizontal row of pixels
 //
-export asm dgrVLin(buff, x, y1, y2)
+export asm dgrVLin(buff, x, y1, y2)#0
 	; GET BUFFER ADDRESS
 	STX	ESP
 	LDA	ESTKL+3,X
@@ -168,13 +170,14 @@ asm _dgrVLinPix
 	BEQ	-
 	INX
 	INX
+    INX
 	INX
 	RTS
 end
 //
 // Draw sprite
 //
-export asm dgrBLT(buff, x, y, width, height, src)
+export asm dgrBLT(buff, x, y, width, height, src)#0
 	LDA	ESTKL,X		; SPRITE
 	STA	SRCL
 	LDA	ESTKH,X
@@ -206,8 +209,9 @@ export asm dgrBLT(buff, x, y, width, height, src)
 	CLC
 	ADC	ESTKL+2,X	; WIDTH
 	STA	SRCL
-	BCC	+++
-	INC	SRCH
+	LDA	SRCH
+	ADC	#$00
+	STA	SRCH
 	BNE	+++
 +	AND	#$FE
 	TAY
@@ -253,6 +257,7 @@ asm _dgrBLTPix
 	INX
 	INX
 	INX
+    INX
 	RTS
 end
 //
@@ -267,10 +272,12 @@ asm _dgrSetPix
 end
 asm _dgrSetEvnEvn
 	; EVEN PIXEL
+	LDA	$2000,X
+	AND	#$0F
+	STA	TMP
 	JSR	$0100		; LDA AUX (DST),Y
-	EOR	$2000,X
 	AND	#$F0
-	EOR	$2000,X
+	ORA	TMP
 	STA	$C005		; WRITE AUX MEM
 	STA	(GBASE),Y
 	STA	$C004		; WRITE MAIN MEM
@@ -278,10 +285,12 @@ asm _dgrSetEvnEvn
 end
 asm _dgrSetEvnOdd
 	; ODD PIXEL
-+	LDA	(GBASE),Y
-	EOR	$1000,X
++	LDA	$1000,X
+	AND	#$0F
+	STA	TMP
+	LDA	(GBASE),Y
 	AND	#$F0
-	EOR	$1000,X
+	ORA	TMP
 	STA	(GBASE),Y
 	RTS
 	; ODD ROW
@@ -291,10 +300,12 @@ asm _dgrSetEvnOdd
 end
 asm _dgrSetOddEvn
 	; EVEN PIXEL
+	LDA	$2000,X
+	AND	#$F0
+	STA	TMP
 	JSR	$0100		; LDA AUX (DST),Y
-	EOR	$2000,X
 	AND	#$0F
-	EOR	$2000,X
+	ORA	TMP
 	STA	$C005		; WRITE AUX MEM
 	STA	(GBASE),Y
 	STA	$C004		; WRITE MAIN MEM
@@ -302,10 +313,12 @@ asm _dgrSetOddEvn
 end
 asm _dgrSetOddOdd
 	; ODD PIXEL
-+++	LDA	(GBASE),Y
-	EOR	$1000,X
++++	LDA	$1000,X
+	AND	#$F0
+	STA	TMP
+	LDA	(GBASE),Y
 	AND	#$0F
-	EOR	$1000,X
+	ORA	TMP
 	STA	(GBASE),Y
 	RTS
 end
@@ -318,7 +331,7 @@ end
 //
 // Draw 8x8 tile (forced to 2x2 block address)
 //
-export asm dgrTile(buff, x, y, src)
+export asm dgrTile(buff, x, y, src)#0
 	STX	ESP
 	LDA	ESTKL,X		; TILE
 	STA	SRCL
@@ -349,8 +362,9 @@ export asm dgrTile(buff, x, y, src)
 	LDA	SRCL		; SKIP TO NEXT ROW
 	ADC	#$07		; CARRY = 1
 	STA	SRCL
-	BCC	+++
-	INC	SRCH
+	LDA	SRCH
+	ADC	#$00
+	STA	SRCH
 	BNE	+++
 +	AND	#$FE
 	TAY
@@ -398,14 +412,15 @@ export asm dgrTile(buff, x, y, src)
 ++++	INX
 	INX
 	INX
+    INX
 	RTS
 end
 //
 // Draw a string of tiles
 //
-export asm dgrTileStr(buff, x, y, tilestr, strlen, tilebuff)
-	DEX
+export asm dgrTileStr(buff, x, y, tilestr, strlen, tilebuff)#0
 -	DEX
+	DEX
 	DEX
 	DEX
 	LDA	ESTKL+9,X	; BUFF
@@ -423,13 +438,13 @@ export asm dgrTileStr(buff, x, y, tilestr, strlen, tilebuff)
 end
 asm _dgrTileTile
 	JSR	$5000
-	LDA	ESTKL+5,X	; UPDATE X COORD
+	LDA	ESTKL+4,X	; UPDATE X COORD
 	CLC
 	ADC	#$08
 	CMP	#80		; OFF RIGHT SIDE
 	BPL	+
-	STA	ESTKL+5,X
-	DEC	ESTKL+2,X	; DEC STRLEN
+	STA	ESTKL+4,X
+	DEC	ESTKL+1,X	; DEC STRLEN
 	BNE	-
 +	INX
 	INX
@@ -442,7 +457,7 @@ end
 //
 // Draw a string of tiles
 //
-export asm dgrFill(buff, x, y, tile)
+export asm dgrFill(buff, x, y, tile)#0
 	LDA	ESTKL+2,X
 	AND	#$0F
 	STA	ESTKL+2,X
@@ -458,8 +473,8 @@ export asm dgrFill(buff, x, y, tile)
 	SEC
 	SBC	ESTKL+1,X
 	STA	ESTKL+1,X
-	DEX
 -	DEX
+	DEX
 	DEX
 	DEX
 	LDA	ESTKL+7,X	; BUFF
@@ -477,18 +492,18 @@ export asm dgrFill(buff, x, y, tile)
 end
 asm _dgrFillTile
 	JSR	$5000
-	LDA	ESTKL+3,X	; UPDATE X COORD
-	CLC
-	ADC	#$08
-	STA	ESTKL+3,X
-	CMP	#80		; OFF RIGHT SIDE?
-	BMI	-
-	LDA	ESTKH+3,X	; RESTORE X COORD
-	STA	ESTKL+3,X
-	LDA	ESTKL+2,X	; UPDATE Y COORD
+	LDA	ESTKL+2,X	; UPDATE X COORD
 	CLC
 	ADC	#$08
 	STA	ESTKL+2,X
+	CMP	#80		; OFF RIGHT SIDE?
+	BMI	-
+	LDA	ESTKH+2,X	; RESTORE X COORD
+	STA	ESTKL+2,X
+	LDA	ESTKL+1,X	; UPDATE Y COORD
+	CLC
+	ADC	#$08
+	STA	ESTKL+1,X
 	CMP	#48		; OFF BOTTOM?
 	BMI	-
 	INX
@@ -500,8 +515,7 @@ end
 //
 // Wait for VLB
 //
-asm vlbWait
-	DEX
+asm vlbWait#0
 -	LDA	$C019
 	BMI	-
 -	LDA	$C019
@@ -511,7 +525,7 @@ end
 //
 // Set double lores graphics, return draw buffer
 //
-export def dgrMode
+export def dgrMode#1
 	^showlores
 	^showfull
 	^showgraphics
@@ -520,24 +534,24 @@ export def dgrMode
 	^show80 = 0
 //	^mapaux = 0
 	^an3on
-	return 1
+    return 1
 end
 //
 // Set text mode
 //
-export def txtMode
+export def txtMode#0
 	^showtext
 	^showpage1
 	^ena80   = 0
 	^show40  = 0
 	^mapmain = 0
 	^an3on
-	return call($FC58, 0, 0, 0, 0) // home()
+	call($FC58, 0, 0, 0, 0) // home()
 end
 //
 // Set display page, return other page
 //
-export def dgrShow(page)
+export def dgrShow(page)#1
 	page = page & 1
 	^(showpage1 + page)
 	return page ^ 1
@@ -545,13 +559,13 @@ end
 //
 // Set color for cear & plot routines
 //
-export def dgrColor(clr)
+export def dgrColor(clr)#0
 	^$30 = clr & $0F
 end
 //
 // Draw line
 //
-export def dgrLine(buff, x1, y1, x2, y2)
+export def dgrLine(buff, x1, y1, x2, y2)#0
 	byte dx, dy, dx2, dy2, pp
 	word sx, sy, err, dd2
 
@@ -636,12 +650,12 @@ end
 //
 // Clear the buffer
 //
-export def dgrClear(buff, clr)
+export def dgrClear(buff, clr)#0
 	byte[32] clrtile
 
 	clr = evnclr[clr&$0F] | (oddclr[clr&$0F] << 8)
 	memset(@clrtile, clr, 32)
-	return dgrFill(buff, 0, 0, @clrtile)
+	dgrFill(buff, 0, 0, @clrtile)
 end
 //
 // Make sure we are a 128K //e or //c
@@ -655,16 +669,16 @@ fin
 //
 // Assembly fixups
 //
-_dgrPlotPix:1   = @_dgrSetPix
-_dgrHLinPix:1   = @_dgrSetPix
-_dgrVLinPix:1   = @_dgrSetPix
-_dgrBLTPix:1    = @_dgrSetPix
-_dgrTileTile:1  = @dgrTile
-_dgrFillTile:1  = @dgrTile
-_dgrSetEvnEvn:1 = @evnclr
-_dgrSetEvnOdd:1 = @oddclr
-_dgrSetOddEvn:1 = @evnclr
-_dgrSetOddOdd:1 = @oddclr
+*(@_dgrPlotPix):1   = @_dgrSetPix
+*(@_dgrHLinPix):1   = @_dgrSetPix
+*(@_dgrVLinPix):1   = @_dgrSetPix
+*(@_dgrBLTPix):1    = @_dgrSetPix
+*(@_dgrTileTile):1  = @dgrTile
+*(@_dgrFillTile):1  = @dgrTile
+*(@_dgrSetEvnEvn):1 = @evnclr
+*(@_dgrSetEvnOdd):1 = @oddclr
+*(@_dgrSetOddEvn):1 = @evnclr
+*(@_dgrSetOddOdd):1 = @oddclr
 // Put read AUX mem routine in scary location
 memcpy($0100, @auxRead, 9)
 done

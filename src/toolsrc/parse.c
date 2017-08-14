@@ -1,11 +1,19 @@
 #include <stdio.h>
+#include <string.h>
 #include "plasm.h"
-#define LVALUE  0
-#define RVALUE  1
+#define LVALUE      0
+#define RVALUE      1
+#define MAX_LAMBDA  64
+
 int infunc = 0, break_tag = 0, cont_tag = 0, stack_loop = 0;
 long infuncvals = 0;
 t_token prevstmnt;
-
+static int      lambda_num = 0;
+static int      lambda_cnt = 0;
+static t_opseq *lambda_seq[MAX_LAMBDA];
+static char     lambda_id[MAX_LAMBDA][16];
+static int      lambda_tag[MAX_LAMBDA];
+static int      lambda_cparams[MAX_LAMBDA];
 t_token binary_ops_table[] = {
     /* Highest precedence */
     MUL_TOKEN, DIV_TOKEN, MOD_TOKEN,
@@ -338,6 +346,7 @@ int parse_const(long *value)
 /*
  * Normal expression parsing
  */
+int parse_lambda(void);
 t_opseq *parse_expr(t_opseq *codeseq, int *stackdepth);
 t_opseq *parse_list(t_opseq *codeseq, int *stackdepth)
 {
@@ -446,6 +455,12 @@ t_opseq *parse_value(t_opseq *codeseq, int rvalue, int *stackdepth)
             cfnvals  = funcvals_cnt(type);
         }
     }
+    else if (scantoken == LAMBDA_TOKEN)
+    {
+        type |= CONST_TYPE;
+        value = parse_lambda();
+        valseq = gen_gbladr(NULL, value, FUNC_TYPE);
+    }
     else if (scantoken == OPEN_PAREN_TOKEN)
     {
         if (!(valseq = parse_expr(NULL, stackdepth)))
@@ -474,7 +489,7 @@ t_opseq *parse_value(t_opseq *codeseq, int rvalue, int *stackdepth)
             valseq = cat_seq(parse_list(NULL, &value), valseq);
             if (scantoken != CLOSE_PAREN_TOKEN)
             {
-                parse_error("Missing closing parenthesis");
+                parse_error("Missing function call closing parenthesis");
                 return (NULL);
             }
             if (scan() == POUND_TOKEN)
@@ -569,6 +584,11 @@ t_opseq *parse_value(t_opseq *codeseq, int rvalue, int *stackdepth)
             type = (scantoken == PTRB_TOKEN) ? BPTR_TYPE : WPTR_TYPE;
             if (!parse_const(&const_offset))
             {
+                if (scantoken == EOL_TOKEN || scantoken == CLOSE_PAREN_TOKEN)
+                {
+                    parse_error("Syntax");
+                    return (NULL);
+                }
                 /*
                  * Setting type override for following operations
                  */
@@ -603,6 +623,11 @@ t_opseq *parse_value(t_opseq *codeseq, int rvalue, int *stackdepth)
                  : ((scantoken == DOT_TOKEN) ? BPTR_TYPE : WPTR_TYPE);
             if (!parse_const(&const_offset))
             {
+                if (scantoken == EOL_TOKEN || scantoken == CLOSE_PAREN_TOKEN)
+                {
+                    parse_error("Syntax");
+                    return (NULL);
+                }
                 /*
                  * Setting type override for following operations
                  */
@@ -728,6 +753,7 @@ t_opseq *parse_set(t_opseq *codeseq)
     char *setptr = tokenstr;
     int lparms = 0, rparms = 0;
     int i;
+    int lambda_set = lambda_cnt;
     t_opseq *setseq[16], *rseq = NULL;
 
     while ((setseq[lparms] = parse_value(NULL, LVALUE, NULL)))
@@ -742,6 +768,12 @@ t_opseq *parse_set(t_opseq *codeseq)
         scan_rewind(tokenstr);
         while (lparms--)
             release_seq(setseq[lparms]);
+        while (lambda_cnt > lambda_set)
+        {
+            lambda_cnt--;
+            lambda_num--;
+            release_seq(lambda_seq[lambda_cnt]);
+        }
         return (NULL);
     }
     rseq = parse_list(NULL, &rparms);
@@ -1447,6 +1479,80 @@ int parse_mods(void)
     emit_moddep(0, 0);
     return (0);
 }
+int parse_lambda(void)
+{
+    int func_tag;
+    int cfnparms;
+    char *expr;
+
+    if (!infunc)
+    {
+        parse_error("Lambda functions only allowed inside definitions");
+        return (0);
+    }
+    idlocal_save();
+    /*
+     * Parse parameters and return value count
+     */
+    cfnparms = 0;
+    if (scan() == OPEN_PAREN_TOKEN)
+    {
+        do
+        {
+            if (scan() == ID_TOKEN)
+            {
+                cfnparms++;
+                idlocal_add(tokenstr, tokenlen, WORD_TYPE, 2);
+                scan();
+            }
+        } while (scantoken == COMMA_TOKEN);
+        if (scantoken != CLOSE_PAREN_TOKEN)
+        {
+            parse_error("Bad function parameter list");
+            return (0);
+        }
+    }
+    else
+    {
+        parse_error("Missing parameter list in lambda function");
+        return (0);
+    }
+    expr = scanpos;
+    if (scan_lookahead() == OPEN_PAREN_TOKEN)
+    {
+        /*
+         * Function call - parameters generate before call address
+         */
+        scan();
+        lambda_seq[lambda_cnt] = parse_list(NULL, NULL);
+        if (scantoken != CLOSE_PAREN_TOKEN)
+        {
+            parse_error("Missing closing lambda function parenthesis");
+            return (0);
+        }
+    }
+    else
+    {
+        lambda_seq[lambda_cnt] = parse_expr(NULL, NULL);
+        scan_rewind(tokenstr);
+    }
+    sprintf(lambda_id[lambda_cnt], "_LAMBDA%04d", lambda_num++);
+    if (idglobal_lookup(lambda_id[lambda_cnt], strlen(lambda_id[lambda_cnt])) >= 0)
+    {
+        func_tag = lambda_tag[lambda_cnt];
+        idfunc_set(lambda_id[lambda_cnt], strlen(lambda_id[lambda_cnt]), DEF_TYPE | funcparms_type(cfnparms), func_tag); // Override any predef type & tag
+    }
+    else
+    {
+        func_tag = tag_new(DEF_TYPE);
+        lambda_tag[lambda_cnt]     = func_tag;
+        lambda_cparams[lambda_cnt] = cfnparms;
+        idfunc_add(lambda_id[lambda_cnt], strlen(lambda_id[lambda_cnt]), DEF_TYPE | funcparms_type(cfnparms), func_tag);
+    }
+    lambda_cnt++;
+    idlocal_restore();
+    return (func_tag);
+}
 int parse_defs(void)
 {
     char c, *idstr;
@@ -1469,6 +1575,7 @@ int parse_defs(void)
             return (0);
         }
         emit_bytecode_seg();
+        lambda_cnt  = 0;
         bytecode    = 1;
         cfnparms    = 0;
         infuncvals  = 1; // Defaut to one return value for compatibility
@@ -1557,6 +1664,8 @@ int parse_defs(void)
                 emit_const(0);
             emit_leave();
         }
+        while (lambda_cnt--)
+            emit_lambdafunc(lambda_tag[lambda_cnt], lambda_id[lambda_cnt], lambda_cparams[lambda_cnt], lambda_seq[lambda_cnt]);
         return (1);
     }
     else if (scantoken == ASM_TOKEN)

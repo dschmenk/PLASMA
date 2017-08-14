@@ -67,6 +67,7 @@ Different projects have led to the architecture of PLASMA, most notably Apple Pa
         - [Assignment](#assignment)
             - [Empty Assignments](#empty-assignments)
         - [Increment and Decrement](#increment-and-decrement)
+        - [Lambda (Anonymous) Functions](#lambda-functions)
         - [Control Flow](#control-flow)
             - [CALL](#call)
             - [RETURN](#return)
@@ -464,6 +465,22 @@ keyin = @keyin2plus // address-of keyin2plus function
 key   = keyin()
 ```
 
+Lambda functions are anonymous functions that can be used to return a value (or multiple values). They can be used as function pointers to routines that need a quick and dirty expression. They are written an '&' (a poor man's lambda symbol) followed by parameters in parentheses, and the resultant expression. There are no local variables allowed.
+
+```
+word result
+
+def eval_op(x, y, op)
+    result = result + op(x, y)
+    return result
+end
+
+def keyin(x, y, key)
+    if key == '+'
+        eval_op(x, y, &(x, y) x + y)
+    fin
+end
+````
 Control statements affect the flow of control through the program.  There are conditional and looping constructs.  The most widely used is probably the `if`/`elsif`/`else`/`fin` construct.
 
 ```
@@ -1004,7 +1021,6 @@ keypress = ^$C000 // read keyboard
 ^$C010 // read keyboard strobe, throw away value
 ```
 
-
 ### Increment and Decrement
 
 PLASMA has an increment and decrement statement. This is different than the increment and decrement operations in languages like C and Java. Instead, they cannot be part of an expression and only exist as a statement in postfix:
@@ -1018,6 +1034,36 @@ puti(i) // print 5
 i-- // decrement i by 1
 puti(i) // print 4
 ```
+
+### Lambda Functions
+
+A Lambda function is a simple, anonymous function that can be passed to a function or assigned to a variable. It is called as a function pointer. The function can take a number of parameters and return a value based on the parameters and/or global values. By enclosing the expression of the lambda function in parenthesis, multiple values can be returned.
+
+```
+
+def what_op(a, b, op)
+    puti(a)
+    puts(" ? ")
+    puti(b)
+    puts(" = ")
+    puti(op(a, b))
+    putln
+end
+
+def lambdas
+    word lambda1
+    word lambda2
+    word x, y
+  
+    lambda1 = &(a, b) a + b
+    lambda2 = &(a, b) (a + b, a - b)
+    x    = lambda1(1, 2)           // This will return 3
+    x, y = lambda2(3, 4)#2         // This will return 7, -1 (the #2 denotes two returned values instead of the default of one)
+    what_op(10, 20, &(a, b) a * b) // This will print 10 ? 20 = 200
+    return &(x, y, z) x * z / y    // You can even return lambdas from definitions (these x, y are different from the locally defined x, y)
+end
+````
+There are some limitations to lambda functions. They don't have any local variables except for the parameters. They can only return an expression; there are no control flow statements allowed. Lastly, they can only be defined inside another definition. They cannot be defined in global data space or in the module main function (it gets deallocated after initialization).
 
 ### Control Flow
 
@@ -1275,6 +1321,7 @@ The compact code representation comes through the use of opcodes closely matched
 | $58    | ENTER  | allocate frame size and copy stack parameters to local frame
 | $5A    | LEAVE  | deallocate frame and return from sub routine call
 | $5C    | RET    | return from sub routine call
+| $5E    | CFFB   | constant with $FF MSB
 | $60    | LB     | load byte from top of stack address
 | $62    | LW     | load word from top of stack address
 | $64    | LLB    | load byte from frame offset
@@ -1308,6 +1355,8 @@ Probably the most exciting development is the support for the Apple ///. PLASMA 
 
 
 # Links
+
+[PLASMA on Acorn Beeb](http://stardot.org.uk/forums/viewtopic.php?f=55&t=12306&p=163288#p163288)
 
 [ACME 6502 assembler](https://sourceforge.net/projects/acme-crossass/)
 
