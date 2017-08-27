@@ -457,12 +457,10 @@ void call(uword pc)
             if (c == 0x0D)
                 c = '\n';
             putchar(c);
-            PUSH(0);
             break;
         case 4: // LIBRARY STDLIB::PUTS
             s = POP;
             i = mem_data[s++];
-            PUSH(i);
             while (i--)
             {
                 c = mem_data[s++];
@@ -479,7 +477,6 @@ void call(uword pc)
                     c = '\n';
                 putchar(c);
             }
-            PUSH(0);
             break;
         case 6: // LIBRARY STDLIB::GETC
             PUSH(getchar());
@@ -495,7 +492,6 @@ void call(uword pc)
         case 8: // LIBRARY STDLIB::PUTNL
             putchar('\n');
             fflush(stdout);
-            PUSH(0);
             break;
         default:
             printf("\nBad call code:$%02X\n", mem_data[pc - 1]);

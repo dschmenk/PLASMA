@@ -83,20 +83,20 @@ $(PLVM): vmsrc/plvm.c
 	cc vmsrc/plvm.c -o $(PLVM)
 
 vmsrc/a1cmd.a: vmsrc/a1cmd.pla $(PLASM)
-	./$(PLASM) -AO < vmsrc/a1cmd.pla > vmsrc/a1cmd.a
+	./$(PLASM) -AOW < vmsrc/a1cmd.pla > vmsrc/a1cmd.a
 
 $(PLVM01): vmsrc/plvm01.s vmsrc/a1cmd.a
 	acme -o $(PLVM01) -l vmsrc/plvm01.sym vmsrc/plvm01.s
 
 $(CMD): vmsrc/cmd.pla vmsrc/cmdstub.s $(PLVM02) $(PLASM)
-	./$(PLASM) -AO < vmsrc/cmd.pla > vmsrc/cmd.a
+	./$(PLASM) -AOW < vmsrc/cmd.pla > vmsrc/cmd.a
 	acme --setpc 8192 -o $(CMD) vmsrc/cmdstub.s
 
 $(PLVM02): vmsrc/plvm02.s
 	acme -o $(PLVM02) -l vmsrc/plvm02.sym vmsrc/plvm02.s
 
 vmsrc/soscmd.a: vmsrc/soscmd.pla $(PLASM)
-	./$(PLASM) -AO < vmsrc/soscmd.pla > vmsrc/soscmd.a
+	./$(PLASM) -AOW < vmsrc/soscmd.pla > vmsrc/soscmd.a
 
 $(PLVM03): vmsrc/plvm03.s vmsrc/soscmd.a
 	acme -o $(PLVM03) -l vmsrc/plvm03.sym vmsrc/plvm03.s
@@ -105,9 +105,9 @@ $(PLVM03): vmsrc/plvm03.s vmsrc/soscmd.a
 # Sample code
 #
 test:	samplesrc/test.pla samplesrc/testlib.pla $(PLVM) $(PLASM)
-	./$(PLASM) -AMO  < samplesrc/test.pla > samplesrc/test.a
+	./$(PLASM) -AMOW  < samplesrc/test.pla > samplesrc/test.a
 	acme --setpc 4094 -o $(TEST) samplesrc/test.a
-	./$(PLASM) -AMO  < samplesrc/testlib.pla > samplesrc/testlib.a
+	./$(PLASM) -AMOW  < samplesrc/testlib.pla > samplesrc/testlib.a
 	acme --setpc 4094 -o $(TESTLIB) samplesrc/testlib.a
 	./$(PLVM) TEST
 
