@@ -24,12 +24,12 @@ const modinitkeep = $4000
 //
 // Pedefined functions.
 //
-predef syscall, call
-predef crout, cout, prstr, cin, rdstr
-predef markheap, allocheap, allocalignheap, releaseheap, availheap
-predef memset, memcpy
-predef uword_isgt, uword_isge, uword_islt, uword_isle
-predef loadmod, execmod, lookupstrmod
+predef syscall(cmd,params)#1, call(addr,areg,xreg,yreg,status)#1
+predef crout()#0, cout(c)#0, prstr(s)#0, cin()#1, rdstr(p)#1
+predef markheap()#1, allocheap(size)#1, allocalignheap(size, pow2, freeaddr), releaseheap(newheap)#1, availheap()#1
+predef memset(addr,value,size)#0, memcpy(dst,src,size)#0
+predef uword_isgt(a,b)#1, uword_isge(a,b)#1, uword_islt(a,b)#1, uword_isle(a,b)#1
+predef loadmod(mod)#1, execmod(modfile)#1, lookupstrmod(str)#1
 //
 // System variable.
 //
@@ -100,7 +100,7 @@ word syslibsym    = @exports
 // CALL PRODOS
 // SYSCALL(CMD, PARAMS)
 //
-asm syscall
+asm syscall(cmd,params)#1
     LDA ESTKL,X
     LDY ESTKH,X
     STA PARAMS
@@ -120,7 +120,7 @@ end
 // CALL 6502 ROUTINE
 // CALL(ADDR, AREG, XREG, YREG, STATUS)
 //
-asm call
+asm call(addr,areg,xreg,yreg,sstatus)#1
 REGVALS =   SRC
         PHP
         LDA     ESTKL+4,X
@@ -137,7 +137,7 @@ REGVALS =   SRC
         INX
         INX
         INX
-    INX
+        INX
         STX     ESP
         TAX
         PLA
@@ -163,7 +163,7 @@ end
 //
 // CALL LOADED SYSTEM PROGRAM
 //
-asm exec
+asm exec()#0
     LDX #$00
     STX IFPL
     LDA #$BF
@@ -177,7 +177,7 @@ end
 //
 // EXIT
 //
-asm reboot
+asm reboot()#0
     BIT ROMEN
     DEC $03F4       ; INVALIDATE POWER-UP BYTE
     JMP ($FFFC)     ; RESET
@@ -187,7 +187,7 @@ end
 // MEMSET(ADDR, VALUE, SIZE)
 //   With optimizations from Peter Ferrie
 //
-asm memset
+asm memset(addr,value,size)#0
     LDA     ESTKL+2,X
     STA     DSTL
     LDA     ESTKH+2,X
@@ -215,37 +215,39 @@ SETMLPH STA     (DST),Y
     BNE     -
 SETMEX  INX
     INX
+    INX
     RTS
 end
 //
 // COPY MEMORY
 // MEMCPY(DSTADDR, SRCADDR, SIZE)
 //
-asm memcpy
+asm memcpy(dst,src,size)#0
     INX
     INX
-    LDA ESTKL-2,X
-    ORA ESTKH-2,X
+    INX
+    LDA ESTKL-3,X
+    ORA ESTKH-3,X
     BEQ CPYMEX
-    LDA ESTKL-1,X
-    CMP ESTKL,X
-    LDA ESTKH-1,X
-    SBC ESTKH,X
+    LDA ESTKL-2,X
+    CMP ESTKL-1,X
+    LDA ESTKH-2,X
+    SBC ESTKH-1,X
     BCC REVCPY
 ;
 ; FORWARD COPY
 ;
-    LDA ESTKL,X
-    STA     DSTL
-    LDA ESTKH,X
-    STA     DSTH
     LDA ESTKL-1,X
-    STA     SRCL
+    STA     DSTL
     LDA ESTKH-1,X
+    STA     DSTH
+    LDA ESTKL-2,X
+    STA     SRCL
+    LDA ESTKH-2,X
     STA     SRCH
-    LDY ESTKL-2,X
+    LDY ESTKL-3,X
     BEQ FORCPYLP
-    INC     ESTKH-2,X
+    INC     ESTKH-3,X
     LDY #$00
 FORCPYLP LDA    (SRC),Y
     STA (DST),Y
@@ -253,34 +255,34 @@ FORCPYLP LDA    (SRC),Y
     BNE +
     INC DSTH
     INC SRCH
-+   DEC     ESTKL-2,X
++   DEC     ESTKL-3,X
     BNE FORCPYLP
-    DEC ESTKH-2,X
+    DEC ESTKH-3,X
     BNE FORCPYLP
     RTS
 ;
 ; REVERSE COPY
 ;
 REVCPY  ;CLC
-    LDA     ESTKL-2,X
-    ADC ESTKL,X
+    LDA     ESTKL-3,X
+    ADC ESTKL-1,X
     STA DSTL
-    LDA ESTKH-2,X
-    ADC ESTKH,X
+    LDA ESTKH-3,X
+    ADC ESTKH-1,X
     STA DSTH
     CLC
-    LDA     ESTKL-2,X
-    ADC ESTKL-1,X
+    LDA     ESTKL-3,X
+    ADC ESTKL-2,X
     STA SRCL
-    LDA ESTKH-2,X
-    ADC ESTKH-1,X
+    LDA ESTKH-3,X
+    ADC ESTKH-2,X
     STA SRCH
     DEC DSTH
     DEC SRCH
     LDY #$FF
-    LDA     ESTKL-2,X
+    LDA     ESTKL-3,X
     BEQ REVCPYLP
-    INC     ESTKH-2,X
+    INC     ESTKH-3,X
 REVCPYLP LDA    (SRC),Y
     STA (DST),Y
     DEY
@@ -288,9 +290,9 @@ REVCPYLP LDA    (SRC),Y
     BNE +
     DEC DSTH
     DEC SRCH
-+   DEC     ESTKL-2,X
++   DEC     ESTKL-3,X
     BNE REVCPYLP
-    DEC ESTKH-2,X
+    DEC ESTKH-3,X
     BNE REVCPYLP
 CPYMEX  RTS
 end
@@ -299,7 +301,7 @@ end
 //
 // MEMXCPY(DST, SRC, SIZE)
 //
-asm memxcpy
+asm memxcpy(dst,src,size)#0
     LDA ESTKL+1,X
     STA $3C
     CLC
@@ -321,9 +323,10 @@ asm memxcpy
     LDX ESP
     INX
     INX
+    INX
     RTS
 end
-asm crout
+asm crout()#0
     DEX
     LDA #$0D
     BNE +
@@ -333,7 +336,7 @@ end
 // CHAR OUT
 // COUT(CHAR)
 //
-asm cout
+asm cout(c)#0
     LDA ESTKL,X
     BIT $BF98
     BMI +
@@ -342,13 +345,14 @@ asm cout
     BIT ROMEN
     JSR $FDED
     BIT LCRDEN+LCBNK2
+    INX
     RTS
 end
 //
 // CHAR IN
 // RDKEY()
 //
-asm cin
+asm cin()#1
     BIT ROMEN
     JSR $FD0C
     BIT LCRDEN+LCBNK2
@@ -363,7 +367,7 @@ end
 // PRINT STRING
 // PRSTR(STR)
 //
-asm prstr
+asm prstr(s)#0
     LDY #$00
     LDA ESTKL,X
     STA SRCL
@@ -383,24 +387,26 @@ asm prstr
     CPY TMP
     BNE -
     BIT LCRDEN+LCBNK2
-++  RTS
+++  INX
+    RTS
 end
 //
 // PRINT BYTE
 //
-asm prbyte
+asm prbyte(b)#0
     LDA ESTKL,X
     STX     ESP
     BIT ROMEN
     JSR $FDDA
     LDX     ESP
     BIT LCRDEN+LCBNK2
+    INX
     RTS
 end
 //
 // PRINT WORD
 //
-asm prword
+asm prword(w)#0
     STX ESP
     TXA
     TAY
@@ -410,13 +416,14 @@ asm prword
     JSR $F941
     LDX     ESP
     BIT LCRDEN+LCBNK2
+    INX
     RTS
 end
 //
 // READ STRING
 // STR = RDSTR(PROMPTCHAR)
 //
-asm rdstr
+asm rdstr(p)#1
     LDA     ESTKL,X
     STA     $33
     STX     ESP
@@ -436,7 +443,7 @@ asm rdstr
     BIT     LCRDEN+LCBNK2
     RTS
 end
-asm uword_isge
+asm uword_isge(a,b)#1
     LDA ESTKL+1,X
     CMP ESTKL,X
     LDA ESTKH+1,X
@@ -449,7 +456,7 @@ asm uword_isge
     INX
     RTS
 end
-asm uword_isle
+asm uword_isle(a,b)#1
     LDA ESTKL,X
     CMP ESTKL+1,X
     LDA ESTKH,X
@@ -462,7 +469,7 @@ asm uword_isle
     INX
     RTS
 end
-asm uword_isgt
+asm uword_isgt(a,b)#1
     LDA ESTKL,X
     CMP ESTKL+1,X
     LDA ESTKH,X
@@ -474,7 +481,7 @@ asm uword_isgt
     INX
     RTS
 end
-asm uword_islt
+asm uword_islt(a,b)#1
     LDA ESTKL+1,X
     CMP ESTKL,X
     LDA ESTKH+1,X
@@ -503,7 +510,7 @@ end
 //    ^str = len
 //    return len
 //end
-asm dcitos
+asm dcitos(dci, str)#1
     LDA ESTKL,X
     STA DSTL
     LDA ESTKH,X
@@ -543,7 +550,7 @@ end
 //    loop
 //    return ^str
 //end
-asm stodci
+asm stodci(str,dci)#1
     LDA ESTKL,X
     STA DSTL
     LDA ESTKH,X
@@ -571,7 +578,7 @@ asm stodci
     STY ESTKH,X
     RTS
 end
-asm toupper
+asm toupper(c)#1
     LDA     ESTKL,X
 TOUPR   AND #$7F
     CMP     #'a'
@@ -598,7 +605,7 @@ end
 //    until !(c & $80)
 //    return dci
 //end
-asm modtosym
+asm modtosym(mod,dci)#1
     LDA ESTKL+1,X
     STA SRCL
     LDA ESTKH+1,X
@@ -639,7 +646,7 @@ end
 //        tbl = tbl + 3
 //    loop
 //    return 0
-asm lookuptbl
+asm lookuptbl(dci, tbl)#1
     LDA ESTKL,X
     STA DSTL
     LDA ESTKH,X
@@ -684,7 +691,7 @@ end
 //
 // ProDOS routines
 //
-def getpfx(path)
+def getpfx(path)#1
     byte params[3]
 
     ^path    = 0
@@ -693,7 +700,7 @@ def getpfx(path)
     perr     = syscall($C7, @params)
     return path
 end
-def setpfx(path)
+def setpfx(path)#1
     byte params[3]
 
     params.0 = 1
@@ -701,7 +708,7 @@ def setpfx(path)
     perr     = syscall($C6, @params)
     return path
 end
-def open(path, buff)
+def open(path, buff)#1
     byte params[6]
 
     params.0 = 3
@@ -711,7 +718,7 @@ def open(path, buff)
     perr     = syscall($C8, @params)
     return params.5
 end
-def close(refnum)
+def close(refnum)#1
     byte params[2]
 
     params.0 = 1
@@ -719,7 +726,7 @@ def close(refnum)
     perr     = syscall($CC, @params)
     return perr
 end
-def read(refnum, buff, len)
+def read(refnum, buff, len)#1
     byte params[8]
 
     params.0 = 4
@@ -733,11 +740,11 @@ end
 //
 // Heap routines.
 //
-def availheap
+def availheap()#1
     byte fp
     return @fp - heap
 end
-def allocheap(size)
+def allocheap(size)#1
     word addr
     addr = heap
     heap = heap + size
@@ -771,14 +778,14 @@ def allocalignheap(size, pow2, freeaddr)
     fin
     return addr
 end
-def markheap
+def markheap()#1
     return heap
 end
-def releaseheap(newheap)
+def releaseheap(newheap)#1
     heap = newheap
     return @newheap - heap
 end
-def allocxheap(size)
+def allocxheap(size)#1
     word xaddr
     xaddr = xheap
     xheap = xheap + size
@@ -814,10 +821,10 @@ end
 //
 // Symbol table routines.
 //
-def lookupsym(sym)
+def lookupsym(sym)#1
     return lookuptbl(sym, symtbl)
 end
-def addsym(sym, addr)
+def addsym(sym, addr)#0
     while ^sym & $80
         ^lastsym = ^sym
         lastsym  = lastsym + 1
@@ -831,20 +838,20 @@ end
 //
 // Module routines.
 //
-def lookupmod(mod)
+def lookupmod(mod)#1
     byte dci[17]
     return lookuptbl(modtosym(mod, @dci), symtbl)
 end
-def lookupstrmod(str)
+def lookupstrmod(str)#1
     byte mod[17]
     stodci(str, @mod)
     return lookupmod(@mod)
 end
-def addmod(mod, addr)
+def addmod(mod, addr)#0
     byte dci[17]
-    return addsym(modtosym(mod, @dci), addr)
+    addsym(modtosym(mod, @dci), addr)
 end
-def lookupextern(esd, index)
+def lookupextern(esd, index)#1
     word sym, addr
     byte str[16]
     while ^esd
@@ -864,7 +871,7 @@ def lookupextern(esd, index)
     loop
     return 0
 end
-def adddef(bank, addr, deflast)
+def adddef(bank, addr, deflast)#1
     word defentry
     defentry = *deflast
     *deflast = defentry + 5
@@ -878,7 +885,7 @@ def adddef(bank, addr, deflast)
     defentry->5 = 0 // NULL out next entry
     return defentry
 end
-def lookupdef(addr, deftbl)
+def lookupdef(addr, deftbl)#1
     while deftbl->0 == $20
         if deftbl=>3 == addr
             return deftbl
@@ -887,7 +894,7 @@ def lookupdef(addr, deftbl)
     loop
     return 0
 end
-def loadmod(mod)
+def loadmod(mod)#1
     word refnum, rdlen, modsize, bytecode, defofst, defcnt, init, fixup
     word addr, defaddr, modaddr, modfix, modend
     word deftbl, deflast
@@ -1087,7 +1094,7 @@ end
 //
 // Command mode
 //
-def volumes
+def volumes()#0
     byte params[4]
     word strbuf
     byte i
@@ -1107,7 +1114,7 @@ def volumes
     strbuf = strbuf + 16
     next
 end
-def catalog(optpath)
+def catalog(optpath)#1
     byte path[64]
     byte refnum
     byte firstblk
@@ -1168,14 +1175,14 @@ def catalog(optpath)
     crout()
     return 0
 end
-def stripchars(strptr)
+def stripchars(strptr)#1
     while ^strptr and ^(strptr + 1) > ' '
         memcpy(strptr + 1, strptr + 2, ^strptr)
         ^strptr = ^strptr - 1
     loop
     return ^strptr
 end
-def stripspaces(strptr)
+def stripspaces(strptr)#0
     while ^strptr and ^(strptr + ^strptr) <= ' '
         ^strptr = ^strptr - 1
     loop
@@ -1184,7 +1191,7 @@ def stripspaces(strptr)
         ^strptr = ^strptr - 1
     loop
 end
-def striptrail(strptr)
+def striptrail(strptr)#1
     byte i
 
     for i = 1 to ^strptr
@@ -1195,7 +1202,7 @@ def striptrail(strptr)
     next
     return strptr
 end
-def parsecmd(strptr)
+def parsecmd(strptr)#1
     byte cmd
 
     cmd = 0
@@ -1208,7 +1215,7 @@ def parsecmd(strptr)
     stripspaces(strptr)
     return cmd
 end
-def resetmemfiles
+def resetmemfiles()#0
     //
     // Close all files
     //
@@ -1221,7 +1228,7 @@ def resetmemfiles
     ^$BF58 = $CF
     ^$BF6F = $01
 end
-def execsys(sysfile)
+def execsys(sysfile)#0
     byte refnum
     word len
 
@@ -1246,7 +1253,7 @@ def execsys(sysfile)
     fin
     fin
 end
-def execmod(modfile)
+def execmod(modfile)#1
     byte moddci[17]
     word saveheap, savexheap, savesym, saveflags
 

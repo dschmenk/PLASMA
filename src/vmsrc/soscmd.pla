@@ -25,12 +25,12 @@ const O_READ_WRITE = 3
 //
 // Pedefined functions.
 //
-predef crout, cout, prstr, cin, rdstr
-predef syscall, call
-predef markheap, allocheap, allocalignheap, releaseheap, availheap
-predef memset, memcpy
-predef uword_isgt, uword_isge, uword_islt, uword_isle
-predef loadmod, execmod, lookupstrmod
+predef syscall(cmd,params)#1, call(addr,areg,xreg,yreg,status)#1
+predef crout()#0, cout(c)#0, prstr(s)#0, cin()#1, rdstr(p)#1
+predef markheap()#1, allocheap(size)#1, allocalignheap(size, pow2, freeaddr), releaseheap(newheap)#1, availheap()#1
+predef memset(addr,value,size)#0, memcpy(dst,src,size)#0
+predef uword_isgt(a,b)#1, uword_isge(a,b)#1, uword_islt(a,b)#1, uword_isle(a,b)#1
+predef loadmod(mod)#1, execmod(modfile)#1, lookupstrmod(str)#1
 //
 // System variables.
 //
@@ -113,7 +113,7 @@ word syslibsym    = @exports
 // CALL SOS
 // SYSCALL(CMD, PARAMS)
 //
-asm syscall
+asm syscall(cmd,params)#1
         LDA     ESTKL,X
         LDY     ESTKH,X
         STA     PARAMS
@@ -133,7 +133,7 @@ end
 // CALL 6502 ROUTINE
 // CALL(AREG, XREG, YREG, STATUS, ADDR)
 //
-asm call
+asm call(addr,areg,xreg,yreg,sstatus)#1
 REGVALS =       SRC
         PHP
         LDA     ESTKL,X
@@ -176,7 +176,7 @@ end
 // MEMSET(ADDR, VALUE, SIZE)
 //   With optimizations from Peter Ferrie
 //
-asm memset
+asm memset(addr,value,size)#0
         LDA     ESTKL+2,X
         STA     DSTL
         LDA     ESTKH+2,X
@@ -204,37 +204,39 @@ SETMLPH STA     (DST),Y
         BNE     -
 SETMEX  INX
         INX
+        INX
         RTS
 end
 //
 // COPY MEMORY
 // MEMCPY(DSTADDR, SRCADDR, SIZE)
 //
-asm memcpy
+asm memcpy(dst,src,size)#0
         INX
         INX
-        LDA     ESTKL-2,X
-        ORA     ESTKH-2,X
+        INX
+        LDA     ESTKL-3,X
+        ORA     ESTKH-3,X
         BEQ     CPYMEX
-        LDA     ESTKL-1,X
-        CMP     ESTKL,X
-        LDA     ESTKH-1,X
-        SBC     ESTKH,X
+        LDA     ESTKL-2,X
+        CMP     ESTKL-1,X
+        LDA     ESTKH-2,X
+        SBC     ESTKH-1,X
         BCC     REVCPY
 ;
 ; FORWARD COPY
 ;
-        LDA     ESTKL,X
+        LDA     ESTKL-2,X
         STA     DSTL
-        LDA     ESTKH,X
+        LDA     ESTKH-2,X
         STA     DSTH
-        LDA     ESTKL-1,X
+        LDA     ESTKL-2,X
         STA     SRCL
-        LDA     ESTKH-1,X
+        LDA     ESTKH-2,X
         STA     SRCH
-        LDY     ESTKL-2,X
+        LDY     ESTKL-3,X
         BEQ     FORCPYLP
-        INC     ESTKH-2,X
+        INC     ESTKH-3,X
         LDY     #$00
 FORCPYLP LDA    (SRC),Y
         STA     (DST),Y
@@ -242,34 +244,34 @@ FORCPYLP LDA    (SRC),Y
         BNE     +
         INC     DSTH
         INC     SRCH
-+       DEC     ESTKL-2,X
++       DEC     ESTKL-3,X
         BNE     FORCPYLP
-        DEC     ESTKH-2,X
+        DEC     ESTKH-3,X
         BNE     FORCPYLP
         RTS
 ;
 ; REVERSE COPY
 ;
 REVCPY  ;CLC
-        LDA     ESTKL-2,X
-        ADC     ESTKL,X
+        LDA     ESTKL-3,X
+        ADC     ESTKL-1,X
         STA     DSTL
-        LDA     ESTKH-2,X
-        ADC     ESTKH,X
+        LDA     ESTKH-3,X
+        ADC     ESTKH-1,X
         STA     DSTH
         CLC
-        LDA     ESTKL-2,X
-        ADC     ESTKL-1,X
+        LDA     ESTKL-3,X
+        ADC     ESTKL-2,X
         STA     SRCL
-        LDA     ESTKH-2,X
-        ADC     ESTKH-1,X
+        LDA     ESTKH-3,X
+        ADC     ESTKH-2,X
         STA     SRCH
         DEC     DSTH
         DEC     SRCH
         LDY     #$FF
-        LDA     ESTKL-2,X
+        LDA     ESTKL-3,X
         BEQ     REVCPYLP
-        INC     ESTKH-2,X
+        INC     ESTKH-3,X
 REVCPYLP LDA    (SRC),Y
         STA     (DST),Y
         DEY
@@ -277,9 +279,9 @@ REVCPYLP LDA    (SRC),Y
         BNE     +
         DEC     DSTH
         DEC     SRCH
-+       DEC     ESTKL-2,X
++       DEC     ESTKL-3,X
         BNE     REVCPYLP
-        DEC     ESTKH-2,X
+        DEC     ESTKH-3,X
         BNE     REVCPYLP
 CPYMEX  RTS
 end
@@ -288,7 +290,7 @@ end
 //
 // MEMXCPY(DSTSEG, SRC, SIZE)
 //
-asm memxcpy
+asm memxcpy(dst,src,size)#0
         LDA     ESTKL,X
         ORA     ESTKH,X
         BEQ     CPYXMEX
@@ -321,6 +323,7 @@ CPYXLP  LDA     (SRC),Y
         STA     DSTX
 CPYXMEX INX
         INX
+        INX
         RTS
 end
 //
@@ -328,7 +331,7 @@ end
 //
 // XPOKEB(SEG, DST, BYTEVAL)
 //
-asm xpokeb
+asm xpokeb(seg, dst, byteval)#0
         LDA     ESTKL+1,X
         STA     DSTL
         LDA     ESTKH+1,X
@@ -345,12 +348,13 @@ asm xpokeb
         STY     DSTX
         INX
         INX
+        INX
         RTS
 end
 //
 // Unsigned word comparisons.
 //
-asm uword_isge
+asm uword_isge(a,b)#1
         LDA     ESTKL+1,X
         CMP     ESTKL,X
         LDA     ESTKH+1,X
@@ -363,7 +367,7 @@ asm uword_isge
         INX
         RTS
 end
-asm uword_isle
+asm uword_isle(a,b)#1
         LDA     ESTKL,X
         CMP     ESTKL+1,X
         LDA     ESTKH,X
@@ -376,7 +380,7 @@ asm uword_isle
         INX
         RTS
 end
-asm uword_isgt
+asm uword_isgt(a,b)#1
         LDA     ESTKL,X
         CMP     ESTKL+1,X
         LDA     ESTKH,X
@@ -388,7 +392,7 @@ asm uword_isgt
         INX
         RTS
 end
-asm uword_islt
+asm uword_islt(a,b)#1
         LDA     ESTKL+1,X
         CMP     ESTKL,X
         LDA     ESTKH+1,X
@@ -403,7 +407,7 @@ end
 //
 // Addresses of internal routines.
 //
-asm interp
+asm interp()#1
         DEX
         LDA     #<XINTERP
         STA     ESTKL,X
@@ -426,7 +430,7 @@ end
 //    ^str = len
 //    return len
 //end
-asm dcitos
+asm dcitos(dci, str)#1
         LDA     ESTKL,X
         STA     DSTL
         LDA     ESTKH,X
@@ -466,7 +470,7 @@ end
 //    loop
 //    return ^str
 //end
-asm stodci
+asm stodci(str, dci)#1
         LDA     ESTKL,X
         STA     DSTL
         LDA     ESTKH,X
@@ -494,7 +498,7 @@ asm stodci
         STY     ESTKH,X
         RTS
 end
-asm toupper
+asm toupper(c)#1
         LDA     ESTKL,X
 TOUPR   AND     #$7F
         CMP     #'a'
@@ -521,7 +525,7 @@ end
 //    until !(c & $80)
 //    return dci
 //end
-asm modtosym
+asm modtosym(mod, dci)#1
         LDA     ESTKL+1,X
         STA     SRCL
         LDA     ESTKH+1,X
@@ -562,7 +566,7 @@ end
 //        tbl = tbl + 3
 //    loop
 //    return 0
-asm lookuptbl
+asm lookuptbl(dci, tbl)#1
         LDY     #$00
         STY     DSTL
         LDA     ESTKH,X
@@ -615,7 +619,7 @@ end
 // SOS routines
 // FILE I/O
 //
-def getpfx(path)
+def getpfx(path)#1
     byte params[4]
 
     ^path    = 0
@@ -625,7 +629,7 @@ def getpfx(path)
     perr     = syscall($C7, @params)
     return path
 end
-def setpfx(path)
+def setpfx(path)#1
     byte params[3]
 
     params.0 = 1
@@ -633,7 +637,7 @@ def setpfx(path)
     perr     = syscall($C6, @params)
     return path
 end
-def volume(devname, volname, ttlblks, freblks)
+def volume(devname, volname, ttlblks, freblks)#1
     byte params[9]
 
     params.0 = 4
@@ -646,7 +650,7 @@ def volume(devname, volname, ttlblks, freblks)
     *freblks = params:7
     return perr
 end
-def open(path, access)
+def open(path, access)#1
     byte params[7]
 
     params.0 = 4
@@ -657,7 +661,7 @@ def open(path, access)
     perr     = syscall($C8, @params)
     return params.3
 end
-def close(refnum)
+def close(refnum)#1
     byte params[2]
 
     params.0 = 1
@@ -665,7 +669,7 @@ def close(refnum)
     perr     = syscall($CC, @params)
     return perr
 end
-def read(refnum, buff, len)
+def read(refnum, buff, len)#1
     byte params[8]
 
     params.0 = 4
@@ -676,7 +680,7 @@ def read(refnum, buff, len)
     perr     = syscall($CA, @params)
     return params:6
 end
-def write(refnum, buff, len)
+def write(refnum, buff, len)#1
     byte params[6]
 
     params.0 = 3
@@ -689,7 +693,7 @@ end
 //
 // DEVICE I/O
 //
-def dev_control(devnum, code, list)
+def dev_control(devnum, code, list)#1
     byte params[5]
 
     params.0 = 3
@@ -699,7 +703,7 @@ def dev_control(devnum, code, list)
     perr     = syscall($83, @params)
     return perr
 end
-def dev_getnum(name)
+def dev_getnum(name)#1
     byte params[4]
 
     params.0 = 2
@@ -708,7 +712,7 @@ def dev_getnum(name)
     perr     = syscall($84, @params)
     return params.3
 end
-def dev_info(devnum, name, list, listlen)
+def dev_info(devnum, name, list, listlen)#1
     byte params[7]
 
     params.0 = 4
@@ -722,7 +726,7 @@ end
 //
 // MEMORY CALLS
 //
-def seg_request(base, limit, id)
+def seg_request(base, limit, id)#1
     byte params[7]
 
     params.0 = 4
@@ -733,7 +737,7 @@ def seg_request(base, limit, id)
     perr     = syscall($40, @params)
     return params.6
 end
-def seg_find(search, base, limit, pages, id)
+def seg_find(search, base, limit, pages, id)#1
     byte params[10]
 
     params.0 = 6
@@ -748,7 +752,7 @@ def seg_find(search, base, limit, pages, id)
     *limit   = params:7
     return params.9
 end
-def seg_release(segnum)
+def seg_release(segnum)#1
     byte params[2]
 
     params.0 = 1
@@ -759,7 +763,7 @@ end
 //
 // Other SOS calls.
 //
-def quit
+def quit()#0
     byte params[1]
 
     close(0)
@@ -770,7 +774,7 @@ end
 //
 // CONSOLE I/O
 //
-def init_cons
+def init_cons()#0
     byte nlmode[2]
     if !refcons
         refcons = open(@console, O_READ_WRITE)
@@ -781,7 +785,7 @@ def init_cons
     nlmode.1 = $0D
     dev_control(devcons, $02, @nlmode)
 end
-def cout(ch)
+def cout(ch)#0
     if ch == $0D
         ch = $0A0D
         write(refcons, @ch, 2)
@@ -789,18 +793,18 @@ def cout(ch)
         write(refcons, @ch, 1)
     fin
 end
-def cin
+def cin()#1
     byte ch
     read(refcons, @ch, 1)
     return ch & $7F
 end
-def prstr(str)
+def prstr(str)#0
     write(refcons, str + 1, ^str)
     if str->[^str] == $0D
         cout($0A)
     fin
 end
-def rdstr(prompt)
+def rdstr(prompt)#1
     cout(prompt)
     ^heap = read(refcons, heap + 1, 128)
     if heap->[^heap] == $0D
@@ -809,25 +813,25 @@ def rdstr(prompt)
     cout($0D)
     return heap
 end
-def crout
-    return cout($0D)
+def crout()#0
+    cout($0D)
 end
-def prbyte(v)
+def prbyte(v)#0
     cout(hexchar[(v >> 4) & $0F])
-    return cout(hexchar[v & $0F])
+    cout(hexchar[v & $0F])
 end
-def prword(v)
+def prword(v)#0
     prbyte(v >> 8)
-    return prbyte(v)
+    prbyte(v)
 end
 //
 // Heap routines.
 //
-def availheap
+def availheap()#1
     byte fp
     return @fp - heap
 end
-def allocheap(size)
+def allocheap(size)#1
     word addr
     addr = heap
     heap = heap + size
@@ -836,7 +840,7 @@ def allocheap(size)
     fin
     return addr
 end
-def allocalignheap(size, pow2, freeaddr)
+def allocalignheap(size, pow2, freeaddr)#1
     word align, addr
     if freeaddr
         *freeaddr = heap
@@ -849,20 +853,20 @@ def allocalignheap(size, pow2, freeaddr)
     fin
     return addr
 end
-def markheap
+def markheap()#1
     return heap
 end
-def releaseheap(newheap)
+def releaseheap(newheap)#1
     heap = newheap
     return @newheap - heap
 end
 //
 // Symbol table routines.
 //
-def lookupsym(sym)
+def lookupsym(sym)#1
     return lookuptbl(sym, symtbl)
 end
-def addsym(sym, addr)
+def addsym(sym, addr)#0
     while ^sym & $80
         xpokeb(symtbl.0, lastsym, ^sym)
         lastsym  = lastsym + 1
@@ -877,20 +881,20 @@ end
 //
 // Module routines.
 //
-def lookupmod(mod)
+def lookupmod(mod)#1
     byte dci[17]
     return lookuptbl(modtosym(mod, @dci), symtbl)
 end
-def lookupstrmod(str)
+def lookupstrmod(str)#1
     byte mod[17]
     stodci(str, @mod)
     return lookupmod(@mod)
 end
-def addmod(mod, addr)
+def addmod(mod, addr)#0
     byte dci[17]
-    return addsym(modtosym(mod, @dci), addr)
+    addsym(modtosym(mod, @dci), addr)
 end
-def lookupextern(esd, index)
+def lookupextern(esd, index)#1
     word sym, addr
     byte str[16]
     while ^esd
@@ -910,7 +914,7 @@ def lookupextern(esd, index)
     loop
     return 0
 end
-def adddef(ext, addr, deflast)
+def adddef(ext, addr, deflast)#1
     word defentry
     defentry = *deflast
     *deflast = defentry + 6
@@ -920,7 +924,7 @@ def adddef(ext, addr, deflast)
     defentry=>5 = ext // ext is byte, so this nulls out next entry
     return defentry
 end
-def lookupdef(addr, deftbl)
+def lookupdef(addr, deftbl)#1
     while deftbl->0 == $20
         if deftbl=>3 == addr
             return deftbl
@@ -929,7 +933,7 @@ def lookupdef(addr, deftbl)
     loop
     return 0
 end
-def loadmod(mod)
+def loadmod(mod)#1
     word refnum, rdlen, modsize, bytecode, defofst, defcnt, init, fixup
     word addr, defaddr, modaddr, modfix, modend
     word deftbl, deflast, codeseg
@@ -1121,7 +1125,7 @@ end
 //
 // Command mode
 //
-def volumes
+def volumes()#0
     byte info[11]
     byte devname[17]
     byte volname[17]
@@ -1141,7 +1145,7 @@ def volumes
     next
     perr = 0
 end
-def catalog(optpath)
+def catalog(optpath)#1
     byte path[64]
     byte refnum
     byte firstblk
@@ -1202,14 +1206,14 @@ def catalog(optpath)
     crout()
     return 0
 end
-def stripchars(strptr)
+def stripchars(strptr)#1
     while ^strptr and ^(strptr + 1) <> ' '
         memcpy(strptr + 1, strptr + 2, ^strptr)
         ^strptr = ^strptr - 1
     loop
     return ^strptr
 end
-def stripspaces(strptr)
+def stripspaces(strptr)#0
     while ^strptr and ^(strptr + ^strptr) <= ' '
         ^strptr = ^strptr - 1
     loop
@@ -1218,7 +1222,7 @@ def stripspaces(strptr)
         ^strptr = ^strptr - 1
     loop
 end
-def striptrail(strptr)
+def striptrail(strptr)#0
     byte i
 
     for i = 1 to ^strptr
@@ -1228,7 +1232,7 @@ def striptrail(strptr)
         fin
     next
 end
-def parsecmd(strptr)
+def parsecmd(strptr)#1
     byte cmd
 
     cmd = 0
@@ -1241,7 +1245,7 @@ def parsecmd(strptr)
     stripspaces(strptr)
     return cmd
 end
-def execmod(modfile)
+def execmod(modfile)#1
     byte moddci[17]
     word saveheap, savesym, saveflags
 

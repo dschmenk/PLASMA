@@ -584,6 +584,11 @@ t_opseq *parse_value(t_opseq *codeseq, int rvalue, int *stackdepth)
             type = (scantoken == PTRB_TOKEN) ? BPTR_TYPE : WPTR_TYPE;
             if (!parse_const(&const_offset))
             {
+                if (scantoken == EOL_TOKEN || scantoken == CLOSE_PAREN_TOKEN)
+                {
+                    parse_error("Syntax");
+                    return (NULL);
+                }
                 /*
                  * Setting type override for following operations
                  */
@@ -618,6 +623,11 @@ t_opseq *parse_value(t_opseq *codeseq, int rvalue, int *stackdepth)
                  : ((scantoken == DOT_TOKEN) ? BPTR_TYPE : WPTR_TYPE);
             if (!parse_const(&const_offset))
             {
+                if (scantoken == EOL_TOKEN || scantoken == CLOSE_PAREN_TOKEN)
+                {
+                    parse_error("Syntax");
+                    return (NULL);
+                }
                 /*
                  * Setting type override for following operations
                  */
@@ -1485,7 +1495,6 @@ int parse_lambda(void)
      * Parse parameters and return value count
      */
     cfnparms = 0;
-    func_tag = tag_new(DEF_TYPE);
     if (scan() == OPEN_PAREN_TOKEN)
     {
         do
@@ -1527,13 +1536,19 @@ int parse_lambda(void)
         lambda_seq[lambda_cnt] = parse_expr(NULL, NULL);
         scan_rewind(tokenstr);
     }
-    lambda_cparams[lambda_cnt] = cfnparms;
-    lambda_tag[lambda_cnt]     = func_tag;
     sprintf(lambda_id[lambda_cnt], "_LAMBDA%04d", lambda_num++);
     if (idglobal_lookup(lambda_id[lambda_cnt], strlen(lambda_id[lambda_cnt])) >= 0)
+    {
+        func_tag = lambda_tag[lambda_cnt];
         idfunc_set(lambda_id[lambda_cnt], strlen(lambda_id[lambda_cnt]), DEF_TYPE | funcparms_type(cfnparms), func_tag); // Override any predef type & tag
+    }
     else
+    {
+        func_tag = tag_new(DEF_TYPE);
+        lambda_tag[lambda_cnt]     = func_tag;
+        lambda_cparams[lambda_cnt] = cfnparms;
         idfunc_add(lambda_id[lambda_cnt], strlen(lambda_id[lambda_cnt]), DEF_TYPE | funcparms_type(cfnparms), func_tag);
+    }
     lambda_cnt++;
     idlocal_restore();
     return (func_tag);

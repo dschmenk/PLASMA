@@ -465,7 +465,7 @@ keyin = @keyin2plus // address-of keyin2plus function
 key   = keyin()
 ```
 
-Lambda functions are anonymous functions that can be used to return a value (or multiple values). They can be used as function pointers to routines that need a quick and dirty expression. They are written an '&' (a poor man's lambda symbol) followed by parameters in parentheses, and the resultant expression. There are no local variables allowed.
+Lambda functions are anonymous functions that can be used to return a value (or multiple values). They can be used as function pointers to routines that need a quick and dirty expression. They are written as '&' (a poor man's lambda symbol) followed by parameters in parentheses, and the resultant expression. There are no local variables allowed.
 
 ```
 word result
@@ -493,7 +493,7 @@ if ^pushbttn3 < 128
         key = $CE // N
     fin
 else
-   key = key | $E0
+    key = key | $E0
 fin
 ```
 
@@ -503,7 +503,7 @@ The `when`/`is`/`otherwise`/`wend` statement is similar to the `if`/`elsif`/`els
 when keypressed
     is keyarrowup
         cursup
-        breaking
+        break
     is keyarrowdown
         cursdown
         break
