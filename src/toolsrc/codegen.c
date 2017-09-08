@@ -1053,6 +1053,13 @@ int crunch_seq(t_opseq **seq, int pass)
                         freeops = 1;
                         break;
                     }
+                    if (opnext->code == BINARY_CODE(SHL_TOKEN))
+                    {
+                        op->code = DUP_CODE;
+                        opnext->code = BINARY_CODE(ADD_TOKEN);
+                        crunched = 1;
+                        break;
+                    }
                 }
                 switch (opnext->code)
                 {
