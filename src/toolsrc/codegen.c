@@ -495,7 +495,7 @@ void emit_lambdafunc(int tag, char *name, int cparams, t_opseq *lambda_seq)
 {
     emit_idfunc(tag, DEF_TYPE, name, 1);
     if (cparams)
-        printf("\t%s\t$58,$%02X,$%02X\t\t; ENTER\t%d,%d\n", DB, 0, cparams, 0, cparams);
+        printf("\t%s\t$58,$%02X,$%02X\t\t; ENTER\t%d,%d\n", DB, cparams*2, cparams, cparams*2, cparams);
     emit_seq(lambda_seq);
     emit_pending_seq();
     if (cparams)
