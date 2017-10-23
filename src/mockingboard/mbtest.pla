@@ -1,5 +1,6 @@
 const inbuff         = $200
 const freemem        = $0002
+const timerInc       = $0006
 const iobuffer       = $1C00
 const NMACROS        = 7
 const FALSE          = 0
@@ -152,8 +153,63 @@ asm psgWrite(pVIA, reg, val)#0
         RTS
 end
 //
+// MockingBoard IRQ handler
+//
+asm mbIRQ#0
+        CLD
+        BIT     $C404       ; CLEAR IRQ
+        INC     $06         ; FLAG FOR PLASMA CODE
+        CLC
+        RTS
+end
+//
+// CALL PRODOS
+//
+asm syscall(cmd, params)
+        SEI
+        LDA     ESTKL,X
+        LDY     ESTKH,X
+        STA     PARAMS
+        STY     PARAMS+1
+        INX
+        LDA     ESTKL,X
+        STA     CMD
+        JSR     $BF00
+CMD:    !BYTE   00
+PARAMS: !WORD   0000
+        LDY     #$00
+        STA     ESTKL,X
+        STY     ESTKH,X
+        CLI
+        RTS
+end
+//
 // Utility routines
 //
+asm getStatus#1
+        PHP
+        PLA
+        DEX
+        STA     ESTKL,X
+        LDA     #$00
+        STA     ESTKH,X
+        RTS
+end
+asm setStatus(stat)#0
+        LDA     ESTKL,X
+        PHA
+        PLP
+        DEX
+        RTS
+end
+asm disableInts#0
+        SEI
+        RTS
+end
+asm enableInts#0
+        CLI
+        RTS
+end
 asm putc#0
         LDA     ESTKL,X
         INX
@@ -163,7 +219,6 @@ end
 def putln#0
     putc($0D)
 end
-
 def puts(str)#0
     byte i
 
@@ -212,6 +267,24 @@ end
 //    pVIA->DDRA = $FF
 //    return val
 //end
+//
+// MB interrupt install
+//
+def mbInstallIRQ#0
+    byte params[4]
+    
+    params.0 = 2
+    params.1 = 1
+    params:2 = @mbIRQ
+    syscall($40, @params)
+end
+def mbUninstallIRQ#0
+    byte params[2]
+    
+    params.0 = 1
+    params.1 = 1
+    syscall($41, @params)
+end
 //
 // Search slots for MockingBoard
 //
@@ -262,16 +335,6 @@ def mbSearch
     return 0
 end
 def psgSetup(pVIA)
-    //
-    // Set up the VIA1 (enulators only support Timer1 on first 6522)
-    //
-    if pVIA == mbVIA1
-        pVIA->IER = $7F   // Mask all interrupts
-        pVIA=>T1L = $F9C2 // 16 Ints/sec
-        pVIA=>T1C = $F9C2 // 16 Ints/sec
-        pVIA->ACR = $40   // Continuos T1 interrupts
-        pVIA->IFR = $40   // Clear interrupt
-    fin
     psgWrite(pVIA,     MIXER,     $00)   // Turn everything off
     psgWrite(pVIA,     AENVAMP,   $00)
     psgWrite(pVIA,     BENVAMP,   $00)
@@ -286,7 +349,7 @@ def psgSetup(pVIA)
 end
 def mbSequence(track)#0
     word seqEvent, seqTime, eventTime, updateTime, period, n
-    byte numNotes, note, volume, channel, i, overflow
+    byte numNotes, note, volume, channel, i, overflow, cpuFlags
     byte indexA[2], indexB[2], indexC[2]
     byte noteA[2], noteB[2], noteC[2]
     word notes1[MAX_CHAN_NOTES], notes2[MAX_CHAN_NOTES]
@@ -319,94 +382,110 @@ def mbSequence(track)#0
     //
     seqTime     = 0
     seqEvent    = track
-    eventTime   = seqTime + seqEvent->deltatime
+    eventTime   = seqEvent->deltatime
     updateTime  = ARPEGGIO
     numNotes    = 0
     overflow    = 0
+    //
+    // Enable timer IRQ
+    //
+    cpuFlags = getStatus
+    mbVIA1->IER = $7F       // Mask all interrupts
+    (@mbIRQ).3  = mbVIA1.1  // Relocate IRQ 6522 address
+    ^timerInc   = 0         // Clear timer increment
+    mbInstallIRQ
+    mbVIA1->ACR = $40       // Continuos T1 interrupts
+    mbVIA1=>T1L = $F9C2     // 16 Ints/sec
+    mbVIA1=>T1C = $F9C2     // 16 Ints/sec
+    mbVIA1->IFR = $40       // Clear interrupt
+    mbVIA1->IER = $C0       // Enable Timer1 interrupt
+    enableInts
     repeat
         //puts("seqTime = "); puti(seqTime); puts(" eventTime = "); puti(eventTime); putln
-        while eventTime == seqTime
-            note = seqEvent->percnote
-            if note & $80
-                //
-                // Note event
-                //
-                volume  = seqEvent->perchanvol
-                channel = (volume & mbVIA2.LSB) >> 7 // Clever - mbVIA2.0 will be $80 if it exists
-                if volume & $0F
+        if eventTime <= seqTime
+            repeat
+                note = seqEvent->percnote
+                if note & $80
                     //
-                    // Note on
+                    // Note event
                     //
-                    for i = 0 to MAX_CHAN_NOTES-1
+                    volume  = seqEvent->perchanvol
+                    channel = (volume & mbVIA2.LSB) >> 7 // Clever - mbVIA2.0 will be $80 if it exists
+                    if volume & $0F
                         //
-                        // Look for available slot in active note table
+                        // Note on
                         //
-                        if !notes[channel, i].LSB //or notes[channel, i] == note
-                            break
+                        for i = 0 to MAX_CHAN_NOTES-1
+                            //
+                            // Look for available slot in active note table
+                            //
+                            if !notes[channel, i].LSB //or notes[channel, i] == note
+                                break
+                            fin
+                        next
+                        //
+                        // Full note table, kick one out
+                        //
+                        if i == MAX_CHAN_NOTES
+                            i = overflow
+                            overflow = (overflow + 1) % MAX_CHAN_NOTES
+                            //puts("Full note table on channel: "); puti(channel); putln
+                        else
+                            numNotes++
                         fin
-                    next
-                    //
-                    // Full note table, kick one out
-                    //
-                    if i == MAX_CHAN_NOTES
-                        i = overflow
-                        overflow = (overflow + 1) % MAX_CHAN_NOTES
-                        //puts("Full note table on channel: "); puti(channel); putln
+                        notes[channel, i] = note | (volume << 8)
+                        periods[channel, i] = mbOctave0[note & $0F] >> ((note >> 4) & $07)
+                        //puts("Insert note ");puti((note>>4)&$7);putc(':');puti(note&$0F)
+                        //puts(" in table[");puti(channel);putc(',');puti(i);puts("]\n")
                     else
-                        numNotes++
+                        //
+                        // Note off
+                        //
+                        for i = 0 to MAX_CHAN_NOTES-1
+                            //
+                            // Remove from active note table
+                            //
+                            if notes[channel, i].LSB == note
+                                notes[channel, i] = 0
+                                numNotes--
+                                break
+                            fin
+                        next
+                        //puts("Remove note ");puti((note>>4)&$7);putc(':');puti(note&$0F)
+                        //puts(" from table[");puti(channel);putc(',');puti(i);puts("]\n")
                     fin
-                    notes[channel, i] = note | (volume << 8)
-                    periods[channel, i] = mbOctave0[note & $0F] >> ((note >> 4) & $07)
-                    //puts("Insert note ");puti((note>>4)&$7);putc(':');puti(note&$0F)
-                    //puts(" in table[");puti(channel);putc(',');puti(i);puts("]\n")
+                    updateTime = seqTime
                 else
                     //
-                    // Note off
+                    // Percussion event
                     //
-                    for i = 0 to MAX_CHAN_NOTES-1
-                        //
-                        // Remove from active note table
-                        //
-                        if notes[channel, i].LSB == note
-                            notes[channel, i] = 0
-                            numNotes--
-                            break
+                    period = seqEvent->perchanvol
+                    if period
+                        psgWrite(mbVIA1, MIXER,       $1C)   // NG on C, Tone on B, A
+                        psgWrite(mbVIA1, CENVAMP,     $10)
+                        psgWrite(mbVIA1, NGFREQ,      note)
+                        psgWrite(mbVIA1, ENVPERIOD+1, period)
+                        psgWrite(mbVIA1, ENVSHAPE,    $00)   // Single decay
+                        if mbVIA2
+                            psgWrite(mbVIA2, MIXER,       $1C)   // NG on C, Tone on B, A
+                            psgWrite(mbVIA2, CENVAMP,     $10)
+                            psgWrite(mbVIA2, NGFREQ,      note)
+                            psgWrite(mbVIA2, ENVPERIOD+1, period)
+                            psgWrite(mbVIA2, ENVSHAPE,    $00)   // Single decay
                         fin
-                    next
-                    //puts("Remove note ");puti((note>>4)&$7);putc(':');puti(note&$0F)
-                    //puts(" from table[");puti(channel);putc(',');puti(i);puts("]\n")
-                fin
-                updateTime = seqTime
-            else
-                //
-                // Percussion event
-                //
-                period = seqEvent->perchanvol
-                if period
-                    psgWrite(mbVIA1, MIXER,       $1C)   // NG on C, Tone on B, A
-                    psgWrite(mbVIA1, CENVAMP,     $10)
-                    psgWrite(mbVIA1, NGFREQ,      note)
-                    psgWrite(mbVIA1, ENVPERIOD+1, period)
-                    psgWrite(mbVIA1, ENVSHAPE,    $00)   // Single decay
-                    if mbVIA2
-                        psgWrite(mbVIA2, MIXER,       $1C)   // NG on C, Tone on B, A
-                        psgWrite(mbVIA2, CENVAMP,     $10)
-                        psgWrite(mbVIA2, NGFREQ,      note)
-                        psgWrite(mbVIA2, ENVPERIOD+1, period)
-                        psgWrite(mbVIA2, ENVSHAPE,    $00)   // Single decay
+                    else
+                        eventTime = -1
+                        break
                     fin
-                else
-                    eventTime = -1
-                    break
                 fin
-            fin
-            //
-            // Next event
-            //
-            seqEvent  = seqEvent + t_event
-            eventTime = seqTime  + seqEvent->deltatime
-        loop
-        if updateTime == seqTime
+                //
+                // Next event
+                //
+                seqEvent  = seqEvent  + t_event
+                eventTime = eventTime + seqEvent->deltatime
+            until seqEvent->deltatime
+        fin
+        if updateTime <= seqTime
             //
             // Time slice active note tables (arpeggio)
             //
@@ -469,15 +548,23 @@ def mbSequence(track)#0
         //
         // Increment time tick
         //
-        seqTime++
-        if updateTime < seqTime; updateTime = seqTime; fin
-        while !(mbVIA1->IFR & $40) // Wait for T1 interrupt
+        //seqTime++
+        //if updateTime < seqTime; updateTime = seqTime; fin
+        while !(^timerInc)
+        //while !(mbVIA1->IFR & $40) // Wait for T1 interrupt
             if ^$C000 > 127; eventTime = -1; ^$C010; break; fin
         loop
-        mbVIA1->IFR = $40 // Clear interrupt
+        seqTime = seqTime + ^timerInc
+        ^timerInc  = 0
+        //mbVIA1->IFR = $40 // Clear interrupt
     until eventTime < 0
     psgWrite(mbVIA1, MIXER, $FF) // Turn everything off
+    psgWrite(mbVIA1, AENVAMP, $00)
+    psgWrite(mbVIA1, BENVAMP, $00)
     psgWrite(mbVIA1, CENVAMP, $00)
+    mbVIA1->IER = $7F   // Mask all interrupts
+    setStatus(cpuFlags))
+    mbUninstallIRQ
     if mbVIA2
         psgWrite(mbVIA2, MIXER, $FF)
         psgWrite(mbVIA2, CENVAMP, $00)
