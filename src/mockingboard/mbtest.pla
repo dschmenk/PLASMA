@@ -347,7 +347,7 @@ def psgSetup(pVIA)
     psgWriteWord(pVIA, CFREQ,     $0000)
     psgWrite(pVIA,     MIXER,     $38)   // Tone on C, B, A
 end
-def mbSequence(track)#0
+def mbSequence(track)
     word seqEvent, seqTime, eventTime, updateTime, period, n
     byte numNotes, note, volume, channel, i, overflow, cpuFlags
     byte indexA[2], indexB[2], indexC[2]
@@ -390,16 +390,17 @@ def mbSequence(track)#0
     // Enable timer IRQ
     //
     cpuFlags = getStatus
+    disableInts
     mbVIA1->IER = $7F       // Mask all interrupts
-    (@mbIRQ).3  = mbVIA1.1  // Relocate IRQ 6522 address
-    ^timerInc   = 0         // Clear timer increment
-    mbInstallIRQ
+    //(@mbIRQ).3  = mbVIA1.1  // Relocate IRQ 6522 address
+    //^timerInc   = 0         // Clear timer increment
+    //mbInstallIRQ
     mbVIA1->ACR = $40       // Continuos T1 interrupts
     mbVIA1=>T1L = $F9C2     // 16 Ints/sec
     mbVIA1=>T1C = $F9C2     // 16 Ints/sec
     mbVIA1->IFR = $40       // Clear interrupt
     mbVIA1->IER = $C0       // Enable Timer1 interrupt
-    enableInts
+    //enableInts
     repeat
         //puts("seqTime = "); puti(seqTime); puts(" eventTime = "); puti(eventTime); putln
         if eventTime <= seqTime
@@ -474,7 +475,8 @@ def mbSequence(track)#0
                             psgWrite(mbVIA2, ENVSHAPE,    $00)   // Single decay
                         fin
                     else
-                        eventTime = -1
+                        eventTime  = -1 // Exit out
+                        seqEvent   = 0  // Signal end of track
                         break
                     fin
                 fin
@@ -548,15 +550,15 @@ def mbSequence(track)#0
         //
         // Increment time tick
         //
-        //seqTime++
-        //if updateTime < seqTime; updateTime = seqTime; fin
-        while !(^timerInc)
-        //while !(mbVIA1->IFR & $40) // Wait for T1 interrupt
-            if ^$C000 > 127; eventTime = -1; ^$C010; break; fin
+        //while !(^timerInc)
+        while !(mbVIA1->IFR & $40) // Wait for T1 interrupt
+            if ^$C000 > 127; eventTime = -1; break; fin
         loop
-        seqTime = seqTime + ^timerInc
-        ^timerInc  = 0
-        //mbVIA1->IFR = $40 // Clear interrupt
+        //seqTime = seqTime + ^timerInc
+        //^timerInc  = 0
+        seqTime++
+        if updateTime < seqTime; updateTime = seqTime; fin
+        mbVIA1->IFR = $40 // Clear interrupt
     until eventTime < 0
     psgWrite(mbVIA1, MIXER, $FF) // Turn everything off
     psgWrite(mbVIA1, AENVAMP, $00)
@@ -564,14 +566,16 @@ def mbSequence(track)#0
     psgWrite(mbVIA1, CENVAMP, $00)
     mbVIA1->IER = $7F   // Mask all interrupts
     setStatus(cpuFlags))
-    mbUninstallIRQ
+    //mbUninstallIRQ
     if mbVIA2
         psgWrite(mbVIA2, MIXER, $FF)
         psgWrite(mbVIA2, CENVAMP, $00)
     fin
+    return seqEvent
 end
 heap = *freemem
 if mbSearch
     mbSequence(@toneTrack)
+    ^$C010
 fin
 done
