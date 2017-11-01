@@ -25,11 +25,10 @@ for msg in mid:
             # Percussion
             #
             if vol > 0 and deltatime > 0:
-                print 'byte = ${0:02X}, ${1:02X}, ${2:02X}'.format(deltatime, msg.note >> 3, 2)
+                print '\t!BYTE\t${0:02X}, ${1:02X}, ${2:02X}'.format(deltatime, msg.note >> 3, 2)
         else:
             #
             # Note
             #
-            print 'byte = ${0:02X}, ${1:02X}, ${2:02X}'.format(deltatime, 0x80 | (octave << 4) | onote, (lrchan << 7) | vol)
-print '// MIDI length in seconds: {0:f}'.format(mid.length)
-print '// Sequence length in seconds*16: {0:d}'.format(totaltime)
+            print '\t!BYTE\t${0:02X}, ${1:02X}, ${2:02X}'.format(deltatime, 0x80 | (octave << 4) | onote, (lrchan << 7) | vol)
+print '\t!BYTE\t$00, $00, $00'
