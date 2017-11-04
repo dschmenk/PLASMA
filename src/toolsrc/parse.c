@@ -820,7 +820,7 @@ int parse_stmnt(void)
             tag_endif = tag_new(BRANCH_TYPE);
             seq = gen_brfls(seq, tag_else);
             emit_seq(seq);
-            scan();
+            //scan();
             do
             {
                 while (parse_stmnt()) next_line();
@@ -1075,7 +1075,7 @@ int parse_stmnt(void)
             }
             break;
         case EOL_TOKEN:
-        case COMMENT_TOKEN:
+        //case COMMENT_TOKEN:
             return (1);
         case ELSE_TOKEN:
         case ELSEIF_TOKEN:
@@ -1131,7 +1131,7 @@ int parse_stmnt(void)
                 }
             }
     }
-    if (scan() != EOL_TOKEN && scantoken != COMMENT_TOKEN)
+    if (scan() != EOL_TOKEN /*&& scantoken != COMMENT_TOKEN*/)
     {
         parse_error("Extraneous characters");
         return (0);
@@ -1224,6 +1224,7 @@ int parse_struc(void)
         struclen = tokenlen;
         for (idlen = 0; idlen < struclen; idlen++)
             strucid[idlen] = tokenstr[idlen];
+        scan();
     }
     while (next_line() == BYTE_TOKEN || scantoken == WORD_TOKEN || scantoken == EOL_TOKEN)
     {
@@ -1266,12 +1267,16 @@ int parse_struc(void)
                 idconst_add(idstr, idlen, offset);
             offset += size;
         } while (scantoken == COMMA_TOKEN);
-        if (scantoken != EOL_TOKEN && scantoken != COMMENT_TOKEN)
+        if (scantoken != EOL_TOKEN /*&& scantoken != COMMENT_TOKEN*/)
             return (0);
     }
     if (struclen)
         idconst_add(strucid, struclen, offset);
-    return (scantoken == END_TOKEN);
+    //return (scantoken == END_TOKEN);
+    if (scantoken != END_TOKEN)
+        return (0);
+    scan();
+    return (1);
 }
 int parse_vars(int type)
 {
@@ -1444,7 +1449,7 @@ int parse_vars(int type)
                 return (0);
             }
         case EOL_TOKEN:
-        case COMMENT_TOKEN:
+        //case COMMENT_TOKEN:
             return (1);
         default:
             return (0);
@@ -1468,13 +1473,13 @@ int parse_mods(void)
             parse_error("Syntax error");
             return (0);
         }
-        if (scan() != EOL_TOKEN && scantoken != COMMENT_TOKEN)
+        if (scan() != EOL_TOKEN /*&& scantoken != COMMENT_TOKEN*/)
         {
             parse_error("Extraneous characters");
             return (0);
         }
     }
-    if (scantoken == EOL_TOKEN || scantoken == COMMENT_TOKEN)
+    if (scantoken == EOL_TOKEN /*|| scantoken == COMMENT_TOKEN*/)
         return (1);
     emit_moddep(0, 0);
     return (0);
@@ -1651,7 +1656,7 @@ int parse_defs(void)
             parse_error("Syntax error");
             return (0);
         }
-        if (scan() != EOL_TOKEN && scantoken != COMMENT_TOKEN)
+        if (scan() != EOL_TOKEN /*&& scantoken != COMMENT_TOKEN*/)
         {
             parse_error("Extraneous characters");
             return (0);
@@ -1740,18 +1745,19 @@ int parse_defs(void)
         idstr[idlen] = c;
         do
         {
-            if (scantoken == EOL_TOKEN || scantoken == COMMENT_TOKEN)
-                next_line();
-            else if (scantoken != END_TOKEN)
+            ///if (scantoken == EOL_TOKEN /*|| scantoken == COMMENT_TOKEN*/)
+                //next_line();
+            if (scantoken != END_TOKEN && scantoken != EOL_TOKEN)
             {
+                scantoken = EOL_TOKEN;
                 emit_asm(inputline);
-                next_line();
             }
-        }
-        while (scantoken != END_TOKEN);
+            next_line();
+        } while (scantoken != END_TOKEN);
+        scan();
         return (1);
     }
-    if (scantoken == EOL_TOKEN || scantoken == COMMENT_TOKEN)
+    if (scantoken == EOL_TOKEN /*|| scantoken == COMMENT_TOKEN*/)
         return (1);
     return (0);
 }
