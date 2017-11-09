@@ -398,12 +398,12 @@ def mbSequence(track)
     mbVIA1=>T1L = $F9C2     // 16 Ints/sec
     mbVIA1=>T1C = $F9C2     // 16 Ints/sec
     mbVIA1->IFR = $40       // Clear interrupt
-//    mbVIA1->IER = $C0       // Enable Timer1 interrupt
+    mbVIA1->IER = $C0       // Enable Timer1 interrupt
     //enableInts
     repeat
         //puts("seqTime = "); puti(seqTime); puts(" eventTime = "); puti(eventTime); putln
         while eventTime == seqTime
-            note = seqEvent->percnote
+            note    = seqEvent->percnote
             if note & $80
                 //
                 // Note event
@@ -460,17 +460,18 @@ def mbSequence(track)
                 //
                 period = seqEvent->perchanvol
                 if period
-                    psgWrite(mbVIA1, MIXER,       $1C)   // NG on C, Tone on B, A
-                    psgWrite(mbVIA1, CENVAMP,     $10)
-                    psgWrite(mbVIA1, NGFREQ,      note)
-                    psgWrite(mbVIA1, ENVPERIOD+1, period)
-                    psgWrite(mbVIA1, ENVSHAPE,    $00)   // Single decay
-                    if mbVIA2
+                    if (period & $80)
+                        psgWrite(mbVIA1, MIXER,       $1C)   // NG on C, Tone on B, A
+                        psgWrite(mbVIA1, CENVAMP,     $10)
+                        psgWrite(mbVIA1, ENVSHAPE,   (note >> 4) & $04)
+                        psgWrite(mbVIA1, NGFREQ,     (note >> 1) & $1F)
+                        psgWrite(mbVIA1, ENVPERIOD+1, period & $7F)
+                    elsif mbVIA2
                         psgWrite(mbVIA2, MIXER,       $1C)   // NG on C, Tone on B, A
                         psgWrite(mbVIA2, CENVAMP,     $10)
-                        psgWrite(mbVIA2, NGFREQ,      note)
+                        psgWrite(mbVIA2, ENVSHAPE,   (note >> 4) & $04)
+                        psgWrite(mbVIA2, NGFREQ,     (note >> 1) & $1F)
                         psgWrite(mbVIA2, ENVPERIOD+1, period)
-                        psgWrite(mbVIA2, ENVSHAPE,    $00)   // Single decay
                     fin
                 else
                     eventTime  = -1 // Exit out
@@ -571,7 +572,9 @@ def mbSequence(track)
 end
 heap = *freemem
 if mbSearch
-    mbSequence(@toneTrack)
+    repeat
+        mbSequence(@toneTrack)
+    until ^$C000 > 127
     ^$C010
 fin
 done

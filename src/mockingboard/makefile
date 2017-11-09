@@ -2,7 +2,7 @@
 AFLAGS	    = -o $@
 MBTEST      = mbtest.bin
 SPKRTEST    = spkrtest.bin
-SEQPLAY     = seqplay.bin
+SEQPLAY     = seqplay.rel
 PLASM       = ../plasm
 #
 # Image filetypes for Virtual ][
@@ -33,6 +33,7 @@ $(SPKRTEST): test.seq spkrtest.pla spkrvm.s $(PLASM)
 	$(PLASM) -AO < spkrtest.pla > spkrtest.a
 	acme -o $(SPKRTEST) spkrvm.s
 
-$(SEQPLAY): seqplay.pla seqvm.s $(PLASM)
-	$(PLASM) -AO < seqplay.pla > seqplay.a
-	acme -o $(SEQPLAY) seqvm.s
+$(SEQPLAY): seqplay.pla test.seq $(PLASM)
+	$(PLASM) -AOM < seqplay.pla > seqplay.a
+	acme --setpc 4094 -o $(SEQPLAY) seqplay.a
+	acme --setpc 1024 -o testseq.bin test.seq

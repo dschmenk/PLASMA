@@ -1,3 +1,6 @@
+include "../inc/cmdsys.plh"
+include "../inc/fileio.plh"
+include "../inc/args.plh"
 //
 // Usage is documented following the source in this file...
 //
@@ -88,14 +91,10 @@ word[5] arpeggioDuration = DUR16TH, DUR16TH, DUR16TH/2, DUR16TH/3, DUR16TH/4
 //
 // These are utility sequences/routines needed to test the music sequencer code.
 //
-asm toneTrack
-include "ultima3.seq"
-end
-asm putc(ch)#0
-        LDA     ESTKL,X
-        INX
-        ORA     #$80
-        JMP     $FDED
+word arg
+word ref
+asm defs
+        !SOURCE "../vmsrc/plvmzp.inc"
 end
 ///////////////////////////////////////////////////////////////////////////////
 //
@@ -477,17 +476,18 @@ def mbSequence(yield, func)#0
                 //
                 period = seqEvent->perchanvol
                 if period
-                    psgWrite(mbVIA1, MIXER,       $1C)   // NG on C, Tone on B, A
-                    psgWrite(mbVIA1, CENVAMP,     $10)
-                    psgWrite(mbVIA1, NGFREQ,      note)
-                    psgWrite(mbVIA1, ENVPERIOD+1, period)
-                    psgWrite(mbVIA1, ENVSHAPE,    $00)   // Single decay
-                    if mbVIA2
+                    if (period & $80)
+                        psgWrite(mbVIA1, MIXER,       $1C)   // NG on C, Tone on B, A
+                        psgWrite(mbVIA1, CENVAMP,     $10)
+                        psgWrite(mbVIA1, ENVSHAPE,   (note >> 4) & $04)
+                        psgWrite(mbVIA1, NGFREQ,     (note >> 1) & $1F)
+                        psgWrite(mbVIA1, ENVPERIOD+1, period & $7F)
+                    elsif mbVIA2
                         psgWrite(mbVIA2, MIXER,       $1C)   // NG on C, Tone on B, A
                         psgWrite(mbVIA2, CENVAMP,     $10)
-                        psgWrite(mbVIA2, NGFREQ,      note)
+                        psgWrite(mbVIA2, ENVSHAPE,   (note >> 4) & $04)
+                        psgWrite(mbVIA2, NGFREQ,     (note >> 1) & $1F)
                         psgWrite(mbVIA2, ENVPERIOD+1, period)
-                        psgWrite(mbVIA2, ENVSHAPE,    $00)   // Single decay
                     fin
                 else
                     if seqRepeat
@@ -662,7 +662,7 @@ def spkrSequence(yield, func)#0
                 // Percussion event
                 //
                 if seqEvent->perchanvol
-                    spkrPWM($D000, 0, 64) // Play some random sample as percussion
+                    //spkrPWM($D000, 0, 64) // Play some random sample as percussion
                 else
                     if seqRepeat
                         musicPlay(seqTrack, TRUE)
@@ -774,7 +774,7 @@ end
 //
 // Get a keystroke and convert it to upper case
 //
-export def getUpperKey#1
+export def getKey#1
     byte key
 
     while ^$C000 < 128
@@ -782,58 +782,31 @@ export def getUpperKey#1
     loop
     key = ^$C000 & $7F
     ^$C010
-    if key >= 'a' and key <= 'z'
-        key = key - $20
-    fin
     return key
 end
 ///////////////////////////////////////////////////////////////////////////////
 //
-// More utility routines to test the getUpperKey routine
-//
-def putln#0
-    putc($0D)
-end
-def puts(str)#0
-    byte i
-
-    for i = 1 to ^str
-        putc(^(str+i))
-    next
-end
+// More utility routines to test the getKey routine
 //
 // Sample background process
 //
 def backgroundProc#0
     ^$0400++
 end
-//
-// Test functionality
-//
-def test#0
-    byte key
 
-    puts("Press <RETURN> to exit:")
-    while TRUE
-        key = getUpperKey
-        when key
-            is $0D
-                return
-            is 'P'
-                musicPlay(@toneTrack, TRUE)
-                break
-            is 'S'
-                musicStop
-                break
-            otherwise
-                putc(key)
-        wend
-    loop
-end
-
-musicPlay(@toneTrack, TRUE)
-test
-musicStop
+arg = argNext(argFirst)
+if ^arg
+    ref = open(arg, sysbuf)
+    if ref
+        read(ref, heapmark(), heapavail())
+        close(ref)
+        musicPlay(heapmark(), TRUE)
+        getKey
+        musicStop
+    else
+        puts("File not found.\n")
+    fin
+fin
 done
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -844,14 +817,20 @@ musicPlay(trackPtr, trackRepeat)
     Params:
         Pointer to a track sequence created from the cvtmidi.py tool
         Repeat flag - TRUE or FALSE.
+    The first time its is called, it will try and search for a MockingBoard.
+    However, it is noted that this can cause problems if a Z-80 card is installed.
+    The scanning routine might cause a hang if it encounters a Z-80 card before
+    it finds a MockingBoard. In order to make this robust, it might be best to
+    prompt the user to search for the MockingBoard, enter the actual MockingBoard
+    slot, or skip the MockingBoard and use the internal speaker.
 
 musicStop()
     Stop playing a track sequence in the getUpperKey routine
         The getUpperKey routine will call a dummy sequence routine that will
         keep the correct timing for any background processing
 
-getUpperKey()
-    Wait for a keypress and return the upper case character
+getKey()
+    Wait for a keypress and return the character
         While waiting for the keypress, the track sequence will be played though
         either the MockingBoard (if present) or the internal speaker. Optionally,
         a background function can be called periodically based on the sequencer
@@ -872,3 +851,20 @@ spkrPWM(samples, speed, len)
         Pointer to 8 bit pulse width samples
         Speed to play through samples
         Length of sample
+
+The main routines for sequencing music are:
+
+mbSequence(yield, func)
+spkrSequence(yield, func)
+noSequence(yield, func)
+
+    All three try and provide more functionality than would be present in
+    previous music sequencers. The MockingBoard sequencer will attempt to play up
+    to 9 tones per sound generator (18 if a MockingBoard II is found). Up to
+    four notes will be played simultaneously on the internal speaker. In order
+    to play more notes than the hardware normally supports, a technique using
+    arpeggio (playing multiple notes in a quick sequence rather than concurrently)
+    pulls off this feat. The sequencers will immediately return if a keypress is
+    detected. Finally, during the sequencing, a background function can be periodically
+    called every 'yield' time which has a resolution of a 16th of a second. Pass
+    in zero for 'yield' and/or 'func' to disable any background calls.
