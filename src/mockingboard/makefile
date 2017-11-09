@@ -20,7 +20,7 @@ TXTTYPE	= .TXT
 #SYSTYPE	= \#FF2000
 #TXTTYPE	= \#040000
 
-all: $(MBTEST) $(SPKRTEST) $(SEQPLAY)
+all: $(SEQPLAY)
 
 clean:
 	-rm *.o *~ *.a *.bin
