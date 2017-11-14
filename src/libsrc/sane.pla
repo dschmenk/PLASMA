@@ -1,0 +1,146 @@
+include "inc/cmdsys.plh"
+include "inc/fileio.plh"
+
+struc t_diskinfo
+    word codelen
+    word codeaddr
+end
+struc t_codefile
+    byte[16*t_diskinfo] diskinfo
+    byte[16*8]          segname
+    word[16]            segkind
+    word[16]            textaddr
+    word[16]            seginfo
+end
+
+byte ref
+word pcode, fp6502, preloc
+
+def prbyte(h)#0
+    putc('$')
+    call($FDDA, h, 0, 0, 0)
+end
+def prword(h)#0
+    putc('$')
+    call($F941, h >> 8, h, 0, 0)
+end
+def print(i)#0
+    byte numstr[7]
+    byte place, sign
+
+    place = 6
+    if i < 0
+        sign = 1
+        i    = -i
+    else
+        sign = 0
+    fin
+    while i >= 10
+        numstr[place] = i % 10 + '0'
+        i             = i / 10
+        place         = place - 1
+    loop
+    numstr[place] = i + '0'
+    place         = place - 1
+    if sign
+        numstr[place] = '-'
+        place         = place - 1
+    fin
+    numstr[place] = 6 - place
+    puts(@numstr[place])
+end
+def putname(pchr)#0
+    byte c
+
+    for c = 0 to 7
+        putc(pchr->[c])
+    next
+end
+def putln#0
+    putc('\n')
+end
+def dumpheader(phdr)#0
+    byte i
+
+    puts("Seg Info\n")
+    puts("--------\n")
+    for i = 0 to 15
+        if (phdr + i * t_diskinfo)=>codelen
+            prword((phdr + i * t_diskinfo)=>codelen)
+            putc(':')
+            prword((phdr + i * t_diskinfo)=>codeaddr)
+            putc('=')
+            putname(phdr + i * 8 + segname)
+            putc(',')
+            prword((phdr + segkind)=>[i])
+            putc(',')
+            prword((phdr + textaddr)=>[i])
+            putc(',')
+            prword((phdr + seginfo)=>[i])
+            putln
+        fin
+    next
+    putname(phdr + $01F4); putln
+end
+def dumpli(pli)
+    while ^pli
+        putname(pli); putc(':')
+        prword(pli=>8); putc(' ')
+        prword(pli=>10); putc(' ')
+        prword(pli=>12); putc(' ')
+        prword(pli=>14); putln
+        pli = pli + 16
+    loop
+end
+def reloc(base, prel)
+    word listsz, list, len
+
+    list = prel
+    while prel->1 == 1
+        prel = prel - 2
+        listsz = *prel
+        prword(listsz); putln
+        while listsz
+            prel = prel - 2
+            if *prel
+                list = base + *prel - 6
+                len = *list
+                list = list - 2
+                while len
+                    *(list - *list) = *(list - *list) + base
+                    list = list - 2
+                    len--
+                loop
+            fin
+            listsz--
+        loop
+    loop
+    return list
+end
+def loadcode(codefile)
+    byte ref
+    word pcode. preloc
+
+    pcode = 0
+    ref   = open(codefile, sysbuf)
+    if ref
+        pcode = heapmark
+        read(ref, pcode, 512)
+        dumpheader(pcode)
+        putname(pcode + segname + 8); putc('='); prword(pcode); putln
+        preloc = (pcode + t_diskinfo)=>codeaddr
+        read(ref, pcode, preloc)
+        dumpli(pcode  + (((pcode + preloc | 511) + 1))
+        preloc = pcode + preloc - 2
+        close(ref)
+        puts("LinkInfo "); prword(preloc); putc(':'); putln
+        heaprelease(reloc(pcode, preloc)) // Set heap to beginning of relocation list
+    fin
+    return pcode
+end
+if !loadcode("FP6502.CODE")
+    puts("SANE library not found.\n")
+    return -1
+fin
+return 0
+done
