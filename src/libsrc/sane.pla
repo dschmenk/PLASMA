@@ -15,19 +15,35 @@ end
 
 export word[64] sane
 byte ref
-word pcode, fp6502, preloc
+word pcode, fp6502, elems, preloc
 
 asm equates
         !SOURCE "vmsrc/plvmzp.inc"
 end
 //
-// Prototypes for PLASMA <-> SANE interface
+// PLASMA <-> SANE interface routines
 //
-asm protoFP1(op)#1
+asm fpOp1(op, dst)#1
+        LDA     ESTKH,X
+        PHA
+        LDA     ESTKL,X
+        PHA
+        LDA     ESTKH+1,X
+        PHA
+        LDA     ESTKL+1,X
+        PHA
+        INX
+        STX     ESP
 end
-asm protoFP2(op1, op2)#1
+asm fixupFP1
+        JSR     $FFFF
+        TXA
+        LDX     ESP
+        STA     ESTKL,X
+        STY     ESTKH,X
+        RTS
 end
-asm protoFP3(op1, op2, op3)#1
+asm fpOp2(op1, dst, src)#1
         LDA     ESTKH,X
         PHA
         LDA     ESTKL,X
@@ -44,8 +60,7 @@ asm protoFP3(op1, op2, op3)#1
         INX
         STX     ESP
 end
-asm fixupFP3
-        LDA     #$00
+asm fixupFP2
         JSR     $FFFF
         TXA
         LDX     ESP
@@ -100,7 +115,6 @@ def dumpheader(phdr)#0
     byte i
 
     puts("Seg Info\n")
-    puts("--------\n")
     for i = 0 to 15
         if (phdr + i * t_diskinfo)=>codelen
             prword((phdr + i * t_diskinfo)=>codelen)
@@ -119,30 +133,20 @@ def dumpheader(phdr)#0
     next
     putname(phdr + $01F4); putln
 end
-def dumpli(pli)
-    while ^pli
-        putname(pli); putc(':')
-        prword(pli=>8); putc(' ')
-        prword(pli=>10); putc(' ')
-        prword(pli=>12); putc(' ')
-        prword(pli=>14); putln
-        pli = pli + 16
-    loop
-end
-def reloc(base, prel)
+def reloc(base, prel, ofst)
     word listsz, list, len
 
     list = prel
     while prel->1 == 1
         prel = prel - 2
         listsz = *prel
-        prword(listsz); putln
         while listsz
             prel = prel - 2
             if *prel
-                list = base + *prel - 6
+                list = base + *prel - ofst
                 len = *list
                 list = list - 2
+                puts("Reloc list len = "); prword(len); putln
                 while len
                     *(list - *list) = *(list - *list) + base
                     list = list - 2
@@ -154,10 +158,37 @@ def reloc(base, prel)
     loop
     return list
 end
+def fixup(base, pli, preloc)
+    byte fixups
+    word basend
+
+    puts("LinkInfo "); prword(pli); putc(':'); putln
+    basend = preloc
+    while ^pli
+        putname(pli); putc(':')
+        prword(pli=>8); putc(' ')
+        prword(pli=>10); putc(' ')
+        prword(pli=>12); putc(' ')
+        prword(pli=>14); putln
+        fixups = 0
+        if pli=>8 == $0002
+            fixups = pli=>12
+        elsif pli=>8 == $0006 and pli=>10 == $0001
+            basend = reloc(base, preloc, pli=>12)
+        fin
+        pli = pli + 16
+        while fixups
+            *(base + *pli) = fp6502
+            pli = pli + 2
+            fixups--
+        loop
+    loop
+end
 def loadcode(codefile)
     byte ref
-    word pcode, preloc
+    word pcode, preloc, pli
 
+    puts(codefile); puts(":\n")
     pcode = 0
     ref   = open(codefile, sysbuf)
     if ref
@@ -166,18 +197,25 @@ def loadcode(codefile)
         dumpheader(pcode)
         putname(pcode + segname + 8); putc('='); prword(pcode); putln
         preloc = (pcode + t_diskinfo)=>codeaddr
-        read(ref, pcode, preloc)
-        dumpli(pcode  + ((pcode + preloc | 511) + 1))
-        preloc = pcode + preloc - 2
+        read(ref, pcode, heapavail)
         close(ref)
-        puts("LinkInfo "); prword(preloc); putc(':'); putln
-        heaprelease(reloc(pcode, preloc)) // Set heap to beginning of relocation list
+        pli    = pcode + (preloc | 511) + 1
+        preloc = pcode + preloc - 2
+        puts("Reloc = "); prword(preloc); putln
+        heaprelease(fixup(pcode, pli, preloc)) // Set heap to beginning of relocation list
     fin
     return pcode
 end
-if !loadcode("FP6502.CODE")
+fp6502 = loadcode("FP6502.CODE")
+if !fp6502
     puts("SANE library not found.\n")
     return -1
 fin
+elems = loadcode("ELEMS.CODE")
+if !elems
+    puts("ELEMS library not found.\n")
+    return -1
+fin
+call(-151, 0, 0, 0, 0)
 return 0
 done
