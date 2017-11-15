@@ -13,9 +13,46 @@ struc t_codefile
     word[16]            seginfo
 end
 
+export word[64] sane
 byte ref
 word pcode, fp6502, preloc
 
+asm equates
+        !SOURCE "vmsrc/plvmzp.inc"
+end
+//
+// Prototypes for PLASMA <-> SANE interface
+//
+asm protoFP1(op)#1
+end
+asm protoFP2(op1, op2)#1
+end
+asm protoFP3(op1, op2, op3)#1
+        LDA     ESTKH,X
+        PHA
+        LDA     ESTKL,X
+        PHA
+        LDA     ESTKH+1,X
+        PHA
+        LDA     ESTKL+1,X
+        PHA
+        LDA     ESTKH+2,X
+        PHA
+        LDA     ESTKL+2,X
+        PHA
+        INX
+        INX
+        STX     ESP
+end
+asm fixupFP3
+        LDA     #$00
+        JSR     $FFFF
+        TXA
+        LDX     ESP
+        STA     ESTKL,X
+        STY     ESTKH,X
+        RTS
+end
 def prbyte(h)#0
     putc('$')
     call($FDDA, h, 0, 0, 0)
@@ -119,7 +156,7 @@ def reloc(base, prel)
 end
 def loadcode(codefile)
     byte ref
-    word pcode. preloc
+    word pcode, preloc
 
     pcode = 0
     ref   = open(codefile, sysbuf)
@@ -130,7 +167,7 @@ def loadcode(codefile)
         putname(pcode + segname + 8); putc('='); prword(pcode); putln
         preloc = (pcode + t_diskinfo)=>codeaddr
         read(ref, pcode, preloc)
-        dumpli(pcode  + (((pcode + preloc | 511) + 1))
+        dumpli(pcode  + ((pcode + preloc | 511) + 1))
         preloc = pcode + preloc - 2
         close(ref)
         puts("LinkInfo "); prword(preloc); putc(':'); putln
