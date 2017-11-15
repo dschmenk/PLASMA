@@ -12,17 +12,21 @@ struc t_codefile
     word[16]            textaddr
     word[16]            seginfo
 end
-
-export word[64] sane
-byte ref
-word pcode, fp6502, elems, preloc
-
-asm equates
-        !SOURCE "vmsrc/plvmzp.inc"
-end
+//
+// External interface to SANE libraries
+//
+predef fpInit(), uninit0(), uninit1(op, dst), uninit2(op, dst, src)
+export word[7] sane = @fpInit, @uninit1, @uninit2, @uninit1, @uninit2, @uninit0, @uninit0
+//
+// Pointer to FP6502 entry
+//
+word fp6502, fpzpsave
 //
 // PLASMA <-> SANE interface routines
 //
+asm equates
+        !SOURCE "vmsrc/plvmzp.inc"
+end
 asm fpOp1(op, dst)#1
         LDA     ESTKH,X
         PHA
@@ -43,7 +47,7 @@ asm fixupFP1
         STY     ESTKH,X
         RTS
 end
-asm fpOp2(op1, dst, src)#1
+asm fpOp2(op, dst, src)#1
         LDA     ESTKH,X
         PHA
         LDA     ESTKL,X
@@ -68,154 +72,274 @@ asm fixupFP2
         STY     ESTKH,X
         RTS
 end
-def prbyte(h)#0
-    putc('$')
-    call($FDDA, h, 0, 0, 0)
+asm elemsOp1(op, dst)#1
+        LDA     ESTKH,X
+        PHA
+        LDA     ESTKL,X
+        PHA
+        LDA     ESTKH+1,X
+        PHA
+        LDA     ESTKL+1,X
+        PHA
+        INX
+        STX     ESP
 end
+asm fixupEL1
+        JSR     $FFFF
+        TXA
+        LDX     ESP
+        STA     ESTKL,X
+        STY     ESTKH,X
+        RTS
+end
+asm elemsOp2(op, dst, src)#1
+        LDA     ESTKH,X
+        PHA
+        LDA     ESTKL,X
+        PHA
+        LDA     ESTKH+1,X
+        PHA
+        LDA     ESTKL+1,X
+        PHA
+        LDA     ESTKH+2,X
+        PHA
+        LDA     ESTKL+2,X
+        PHA
+        INX
+        INX
+        STX     ESP
+end
+asm fixupEL2
+        JSR     $FFFF
+        TXA
+        LDX     ESP
+        STA     ESTKL,X
+        STY     ESTKH,X
+        RTS
+end
+asm zpSave#1
+        LDY     #$33
+-       LDA     $00,Y
+end
+asm fixupZPS
+        STA     $FFFF,Y
+        DEY
+        BPL     -
+        DEX
+        RTS
+end
+asm zpRestore#1
+        LDY     #$33
+end
+asm fixupZPR
+-       LDA     $FFFF,Y
+        STA     $00,Y
+        DEY
+        BPL     -
+end
+asm nopZP#1
+        DEX
+        RTS
+end
+//
+// Utility test routines
+//
+//def prbyte(h)#0
+//    putc('$')
+//    call($FDDA, h, 0, 0, 0)
+//end
 def prword(h)#0
     putc('$')
     call($F941, h >> 8, h, 0, 0)
 end
-def print(i)#0
-    byte numstr[7]
-    byte place, sign
+//def putname(pchr)#0
+//    byte c
+//
+//    for c = 0 to 7
+//        putc(pchr->[c])
+//    next
+//end
+//def putln#0
+//    putc('\n')
+//end
+//def dumpheader(phdr)#0
+//    byte i
+//
+//    puts("Seg Info\n")
+//    for i = 0 to 15
+//        if (phdr + i * t_diskinfo)=>codelen
+//            prword((phdr + i * t_diskinfo)=>codelen)
+//            putc(':')
+//            prword((phdr + i * t_diskinfo)=>codeaddr)
+//            putc('=')
+//            putname(phdr + i * 8 + segname)
+//            putc(',')
+//            prword((phdr + segkind)=>[i])
+//            putc(',')
+//            prword((phdr + textaddr)=>[i])
+//            putc(',')
+//            prword((phdr + seginfo)=>[i])
+//            putln
+//        fin
+//    next
+//    putname(phdr + $01F4); putln
+//end
+//
+// Fix-up external references and local relocations
+//
+def fixup(base, list)
+    word len
+    byte listcnt
 
-    place = 6
-    if i < 0
-        sign = 1
-        i    = -i
-    else
-        sign = 0
+    //puts("Reloc = "); prword(list); putln
+    if *list <> $0101
+        //puts("Reloc table not found!\n")
+        return list
     fin
-    while i >= 10
-        numstr[place] = i % 10 + '0'
-        i             = i / 10
-        place         = place - 1
+    list = list - 10
+    //
+    // External reference fixup (only have fp6502 in our case)
+    //
+    len  = *list
+    list = list - 2
+    //puts("Extern list len = "); prword(len); putln; getc
+    while len
+        //puts(" *"); prword(list - *list); putln
+        *(list - *list) = fp6502
+        list = list - 2
+        len--
     loop
-    numstr[place] = i + '0'
-    place         = place - 1
-    if sign
-        numstr[place] = '-'
-        place         = place - 1
-    fin
-    numstr[place] = 6 - place
-    puts(@numstr[place])
-end
-def putname(pchr)#0
-    byte c
-
-    for c = 0 to 7
-        putc(pchr->[c])
-    next
-end
-def putln#0
-    putc('\n')
-end
-def dumpheader(phdr)#0
-    byte i
-
-    puts("Seg Info\n")
-    for i = 0 to 15
-        if (phdr + i * t_diskinfo)=>codelen
-            prword((phdr + i * t_diskinfo)=>codelen)
-            putc(':')
-            prword((phdr + i * t_diskinfo)=>codeaddr)
-            putc('=')
-            putname(phdr + i * 8 + segname)
-            putc(',')
-            prword((phdr + segkind)=>[i])
-            putc(',')
-            prword((phdr + textaddr)=>[i])
-            putc(',')
-            prword((phdr + seginfo)=>[i])
-            putln
-        fin
-    next
-    putname(phdr + $01F4); putln
-end
-def reloc(base, prel, ofst)
-    word listsz, list, len
-
-    list = prel
-    while prel->1 == 1
-        prel = prel - 2
-        listsz = *prel
-        while listsz
-            prel = prel - 2
-            if *prel
-                list = base + *prel - ofst
-                len = *list
-                list = list - 2
-                puts("Reloc list len = "); prword(len); putln
-                while len
-                    *(list - *list) = *(list - *list) + base
-                    list = list - 2
-                    len--
-                loop
-            fin
-            listsz--
-        loop
+    //
+    // Internal relocation
+    //
+    len  = *list
+    list = list - 2
+    //puts("Reloc list len = "); prword(len); putln; getc
+    while len
+        //puts(" *"); prword(list - *list); putln
+        *(list - *list) = *(list - *list) + base
+        list = list - 2
+        len--
     loop
     return list
 end
-def fixup(base, pli, preloc)
-    byte fixups
-    word basend
-
-    puts("LinkInfo "); prword(pli); putc(':'); putln
-    basend = preloc
-    while ^pli
-        putname(pli); putc(':')
-        prword(pli=>8); putc(' ')
-        prword(pli=>10); putc(' ')
-        prword(pli=>12); putc(' ')
-        prword(pli=>14); putln
-        fixups = 0
-        if pli=>8 == $0002
-            fixups = pli=>12
-        elsif pli=>8 == $0006 and pli=>10 == $0001
-            basend = reloc(base, preloc, pli=>12)
-        fin
-        pli = pli + 16
-        while fixups
-            *(base + *pli) = fp6502
-            pli = pli + 2
-            fixups--
-        loop
-    loop
-end
+//
+// Linker Information that we don't need
+//
+//def resolve(base, pli)
+//    byte fixups
+//    word basend
+//
+//    puts("LinkInfo "); prword(pli); putc(':'); putln
+//    basend = preloc
+//    while ^pli
+//        putname(pli); putc(':')
+//        prword(pli=>8); putc(' ')
+//        prword(pli=>10); putc(' ')
+//        prword(pli=>12); putc(' ')
+//        prword(pli=>14); putln
+//        fixups = 0
+//        if pli=>8 == $0002
+//            fixups = pli=>12
+//        fin
+//        pli = pli + 16
+//        while fixups
+//            *(base + *pli) = fp6502
+//            pli = pli + 2
+//            fixups--
+//        loop
+//    loop
+//end
+//
+// Load Pascal CODE file
+//
 def loadcode(codefile)
     byte ref
-    word pcode, preloc, pli
+    word pcode, seglen
 
-    puts(codefile); puts(":\n")
+    //puts(codefile); puts(":\n")
     pcode = 0
     ref   = open(codefile, sysbuf)
     if ref
         pcode = heapmark
         read(ref, pcode, 512)
-        dumpheader(pcode)
-        putname(pcode + segname + 8); putc('='); prword(pcode); putln
-        preloc = (pcode + t_diskinfo)=>codeaddr
-        read(ref, pcode, heapavail)
+        //dumpheader(pcode)
+        //putname(pcode + segname + 8); putc('='); prword(pcode); putln
+        seglen = read(ref, pcode, (pcode + t_diskinfo)=>codeaddr)
         close(ref)
-        pli    = pcode + (preloc | 511) + 1
-        preloc = pcode + preloc - 2
-        puts("Reloc = "); prword(preloc); putln
-        heaprelease(fixup(pcode, pli, preloc)) // Set heap to beginning of relocation list
+        heaprelease(fixup(pcode, pcode + seglen - 2)) // Set heap to beginning of relocation list
     fin
     return pcode
 end
-fp6502 = loadcode("FP6502.CODE")
-if !fp6502
-    puts("SANE library not found.\n")
+//
+// Load ELEMS6502 library
+//
+def loadElems
+    word elems
+
+    elems = loadcode("ELEMS.CODE")
+    if !elems
+        puts("ELEMS library not found.\n")
+        return 0
+    fin
+    (@fixupEL1)=>1 = elems
+    (@fixupEL2)=>1 = elems
+    sane[3] = @elemsOp1
+    sane[4] = @elemsOp2
+    return 1
+end
+//
+// Don't load ELEMS6502 until referenced
+//
+def elemsLoad1(op, dst)#1
+    if loadElems
+        return elemsOp1(op, dst)
+    fin
     return -1
-fin
-elems = loadcode("ELEMS.CODE")
-if !elems
-    puts("ELEMS library not found.\n")
+end
+def elemsLoad2(op, src, dst)#1
+    if loadElems
+        return elemsOp2(op, src, dst)
+    fin
     return -1
-fin
-call(-151, 0, 0, 0, 0)
-return 0
+end
+//
+// Load SANE library and fixup function pointers
+//
+def fpInit()
+    fp6502 = loadcode("FP6502.CODE")
+    if !fp6502
+        puts("SANE library not found.\n")
+        return -1
+    fin
+    fpzpsave = heapalloc($0033)
+    //
+    // Fixup calls in interface routines
+    //
+    (@fixupFP1)=>1 = fp6502
+    (@fixupFP2)=>1 = fp6502
+    (@fixupZPS)=>1 = fpzpsave
+    (@fixupZPR)=>1 = fpzpsave
+    sane[1] = @fpOp1
+    sane[2] = @fpOp2
+    sane[3] = @elemsLoad1
+    sane[4] = @elemsLoad2
+    sane[5] = @zpSave
+    sane[6] = @zpRestore
+end
+//
+// Uninitialized placeholders of API
+//
+def uninit0()
+    puts("SANE not initialized\n")
+    return -1
+end
+def uninit1(op, dst)
+    puts("SANE not initialized\n")
+    return -1
+end
+def uninit2(op, dst, src)
+    puts("SANE not initialized\n")
+    return -1
+end
 done
