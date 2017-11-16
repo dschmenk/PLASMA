@@ -1,6 +1,6 @@
 include "inc/cmdsys.plh"
 include "inc/fileio.plh"
-
+const AUXADDR = $E000 // Location of SANE on 128K //e or //c
 struc t_diskinfo
     word codelen
     word codeaddr
@@ -20,13 +20,16 @@ export word[7] sane = @fpInit, @uninit1, @uninit2, @uninit1, @uninit2, @uninit0,
 //
 // Pointer to FP6502 entry
 //
-word fp6502, fpzpsave
+word fp6502
 //
 // PLASMA <-> SANE interface routines
 //
 asm equates
         !SOURCE "vmsrc/plvmzp.inc"
 end
+//
+// Main memory FP6502 API
+//
 asm fpOp1(op, dst)#1
         LDA     ESTKH,X
         PHA
@@ -72,6 +75,81 @@ asm fixupFP2
         STY     ESTKH,X
         RTS
 end
+//
+// AUX memory FP6502 API
+//
+asm xfpOp1(op, dst)#1
+        LDA     ESTKL+1,X
+        STA     $02FE
+        LDA     ESTKH+1,X
+        STA     $02FF
+        LDY     ESTKL,X
+        LDA     ESTKH,X
+        INX
+        STX     ESP
+        PHP
+        SEI
+        STA     $C009       ; SELECT ALTZP
+        BIT     $C083       ; R/W LC BANK2
+        BIT     $C083
+        PHA
+        TYA
+        PHA
+        LDA     $02FF
+        PHA
+        LDA     $02FE
+        PHA
+        JSR     $E000
+        STA     $C008       ; BACK TO MAINZP
+        PLP
+        TXA
+        LDX     ESP
+        STA     ESTKL,X
+        STY     ESTKH,X
+        RTS
+end
+asm xfpOp2(op, dst, src)#1
+        LDA     ESTKL+2,X
+        STA     $02FC
+        LDA     ESTKH+2,X
+        STA     $02FD
+        LDA     ESTKL+1,X
+        STA     $02FE
+        LDA     ESTKH+1,X
+        STA     $02FF
+        LDY     ESTKL,X
+        LDA     ESTKH,X
+        INX
+        INX
+        STX     ESP
+        PHP
+        SEI
+        STA     $C009       ; SELECT ALTZP
+        BIT     $C083       ; R/W LC BANK2
+        BIT     $C083
+        PHA
+        TYA
+        PHA
+        LDA     $02FF
+        PHA
+        LDA     $02FE
+        PHA
+        LDA     $02FD
+        PHA
+        LDA     $02FC
+        PHA
+        JSR     $E000
+        STA     $C008       ; BACK TO MAINZP
+        PLP
+        TXA
+        LDX     ESP
+        STA     ESTKL,X
+        STY     ESTKH,X
+        RTS
+end
+//
+// Main memory ELEMS6502 API
+//
 asm elemsOp1(op, dst)#1
         LDA     ESTKH,X
         PHA
@@ -117,6 +195,82 @@ asm fixupEL2
         STY     ESTKH,X
         RTS
 end
+//
+// AUX memory ELEMS6502 API
+//
+asm xelemsOp1(op, dst)#1
+        LDA     ESTKL+1,X
+        STA     $02FE
+        LDA     ESTKH+1,X
+        STA     $02FF
+        LDY     ESTKL,X
+        LDA     ESTKH,X
+        INX
+        STX     ESP
+        PHP
+        SEI
+        STA     $C009       ; SELECT ALTZP
+        BIT     $C083       ; R/W LC BANK2
+        BIT     $C083
+        PHA
+        TYA
+        PHA
+        LDA     $02FF
+        PHA
+        LDA     $02FE
+        PHA
+end
+asm fixupXEL1
+        JSR     $FFFF
+        STA     $C008       ; BACK TO MAINZP
+        PLP
+        TXA
+        LDX     ESP
+        STA     ESTKL,X
+        STY     ESTKH,X
+        RTS
+end
+asm xelemsOp2(op, dst)#1
+        LDA     ESTKL+2,X
+        STA     $02FC
+        LDA     ESTKH+2,X
+        STA     $02FD
+        LDA     ESTKL+1,X
+        STA     $02FE
+        LDA     ESTKH+1,X
+        STA     $02FF
+        LDY     ESTKL,X
+        LDA     ESTKH,X
+        INX
+        INX
+        STX     ESP
+        PHP
+        SEI
+        STA     $C009       ; SELECT ALTZP
+        BIT     $C083       ; R/W LC BANK2
+        BIT     $C083
+        PHA
+        TYA
+        PHA
+        LDA     $02FF
+        PHA
+        LDA     $02FE
+        PHA
+        LDA     $02FD
+        PHA
+        LDA     $02FC
+        PHA
+end
+asm fixupXEL2
+        JSR     $FFFF
+        STA     $C008       ; BACK TO MAINZP
+        PLP
+        TXA
+        LDX     ESP
+        STA     ESTKL,X
+        STY     ESTKH,X
+        RTS
+end
 asm zpSave#1
         LDY     #$33
 -       LDA     $00,Y
@@ -137,8 +291,58 @@ asm fixupZPR
         DEY
         BPL     -
 end
-asm nopZP#1
+asm zpNop#1
         DEX
+        RTS
+end
+asm auxmove(dst, src, len)#0
+        LDA     ESTKL+2,X
+        STA     $02FA
+        LDA     ESTKH+2,X
+        STA     $02FB
+        LDA     ESTKL+1,X
+        STA     $02FC
+        LDA     ESTKH+1,X
+        STA     $02FD
+        LDA     ESTKL,X
+        STA     $02FE
+        CLC
+        BEQ     +
+        SEC
++       LDA     ESTKH,X
+        ADC     #$00
+        STA     $02FF
+        INX
+        INX
+        INX
+        STX     ESP
+        PHP
+        SEI
+        STA     $C009       ; SELECT ALTZP
+        BIT     $C083       ; R/W LC BANK2
+        BIT     $C083
+        LDA     $02FA       ; DST ADDRESS
+        STA     $42
+        LDA     $02FB
+        STA     $43
+        LDA     $02FC       ; SRC ADDRESS
+        STA     $3C
+        LDA     $02FD
+        STA     $3D
+        LDY     #$00
+-       LDA     ($3C),Y
+        STA     ($42),Y
+        INY
+        BNE     +
+        INC     $3D
+        INC     $43
++       DEC     $02FE
+        BNE     -
+        DEC     $02FF
+        BNE     -
+        STA     $C008       ; SELECT MAINZP
+        PLP
+        LDX     ESP
         RTS
 end
 //
@@ -267,7 +471,13 @@ def loadcode(codefile)
         //putname(pcode + segname + 8); putc('='); prword(pcode); putln
         seglen = read(ref, pcode, (pcode + t_diskinfo)=>codeaddr)
         close(ref)
-        heaprelease(fixup(pcode, pcode + seglen - 2)) // Set heap to beginning of relocation list
+        if !fp6502 and ^MACHID & $30 == $30
+            seglen = fixup(AUXADDR, pcode + seglen - 2) - pcode
+            auxmove(AUXADDR, pcode, seglen)
+            pcode = AUXADDR
+        else
+            heaprelease(fixup(pcode, pcode + seglen - 2)) // Set heap to beginning of relocation list
+        fin
     fin
     return pcode
 end
@@ -282,10 +492,17 @@ def loadElems
         puts("ELEMS library not found.\n")
         return 0
     fin
-    (@fixupEL1)=>1 = elems
-    (@fixupEL2)=>1 = elems
-    sane[3] = @elemsOp1
-    sane[4] = @elemsOp2
+    if fp6502 == AUXADDR
+        (@fixupXEL1)=>1 = elems
+        (@fixupXEL2)=>1 = elems
+        sane[3] = @xelemsOp1
+        sane[4] = @xelemsOp2
+    else
+        (@fixupEL1)=>1 = elems
+        (@fixupEL2)=>1 = elems
+        sane[3] = @elemsOp1
+        sane[4] = @elemsOp2
+    fin
     return 1
 end
 //
@@ -293,13 +510,13 @@ end
 //
 def elemsLoad1(op, dst)#1
     if loadElems
-        return elemsOp1(op, dst)
+        return sane[3](op, dst)
     fin
     return -1
 end
 def elemsLoad2(op, src, dst)#1
     if loadElems
-        return elemsOp2(op, src, dst)
+        return sane[4](op, src, dst)
     fin
     return -1
 end
@@ -307,25 +524,37 @@ end
 // Load SANE library and fixup function pointers
 //
 def fpInit()
+    word fpzpsave
+
     fp6502 = loadcode("FP6502.CODE")
     if !fp6502
         puts("SANE library not found.\n")
         return -1
     fin
-    fpzpsave = heapalloc($0033)
-    //
-    // Fixup calls in interface routines
-    //
-    (@fixupFP1)=>1 = fp6502
-    (@fixupFP2)=>1 = fp6502
-    (@fixupZPS)=>1 = fpzpsave
-    (@fixupZPR)=>1 = fpzpsave
-    sane[1] = @fpOp1
-    sane[2] = @fpOp2
+    if fp6502 == AUXADDR
+        //
+        // Fixup AUX calls in interface routines
+        //
+        sane[1] = @xfpOp1
+        sane[2] = @xfpOp2
+        sane[5] = @zpNop
+        sane[6] = @zpNop
+    else
+        //
+        // Fixup MAIN calls in interface routines
+        //
+        fpzpsave       = heapalloc($0033)
+        (@fixupZPS)=>1 = fpzpsave
+        (@fixupZPR)=>1 = fpzpsave
+        (@fixupFP1)=>1 = fp6502
+        (@fixupFP2)=>1 = fp6502
+        sane[1] = @fpOp1
+        sane[2] = @fpOp2
+        sane[5] = @zpSave
+        sane[6] = @zpRestore
+    fin
     sane[3] = @elemsLoad1
     sane[4] = @elemsLoad2
-    sane[5] = @zpSave
-    sane[6] = @zpRestore
 end
 //
 // Uninitialized placeholders of API
