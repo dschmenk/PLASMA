@@ -15,12 +15,16 @@ end
 //
 // External interface to SANE libraries
 //
-predef fpInit(), uninit0(), uninit1(op, dst), uninit2(op, dst, src)
-export word[7] sane = @fpInit, @uninit1, @uninit2, @uninit1, @uninit2, @uninit0, @uninit0
+predef fpInit(), fpDefaultHalt(pstatus), uninit0(), uninit1(op, dst), uninit2(op, dst, src)
+export word[7] sane = @fpInit, @fpDefaultHalt, @uninit0, @uninit1, @uninit2, @uninit1, @uninit2, @uninit0, @uninit0
 //
 // Pointer to FP6502 entry
 //
 word fp6502
+//
+// Pointer to Halt handler
+//
+word hhaddr
 //
 // PLASMA <-> SANE interface routines
 //
@@ -28,8 +32,58 @@ asm equates
         !SOURCE "vmsrc/plvmzp.inc"
 end
 //
+// HALT exception handling
+//
+asm xfpHalt
+        STX     SRC         ; COPY STATUS RECORD TO MAIN MEMORY
+        STY     SRC+1
+        LDY     #$08
+-       LDA     (SRC),Y
+        STA     $02F7,Y
+        DEY
+        BPL     -
+        PLA
+        TAX
+        PLA
+        TAY
+        STA     $C008       ; BACK TO MAINZP
+        PLP
+        TYA
+        PHA
+        TXA
+        PHA
+        LDY     #$02        ; POINT TO MOVED STATUS RECORD
+        LDX     #$F7
+end
+asm fpHalt
+        TXA
+        LDX     ESP
+        STA     ESTKL,X
+        STY     ESTKH,X
+        PLA                 ; POP RETURN TO fpOp?
+        PLA
+end
+asm fixupHLT
+        JMP     ($FFF0)     ; JUMP THROUGH PLASMA HALT VECTOR
+end
+//
 // Main memory FP6502 API
 //
+asm fpOp0(op)#1
+        LDA     ESTKH,X
+        PHA
+        LDA     ESTKL,X
+        PHA
+        STX     ESP
+end
+asm fixupFP0
+        JSR     $FFF0
+        TXA
+        LDX     ESP
+        STA     ESTKL,X
+        STY     ESTKH,X
+        RTS
+end
 asm fpOp1(op, dst)#1
         LDA     ESTKH,X
         PHA
@@ -43,7 +97,7 @@ asm fpOp1(op, dst)#1
         STX     ESP
 end
 asm fixupFP1
-        JSR     $FFFF
+        JSR     $FFF0
         TXA
         LDX     ESP
         STA     ESTKL,X
@@ -68,7 +122,7 @@ asm fpOp2(op, dst, src)#1
         STX     ESP
 end
 asm fixupFP2
-        JSR     $FFFF
+        JSR     $FFF0
         TXA
         LDX     ESP
         STA     ESTKL,X
@@ -78,6 +132,27 @@ end
 //
 // AUX memory FP6502 API
 //
+asm xfpOp0(op)#1
+        LDY     ESTKL,X
+        LDA     ESTKH,X
+        STX     ESP
+        PHP
+        SEI
+        STA     $C009       ; SELECT ALTZP
+        BIT     $C083       ; R/W LC BANK2
+        BIT     $C083
+        PHA
+        TYA
+        PHA
+        JSR     $E000
+        STA     $C008       ; BACK TO MAINZP
+        PLP
+        TXA
+        LDX     ESP
+        STA     ESTKL,X
+        STY     ESTKH,X
+        RTS
+end
 asm xfpOp1(op, dst)#1
         LDA     ESTKL+1,X
         STA     $02FE
@@ -163,7 +238,7 @@ asm elemsOp1(op, dst)#1
         STX     ESP
 end
 asm fixupEL1
-        JSR     $FFFF
+        JSR     $FFF0
         TXA
         LDX     ESP
         STA     ESTKL,X
@@ -188,7 +263,7 @@ asm elemsOp2(op, dst, src)#1
         STX     ESP
 end
 asm fixupEL2
-        JSR     $FFFF
+        JSR     $FFF0
         TXA
         LDX     ESP
         STA     ESTKL,X
@@ -221,7 +296,7 @@ asm xelemsOp1(op, dst)#1
         PHA
 end
 asm fixupXEL1
-        JSR     $FFFF
+        JSR     $FFF0
         STA     $C008       ; BACK TO MAINZP
         PLP
         TXA
@@ -262,7 +337,7 @@ asm xelemsOp2(op, dst)#1
         PHA
 end
 asm fixupXEL2
-        JSR     $FFFF
+        JSR     $FFF0
         STA     $C008       ; BACK TO MAINZP
         PLP
         TXA
@@ -344,6 +419,13 @@ asm auxmove(dst, src, len)#0
         PLP
         LDX     ESP
         RTS
+end
+//
+// Default HALT handler
+//
+def fpDefaultHalt(pstatus)
+    puts("SANE Exception="); puti(pstatus->8); puts("!\n")
+    return pstatus=>4
 end
 //
 // Utility test routines
@@ -495,13 +577,13 @@ def loadElems
     if fp6502 == AUXADDR
         (@fixupXEL1)=>1 = elems
         (@fixupXEL2)=>1 = elems
-        sane[3] = @xelemsOp1
-        sane[4] = @xelemsOp2
+        sane[5] = @xelemsOp1
+        sane[6] = @xelemsOp2
     else
         (@fixupEL1)=>1 = elems
         (@fixupEL2)=>1 = elems
-        sane[3] = @elemsOp1
-        sane[4] = @elemsOp2
+        sane[5] = @elemsOp1
+        sane[6] = @elemsOp2
     fin
     return 1
 end
@@ -526,35 +608,53 @@ end
 def fpInit()
     word fpzpsave
 
-    fp6502 = loadcode("FP6502.CODE")
     if !fp6502
-        puts("SANE library not found.\n")
-        return -1
+        fp6502 = loadcode("FP6502.CODE")
+        if !fp6502
+            puts("SANE library not found.\n")
+            return -1
+        fin
+        if fp6502 == AUXADDR
+            //
+            // Fixup AUX calls in interface routines
+            //
+            sane[2] = @xfpOp0
+            sane[3] = @xfpOp1
+            sane[4] = @xfpOp2
+            sane[7] = @zpNop
+            sane[8] = @zpNop
+            //
+            // Install AUX HALT handler
+            //
+            hhaddr = @xfpHalt
+            (@fixupHLT)=>1 = @sane+2
+            xfpOp1($0005, @hhaddr)
+        else
+            //
+            // Fixup MAIN calls in interface routines
+            //
+            fpzpsave       = heapalloc($0033)
+            (@fixupZPS)=>1 = fpzpsave
+            (@fixupZPR)=>1 = fpzpsave
+            (@fixupFP0)=>1 = fp6502
+            (@fixupFP1)=>1 = fp6502
+            (@fixupFP2)=>1 = fp6502
+            sane[2] = @fpOp0
+            sane[3] = @fpOp1
+            sane[4] = @fpOp2
+            sane[7] = @zpSave
+            sane[8] = @zpRestore
+            //
+            // Install MAIN HALT handler
+            //
+            hhaddr = @fpHalt
+            (@fixupHLT)=>1 = @sane+2
+            fpOp1($0005, @hhaddr)
+        fin
+        sane[5] = @elemsLoad1
+        sane[6] = @elemsLoad2
     fin
-    if fp6502 == AUXADDR
-        //
-        // Fixup AUX calls in interface routines
-        //
-        sane[1] = @xfpOp1
-        sane[2] = @xfpOp2
-        sane[5] = @zpNop
-        sane[6] = @zpNop
-    else
-        //
-        // Fixup MAIN calls in interface routines
-        //
-        fpzpsave       = heapalloc($0033)
-        (@fixupZPS)=>1 = fpzpsave
-        (@fixupZPR)=>1 = fpzpsave
-        (@fixupFP1)=>1 = fp6502
-        (@fixupFP2)=>1 = fp6502
-        sane[1] = @fpOp1
-        sane[2] = @fpOp2
-        sane[5] = @zpSave
-        sane[6] = @zpRestore
-    fin
-    sane[3] = @elemsLoad1
-    sane[4] = @elemsLoad2
+    sane[1] = @fpDefaultHalt
 end
 //
 // Uninitialized placeholders of API
