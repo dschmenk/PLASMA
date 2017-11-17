@@ -15,8 +15,8 @@ end
 //
 // External interface to SANE libraries
 //
-predef fpInit(), fpDefaultHalt(pstatus), uninit0(), uninit1(op, dst), uninit2(op, dst, src)
-export word[7] sane = @fpInit, @fpDefaultHalt, @uninit0, @uninit1, @uninit2, @uninit1, @uninit2, @uninit0, @uninit0
+predef fpInit(), fpDefaultHalt(pstatus), uninit0(), uninit1(op, dst), uninit2(op, dst, src), uninit3(op, dst, src, src2)
+export word sane = @fpInit, @fpDefaultHalt, @uninit0, @uninit1, @uninit2, @uninit3, @uninit1, @uninit2, @uninit3, @uninit0, @uninit0
 //
 // Pointer to FP6502 entry
 //
@@ -126,6 +126,36 @@ asm fixupFP2
         STY     ESTKH,X
         RTS
 end
+asm fpOp3(op, dst, src, src2)#1
+        LDA     ESTKH,X
+        PHA
+        LDA     ESTKL,X
+        PHA
+        LDA     ESTKH+1,X
+        PHA
+        LDA     ESTKL+1,X
+        PHA
+        LDA     ESTKH+2,X
+        PHA
+        LDA     ESTKL+2,X
+        PHA
+        LDA     ESTKH+3,X
+        PHA
+        LDA     ESTKL+3,X
+        PHA
+        INX
+        INX
+        INX
+        STX     ESP
+end
+asm fixupFP3
+        JSR     $FFF0
+        TXA
+        LDX     ESP
+        STA     ESTKL,X
+        STY     ESTKH,X
+        RTS
+end
 //
 // AUX memory FP6502 API
 //
@@ -219,6 +249,54 @@ asm xfpOp2(op, dst, src)#1
         STY     ESTKH,X
         RTS
 end
+asm xfpOp3(op, dst, src, src2)#1
+        LDA     ESTKL+3,X
+        STA     $02FA
+        LDA     ESTKH+3,X
+        STA     $02FB
+        LDA     ESTKL+2,X
+        STA     $02FC
+        LDA     ESTKH+2,X
+        STA     $02FD
+        LDA     ESTKL+1,X
+        STA     $02FE
+        LDA     ESTKH+1,X
+        STA     $02FF
+        LDY     ESTKL,X
+        LDA     ESTKH,X
+        INX
+        INX
+        INX
+        STX     ESP
+        PHP
+        SEI
+        STA     $C009       ; SELECT ALTZP
+        BIT     $C083       ; R/W LC BANK2
+        BIT     $C083
+        PHA
+        TYA
+        PHA
+        LDA     $02FF
+        PHA
+        LDA     $02FE
+        PHA
+        LDA     $02FD
+        PHA
+        LDA     $02FC
+        PHA
+        LDA     $02FB
+        PHA
+        LDA     $02FA
+        PHA
+        JSR     $E000
+        STA     $C008       ; BACK TO MAINZP
+        PLP
+        TXA
+        LDX     ESP
+        STA     ESTKL,X
+        STY     ESTKH,X
+        RTS
+end
 //
 // Main memory ELEMS6502 API
 //
@@ -267,6 +345,36 @@ asm fixupEL2
         STY     ESTKH,X
         RTS
 end
+asm elemsOp3(op, dst, src, src2)#1
+        LDA     ESTKH,X
+        PHA
+        LDA     ESTKL,X
+        PHA
+        LDA     ESTKH+1,X
+        PHA
+        LDA     ESTKL+1,X
+        PHA
+        LDA     ESTKH+2,X
+        PHA
+        LDA     ESTKL+2,X
+        PHA
+        LDA     ESTKH+3,X
+        PHA
+        LDA     ESTKL+3,X
+        PHA
+        INX
+        INX
+        INX
+        STX     ESP
+end
+asm fixupEL3
+        JSR     $FFF0
+        TXA
+        LDX     ESP
+        STA     ESTKL,X
+        STY     ESTKH,X
+        RTS
+end
 //
 // AUX memory ELEMS6502 API
 //
@@ -302,7 +410,7 @@ asm fixupXEL1
         STY     ESTKH,X
         RTS
 end
-asm xelemsOp2(op, dst)#1
+asm xelemsOp2(op, dst, src)#1
         LDA     ESTKL+2,X
         STA     $02FC
         LDA     ESTKH+2,X
@@ -334,6 +442,56 @@ asm xelemsOp2(op, dst)#1
         PHA
 end
 asm fixupXEL2
+        JSR     $FFF0
+        STA     $C008       ; BACK TO MAINZP
+        PLP
+        TXA
+        LDX     ESP
+        STA     ESTKL,X
+        STY     ESTKH,X
+        RTS
+end
+asm xelemsOp3(op, dst, src, src2)#1
+        LDA     ESTKL+2,X
+        STA     $02FA
+        LDA     ESTKH+2,X
+        STA     $02FB
+        LDA     ESTKL+2,X
+        STA     $02FC
+        LDA     ESTKH+2,X
+        STA     $02FD
+        LDA     ESTKL+1,X
+        STA     $02FE
+        LDA     ESTKH+1,X
+        STA     $02FF
+        LDY     ESTKL,X
+        LDA     ESTKH,X
+        INX
+        INX
+        INX
+        STX     ESP
+        PHP
+        SEI
+        STA     $C009       ; SELECT ALTZP
+        BIT     $C083       ; R/W LC BANK2
+        BIT     $C083
+        PHA
+        TYA
+        PHA
+        LDA     $02FF
+        PHA
+        LDA     $02FE
+        PHA
+        LDA     $02FD
+        PHA
+        LDA     $02FC
+        PHA
+        LDA     $02FB
+        PHA
+        LDA     $02FA
+        PHA
+end
+asm fixupXEL3
         JSR     $FFF0
         STA     $C008       ; BACK TO MAINZP
         PLP
@@ -421,9 +579,9 @@ end
 // Default HALT handler
 //
 def fpDefaultHalt(pstatus)
-    sane[8]() // zpRestore
+    sane[10]() // zpRestore
     puts("SANE Exception="); puti(pstatus->8); puts("!\n")
-    sane[7]() // zpSave
+    sane[9]() // zpSave
     return pstatus=>4
 end
 //
@@ -576,13 +734,17 @@ def loadElems
     if fp6502 == AUXADDR
         (@fixupXEL1)=>1 = elems
         (@fixupXEL2)=>1 = elems
-        sane[5] = @xelemsOp1
-        sane[6] = @xelemsOp2
+        (@fixupXEL3)=>1 = elems
+        sane[6] = @xelemsOp1
+        sane[7] = @xelemsOp2
+        sane[8] = @xelemsOp3
     else
         (@fixupEL1)=>1 = elems
         (@fixupEL2)=>1 = elems
-        sane[5] = @elemsOp1
-        sane[6] = @elemsOp2
+        (@fixupEL3)=>1 = elems
+        sane[6] = @elemsOp1
+        sane[7] = @elemsOp2
+        sane[8] = @elemsOp3
     fin
     return 1
 end
@@ -595,9 +757,15 @@ def elemsLoad1(op, dst)#1
     fin
     return -1
 end
-def elemsLoad2(op, src, dst)#1
+def elemsLoad2(op, dst, src)#1
     if loadElems
-        return sane[4](op, src, dst)
+        return sane[4](op, dst, src)
+    fin
+    return -1
+end
+def elemsLoad3(op, dst, src, src2)#1
+    if loadElems
+        return sane[4](op, dst, src, src2)
     fin
     return -1
 end
@@ -617,11 +785,12 @@ def fpInit()
             //
             // Fixup AUX calls in interface routines
             //
-            sane[2] = @xfpOp0
-            sane[3] = @xfpOp1
-            sane[4] = @xfpOp2
-            sane[7] = @zpNop
-            sane[8] = @zpNop
+            sane[2]  = @xfpOp0
+            sane[3]  = @xfpOp1
+            sane[4]  = @xfpOp2
+            sane[5]  = @xfpOp3
+            sane[9]  = @zpNop
+            sane[10] = @zpNop
             //
             // Install AUX HALT handler
             //
@@ -636,18 +805,21 @@ def fpInit()
             (@fixupFP0)=>1 = fp6502
             (@fixupFP1)=>1 = fp6502
             (@fixupFP2)=>1 = fp6502
-            sane[2] = @fpOp0
-            sane[3] = @fpOp1
-            sane[4] = @fpOp2
-            sane[7] = @zpSave
-            sane[8] = @zpRestore
+            (@fixupFP3)=>1 = fp6502
+            sane[2]  = @fpOp0
+            sane[3]  = @fpOp1
+            sane[4]  = @fpOp2
+            sane[5]  = @fpOp3
+            sane[9]  = @zpSave
+            sane[10] = @zpRestore
             //
             // Install MAIN HALT handler
             //
             fpOp1($0005, @fpHalt)
         fin
-        sane[5] = @elemsLoad1
-        sane[6] = @elemsLoad2
+        sane[6] = @elemsLoad1
+        sane[7] = @elemsLoad2
+        sane[8] = @elemsLoad3
     fin
     (@fixupHLT)=>1 = @sane+2
     sane[1]        = @fpDefaultHalt
@@ -667,9 +839,12 @@ def uninit0()
     return uninit
 end
 def uninit1(op, dst)
-return uninit
+    return uninit
 end
 def uninit2(op, dst, src)
-return uninit
+    return uninit
+end
+def uninit3(op, dst, src, src2)
+    return uninit
 end
 done
