@@ -22,10 +22,6 @@ export word[7] sane = @fpInit, @fpDefaultHalt, @uninit0, @uninit1, @uninit2, @un
 //
 word fp6502
 //
-// Pointer to Halt handler
-//
-word hhaddr
-//
 // PLASMA <-> SANE interface routines
 //
 asm equates
@@ -56,6 +52,7 @@ asm xfpHalt
         LDX     #$F7
 end
 asm fpHalt
+        STA     $C008
         TXA
         LDX     ESP
         STA     ESTKL,X
@@ -424,7 +421,9 @@ end
 // Default HALT handler
 //
 def fpDefaultHalt(pstatus)
+    sane[8]() // zpRestore
     puts("SANE Exception="); puti(pstatus->8); puts("!\n")
+    sane[7]() // zpSave
     return pstatus=>4
 end
 //
@@ -626,9 +625,7 @@ def fpInit()
             //
             // Install AUX HALT handler
             //
-            hhaddr = @xfpHalt
-            (@fixupHLT)=>1 = @sane+2
-            xfpOp1($0005, @hhaddr)
+            xfpOp1($0005, @xfpHalt)
         else
             //
             // Fixup MAIN calls in interface routines
@@ -647,14 +644,17 @@ def fpInit()
             //
             // Install MAIN HALT handler
             //
-            hhaddr = @fpHalt
-            (@fixupHLT)=>1 = @sane+2
-            fpOp1($0005, @hhaddr)
+            fpOp1($0005, @fpHalt)
         fin
         sane[5] = @elemsLoad1
         sane[6] = @elemsLoad2
     fin
-    sane[1] = @fpDefaultHalt
+    (@fixupHLT)=>1 = @sane+2
+    sane[1]        = @fpDefaultHalt
+    //
+    // Reset environment word
+    //
+    sane[3]($0001, $0000)
 end
 //
 // Uninitialized placeholders of API
