@@ -189,9 +189,7 @@ PLASMA only defines two data types: `byte` and `word`. All operations take place
 To start things off, here is the standard introductory program:
 
 ```
-import cmdsys
-    predef puts
-end
+include "inc/cmdsys.plh"
 
 puts("Hello, world.\n")
 done
@@ -281,7 +279,7 @@ include "inc/testlib.plh
 Sometimes a function needs to be referenced before it is defined. The `predef` declaration reserves the label for a function. The `import` declaration block also uses the `predef` declaration to reserve an external function. Outside of an `import` block, `predef` will only predefine a function that must be declared later in the source file, otherwise an error will occur.
 
 ```
-predef exec_file, mydef
+predef exec_file(str), mydef(var)
 ```
 
 ### Constant Declarations
@@ -326,9 +324,7 @@ One of the most powerful features in PLASMA is the flexible data declaration. Da
 //
 // Import standard library functions.
 //
-import cmdlib
-    predef putc, puts, getc, gets, cls, memcpy, memset, memclr
-end
+include "inc/cmdsys.plh"
 //
 // Constants used for hardware and flags
 //
@@ -567,13 +563,13 @@ until txtbuf == 0 or numlines == maxlines
 Function definitions are completed with the `end` statement. All definitions return a value, even if not specified in the source. A return value of zero will be inserted by the compiler at the `end` of a definition (or a `return` statement without a value). Defined functions without parameters can be called simply, without any parenthesis.
 
 ```
-def drawscrn(topline, leftpos)
+def drawscrn(topline, leftpos)#0
     byte i
     for i = 0 to 23
         drawline(textbuff[i + topline], leftpos)
     next
 end
-def redraw
+def redraw#0
     cursoff
     drawscrn(scrntop, scrnleft)
     curson
@@ -589,7 +585,7 @@ Data and function labels can be exported so other modules may access this module
 Here is an example using the `import`s from the previous examples to export an initialized array of 10 elements (2 defined + null delimiter):
 
 ```
-predef mydef
+predef mydef(var)
 
 export word[10] myfuncs = @putc, @mydef, $0000
 ```
@@ -618,13 +614,13 @@ The final declaration of a module source file is the `done` statement. This decl
 
 PLASMA includes a very minimal runtime that nevertheless provides a great deal of functionality to the system.  Two system calls are provided to access native 6502 routines (usually in ROM) and ProDOS.
 
-call(aReg, xReg, yReg, statusReg, addr) returns a pointer to a four-byte structure containing the A,X,Y and STATUS register results.
+call(addr, aReg, xReg, yReg, statusReg) returns a pointer to a four-byte structure containing the A,X,Y and STATUS register results.
 
 ```
 const xreg = 1
 const getlin = $FD6A
 
-numchars = call(0, 0, 0, 0, getlin).xreg // return char count in X reg
+numchars = call(getlin, 0, 0, 0, 0).xreg // return char count in X reg
 ```
 
 syscall(cmd, params) calls ProDOS, returning the status value.
@@ -730,7 +726,7 @@ word funclist = @myfunc, $0000
 Equivalently written as:
 
 ```
-predef myfunc
+predef myfunc(var)#0
 
 byte[4] smallarray
 byte[] initbarray = 1, 2, 3, 4, 5, 6, 7, 8, 9, 10
@@ -918,7 +914,7 @@ puti(funcptr(5, 2)) // Outputs 3
 These concepts can be combined with the structure offsets to create a function table that can be easily changed on the fly. Virtual functions in object-oriented languages are implemented this way.
 
 ```
-predef myinit, mynew, mydelete
+predef myinit(), mynew(size), mydelete(obj)
 
 export word myobject_class = @myinit, @mynew, @mydelete
 // Rest of class data/code follows...
@@ -1195,27 +1191,17 @@ end
 
 ### Return Values
 
-PLASMA always returns a value from a function, even if you don't supply one. Probably the easiest optimization to make in PLASMA is to cascade a return value if you don't care about the value you return. This only works if the last thing you do before returning from your routine is calling another definition. You would go from:
-
+PLASMA always returns values from a function as it is defined, even if you don't explicitly supply one. Unless you define no return values with ```#0``` in the function definition.
 ```
-def mydef
-    // do some stuff
-    calldef(10) // call some other def
+def mydef()#2
+    return 100
 end
 ```
-
-PLASMA will effectively add a RETURN 0 to the end of your function, as well as add code to ignore the result of `calldef(10)`. As long as you don't care about the return value from `mydef` or want to use its return as the return value from your function (cascade the return), you can save some code bytes with:
-
-```
-def mydef
-    // do some stuff
-    return calldef(10) // call some other def
-end
-```
+would silently return 100,0 because of the return value count in the definition.
 
 ## Native Assembly Functions
 
-Assembly code in PLASMA is implemented strictly as a pass-through to the assembler. No syntax checking, or checking at all, is made. All assembly routines *must* come after all data has been declared, and before any PLASMA function definitions. Native assembly functions can't see PLASMA labels and definitions, so they are pretty much relegated to leaf functions. Lastly, PLASMA modules are re-locatable, but labels inside assembly functions don't get flagged for fix-ups. The assembly code must use all relative branches and only accessing data/code at a fixed address. Data passed in on the PLASMA evaluation stack is readily accessed with the X register and the zero page address of the ESTK. The X register must be properly saved, incremented, and/or decremented to remain consistent with the rest of PLASMA. Parameters are **popped** off the evaluation stack with `INX`, and the return value is **pushed** with `DEX`.
+Assembly code in PLASMA is implemented strictly as a pass-through to the assembler. No syntax checking, or checking at all, is made. All assembly routines *must* come after all data has been declared, and before any PLASMA function definitions. Native assembly functions can't see PLASMA labels and definitions, so they are pretty much relegated to leaf functions. Lastly, PLASMA modules are re-locatable, but labels inside assembly functions don't get flagged for fix-ups. The assembly code must use all relative branches and only accessing data/code at a fixed address. Data passed in on the PLASMA evaluation stack is readily accessed with the X register and the zero page address of the ESTK. The X register must be properly saved, incremented, and/or decremented to remain consistent with the rest of PLASMA. Parameters are **popped** off the evaluation stack with `INX`, and the return value is **pushed** with `DEX`. It is possible to relocate absolute addresses with a little trickery. Look to some of the library modules where native code is fixed up in the initialization block.
 
 # Implementation
 
