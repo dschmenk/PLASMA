@@ -388,6 +388,30 @@ t_token scan(void)
                     scanpos++;
                 }
                 break;
+            case ':':
+                if (scanpos[1] == ':')
+                {
+                    scantoken = TRIELSE_TOKEN;
+                    scanpos += 2;
+                }
+                else
+                {
+                    scantoken = COLON_TOKEN;
+                    scanpos++;
+                }
+                break;
+            case '?':
+                if (scanpos[1] == '?')
+                {
+                    scantoken = TERNARY_TOKEN;
+                    scanpos += 2;
+                }
+                else
+                {
+                    scantoken = TERNARY_TOKEN;
+                    scanpos++;
+                }
+                break;
             default:
                 /*
                  * Simple single character tokens.

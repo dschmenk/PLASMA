@@ -746,6 +746,32 @@ t_opseq *parse_expr(t_opseq *codeseq, int *stackdepth)
         if (stackdepth)
             (*stackdepth)--;
     }
+    /*
+     * Look for ternary operator
+     */
+    if (scantoken == TERNARY_TOKEN)
+    {
+        int tag_else, tag_endtri;
+        int stackdepth1;
+
+        if (*stackdepth != 1)
+            parse_error("Ternary op must evaluate to single value");
+        tag_else   = tag_new(BRANCH_TYPE);
+        tag_endtri = tag_new(BRANCH_TYPE);
+        codeseq    = gen_brfls(codeseq, tag_else);
+        codeseq    = parse_expr(codeseq, &stackdepth1);
+        if (scantoken != TRIELSE_TOKEN)
+        {
+            parse_error("Missing '::' in ternary op");
+            return (NULL);
+        }
+        codeseq = gen_brnch(codeseq, tag_endtri);
+        codeseq = gen_codetag(codeseq, tag_else);
+        codeseq = parse_expr(codeseq, stackdepth);
+        if (stackdepth1 != *stackdepth)
+            parse_error("Inconsistent value counts in ternary op");
+        codeseq = gen_codetag(codeseq, tag_endtri);
+    }
     return (codeseq);
 }
 t_opseq *parse_set(t_opseq *codeseq)

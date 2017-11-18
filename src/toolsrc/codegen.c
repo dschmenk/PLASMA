@@ -1665,6 +1665,11 @@ int emit_pending_seq()
             case BRTRUE_CODE:
                 emit_brtru(op->tag);
                 break;
+            case CODETAG_CODE:
+                printf("_B%03d%c\n", op->tag, LBL);
+                break;
+            case NOP_CODE:
+                break;
             default:
                 return (0);
         }

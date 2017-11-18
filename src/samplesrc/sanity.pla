@@ -3,14 +3,173 @@
 //
 include "inc/cmdsys.plh"
 include "inc/sane.plh"
+struc t_decrecord
+    word sgn
+    word exp
+    byte sig[29]
+end
+struc t_decformat
+    word style
+    word digits
+end
 //
 // Test values
 //
 word iA, iB, iC, zero, fpEnv
 byte xT[t_extended]
-word decrec = 0, 0
-byte strA[28] = "10"
-word decform = 0, 6
+byte strNum = "-100.25"
+byte strA[16]
+//
+// Parse string into decrecord
+//
+def str2ext(str, ext)
+    byte i, s, d
+    byte decrec[t_decrecord]
+    word sgnadj, expadj
+
+    decrec:sgn  = 0
+    decrec:exp  = 0
+    decrec.sig  = 0
+    s           = 1
+    i           = 1
+    //
+    // Skip whitespace
+    //
+    while ^(str+i) <= ' ' and i <= ^str; i++; loop
+    //
+    // Check for sign
+    //
+    if ^(str+i) == '-'
+        decrec:sgn = 1
+        i++
+    elsif ^(str+i) == '+'
+        i++
+    fin
+    //
+    // Skip leading zeros
+    //
+    while i <= ^str and ^(str+i) == '0'
+        i++
+    loop
+    //
+    // Parse number
+    //
+    while i <= ^str
+        d = toupper(^(str+i))
+        if d >= '0' and d <= '9'
+            //
+            // Parse digit
+            //
+            decrec.sig[s] = ^(str+i)
+            decrec:sig++
+            s++
+        elsif d == '.'
+            //
+            // Parse decimal point
+            //
+            i++
+            while i <= ^str
+                d = toupper(^(str+i))
+                if d >= '0' and d <= '9'
+                    decrec.sig[s] = ^(str+i)
+                    decrec.sig++
+                    decrec:exp--
+                    s++
+                elsif d == 'E'
+                    i--
+                    break
+                else
+                    i = ^str
+                fin
+                i++
+            loop
+        elsif d == 'E'
+            //
+            // Parse exponent
+            //
+            i++
+            expadj = 0
+            sgnadj = 1
+            if ^(str+i) == '-'
+                sgnadj = -1
+                i++
+            elsif ^(str+i) == '+'
+                i++
+            fin
+            while i <= ^str
+                d = ^(str+i)
+                if d >= '0' and d <= '9'
+                    expadj = expadj * 10 + (d - '0')
+                else
+                    i = ^str
+                fin
+            loop
+            decrec:exp = decrec:exp + (sgnadj * expadj)
+        else
+            i = ^str
+        fin
+        i++
+    loop
+    //
+    // Strip leading zeros from sig
+    //
+    while decrec.sig > 1 and decrec.sig.1 == '0'
+        decrec.sig--
+        if decrec:exp < 0
+            decrec:exp--
+        fin
+        memcpy(@decrec.sig.1, @decrec.sig.2, decrec.sig)
+    loop
+    //
+    // Check for zero
+    //
+    if !decrec.sig
+        decrec.sig = 1
+        decrec.sig.1 = '0'
+    fin
+    //putc(decrec.sgn ?? '-' :: '+'); puts(@decrec.sig); putc('e'); puti(decrec:exp); putln
+    return sane:fpOp2(FFEXT|FOD2B, ext, @decrec)
+end
+def ext2str(ext, str)
+    byte d, i, dp
+    byte decform[t_decformat]
+    byte decrec[t_decrecord]
+
+    decform:style  = 1
+    decform:digits = 4
+    sane:fpOp3(FFEXT|FOB2D, @decrec, ext, @decform)
+    //putc(decrec.sgn ?? '-' :: '+'); puts(@decrec.sig); putc('e'); puti(decrec:exp); putln
+    i = 0
+    if decrec.sgn
+        ^(str+1) = '-'
+        i = 1
+    fin
+    dp = decrec.sig + decrec:exp
+    for d = 1 to decrec.sig
+        i++
+        ^(str+i) = decrec.sig[d]
+        if d == dp
+            i++
+            ^(str+i) = '.'
+        fin
+    next
+    ^str = i
+    return ^str
+end
+def divstri(strNum, denom)#0
+    byte strResult[16]
+    byte xResult[t_extended]
+
+    //
+    // Convert string to and from SANE
+    //
+    sane:zpSave()
+    str2ext(strNum, @xResult)
+    sane:fpOp2(FFINT|FODIV, @xResult, @denom) // Div int denom into ext Result
+    ext2str(@xResult, @strResult)
+    sane:zpRestore()
+    puts(strNum); putc('/'); puti(denom); putc('='); puts(@strResult); putln
+end
 //
 // My custom SANE exception handler
 //
@@ -26,6 +185,7 @@ def myException(pstatus)
     sane:zpSave()
     return pstatus=>4
 end
+
 
 iA = 3
 iB = 4
@@ -73,14 +233,8 @@ sane:fpOp2(FFINT|FOX2Z, @iC, @xT) // Convert ext T to int C
 sane:zpRestore()
 puti(iA); putc('/'); puti(zero); putc('='); puti(iC); putc('\n')
 //
-// Convert string to and from SANE
+// String conversion tests
 //
-sane:zpSave()
-sane:fpOp2(FFEXT|FOD2B, @xT, @decrec)
-//sane:fpOp2(FFINT|FOZ2X, @xT, @iA) // Convert int A to ext T
-sane:fpOp2(FFINT|FODIV, @xT, @iB) // Div int B into ext T
-sane:fpOp2(FFINT|FOX2Z, @iC, @xT) // Convert ext T to int C
-sane:fpOp3(FFEXT|FOB2D, @decrec, @xT, @decform)
-sane:zpRestore()
-puts("10 / 4 = "); puts(@strA); putc('e'); puti(decrec:2); putc('('); puti(iC); putc(')'); putln
+divstri("-100.5", 4)
+divstri("00.5", 2)
 done
