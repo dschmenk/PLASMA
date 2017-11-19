@@ -98,6 +98,7 @@ def str2ext(str, ext)
             fin
             while i <= ^str
                 d = ^(str+i)
+                i++
                 if d >= '0' and d <= '9'
                     expadj = expadj * 10 + (d - '0')
                 else
@@ -130,34 +131,117 @@ def str2ext(str, ext)
     //putc(decrec.sgn ?? '-' :: '+'); puts(@decrec.sig); putc('e'); puti(decrec:exp); putln
     return sane:fpOp2(FFEXT|FOD2B, ext, @decrec)
 end
-def ext2str(ext, str)
-    byte d, i, dp
+def ext2str(ext, str, fracdigits, maxlen, expformat)
+    byte d, i, sigdigits
+    word dp, tens
     byte decform[t_decformat]
     byte decrec[t_decrecord]
 
-    decform:style  = 1
-    decform:digits = 4
+    decform:style  = 0
+    decform:digits = fracdigits
     sane:fpOp3(FFEXT|FOB2D, @decrec, ext, @decform)
-    //putc(decrec.sgn ?? '-' :: '+'); puts(@decrec.sig); putc('e'); puti(decrec:exp); putln
-    i = 0
-    if decrec.sgn
-        ^(str+1) = '-'
-        i = 1
+    ^(str+1) = decrec.sgn ?? '-' :: ' '
+    if decrec.sig.1 == 'I'
+        ^(str+2) = 'I'
+        ^(str+3) = 'n'
+        ^(str+4) = 'f'
+        ^str     = 4
+        return str
+    fin
+    if decrec.sig.1 == 'N'
+        ^(str+2) = 'N'
+        ^(str+3) = 'a'
+        ^(str+4) = 'N'
+        ^str     = 4
+        return str
     fin
     dp = decrec.sig + decrec:exp
-    for d = 1 to decrec.sig
-        i++
-        ^(str+i) = decrec.sig[d]
-        if d == dp
+    sigdigits = decrec.sig
+    //putc(decrec.sgn ?? '-' :: '+'); puts(@decrec.sig); putc('e'); puti(decrec:exp); putln
+    if decrec:exp < 0
+        //
+        // Strip off trailing fractional zeros
+        //
+        while sigdigits > (decrec.sig+decrec:exp) and decrec.sig[sigdigits] == '0'
+            sigdigits--
+        loop
+    fin
+    //puts("sigdigits: "); puti(sigdigits); putln
+    if (decrec:exp + (decrec.sig - sigdigits)) < -fracdigits or decrec:exp > 0 or expformat
+        //
+        // Convert to exponential format
+        //
+        ^(str+2) = decrec.sig.1
+        ^(str+3) = '.'
+        i = 3
+        for d = 2 to decrec.sig
             i++
-            ^(str+i) = '.'
+            ^(str+i) = decrec.sig[d]
+        next
+        //
+        // Copy over all significant digits
+        //
+        if ^(str+i) == '.'; i--; fin
+        i++
+        ^(str+i) = 'E'
+        i++
+        dp--
+        if dp < 0
+            ^(str+i) = '-'
+            dp = -dp
+        else
+            ^(str+i) = '+'
+            if dp == 0
+                i++
+                ^(str+i) = '0'
+            fin
         fin
-    next
+        //
+        // Pretty output the exponent (preceding zero for values less than 10)
+        d    = 0
+        tens = 10000
+        while dp
+            d = d or tens <= 10
+            if dp >= tens or d
+                d = 1
+                i++
+                ^(str+i) = (dp / tens) + '0'
+            fin
+            dp = dp % tens
+            tens = tens / 10
+            if !tens; break; fin
+        loop
+        //puts("DP=");puti(dp);puts(" digits="); puti(decrec.sig); puts(" exp="); puti(decrec:exp); putln
+    else
+        //
+        // Convert as floating point
+        //
+        //puts("DP=");puti(dp);puts(" digits="); puti(decrec.sig); puts(" exp="); puti(decrec:exp); putln
+        i = 1
+        if dp <= 0
+            *(str+2) = '0'|('.'<<8)
+            i = 3
+            while dp < 0
+                dp++
+                i++
+                ^(str+i) = '0'
+            loop
+        fin
+        for d = 1 to sigdigits
+            i++
+            ^(str+i) = decrec.sig[d]
+            if d == dp
+                i++
+                ^(str+i) = '.'
+            fin
+        next
+        if ^(str+i) == '.'; i--; fin
+    fin
     ^str = i
-    return ^str
+    return str
 end
-def divstri(strNum, denom)#0
-    byte strResult[16]
+def divstri(strNum, denom, expformat)#0
+    byte strResult[20]
     byte xResult[t_extended]
 
     //
@@ -166,7 +250,7 @@ def divstri(strNum, denom)#0
     sane:zpSave()
     str2ext(strNum, @xResult)
     sane:fpOp2(FFINT|FODIV, @xResult, @denom) // Div int denom into ext Result
-    ext2str(@xResult, @strResult)
+    ext2str(@xResult, @strResult, 6, 19, expformat)
     sane:zpRestore()
     puts(strNum); putc('/'); puti(denom); putc('='); puts(@strResult); putln
 end
@@ -219,22 +303,23 @@ sane:zpRestore()
 puti(iA); putc('/'); puti(iB); putc('='); puti(iC); putc('\n')
 //
 // Hook custom HALT exception handler and divide by zero :-)
+// Enable all exceptions
 //
 sane:zpSave()
 sane:fpHalt = @myException
 fpEnv = sane:fpOp0(FOGETENV)
-//
-// Enable all exceptions
-//
 sane:fpOp1(FOSETENV, fpEnv | FBINVALID | FBUFLOW | FBOFLOW | FBDIVZER | FBINEXACT)
-sane:fpOp2(FFINT|FOZ2X, @xT, @iA) // Convert int A to ext T
-sane:fpOp2(FFINT|FODIV, @xT, @zero) // Div ZERO into ext T
-sane:fpOp2(FFINT|FOX2Z, @iC, @xT) // Convert ext T to int C
 sane:zpRestore()
-puti(iA); putc('/'); puti(zero); putc('='); puti(iC); putc('\n')
 //
 // String conversion tests
 //
-divstri("-100.5", 4)
-divstri("00.5", 2)
+divstri("-3", 0, 0)
+divstri("3", 0, 0)
+divstri("-100.5", 4, 0)
+divstri("00.5", 2, 0)
+divstri(".5", 10, 0)
+divstri("800000", 2, 0)
+divstri("800000", 2, 1)
+divstri("1e+2", 2, 0)
+divstri("-1e-2", 2, 0)
 done
