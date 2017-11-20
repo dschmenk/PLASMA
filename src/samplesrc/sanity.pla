@@ -131,14 +131,15 @@ def str2ext(str, ext)
     //putc(decrec.sgn ?? '-' :: '+'); puts(@decrec.sig); putc('e'); puti(decrec:exp); putln
     return sane:fpOp2(FFEXT|FOD2B, ext, @decrec)
 end
-def ext2str(ext, str, numdigits, expformat)
-    byte d, i, sigdigits
+def ext2str(ext, str, intdigits, fracdigits, format)
+    byte d, i, sigdigits, numdigits
     word dp, tens
     byte decform[t_decformat]
     byte decrec[t_decrecord]
 
-    decform:style  = 0
-    decform:digits = numdigits
+    numdigits = intdigits + fracdigits
+    decform:style  = format & $01
+    decform:digits = decform:style ?? fracdigits :: numdigits
     sane:fpOp3(FFEXT|FOB2D, @decrec, ext, @decform)
     ^(str+1) = decrec.sgn ?? '-' :: ' '
     if decrec.sig.1 == 'I'
@@ -156,21 +157,28 @@ def ext2str(ext, str, numdigits, expformat)
         return str
     fin
     if decrec.sig.1 == '0'
+        while decrec.sig < fracdigits
+            decrec.sig++
+            decrec.sig[decrec.sig] = '0'
+        loop
         decrec:exp = -decrec.sig
     fin
     dp = decrec.sig + decrec:exp
     sigdigits = decrec.sig
-    //putc(decrec.sgn ?? '-' :: '+'); puts(@decrec.sig); putc('e'); puti(decrec:exp); putln
-    if decrec:exp < 0
+    if decrec:exp < 0 and format & $02
         //
         // Strip off trailing fractional zeros
         //
         while sigdigits > dp and decrec.sig[sigdigits] == '0'
             sigdigits--
+            decrec:exp++
         loop
     fin
+    //sane:zpRestore()
     //puts("sigdigits: "); puti(sigdigits); putln
-    if (decrec:exp + (decrec.sig - sigdigits)) < -numdigits or decrec:exp > 0 or expformat
+    //putc(decrec.sgn ?? '-' :: '+'); puts(@decrec.sig); putc('e'); puti(decrec:exp); putln
+    //sane:zpSave()
+    if sigdigits - decrec:exp > numdigits or decrec:exp > 0 or format & $04
         //
         // Convert to exponential format
         //
@@ -243,7 +251,7 @@ def ext2str(ext, str, numdigits, expformat)
     ^str = i
     return str
 end
-def divstri(strNum, denom, expformat)#0
+def divstri(strNum, denom, format)#0
     byte strResult[20]
     byte xResult[t_extended]
 
@@ -253,7 +261,7 @@ def divstri(strNum, denom, expformat)#0
     sane:zpSave()
     str2ext(strNum, @xResult)
     sane:fpOp2(FFINT|FODIV, @xResult, @denom) // Div int denom into ext Result
-    ext2str(@xResult, @strResult, 6, expformat)
+    ext2str(@xResult, @strResult, format & $05 ?? 1 :: 6, 4, format)
     sane:zpRestore()
     puts(strNum); putc('/'); puti(denom); putc('='); puts(@strResult); putln
 end
@@ -316,13 +324,14 @@ sane:zpRestore()
 //
 // String conversion tests
 //
-divstri("-3", 0, 0)
-divstri("3", 0, 0)
-divstri("-100.5", 4, 0)
-divstri("00.5", 2, 0)
-divstri(".5", 10, 0)
-divstri("800000", 2, 0)
-divstri("800000", 2, 1)
-divstri("1e+2", 2, 0)
-divstri("-1e-2", 2, 0)
+divstri("-3", 0, 2)
+divstri("3", 0, 2)
+divstri("-100.5", 4, 2)
+divstri("00.5", 2, 2)
+divstri(".5", 10, 3)
+divstri("800000", 2, 2)
+divstri("800000", 2, 4)
+divstri("1e+2", 2, 2)
+divstri("-1e-2", 2, 2)
+divstri("0", 1, 2)
 done

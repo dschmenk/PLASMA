@@ -129,14 +129,15 @@ end
 //
 // Convert extended FP to string using , return string
 //
-export def ext2str(ext, str, numdigits, expformat)
-    byte d, i, sigdigits
+export def ext2str(ext, str, intdigits, fracdigits, format)
+    byte d, i, sigdigits, numdigits
     word dp, tens
     byte decform[t_decformat]
     byte decrec[t_decrecord]
 
-    decform:style  = 0
-    decform:digits = numdigits
+    numdigits = intdigits + fracdigits
+    decform:style  = format & $01
+    decform:digits = decform:style ?? fracdigits :: numdigits
     sane:fpOp3(FFEXT|FOB2D, @decrec, ext, @decform)
     ^(str+1) = decrec.sgn ?? '-' :: ' '
     if decrec.sig.1 == 'I'
@@ -154,19 +155,24 @@ export def ext2str(ext, str, numdigits, expformat)
         return str
     fin
     if decrec.sig.1 == '0'
+        while decrec.sig < fracdigits
+            decrec.sig++
+            decrec.sig[decrec.sig] = '0'
+        loop
         decrec:exp = -decrec.sig
     fin
     dp = decrec.sig + decrec:exp
     sigdigits = decrec.sig
-    if decrec:exp < 0
+    if decrec:exp < 0 and format & $02
         //
         // Strip off trailing fractional zeros
         //
         while sigdigits > dp and decrec.sig[sigdigits] == '0'
             sigdigits--
+            decrec:exp++
         loop
     fin
-    if (decrec:exp + (decrec.sig - sigdigits)) < -numdigits or decrec:exp > 0 or expformat
+    if sigdigits - decrec:exp > numdigits or decrec:exp > 0 or format & $04
         //
         // Convert to exponential format
         //
