@@ -1,0 +1,267 @@
+//
+// SANE stack-based Floating Point Unit library
+//
+include "inc/cmdsys.plh"
+include "inc/sane.plh"
+include "inc/fpstr.plh"
+//
+// External interface to FPU library
+//
+//export word[] fpu
+//word = @reset
+//word = @pushDbl, @pushDbl, @pushDbl, @pushExt, @pushStr
+//word = @pullDbl, @pullDbl, @pullDbl, @pullExt, @pullStr
+//word = @loadDbl, @loadDbl, @loadDbl, @loadExt, @loadStr
+//word = @storDbl, @storDbl, @storDbl, @storExt, @storStr
+//word = @shiftUp, @shiftDown, @rotateUp, @rotateDown, @dup, @swap, @clear
+//word = @add, @sub, @mul, @div, @rem
+//word = @neg, @abs, @trunc, @round
+//
+// FP Stack
+//
+byte stack[t_extended*4]
+word stackRegs[4]
+//
+// Stack manipulation routines
+//
+def rotateUp#1
+    stackRegs[0], stackRegs[1], stackRegs[2], stackRegs[3] = stackRegs[3], stackRegs[0], stackRegs[1], stackRegs[2]
+end
+def rotateDown#1
+    stackRegs[0], stackRegs[1], stackRegs[2], stackRegs[3] = stackRegs[1], stackRegs[2], stackRegs[3], stackRegs[0]
+end
+def shiftUp#1
+    stackRegs[0], stackRegs[1], stackRegs[2], stackRegs[3] = stackRegs[3], stackRegs[0], stackRegs[1], stackRegs[2]
+    memset(stackRegs[0], 0, t_extended)
+end
+def shiftDown#1
+    stackRegs[0], stackRegs[1], stackRegs[2], stackRegs[3] = stackRegs[1], stackRegs[2], stackRegs[3], stackRegs[0]
+    memset(stackRegs[3], 0, t_extended)
+end
+def dup#1
+    stackRegs[0], stackRegs[1], stackRegs[2], stackRegs[3] = stackRegs[3], stackRegs[0], stackRegs[1], stackRegs[2]
+    memcpy(stackRegs[0], stackRegs[1], t_extended)
+end
+def swap#1
+    byte temp[t_extended]
+    memcpy(temp,         stackRegs[1], t_extended)
+    memcpy(stackRegs[1], stackRegs[0], t_extended)
+    memcpy(stackRegs[0], temp,         t_extended)
+end
+def clear#1
+    memset(stackRegs[0], 0, t_extended)
+end
+//
+// Stack access
+//
+def pushInt(pInt)
+    stackRegs[0], stackRegs[1], stackRegs[2], stackRegs[3] = stackRegs[3], stackRegs[0], stackRegs[1], stackRegs[2]
+    sane:zpSave()
+    sane:fpOp2(FFINT|FOZ2X, stackRegs[0], pInt)
+    return sane:zpRestore()
+end
+def pullInt(pInt)
+    sane:zpSave()
+    sane:fpOp2(FFINT|FOX2Z, pInt, stackRegs[0])
+    sane:zpRestore()
+    return shiftDown
+end
+def loadInt(pInt, reg)
+    sane:zpSave()
+    sane:fpOp2(FFINT|FOZ2X, stackRegs[reg & $03], pInt)
+    return sane:zpRestore()
+end
+def storeInt(pInt, reg)
+    sane:zpSave()
+    sane:fpOp2(FFINT|FOX2Z, pInt, stackRegs[reg & $03])
+    return sane:zpRestore()
+end
+def pushSgl(pSgl)
+    stackRegs[0], stackRegs[1], stackRegs[2], stackRegs[3] = stackRegs[3], stackRegs[0], stackRegs[1], stackRegs[2]
+    sane:zpSave()
+    sane:fpOp2(FFSGL|FOZ2X, stackRegs[0], pSgl)
+    return sane:zpRestore()
+end
+def pullSgl(pSgl)
+    sane:zpSave()
+    sane:fpOp2(FFSGL|FOX2Z, pSgl, stackRegs[0])
+    sane:zpRestore()
+    return shiftDown
+end
+def loadSgl(pSgl, reg)
+    sane:zpSave()
+    sane:fpOp2(FFSGL|FOZ2X, stackRegs[reg & $03], pSgl)
+    return sane:zpRestore()
+end
+def storeSgl(pSgl, reg)
+    sane:zpSave()
+    sane:fpOp2(FFSGL|FOX2Z, pSgl, stackRegs[reg & $03])
+    return sane:zpRestore()
+end
+def pushDbl(pDbl)
+    stackRegs[0], stackRegs[1], stackRegs[2], stackRegs[3] = stackRegs[3], stackRegs[0], stackRegs[1], stackRegs[2]
+    sane:zpSave()
+    sane:fpOp2(FFDBL|FOZ2X, stackRegs[0], pDbl)
+    return sane:zpRestore()
+end
+def pullDbl(pDbl)
+    sane:zpSave()
+    sane:fpOp2(FFDBL|FOX2Z, pDbl, stackRegs[0])
+    sane:zpRestore()
+    return shiftDown
+end
+def loadDbl(pDbl, reg)
+    sane:zpSave()
+    sane:fpOp2(FFDBL|FOZ2X, stackRegs[reg & $03], pDbl)
+    return sane:zpRestore()
+end
+def storeDbl(pDbl, reg)
+    sane:zpSave()
+    sane:fpOp2(FFDBL|FOX2Z, pDbl, stackRegs[reg & $03])
+    return sane:zpRestore()
+end
+def pushExt(pExt)
+    stackRegs[0], stackRegs[1], stackRegs[2], stackRegs[3] = stackRegs[3], stackRegs[0], stackRegs[1], stackRegs[2]
+    sane:zpSave()
+    sane:fpOp2(FFEXT|FOZ2X, stackRegs[0], pExt)
+    return sane:zpRestore()
+end
+def pullExt(pExt)
+    sane:zpSave()
+    sane:fpOp2(FFEXT|FOX2Z, pExt, stackRegs[0])
+    sane:zpRestore()
+    return shiftDown
+end
+def loadExt(pExt, reg)
+    sane:zpSave()
+    sane:fpOp2(FFEXT|FOZ2X, stackRegs[reg & $03], pExt)
+    return sane:zpRestore()
+end
+def storeExt(pExt, reg)
+    sane:zpSave()
+    sane:fpOp2(FFEXT|FOX2Z, pExt, stackRegs[reg & $03])
+    return sane:zpRestore()
+end
+def pushStr(pStr)
+    stackRegs[0], stackRegs[1], stackRegs[2], stackRegs[3] = stackRegs[3], stackRegs[0], stackRegs[1], stackRegs[2]
+    sane:zpSave()
+    str2ext(pStr, stackRegs[0])
+    return sane:zpRestore()
+end
+def pullStr(pStr, sigdigits, expformat)
+    sane:zpSave()
+    ext2str(stackRegs[0], pStr, sigdigits, expformat)
+    sane:zpRestore()
+    return shiftDown
+end
+def loadStr(pStr, reg)
+    sane:zpSave()
+    str2ext(pStr, stackRegs[reg])
+    return sane:zpRestore()
+end
+def storStr(pStr, sigdigits, expformat, reg)
+    sane:zpSave()
+    ext2str(stackRegs[reg], pStr, sigdigits, expformat)
+    return sane:zpRestore()
+end
+//
+// Basic math operations
+//
+def add#1
+    sane:zpSave()
+    sane:fpOp2(FFEXT|FOADD, stackRegs[1], stackRegs[0])
+    sane:zpRestore()
+    return shiftDown
+end
+def sub#1
+    sane:zpSave()
+    sane:fpOp2(FFEXT|FOSUB, stackRegs[1], stackRegs[0])
+    sane:zpRestore()
+    return shiftDown
+end
+def mul#1
+    sane:zpSave()
+    sane:fpOp2(FFEXT|FOMUL, stackRegs[1], stackRegs[0])
+    sane:zpRestore()
+    return shiftDown
+end
+def div#1
+    sane:zpSave()
+    sane:fpOp2(FFEXT|FODIV, stackRegs[1], stackRegs[0])
+    sane:zpRestore()
+    return shiftDown
+end
+def rem#1
+    sane:zpSave()
+    sane:fpOp2(FFEXT|FOREM, stackRegs[1], stackRegs[0])
+    sane:zpRestore()
+    return shiftDown
+end
+def neg#1
+    sane:zpSave()
+    sane:fpOp1(FFEXT|FONEG, stackRegs[0])
+    return sane:zpRestore()
+end
+def abs#1
+    sane:zpSave()
+    sane:fpOp1(FFEXT|FOABS, stackRegs[0])
+    return sane:zpRestore()
+end
+def trunc#1
+    sane:zpSave()
+    sane:fpOp1(FFEXT|FOTTI, stackRegs[0])
+    return sane:zpRestore()
+end
+def round#1
+    sane:zpSave()
+    sane:fpOp1(FFEXT|FORTI, stackRegs[0])
+    return sane:zpRestore()
+end
+def sqrt#1
+    sane:zpSave()
+    sane:fpOp1(FFEXT|FOSQRT, stackRegs[0])
+    return sane:zpRestore()
+end
+//
+// Reset FPU and SANE
+//
+def reset#1
+    byte i
+    word zero
+
+    zero = 0
+    sane:fpInit()
+    sane:zpSave()
+    for i = 0 to 3
+        stackRegs[i] = @stack[i * t_extended]
+        sane:fpOp2(FFINT|FOZ2X, stackRegs[i], @zero)
+    next
+    return sane:zpRestore()
+end
+//
+// Test code
+//
+def dumpStack#0
+    byte r
+    byte regStr[24]
+
+    for r = 3 downto 0
+        storStr(@regStr, 8, 0, r)
+        puts("  "); puti(r); putc(':'); puts(@regStr); putln
+    next
+end
+//
+// Run through some test cases
+//
+reset
+dumpStack
+puts("Push 2.0\n")
+pushStr("2.0")
+dumpStack
+puts("Push 4.0\n")
+pushStr("4.0")
+dumpStack
+puts("Add\n")
+add
+dumpStack
+done
