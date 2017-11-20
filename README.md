@@ -1011,7 +1011,7 @@ Assignments evaluate an expression and save the result into memory. They can be 
 byte a
 a = 0
 ```
-Multiple assignement are supported. They can be very useful for returning more than one value from a function or efficiently swapping values around/
+Multiple assignement are supported. They can be very useful for returning more than one value from a function or efficiently swapping values around.
 ```
 predef bivalfunc#2
 
@@ -1071,7 +1071,7 @@ def lambdas
     return &(x, y, z) x * z / y    // You can even return lambdas from definitions (these x, y are different from the locally defined x, y)
 end
 ````
-There are some limitations to lambda functions. They don't have any local variables except for the parameters. They can only return an expression; there are no control flow statements allowed. Lastly, they can only be defined inside another definition. They cannot be defined in global data space or in the module main function (it gets deallocated after initialization).
+There are some limitations to lambda functions. They don't have any local variables except for the parameters. They can only return an expression; there are no control flow statements allowed, but the ternary operator can be used for simple `if-the-else` control. Lastly, they can only be defined inside another definition. They cannot be defined in global data space or in the module main function (it gets deallocated after initialization).
 
 ### Control Flow
 
