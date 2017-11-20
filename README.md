@@ -430,6 +430,8 @@ a, b = b, a
 
 Expressions can be built up with constants, variables, function calls, addresses, and pointers/arrays.  Comparison operators evaluate to 0 or -1 instead of the more traditional 0 or 1.  The use of -1 allows binary operations to be applied to other non-zero values and still retain a non-zero result.  Any conditional tests check only for zero and non-zero values.
 
+Operators on values can be unary, `-myvar`, binary `var1 * var2`, and ternary  `testvar > 0 ?? trueValue :: falseValue`. The unary and binary operators are algebraic and referencing in nature. The ternary operator is logical, like an inline `if-then-else` clause (it works just like the ternary `? :` operator in C like languages).
+
 There are four basic types of data that can be manipulated: constants, variables, addresses, and functions.  Memory can only be read or written as either a byte or a word.  Bytes are unsigned 8-bit quantities, words are signed 16-bit quantities.  Everything on the evaluation stack is treated as a word.  Other than that, any value can be treated as a pointer, address, function, character, integer, etc.  There are convenience operations in PLASMA to easily manipulate addresses and expressions as pointers, arrays, structures, functions, or combinations thereof.  If a variable is declared as a byte, it can be accessed as a simple, single dimension byte array by using brackets to indicate the offset.  Any expression can calculate the indexed offset.  A word variable can be accessed as a word array in the same fashion.  In order to access expressions or constants as arrays, a type identifier has to be inserted before the brackets.  a `.` character denotes a byte type, a `:` character denotes a word type.  Along with brackets to calculate an indexed offset, a constant can be used after the `.` or `:` and will be added to the base address.  The constant can be a defined const to allow for structure style syntax.  If the offset is a known constant, using the constant offset is a much more efficient way to address the elements over an array index.  Multidimensional arrays are treated as arrays of array pointers.
 
 ```
@@ -461,7 +463,7 @@ keyin = @keyin2plus // address-of keyin2plus function
 key   = keyin()
 ```
 
-Lambda functions are anonymous functions that can be used to return a value (or multiple values). They can be used as function pointers to routines that need a quick and dirty expression. They are written as '&' (a poor man's lambda symbol) followed by parameters in parentheses, and the resultant expression. There are no local variables allowed.
+Lambda functions are anonymous functions that can be used to return a value (or multiple values). They can be used as function pointers to routines that need a quick and dirty expression. They are written as '&' (a poor man's lambda symbol) followed by parameters in parentheses, and the resultant expression. There are no local variables or statements allowed, only expressions. The ternary operator can be used to provide a bit of `if-then-else` control inside the lambda function.
 
 ```
 word result
@@ -966,36 +968,40 @@ Address operators can work on any value, i.e. anything can be an address. Parent
 
 #### Arithmetic, Bitwise, and Logical Operators
 
-| OP   |     Unary Operation |
-|:----:|---------------------|
-| -    | negate
-| ~    | bitwise compliment
-| NOT  | logical NOT
-|  !   | logical NOT (alternate)
+|  OP   |     Unary Operation |
+|:-----:|---------------------|
+|  -    | negate
+|  ~    | bitwise compliment
+|  NOT  | logical NOT
+|  !    | logical NOT (alternate)
 
-| OP   |     Binary Operation |
-|:----:|----------------------|
-| *    | multiply
-| /    | divide
-| %    | modulo
-| +    | add
-| -    | subtract
-| <<   | shift left
-| >>   | shift right
-| &    | bitwise AND
-| ^    | bitwise XOR
-| &#124; | bitwise OR
-| ==   | equals
-| <>   | not equal
-| !=   | not equal (alt)
-| >=   | greater than or equal
-| >    | greater than
-| <=   | less than or equal
-| <    | less than
-| OR   |  logical OR
-| AND  |  logical AND
-| &#124;&#124;    |  logical OR (alt)
-| &&   |  logical AND (alt)
+|  OP   |     Binary Operation |
+|:-----:|----------------------|
+|  *    | multiply
+|  /    | divide
+|  %    | modulo
+|  +    | add
+|  -    | subtract
+|  <<   | shift left
+|  >>   | shift right
+|  &    | bitwise AND
+|  ^    | bitwise XOR
+|  &#124; | bitwise OR
+|  ==   | equals
+|  <>   | not equal
+|  !=   | not equal (alt)
+|  >=   | greater than or equal
+|  >    | greater than
+|  <=   | less than or equal
+|  <    | less than
+|  OR   |  logical OR
+|  AND  |  logical AND
+|  &#124;&#124;    |  logical OR (alt)
+|  &&   |  logical AND (alt)
+
+|  OP   |    Ternary Operation |
+|:-----:|----------------------|
+| ?? :: | if then else
 
 ### Assignment
 
@@ -1005,7 +1011,13 @@ Assignments evaluate an expression and save the result into memory. They can be 
 byte a
 a = 0
 ```
+Multiple assignement are supported. They can be very useful for returning more than one value from a function or efficiently swapping values around/
+```
+predef bivalfunc#2
 
+a, b = bivalfunc() // Two values returned from function
+stack[0], stack[1], stack[3] = 0, stack[0], stack[1] // Push 0 to bottom of three element stack
+```
 #### Empty Assignments
 
 An assignment doesn't even have to save the expression into memory, although the expression will be evaluated. This can be useful when referencing hardware that responds just to being accessed. On the Apple II, the keyboard is read from location $C000, then the strobe, telling the hardware to prepare for another key press is cleared by just reading the address $C010. In PLASMA, this looks like:
@@ -1050,7 +1062,7 @@ def lambdas
     word lambda1
     word lambda2
     word x, y
-  
+
     lambda1 = &(a, b) a + b
     lambda2 = &(a, b) (a + b, a - b)
     x    = lambda1(1, 2)           // This will return 3
