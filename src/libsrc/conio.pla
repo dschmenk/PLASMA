@@ -24,16 +24,22 @@ const hgr1         = $2000
 const hgr2         = $4000
 const page1        = 0
 const page2        = 1
+struc t_conio
+    word keypressed
+    word home
+    word gotoxy
+    word viewport
+    word texttype
+    word textmode
+    word grmode
+    word grcolor
+    word grplot
+end
 //
 // Predefined functions.
 //
-predef a2reset,a2keypressed,a2home,a2gotoxy,a2viewport,a2texttype
-predef a2textmode,a2writeint,a2writeln
-predef a2grmode,grcolor,grplot
-//
-// String pool.
-//
-byte stdlib[]  = "STDLIB"
+predef a2keypressed,a2home,a2gotoxy,a2viewport,a2texttype
+predef a2textmode,a2grmode,a2grcolor,a2grplot
 //
 // Screen row address arrays.
 //
@@ -63,7 +69,6 @@ export word conio[]
 //
 // Function pointers.
 //
-word = @a2reset
 word = @a2keypressed
 word = @a2home
 word = @a2gotoxy
@@ -71,8 +76,8 @@ word = @a2viewport
 word = @a2texttype
 word = @a2textmode
 word = @a2grmode
-word = @grcolor
-word = @grplot
+word = @a2grcolor
+word = @a2grplot
 //
 // Native  routines.
 //
@@ -82,7 +87,7 @@ end
 //
 // def grscrn(rowaddrs)
 //
-asm grscrn
+asm a2grscrn
 GRSCRN	=	$26
 GRSCRNL	=	GRSCRN
 GRSCRNH	=	GRSCRNL+1
@@ -95,7 +100,7 @@ end
 //
 // def grcolor(color)
 //
-asm grcolor
+asm a2grcolor
 GRCLR	=	$30
 	LDA	#$0F
 	AND	ESTKL,X
@@ -111,7 +116,7 @@ end
 //
 // def grplot(x, y)
 //
-asm grplot
+asm a2grplot
 	STY	IPY
 	LDA	ESTKL,X
 	AND	#$FE
@@ -142,13 +147,19 @@ end
 def a1keypressed
     return ^$D011 >= 128
 end
+def a1home
+    byte l
+    for l = 0 to 23
+        putln
+    next
+end
 def a1gotoxy(x, y)
     curshpos = x
     cursvpos = y
     putln
     while x
         putc(' ')
-	x = x - 1
+    	x = x - 1
     loop
 end
 def a1viewport(left, top, width, height)
@@ -168,7 +179,7 @@ def a2keypressed
 end
 def a2home
     curshpos = 0
-    cursypos = 0
+    cursvpos = 0
     return call($FC58, 0, 0, 0, 0) // home()
 end
 def a2gotoxy(x, y)
@@ -180,9 +191,9 @@ end
 def a2viewport(left, top, width, height)
     if !width or !height
         left   = 0
-	top    = 0
-	width  = 40
-	height = 24
+    	top    = 0
+    	width  = 40
+    	height = 24
     fin
     ^$20 = left
     ^$21 = width
@@ -191,9 +202,6 @@ def a2viewport(left, top, width, height)
     return a2gotoxy(0, 0)
 end
 def a2texttype(type)
-end
-def a2writeln(string, start, fill)
-
 end
 def a2textmode(columns)
     call($FB39, 0, 0, 0, 0) // textmode()
@@ -206,7 +214,7 @@ def a2grmode(mix)
         ^showfull
     fin
     a2home
-    return grscrn(@txt1scrn) // point to lo-res screen
+    return a2grscrn(@txt1scrn) // point to lo-res screen
 end
 //
 // Apple III routines.
@@ -237,7 +245,7 @@ end
 def a3home
     curshpos = 0
     cursvpos = 0
-    return cout(28)
+    return putc(28)
 end
 def a3gotoxy(x, y)
     curshpos = x
@@ -250,12 +258,12 @@ end
 def a3viewport(left, top, width, height)
     if !width or !height
         //
-	// Reset the full-screen viewport
-	//
+    	// Reset the full-screen viewport
+    	//
         left   = 0
-	top    = 0
-	width  = textwidth
-	height = 24
+    	top    = 0
+    	width  = textcols
+    	height = 24
     fin
     putc(1) // Reset viewport
     putc(26)
@@ -293,30 +301,31 @@ def a3grmode(mix)
         memset(txt1scrn[i], 40, $0000) // text  screen
         memset(txt2scrn[i], 40, $0000) // color screen
     next
-    return grscrn(@txt2scrn) // point to color screen
+    return a2grscrn(@txt2scrn) // point to color screen
 end
 //
 // Machine specific initialization.
 //
-when MACHID & $C8
+when ^MACHID & $C8
     is $08 // Apple 1
-	conio:reset      = @a1reset
         conio:keypressed = @a1keypressed
-	conio:home       = @a1home
-	conio:gotoxy     = @a1gotoxy
-	conio:viewport   = @a1viewport
-	conio:texttype   = @a1texttype
-	conio:textmode   = @a1textmode
-	conio:grmixmode  = @a1grmixmode
+        conio:home       = @a1home
+        conio:gotoxy     = @a1gotoxy
+        conio:viewport   = @a1viewport
+        conio:texttype   = @a1texttype
+        conio:textmode   = @a1textmode
+        conio:grmode     = @a1grmode
+        break
     is $C0 // Apple ///
-	conio:reset      = @a3reset
         conio:keypressed = @a3keypressed
-	conio:home       = @a3home
-	conio:gotoxy     = @a3gotoxy
-	conio:viewport   = @a3viewport
-	conio:texttype   = @a3texttype
-	conio:textmode   = @a3textmode
-	conio:grmixmode  = @a3grmixmode
-	devcons = modaddr(@stdlib).5 // devcons variable from STDLIB
+        conio:home       = @a3home
+        conio:gotoxy     = @a3gotoxy
+        conio:viewport   = @a3viewport
+        conio:texttype   = @a3texttype
+        conio:textmode   = @a3textmode
+        conio:grmode     = @a3grmode
+        devcons = modaddr("CMDSYS").5 // devcons variable from STDLIB
+        break
     otherwise // Apple ][
 wend
+done
