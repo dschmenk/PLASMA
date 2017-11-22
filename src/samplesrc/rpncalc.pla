@@ -24,7 +24,7 @@ end
 predef delKey#0, clearKey#0, dropKey#0
 predef digitKey#0, zeroKey#0, pointKey#0, opKey#0
 predef enterKey#0, chsKey#0, memKey#0
-predef sqrtKey#0, powKey#0
+predef sqrtKey#0, piKey#0
 //
 // Current input
 //
@@ -82,8 +82,8 @@ byte[t_keypad]        = '>', 15, 18, "[>]"
 word                  = @memKey
 byte[t_keypad]        = 'Q',  3, 20, "[S(Q)R]"
 word                  = @sqrtKey
-byte[t_keypad]        = '^', 11, 20, "[Y(^)X]"
-word                  = @powKey
+byte[t_keypad]        = 'P', 11, 20, "[ (P)I]"
+word                  = @piKey
 byte                  = 0
 //
 // Display format state
@@ -129,7 +129,7 @@ def showStack#0
     byte strFP[displayWidth+1]
 
     for s = 0 to 3
-        fpu:storStr(@strFP, displayWidth - displayFix - 1, displayFix, FPSTR_FIXED, s)
+        fpu:storStr(@strFP, displayWidth - displayFix - 5, displayFix, FPSTR_FIXED, s)
         conio:gotoxy(4, 5 - s)
         repc(displayWidth - strFP - 1, ' ')
         puts(@strFP)
@@ -140,7 +140,7 @@ def showMem#0
     byte strFP[displayWidth+1]
 
     for m = 0 to 9
-        ext2str(@memory[m*t_extended], @strFP, displayWidth - displayFix - 1, displayFix, FPSTR_FIXED)
+        ext2str(@memory[m*t_extended], @strFP, displayWidth - displayFix - 5, displayFix, FPSTR_FIXED)
         conio:gotoxy(23, 2 + m)
         repc(displayWidth - strFP - 1, ' ')
         puts(@strFP)
@@ -162,6 +162,13 @@ end
 def initInput#0
     inputStr   = 1
     inputStr.1 = '0'
+end
+def updateInput#0
+    if inputStr <> 1 or inputStr.1 <> '0'
+        fpu:pushStr(@inputStr)
+    fin
+    initInput
+    showInput
 end
 def initDisplay#0
     byte i
@@ -221,7 +228,12 @@ def delKey(pkey)#0
     showInput
 end
 def dropKey(pkey)#0
-    fpu:shiftDown()
+    fpu:pullStr(@inputStr, , displayWidth - displayFix - 1, displayFix, FPSTR_STRIP|FPSTR_FLOAT)
+    if inputStr.1 == ' '
+        inputStr--
+        memcpy(@inputStr.1, @inputStr.2, inputStr)
+    fin
+    showInput
     showStack
 end
 def digitKey(pkey)#0
@@ -257,9 +269,7 @@ def enterKey(pkey)#0
     showInput
 end
 def opKey(pkey)#0
-    if inputStr <> 1 or inputStr.1 <> '0'
-        fpu:pushStr(@inputStr)
-    fin
+    updateInput
     when ^pkey
         is '+'
             fpu:add()
@@ -275,8 +285,6 @@ def opKey(pkey)#0
             break
     wend
     showStack
-    initInput
-    showInput
 end
 def chsKey(pkey)#0
     if inputStr.1 <> '0'
@@ -308,8 +316,13 @@ def memKey(pkey)#0
     fin
 end
 def sqrtKey(pkey)#0
+    updateInput
+    fpu:sqrt()
+    showStack
 end
-def powKey(pkey)#0
+def piKey(pkey)#0
+    fpu:constPi()
+    showStack
 end
 //
 // Keypress handler
