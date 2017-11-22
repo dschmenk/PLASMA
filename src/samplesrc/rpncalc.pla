@@ -3,11 +3,97 @@
 //
 include "inc/cmdsys.plh"
 include "inc/sane.plh"
+include "inc/fpstr.plh"
 include "inc/fpu.plh"
 include "inc/conio.plh"
-
+const displayWidth = 16
+const inputLen = displayWidth
+//
+// Keypad structure
+//
+struc t_keypad
+    byte keychar
+    byte xpos
+    byte ypos
+    byte keystr[8]
+end
+struc t_keyinput
+    byte keyinfo[t_keypad]
+    word phandler
+end
+predef delKey#0, clearKey#0, dropKey#0
+predef digitKey#0, zeroKey#0, pointKey#0, opKey#0
+predef enterKey#0, chsKey#0, memKey#0
+predef sqrtKey#0, powKey#0
+//
+// Current input
+//
+byte inputStr[inputLen+1] = "0"
+//
+// Store/load memory
+//
+byte memory[10*t_extended]
+//
+// Key values
+//
+byte[t_keypad] keypad = $08, 0, 0, ""
+word                  = @delKey
+byte[t_keypad]        = $1B, 0, 0, ""
+word                  = @clearKey
+byte[t_keypad]        = '=', 0, 0, ""
+word                  = @dropKey
+byte[t_keypad]        = '7',  3, 10, "[7]"
+word                  = @digitKey
+byte[t_keypad]        = '8',  7, 10, "[8]"
+word                  = @digitKey
+byte[t_keypad]        = '9', 11, 10, "[9]"
+word                  = @digitKey
+byte[t_keypad]        = '/', 15, 10, "[/]"
+word                  = @opKey
+byte[t_keypad]        = '4',  3, 12, "[4]"
+word                  = @digitKey
+byte[t_keypad]        = '5',  7, 12, "[5]"
+word                  = @digitKey
+byte[t_keypad]        = '6', 11, 12, "[6]"
+word                  = @digitKey
+byte[t_keypad]        = '*', 15, 12, "[*]"
+word                  = @opKey
+byte[t_keypad]        = '1',  3, 14, "[1]"
+word                  = @digitKey
+byte[t_keypad]        = '2',  7, 14, "[2]"
+word                  = @digitKey
+byte[t_keypad]        = '3', 11, 14, "[3]"
+word                  = @digitKey
+byte[t_keypad]        = '-', 15, 14, "[-]"
+word                  = @opKey
+byte[t_keypad]        = '0',  3, 16, "[0]"
+word                  = @zeroKey
+byte[t_keypad]        = '.',  7, 16, "[.]"
+word                  = @pointKey
+byte[t_keypad]        = '?', 11, 16, "[?]"
+word                  = @chsKey
+byte[t_keypad]        = '+', 15, 16, "[+]"
+word                  = @opKey
+byte[t_keypad]        = $0D,  3, 18, "[ENTER]"
+word                  = @enterKey
+byte[t_keypad]        = '<', 11, 18, "[<]"
+word                  = @memKey
+byte[t_keypad]        = '>', 15, 18, "[>]"
+word                  = @memKey
+byte[t_keypad]        = 'Q',  3, 20, "[S(Q)R]"
+word                  = @sqrtKey
+byte[t_keypad]        = '^', 11, 20, "[Y(^)X]"
+word                  = @powKey
+byte                  = 0
+//
+// Display format state
+//
+byte displayFix = 4
+//
+// Utility routines
+//
 def repc(rep, c)#0
-    while rep
+    while rep > 0
         putc(c)
         rep--
     loop
@@ -16,9 +102,9 @@ def rect(x, y, width, height, frame, title)
     byte i
 
     conio:gotoxy(x + 1, y)
-    repc(width - 2, frame ?? '=' :: '-')
+    repc(width - 2, frame ?? '#' :: '-')
     conio:gotoxy(x + 1, y + height - 1)
-    repc(width - 2, frame ?? '=' :: '-')
+    repc(width - 2, frame ?? '#' :: '-')
     for i = 1 to height - 1
         conio:gotoxy(x, y + i)
         putc(frame ?? '#' :: '!')
@@ -38,10 +124,215 @@ def rect(x, y, width, height, frame, title)
         puts(title)
     fin
 end
-conio:home()
-rect(0, 0, 40, 23, 1, "RPN Calculator")
-rect(1, 1, 19, 6, 0, "Stack")
-rect(1, 6, 19, 3, 0, 0)
-rect(20, 1, 19, 12, 0, "Memory")
-conio:gotoxy(0, 20)
+def showStack#0
+    byte s
+    byte strFP[displayWidth+1]
+
+    for s = 0 to 3
+        fpu:storStr(@strFP, displayWidth - displayFix - 1, displayFix, FPSTR_FIXED, s)
+        conio:gotoxy(4, 5 - s)
+        repc(displayWidth - strFP - 1, ' ')
+        puts(@strFP)
+    next
+end
+def showMem#0
+    byte m
+    byte strFP[displayWidth+1]
+
+    for m = 0 to 9
+        ext2str(@memory[m*t_extended], @strFP, displayWidth - displayFix - 1, displayFix, FPSTR_FIXED)
+        conio:gotoxy(23, 2 + m)
+        repc(displayWidth - strFP - 1, ' ')
+        puts(@strFP)
+    next
+end
+def showInput#0
+    conio:gotoxy(2,7)
+    repc(17 - inputStr, ' ')
+    puts(@inputStr)
+end
+def showStatus(pstr)#0
+    conio:gotoxy(0,23)
+    puts(pstr)
+end
+def clearStatus#0
+    conio:gotoxy(0,23)
+    repc(39, ' ')
+end
+def initInput#0
+    inputStr   = 1
+    inputStr.1 = '0'
+end
+def initDisplay#0
+    byte i
+    word pkeys
+
+    conio:home()
+    rect(0, 0, 40, 23, 1, "RPN Calculator")
+    rect(1, 1, 19, 6, 0, "Stack")
+    rect(1, 6, 19, 3, 0, 0)
+    conio:gotoxy(2, 2); puts("T:")
+    conio:gotoxy(2, 3); puts("Z:")
+    conio:gotoxy(2, 4); puts("Y:")
+    conio:gotoxy(2, 5); puts("X:")
+    rect(20, 1, 19, 12, 0, "Memory")
+    for i = 0 to 9
+        conio:gotoxy(21, 2 + i); puti(i); putc(':')
+    next
+    pkeys = @keypad
+    while ^pkeys
+        conio:gotoxy(pkeys->xpos, pkeys->ypos)
+        puts(pkeys + keystr)
+        pkeys = pkeys + t_keyinput
+    loop
+    initInput
+    showInput
+end
+def initState#0
+    byte m
+
+    //
+    // Init FPU
+    //
+    fpu:reset()
+    //
+    // Fill memory
+    //
+    for m = 0 to 9
+        fpu:storExt(@memory[m*t_extended], X_REG)
+    next
+    showStack
+    showMem
+end
+//
+// Keypress input handlers
+//
+def clearKey(pkey)#0
+    initInput
+    showInput
+end
+def delKey(pkey)#0
+    if inputStr
+        inputStr--
+    fin
+    if !inputStr or (inputStr == 1 and inputStr.1 == '-')
+        initInput
+    fin
+    showInput
+end
+def dropKey(pkey)#0
+    fpu:shiftDown()
+    showStack
+end
+def digitKey(pkey)#0
+    if inputStr < inputLen
+        if inputStr <> 1 or inputStr.1 <> '0'
+            inputStr++
+        fin
+        inputStr[inputStr] = ^pkey
+        showInput
+    fin
+end
+def zeroKey(pkey)#0
+    if inputStr <> 1 or inputStr.1 <> '0'
+        digitKey(pkey)
+    fin
+end
+def pointKey(pkey)#0
+    byte c
+
+    for c = 1 to inputStr
+        if inputStr[c] == '.'
+            return
+        fin
+    next
+    inputStr++
+    inputStr[inputStr] = '.'
+    showInput
+end
+def enterKey(pkey)#0
+    fpu:pushStr(@inputStr)
+    showStack
+    initInput
+    showInput
+end
+def opKey(pkey)#0
+    if inputStr <> 1 or inputStr.1 <> '0'
+        fpu:pushStr(@inputStr)
+    fin
+    when ^pkey
+        is '+'
+            fpu:add()
+            break
+        is '-'
+            fpu:sub()
+            break
+        is '*'
+            fpu:mul()
+            break
+        is '/'
+            fpu:div()
+            break
+    wend
+    showStack
+    initInput
+    showInput
+end
+def chsKey(pkey)#0
+    if inputStr.1 <> '0'
+        if inputStr.1 <> '-'
+            memcpy(@inputStr.2, @inputStr.1, inputStr)
+            inputStr++
+            inputStr.1 = '-'
+        else
+            inputStr--
+            memcpy(@inputStr.1, @inputStr.2, inputStr)
+        fin
+        showInput
+    fin
+end
+def memKey(pkey)#0
+    word r
+
+    showStatus("Press 0-9 for memory register:")
+    r = getc - '0'
+    clearStatus
+    if r >= 0 and r <= 9
+        if ^pkey == '<'
+            fpu:pushExt(@memory[r*t_extended])
+            showStack
+        else
+            fpu:storExt(@memory[r*t_extended], X_REG)
+            showMem
+        fin
+    fin
+end
+def sqrtKey(pkey)#0
+end
+def powKey(pkey)#0
+end
+//
+// Keypress handler
+//
+def inputKey
+    byte inkey
+    word pkeys
+
+    while 1
+        pkeys = @keypad
+        conio:gotoxy(18, 7)
+        inkey = toupper(getc)
+        while ^pkeys
+            if inkey == ^pkeys
+                pkeys=>phandler(pkeys)#0
+                break
+            fin
+            pkeys = pkeys + t_keyinput
+        loop
+    loop
+end
+initDisplay
+initState
+inputKey
+conio:gotoxy(0, 22)
 done
