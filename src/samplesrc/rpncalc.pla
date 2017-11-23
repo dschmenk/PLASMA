@@ -21,10 +21,10 @@ struc t_keyinput
     byte keyinfo[t_keypad]
     word phandler
 end
-predef delKey#0, clearKey#0, dropKey#0
+predef delKey#0, cmdKey#0, dropKey#0
 predef digitKey#0, zeroKey#0, pointKey#0, opKey#0
 predef enterKey#0, chsKey#0, memKey#0
-predef sqrtKey#0, piKey#0
+predef sqrtKey#0, absKey#0
 //
 // Current input
 //
@@ -39,7 +39,7 @@ byte memory[10*t_extended]
 byte[t_keypad] keypad = $08, 0, 0, ""
 word                  = @delKey
 byte[t_keypad]        = $1B, 0, 0, ""
-word                  = @clearKey
+word                  = @cmdKey
 byte[t_keypad]        = '=', 0, 0, ""
 word                  = @dropKey
 byte[t_keypad]        = '7',  3, 10, "[7]"
@@ -70,8 +70,8 @@ byte[t_keypad]        = '0',  3, 16, "[0]"
 word                  = @zeroKey
 byte[t_keypad]        = '.',  7, 16, "[.]"
 word                  = @pointKey
-byte[t_keypad]        = '?', 11, 16, "[?]"
-word                  = @chsKey
+byte[t_keypad]        = '@', 11, 16, "[@]"
+word                  = @opKey
 byte[t_keypad]        = '+', 15, 16, "[+]"
 word                  = @opKey
 byte[t_keypad]        = $0D,  3, 18, "[ENTER]"
@@ -80,10 +80,10 @@ byte[t_keypad]        = '<', 11, 18, "[<]"
 word                  = @memKey
 byte[t_keypad]        = '>', 15, 18, "[>]"
 word                  = @memKey
-byte[t_keypad]        = 'Q',  3, 20, "[S(Q)R]"
-word                  = @sqrtKey
-byte[t_keypad]        = 'P', 11, 20, "[ (P)I]"
-word                  = @piKey
+byte[t_keypad]        = 'A',  3, 20, "[(A)BS]"
+word                  = @opKey
+byte[t_keypad]        = 'N', 11, 20, "[(N)EG]"
+word                  = @chsKey
 byte                  = 0
 //
 // Display format state
@@ -192,8 +192,6 @@ def initDisplay#0
         puts(pkeys + keystr)
         pkeys = pkeys + t_keyinput
     loop
-    initInput
-    showInput
 end
 def initState#0
     byte m
@@ -205,19 +203,20 @@ def initState#0
     //
     // Fill memory
     //
-    for m = 0 to 9
+    for m = 2 to 9
         fpu:storExt(@memory[m*t_extended], X_REG)
     next
-    showStack
-    showMem
+    //
+    // Put some useful constants in there
+    //
+    fpu:constPi()
+    fpu:pullExt(@memory[0*t_extended])
+    fpu:constE()
+    fpu:pullExt(@memory[1*t_extended])
 end
 //
 // Keypress input handlers
 //
-def clearKey(pkey)#0
-    initInput
-    showInput
-end
 def delKey(pkey)#0
     if inputStr
         inputStr--
@@ -283,6 +282,12 @@ def opKey(pkey)#0
         is '/'
             fpu:div()
             break
+        is '@'
+            fpu:sqrt()
+            break
+        is 'A'
+            fpu:abs()
+            break
     wend
     showStack
 end
@@ -315,15 +320,24 @@ def memKey(pkey)#0
         fin
     fin
 end
-def sqrtKey(pkey)#0
-    updateInput
-    fpu:sqrt()
+//
+// Command line handler
+//
+def cmdKey(pkey)#0
+    word cmdLine
+
+    showStatus("Command")
+    cmdLine = gets(':'|$80)
+    clearStatus
+    //
+    // Do something
+    //
+    initDisplay
     showStack
+    showMem
+    showInput
 end
-def piKey(pkey)#0
-    fpu:constPi()
-    showStack
-end
+
 //
 // Keypress handler
 //
@@ -337,7 +351,13 @@ def inputKey
         inkey = toupper(getc)
         while ^pkeys
             if inkey == ^pkeys
+                conio:texttype(INVERSE)
+                conio:gotoxy(pkeys->xpos, pkeys->ypos)
+                puts(pkeys + keystr)
+                conio:texttype(NORMAL)
                 pkeys=>phandler(pkeys)#0
+                conio:gotoxy(pkeys->xpos, pkeys->ypos)
+                puts(pkeys + keystr)
                 break
             fin
             pkeys = pkeys + t_keyinput
@@ -346,6 +366,10 @@ def inputKey
 end
 initDisplay
 initState
+initInput
+showStack
+showMem
+showInput
 inputKey
 conio:gotoxy(0, 22)
 done
