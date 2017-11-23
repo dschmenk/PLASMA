@@ -8,6 +8,7 @@ include "inc/fpu.plh"
 include "inc/conio.plh"
 const displayWidth = 16
 const inputLen = displayWidth
+const ZEROSTR = $3001
 //
 // Keypad structure
 //
@@ -22,13 +23,17 @@ struc t_keyinput
     word phandler
 end
 predef delKey#0, cmdKey#0, dropKey#0
-predef digitKey#0, zeroKey#0, pointKey#0, opKey#0
+predef digitKey#0, pointKey#0, opKey#0
 predef enterKey#0, chsKey#0, memKey#0
 predef sqrtKey#0, absKey#0
 //
 // Current input
 //
-byte inputStr[inputLen+1] = "0"
+byte inputStr[inputLen+1] = ""
+//
+// Display format state
+//
+byte displayFix = 6
 //
 // Store/load memory
 //
@@ -67,7 +72,7 @@ word                  = @digitKey
 byte[t_keypad]        = '-', 15, 14, "[-]"
 word                  = @opKey
 byte[t_keypad]        = '0',  3, 16, "[0]"
-word                  = @zeroKey
+word                  = @digitKey
 byte[t_keypad]        = '.',  7, 16, "[.]"
 word                  = @pointKey
 byte[t_keypad]        = ';', 11, 16, "[;]"
@@ -85,10 +90,6 @@ word                  = @opKey
 byte[t_keypad]        = '^', 11, 20, "[X(^)2]"
 word                  = @opKey
 byte                  = 0
-//
-// Display format state
-//
-byte displayFix = 4
 //
 // Utility routines
 //
@@ -129,7 +130,7 @@ def showStack#0
     byte strFP[displayWidth+1]
 
     for s = 0 to 3
-        fpu:storStr(@strFP, displayWidth - displayFix - 5, displayFix, FPSTR_FIXED, s)
+        fpu:storStr(@strFP, displayWidth - displayFix - 2, displayFix, FPSTR_FIXED, s)
         conio:gotoxy(4, 5 - s)
         repc(displayWidth - strFP - 1, ' ')
         puts(@strFP)
@@ -141,7 +142,7 @@ def showMem#0
 
     for m = 0 to 9
         sane:zpSave()
-        ext2str(@memory[m*t_extended], @strFP, displayWidth - displayFix - 5, displayFix, FPSTR_FIXED)
+        ext2str(@memory[m*t_extended], @strFP, displayWidth - displayFix - 2, displayFix, FPSTR_FIXED)
         sane:zpRestore()
         conio:gotoxy(23, 2 + m)
         repc(displayWidth - strFP - 1, ' ')
@@ -162,11 +163,13 @@ def clearStatus#0
     repc(39, ' ')
 end
 def initInput#0
-    inputStr   = 1
-    inputStr.1 = '0'
+    inputStr   = 0
 end
 def updateInput#0
-    if inputStr <> 1 or inputStr.1 <> '0'
+    //
+    // Lift stack if something input
+    //
+    if inputStr
         fpu:pushStr(@inputStr)
     fin
     initInput
@@ -223,8 +226,8 @@ def delKey(pkey)#0
     if inputStr
         inputStr--
     fin
-    if !inputStr or (inputStr == 1 and inputStr.1 == '-')
-        initInput
+    if inputStr == 1 and inputStr.1 == '-'
+        inputStr--
     fin
     showInput
 end
@@ -239,29 +242,47 @@ def dropKey(pkey)#0
 end
 def digitKey(pkey)#0
     if inputStr < inputLen
-        if inputStr <> 1 or inputStr.1 <> '0'
+        if inputStr:0 <> ZEROSTR
             inputStr++
         fin
         inputStr[inputStr] = ^pkey
         showInput
     fin
 end
-def zeroKey(pkey)#0
-    if inputStr <> 1 or inputStr.1 <> '0'
-        digitKey(pkey)
-    fin
-end
 def pointKey(pkey)#0
     byte c
 
-    for c = 1 to inputStr
-        if inputStr[c] == '.'
-            return
-        fin
-    next
+    if !inputStr
+        //
+        // Start off with '0' if blank input
+        //
+        inputStr:0 = ZEROSTR
+    else
+        //
+        // Check for existing decimal point
+        //
+        for c = 1 to inputStr
+            if inputStr[c] == '.'
+                return
+            fin
+        next
+    fin
     inputStr++
     inputStr[inputStr] = '.'
     showInput
+end
+def chsKey(pkey)#0
+    if inputStr and inputStr:0 <> ZEROSTR
+        if inputStr.1 <> '-'
+            memcpy(@inputStr.2, @inputStr.1, inputStr)
+            inputStr++
+            inputStr.1 = '-'
+        else
+            inputStr--
+            memcpy(@inputStr.1, @inputStr.2, inputStr)
+        fin
+        showInput
+    fin
 end
 def enterKey(pkey)#0
     fpu:pushStr(@inputStr)
@@ -292,19 +313,6 @@ def opKey(pkey)#0
             break
     wend
     showStack
-end
-def chsKey(pkey)#0
-    if inputStr.1 <> '0'
-        if inputStr.1 <> '-'
-            memcpy(@inputStr.2, @inputStr.1, inputStr)
-            inputStr++
-            inputStr.1 = '-'
-        else
-            inputStr--
-            memcpy(@inputStr.1, @inputStr.2, inputStr)
-        fin
-        showInput
-    fin
 end
 def memKey(pkey)#0
     word r
@@ -339,7 +347,6 @@ def cmdKey(pkey)#0
     showMem
     showInput
 end
-
 //
 // Keypress handler
 //
