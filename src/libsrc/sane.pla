@@ -509,10 +509,12 @@ asm fixupZPS
         STA     $FFFF,Y
         DEY
         BPL     -
+end
+asm zpNopSave
         DEX
         RTS
 end
-asm zpRestore#1
+asm zpRestore(passthru)#1
         LDY     #$33
 end
 asm fixupZPR
@@ -521,8 +523,7 @@ asm fixupZPR
         DEY
         BPL     -
 end
-asm zpNop#1
-        DEX
+asm zpNopRestore(passthru)#1
         RTS
 end
 asm auxmove(dst, src, len)#0
@@ -579,7 +580,7 @@ end
 // Default HALT handler
 //
 def fpDefaultHalt(pstatus)
-    sane[10]() // zpRestore
+    sane[10](0) // zpRestore
     puts("SANE Exception="); puti(pstatus->8); puts("!\n")
     sane[9]() // zpSave
     return pstatus=>4
@@ -789,8 +790,8 @@ def fpInit()
             sane[3]  = @xfpOp1
             sane[4]  = @xfpOp2
             sane[5]  = @xfpOp3
-            sane[9]  = @zpNop
-            sane[10] = @zpNop
+            sane[9]  = @zpNopSave
+            sane[10] = @zpNopRestore
             //
             // Install AUX HALT handler
             //
@@ -816,8 +817,7 @@ def fpInit()
             // Install MAIN HALT handler
             //
             zpSave()
-            fpOp1($0005, @fpHalt)
-            zpRestore()
+            zpRestore(fpOp1($0005, @fpHalt))
         fin
         sane[6] = @elemsLoad1
         sane[7] = @elemsLoad2
@@ -830,7 +830,7 @@ def fpInit()
     //
     sane[9]()
     sane[3]($0001, $0000)
-    sane[10]()
+    sane[10](0)
 end
 //
 // Uninitialized placeholders of API

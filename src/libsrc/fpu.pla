@@ -7,24 +7,38 @@ include "inc/fpstr.plh"
 //
 // External interface to FPU library
 //
-predef reset, constPi, constE
-predef        pushInt, pushSgl, pushDbl, pushExt, pushStr
-predef        pullInt, pullSgl, pullDbl, pullExt, pullStr
-predef        loadInt, loadSgl, loadDbl, loadExt, loadStr
-predef        storInt, storSgl, storDbl, storExt, storStr
-predef        shiftUp, shiftDown, rotateUp, rotateDown, dup, swap, clear
-predef        add, sub, mul, div, rem
-predef        neg, abs, trunc, round, sqrt, square
-predef        cos, sin, tan
-export word fpu = @reset, @constPi, @constE
+predef reset, getEnv, setEnv, testExcept, setExcept, enterProc, exitProc
+predef constPi, constE
+predef pushInt, pushSgl, pushDbl, pushExt, pushStr
+predef pullInt, pullSgl, pullDbl, pullExt, pullStr
+predef loadInt, loadSgl, loadDbl, loadExt, loadStr
+predef storInt, storSgl, storDbl, storExt, storStr
+predef shiftUp, shiftDown, rotateUp, rotateDown, dup, swap, clear
+predef add, sub, mul, div, rem
+predef neg, abs, type, cmp, logb, scalb, trunc, round, sqrt, squared
+predef cos, sin, tan, atan
+predef log2X, log21X, lnX, ln1X, pow2X, pow21X, powEX, powE1X, powE21X, powXInt, powXY
+predef compXY, annuityXY, randNum
+//
+// FP6502 functions
+//
+export word fpu = @reset
+word = @setEnv, @getEnv, @testExcept, @setExcept, @enterProc, @exitProc
+word = @constPi, @constE
 word = @pushInt, @pushSgl, @pushDbl, @pushExt, @pushStr
 word = @pullInt, @pullSgl, @pullDbl, @pullExt, @pullStr
 word = @loadInt, @loadSgl, @loadDbl, @loadExt, @loadStr
 word = @storInt, @storSgl, @storDbl, @storExt, @storStr
 word = @shiftUp, @shiftDown, @rotateUp, @rotateDown, @dup, @swap, @clear
 word = @add, @sub, @mul, @div, @rem
-word = @neg, @abs, @trunc, @round, @sqrt, @square
-word = @cos, @sin, @tan
+word = @neg, @abs, @type, @cmp
+word = @logb, @scalb, @trunc, @round, @sqrt, @squared
+//
+// ELEMS6502 functions
+//
+word = @cos, @sin, @tan, @atan
+word = @log2X, log21X, @lnX, @ln1X, @pow2X, @pow21X, @powEX, @powE1X, @powE21X, @powXInt, @powXY
+word = @compXY, @annuityXY, @randNum
 //
 // Useful constants
 //
@@ -36,6 +50,33 @@ byte ext_e[t_extended]  = $9B,$4A,$BB,$A2,$5B,$54,$F8,$AD,$00,$40
 byte stack[t_extended*4]
 word stackRegs[4]
 //
+// Environment access
+//
+def setEnv(env)
+    sane:zpSave()
+    return sane:zpRestore(sane:fpOp1(FOSETENV, env))
+end
+def getEnv
+    sane:zpSave()
+    return sane:zpRestore(sane:fpOp0(FOGETENV))
+end
+def testExcept(except)
+    sane:zpSave()
+    return sane:zpRestore(sane:fpOp1(FOTESTXCP, except))
+end
+def setExcept(except)
+    sane:zpSave()
+    return sane:zpRestore(sane:fpOp1(FOSETXCP, except))
+end
+def enterProc(pEnv)
+    sane:zpSave()
+    return sane:zpRestore(sane:fpOp1(FOPROCENTRY, pEnv))
+end
+def exitProc(env)
+    sane:zpSave()
+    return sane:zpRestore(sane:fpOp1(FOPROCEXIT, env))
+end
+//
 // Stack manipulation routines
 //
 def rotateUp
@@ -46,24 +87,33 @@ def rotateDown
 end
 def shiftUp
     stackRegs[0], stackRegs[1], stackRegs[2], stackRegs[3] = stackRegs[3], stackRegs[0], stackRegs[1], stackRegs[2]
-    memset(stackRegs[0], 0, t_extended)
+    memcpy(stackRegs[0], stackRegs[1], t_extended)
 end
-def shiftDown
+def shiftDown // drop
     stackRegs[0], stackRegs[1], stackRegs[2], stackRegs[3] = stackRegs[1], stackRegs[2], stackRegs[3], stackRegs[0]
-    memset(stackRegs[3], 0, t_extended)
+    memcpy(stackRegs[3], stackRegs[2], t_extended)
+end
+def _drop(passthru) // Internal version with passthru
+    stackRegs[0], stackRegs[1], stackRegs[2], stackRegs[3] = stackRegs[1], stackRegs[2], stackRegs[3], stackRegs[0]
+    memcpy(stackRegs[3], stackRegs[2], t_extended)
+    return passthru
+end
+def swap
+    stackRegs[0], stackRegs[1] = stackRegs[1], stackRegs[0]
+end
+def _swap(passthru) // Internal version with passthru
+    stackRegs[0], stackRegs[1] = stackRegs[1], stackRegs[0]
+    return passthru
 end
 def dup
     stackRegs[0], stackRegs[1], stackRegs[2], stackRegs[3] = stackRegs[3], stackRegs[0], stackRegs[1], stackRegs[2]
     memcpy(stackRegs[0], stackRegs[1], t_extended)
 end
-def swap
-    byte temp[t_extended]
-    memcpy(temp,         stackRegs[1], t_extended)
-    memcpy(stackRegs[1], stackRegs[0], t_extended)
-    memcpy(stackRegs[0], temp,         t_extended)
-end
 def clear
-    memset(stackRegs[0], 0, t_extended)
+    word zero
+    zero = 0
+    sane:zpSave()
+    return sane:zpRestore(sane:fpOp2(FFINT|FOZ2X, stackRegs[0], @zero))
 end
 //
 // Stack access
@@ -71,193 +121,221 @@ end
 def pushInt(pInt)
     stackRegs[0], stackRegs[1], stackRegs[2], stackRegs[3] = stackRegs[3], stackRegs[0], stackRegs[1], stackRegs[2]
     sane:zpSave()
-    sane:fpOp2(FFINT|FOZ2X, stackRegs[0], pInt)
-    return sane:zpRestore()
+    return sane:zpRestore(sane:fpOp2(FFINT|FOZ2X, stackRegs[0], pInt))
 end
 def pullInt(pInt)
     sane:zpSave()
-    sane:fpOp2(FFINT|FOX2Z, pInt, stackRegs[0])
-    sane:zpRestore()
-    return shiftDown
+    return _drop(sane:zpRestore(sane:fpOp2(FFINT|FOX2Z, pInt, stackRegs[0])))
 end
 def loadInt(pInt, reg)
     sane:zpSave()
-    sane:fpOp2(FFINT|FOZ2X, stackRegs[reg & $03], pInt)
-    return sane:zpRestore()
+    return sane:zpRestore(sane:fpOp2(FFINT|FOZ2X, stackRegs[reg & $03], pInt))
 end
 def storInt(pInt, reg)
     sane:zpSave()
-    sane:fpOp2(FFINT|FOX2Z, pInt, stackRegs[reg & $03])
-    return sane:zpRestore()
+    return sane:zpRestore(sane:fpOp2(FFINT|FOX2Z, pInt, stackRegs[reg & $03]))
 end
 def pushSgl(pSgl)
     stackRegs[0], stackRegs[1], stackRegs[2], stackRegs[3] = stackRegs[3], stackRegs[0], stackRegs[1], stackRegs[2]
     sane:zpSave()
-    sane:fpOp2(FFSGL|FOZ2X, stackRegs[0], pSgl)
-    return sane:zpRestore()
+    return sane:zpRestore(sane:fpOp2(FFSGL|FOZ2X, stackRegs[0], pSgl))
 end
 def pullSgl(pSgl)
     sane:zpSave()
-    sane:fpOp2(FFSGL|FOX2Z, pSgl, stackRegs[0])
-    sane:zpRestore()
-    return shiftDown
+    return _drop(sane:zpRestore(sane:fpOp2(FFSGL|FOX2Z, pSgl, stackRegs[0])))
 end
 def loadSgl(pSgl, reg)
     sane:zpSave()
-    sane:fpOp2(FFSGL|FOZ2X, stackRegs[reg & $03], pSgl)
-    return sane:zpRestore()
+    return sane:zpRestore(sane:fpOp2(FFSGL|FOZ2X, stackRegs[reg & $03], pSgl))
 end
 def storSgl(pSgl, reg)
     sane:zpSave()
-    sane:fpOp2(FFSGL|FOX2Z, pSgl, stackRegs[reg & $03])
-    return sane:zpRestore()
+    return sane:zpRestore(sane:fpOp2(FFSGL|FOX2Z, pSgl, stackRegs[reg & $03]))
 end
 def pushDbl(pDbl)
     stackRegs[0], stackRegs[1], stackRegs[2], stackRegs[3] = stackRegs[3], stackRegs[0], stackRegs[1], stackRegs[2]
     sane:zpSave()
-    sane:fpOp2(FFDBL|FOZ2X, stackRegs[0], pDbl)
-    return sane:zpRestore()
+    return sane:zpRestore(sane:fpOp2(FFDBL|FOZ2X, stackRegs[0], pDbl))
 end
 def pullDbl(pDbl)
     sane:zpSave()
-    sane:fpOp2(FFDBL|FOX2Z, pDbl, stackRegs[0])
-    sane:zpRestore()
-    return shiftDown
+    return _drop(sane:zpRestore(sane:fpOp2(FFDBL|FOX2Z, pDbl, stackRegs[0])))
 end
 def loadDbl(pDbl, reg)
     sane:zpSave()
-    sane:fpOp2(FFDBL|FOZ2X, stackRegs[reg & $03], pDbl)
-    return sane:zpRestore()
+    return sane:zpRestore(sane:fpOp2(FFDBL|FOZ2X, stackRegs[reg & $03], pDbl))
 end
 def storDbl(pDbl, reg)
     sane:zpSave()
-    sane:fpOp2(FFDBL|FOX2Z, pDbl, stackRegs[reg & $03])
-    return sane:zpRestore()
+    return sane:zpRestore(sane:fpOp2(FFDBL|FOX2Z, pDbl, stackRegs[reg & $03]))
 end
 def pushExt(pExt)
     stackRegs[0], stackRegs[1], stackRegs[2], stackRegs[3] = stackRegs[3], stackRegs[0], stackRegs[1], stackRegs[2]
     sane:zpSave()
-    sane:fpOp2(FFEXT|FOZ2X, stackRegs[0], pExt)
-    return sane:zpRestore()
+    return sane:zpRestore(sane:fpOp2(FFEXT|FOZ2X, stackRegs[0], pExt))
 end
 def pullExt(pExt)
     sane:zpSave()
-    sane:fpOp2(FFEXT|FOX2Z, pExt, stackRegs[0])
-    sane:zpRestore()
-    return shiftDown
+    return _drop(sane:zpRestore(sane:fpOp2(FFEXT|FOX2Z, pExt, stackRegs[0])))
 end
 def loadExt(pExt, reg)
     sane:zpSave()
-    sane:fpOp2(FFEXT|FOZ2X, stackRegs[reg & $03], pExt)
-    return sane:zpRestore()
+    return sane:zpRestore(sane:fpOp2(FFEXT|FOZ2X, stackRegs[reg & $03], pExt))
 end
 def storExt(pExt, reg)
     sane:zpSave()
-    sane:fpOp2(FFEXT|FOX2Z, pExt, stackRegs[reg & $03])
-    return sane:zpRestore()
+    return sane:zpRestore(sane:fpOp2(FFEXT|FOX2Z, pExt, stackRegs[reg & $03]))
 end
 def pushStr(pStr)
     stackRegs[0], stackRegs[1], stackRegs[2], stackRegs[3] = stackRegs[3], stackRegs[0], stackRegs[1], stackRegs[2]
-    sane:zpSave()
-    str2ext(pStr, stackRegs[0])
-    return sane:zpRestore()
+    return str2ext(pStr, stackRegs[0])
 end
 def pullStr(pStr, intdigits, fracdigits, format)
-    sane:zpSave()
-    ext2str(stackRegs[0], pStr, intdigits, fracdigits, format)
-    sane:zpRestore()
-    return shiftDown
+    return _drop(ext2str(stackRegs[0], pStr, intdigits, fracdigits, format))
 end
 def loadStr(pStr, reg)
-    sane:zpSave()
-    str2ext(pStr, stackRegs[reg])
-    return sane:zpRestore()
+    return str2ext(pStr, stackRegs[reg])
 end
 def storStr(pStr, intdigits, fracdigits, format, reg)
-    sane:zpSave()
-    ext2str(stackRegs[reg], pStr, intdigits, fracdigits, format)
-    return sane:zpRestore()
+    return ext2str(stackRegs[reg], pStr, intdigits, fracdigits, format)
 end
 //
 // Basic math operations
 //
 def add
     sane:zpSave()
-    sane:fpOp2(FFEXT|FOADD, stackRegs[1], stackRegs[0])
-    sane:zpRestore()
-    return shiftDown
+    return _drop(sane:zpRestore(sane:fpOp2(FFEXT|FOADD, stackRegs[1], stackRegs[0])))
 end
 def sub
     sane:zpSave()
-    sane:fpOp2(FFEXT|FOSUB, stackRegs[1], stackRegs[0])
-    sane:zpRestore()
-    return shiftDown
+    return _drop(sane:zpRestore(sane:fpOp2(FFEXT|FOSUB, stackRegs[1], stackRegs[0])))
 end
 def mul
     sane:zpSave()
-    sane:fpOp2(FFEXT|FOMUL, stackRegs[1], stackRegs[0])
-    sane:zpRestore()
-    return shiftDown
+    return _drop(sane:zpRestore(sane:fpOp2(FFEXT|FOMUL, stackRegs[1], stackRegs[0])))
 end
 def div
     sane:zpSave()
-    sane:fpOp2(FFEXT|FODIV, stackRegs[1], stackRegs[0])
-    sane:zpRestore()
-    return shiftDown
+    return _drop(sane:zpRestore(sane:fpOp2(FFEXT|FODIV, stackRegs[1], stackRegs[0])))
 end
 def rem
     sane:zpSave()
-    sane:fpOp2(FFEXT|FOREM, stackRegs[1], stackRegs[0])
-    sane:zpRestore()
-    return shiftDown
+    return _drop(sane:zpRestore(sane:fpOp2(FFEXT|FOREM, stackRegs[1], stackRegs[0])))
 end
-def neg#1
+def neg
     sane:zpSave()
-    sane:fpOp1(FFEXT|FONEG, stackRegs[0])
-    return sane:zpRestore()
+    return sane:zpRestore(sane:fpOp1(FFEXT|FONEG, stackRegs[0]))
 end
 def abs
     sane:zpSave()
-    sane:fpOp1(FFEXT|FOABS, stackRegs[0])
-    return sane:zpRestore()
+    return sane:zpRestore(sane:fpOp1(FFEXT|FOABS, stackRegs[0]))
+end
+def type
+    sane:zpSave()
+    return sane:zpRestore(sane:fpOp1(FFEXT|FOCLASS, stackRegs[0]))
+end
+def cmp
+    sane:zpSave()
+    return sane:zpRestore(sane:fpOp2(FFEXT|FOCMP, stackRegs[1], stackRegs[0]))
 end
 def trunc
     sane:zpSave()
-    sane:fpOp1(FFEXT|FOTTI, stackRegs[0])
-    return sane:zpRestore()
+    return sane:zpRestore(sane:fpOp1(FFEXT|FOTTI, stackRegs[0]))
 end
 def round
     sane:zpSave()
-    sane:fpOp1(FFEXT|FORTI, stackRegs[0])
-    return sane:zpRestore()
+    return sane:zpRestore(sane:fpOp1(FFEXT|FORTI, stackRegs[0]))
 end
 def sqrt
     sane:zpSave()
-    sane:fpOp1(FFEXT|FOSQRT, stackRegs[0])
-    return sane:zpRestore()
+    return sane:zpRestore(sane:fpOp1(FFEXT|FOSQRT, stackRegs[0]))
 end
-def square
+def squared
     sane:zpSave()
-    sane:fpOp2(FFEXT|FOMUL, stackRegs[0], stackRegs[0])
-    return sane:zpRestore()
+    return sane:zpRestore(sane:fpOp2(FFEXT|FOMUL, stackRegs[0], stackRegs[0]))
+end
+def logb
+    sane:zpSave()
+    return sane:zpRestore(sane:fpOp1(FFEXT|FOLOGB, stackRegs[0]))
+end
+def scalb(scale)
+    sane:zpSave()
+    return sane:zpRestore(sane:fpOp2(FFEXT|FOSCALB, stackRegs[0], scale))
 end
 //
 // Elems operations
 //
 def cos
     sane:zpSave()
-    sane:elOp1(FFEXT|FOCOSX, stackRegs[0])
-    return sane:zpRestore()
+    return sane:zpRestore(sane:elOp1(FFEXT|FOCOSX, stackRegs[0]))
 end
 def sin
     sane:zpSave()
-    sane:elOp1(FFEXT|FOSINX, stackRegs[0])
-    return sane:zpRestore()
+    return sane:zpRestore(sane:elOp1(FFEXT|FOSINX, stackRegs[0]))
 end
 def tan
     sane:zpSave()
-    sane:elOp1(FFEXT|FOTANX, stackRegs[0])
-    return sane:zpRestore()
+    return sane:zpRestore(sane:elOp1(FFEXT|FOTANX, stackRegs[0]))
+end
+def atan
+    sane:zpSave()
+    return sane:zpRestore(sane:elOp1(FFEXT|FOATANX, stackRegs[0]))
+end
+def log2X
+    sane:zpSave()
+    return sane:zpRestore(sane:elOp1(FFEXT|FOLOG2X, stackRegs[0]))
+end
+def log21X
+    sane:zpSave()
+    return sane:zpRestore(sane:elOp1(FFEXT|FOLOG21X, stackRegs[0]))
+end
+def lnX
+    sane:zpSave()
+    return sane:zpRestore(sane:elOp1(FFEXT|FOLNX, stackRegs[0]))
+end
+def ln1X
+    sane:zpSave()
+    return sane:zpRestore(sane:elOp1(FFEXT|FOLN1X, stackRegs[0]))
+end
+def pow2X
+    sane:zpSave()
+    return sane:zpRestore(sane:elOp1(FFEXT|FOEXP2X, stackRegs[0]))
+end
+def pow21X
+    sane:zpSave()
+    return sane:zpRestore(sane:elOp1(FFEXT|FOEXP21X, stackRegs[0]))
+end
+def powEX
+    sane:zpSave()
+    return sane:zpRestore(sane:elOp1(FFEXT|FOEXPX, stackRegs[0]))
+end
+def powE1X
+    sane:zpSave()
+    return sane:zpRestore(sane:elOp1(FFEXT|FOEXP1X, stackRegs[0]))
+end
+def powE21X
+    sane:zpSave()
+    return sane:zpRestore(sane:elOp1(FFEXT|FOEXP21X, stackRegs[0]))
+    end
+def powXInt(powInt)
+    sane:zpSave()
+    return sane:zpRestore(sane:elOp2(FFEXT|FOXPWRI, stackRegs[0], powInt))
+end
+def powXY
+    sane:zpSave()
+    return sane:zpRestore(_drop(_swap(sane:elOp2(FFEXT|FOXPWRY, stackRegs[0], stackRegs[1]))))
+end
+def compXY
+    sane:zpSave()
+    return sane:zpRestore(_drop(_swap(sane:elOp2(FFEXT|FOCOMPND, stackRegs[0], stackRegs[1]))))
+end
+def annuityXY
+    sane:zpSave()
+    return sane:zpRestore(_drop(_swap(sane:elOp2(FFEXT|FOANNUIT, stackRegs[0], stackRegs[1]))))
+end
+def randNum(pSeed)
+    sane:zpSave()
+    return sane:zpRestore(sane:elOp1(FFEXT|FORANDX, pSeed))
 end
 //
 // Push useful constants
@@ -282,57 +360,6 @@ def reset
         stackRegs[i] = @stack[i * t_extended]
         sane:fpOp2(FFINT|FOZ2X, stackRegs[i], @zero)
     next
-    return sane:zpRestore()
+    return sane:zpRestore(0)
 end
-done
-//
-// Test code
-//
-def dumpStack#0
-    byte r
-    byte regStr[16]
-
-    for r = 3 downto 0
-        storStr(@regStr, 6, 4, 1, r)
-        puts("  "); puti(r); putc(':'); puts(@regStr); putln
-    next
-end
-def dumpExt#0
-    byte i
-
-    for i = 0 to t_extended-1
-        putc('$')
-        call($FDDA, stackRegs.[0, i], 0, 0, 0)
-        putc(' ')
-    next
-    putln
-end
-//
-// Run through some test cases
-//
-reset
-dumpStack
-puts("Push 2.0\n")
-pushStr("2.0")
-dumpStack
-puts("Push 4.0\n")
-pushStr("4.0")
-dumpStack
-puts("Add\n")
-add
-dumpStack
-puts("Square\n")
-square
-dumpStack
-puts("Sqrt\n")
-sqrt
-dumpStack
-pushStr("2.71828182845904523536028747")
-dumpExt
-constE
-dumpExt
-pushStr("3.14159265358979323846264338")
-dumpExt
-constPi
-dumpExt
 done

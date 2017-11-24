@@ -2,12 +2,11 @@
 // Desktop RPN calculator
 //
 include "inc/cmdsys.plh"
-include "inc/sane.plh"
 include "inc/fpstr.plh"
 include "inc/fpu.plh"
 include "inc/conio.plh"
 const displayWidth = 16
-const inputLen = displayWidth
+const inputLen = displayWidth+1
 const ZEROSTR = $3001
 //
 // Keypad structure
@@ -24,20 +23,21 @@ struc t_keyinput
 end
 predef delKey#0, cmdKey#0, dropKey#0
 predef digitKey#0, pointKey#0, opKey#0
-predef enterKey#0, chsKey#0, memKey#0
+predef enterKey#0, copyKey#0, chsKey#0, memKey#0
 predef elemsKey#0
 //
 // Current input
 //
-byte inputStr[inputLen+1] = ""
+byte inputStr[32] = ""
 //
 // Display format state
 //
 byte displayFix = 6
+byte displayInt = displayWidth - 8 //  - displayFix - 2
 //
 // Store/load memory
 //
-byte memory[10*t_extended]
+byte memory[10*t_fpureg]
 //
 // Key values
 //
@@ -75,8 +75,8 @@ byte[t_keypad]        = '0',  3, 16, "[0]"
 word                  = @digitKey
 byte[t_keypad]        = '.',  7, 16, "[.]"
 word                  = @pointKey
-byte[t_keypad]        = ';', 11, 16, "[;]"
-word                  = @chsKey
+byte[t_keypad]        = 'X', 11, 16, "[X]"
+word                  = @copyKey
 byte[t_keypad]        = '+', 15, 16, "[+]"
 word                  = @opKey
 byte[t_keypad]        = $0D,  3, 18, "[ENTER]"
@@ -85,15 +85,25 @@ byte[t_keypad]        = '<', 11, 18, "[<]"
 word                  = @memKey
 byte[t_keypad]        = '>', 15, 18, "[>]"
 word                  = @memKey
-byte[t_keypad]        = 'R',  3, 20, "[SQ(R)]"
+byte[t_keypad]        = 'R', 3, 20, "[SQ(R)]"
 word                  = @opKey
-byte[t_keypad]        = '^', 11, 20, "[X(^)2]"
-word                  = @opKey
-byte[t_keypad]        = 'C',  22, 14, "[(C)OS]"
+byte[t_keypad]        = 'H', 11, 20, "[C(H)S]"
+word                  = @chsKey
+byte[t_keypad]        = 'C', 22, 14, "[(C)OS]"
 word                  = @elemsKey
-byte[t_keypad]        = 'S',  30, 14, "[(S)IN]"
+byte[t_keypad]        = 'S', 22, 16, "[(S)IN]"
 word                  = @elemsKey
-byte[t_keypad]        = 'T',  22, 16, "[(T)AN]"
+byte[t_keypad]        = 'T', 22, 18, "[(T)AN]"
+word                  = @elemsKey
+byte[t_keypad]        = 'A', 22, 20, "[(A)TN]"
+word                  = @elemsKey
+byte[t_keypad]        = '^', 30, 14, "[X(^)Y]"
+word                  = @elemsKey
+byte[t_keypad]        = 'L', 30, 16, "[(L)G2]"
+word                  = @elemsKey
+byte[t_keypad]        = 'E', 30, 18, "[(E)^X]"
+word                  = @elemsKey
+byte[t_keypad]        = 'N', 30, 20, "[L(N)X]"
 word                  = @elemsKey
 byte                  = 0
 //
@@ -136,7 +146,7 @@ def showStack#0
     byte strFP[displayWidth+1]
 
     for s = 0 to 3
-        fpu:storStr(@strFP, displayWidth - displayFix - 2, displayFix, FPSTR_FIXED, s)
+        fpu:storStr(@strFP, displayInt, displayFix, FPSTR_FIXED, s)
         conio:gotoxy(4, 5 - s)
         repc(displayWidth - strFP - 1, ' ')
         puts(@strFP)
@@ -147,9 +157,7 @@ def showMem#0
     byte strFP[displayWidth+1]
 
     for m = 0 to 9
-        sane:zpSave()
-        ext2str(@memory[m*t_extended], @strFP, displayWidth - displayFix - 2, displayFix, FPSTR_FIXED)
-        sane:zpRestore()
+        ext2str(@memory[m*t_fpureg], @strFP, displayInt, displayFix, FPSTR_FIXED)
         conio:gotoxy(23, 2 + m)
         repc(displayWidth - strFP - 1, ' ')
         puts(@strFP)
@@ -215,15 +223,15 @@ def initState#0
     // Fill memory
     //
     for m = 2 to 9
-        fpu:storExt(@memory[m*t_extended], X_REG)
+        fpu:storExt(@memory[m*t_fpureg], X_REG)
     next
     //
     // Put some useful constants in there
     //
     fpu:constPi()
-    fpu:pullExt(@memory[0*t_extended])
+    fpu:pullExt(@memory[0*t_fpureg])
     fpu:constE()
-    fpu:pullExt(@memory[1*t_extended])
+    fpu:pullExt(@memory[1*t_fpureg])
 end
 //
 // Keypress input handlers
@@ -232,19 +240,27 @@ def delKey(pkey)#0
     if inputStr
         inputStr--
     fin
-    if inputStr == 1 and inputStr.1 == '-'
+    if inputStr:0 == 1 | ('-' << 8) //inputStr == 1 and inputStr.1 == '-'
         inputStr--
     fin
     showInput
 end
 def dropKey(pkey)#0
-    fpu:pullStr(@inputStr, , displayWidth - displayFix - 1, displayFix, FPSTR_STRIP|FPSTR_FLOAT)
+    fpu:pullStr(@inputStr, displayInt, displayFix, FPSTR_STRIP|FPSTR_FLOAT)
     if inputStr.1 == ' '
         inputStr--
         memcpy(@inputStr.1, @inputStr.2, inputStr)
     fin
     showInput
     showStack
+end
+def copyKey(pkey)#0
+    fpu:storStr(@inputStr, displayInt, displayFix, FPSTR_STRIP|FPSTR_FLOAT, X_REG)
+    if inputStr.1 == ' '
+        inputStr--
+        memcpy(@inputStr.1, @inputStr.2, inputStr)
+    fin
+    showInput
 end
 def digitKey(pkey)#0
     if inputStr < inputLen
@@ -278,7 +294,7 @@ def pointKey(pkey)#0
     showInput
 end
 def chsKey(pkey)#0
-    if inputStr and inputStr:0 <> ZEROSTR
+    if inputStr
         if inputStr.1 <> '-'
             memcpy(@inputStr.2, @inputStr.1, inputStr)
             inputStr++
@@ -300,22 +316,19 @@ def opKey(pkey)#0
     updateInput
     when ^pkey
         is '+'
-            fpu:add()
+            fpu:addXY()
             break
         is '-'
-            fpu:sub()
+            fpu:subXY()
             break
         is '*'
-            fpu:mul()
+            fpu:mulXY()
             break
         is '/'
-            fpu:div()
-            break
-        is '^'
-            fpu:square()
+            fpu:divXY()
             break
         is 'R'
-            fpu:sqrt()
+            fpu:sqrtX()
             break
     wend
     showStack
@@ -328,10 +341,10 @@ def memKey(pkey)#0
     clearStatus
     if r >= 0 and r <= 9
         if ^pkey == '<'
-            fpu:pushExt(@memory[r*t_extended])
+            fpu:pushExt(@memory[r*t_fpureg])
             showStack
         else
-            fpu:storExt(@memory[r*t_extended], X_REG)
+            fpu:storExt(@memory[r*t_fpureg], X_REG)
             showMem
         fin
     fin
@@ -340,13 +353,28 @@ def elemsKey(pkey)#0
     updateInput
     when ^pkey
         is 'C'
-            fpu:cos()
+            fpu:cosX()
             break
         is 'S'
-            fpu:sin()
+            fpu:sinX()
             break
         is 'T'
-            fpu:tan()
+            fpu:tanX()
+            break
+        is 'A'
+            fpu:atanX()
+            break
+        is '^'
+            fpu:powXY()
+            break
+        is 'L'
+            fpu:log2X()
+            break
+        is 'E'
+            fpu:powEX()
+            break
+        is 'N'
+            fpu:lnX()
             break
     wend
     showStack
@@ -355,10 +383,18 @@ end
 // Command line handler
 //
 def cmdKey(pkey)#0
-    word cmdLine
+//    word cmdLine
 
-    showStatus("Command")
-    cmdLine = gets(':'|$80)
+//    showStatus("Command")
+//    cmdLine = gets(':'|$80)
+    word d
+
+    showStatus("Press 1-9 for fix point digits:")
+    d = getc - '0'
+    if d >= 1 and d <= 9
+        displayFix = d
+        displayInt = displayWidth - displayFix - 2
+    fin
     clearStatus
     //
     // Do something
@@ -400,6 +436,7 @@ initInput
 showStack
 showMem
 showInput
+showStatus("Version 0.5")
 inputKey
 conio:gotoxy(0, 22)
 done
