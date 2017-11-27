@@ -49,15 +49,14 @@ ALTRDON =       $C003
 ALTWROFF=       $C004
 ALTWRON =       $C005
         !SOURCE "vmsrc/plvmzp.inc"
-OP16IDX =       FETCHOP+4
-OP16PAGE=       OP16IDX+1
 DROP16  =       $EE
 NEXTOP16=       $EF
 FETCHOP16=      NEXTOP16+3
 IP16    =       $F3
 IP16L   =       $F3
 IP16H   =       IP16L+1
-OP16TBL =       $F7
+OP16IDX =       FETCHOP16+4
+OP16PAGE=       OP16IDX+1
 HWSP    =       TMPH+1
 ;
 ; BUFFER ADDRESSES
@@ -390,7 +389,7 @@ PAGE0    =      *
 NEXTOPH SEP     #$20            ; SET 8 BIT MODE
         INC     IP16H
         REP     #$20            ; SET 16 BIT MODE
-        BRA     FETCHOP
+        BRA     FETCHOP16
 }
 PAGE3   =       *
 ;*
@@ -661,12 +660,12 @@ ZERO    LDA     #$0000
         PHA
         JMP     NEXTOP16
 CFFB    +INC_IP
-        LDA     (IP),Y
+        LDA     (IP16),Y
         ORA     #$FF00
         PHA
         JMP     NEXTOP16
 CB      +INC_IP
-        LDA     (IP),Y
+        LDA     (IP16),Y
         AND     #$00FF
         PHA
         JMP     NEXTOP16
@@ -676,7 +675,7 @@ CB      +INC_IP
 LA      =       *
 CW      DEX
         +INC_IP
-        LDA     (IP),Y
+        LDA     (IP16),Y
         PHA
         +INC_IP
         JMP     NEXTOP16
@@ -689,7 +688,7 @@ CS      +INC_IP
         ADC     IP16
         STA     IP16
         PHA
-        LDA     (IP),Y
+        LDA     (IP16),Y
         TAY
         JMP     NEXTOP16
 ;
