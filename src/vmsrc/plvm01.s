@@ -891,19 +891,19 @@ CALL    +INC_IP
     +INC_IP
     LDA (IP),Y
     STA CALLADR+2
-    LDA IPH
-    PHA
-    LDA IPL
-    PHA
     TYA
+    CLC
+    ADC IPL
+    PHA
+    LDA IPH
+    ADC #$00
     PHA
 CALLADR JSR $FFFF
     PLA
-    TAY
+    STA IPH
     PLA
     STA IPL
-    PLA
-    STA IPH
+    LDY #$00
     JMP NEXTOP
 ;*
 ;* INDIRECT CALL TO ADDRESS (NATIVE CODE)
@@ -913,19 +913,19 @@ ICAL    LDA ESTKL,X
     LDA ESTKH,X
     STA ICALADR+2
     INX
-    LDA IPH
-    PHA
-    LDA IPL
-    PHA
     TYA
+    CLC
+    ADC IPL
+    PHA
+    LDA IPH
+    ADC #$00
     PHA
 ICALADR JSR $FFFF
     PLA
-    TAY
+    STA IPH
     PLA
     STA IPL
-    PLA
-    STA IPH
+    LDY #$00
     JMP NEXTOP
 ;*
 ;* ENTER FUNCTION WITH FRAME SIZE AND PARAM COUNT
@@ -941,9 +941,9 @@ ENTER   INY
     DEC IFPH
 +   INY
     LDA (IP),Y
+    BEQ +
     ASL
     TAY
-    BEQ +
 -   LDA ESTKH,X
     DEY
     STA (IFP),Y

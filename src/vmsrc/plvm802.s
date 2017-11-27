@@ -1114,118 +1114,133 @@ CALL    +INC_IP
         LDA     (IP16),Y
         STA     TMP
         +INC_IP
-EMUSTK  STY     IPY
-        SEC                     ; SWITCH TO EMULATED MODE
+EMUSTK  SEC                     ; SWITCH TO EMULATED MODE
         XCE
         !AS
-        TSX                     ; COPY HW EVAL STACK TO ZP EVAL STACK
-        TXA
+        STY     IPY
+        TSC                     ; MOVE HW EVAL STACK TO ZP EVAL STACK
+        EOR     #$FF
         SEC
-        SBC     HWSP
+        ADC     HWSP            ; STACK DEPTH = (HWSP - SP)/2
         LSR
-        LDX     ESP
+        EOR     #$FF
+        SEC
+        ADC     ESP             ; ESP - STACK DEPTH
         TAY
-        BEQ     +
--       DEX
-        PLA
+        TAX
+        BRA     +
+-       PLA
         STA     ESTKL,X
         PLA
         STA     ESTKH,X
-        DEY
+        INX
++       CPX     ESP
         BNE     -
-+       LDA     IP16H
-        PHA
-        LDA     IP16L
-        PHA
         LDA     IPY
+        CLC
+        ADC     IP16L
+        PHA
+        LDA     IP16H
+        ADC     #$00
         PHA
         PHX
+        TYX
         JSR     JMPTMP
-        PLY                     ; COPY RETURN VALUES TO HW EVAL STACK
+        PLY                     ; MOVE RETURN VALUES TO HW EVAL STACK
         STY     ESP
-        PLY
-        PLA
-        STA     IP16L
         PLA
         STA     IP16H
-        CPX     ESP
-        BEQ     +
--       LDA     ESTKH,X
+        PLA
+        STA     IP16L
+        STX     TMPL
+        TYX
+        BRA     +
+-       DEX
+        LDA     ESTKH,X
         PHA
         LDA     ESTKL,X
         PHA
-        INX
-        CPX     ESP
++       CPX     TMPL
         BNE     -
-+       CLC                     ; SWITCH BACK TO NATIVE MODE
+        CLC                     ; SWITCH BACK TO NATIVE MODE
         XCE
         REP     #$20            ; 16 BIT A/M
         SEP     #$10            ; 8 BIT X,Y
         !AL
+        TSX
+        STX     HWSP
         LDX     #>OPTBL         ; MAKE SURE WE'RE INDEXING THE RIGHT TABLE
         STX     OP16PAGE
+        LDY     #$00
         JMP     NEXTOP16
 ;
 CALLX   +INC_IP
         LDA     (IP16),Y
         STA     TMP
         +INC_IP
-EMUSTKX STY     IPY
-        SEC                     ; SWITCH TO EMULATED MODE
+EMUSTKX SEC                     ; SWITCH TO EMULATED MODE
         XCE
         !AS
-        TSX                     ; COPY HW EVAL STACK TO ZP EVAL STACK
-        TXA
+        STY     IPY
+        TSC                     ; MOVE HW EVAL STACK TO ZP EVAL STACK
+        EOR     #$FF
         SEC
-        SBC     HWSP
+        ADC     HWSP            ; STACK DEPTH = (HWSP - SP)/2
         LSR
-        LDX     ESP
+        EOR     #$FF
+        SEC
+        ADC     ESP             ; ESP - STACK DEPTH
         TAY
-        BEQ     +
--       DEX
-        PLA
+        TAX
+        BRA     +
+-       PLA
         STA     ESTKL,X
         PLA
         STA     ESTKH,X
-        DEY
+        INX
++       CPX     ESP
         BNE     -
-+       LDA     IP16H
-        PHA
-        LDA     IP16L
-        PHA
         LDA     IPY
+        CLC
+        ADC     IP16L
+        PHA
+        LDA     IP16H
+        ADC     #$00
         PHA
         PHX
+        TYX
         STX     ALTRDOFF
         ;CLI UNTIL I KNOW WHAT TO DO WITH THE UNENHANCED IIE
         JSR     JMPTMP
         ;SEI UNTIL I KNOW WHAT TO DO WITH THE UNENHANCED IIE
         STX     ALTRDON
-        PLY                     ; COPY RETURN VALUES TO HW EVAL STACK
+        PLY                     ; MOVE RETURN VALUES TO HW EVAL STACK
         STY     ESP
-        PLY
-        PLA
-        STA     IP16L
         PLA
         STA     IP16H
-        CPX     ESP
-        BEQ     +
--       LDA     ESTKH,X
+        PLA
+        STA     IP16L
+        STX     TMPL
+        TYX
+        BRA     +
+-       DEX
+        LDA     ESTKH,X
         PHA
         LDA     ESTKL,X
         PHA
-        INX
-        CPX     ESP
++       CPX     TMPL
         BNE     -
-+       CLC                     ; SWITCH BACK TO NATIVE MODE
+        CLC                     ; SWITCH BACK TO NATIVE MODE
         XCE
         REP     #$20            ; 16 BIT A/M
         SEP     #$10            ; 8 BIT X,Y
         !AL
+        TSX
+        STX     HWSP
         LDX     #>OPXTBL         ; MAKE SURE WE'RE INDEXING THE RIGHT TABLE
         STX     OP16PAGE
+        LDY     #$00
         JMP     NEXTOP16
-
 ;*
 ;* INDIRECT CALL TO ADDRESS (NATIVE CODE)
 ;*
@@ -1260,10 +1275,10 @@ ENTER   INY
         !AS
         INY
         LDA     (IP16),Y
+        BEQ     +
         ASL
         TAY
-        BEQ     +
-        LDX     ESP
+        LDX     ESP             ; MOVE PARAMETERS TO CALL FRAME
 -       LDA     ESTKH,X
         DEY
         STA     (IFP),Y
@@ -1284,22 +1299,25 @@ LEAVEX  STX     ALTRDOFF
         ;CLI UNTIL I KNOW WHAT TO DO WITH THE UNENHANCED IIE
 LEAVE   SEP     #$20            ; 8 BIT A/M
         !AS
-        TSX                     ; COPY HW EVAL STACK TO ZP EVAL STACK
-        TXA
-        LDX     ESP
+        TSC                     ; MOVE HW EVAL STACK TO ZP EVAL STACK
+        EOR     #$FF
         SEC
-        SBC     HWSP
+        ADC     HWSP            ; STACK DEPTH = (HWSP - SP)/2
         LSR
-        BEQ     +
+        EOR     #$FF
+        SEC
+        ADC     ESP             ; ESP - STACK DEPTH
         TAY
--       DEX
-        PLA
+        TAX
+        BRA     +
+-       PLA
         STA     ESTKL,X
         PLA
         STA     ESTKH,X
-        DEY
+        INX
++       CPX     ESP
         BNE     -
-+       PLA                     ; DEALLOCATE POOL + FRAME
+        PLA                     ; DEALLOCATE POOL + FRAME
         REP     #$20            ; 16 BIT A/M
         !AL
         AND     #$00FF
@@ -1316,22 +1334,25 @@ RETX    STX     ALTRDOFF
         ;CLI UNTIL I KNOW WHAT TO DO WITH THE UNENHANCED IIE
 RET     SEP     #$20            ; 8 BIT A/M
         !AS
-        TSX                     ; COPY HW EVAL STACK TO ZP EVAL STACK
-        TXA
-        LDX     ESP
+        TSC                     ; MOVE HW EVAL STACK TO ZP EVAL STACK
+        EOR     #$FF
         SEC
-        SBC     HWSP
+        ADC     HWSP            ; STACK DEPTH = (HWSP - SP)/2
         LSR
-        BEQ     +
+        EOR     #$FF
+        SEC
+        ADC     ESP             ; ESP - STACK DEPTH
         TAY
--       DEX
-        PLA
+        TAX
+        BRA     +
+-       PLA
         STA     ESTKL,X
         PLA
         STA     ESTKH,X
-        DEY
+        INX
++       CPX     ESP
         BNE     -
-+       REP     #$20            ; 16 BIT A/M
+        REP     #$20            ; 16 BIT A/M
         !AL
         LDA     IFP             ; DEALLOCATE POOL
         STA     PP
