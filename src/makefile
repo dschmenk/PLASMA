@@ -3,6 +3,7 @@ AFLAGS	= -o $@
 PLVM    = plvm
 PLVM01  = A1PLASMA\#060280
 PLVM02	= PLASMA.SYSTEM\#FF2000
+PLVM802	= PLASMA16.SYSTEM\#FF2000
 PLVM03	= SOS.INTERP\#050000
 CMD     = CMD\#FF2000
 ED      = ED\#FF2000
@@ -68,7 +69,7 @@ TXTTYPE	= .TXT
 #SYSTYPE	= \#FF2000
 #TXTTYPE	= \#040000
 
-all: $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVM03) $(CMD) $(ARGS) $(MEMMGR) $(MEMTEST) $(FIBER) $(SB) $(MON) $(ROD) $(SIEVE) $(UTHERNET2) $(UTHERNET) $(ETHERIP) $(INET) $(DHCP) $(HTTPD) $(ROGUE) $(ROGUEMAP) $(ROGUECOMBAT) $(ROGUEIO) $(HGR1) $(TONE) $(DGR) $(DGRTEST) $(FILEIO) $(CONIO) $(PORTIO) $(SPIPORT) $(SDFAT) $(FATCAT) $(FATGET) $(FATPUT) $(FATWDSK) $(FATRDSK) $(SANE) $(FPSTR) $(FPU) $(SANITY) $(RPNCALC)
+all: $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVM802) $(PLVM03) $(CMD) $(ARGS) $(MEMMGR) $(MEMTEST) $(FIBER) $(SB) $(MON) $(ROD) $(SIEVE) $(UTHERNET2) $(UTHERNET) $(ETHERIP) $(INET) $(DHCP) $(HTTPD) $(ROGUE) $(ROGUEMAP) $(ROGUECOMBAT) $(ROGUEIO) $(HGR1) $(TONE) $(DGR) $(DGRTEST) $(FILEIO) $(CONIO) $(PORTIO) $(SPIPORT) $(SDFAT) $(FATCAT) $(FATGET) $(FATPUT) $(FATWDSK) $(FATRDSK) $(SANE) $(FPSTR) $(FPU) $(SANITY) $(RPNCALC)
 
 clean:
 	-rm *FE1000 *FF2000 $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVM03)
@@ -100,6 +101,9 @@ $(CMD): vmsrc/cmd.pla vmsrc/cmdstub.s $(PLVM02) $(PLASM)
 
 $(PLVM02): vmsrc/plvm02.s
 	acme -o $(PLVM02) -l vmsrc/plvm02.sym vmsrc/plvm02.s
+
+$(PLVM802): vmsrc/plvm802.s
+	acme -o $(PLVM802) -l vmsrc/plvm802.sym vmsrc/plvm802.s
 
 vmsrc/soscmd.a: vmsrc/soscmd.pla $(PLASM)
 	./$(PLASM) -AOW < vmsrc/soscmd.pla > vmsrc/soscmd.a

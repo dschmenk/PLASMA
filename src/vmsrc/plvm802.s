@@ -5,6 +5,7 @@
 ;*              SYSTEM ROUTINES AND LOCATIONS
 ;*
 ;**********************************************************
+        !CPU    65816
 ;*
 ;* THE DEFAULT CPU MODE FOR EXECUTING OPCODES IS:
 ;*   16 BIT A/M
@@ -14,7 +15,6 @@
 ;* A CALL IS MADE. THE 16 BIT PARAMETERS WILL BE COPIED
 ;* TO THE ZERO PAGE INTERLEAVED EVALUATION STACK.
 ;*
-SELFMODIFY  =   0
 ;*
 ;* MONITOR SPECIAL LOCATIONS
 ;*
@@ -53,6 +53,15 @@ OP16IDX =       FETCHOP+4
 OP16PAGE=       OP16IDX+1
 DROP16  =       $EE
 NEXTOP16=       $EF
+FETCHOP16=      NEXTOP16+3
+IP16    =       $F3
+IP16L   =       $F3
+IP16H   =       IP16L+1
+OP16TBL =       $F7
+HWSP    =       TMPH+1
+;
+; BUFFER ADDRESSES
+;
 STRBUF  =       $0280
 INTERP  =       $03D0
 ;*
@@ -66,9 +75,9 @@ NOS     =       $03             ; TOS-1
         !MACRO  INC_IP  {
         INY
         BNE     * + 8
-        SEP     $20             ; SET 8 BIT MODE
+        SEP     #$20            ; SET 8 BIT MODE
         INC     IP16H
-        REP     $20             ; SET 16 BIT MODE
+        REP     #$20            ; SET 16 BIT MODE
         }
 ;******************************
 ;*                            *
@@ -206,23 +215,19 @@ DINTRP  CLC                     ; SWITCH TO NATIVE MODE
         REP     #$20            ; 16 BIT A/M
         SEP     #$10            ; 8 BIT X,Y
         PLA
-        INC     A
+        INC
         STA     IP16
         LDA     IFP
         PHA                     ; SAVE ON STACK FOR LEAVE/RET
         LDA     PP              ; SET FP TO PP
         STA     IFP
         LDY     #$00
-!IF SELFMODIFY {
-        BEQ +
-} ELSE {
         STX     ESP
         TSX
         STX     HWSP
         LDX     #>OPTBL
         STX     OP16PAGE
         JMP     FETCHOP16
-}
 IINTRP  CLC                     ; SWITCH TO NATIVE MODE
         XCE
         REP     #$20            ; 16 BIT A/M
@@ -242,10 +247,6 @@ IINTRP  CLC                     ; SWITCH TO NATIVE MODE
         STX     HWSP
         LDX     #>OPTBL
         STX     OP16PAGE
-!IF SELFMODIFY {
-        LDX     LCRWEN+LCBNK2
-        LDX     LCRWEN+LCBNK2
-}
         JMP     FETCHOP16
 IINTRPX CLC                     ; SWITCH TO NATIVE MODE
         XCE
@@ -268,10 +269,6 @@ IINTRPX CLC                     ; SWITCH TO NATIVE MODE
         STX     OP16PAGE
         ;SEI UNTIL I KNOW WHAT TO DO WITH THE UNENHANCED IIE
         STX     ALTRDON
-!IF SELFMODIFY {
-        LDX     LCRWEN+LCBNK2
-        LDX     LCRWEN+LCBNK2
-}
         JMP     FETCHOP16
 ;************************************************************
 ;*                                                          *
@@ -306,7 +303,7 @@ CMDENTRY =      *
 ;
 ; INSTALL PAGE 0 FETCHOP ROUTINE
 ;
-        LDY     #$12
+        LDY     #$11
 -       LDA     PAGE0,Y
         STA     DROP16,Y
         DEY
@@ -390,9 +387,9 @@ PAGE0    =      *
         BEQ     NEXTOPH
         LDX     $FFFF,Y         ; FETCHOP16 @ $F2, IP16 MAPS OVER $FFFF @ $F3
         JMP     (OPTBL,X)       ; OP16IDX AND OP16PAGE MAP OVER OPTBL
-NEXTOPH SEP     $20             ; SET 8 BIT MODE
+NEXTOPH SEP     #$20            ; SET 8 BIT MODE
         INC     IP16H
-        REP     $20             ; SET 16 BIT MODE
+        REP     #$20            ; SET 16 BIT MODE
         BRA     FETCHOP
 }
 PAGE3   =       *
@@ -419,10 +416,10 @@ LCDEFCMD =      *-28            ; DEFCMD IN LC MEMORY
         !ALIGN  255,0
 OPXTBL  !WORD   ZERO,ADD,SUB,MUL,DIV,MOD,INCR,DECR              ; 00 02 04 06 08 0A 0C 0E
         !WORD   NEG,COMP,BAND,IOR,XOR,SHL,SHR,IDXW              ; 10 12 14 16 18 1A 1C 1E
-        !WORD   LNOT,LOR,LAND,LA,LLA,CB,CW,CSX                  ; 20 22 24 26 28 2A 2C 2E
+        !WORD   LNOT,LOR,LAND,LA,LLA,CB,CW,CS                   ; 20 22 24 26 28 2A 2C 2E
         !WORD   DROP,DUP,PUSHEP,PULLEP,BRGT,BRLT,BREQ,BRNE      ; 30 32 34 36 38 3A 3C 3E
         !WORD   ISEQ,ISNE,ISGT,ISLT,ISGE,ISLE,BRFLS,BRTRU       ; 40 42 44 46 48 4A 4C 4E
-        !WORD   BRNCH,IBRNCH,CALLX,ICALX,ENTER,LEAVEX,RETX,CFFB; 50 52 54 56 58 5A 5C 5E
+        !WORD   BRNCH,IBRNCH,CALLX,ICALX,ENTER,LEAVEX,RETX,CFFB ; 50 52 54 56 58 5A 5C 5E
         !WORD   LBX,LWX,LLBX,LLWX,LABX,LAWX,DLB,DLW             ; 60 62 64 66 68 6A 6C 6E
         !WORD   SB,SW,SLB,SLW,SAB,SAW,DAB,DAW                   ; 70 72 74 76 78 7A 7C 7E
 ;*********************************************************************
@@ -455,312 +452,224 @@ IDXW    PLA
         CLC
         ADC     TOS,S
         STA     TOS,S
-        JMP     NEXTOP
+        JMP     NEXTOP16
 ;*
 ;* MUL TOS-1 BY TOS
 ;*
-MUL     STY     IPY
-        LDY     #$10
-        LDA     ESTKL+1,X
-        EOR     #$FF
-        STA     TMPL
-        LDA     ESTKH+1,X
-        EOR     #$FF
-        STA     TMPH
-        LDA     #$00
-        STA     ESTKL+1,X       ; PRODL
-;       STA     ESTKH+1,X       ; PRODH
-MULLP   LSR     TMPH            ; MULTPLRH
-        ROR     TMPL            ; MULTPLRL
+MUL     ;STY     IPY
+        ;LDY     #$10
+        LDA     NOS,S
+        EOR     #$FFFF
+        STA     TMP
+        LDA     #$0000
+MULLP   ASL     TMP             ;LSR     TMP             ; MULTPLR
         BCS     +
-        STA     ESTKH+1,X       ; PRODH
-        LDA     ESTKL,X         ; MULTPLNDL
-        ADC     ESTKL+1,X       ; PRODL
-        STA     ESTKL+1,X
-        LDA     ESTKH,X         ; MULTPLNDH
-        ADC     ESTKH+1,X       ; PRODH
-+       ASL     ESTKL,X         ; MULTPLNDL
-        ROL     ESTKH,X         ; MULTPLNDH
-        DEY
+        ADC     TOS,S           ; MULTPLD
++       ASL                     ;ASL     TOS,S           ; MULTPLD
+        ;DEY
         BNE     MULLP
-        STA     ESTKH+1,X       ; PRODH
-        LDY     IPY
-;       INX
-;       JMP     NEXTOP
-        JMP     DROP
+        STA     NOS,S           ; PROD
+        ;LDY     IPY
+        JMP     DROP16
 ;*
 ;* INTERNAL DIVIDE ALGORITHM
 ;*
-_NEG    LDA     #$00
+_NEG    EOR     #$FFFF
+        INC
         SEC
-        SBC     ESTKL,X
-        STA     ESTKL,X
-        LDA     #$00
-        SBC     ESTKH,X
-        STA     ESTKH,X
+        SBC     TOS,S
+        STA     TOS,S
         RTS
 _DIV    STY     IPY
         LDY     #$11            ; #BITS+1
-        LDA     #$00
-        STA     TMPL            ; REMNDRL
-        STA     TMPH            ; REMNDRH
-        LDA     ESTKH,X
-        AND     #$80
-        STA     DVSIGN
+        LDX     #$00
+        LDA     TOS,S
         BPL     +
-        JSR     _NEG
-        INC     DVSIGN
-+       LDA     ESTKH+1,X
+        LDX     #$81
+        EOR     #$FFFF
+        INC
+        STA     TOS,S
++       LDA     NOS,S
         BPL     +
         INX
-        JSR     _NEG
-        DEX
-        INC     DVSIGN
-        BNE     _DIV1
-+       ORA     ESTKL+1,X       ; DVDNDL
-        BEQ     _DIVEX
-_DIV1   ASL     ESTKL+1,X       ; DVDNDL
-        ROL     ESTKH+1,X       ; DVDNDH
+        EOR     #$FFFF
+        INC
+        STA     TMP             ; NOS,S
++       BEQ     _DIVEX
+_DIV1   ASL                     ; DVDND
         DEY
         BCC     _DIV1
-_DIVLP  ROL     TMPL            ; REMNDRL
-        ROL     TMPH            ; REMNDRH
-        LDA     TMPL            ; REMNDRL
-        CMP     ESTKL,X         ; DVSRL
-        LDA     TMPH            ; REMNDRH
-        SBC     ESTKH,X         ; DVSRH
+        STA     TMP             ;NOS,S           ; DVDND
+        LDA     #$0000          ; REMNDR
+_DIVLP  ROL                     ; REMNDR
+        CMP     TOS,S           ; DVSR
         BCC     +
-        STA     TMPH            ; REMNDRH
-        LDA     TMPL            ; REMNDRL
-        SBC     ESTKL,X         ; DVSRL
-        STA     TMPL            ; REMNDRL
+        SBC     TOS,S           ; DVSR
         SEC
-+       ROL     ESTKL+1,X       ; DVDNDL
-        ROL     ESTKH+1,X       ; DVDNDH
++       ROL     TMP             ;NOS,S           ; DVDND
         DEY
         BNE     _DIVLP
-_DIVEX  INX
+_DIVEX  ;STA     TMP             ; REMNDR
         LDY     IPY
         RTS
 ;*
 ;* NEGATE TOS
 ;*
-NEG     LDA     #$00
+NEG     LDA     #$0000
         SEC
-        SBC     ESTKL,X
-        STA     ESTKL,X
-        LDA     #$00
-        SBC     ESTKH,X
-        STA     ESTKH,X
-        JMP     NEXTOP
+        SBC     TOS,S
+        STA     TOS,S
+        JMP     NEXTOP16
 ;*
 ;* DIV TOS-1 BY TOS
 ;*
 DIV     JSR     _DIV
-        LSR     DVSIGN          ; SIGN(RESULT) = (SIGN(DIVIDEND) + SIGN(DIVISOR)) & 1
+        LDA     TMP
+        STA     NOS,S
+        PLA
+        TXA
+        LSR                     ; SIGN(RESULT) = (SIGN(DIVIDEND) + SIGN(DIVISOR)) & 1
         BCS     NEG
-        JMP     NEXTOP
+        JMP     NEXTOP16
 ;*
 ;* MOD TOS-1 BY TOS
 ;*
 MOD     JSR     _DIV
-        LDA     TMPL            ; REMNDRL
-        STA     ESTKL,X
-        LDA     TMPH            ; REMNDRH
-        STA     ESTKH,X
-        LDA     DVSIGN          ; REMAINDER IS SIGN OF DIVIDEND
-        BMI     NEG
-        JMP     NEXTOP
+        STA     NOS,S           ; REMNDR
+        PLA
+        TXA
+        AND     #$0080          ; REMAINDER IS SIGN OF DIVIDEND
+        BNE     NEG
+        JMP     NEXTOP16
 ;*
 ;* INCREMENT TOS
 ;*
-INCR    INC     ESTKL,X
-        BNE     INCR1
-        INC     ESTKH,X
-INCR1   JMP     NEXTOP
+INCR    LDA     TOS,S
+        INC
+        STA     TOS,S
+        JMP     NEXTOP16
 ;*
 ;* DECREMENT TOS
 ;*
-DECR    LDA     ESTKL,X
-        BNE     DECR1
-        DEC     ESTKH,X
-DECR1   DEC     ESTKL,X
-        JMP     NEXTOP
+DECR    LDA     TOS,S
+        DEC
+        STA     TOS,S
+        JMP     NEXTOP16
 ;*
 ;* BITWISE COMPLIMENT TOS
 ;*
-COMP    LDA     #$FF
-        EOR     ESTKL,X
-        STA     ESTKL,X
-        LDA     #$FF
-        EOR     ESTKH,X
-        STA     ESTKH,X
-        JMP     NEXTOP
+COMP    LDA     #$FFFF
+        EOR     TOS,S
+        STA     TOS,S
+        JMP     NEXTOP16
 ;*
 ;* BITWISE AND TOS TO TOS-1
 ;*
-BAND    LDA     ESTKL+1,X
-        AND     ESTKL,X
-        STA     ESTKL+1,X
-        LDA     ESTKH+1,X
-        AND     ESTKH,X
-        STA     ESTKH+1,X
-;       INX
-;       JMP     NEXTOP
-        JMP     DROP
+BAND    PLA
+        AND     TOS,S
+        STA     TOS,S
+        JMP     NEXTOP16
 ;*
 ;* INCLUSIVE OR TOS TO TOS-1
 ;*
-IOR     LDA     ESTKL+1,X
-        ORA     ESTKL,X
-        STA     ESTKL+1,X
-        LDA     ESTKH+1,X
-        ORA     ESTKH,X
-        STA     ESTKH+1,X
-;       INX
-;       JMP     NEXTOP
-        JMP     DROP
+IOR     PLA
+        ORA     TOS,S
+        STA     TOS,S
+        JMP     NEXTOP16
 ;*
 ;* EXLUSIVE OR TOS TO TOS-1
 ;*
-XOR     LDA     ESTKL+1,X
-        EOR     ESTKL,X
-        STA     ESTKL+1,X
-        LDA     ESTKH+1,X
-        EOR     ESTKH,X
-        STA     ESTKH+1,X
-;       INX
-;       JMP     NEXTOP
-        JMP     DROP
+XOR     PLA
+        EOR     TOS,S
+        STA     TOS,S
+        JMP     NEXTOP16
 ;*
 ;* SHIFT TOS-1 LEFT BY TOS
 ;*
-SHL     STY     IPY
-        LDA     ESTKL,X
-        CMP     #$08
-        BCC     SHL1
-        LDY     ESTKL+1,X
-        STY     ESTKH+1,X
-        LDY     #$00
-        STY     ESTKL+1,X
-        SBC     #$08
-SHL1    TAY
-        BEQ     SHL3
-SHL2    ASL     ESTKL+1,X
-        ROL     ESTKH+1,X
-        DEY
-        BNE     SHL2
-SHL3    LDY     IPY
-;       INX
-;       JMP     NEXTOP
-        JMP     DROP
+SHL     PLA
+        TAX
+        BEQ     SHL2
+        LDA     TOS,S
+SHL1    ASL
+        DEX
+        BNE     SHL1
+        STA     TOS,S
+SHL2    JMP     NEXTOP16
 ;*
 ;* SHIFT TOS-1 RIGHT BY TOS
 ;*
-SHR     STY     IPY
-        LDA     ESTKL,X
-        CMP     #$08
-        BCC     SHR2
-        LDY     ESTKH+1,X
-        STY     ESTKL+1,X
-        CPY     #$80
-        LDY     #$00
-        BCC     SHR1
-        DEY
-SHR1    STY     ESTKH+1,X
-        SEC
-        SBC     #$08
-SHR2    TAY
-        BEQ     SHR4
-        LDA     ESTKH+1,X
-SHR3    CMP     #$80
+SHR     PLA
+        TAX
+        BEQ     SHR2
+        LDA     TOS,S
+SHR1    CMP     #$8000
         ROR
-        ROR     ESTKL+1,X
-        DEY
-        BNE     SHR3
-        STA     ESTKH+1,X
-SHR4    LDY     IPY
-;       INX
-;       JMP     NEXTOP
-        JMP     DROP
+        DEX
+        BNE     SHR1
+        STA     TOS,S
+SHR2    JMP     NEXTOP16
 ;*
 ;* LOGICAL NOT
 ;*
-LNOT    LDA     ESTKL,X
-        ORA     ESTKH,X
+LNOT    LDA     TOS,S
         BEQ     LNOT1
-        LDA     #$FF
-LNOT1   EOR     #$FF
-        STA     ESTKL,X
-        STA     ESTKH,X
-        JMP     NEXTOP
+        LDA     #$0001
+LNOT1   DEC
+        STA     TOS,S
+        JMP     NEXTOP16
 ;*
 ;* LOGICAL AND
 ;*
-LAND    LDA     ESTKL+1,X
-        ORA     ESTKH+1,X
-        BEQ     LAND2
-        LDA     ESTKL,X
-        ORA     ESTKH,X
+LAND    PLA
         BEQ     LAND1
-        LDA     #$FF
-LAND1   STA     ESTKL+1,X
-        STA     ESTKH+1,X
-;LAND2  INX
-;       JMP     NEXTOP
-LAND2   JMP     DROP
+        LDA     TOS,S
+        BEQ     LAND2
+        LDA     #$FFFF
+LAND1   STA     TOS,S
+LAND2   JMP     NEXTOP16
 ;*
 ;* LOGICAL OR
 ;*
-LOR     LDA     ESTKL,X
-        ORA     ESTKH,X
-        ORA     ESTKL+1,X
-        ORA     ESTKH+1,X
+LOR     PLA
+        ORA     TOS,S
         BEQ     LOR1
-        LDA     #$FF
-        STA     ESTKL+1,X
-        STA     ESTKH+1,X
-;LOR1   INX
-;       JMP     NEXTOP
-LOR1    JMP     DROP
+        LDA     #$FFFF
+        STA     TOS,S
+LOR1    JMP     NEXTOP16
 ;*
 ;* DUPLICATE TOS
 ;*
-DUP     DEX
-        LDA     ESTKL+1,X
-        STA     ESTKL,X
-        LDA     ESTKH+1,X
-        STA     ESTKH,X
-        JMP     NEXTOP
+DUP     LDA     TOS,S
+        PHA
+        JMP     NEXTOP16
 ;*
 ;* PUSH EVAL STACK POINTER TO CALL STACK
 ;*
 PUSHEP  TXA
-        PHA
-        JMP     NEXTOP
+        PHA                     ; MAKE SURE WE PUSH 16 BITS
+        JMP     NEXTOP16
 ;*
 ;* PULL EVAL STACK POINTER FROM CALL STACK
 ;*
-PULLEP  PLA
+PULLEP  PLA                     ; MAKE SURE WE PULL 16 BITS
         TAX
-        JMP     NEXTOP
+        JMP     NEXTOP16
 ;*
 ;* CONSTANT
 ;*
-ZERO    DEX
-        LDA     #$00
-        STA     ESTKL,X
-        STA     ESTKH,X
-        JMP     NEXTOP
-CFFB    LDA     #$FF
-    !BYTE $2C   ; BIT $00A9 - effectively skips LDA #$00, no harm in reading this address
-CB      LDA     #$00
-        DEX
-        STA     ESTKH,X
-        +INC_IP
+ZERO    LDA     #$0000
+        PHA
+        JMP     NEXTOP16
+CFFB    +INC_IP
         LDA     (IP),Y
-        STA     ESTKL,X
-        JMP     NEXTOP
+        ORA     #$FF00
+        PHA
+        JMP     NEXTOP16
+CB      +INC_IP
+        LDA     (IP),Y
+        AND     #$00FF
+        PHA
+        JMP     NEXTOP16
 ;*
 ;* LOAD ADDRESS & LOAD CONSTANT WORD (SAME THING, WITH OR WITHOUT FIXUP)
 ;*
@@ -768,666 +677,436 @@ LA      =       *
 CW      DEX
         +INC_IP
         LDA     (IP),Y
-        STA     ESTKL,X
+        PHA
         +INC_IP
-        LDA     (IP),Y
-        STA     ESTKH,X
-        JMP     NEXTOP
+        JMP     NEXTOP16
 ;*
 ;* CONSTANT STRING
 ;*
-CS      DEX
-        +INC_IP
+CS      +INC_IP
         TYA                     ; NORMALIZE IP AND SAVE STRING ADDR ON ESTK
         CLC
-        ADC     IPL
-        STA     IPL
-        STA     ESTKL,X
-        LDA     #$00
-        TAY
-        ADC     IPH
-        STA     IPH
-        STA     ESTKH,X
+        ADC     IP16
+        STA     IP16
+        PHA
         LDA     (IP),Y
         TAY
-        JMP     NEXTOP
+        JMP     NEXTOP16
 ;
-CSX DEX
-        +INC_IP
+CSX     +INC_IP
         TYA                     ; NORMALIZE IP
         CLC
-        ADC     IPL
-        STA     IPL
-        LDA     #$00
-        TAY
-        ADC     IPH
-        STA     IPH
-        LDA     PPL             ; SCAN POOL FOR STRING ALREADY THERE
-        STA     TMPL
-        LDA     PPH
-        STA     TMPH
-_CMPPSX ;LDA    TMPH            ; CHECK FOR END OF POOL
-        CMP     IFPH
+        ADC     IP16
+        STA     IP16
+        LDY     #$00
+        LDA     PP              ; SCAN POOL FOR STRING ALREADY THERE
+        STA     TMP
+_CMPPSX CMP     IFP             ; CHECK FOR END OF POOL
         BCC     _CMPSX          ; CHECK FOR MATCHING STRING
-        BNE     _CPYSX          ; BEYOND END OF POOL, COPY STRING OVER
-        LDA     TMPL
-        CMP     IFPL
         BCS     _CPYSX          ; AT OR BEYOND END OF POOL, COPY STRING OVER
-_CMPSX  STA     ALTRDOFF
+_CMPSX  SEP     #$20            ; 8 BIT A/M
+        !AS
+        STX     ALTRDOFF
         LDA     (TMP),Y         ; COMPARE STRINGS FROM AUX MEM TO STRINGS IN MAIN MEM
-        STA     ALTRDON
-        CMP     (IP),Y          ; COMPARE STRING LENGTHS
+        STX     ALTRDON
+        CMP     (IP16),Y        ; COMPARE STRING LENGTHS
         BNE     _CNXTSX1
         TAY
-_CMPCSX STA     ALTRDOFF
+_CMPCSX STX     ALTRDOFF
         LDA     (TMP),Y         ; COMPARE STRING CHARS FROM END
-        STA     ALTRDON
-        CMP     (IP),Y
+        STX     ALTRDON
+        CMP     (IP16),Y
         BNE     _CNXTSX
         DEY
         BNE     _CMPCSX
-        LDA     TMPL            ; MATCH - SAVE EXISTING ADDR ON ESTK AND MOVE ON
-        STA     ESTKL,X
-        LDA     TMPH
-        STA     ESTKH,X
-        BNE     _CEXSX
+        LDA     TMPH            ; MATCH - SAVE EXISTING ADDR ON ESTK AND MOVE ON
+        PHA
+        LDA     TMPL
+        PHA
+        BRA     _CEXSX
 _CNXTSX LDY     #$00
-        STA     ALTRDOFF
+        STX     ALTRDOFF
         LDA     (TMP),Y
-        STA     ALTRDON
-_CNXTSX1 SEC
-        ADC     TMPL
-        STA     TMPL
-        LDA     #$00
-        ADC     TMPH
-        STA     TMPH
+        STX     ALTRDON
+_CNXTSX1 REP     #$20            ; 16 BIT A/M
+        !AL
+        AND     #$00FF
+        SEC
+        ADC     TMP
+        STA     TMP
         BNE     _CMPPSX
-_CPYSX  LDA     (IP),Y          ; COPY STRING FROM AUX TO MAIN MEM POOL
+        !AS
+_CPYSX  LDA     (IP16),Y        ; COPY STRING FROM AUX TO MAIN MEM POOL
         TAY                     ; MAKE ROOM IN POOL AND SAVE ADDR ON ESTK
         EOR     #$FF
         CLC
         ADC     PPL
         STA     PPL
-        STA     ESTKL,X
+        TAX
         LDA     #$FF
         ADC     PPH
         STA     PPH
-        STA     ESTKH,X         ; COPY STRING FROM AUX MEM BYTECODE TO MAIN MEM POOL
-_CPYSX1 LDA     (IP),Y          ; ALTRD IS ON,  NO NEED TO CHANGE IT HERE
+        PHA                     ; SAVE ADDRESS ON ESTK
+        PHX
+_CPYSX1 LDA     (IP16),Y        ; ALTRD IS ON,  NO NEED TO CHANGE IT HERE
         STA     (PP),Y          ; ALTWR IS OFF, NO NEED TO CHANGE IT HERE
         DEY
         CPY     #$FF
         BNE     _CPYSX1
         INY
-_CEXSX  LDA     (IP),Y          ; SKIP TO NEXT OP ADDR AFTER STRING
+_CEXSX  LDA     (IP16),Y        ; SKIP TO NEXT OP ADDR AFTER STRING
         TAY
-        JMP     NEXTOP
+        REP     #$20            ; 16 BIT A/M
+        !AL
+        JMP     NEXTOP16
 ;*
 ;* LOAD VALUE FROM ADDRESS TAG
 ;*
-!IF SELFMODIFY {
-LB      LDA     ESTKL,X
-        STA     LBLDA+1
-        LDA     ESTKH,X
-        STA     LBLDA+2
-LBLDA   LDA   $FFFF
-        STA     ESTKL,X
-    LDA #$00
-        STA     ESTKH,X
-        JMP     NEXTOP
-} ELSE {
-LB      LDA     ESTKL,X
-        STA     TMPL
-        LDA     ESTKH,X
-        STA     TMPH
-        STY     IPY
+LB      TYX
         LDY     #$00
-        LDA     (TMP),Y
-        STA     ESTKL,X
-        STY     ESTKH,X
-        LDY     IPY
-        JMP     NEXTOP
-}
-LW      LDA     ESTKL,X
-        STA     TMPL
-        LDA     ESTKH,X
-        STA     TMPH
-        STY     IPY
+        SEP     #$20            ; 8 BIT A/M
+        !AS
+        LDA     (TOS,S),Y
+        REP     #$20            ; 16 BIT A/M
+        !AL
+        AND     #$00FF
+        STA     TOS,S
+        TXY
+        JMP     NEXTOP16
+LW      TYX
         LDY     #$00
-        LDA     (TMP),Y
-        STA     ESTKL,X
-        INY
-        LDA     (TMP),Y
-        STA     ESTKH,X
-        LDY     IPY
-        JMP     NEXTOP
+        LDA     (TOS,S),Y
+        STA     TOS,S
+        TXY
+        JMP     NEXTOP16
 ;
-!IF SELFMODIFY {
-LBX     LDA     ESTKL,X
-        STA     LBXLDA+1
-        LDA     ESTKH,X
-        STA     LBXLDA+2
-        STA     ALTRDOFF
-LBXLDA  LDA     $FFFF
-        STA     ESTKL,X
-    LDA #$00
-        STA     ESTKH,X
-        STA     ALTRDON
-        JMP     NEXTOP
-} ELSE {
-LBX     LDA     ESTKL,X
-        STA     TMPL
-        LDA     ESTKH,X
-        STA     TMPH
-        STY     IPY
-        STA     ALTRDOFF
+LBX     TYX
         LDY     #$00
-        LDA     (TMP),Y
-        STA     ESTKL,X
-        STY     ESTKH,X
-        LDY     IPY
-        STA     ALTRDON
-        JMP     NEXTOP
-}
-LWX     LDA     ESTKL,X
-        STA     TMPL
-        LDA     ESTKH,X
-        STA     TMPH
-        STY     IPY
-        STA     ALTRDOFF
+        STX     ALTRDOFF
+        SEP     #$20            ; 8 BIT A/M
+        !AS
+        LDA     (TOS,S),Y
+        REP     #$20            ; 16 BIT A/M
+        !AL
+        STX     ALTRDON
+        AND     #$00FF
+        STA     TOS,S
+        TXY
+        JMP     NEXTOP16
+LWX     TYX
         LDY     #$00
-        LDA     (TMP),Y
-        STA     ESTKL,X
-        INY
-        LDA     (TMP),Y
-        STA     ESTKH,X
-        LDY     IPY
-        STA     ALTRDON
-        JMP     NEXTOP
+        STX     ALTRDOFF
+        LDA     (TOS,S),Y
+        STX     ALTRDON
+        STA     TOS,S
+        TXY
+        JMP     NEXTOP16
 ;*
 ;* LOAD ADDRESS OF LOCAL FRAME OFFSET
 ;*
 LLA     +INC_IP
-        LDA     (IP),Y
-        DEX
+        LDA     (IP16),Y
+        AND     #$00FF
         CLC
-        ADC     IFPL
-        STA     ESTKL,X
-        LDA     #$00
-        ADC     IFPH
-        STA     ESTKH,X
-        JMP     NEXTOP
+        ADC     IFP
+        PHA
+        JMP     NEXTOP16
 ;*
 ;* LOAD VALUE FROM LOCAL FRAME OFFSET
 ;*
 LLB     +INC_IP
-        LDA     (IP),Y
-        STY     IPY
+        LDA     (IP16),Y
+        TYX
         TAY
-        DEX
         LDA     (IFP),Y
-        STA     ESTKL,X
-        LDA     #$00
-        STA     ESTKH,X
-        LDY     IPY
-        JMP     NEXTOP
+        AND     #$00FF
+        PHA
+        TXY
+        JMP     NEXTOP16
 LLW     +INC_IP
-        LDA     (IP),Y
-        STY     IPY
+        LDA     (IP16),Y
+        TYX
         TAY
-        DEX
         LDA     (IFP),Y
-        STA     ESTKL,X
-        INY
-        LDA     (IFP),Y
-        STA     ESTKH,X
-        LDY     IPY
-        JMP     NEXTOP
+        PHA
+        TXY
+        JMP     NEXTOP16
 ;
 LLBX    +INC_IP
-        LDA     (IP),Y
-        STY     IPY
+        LDA     (IP16),Y
+        TYX
         TAY
-        DEX
-        STA     ALTRDOFF
+        STX     ALTRDOFF
         LDA     (IFP),Y
-        STA     ESTKL,X
-        LDA     #$00
-        STA     ESTKH,X
-        STA     ALTRDON
-        LDY     IPY
-        JMP     NEXTOP
+        STX     ALTRDON
+        AND     #$00FF
+        PHA
+        TXY
+        JMP     NEXTOP16
 LLWX    +INC_IP
-        LDA     (IP),Y
-        STY     IPY
+        LDA     (IP16),Y
+        TYX
         TAY
-        DEX
-        STA     ALTRDOFF
+        STX     ALTRDOFF
         LDA     (IFP),Y
-        STA     ESTKL,X
-        INY
-        LDA     (IFP),Y
-        STA     ESTKH,X
-        STA     ALTRDON
-        LDY     IPY
-        JMP     NEXTOP
+        STX     ALTRDON
+        PHA
+        TXY
+        JMP     NEXTOP16
 ;*
 ;* LOAD VALUE FROM ABSOLUTE ADDRESS
 ;*
-!IF SELFMODIFY {
 LAB     +INC_IP
-        LDA     (IP),Y
-        STA     LABLDA+1
+        LDA     (IP16),Y
         +INC_IP
-        LDA     (IP),Y
-        STA     LABLDA+2
-LABLDA  LDA     $FFFF
-        DEX
-        STA     ESTKL,X
-    LDA #$00
-        STA     ESTKH,X
-        JMP     NEXTOP
-} ELSE {
-LAB     +INC_IP
-        LDA     (IP),Y
-        STA     TMPL
-        +INC_IP
-        LDA     (IP),Y
-        STA     TMPH
-        STY     IPY
-        LDY     #$00
-        LDA     (TMP),Y
-        DEX
-        STA     ESTKL,X
-        STY     ESTKH,X
-        LDY     IPY
-        JMP     NEXTOP
-}
+        STA     TMP
+        SEP     #$20            ; 8 BIT A/M
+        !AS
+        LDA     (TMP)
+        REP     #$20            ; 16 BIT A/M
+        !AL
+        AND     #$00FF
+        PHA
+        JMP     NEXTOP16
 LAW     +INC_IP
-        LDA     (IP),Y
-        STA     TMPL
+        LDA     (IP16),Y
         +INC_IP
-        LDA     (IP),Y
-        STA     TMPH
-        STY     IPY
-        LDY     #$00
-        LDA     (TMP),Y
-        DEX
-        STA     ESTKL,X
-        INY
-        LDA     (TMP),Y
-        STA     ESTKH,X
-        LDY     IPY
-        JMP     NEXTOP
+        STA     TMP
+        LDA     (TMP)
+        PHA
+        JMP     NEXTOP16
 ;
-!IF SELFMODIFY {
 LABX    +INC_IP
-        LDA     (IP),Y
-        STA     LABXLDA+1
+        LDA     (IP16),Y
         +INC_IP
-        LDA     (IP),Y
-        STA     LABXLDA+2
-        STA     ALTRDOFF
-LABXLDA LDA     $FFFF
-        DEX
-        STA     ESTKL,X
-    LDA #$00
-        STA     ESTKH,X
-        STA     ALTRDON
-        JMP     NEXTOP
-} ELSE {
-LABX    +INC_IP
-        LDA     (IP),Y
-        STA     TMPL
-        +INC_IP
-        LDA     (IP),Y
-        STA     TMPH
-        STY     IPY
-        STA     ALTRDOFF
-        LDY     #$00
-        LDA     (TMP),Y
-        DEX
-        STA     ESTKL,X
-        STY     ESTKH,X
-        STA     ALTRDON
-        LDY     IPY
-        JMP     NEXTOP
-}
+        STA     TMP
+        SEP     #$20            ; 8 BIT A/M
+        !AS
+        STX     ALTRDOFF
+        LDA     (TMP)
+        STX     ALTRDON
+        REP     #$20            ; 16 BIT A/M
+        !AL
+        AND     #$00FF
+        PHA
+        JMP     NEXTOP16
 LAWX    +INC_IP
-        LDA     (IP),Y
-        STA     TMPL
+        LDA     (IP16),Y
         +INC_IP
-        LDA     (IP),Y
-        STA     TMPH
-        STY     IPY
-        STA     ALTRDOFF
-        LDY     #$00
-        LDA     (TMP),Y
-        DEX
-        STA     ESTKL,X
-        INY
-        LDA     (TMP),Y
-        STA     ESTKH,X
-        STA     ALTRDON
-        LDY     IPY
-        JMP     NEXTOP
+        STA     TMP
+        STX     ALTRDOFF
+        LDA     (TMP)
+        STX     ALTRDON
+        PHA
+        JMP     NEXTOP16
+;
 ;*
 ;* STORE VALUE TO ADDRESS
 ;*
-!IF SELFMODIFY {
-SB      LDA     ESTKL,X
-        STA     SBSTA+1
-        LDA     ESTKH,X
-        STA     SBSTA+2
-        LDA     ESTKL+1,X
-SBSTA   STA     $FFFF
-        INX
-;       INX
-;       JMP     NEXTOP
-        JMP     DROP
-} ELSE {
-SB      LDA     ESTKL,X
-        STA     TMPL
-        LDA     ESTKH,X
-        STA     TMPH
-        LDA     ESTKL+1,X
-        STY     IPY
+SB      TYX
         LDY     #$00
-        STA     (TMP),Y
-        LDY     IPY
-        INX
-;       INX
-;       JMP     NEXTOP
-        JMP     DROP
-}
-SW      LDA     ESTKL,X
-        STA     TMPL
-        LDA     ESTKH,X
-        STA     TMPH
-        STY     IPY
+        SEP     #$20            ; 8 BIT A/M
+        !AS
+        LDA     NOS,S
+        STA     (TOS,S),Y
+        REP     #$20            ; 16 BIT A/M
+        !AL
+        TXY
+        PLA
+        JMP     DROP16
+SW      TYX
         LDY     #$00
-        LDA     ESTKL+1,X
-        STA     (TMP),Y
-        INY
-        LDA     ESTKH+1,X
-        STA     (TMP),Y
-        LDY     IPY
-        INX
-;       INX
-;       JMP     NEXTOP
-        JMP     DROP
+        LDA     NOS,S
+        STA     (TOS,S),Y
+        TXY
+        PLA
+        JMP     DROP16
 ;*
 ;* STORE VALUE TO LOCAL FRAME OFFSET
 ;*
 SLB     +INC_IP
-        LDA     (IP),Y
-        STY     IPY
+        LDA     (IP16),Y
+        TYX
         TAY
-        LDA     ESTKL,X
+        PLA
+        SEP     #$20            ; 8 BIT A/M
+        !AS
         STA     (IFP),Y
-        LDY     IPY
-;       INX
-;       JMP     NEXTOP
-        JMP     DROP
+        REP     #$20            ; 16 BIT A/M
+        !AL
+        TXY
+        JMP     NEXTOP16
 SLW     +INC_IP
-        LDA     (IP),Y
-        STY     IPY
+        LDA     (IP16),Y
+        TYX
         TAY
-        LDA     ESTKL,X
+        PLA
         STA     (IFP),Y
-        INY
-        LDA     ESTKH,X
-        STA     (IFP),Y
-        LDY     IPY
-;               INX
-;       JMP     NEXTOP
-        JMP     DROP
+        TXY
+        JMP     NEXTOP16
 ;*
 ;* STORE VALUE TO LOCAL FRAME OFFSET WITHOUT POPPING STACK
 ;*
 DLB     +INC_IP
-        LDA     (IP),Y
-        STY     IPY
+        LDA     (IP16),Y
+        TYX
         TAY
-        LDA     ESTKL,X
+        LDA     TOS,S
+        SEP     #$20            ; 8 BIT A/M
+        !AS
         STA     (IFP),Y
-        LDY     IPY
-        JMP     NEXTOP
-DLW             +INC_IP
-        LDA     (IP),Y
-        STY     IPY
+        REP     #$20            ; 16 BIT A/M
+        !AL
+        TXY
+        JMP     NEXTOP16
+DLW     +INC_IP
+        LDA     (IP16),Y
+        TYX
         TAY
-        LDA     ESTKL,X
+        LDA     TOS,S
         STA     (IFP),Y
-        INY
-        LDA     ESTKH,X
-        STA     (IFP),Y
-        LDY     IPY
-        JMP     NEXTOP
+        TXY
+        JMP     NEXTOP16
 ;*
 ;* STORE VALUE TO ABSOLUTE ADDRESS
 ;*
-!IF SELFMODIFY {
 SAB     +INC_IP
-        LDA     (IP),Y
-        STA     SABSTA+1
+        LDA     (IP16),Y
         +INC_IP
-        LDA     (IP),Y
-        STA     SABSTA+2
-        LDA     ESTKL,X
-SABSTA  STA     $FFFF
-;       INX
-;       JMP     NEXTOP
-        JMP     DROP
-} ELSE {
-SAB     +INC_IP
-        LDA     (IP),Y
-        STA     TMPL
-        +INC_IP
-        LDA     (IP),Y
-        STA     TMPH
-        LDA     ESTKL,X
-        STY     IPY
-        LDY     #$00
-        STA     (TMP),Y
-        LDY     IPY
-;       INX
-;       JMP     NEXTOP
-        JMP     DROP
-}
+        STA     TMP
+        PLA
+        SEP     #$20            ; 8 BIT A/M
+        !AS
+        STA     (TMP)
+        REP     #$20            ; 16 BIT A/M
+        !AL
+        JMP     NEXTOP16
 SAW     +INC_IP
-        LDA     (IP),Y
-        STA     TMPL
+        LDA     (IP16),Y
         +INC_IP
-        LDA     (IP),Y
-        STA     TMPH
-        STY     IPY
-        LDY     #$00
-        LDA     ESTKL,X
-        STA     (TMP),Y
-        INY
-        LDA     ESTKH,X
-        STA     (TMP),Y
-        LDY     IPY
-;       INX
-;       JMP     NEXTOP
-        JMP     DROP
+        STA     TMP
+        PLA
+        STA     (TMP)
+        JMP     NEXTOP16
 ;*
 ;* STORE VALUE TO ABSOLUTE ADDRESS WITHOUT POPPING STACK
 ;*
-!IF SELFMODIFY {
 DAB     +INC_IP
-        LDA     (IP),Y
-        STA     DABSTA+1
+        LDA     (IP16),Y
         +INC_IP
-        LDA     (IP),Y
-        STA     DABSTA+2
-        LDA     ESTKL,X
-DABSTA  STA     $FFFF
-        JMP     NEXTOP
-} ELSE {
-DAB     +INC_IP
-        LDA     (IP),Y
-        STA     TMPL
-        +INC_IP
-        LDA     (IP),Y
-        STA     TMPH
-        STY     IPY
-        LDY     #$00
-        LDA     ESTKL,X
-        STA     (TMP),Y
-        LDY     IPY
-        JMP     NEXTOP
-}
+        STA     TMP
+        SEP     #$20            ; 8 BIT A/M
+        !AS
+        LDA     TOS,S
+        STA     (TMP)
+        REP     #$20            ; 16 BIT A/M
+        !AL
+        JMP     NEXTOP16
 DAW     +INC_IP
-        LDA     (IP),Y
-        STA     TMPL
+        LDA     (IP16),Y
         +INC_IP
-        LDA     (IP),Y
-        STA     TMPH
-        STY     IPY
-        LDY     #$00
-        LDA     ESTKL,X
-        STA     (TMP),Y
-        INY
-        LDA     ESTKH,X
-        STA     (TMP),Y
-        LDY     IPY
-        JMP     NEXTOP
+        STA     TMP
+        LDA     TOS,S
+        STA     (TMP)
+        JMP     NEXTOP16
 ;*
 ;* COMPARES
 ;*
-ISEQ    LDA     ESTKL,X
-        CMP     ESTKL+1,X
+ISEQ    PLA
+        CMP     TOS,S
         BNE     ISFLS
-        LDA     ESTKH,X
-        CMP     ESTKH+1,X
-        BNE     ISFLS
-ISTRU   LDA     #$FF
-        STA     ESTKL+1,X
-        STA     ESTKH+1,X
-;       INX
-;       JMP     NEXTOP
-        JMP     DROP
+ISTRU   LDA     #$FFFF
+        STA     TOS,S
+        JMP     NEXTOP16
 ;
-ISNE    LDA     ESTKL,X
-        CMP     ESTKL+1,X
+ISNE    PLA
+        CMP     TOS,S
         BNE     ISTRU
-        LDA     ESTKH,X
-        CMP     ESTKH+1,X
-        BNE     ISTRU
-ISFLS   LDA     #$00
-        STA     ESTKL+1,X
-        STA     ESTKH+1,X
-;       INX
-;       JMP     NEXTOP
-        JMP     DROP
+ISFLS   LDA     #$0000
+        STA     TOS,S
+        JMP     NEXTOP16
 ;
-ISGE    LDA     ESTKL+1,X
-        CMP     ESTKL,X
-        LDA     ESTKH+1,X
-        SBC     ESTKH,X
-        BVC     ISGE1
-        EOR     #$80
-ISGE1   BPL     ISTRU
-        BMI     ISFLS
-;
-ISGT    LDA     ESTKL,X
-        CMP     ESTKL+1,X
-        LDA     ESTKH,X
-        SBC     ESTKH+1,X
-        BVC     ISGT1
-        EOR     #$80
-ISGT1   BMI     ISTRU
+ISGE    PLA
+        CMP     TOS,S
+        BVS     +
+        BMI     ISTRU
+        BEQ     ISTRU
         BPL     ISFLS
++       BMI     ISFLS
+        BEQ     ISFLS
+        BPL     ISTRU
 ;
-ISLE    LDA     ESTKL,X
-        CMP     ESTKL+1,X
-        LDA     ESTKH,X
-        SBC     ESTKH+1,X
-        BVC     ISLE1
-        EOR     #$80
-ISLE1   BPL     ISTRU
+ISGT    PLA
+        CMP     TOS,S
+        BVS     +
+        BMI     ISTRU
+        BPL     ISFLS
++       BMI     ISFLS
+        BPL     ISTRU
+;
+ISLE    PLA
+        CMP     TOS,S
+        BVS     +
+        BPL     ISTRU
         BMI     ISFLS
++       BPL     ISFLS
+        BMI     ISTRU
 ;
-ISLT    LDA     ESTKL+1,X
-        CMP     ESTKL,X
-        LDA     ESTKH+1,X
-        SBC     ESTKH,X
-        BVC     ISLT1
-        EOR     #$80
-ISLT1   BMI     ISTRU
+ISLT    PLA
+        CMP     TOS,S
+        BVS     +
+        BMI     ISFLS
+        BEQ     ISFLS
+        BPL     ISTRU
++       BMI     ISTRU
+        BEQ     ISTRU
         BPL     ISFLS
 ;*
 ;* BRANCHES
 ;*
-BRTRU   INX
-        LDA     ESTKH-1,X
-        ORA     ESTKL-1,X
+BRTRU   PLA
         BNE     BRNCH
 NOBRNCH +INC_IP
         +INC_IP
-        JMP     NEXTOP
-BRFLS   INX
-        LDA     ESTKH-1,X
-        ORA     ESTKL-1,X
+        JMP     NEXTOP16
+BRFLS   PLA
         BNE     NOBRNCH
-BRNCH   LDA     IPH
-        STA     TMPH
-        LDA     IPL
+BRNCH   LDA     IP16
         +INC_IP
         CLC
-        ADC     (IP),Y
-        STA     TMPL
-        LDA     TMPH
-        +INC_IP
-        ADC     (IP),Y
-        STA     IPH
-        LDA     TMPL
-        STA     IPL
+        ADC     (IP16),Y
+        STA     IP16
         DEY
-        DEY
-        JMP     NEXTOP
-BREQ    INX
-        LDA     ESTKL-1,X
-        CMP     ESTKL,X
+        JMP     NEXTOP16
+BREQ    PLA
+        CMP     TOS,S
         BNE     NOBRNCH
-        LDA     ESTKH-1,X
-        CMP     ESTKH,X
         BEQ     BRNCH
-        BNE     NOBRNCH
-BRNE    INX
-        LDA     ESTKL-1,X
-        CMP     ESTKL,X
+BRNE    PLA
+        CMP     TOS,S
         BNE     BRNCH
-        LDA     ESTKH-1,X
-        CMP     ESTKH,X
         BEQ     NOBRNCH
-        BNE     BRNCH
-BRGT    INX
-        LDA     ESTKL-1,X
-        CMP     ESTKL,X
-        LDA     ESTKH-1,X
-        SBC     ESTKH,X
+BRGT    PLA
+        CMP     TOS,S
+        BVS     +
         BMI     BRNCH
         BPL     NOBRNCH
-BRLT    INX
-        LDA     ESTKL,X
-        CMP     ESTKL-1,X
-        LDA     ESTKH,X
-        SBC     ESTKH-1,X
-        BMI     BRNCH
++       BMI     NOBRNCH
+        BPL     BRNCH
+BRLT    PLA
+        CMP     TOS,S
+        BVS     +
+        BMI     NOBRNCH
+        BEQ     NOBRNCH
+        BPL     BRNCH
++       BMI     BRNCH
+        BEQ     BRNCH
         BPL     NOBRNCH
-IBRNCH  LDA     IPL
+IBRNCH  PLA
         CLC
-        ADC     ESTKL,X
-        STA     IPL
-        LDA     IPH
-        ADC     ESTKH,X
-        STA     IPH
-;       INX
-;       JMP     NEXTOP
-        JMP     DROP
+        ADC     IP16
+        STA     IP16
+        JMP     NEXTOP16
 ;*
 ;* CALL INTO ABSOLUTE ADDRESS (NATIVE CODE)
 ;*
@@ -1483,10 +1162,6 @@ EMUSTK  STY     IPY
         REP     #$20            ; 16 BIT A/M
         SEP     #$10            ; 8 BIT X,Y
         !AL
-!IF SELFMODIFY {
-        LDX     LCRWEN+LCBNK2
-        LDX     LCRWEN+LCBNK2
-}
         LDX     #>OPTBL         ; MAKE SURE WE'RE INDEXING THE RIGHT TABLE
         STX     OP16PAGE
         JMP     NEXTOP16
@@ -1547,10 +1222,6 @@ EMUSTKX STY     IPY
         REP     #$20            ; 16 BIT A/M
         SEP     #$10            ; 8 BIT X,Y
         !AL
-!IF SELFMODIFY {
-        LDX     LCRWEN+LCBNK2
-        LDX     LCRWEN+LCBNK2
-}
         LDX     #>OPXTBL         ; MAKE SURE WE'RE INDEXING THE RIGHT TABLE
         STX     OP16PAGE
         JMP     NEXTOP16
