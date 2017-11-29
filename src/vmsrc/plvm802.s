@@ -228,10 +228,7 @@ DINTRP  CLC                     ; SWITCH TO NATIVE MODE
         STX     HWSP
         LDX     #>OPTBL
 !IF DEBUG {
-        LDY     LCRWEN+LCBNK2    ; COPY TO LC FOR BYE
-        LDY     LCRWEN+LCBNK2
-        STX     DBG_OP+2
-        LDX     #>DBGTBL
+        BRA     SETDBG
 }
         STX     OPPAGE
         LDY     #$00
@@ -255,11 +252,7 @@ IINTRP  CLC                     ; SWITCH TO NATIVE MODE
         STX     HWSP
         LDX     #>OPTBL
 !IF DEBUG {
-        LDY     LCRWEN+LCBNK2    ; COPY TO LC FOR BYE
-        LDY     LCRWEN+LCBNK2
-        LDY     #$00
-        STX     DBG_OP+2
-        LDX     #>DBGTBL
+        BRA     SETDBG
 }
         STX     OPPAGE
         JMP     FETCHOP
@@ -280,17 +273,17 @@ IINTRPX CLC                     ; SWITCH TO NATIVE MODE
         STX     ESP
         TSX
         STX     HWSP
+        ;SEI UNTIL I KNOW WHAT TO DO WITH THE UNENHANCED IIE
+        STX     ALTRDON
         LDX     #>OPXTBL
 !IF DEBUG {
-        LDY     LCRWEN+LCBNK2    ; COPY TO LC FOR BYE
+SETDBG  LDY     LCRWEN+LCBNK2    ; COPY TO LC FOR BYE
         LDY     LCRWEN+LCBNK2
         LDY     #$00
         STX     DBG_OP+2
         LDX     #>DBGTBL
 }
         STX     OPPAGE
-        ;SEI UNTIL I KNOW WHAT TO DO WITH THE UNENHANCED IIE
-        STX     ALTRDON
         JMP     FETCHOP
 ;************************************************************
 ;*                                                          *
@@ -426,10 +419,18 @@ PAGE3   =       *
         BIT     LCRDEN+LCBNK2   ; $03DC - INDIRECT INTERPX ENTRY
         JMP     IINTRPX
 }
+!IF     DEBUG {
+DEFCMD  !FILL   23
+} ELSE {
 DEFCMD  !FILL   28
+}
 ENDBYE  =       *
 }
+!IF     DEBUG {
+LCDEFCMD =      *-23 ;*-28      ; DEFCMD IN LC MEMORY
+} ELSE {
 LCDEFCMD =      *-28            ; DEFCMD IN LC MEMORY
+}
 ;*****************
 ;*               *
 ;* OPXCODE TABLE *
