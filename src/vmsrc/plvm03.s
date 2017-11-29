@@ -11,6 +11,14 @@ SELFMODIFY  =   1
 ;
 MEMBANK =       $FFEF
         !SOURCE "vmsrc/plvmzp.inc"
+DROP    =       $EF
+NEXTOP  =       $F0
+FETCHOP =       NEXTOP+3
+IP      =       FETCHOP+1
+IPL     =       IP
+IPH     =       IPL+1
+OPIDX   =       FETCHOP+6
+OPPAGE  =       OPIDX+1
 ;
 ; XPAGE ADDRESSES
 ;
@@ -98,7 +106,7 @@ SEGREQ  !BYTE   4
         !BYTE   $10
         !BYTE   $00
 PAGE0   =       *
-        !PSEUDOPC       $00EF {
+        !PSEUDOPC       DROP {
 ;*
 ;* INTERP BYTECODE INNER LOOP
 ;*
@@ -604,7 +612,7 @@ LB      LDA     ESTKL,X
         STA     LBLDA+1
         LDA     ESTKH,X
         STA     LBLDA+2
-LBLDA	LDA     $FFFF
+LBLDA   LDA     $FFFF
         STA     ESTKL,X
         LDA     #$00
         STA     ESTKH,X
@@ -684,7 +692,7 @@ LAB     +INC_IP
         +INC_IP
         LDA     (IP),Y
         STA     LABLDA+2
-LABLDA	LDA      $FFFF
+LABLDA  LDA      $FFFF
         DEX
         STA     ESTKL,X
         LDA     #$00
