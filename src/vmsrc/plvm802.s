@@ -81,18 +81,6 @@ NOS     =       $03             ; TOS-1
         !AL
         REP     #$20            ; SET 16 BIT MODE
         }
-;*
-;* DEBUG MACROS
-;*
-        !MACRO  DBG_OUT .dch, .ofst {
-        PHX
-        LDX     #$80+.dch
-        STX     $0400+.ofst
-        PLX
-        }
-        !MACRO  DBG_PAUSE {
-        JSR     DBG_STEP
-        }
 ;******************************
 ;*                            *
 ;* INTERPRETER INITIALIZATION *
@@ -375,7 +363,6 @@ CMDENTRY =      *
 ; INIT VM ENVIRONMENT STACK POINTERS
 ;
 ;        LDA #$00               ; INIT FRAME POINTER
-        +DBG_OUT 'I', 0
         STA     PPL
         STA     IFPL
         LDA     #$BF
@@ -501,7 +488,7 @@ PRCHR   ORA     #$80
 ;*
 ;* DEBUG STEP ROUTINE
 ;*
-STEP    PHX
+STEP    STX     TMPL
         LDX     #$00
         SEP     #$20            ; 8 BIT A/M
         LDA     #'$'
@@ -548,7 +535,7 @@ STEP    PHX
         XCE
         BRK
 +       REP     #$20            ; 16 BIT A/M
-        PLX
+        LDX     TMPL
 DBG_OP  JMP     (OPTBL,X)
 }
 ;*********************************************************************
@@ -1521,6 +1508,6 @@ RET     SEP     #$20            ; 8 BIT A/M
         XCE
         !AS
         RTS
-        
+
 VMEND   =       *
 }
