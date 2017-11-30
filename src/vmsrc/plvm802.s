@@ -211,11 +211,12 @@ OPTBL   !WORD   ZERO,ADD,SUB,MUL,DIV,MOD,INCR,DECR              ; 00 02 04 06 08
 ;*
 ;* ENTER INTO BYTECODE INTERPRETER - IMMEDIATELY SWITCH TO NATIVE
 ;*
-        !AL
-DINTRP  CLC                     ; SWITCH TO NATIVE MODE
+        !AS
+DINTRP  SEI
+        CLC                     ; SWITCH TO NATIVE MODE
         XCE
         REP     #$20            ; 16 BIT A/M
-;        SEP     #$10            ; 8 BIT X,Y
+        !AL
         PLA
         INC
         STA     IP
@@ -229,14 +230,17 @@ DINTRP  CLC                     ; SWITCH TO NATIVE MODE
         LDX     #>OPTBL
 !IF DEBUG {
         BRA     SETDBG
-}
+} ELSE {
         STX     OPPAGE
         LDY     #$00
         JMP     FETCHOP
-IINTRP  CLC                     ; SWITCH TO NATIVE MODE
+}
+        !AS
+IINTRP  SEI
+        CLC                     ; SWITCH TO NATIVE MODE
         XCE
         REP     #$20            ; 16 BIT A/M
-;        SEP     #$10            ; 8 BIT X,Y
+        !AL
         PLA
         STA     TMP
         LDY     #$01
@@ -253,13 +257,16 @@ IINTRP  CLC                     ; SWITCH TO NATIVE MODE
         LDX     #>OPTBL
 !IF DEBUG {
         BRA     SETDBG
-}
+} ELSE {
         STX     OPPAGE
         JMP     FETCHOP
-IINTRPX CLC                     ; SWITCH TO NATIVE MODE
+}
+        !AS
+IINTRPX SEI
+        CLC                     ; SWITCH TO NATIVE MODE
         XCE
         REP     #$20            ; 16 BIT A/M
-;        SEP     #$10            ; 8 BIT X,Y
+        !AL
         PLA
         STA     TMP
         LDY     #$01
@@ -273,11 +280,10 @@ IINTRPX CLC                     ; SWITCH TO NATIVE MODE
         STX     ESP
         TSX
         STX     HWSP
-        ;SEI UNTIL I KNOW WHAT TO DO WITH THE UNENHANCED IIE
         STX     ALTRDON
         LDX     #>OPXTBL
 !IF DEBUG {
-SETDBG  LDY     LCRWEN+LCBNK2    ; COPY TO LC FOR BYE
+SETDBG  LDY     LCRWEN+LCBNK2
         LDY     LCRWEN+LCBNK2
         LDY     #$00
         STX     DBG_OP+2
@@ -446,19 +452,7 @@ OPXTBL  !WORD   ZERO,ADD,SUB,MUL,DIV,MOD,INCR,DECR              ; 00 02 04 06 08
         !WORD   LBX,LWX,LLBX,LLWX,LABX,LAWX,DLB,DLW             ; 60 62 64 66 68 6A 6C 6E
         !WORD   SB,SW,SLB,SLW,SAB,SAW,DAB,DAW                   ; 70 72 74 76 78 7A 7C 7E
 !IF     DEBUG {
-;*****************
-;*               *
-;*  DEBUG TABLE  *
-;*               *
-;*****************
-DBGTBL  !WORD   STEP,STEP,STEP,STEP,STEP,STEP,STEP,STEP         ; 00 02 04 06 08 0A 0C 0E
-        !WORD   STEP,STEP,STEP,STEP,STEP,STEP,STEP,STEP         ; 10 12 14 16 18 1A 1C 1E
-        !WORD   STEP,STEP,STEP,STEP,STEP,STEP,STEP,STEP         ; 20 22 24 26 28 2A 2C 2E
-        !WORD   STEP,STEP,STEP,STEP,STEP,STEP,STEP,STEP         ; 30 32 34 36 38 3A 3C 3E
-        !WORD   STEP,STEP,STEP,STEP,STEP,STEP,STEP,STEP         ; 40 42 44 46 48 4A 4C 4E
-        !WORD   STEP,STEP,STEP,STEP,STEP,STEP,STEP,STEP         ; 50 52 54 56 58 5A 5C 5E
-        !WORD   STEP,STEP,STEP,STEP,STEP,STEP,STEP,STEP         ; 60 62 64 66 68 6A 6C 6E
-        !WORD   STEP,STEP,STEP,STEP,STEP,STEP,STEP,STEP         ; 70 72 74 76 78 7A 7C 7E
+        !AS
 PRHEX   PHA
         LSR
         LSR
@@ -470,7 +464,7 @@ PRHEX   PHA
         BCC     +
         ADC     #6
 +       ORA     #$80
-        STA     $400,X
+        STA     $7D0,X
         INX
         PLA
         AND     #$0F
@@ -479,31 +473,59 @@ PRHEX   PHA
         BCC     +
         ADC     #6
 +       ORA     #$80
-        STA     $400,X
+        STA     $7D0,X
         INX
         RTS
 PRCHR   ORA     #$80
-        STA     $400,X
+        STA     $7D0,X
         INX
         RTS
+;*****************
+;*               *
+;*  DEBUG TABLE  *
+;*               *
+;*****************
+        !ALIGN  255,0
+DBGTBL  !WORD   STEP,STEP,STEP,STEP,STEP,STEP,STEP,STEP         ; 00 02 04 06 08 0A 0C 0E
+        !WORD   STEP,STEP,STEP,STEP,STEP,STEP,STEP,STEP         ; 10 12 14 16 18 1A 1C 1E
+        !WORD   STEP,STEP,STEP,STEP,STEP,STEP,STEP,STEP         ; 20 22 24 26 28 2A 2C 2E
+        !WORD   STEP,STEP,STEP,STEP,STEP,STEP,STEP,STEP         ; 30 32 34 36 38 3A 3C 3E
+        !WORD   STEP,STEP,STEP,STEP,STEP,STEP,STEP,STEP         ; 40 42 44 46 48 4A 4C 4E
+        !WORD   STEP,STEP,STEP,STEP,STEP,STEP,STEP,STEP         ; 50 52 54 56 58 5A 5C 5E
+        !WORD   STEP,STEP,STEP,STEP,STEP,STEP,STEP,STEP         ; 60 62 64 66 68 6A 6C 6E
+        !WORD   STEP,STEP,STEP,STEP,STEP,STEP,STEP,STEP         ; 70 72 74 76 78 7A 7C 7E
+        !AL
 ;*
 ;* DEBUG STEP ROUTINE
 ;*
 STEP    STX     TMPL
-        LDX     #$00
         SEP     #$20            ; 8 BIT A/M
+        !AS
+        LDX     #39             ; SCROLL PREVIOUS LINES UP
+-       LDA     $6D0,X
+        STA     $650,X
+        LDA     $750,X
+        STA     $6D0,X
+        LDA     $7D0,X
+        STA     $750,X
+        DEX
+        BPL     -
+        LDX     #$00
         LDA     #'$'
         JSR     PRCHR
         REP     #$20            ; 16 BIT A/M
+        !AL
         TYA
         CLC
         ADC     IP
         SEP     #$20            ; 8 BIT A/M
+        !AS
         XBA
         JSR     PRHEX
         XBA
         JSR     PRHEX
         LDA     #':'
+        JSR     PRCHR
         LDA     #'$'
         JSR     PRCHR
         LDA     (IP),Y
@@ -512,30 +534,57 @@ STEP    STX     TMPL
         LDA     #'$'
         JSR     PRCHR
         REP     #$20            ; 16 BIT A/M
+        !AL
         TSC
         SEP     #$20            ; 8 BIT A/M
+        !AS
         XBA
         JSR     PRHEX
         XBA
         JSR     PRHEX
         LDA     #':'
         JSR     PRCHR
+        TXA
+        TSX
+        CPX     HWSP
+        BEQ     +
+        TAX
         LDA     #'$'
         JSR     PRCHR
         LDA     TOS+1,S
         JSR     PRHEX
         LDA     TOS,S
         JSR     PRHEX
-        LDX     $C010
+        BRA     ++
++       TAX
+        LDA     #' '
+        JSR     PRCHR
+        LDA     #'-'
+        JSR     PRCHR
+        JSR     PRCHR
+        JSR     PRCHR
+        JSR     PRCHR
+++      ;LDX     $C010
+        LDA     #' '
+-       JSR     PRCHR
+        CPX     #40
+        BNE     -
 -       LDX     $C000
-        BPL     -
-        STX     $C010
+        ;BPL     -
+        ;STX     $C010
         CPX     #$9B
         BNE     +
-        SEC                     ; SWITCH TO EMU MODE
-        XCE
-        BRK
+        STX     $C010
+-       LDX     $C000
+        BPL     -
+        CPX     #$9B
+        BEQ     +
+        STX     $C010
+        ;SEC                     ; SWITCH TO EMU MODE
+        ;XCE
+        ;BRK
 +       REP     #$20            ; 16 BIT A/M
+        !AL
         LDX     TMPL
 DBG_OP  JMP     (OPTBL,X)
 }
@@ -826,6 +875,7 @@ CS      +INC_IP
         CLC
         ADC     IP
         STA     IP
+        LDY     #$00
         PHA
         LDA     (IP),Y
         TAY
@@ -1218,8 +1268,8 @@ BRNCH   LDA     IP
         JMP     NEXTOP
 BREQ    PLA
         CMP     TOS,S
-        BNE     NOBRNCH
         BEQ     BRNCH
+        BNE     NOBRNCH
 BRNE    PLA
         CMP     TOS,S
         BNE     BRNCH
@@ -1261,6 +1311,13 @@ EMUSTK  SEC                     ; SWITCH TO EMULATED MODE
         SEC
         ADC     HWSP            ; STACK DEPTH = (HWSP - SP)/2
         LSR
+!IF     DEBUG {
+        PHA
+        CLC
+        ADC     #$80+'0'
+        STA     $7D0+31
+        PLA
+}
         EOR     #$FF
         SEC
         ADC     ESP             ; ESP - STACK DEPTH
@@ -1274,6 +1331,18 @@ EMUSTK  SEC                     ; SWITCH TO EMULATED MODE
         INX
 +       CPX     ESP
         BNE     -
+!IF     DEBUG {
+        TXA
+        TSX
+        CPX     HWSP
+        BEQ     +
+        LDX     #$80+'C'
+        STX     $7D0+30
+-       LDX    $C000
+        BPL     -
+        LDX     $C010
++       TAX
+}
         LDA     IPY
         CLC
         ADC     IPL
@@ -1281,16 +1350,20 @@ EMUSTK  SEC                     ; SWITCH TO EMULATED MODE
         LDA     IPH
         ADC     #$00
         PHA
-        PHX
+        PHX                     ; SAVE BASELINE ESP
         TYX
+        ;CLI
         JSR     JMPTMP
+        ;SEI
         PLY                     ; MOVE RETURN VALUES TO HW EVAL STACK
-        STY     ESP
+        STY     ESP             ; RESTORE BASELINE ESP
         PLA
         STA     IPH
         PLA
         STA     IPL
         STX     TMPL
+        TSX                     ; RESTORE BASELINE HWSP
+        STX     HWSP
         TYX
         BRA     +
 -       DEX
@@ -1303,12 +1376,11 @@ EMUSTK  SEC                     ; SWITCH TO EMULATED MODE
         CLC                     ; SWITCH BACK TO NATIVE MODE
         XCE
         REP     #$20            ; 16 BIT A/M
-;        SEP     #$10            ; 8 BIT X,Y
         !AL
-;        TSX
-;        STX     HWSP
         LDX     #>OPTBL         ; MAKE SURE WE'RE INDEXING THE RIGHT TABLE
 !IF DEBUG {
+        LDY     LCRWEN+LCBNK2
+        LDY     LCRWEN+LCBNK2
         STX     DBG_OP+2
         LDX     #>DBGTBL
 }
@@ -1329,6 +1401,13 @@ EMUSTKX SEC                     ; SWITCH TO EMULATED MODE
         SEC
         ADC     HWSP            ; STACK DEPTH = (HWSP - SP)/2
         LSR
+!IF     DEBUG {
+        PHA
+        CLC
+        ADC     #$80+'0'
+        STA     $7D0+31
+        PLA
+}
         EOR     #$FF
         SEC
         ADC     ESP             ; ESP - STACK DEPTH
@@ -1342,6 +1421,18 @@ EMUSTKX SEC                     ; SWITCH TO EMULATED MODE
         INX
 +       CPX     ESP
         BNE     -
+!IF     DEBUG {
+        TXA
+        TSX
+        CPX     HWSP
+        BEQ     +
+        LDX     #$80+'X'
+        STX     $480+30
+-       LDX    $C000
+        BPL     -
+        LDX     $C010
++       TAX
+}
         LDA     IPY
         CLC
         ADC     IPL
@@ -1349,20 +1440,22 @@ EMUSTKX SEC                     ; SWITCH TO EMULATED MODE
         LDA     IPH
         ADC     #$00
         PHA
-        PHX
+        PHX                     ; SAVE BASELINE ESP
         TYX
         STX     ALTRDOFF
-        ;CLI UNTIL I KNOW WHAT TO DO WITH THE UNENHANCED IIE
+        ;CLI
         JSR     JMPTMP
-        ;SEI UNTIL I KNOW WHAT TO DO WITH THE UNENHANCED IIE
+        ;SEI
         STX     ALTRDON
         PLY                     ; MOVE RETURN VALUES TO HW EVAL STACK
-        STY     ESP
+        STY     ESP             ; RESTORE BASELINE ESP
         PLA
         STA     IPH
         PLA
         STA     IPL
         STX     TMPL
+        TSX                     ; RESTORE BASELINE HWSP
+        STX     HWSP
         TYX
         BRA     +
 -       DEX
@@ -1375,12 +1468,11 @@ EMUSTKX SEC                     ; SWITCH TO EMULATED MODE
         CLC                     ; SWITCH BACK TO NATIVE MODE
         XCE
         REP     #$20            ; 16 BIT A/M
-;        SEP     #$10            ; 8 BIT X,Y
         !AL
-;        TSX
-;        STX     HWSP
         LDX     #>OPXTBL         ; MAKE SURE WE'RE INDEXING THE RIGHT TABLE
 !IF DEBUG {
+        LDY     LCRWEN+LCBNK2
+        LDY     LCRWEN+LCBNK2
         STX     DBG_OP+2
         LDX     #>DBGTBL
 }
@@ -1443,7 +1535,6 @@ ENTER   INY
 ;* LEAVE FUNCTION
 ;*
 LEAVEX  STX     ALTRDOFF
-        ;CLI UNTIL I KNOW WHAT TO DO WITH THE UNENHANCED IIE
 LEAVE   SEP     #$20            ; 8 BIT A/M
         !AS
         TSC                     ; MOVE HW EVAL STACK TO ZP EVAL STACK
@@ -1464,6 +1555,19 @@ LEAVE   SEP     #$20            ; 8 BIT A/M
         INX
 +       CPX     ESP
         BNE     -
+ !IF     DEBUG {
+        STX     TMPL
+        TSX
+        CPX     HWSP
+        BEQ     +
+        LDX     #$80+'L'
+        STX     $7D0+30
+-       LDX    $C000
+        BPL     -
+        LDX     $C010
++       LDX     TMPL
+}
+        TYX                     ; RESTORE NEW ESP
         PLA                     ; DEALLOCATE POOL + FRAME
         REP     #$20            ; 16 BIT A/M
         !AL
@@ -1475,10 +1579,10 @@ LEAVE   SEP     #$20            ; 8 BIT A/M
         STA     IFP
         SEC                     ; SWITCH TO EMULATED MODE
         XCE
+        ;CLI
         RTS
 ;
 RETX    STX     ALTRDOFF
-        ;CLI UNTIL I KNOW WHAT TO DO WITH THE UNENHANCED IIE
 RET     SEP     #$20            ; 8 BIT A/M
         !AS
         TSC                     ; MOVE HW EVAL STACK TO ZP EVAL STACK
@@ -1499,6 +1603,18 @@ RET     SEP     #$20            ; 8 BIT A/M
         INX
 +       CPX     ESP
         BNE     -
+!IF     DEBUG {
+        STX     TMPL
+        TSX
+        CPX     HWSP
+        BEQ     +
+        LDX     #$80+'R'
+        STX     $7D0+30
+-       LDX    $C000
+        BPL     -
+        LDX     $C010
++       LDX     TMPL
+}
         REP     #$20            ; 16 BIT A/M
         !AL
         LDA     IFP             ; DEALLOCATE POOL
@@ -1508,6 +1624,7 @@ RET     SEP     #$20            ; 8 BIT A/M
         SEC                     ; SWITCH TO EMULATED MODE
         XCE
         !AS
+        ;CLI
         RTS
 
 VMEND   =       *
