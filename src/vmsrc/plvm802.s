@@ -51,8 +51,8 @@ ALTWROFF=       $C004
 ALTWRON =       $C005
         !SOURCE "vmsrc/plvmzp.inc"
 HWSP    =       TMPH+1
-DROP    =       $EE
-NEXTOP  =       $EF
+DROP    =       $EF
+NEXTOP  =       DROP+1
 FETCHOP =       NEXTOP+3
 IP      =       FETCHOP+1
 IPL     =       IP
@@ -321,6 +321,10 @@ CMDENTRY =      *
         BIT     $C051
         BIT     $C05F
         JSR     $FC58           ; HOME
+!IF     DEBUG {
+        LDA     #20             ; SET TEXT WINDOW ABOVE DEBUG OUTPUT
+        STA     $23
+}
 ;
 ; INSTALL PAGE 0 FETCHOP ROUTINE
 ;
@@ -403,14 +407,14 @@ PAGE0    =      *
 ;*                            *
 ;******************************
         !PSEUDOPC       DROP {
-        PLA                     ; DROP @ $EE
-        INY                     ; NEXTOP @ $EF
+        PLA                     ; DROP @ $EF
+        INY                     ; NEXTOP @ $F0
         BEQ     NEXTOPH
-        LDX     $FFFF,Y         ; FETCHOP @ $F2, IP MAPS OVER $FFFF @ $F3
+        LDX     $FFFF,Y         ; FETCHOP @ $F3, IP MAPS OVER $FFFF @ $F4
         JMP     (OPTBL,X)       ; OPIDX AND OPPAGE MAP OVER OPTBL
-NEXTOPH SEP     #$20            ; SET 8 BIT MODE
-        INC     IPH
-        REP     #$20            ; SET 16 BIT MODE
+NEXTOPH LDX     IPH
+        INX
+        STX     IPH
         BRA     FETCHOP
 }
 PAGE3   =       *
@@ -480,6 +484,19 @@ PRCHR   ORA     #$80
         STA     $7D0,X
         INX
         RTS
+PRBYTE  PHA
+        LDA     #'$'
+        JSR     PRCHR
+        PLA
+        JMP     PRHEX
+PRWORD  PHA
+        LDA     #'$'
+        JSR     PRCHR
+        XBA
+        JSR     PRHEX
+        PLA
+        JMP     PRHEX
+
 ;*****************
 ;*               *
 ;*  DEBUG TABLE  *
@@ -499,6 +516,9 @@ DBGTBL  !WORD   STEP,STEP,STEP,STEP,STEP,STEP,STEP,STEP         ; 00 02 04 06 08
 ;* DEBUG STEP ROUTINE
 ;*
 STEP    STX     TMPL
+        LDX     $C013           ; SAVE RAMRD
+        STX     $C002
+        STX     TMPH
         SEP     #$20            ; 8 BIT A/M
         !AS
         LDX     #39             ; SCROLL PREVIOUS LINES UP
@@ -510,9 +530,10 @@ STEP    STX     TMPL
         STA     $750,X
         DEX
         BPL     -
-        LDX     #$00
-        LDA     #'$'
-        JSR     PRCHR
+        BIT     TMPH            ; RAMRD SET?
+        BPL     +
+        STA     $C003
++       LDX     #$00
         REP     #$20            ; 16 BIT A/M
         !AL
         TYA
@@ -520,43 +541,41 @@ STEP    STX     TMPL
         ADC     IP
         SEP     #$20            ; 8 BIT A/M
         !AS
-        XBA
-        JSR     PRHEX
-        XBA
-        JSR     PRHEX
+        JSR     PRWORD
         LDA     #':'
         JSR     PRCHR
-        LDA     #'$'
-        JSR     PRCHR
         LDA     (IP),Y
-        JSR     PRHEX
+        JSR     PRBYTE
         INX
-        LDA     #'$'
-        JSR     PRCHR
         REP     #$20            ; 16 BIT A/M
         !AL
         TSC
         SEP     #$20            ; 8 BIT A/M
         !AS
-        XBA
-        JSR     PRHEX
-        XBA
-        JSR     PRHEX
+        JSR     PRWORD
         LDA     #':'
         JSR     PRCHR
-        TXA
+        STX     TMPH
         TSX
         CPX     HWSP
-        BEQ     +
-        TAX
-        LDA     #'$'
+        BEQ     ++
+        BCC     +
+        LDX     TMPH
+        LDA     #' '
         JSR     PRCHR
-        LDA     TOS+1,S
-        JSR     PRHEX
-        LDA     TOS,S
-        JSR     PRHEX
-        BRA     ++
-+       TAX
+        LDA     #'<'            ; STACK UNDERFLOW!
+        JSR     PRCHR
+        JSR     PRCHR
+        JSR     PRCHR
+        JSR     PRCHR
+        BRA     DBGKEY
++       LDA     $102,X
+        XBA
+        LDA     $101,X
+        LDX     TMPH
+        JSR     PRWORD
+        BRA     +++
+++      LDX     TMPH
         LDA     #' '
         JSR     PRCHR
         LDA     #'-'
@@ -564,28 +583,31 @@ STEP    STX     TMPL
         JSR     PRCHR
         JSR     PRCHR
         JSR     PRCHR
-++      ;LDX     $C010
++++     ;LDX     $C010
         LDA     #' '
 -       JSR     PRCHR
         CPX     #40
         BNE     -
+;        LDX     TMPL
+;        CPX     #$48            ; FORCE PAUSE AT 'IS_GE'
+;        BEQ     DBGKEY
 -       LDX     $C000
-        ;BPL     -
-        ;STX     $C010
         CPX     #$9B
-        BNE     +
-        STX     $C010
+        BNE     ++
+DBGKEY  STX     $C010
 -       LDX     $C000
         BPL     -
         CPX     #$9B
-        BEQ     +
+        BEQ     ++
         STX     $C010
-        ;SEC                     ; SWITCH TO EMU MODE
-        ;XCE
-        ;BRK
-+       REP     #$20            ; 16 BIT A/M
+        CPX     #$80+'Q'
+        BNE     ++
+        SEC                     ; SWITCH TO EMU MODE
+        XCE
+        BRK
+++      REP     #$20            ; 16 BIT A/M
         !AL
-        LDX     TMPL
++       LDX     TMPL
 DBG_OP  JMP     (OPTBL,X)
 }
 ;*********************************************************************
@@ -608,7 +630,7 @@ ADD     PLA
 SUB     LDA     NOS,S
         SEC
         SBC     TOS,S
-        STA     NOS,X
+        STA     NOS,S
         JMP     DROP
 ;*
 ;* SHIFT TOS LEFT BY 1, ADD TO TOS-1
@@ -640,52 +662,37 @@ MULLP   ASL     TMP             ;LSR     TMP             ; MULTPLR
 ;*
 ;* INTERNAL DIVIDE ALGORITHM
 ;*
-_NEG    EOR     #$FFFF
-        INC
-        SEC
-        SBC     TOS,S
-        STA     TOS,S
-        RTS
 _DIV    STY     IPY
         LDY     #$11            ; #BITS+1
         LDX     #$00
-        LDA     TOS,S
+        LDA     TOS+2,S         ; WE JSR'ED HERE SO OFFSET ACCORDINGLY
         BPL     +
         LDX     #$81
         EOR     #$FFFF
         INC
-        STA     TOS,S
-+       LDA     NOS,S
+        STA     TOS+2,S
++       LDA     NOS+2,S
         BPL     +
         INX
         EOR     #$FFFF
         INC
-        STA     TMP             ; NOS,S
-+       BEQ     _DIVEX
++       STA     TMP             ; NOS,S
+        BEQ     _DIVEX
 _DIV1   ASL                     ; DVDND
         DEY
         BCC     _DIV1
         STA     TMP             ;NOS,S           ; DVDND
         LDA     #$0000          ; REMNDR
 _DIVLP  ROL                     ; REMNDR
-        CMP     TOS,S           ; DVSR
+        CMP     TOS+2,S         ; DVSR
         BCC     +
-        SBC     TOS,S           ; DVSR
+        SBC     TOS+2,S         ; DVSR
         SEC
 +       ROL     TMP             ;NOS,S           ; DVDND
         DEY
         BNE     _DIVLP
-_DIVEX  ;STA     TMP             ; REMNDR
-        LDY     IPY
+_DIVEX  LDY     IPY
         RTS
-;*
-;* NEGATE TOS
-;*
-NEG     LDA     #$0000
-        SEC
-        SBC     TOS,S
-        STA     TOS,S
-        JMP     NEXTOP
 ;*
 ;* DIV TOS-1 BY TOS
 ;*
@@ -706,6 +713,14 @@ MOD     JSR     _DIV
         TXA
         AND     #$0080          ; REMAINDER IS SIGN OF DIVIDEND
         BNE     NEG
+        JMP     NEXTOP
+;*
+;* NEGATE TOS
+;*
+NEG     LDA     #$0000
+        SEC
+        SBC     TOS,S
+        STA     TOS,S
         JMP     NEXTOP
 ;*
 ;* INCREMENT TOS
@@ -811,9 +826,7 @@ DUP     LDA     TOS,S
 ;*
 ;* PRIVATE EP STASH
 ;*
-EPSAVE  !BYTE   $01             ; INDEX INTO STASH ARRAY (32 SHOULD BE ENOUGH)
-        !WORD   $0000, $0000, $0000, $0000, $0000, $0000, $0000, $0000
-        !WORD   $0000, $0000, $0000, $0000, $0000, $0000, $0000, $0000
+EPSAVE  !BYTE   $01             ; INDEX INTO STASH ARRAY (16 SHOULD BE ENOUGH)
         !WORD   $0000, $0000, $0000, $0000, $0000, $0000, $0000, $0000
         !WORD   $0000, $0000, $0000, $0000, $0000, $0000, $0000, $0000
 ;*
@@ -826,6 +839,14 @@ PUSHEP  LDX     LCRWEN+LCBNK2   ; RWEN LC MEM
         STA     EPSAVE,X
         INX
         INX
+!IF     DEBUG {
+        CPX     #33
+        BCC     +
+        LDX     #$80+'>'
+        STX     $7D0+30
+        LDX     #$32
++
+}
         STX     EPSAVE
         LDX     LCRDEN+LCBNK2   ; REN LC MEM
         JMP     NEXTOP
@@ -837,6 +858,13 @@ PULLEP  LDX     LCRWEN+LCBNK2   ; RWEN LC MEM
         LDX     EPSAVE
         DEX
         DEX
+!IF     DEBUG {
+        BPL     +
+        LDX     #$80+'<'
+        STX     $7D0+30
+        LDX     #$00
++
+}
         LDA     EPSAVE,X
         TCS
         STX     EPSAVE
@@ -1615,6 +1643,7 @@ RET     SEP     #$20            ; 8 BIT A/M
         LDX     $C010
 +       LDX     TMPL
 }
+        TYX
         REP     #$20            ; 16 BIT A/M
         !AL
         LDA     IFP             ; DEALLOCATE POOL
