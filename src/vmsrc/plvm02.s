@@ -40,6 +40,7 @@ ALTRDON =       $C003
 ALTWROFF=       $C004
 ALTWRON =       $C005
         !SOURCE "vmsrc/plvmzp.inc"
+PSR     =       TMPH+1
 DROP    =       $EF
 NEXTOP  =       $F0
 FETCHOP =       NEXTOP+3
@@ -233,11 +234,15 @@ IINTRP  PLA
 +       LDA     #>OPTBL
         STA     OPPAGE
 !IF SELFMODIFY {
-    BIT LCRWEN+LCBNK2
+        BIT     LCRWEN+LCBNK2
         BIT     LCRWEN+LCBNK2
 }
         JMP     FETCHOP
-IINTRPX PLA
+IINTRPX PHP
+        PLA
+        STA     PSR
+        SEI
+        PLA
         STA     TMPL
         PLA
         STA     TMPH
@@ -258,10 +263,9 @@ IINTRPX PLA
         STA     IFPH
         LDA     #>OPXTBL
         STA     OPPAGE
-        ;SEI UNTIL I KNOW WHAT TO DO WITH THE UNENHANCED IIE
         STA     ALTRDON
 !IF SELFMODIFY {
-    BIT LCRWEN+LCBNK2
+        BIT     LCRWEN+LCBNK2
         BIT     LCRWEN+LCBNK2
 }
         JMP     FETCHOP
@@ -425,8 +429,6 @@ ADD     LDA     ESTKL,X
         LDA     ESTKH,X
         ADC     ESTKH+1,X
         STA     ESTKH+1,X
-;       INX
-;       JMP     NEXTOP
         JMP     DROP
 ;*
 ;* SUB TOS FROM TOS-1
@@ -438,8 +440,6 @@ SUB     LDA     ESTKL+1,X
         LDA     ESTKH+1,X
         SBC     ESTKH,X
         STA     ESTKH+1,X
-;       INX
-;       JMP     NEXTOP
         JMP     DROP
 ;*
 ;* SHIFT TOS LEFT BY 1, ADD TO TOS-1
@@ -453,8 +453,6 @@ IDXW    LDA     ESTKL,X
         LDA     ESTKH,X
         ADC     ESTKH+1,X
         STA     ESTKH+1,X
-;       INX
-;       JMP     NEXTOP
         JMP     DROP
 ;*
 ;* MUL TOS-1 BY TOS
@@ -485,8 +483,6 @@ MULLP   LSR     TMPH            ; MULTPLRH
         BNE     MULLP
         STA     ESTKH+1,X       ; PRODH
         LDY     IPY
-;       INX
-;       JMP     NEXTOP
         JMP     DROP
 ;*
 ;* INTERNAL DIVIDE ALGORITHM
@@ -605,8 +601,6 @@ BAND    LDA     ESTKL+1,X
         LDA     ESTKH+1,X
         AND     ESTKH,X
         STA     ESTKH+1,X
-;       INX
-;       JMP     NEXTOP
         JMP     DROP
 ;*
 ;* INCLUSIVE OR TOS TO TOS-1
@@ -617,8 +611,6 @@ IOR     LDA     ESTKL+1,X
         LDA     ESTKH+1,X
         ORA     ESTKH,X
         STA     ESTKH+1,X
-;       INX
-;       JMP     NEXTOP
         JMP     DROP
 ;*
 ;* EXLUSIVE OR TOS TO TOS-1
@@ -629,8 +621,6 @@ XOR     LDA     ESTKL+1,X
         LDA     ESTKH+1,X
         EOR     ESTKH,X
         STA     ESTKH+1,X
-;       INX
-;       JMP     NEXTOP
         JMP     DROP
 ;*
 ;* SHIFT TOS-1 LEFT BY TOS
@@ -651,8 +641,6 @@ SHL2    ASL     ESTKL+1,X
         DEY
         BNE     SHL2
 SHL3    LDY     IPY
-;       INX
-;       JMP     NEXTOP
         JMP     DROP
 ;*
 ;* SHIFT TOS-1 RIGHT BY TOS
@@ -680,8 +668,6 @@ SHR3    CMP     #$80
         BNE     SHR3
         STA     ESTKH+1,X
 SHR4    LDY     IPY
-;       INX
-;       JMP     NEXTOP
         JMP     DROP
 ;*
 ;* LOGICAL NOT
@@ -706,8 +692,6 @@ LAND    LDA     ESTKL+1,X
         LDA     #$FF
 LAND1   STA     ESTKL+1,X
         STA     ESTKH+1,X
-;LAND2  INX
-;       JMP     NEXTOP
 LAND2   JMP     DROP
 ;*
 ;* LOGICAL OR
@@ -720,8 +704,6 @@ LOR     LDA     ESTKL,X
         LDA     #$FF
         STA     ESTKL+1,X
         STA     ESTKH+1,X
-;LOR1   INX
-;       JMP     NEXTOP
 LOR1    JMP     DROP
 ;*
 ;* DUPLICATE TOS
@@ -753,7 +735,7 @@ ZERO    DEX
         STA     ESTKH,X
         JMP     NEXTOP
 CFFB    LDA     #$FF
-    !BYTE $2C   ; BIT $00A9 - effectively skips LDA #$00, no harm in reading this address
+        !BYTE $2C   ; BIT $00A9 - effectively skips LDA #$00, no harm in reading this address
 CB      LDA     #$00
         DEX
         STA     ESTKH,X
@@ -870,9 +852,9 @@ LB      LDA     ESTKL,X
         STA     LBLDA+1
         LDA     ESTKH,X
         STA     LBLDA+2
-LBLDA   LDA   $FFFF
+LBLDA   LDA     $FFFF
         STA     ESTKL,X
-    LDA #$00
+        LDA     #$00
         STA     ESTKH,X
         JMP     NEXTOP
 } ELSE {
@@ -910,7 +892,7 @@ LBX     LDA     ESTKL,X
         STA     ALTRDOFF
 LBXLDA  LDA     $FFFF
         STA     ESTKL,X
-    LDA #$00
+        LDA     #$00
         STA     ESTKH,X
         STA     ALTRDON
         JMP     NEXTOP
@@ -1024,7 +1006,7 @@ LAB     +INC_IP
 LABLDA  LDA     $FFFF
         DEX
         STA     ESTKL,X
-    LDA #$00
+        LDA     #$00
         STA     ESTKH,X
         JMP     NEXTOP
 } ELSE {
@@ -1071,7 +1053,7 @@ LABX    +INC_IP
 LABXLDA LDA     $FFFF
         DEX
         STA     ESTKL,X
-    LDA #$00
+        LDA     #$00
         STA     ESTKH,X
         STA     ALTRDON
         JMP     NEXTOP
@@ -1122,8 +1104,6 @@ SB      LDA     ESTKL,X
         LDA     ESTKL+1,X
 SBSTA   STA     $FFFF
         INX
-;       INX
-;       JMP     NEXTOP
         JMP     DROP
 } ELSE {
 SB      LDA     ESTKL,X
@@ -1136,8 +1116,6 @@ SB      LDA     ESTKL,X
         STA     (TMP),Y
         LDY     IPY
         INX
-;       INX
-;       JMP     NEXTOP
         JMP     DROP
 }
 SW      LDA     ESTKL,X
@@ -1153,8 +1131,6 @@ SW      LDA     ESTKL,X
         STA     (TMP),Y
         LDY     IPY
         INX
-;       INX
-;       JMP     NEXTOP
         JMP     DROP
 ;*
 ;* STORE VALUE TO LOCAL FRAME OFFSET
@@ -1179,8 +1155,6 @@ SLW     +INC_IP
         LDA     ESTKH,X
         STA     (IFP),Y
         LDY     IPY
-;               INX
-;       JMP     NEXTOP
         JMP     DROP
 ;*
 ;* STORE VALUE TO LOCAL FRAME OFFSET WITHOUT POPPING STACK
@@ -1231,8 +1205,6 @@ SAB     +INC_IP
         LDY     #$00
         STA     (TMP),Y
         LDY     IPY
-;       INX
-;       JMP     NEXTOP
         JMP     DROP
 }
 SAW     +INC_IP
@@ -1249,8 +1221,6 @@ SAW     +INC_IP
         LDA     ESTKH,X
         STA     (TMP),Y
         LDY     IPY
-;       INX
-;       JMP     NEXTOP
         JMP     DROP
 ;*
 ;* STORE VALUE TO ABSOLUTE ADDRESS WITHOUT POPPING STACK
@@ -1306,8 +1276,6 @@ ISEQ    LDA     ESTKL,X
 ISTRU   LDA     #$FF
         STA     ESTKL+1,X
         STA     ESTKH+1,X
-;       INX
-;       JMP     NEXTOP
         JMP     DROP
 ;
 ISNE    LDA     ESTKL,X
@@ -1319,8 +1287,6 @@ ISNE    LDA     ESTKL,X
 ISFLS   LDA     #$00
         STA     ESTKL+1,X
         STA     ESTKH+1,X
-;       INX
-;       JMP     NEXTOP
         JMP     DROP
 ;
 ISGE    LDA     ESTKL+1,X
@@ -1425,8 +1391,6 @@ IBRNCH  LDA     IPL
         LDA     IPH
         ADC     ESTKH,X
         STA     IPH
-;       INX
-;       JMP     NEXTOP
         JMP     DROP
 ;*
 ;* CALL INTO ABSOLUTE ADDRESS (NATIVE CODE)
@@ -1437,25 +1401,25 @@ CALL    +INC_IP
         +INC_IP
         LDA     (IP),Y
         STA     TMPH
-    TYA
-    CLC
-    ADC IPL
-    PHA
+        TYA
+        CLC
+        ADC     IPL
+        PHA
         LDA     IPH
-    ADC #$00
+        ADC     #$00
         PHA
         JSR     JMPTMP
-    PLA
+        PLA
         STA     IPH
         PLA
         STA     IPL
         LDA     #>OPTBL         ; MAKE SURE WE'RE INDEXING THE RIGHT TABLE
         STA     OPPAGE
 !IF SELFMODIFY {
-    BIT LCRWEN+LCBNK2
+        BIT     LCRWEN+LCBNK2
         BIT     LCRWEN+LCBNK2
 }
-    LDY #$00
+        LDY     #$00
         JMP     NEXTOP
 ;
 CALLX   +INC_IP
@@ -1464,29 +1428,34 @@ CALLX   +INC_IP
         +INC_IP
         LDA     (IP),Y
         STA     TMPH
-    TYA
-    CLC
-    ADC IPL
-    PHA
+        TYA
+        CLC
+        ADC     IPL
+        PHA
         LDA     IPH
-    ADC #$00
+        ADC     #$00
         PHA
         STA     ALTRDOFF
-        ;CLI UNTIL I KNOW WHAT TO DO WITH THE UNENHANCED IIE
+        LDA     PSR
+        PHA
+        PLP
         JSR     JMPTMP
-        ;SEI UNTIL I KNOW WHAT TO DO WITH THE UNENHANCED IIE
+        PHP
+        PLA
+        STA     PSR
+        SEI
         STA     ALTRDON
-    PLA
+        PLA
         STA     IPH
         PLA
         STA     IPL
         LDA     #>OPXTBL        ; MAKE SURE WE'RE INDEXING THE RIGHT TABLE
         STA     OPPAGE
 !IF SELFMODIFY {
-    BIT LCRWEN+LCBNK2
+        BIT     LCRWEN+LCBNK2
         BIT     LCRWEN+LCBNK2
 }
-    LDY #$00
+        LDY     #$00
         JMP     NEXTOP
 ;*
 ;* INDIRECT CALL TO ADDRESS (NATIVE CODE)
@@ -1496,25 +1465,25 @@ ICAL    LDA     ESTKL,X
         LDA     ESTKH,X
         STA     TMPH
         INX
-    TYA
-    CLC
-    ADC IPL
-    PHA
+        TYA
+        CLC
+        ADC     IPL
+        PHA
         LDA     IPH
-    ADC #$00
+        ADC     #$00
         PHA
         JSR     JMPTMP
-    PLA
+        PLA
         STA     IPH
         PLA
         STA     IPL
         LDA     #>OPTBL         ; MAKE SURE WE'RE INDEXING THE RIGHT TABLE
         STA     OPPAGE
 !IF SELFMODIFY {
-    BIT LCRWEN+LCBNK2
+        BIT     LCRWEN+LCBNK2
         BIT     LCRWEN+LCBNK2
 }
-    LDY #$00
+        LDY     #$00
         JMP     NEXTOP
 ;
 ICALX   LDA     ESTKL,X
@@ -1522,17 +1491,21 @@ ICALX   LDA     ESTKL,X
         LDA     ESTKH,X
         STA     TMPH
         INX
-    TYA
-    CLC
-    ADC IPL
-    PHA
+        TYA
+        CLC
+        ADC     IPL
+        PHA
         LDA     IPH
-    ADC #$00
+        ADC     #$00
         PHA
         STA     ALTRDOFF
-        ;CLI UNTIL I KNOW WHAT TO DO WITH THE UNENHANCED IIE
+        LDA     PSR
+        PHA
+        PLP
         JSR     JMPTMP
-        ;SEI UNTIL I KNOW WHAT TO DO WITH THE UNENHANCED IIE
+        PHP
+        PLA
+        STA     PSR
         STA     ALTRDON
         PLA
         STA     IPH
@@ -1541,10 +1514,10 @@ ICALX   LDA     ESTKL,X
         LDA     #>OPXTBL        ; MAKE SURE WE'RE INDEXING THE RIGHT TABLE
         STA     OPPAGE
 !IF SELFMODIFY {
-    BIT LCRWEN+LCBNK2
+        BIT     LCRWEN+LCBNK2
         BIT     LCRWEN+LCBNK2
 }
-    LDY #$00
+        LDY     #$00
         JMP     NEXTOP
 ;*
 ;* JUMP INDIRECT TRHOUGH TMP
@@ -1567,7 +1540,7 @@ ENTER   INY
         STA     IFPH
         INY
         LDA     (IP),Y
-    BEQ +
+        BEQ     +
         ASL
         TAY
 -       LDA     ESTKH,X
@@ -1577,14 +1550,16 @@ ENTER   INY
         INX
         DEY
         STA     (IFP),Y
-        BNE -
+        BNE     -
 +       LDY     #$02
         JMP     NEXTOP
 ;*
 ;* LEAVE FUNCTION
 ;*
 LEAVEX  STA     ALTRDOFF
-        ;CLI UNTIL I KNOW WHAT TO DO WITH THE UNENHANCED IIE
+        LDA     PSR
+        PHA
+        PLP
 LEAVE   PLA                     ; DEALLOCATE POOL + FRAME
         CLC
         ADC     IFPL
@@ -1599,7 +1574,9 @@ LEAVE   PLA                     ; DEALLOCATE POOL + FRAME
         RTS
 ;
 RETX    STA     ALTRDOFF
-        ;CLI UNTIL I KNOW WHAT TO DO WITH THE UNENHANCED IIE
+        LDA     PSR
+        PHA
+        PLP
 RET     LDA     IFPL            ; DEALLOCATE POOL
         STA     PPL
         LDA     IFPH
