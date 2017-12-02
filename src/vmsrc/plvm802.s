@@ -464,189 +464,6 @@ OPXTBL  !WORD   ZERO,ADD,SUB,MUL,DIV,MOD,INCR,DECR              ; 00 02 04 06 08
         !WORD   BRNCH,IBRNCH,CALLX,ICALX,ENTER,LEAVEX,RETX,CFFB ; 50 52 54 56 58 5A 5C 5E
         !WORD   LBX,LWX,LLBX,LLWX,LABX,LAWX,DLB,DLW             ; 60 62 64 66 68 6A 6C 6E
         !WORD   SB,SW,SLB,SLW,SAB,SAW,DAB,DAW                   ; 70 72 74 76 78 7A 7C 7E
-!IF     DEBUG {
-;*
-;* DEBUG PRINT ROUTINES
-;*
-        !AS
-PRHEX   PHA
-        LSR
-        LSR
-        LSR
-        LSR
-        CLC
-        ADC     #'0'
-        CMP     #':'
-        BCC     +
-        ADC     #6
-+       ORA     #$80
-        STA     $7D0,X
-        INX
-        PLA
-        AND     #$0F
-        ADC     #'0'
-        CMP     #':'
-        BCC     +
-        ADC     #6
-+       ORA     #$80
-        STA     $7D0,X
-        INX
-        RTS
-PRCHR   ORA     #$80
-        STA     $7D0,X
-        INX
-        RTS
-PRBYTE  PHA
-        LDA     #'$'
-        JSR     PRCHR
-        PLA
-        JMP     PRHEX
-PRWORD  PHA
-        LDA     #'$'
-        JSR     PRCHR
-        XBA
-        JSR     PRHEX
-        PLA
-        JMP     PRHEX
-;*****************
-;*               *
-;*  DEBUG TABLE  *
-;*               *
-;*****************
-        !ALIGN  255,0
-DBGTBL  !WORD   STEP,STEP,STEP,STEP,STEP,STEP,STEP,STEP         ; 00 02 04 06 08 0A 0C 0E
-        !WORD   STEP,STEP,STEP,STEP,STEP,STEP,STEP,STEP         ; 10 12 14 16 18 1A 1C 1E
-        !WORD   STEP,STEP,STEP,STEP,STEP,STEP,STEP,STEP         ; 20 22 24 26 28 2A 2C 2E
-        !WORD   STEP,STEP,STEP,STEP,STEP,STEP,STEP,STEP         ; 30 32 34 36 38 3A 3C 3E
-        !WORD   STEP,STEP,STEP,STEP,STEP,STEP,STEP,STEP         ; 40 42 44 46 48 4A 4C 4E
-        !WORD   STEP,STEP,STEP,STEP,STEP,STEP,STEP,STEP         ; 50 52 54 56 58 5A 5C 5E
-        !WORD   STEP,STEP,STEP,STEP,STEP,STEP,STEP,STEP         ; 60 62 64 66 68 6A 6C 6E
-        !WORD   STEP,STEP,STEP,STEP,STEP,STEP,STEP,STEP         ; 70 72 74 76 78 7A 7C 7E
-        !AL
-;*
-;* DEBUG STEP ROUTINE
-;*
-STEP    STX     TMPL
-        LDX     $C013           ; SAVE RAMRD
-        STX     $C002
-        STX     TMPH
-        SEP     #$20            ; 8 BIT A/M
-        !AS
-        LDX     #39             ; SCROLL PREVIOUS LINES UP
--       LDA     $6D0,X
-        STA     $650,X
-        LDA     $750,X
-        STA     $6D0,X
-        LDA     $7D0,X
-        STA     $750,X
-        DEX
-        BPL     -
-        BIT     TMPH            ; RAMRD SET?
-        BPL     +
-        STA     $C003
-+       LDX     #$00
-        REP     #$20            ; 16 BIT A/M
-        !AL
-        TYA
-        CLC
-        ADC     IP
-        SEP     #$20            ; 8 BIT A/M
-        !AS
-        JSR     PRWORD
-        LDA     #':'
-        JSR     PRCHR
-        LDA     (IP),Y
-        JSR     PRBYTE
-        INX
-        REP     #$20            ; 16 BIT A/M
-        !AL
-        TSC
-        SEP     #$20            ; 8 BIT A/M
-        !AS
-        JSR     PRWORD
-        LDA     #$80+'['
-        JSR     PRCHR
-        STX     TMPH
-        TSX
-        TXA
-        EOR     #$FF
-        SEC
-        ADC     HWSP
-        LSR
-        CLC
-        ADC     #$80+'0'
-        LDX     TMPH
-        JSR     PRCHR
-        LDA     #$80+']'
-        JSR     PRCHR
-        LDA     #':'
-        JSR     PRCHR
-        STX     TMPH
-        TSX
-        CPX     HWSP
-        BEQ     ++
-        BCC     +
-        LDX     TMPH
-        LDA     #' '
-        JSR     PRCHR
-        LDA     #'<'            ; STACK UNDERFLOW!
-        JSR     PRCHR
-        JSR     PRCHR
-        JSR     PRCHR
-        JSR     PRCHR
-        BRA     DBGKEY
-+       LDA     $102,X
-        XBA
-        LDA     $101,X
-        LDX     TMPH
-        JSR     PRWORD
-        BRA     +++
-++      LDX     TMPH
-        LDA     #' '
-        JSR     PRCHR
-        LDA     #'-'
-        JSR     PRCHR
-        JSR     PRCHR
-        JSR     PRCHR
-        JSR     PRCHR
-+++     LDA     #' '
--       JSR     PRCHR
-        CPX     #40
-        BNE     -
-;        LDX     TMPL
-;        CPX     #$56            ; FORCE PAUSE AT 'ICAL'
-;        BEQ     DBGKEY
--       LDX     $C000
-        CPX     #$9B
-        BNE     +
-DBGKEY  STX     $C010
--       LDX     $C000
-        BPL     -
-        CPX     #$9B
-        BEQ     +
-        STX     $C010
-        CPX     #$80+'Q'
-        BNE     +
-        SEC                     ; SWITCH TO EMU MODE
-        XCE
-        BIT     $C054           ; SET TEXT MODE
-        BIT     $C051
-        BIT     $C05F
-        LDA     #20             ; SET TEXT WINDOW ABOVE DEBUG OUTPUT
-        STA     $23
-        STZ     $20
-        STZ     $22
-        STZ     $24
-        STZ     $25
-        STZ     $28
-        LDA     #$04
-        STA     $29
-        BRK
-+       REP     #$20            ; 16 BIT A/M
-        !AL
-        LDX     TMPL
-DBG_OP  JMP     (OPTBL,X)
-}
 ;*********************************************************************
 ;*
 ;*      CODE BELOW HERE DEFAULTS TO NATIVE 16 BIT A/M, 8 BIT X,Y
@@ -1355,9 +1172,18 @@ IBRNCH  PLA
 ;*
 CALL    +INC_IP
         LDA     (IP),Y
-        +INC_IP
-        STA     TMP
-EMUSTK  TYA                     ; FLATTEN IP
+        INY
+        BNE     EMUSTK
+        LDX     IPH
+        INX
+        STX     IPH
+        BRA     EMUSTK
+;*
+;* INDIRECT CALL TO ADDRESS (NATIVE CODE)
+;*
+ICAL    PLA
+EMUSTK  STA     TMP
+        TYA                     ; FLATTEN IP
         CLC
         ADC     IP
         STA     IP
@@ -1456,12 +1282,23 @@ EMUSTK  TYA                     ; FLATTEN IP
         STX     OPPAGE
         LDY     #$00
         JMP     NEXTOP
-;
+;*
+;* CALL INTO ABSOLUTE ADDRESS (NATIVE CODE)
+;*
 CALLX   +INC_IP
         LDA     (IP),Y
-        +INC_IP
-        STA     TMP
-EMUSTKX TYA                     ; FLATTEN IP
+        INY
+        BNE     EMUSTKX
+        LDX     IPH
+        INX
+        STX     IPH
+        BRA     EMUSTKX
+;*
+;* INDIRECT CALL TO ADDRESS (NATIVE CODE)
+;*
+ICALX   PLA
+EMUSTKX STA     TMP
+        TYA                     ; FLATTEN IP
         CLC
         ADC     IP
         STA     IP
@@ -1562,16 +1399,6 @@ EMUSTKX TYA                     ; FLATTEN IP
         STX     OPPAGE
         LDY     #$00
         JMP     NEXTOP
-;*
-;* INDIRECT CALL TO ADDRESS (NATIVE CODE)
-;*
-ICAL    PLA
-        STA     TMP
-        JMP     EMUSTK
-;
-ICALX   PLA
-        STA     TMP
-        JMP     EMUSTKX
 ;*
 ;* JUMP INDIRECT THROUGH TMP
 ;*
@@ -1735,6 +1562,189 @@ RET     SEP     #$20            ; 8 BIT A/M
         PHA
         PLP
         RTS
+!IF     DEBUG {
+;*****************
+;*               *
+;*  DEBUG TABLE  *
+;*               *
+;*****************
+        !ALIGN  255,0
+DBGTBL  !WORD   STEP,STEP,STEP,STEP,STEP,STEP,STEP,STEP         ; 00 02 04 06 08 0A 0C 0E
+        !WORD   STEP,STEP,STEP,STEP,STEP,STEP,STEP,STEP         ; 10 12 14 16 18 1A 1C 1E
+        !WORD   STEP,STEP,STEP,STEP,STEP,STEP,STEP,STEP         ; 20 22 24 26 28 2A 2C 2E
+        !WORD   STEP,STEP,STEP,STEP,STEP,STEP,STEP,STEP         ; 30 32 34 36 38 3A 3C 3E
+        !WORD   STEP,STEP,STEP,STEP,STEP,STEP,STEP,STEP         ; 40 42 44 46 48 4A 4C 4E
+        !WORD   STEP,STEP,STEP,STEP,STEP,STEP,STEP,STEP         ; 50 52 54 56 58 5A 5C 5E
+        !WORD   STEP,STEP,STEP,STEP,STEP,STEP,STEP,STEP         ; 60 62 64 66 68 6A 6C 6E
+        !WORD   STEP,STEP,STEP,STEP,STEP,STEP,STEP,STEP         ; 70 72 74 76 78 7A 7C 7E
+;*
+;* DEBUG PRINT ROUTINES
+;*
+        !AS
+PRHEX   PHA
+        LSR
+        LSR
+        LSR
+        LSR
+        CLC
+        ADC     #'0'
+        CMP     #':'
+        BCC     +
+        ADC     #6
++       ORA     #$80
+        STA     $7D0,X
+        INX
+        PLA
+        AND     #$0F
+        ADC     #'0'
+        CMP     #':'
+        BCC     +
+        ADC     #6
++       ORA     #$80
+        STA     $7D0,X
+        INX
+        RTS
+PRCHR   ORA     #$80
+        STA     $7D0,X
+        INX
+        RTS
+PRBYTE  PHA
+        LDA     #'$'
+        JSR     PRCHR
+        PLA
+        JMP     PRHEX
+PRWORD  PHA
+        LDA     #'$'
+        JSR     PRCHR
+        XBA
+        JSR     PRHEX
+        PLA
+        JMP     PRHEX
+        !AL
+;*
+;* DEBUG STEP ROUTINE
+;*
+STEP    STX     TMPL
+        LDX     $C013           ; SAVE RAMRD
+        STX     $C002
+        STX     TMPH
+        SEP     #$20            ; 8 BIT A/M
+        !AS
+        LDX     #39             ; SCROLL PREVIOUS LINES UP
+-       LDA     $6D0,X
+        STA     $650,X
+        LDA     $750,X
+        STA     $6D0,X
+        LDA     $7D0,X
+        STA     $750,X
+        DEX
+        BPL     -
+        BIT     TMPH            ; RAMRD SET?
+        BPL     +
+        STA     $C003
++       LDX     #$00
+        REP     #$20            ; 16 BIT A/M
+        !AL
+        TYA
+        CLC
+        ADC     IP
+        SEP     #$20            ; 8 BIT A/M
+        !AS
+        JSR     PRWORD
+        LDA     #':'
+        JSR     PRCHR
+        LDA     (IP),Y
+        JSR     PRBYTE
+        INX
+        REP     #$20            ; 16 BIT A/M
+        !AL
+        TSC
+        SEP     #$20            ; 8 BIT A/M
+        !AS
+        JSR     PRWORD
+        LDA     #$80+'['
+        JSR     PRCHR
+        STX     TMPH
+        TSX
+        TXA
+        EOR     #$FF
+        SEC
+        ADC     HWSP
+        LSR
+        CLC
+        ADC     #$80+'0'
+        LDX     TMPH
+        JSR     PRCHR
+        LDA     #$80+']'
+        JSR     PRCHR
+        LDA     #':'
+        JSR     PRCHR
+        STX     TMPH
+        TSX
+        CPX     HWSP
+        BEQ     ++
+        BCC     +
+        LDX     TMPH
+        LDA     #' '
+        JSR     PRCHR
+        LDA     #'<'            ; STACK UNDERFLOW!
+        JSR     PRCHR
+        JSR     PRCHR
+        JSR     PRCHR
+        JSR     PRCHR
+        BRA     DBGKEY
++       LDA     $102,X
+        XBA
+        LDA     $101,X
+        LDX     TMPH
+        JSR     PRWORD
+        BRA     +++
+++      LDX     TMPH
+        LDA     #' '
+        JSR     PRCHR
+        LDA     #'-'
+        JSR     PRCHR
+        JSR     PRCHR
+        JSR     PRCHR
+        JSR     PRCHR
++++     LDA     #' '
+-       JSR     PRCHR
+        CPX     #40
+        BNE     -
+;        LDX     TMPL
+;        CPX     #$56            ; FORCE PAUSE AT 'ICAL'
+;        BEQ     DBGKEY
+-       LDX     $C000
+        CPX     #$9B
+        BNE     +
+DBGKEY  STX     $C010
+-       LDX     $C000
+        BPL     -
+        CPX     #$9B
+        BEQ     +
+        STX     $C010
+        CPX     #$80+'Q'
+        BNE     +
+        SEC                     ; SWITCH TO EMU MODE
+        XCE
+        BIT     $C054           ; SET TEXT MODE
+        BIT     $C051
+        BIT     $C05F
+        LDA     #20             ; SET TEXT WINDOW ABOVE DEBUG OUTPUT
+        STA     $23
+        STZ     $20
+        STZ     $22
+        STZ     $24
+        STZ     $25
+        STZ     $28
+        LDA     #$04
+        STA     $29
+        BRK
++       REP     #$20            ; 16 BIT A/M
+        !AL
+        LDX     TMPL
+DBG_OP  JMP     (OPTBL,X)
+}
 
 VMEND   =       *
 }
