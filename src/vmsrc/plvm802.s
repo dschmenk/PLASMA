@@ -75,13 +75,38 @@ NOS     =       $03             ; TOS-1
 ;*
         !MACRO  INC_IP  {
         INY
-        BNE     * + 8
-        SEP     #$20            ; SET 8 BIT MODE
-        !AS
-        INC     IPH
-        !AL
-        REP     #$20            ; SET 16 BIT MODE
+        BNE     +
+        LDX     IPH
+        INX
+        STX     IPH
++
         }
+;*
+;* ACCUM/MEM SIZE MACROS
+;*
+        !MACRO  ACCMEM8 {
+        SEP     #$20            ; 8 BIT A/M
+        !AS
+        }
+        !MACRO  ACCMEM16 {
+        REP     #$20            ; 16 BIT A/M
+        !AL
+        }
+;*
+;* SIZE SWITCHING HACK
+;*
+!IF     DEBUG   {
+        !MACRO  HACK816 {
+        }
+} ELSE {
+        !MACRO  HACK816 {
+        SEP     #$20            ; 8 BIT A/M
+        !AS
+        BIT     TMPH
+        REP     #$20            ; 16 BIT A/M
+        !AL
+        }
+}
 ;******************************
 ;*                            *
 ;* INTERPRETER INITIALIZATION *
@@ -219,13 +244,12 @@ DINTRP  PHP
         SEI
         CLC                     ; SWITCH TO NATIVE MODE
         XCE
-        REP     #$20            ; 16 BIT A/M
-        !AL
+        +ACCMEM16               ; 16 BIT A/M
+        +HACK816
         PLA
         INC
         STA     IP
-        LDA     IFP
-        PHA                     ; SAVE ON STACK FOR LEAVE/RET
+        PEI     (IFP)           ; SAVE ON STACK FOR LEAVE/RET
         LDA     PP              ; SET FP TO PP
         STA     IFP
         STX     ESP
@@ -246,8 +270,8 @@ IINTRP  PHP
         SEI
         CLC                     ; SWITCH TO NATIVE MODE
         XCE
-        REP     #$20            ; 16 BIT A/M
-        !AL
+        +ACCMEM16               ; 16 BIT A/M
+        +HACK816
         LDY     #$01
         LDA     (TOS,S),Y
         DEY
@@ -273,8 +297,8 @@ IINTRPX PHP
         SEI
         CLC                     ; SWITCH TO NATIVE MODE
         XCE
-        REP     #$20            ; 16 BIT A/M
-        !AL
+        +ACCMEM16               ; 16 BIT A/M
+        +HACK816
         LDY     #$01
         LDA     (TOS,S),Y
         DEY
@@ -292,6 +316,7 @@ IINTRPX PHP
 SETDBG  LDY     LCRWEN+LCBNK2
         LDY     LCRWEN+LCBNK2
         STX     DBG_OP+2
+        LDY     LCRDEN+LCBNK2
         LDX     #>DBGTBL
         LDY     #$00
 }
@@ -770,8 +795,7 @@ CSX     +INC_IP
 _CMPPSX STA     TMP
         CMP     IFP             ; CHECK FOR END OF POOL
         BCS     _CPYSX          ; AT OR BEYOND END OF POOL, COPY STRING OVER
-_CMPSX  SEP     #$20            ; 8 BIT A/M
-        !AS
+_CMPSX  +ACCMEM8                ; 8 BIT A/M
         STX     ALTRDOFF        ; CHECK FOR MATCHING STRING
         LDA     (TMP)           ; COMPARE STRINGS FROM AUX MEM TO STRINGS IN MAIN MEM
         STX     ALTRDON
@@ -793,8 +817,7 @@ _CMPSX  SEP     #$20            ; 8 BIT A/M
 _CNXTSX STX     ALTRDOFF
         LDA     (TMP)
         STX     ALTRDON
-_CNXTSX1 REP     #$20           ; 16 BIT A/M
-        !AL
+_CNXTSX1 +ACCMEM16              ; 16 BIT A/M
         AND     #$00FF
         SEC                     ; SKIP OVER STRING+LEN BYTE
         ADC     TMP
@@ -807,8 +830,7 @@ _CPYSX  LDA     (IP)            ; COPY STRING FROM AUX TO MAIN MEM POOL
         ADC     PP
         STA     PP
         PHA                     ; SAVE ADDRESS ON ESTK
-        SEP     #$20            ; 8 BIT A/M
-        !AS
+        +ACCMEM8                ; 8 BIT A/M
 -       LDA     (IP),Y          ; ALTRD IS ON,  NO NEED TO CHANGE IT HERE
         STA     (PP),Y          ; ALTWR IS OFF, NO NEED TO CHANGE IT HERE
         DEY
@@ -816,20 +838,17 @@ _CPYSX  LDA     (IP)            ; COPY STRING FROM AUX TO MAIN MEM POOL
         BNE     -
 _CEXSX  LDA     (IP)            ; SKIP TO NEXT OP ADDR AFTER STRING
         TAY
-        REP     #$20            ; 16 BIT A/M
-        !AL
+        +ACCMEM16               ; 16 BIT A/M
         JMP     NEXTOP
 ;*
 ;* LOAD VALUE FROM ADDRESS TAG
 ;*
 LB      TYX
         LDY     #$00
-        SEP     #$20            ; 8 BIT A/M
-        !AS
+        TYA                     ; QUICKY CLEAR OUT MSB
+        +ACCMEM8                ; 8 BIT A/M
         LDA     (TOS,S),Y
-        REP     #$20            ; 16 BIT A/M
-        !AL
-        AND     #$00FF
+        +ACCMEM16               ; 16 BIT A/M
         STA     TOS,S
         TXY
         JMP     NEXTOP
@@ -842,14 +861,12 @@ LW      TYX
 ;
 LBX     TYX
         LDY     #$00
+        TYA                     ; QUICKY CLEAR OUT MSB
         STX     ALTRDOFF
-        SEP     #$20            ; 8 BIT A/M
-        !AS
+        +ACCMEM8                ; 8 BIT A/M
         LDA     (TOS,S),Y
-        REP     #$20            ; 16 BIT A/M
-        !AL
+        +ACCMEM16               ; 16 BIT A/M
         STX     ALTRDON
-        AND     #$00FF
         STA     TOS,S
         TXY
         JMP     NEXTOP
@@ -875,8 +892,8 @@ LLA     +INC_IP
 ;* LOAD VALUE FROM LOCAL FRAME OFFSET
 ;*
 LLB     +INC_IP
-        LDA     (IP),Y
         TYX
+        LDA     (IP),Y
         TAY
         LDA     (IFP),Y
         AND     #$00FF
@@ -884,8 +901,8 @@ LLB     +INC_IP
         TXY
         JMP     NEXTOP
 LLW     +INC_IP
-        LDA     (IP),Y
         TYX
+        LDA     (IP),Y
         TAY
         LDA     (IFP),Y
         PHA
@@ -893,8 +910,8 @@ LLW     +INC_IP
         JMP     NEXTOP
 ;
 LLBX    +INC_IP
-        LDA     (IP),Y
         TYX
+        LDA     (IP),Y
         TAY
         STX     ALTRDOFF
         LDA     (IFP),Y
@@ -904,8 +921,8 @@ LLBX    +INC_IP
         TXY
         JMP     NEXTOP
 LLWX    +INC_IP
-        LDA     (IP),Y
         TYX
+        LDA     (IP),Y
         TAY
         STX     ALTRDOFF
         LDA     (IFP),Y
@@ -920,12 +937,10 @@ LAB     +INC_IP
         LDA     (IP),Y
         +INC_IP
         STA     TMP
-        SEP     #$20            ; 8 BIT A/M
-        !AS
+        TYA                     ; QUICKY CLEAR OUT MSB
+        +ACCMEM8                ; 8 BIT A/M
         LDA     (TMP)
-        REP     #$20            ; 16 BIT A/M
-        !AL
-        AND     #$00FF
+        +ACCMEM16               ; 16 BIT A/M
         PHA
         JMP     NEXTOP
 LAW     +INC_IP
@@ -940,14 +955,12 @@ LABX    +INC_IP
         LDA     (IP),Y
         +INC_IP
         STA     TMP
-        SEP     #$20            ; 8 BIT A/M
-        !AS
+        TYA                     ; QUICKY CLEAR OUT MSB
         STX     ALTRDOFF
+        +ACCMEM8                ; 8 BIT A/M
         LDA     (TMP)
+        +ACCMEM16               ; 16 BIT A/M
         STX     ALTRDON
-        REP     #$20            ; 16 BIT A/M
-        !AL
-        AND     #$00FF
         PHA
         JMP     NEXTOP
 LAWX    +INC_IP
@@ -965,12 +978,10 @@ LAWX    +INC_IP
 ;*
 SB      TYX
         LDY     #$00
-        SEP     #$20            ; 8 BIT A/M
-        !AS
+        +ACCMEM8                ; 8 BIT A/M
         LDA     NOS,S
         STA     (TOS,S),Y
-        REP     #$20            ; 16 BIT A/M
-        !AL
+        +ACCMEM16               ; 16 BIT A/M
         TXY
         PLA
         JMP     DROP
@@ -989,11 +1000,9 @@ SLB     +INC_IP
         LDA     (IP),Y
         TAY
         PLA
-        SEP     #$20            ; 8 BIT A/M
-        !AS
+        +ACCMEM8                ; 8 BIT A/M
         STA     (IFP),Y
-        REP     #$20            ; 16 BIT A/M
-        !AL
+        +ACCMEM16               ; 16 BIT A/M
         TXY
         JMP     NEXTOP
 SLW     +INC_IP
@@ -1009,14 +1018,12 @@ SLW     +INC_IP
 ;*
 DLB     +INC_IP
         TYX
-        SEP     #$20            ; 8 BIT A/M
-        !AS
+        +ACCMEM8                ; 8 BIT A/M
         LDA     (IP),Y
         TAY
         LDA     TOS,S
         STA     (IFP),Y
-        REP     #$20            ; 16 BIT A/M
-        !AL
+        +ACCMEM16               ; 16 BIT A/M
         TXY
         JMP     NEXTOP
 DLW     +INC_IP
@@ -1035,11 +1042,9 @@ SAB     +INC_IP
         +INC_IP
         STA     TMP
         PLA
-        SEP     #$20            ; 8 BIT A/M
-        !AS
+        +ACCMEM8                ; 8 BIT A/M
         STA     (TMP)
-        REP     #$20            ; 16 BIT A/M
-        !AL
+        +ACCMEM16               ; 16 BIT A/M
         JMP     NEXTOP
 SAW     +INC_IP
         LDA     (IP),Y
@@ -1055,12 +1060,10 @@ DAB     +INC_IP
         LDA     (IP),Y
         +INC_IP
         STA     TMP
-        SEP     #$20            ; 8 BIT A/M
-        !AS
+        +ACCMEM8                ; 8 BIT A/M
         LDA     TOS,S
         STA     (TMP)
-        REP     #$20            ; 16 BIT A/M
-        !AL
+        +ACCMEM16               ; 16 BIT A/M
         JMP     NEXTOP
 DAW     +INC_IP
         LDA     (IP),Y
@@ -1227,10 +1230,7 @@ EMUSTK  STA     TMP
         LDX     $C010
 +       TAX
 }
-        LDA     IPH
-        PHA
-        LDA     IPL
-        PHA
+        PEI     (IP)            ; SAVE INSTRUCTION POINTER
         PHX                     ; SAVE BASELINE ESP
         TYX
         LDA     PSR
@@ -1270,17 +1270,18 @@ EMUSTK  STA     TMP
         BNE     -
         CLC                     ; SWITCH BACK TO NATIVE MODE
         XCE
-        REP     #$20            ; 16 BIT A/M
-        !AL
+        +ACCMEM16               ; 16 BIT A/M
         LDX     #>OPTBL         ; MAKE SURE WE'RE INDEXING THE RIGHT TABLE
 !IF DEBUG {
         LDY     LCRWEN+LCBNK2
         LDY     LCRWEN+LCBNK2
         STX     DBG_OP+2
+        LDY     LCRDEN+LCBNK2
         LDX     #>DBGTBL
 }
         STX     OPPAGE
         LDY     #$00
+        +HACK816
         JMP     NEXTOP
 ;*
 ;* CALL INTO ABSOLUTE ADDRESS (NATIVE CODE)
@@ -1342,10 +1343,7 @@ EMUSTKX STA     TMP
         LDX     $C010
 +       TAX
 }
-        LDA     IPH
-        PHA
-        LDA     IPL
-        PHA
+        PEI     (IP)            ; SAVE INSTRUCTION POINTER
         PHX                     ; SAVE BASELINE ESP
         TYX
         STX     ALTRDOFF
@@ -1387,17 +1385,18 @@ EMUSTKX STA     TMP
         BNE     -
         CLC                     ; SWITCH BACK TO NATIVE MODE
         XCE
-        REP     #$20            ; 16 BIT A/M
-        !AL
-        LDX     #>OPXTBL         ; MAKE SURE WE'RE INDEXING THE RIGHT TABLE
+        +ACCMEM16               ; 16 BIT A/M
+        LDX     #>OPXTBL        ; MAKE SURE WE'RE INDEXING THE RIGHT TABLE
 !IF DEBUG {
         LDY     LCRWEN+LCBNK2
         LDY     LCRWEN+LCBNK2
         STX     DBG_OP+2
+        LDY     LCRDEN+LCBNK2
         LDX     #>DBGTBL
 }
         STX     OPPAGE
         LDY     #$00
+        +HACK816
         JMP     NEXTOP
 ;*
 ;* JUMP INDIRECT THROUGH TMP
@@ -1407,8 +1406,8 @@ JMPTMP  JMP     (TMP)
 ;* ENTER FUNCTION WITH FRAME SIZE AND PARAM COUNT
 ;*
 ENTER   INY
-        SEP     #$20            ; 8 BIT A/M
-        !AS
+        TYA                     ; QUICKY CLEAR OUT MSB
+        +ACCMEM8                ; 8 BIT A/M
         LDA     (IP),Y
 !IF     DEBUG {
         PHA
@@ -1419,16 +1418,14 @@ ENTER   INY
 }
         PHA                     ; SAVE ON STACK FOR LEAVE
         DEC     HWSP            ; UPDATE HWSP TO SKIP FRAME SIZE
-        REP     #$20            ; 16 BIT A/M
-        !AL
-        AND     #$00FF
+        +ACCMEM16               ; 16 BIT A/M
+;        AND     #$00FF
         EOR     #$FFFF          ; ALLOCATE FRAME
         SEC
         ADC     PP
         STA     PP
         STA     IFP
-        SEP     #$20            ; 8 BIT A/M
-        !AS
+        +ACCMEM8                ; 8 BIT A/M
         INY
         LDA     (IP),Y
         BEQ     +
@@ -1444,16 +1441,14 @@ ENTER   INY
         STA     (IFP),Y
         BNE -
         STX     ESP
-+       REP     #$20            ; 16 BIT A/M
-        !AL
++       +ACCMEM16               ; 16 BIT A/M
         LDY     #$02
         JMP     NEXTOP
 ;*
 ;* LEAVE FUNCTION
 ;*
 LEAVEX  STX     ALTRDOFF
-LEAVE   SEP     #$20            ; 8 BIT A/M
-        !AS
+LEAVE   +ACCMEM8                ; 8 BIT A/M
         TSC                     ; MOVE HW EVAL STACK TO ZP EVAL STACK
         EOR     #$FF
         SEC
@@ -1479,7 +1474,7 @@ LEAVE   SEP     #$20            ; 8 BIT A/M
         INX
 +       CPX     ESP
         BNE     -
- !IF     DEBUG {
+ !IF    DEBUG {
         STX     TMPL
         TSX
         CPX     HWSP
@@ -1493,8 +1488,7 @@ LEAVE   SEP     #$20            ; 8 BIT A/M
 }
         TYX                     ; RESTORE NEW ESP
         PLA                     ; DEALLOCATE POOL + FRAME
-        REP     #$20            ; 16 BIT A/M
-        !AL
+        +ACCMEM16               ; 16 BIT A/M
         AND     #$00FF
         CLC
         ADC     IFP
@@ -1509,8 +1503,7 @@ LEAVE   SEP     #$20            ; 8 BIT A/M
         RTS
 ;
 RETX    STX     ALTRDOFF
-RET     SEP     #$20            ; 8 BIT A/M
-        !AS
+RET     +ACCMEM8                ; 8 BIT A/M
         TSC                     ; MOVE HW EVAL STACK TO ZP EVAL STACK
         EOR     #$FF
         SEC
@@ -1549,8 +1542,7 @@ RET     SEP     #$20            ; 8 BIT A/M
 +       LDX     TMPL
 }
         TYX
-        REP     #$20            ; 16 BIT A/M
-        !AL
+        +ACCMEM16               ; 16 BIT A/M
         LDA     IFP             ; DEALLOCATE POOL
         STA     PP
         PLA                     ; RESTORE PREVIOUS FRAME
@@ -1621,15 +1613,37 @@ PRWORD  PHA
         PLA
         JMP     PRHEX
         !AL
+; MESSAGES
+BADEMU  !TEXT   "IN EMULATION MODE!", 0
+BADMODE !TEXT   "IN 8 BIT A/M MODE!", 0
 ;*
 ;* DEBUG STEP ROUTINE
 ;*
 STEP    STX     TMPL
-        LDX     $C013           ; SAVE RAMRD
+        PHP                     ; VALIDATE MODES
+        SEC                     ; SWITCH TO EMULATED MODE
+        XCE
+        +ACCMEM8                ; 8 BIT A/M
+        BCC     +
+        LDX     #$00
+--      LDA     BADEMU,X
+-       BEQ     -
+        JSR     PRCHR
+        BRA     --
++       XCE                     ; SWITCH BACK TO NATIVE MODE
+        PLX
+        TXA
+        AND     #$20
+        BEQ     ++
+        LDX     #$00
+-       LDA     BADMODE,X
+        BNE     +
+        JMP     DBGKEY
++       JSR     PRCHR
+        BRA     -
+++      LDX     $C013           ; SAVE RAMRD
         STX     $C002
         STX     TMPH
-        SEP     #$20            ; 8 BIT A/M
-        !AS
         LDX     #39             ; SCROLL PREVIOUS LINES UP
 -       LDA     $6D0,X
         STA     $650,X
@@ -1639,28 +1653,27 @@ STEP    STX     TMPL
         STA     $750,X
         DEX
         BPL     -
+        LDA     #' '
         BIT     TMPH            ; RAMRD SET?
         BPL     +
-        STA     $C003
+        STX     $C003
+        LDA     #'X'
 +       LDX     #$00
-        REP     #$20            ; 16 BIT A/M
-        !AL
+        JSR     PRCHR
+        +ACCMEM16               ; 16 BIT A/M
         TYA
         CLC
         ADC     IP
-        SEP     #$20            ; 8 BIT A/M
-        !AS
+        +ACCMEM8                ; 8 BIT A/M
         JSR     PRWORD
         LDA     #':'
         JSR     PRCHR
         LDA     (IP),Y
         JSR     PRBYTE
         INX
-        REP     #$20            ; 16 BIT A/M
-        !AL
+        +ACCMEM16               ; 16 BIT A/M
         TSC
-        SEP     #$20            ; 8 BIT A/M
-        !AS
+        +ACCMEM8                ; 8 BIT A/M
         JSR     PRWORD
         LDA     #$80+'['
         JSR     PRCHR
@@ -1740,8 +1753,7 @@ DBGKEY  STX     $C010
         LDA     #$04
         STA     $29
         BRK
-+       REP     #$20            ; 16 BIT A/M
-        !AL
++       +ACCMEM16               ; 16 BIT A/M
         LDX     TMPL
 DBG_OP  JMP     (OPTBL,X)
 }
