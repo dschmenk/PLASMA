@@ -99,7 +99,38 @@ NOS     =       $03             ; TOS-1
 ;*                            *
 ;******************************
 *        =      $2000
-        LDX     #$FE
+;*
+;* CHECK CPU TYPE
+;*
+        CLC
+        XCE                     ; SWITCH TO NATIVE MODE
+        BCS     ++              ; NOPE, NOT 65802/65816
+        LDY     #$00
+-       LDA     BADCPU,Y
+        BEQ     +
+        ORA     #$80
+        JSR     $FDED
+        INY
+        BNE     -
++       LDA     $C000
+        BPL     -
+        LDA     $C010
+        JSR     PRODOS
+        !BYTE   $65
+        !WORD   BYEPARMS
+BYEPARMS !BYTE  4
+        !BYTE   4
+        !WORD   0
+        !BYTE   0
+        !WORD   0
+BADCPU  !TEXT   "65C802/65C816 CPU REQUIRED.", 13
+        !TEXT   "PRESS ANY KEY...", 0
+++      XCE                     ; SWITCH BACK TO EMULATED MODE
+
+;*
+;* INITIALIZE STACK
+;*      
+INITSP  LDX     #$FE
         TXS
         LDX     #$00
         STX     $01FF
