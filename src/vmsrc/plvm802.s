@@ -7,7 +7,7 @@
 ;**********************************************************
         !CPU    65816
 SELFMODIFY  =   0
-DEBUG   =       1
+DEBUG   =       0
 ;*
 ;* THE DEFAULT CPU MODE FOR EXECUTING OPCODES IS:
 ;*   16 BIT A/M
@@ -523,11 +523,11 @@ MUL     LDX     #$10
         EOR     #$FFFF
         STA     TMP
         LDA     #$0000
-MULLP   ASL     TMP             ;LSR     TMP             ; MULTPLR
+MULLP   ASL
+        ASL     TMP             ; MULTPLR
         BCS     +
         ADC     TOS,S           ; MULTPLD
-+       ASL                     ;ASL     TOS,S           ; MULTPLD
-        DEX
++       DEX
         BNE     MULLP
         STA     NOS,S           ; PROD
         JMP     DROP
@@ -1819,7 +1819,7 @@ STEP    STX     TMPL
         XBA
         LDA     $101,X
         LDX     TMPH
-        JSR     PRWORD        
+        JSR     PRWORD
         BRA     +++
 ++      LDX     TMPH
         LDA     #' '
