@@ -613,6 +613,8 @@ DIV     JSR     _DIV
 MOD     JSR     _DIV
         STA     NOS,S           ; REMNDR
         PLA
+        STA     DST             ; SAVE IN CASE OF DIVMOD
+        STX     DVSIGN
         TXA
         AND     #$0080          ; REMAINDER IS SIGN OF DIVIDEND
         BNE     NEG

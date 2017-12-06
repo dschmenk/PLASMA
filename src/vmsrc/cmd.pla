@@ -28,7 +28,7 @@ predef syscall(cmd,params)#1, call(addr,areg,xreg,yreg,status)#1
 predef crout()#0, cout(c)#0, prstr(s)#0, print(i)#0, cin()#1, rdstr(p)#1, toupper(c)#1
 predef markheap()#1, allocheap(size)#1, allocalignheap(size, pow2, freeaddr)#1, releaseheap(newheap)#1, availheap()#1
 predef memset(addr,value,size)#0, memcpy(dst,src,size)#0
-predef uword_isgt(a,b)#1, uword_isge(a,b)#1, uword_islt(a,b)#1, uword_isle(a,b)#1
+predef uword_isgt(a,b)#1, uword_isge(a,b)#1, uword_islt(a,b)#1, uword_isle(a,b)#1, divmod(a,b)#2
 predef loadmod(mod)#1, execmod(modfile)#1, lookupstrmod(str)#1
 //
 // System variable.
@@ -65,6 +65,7 @@ byte uisgtstr   = "ISUGT"
 byte uisgestr   = "ISUGE"
 byte uisltstr   = "ISULT"
 byte uislestr   = "ISULE"
+byte divmodstr  = "DIVMOD"
 byte loadstr    = "MODLOAD"
 byte execstr    = "MODEXEC"
 byte modadrstr  = "MODADDR"
@@ -91,6 +92,7 @@ word            = @uisgtstr,  @uword_isgt
 word            = @uisgestr,  @uword_isge
 word            = @uisltstr,  @uword_islt
 word            = @uislestr,  @uword_isle
+word            = @divmodstr, @divmod
 word            = @loadstr,   @loadmod
 word            = @execstr,   @execmod
 word            = @modadrstr, @lookupstrmod
@@ -497,6 +499,30 @@ asm uword_islt(a,b)#1
         STA     ESTKL+1,X
         STA     ESTKH+1,X
         INX
+        RTS
+end
+asm divmod(a,b)#2
+        LDA     #>(_divmod-1)
+        PHA
+        LDA     #<(_divmod-1)
+        PHA
+        JSR     $03D0           ; CALL DINTERP
+        !BYTE   $0A, $5C        ; MOD, RET
+_divmod DEX
+        LDA     DSTL            ; DVDNDL
+        STA     ESTKL,X
+        LDA     DSTH            ; DVDNDH
+        STA     ESTKH,X
+        LSR     DVSIGN          ; SIGN(RESULT) = (SIGN(DIVIDEND) + SIGN(DIVISOR)) & 1
+        BCS     +
+        RTS
++       LDA     #$00
+;       SEC
+        SBC     ESTKL,X
+        STA     ESTKL,X
+        LDA     #$00
+        SBC     ESTKH,X
+        STA     ESTKH,X
         RTS
 end
 //
