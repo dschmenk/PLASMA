@@ -36,24 +36,15 @@ struc t_fileio
     word readblock
     word writeblock
 end
-predef a1getpfx, a1setpfx, a1getfileinfo, a1open, a1close, a1read, a1write, a1create, a1destroy
-predef a1newline, a13readblock, a13writeblock
-predef a2getpfx, a23setpfx, a2getfileinfo, a2open, a23close, a23read, a2write, a2create, a23destroy
+predef a2getpfx, a23setpfx, a2getfileinfo, a2open, a23close
+predef a23read, a2write, a2create, a23destroy
 predef a23newline, a2readblock, a2writeblock
-predef a3getpfx, a3getfileinfo, a3open, a3write, a3create
 //
 // Exported function table.
 //
-export word fileio[]
-//
-// Platform specific function pointers (default to Apple II).
-//
-word a2io[] = @a2getpfx, @a23setpfx, @a2getfileinfo, @a2open, @a23close, @a23read, @a2write, @a2create, @a23destroy
-word        = @a23newline, @a2readblock, @a2writeblock
-word a3io[] = @a3getpfx, @a23setpfx, @a3getfileinfo, @a3open, @a23close, @a23read, @a3write, @a3create, @a23destroy
-word        = @a23newline, @a13readblock, @a13writeblock
-word a1io[] = @a1getpfx, @a1setpfx, @a1getfileinfo, @a1open, @a1close, @a1read, @a1write, @a1create, @a1destroy
-word        = @a1newline, @a13readblock, @a13writeblock
+export word fileio[] = @a2getpfx, @a23setpfx, @a2getfileinfo, @a2open, @a23close
+word                 = @a23read, @a2write, @a2create, @a23destroy
+word                 = @a23newline, @a2readblock, @a2writeblock
 //
 // SOS/ProDOS error code
 //
@@ -132,15 +123,13 @@ def a2open(path)
 end
 def a3open(path)
     byte params[7]
-    word access
 
-    access   = O_READ_WRITE
     params.0 = 4
     params:1 = path
     params.3 = 0
-    params:4 = @access
-    params.6 = 1
-    syscall($C8, @params)
+    params:4 = 0
+    params.6 = 0
+    perr = syscall($C8, @params)
     return params.3
 end
 def a1close(refnum)
@@ -156,7 +145,7 @@ def a23close(refnum)
 end
 def a1read(refnum, buf, len)
     *CFFA1Dest = buf
-    perr = syscall($22) // This reads the entire file on CFFA
+    perr = syscall($22) // This reads the entire file from CFFA
     return perr
 end
 def a23read(refnum, buf, len)
@@ -281,10 +270,27 @@ end
 //
 when MACHID & $C8
     is $08 // Apple 1
-        memcpy(fileio, a1io, t_fileio)
+        fileio:getpfx      = @a1getpfx
+        fileio:setpfx      = @a1setpfx
+        fileio:getfileinfo = @a1getfileinfo
+        fileio:open        = @a1open
+        fileio:close       = @a1close
+        fileio:read        = @a1read
+        fileio:write       = @a1write
+        fileio:create      = @a1create
+        fileio:destroy     = @a1destroy
+        fileio:newline     = @a1newline
+        fileio:readblock   = @a13readblock
+        fileio:writeblock  = @a13writeblock
         break
     is $C0 // Apple ///
-        memcpy(fileio, a3io, t_fileio)
+        fileio:getpfx      = @a3getpfx
+        fileio:getfileinfo = @a3getfileinfo
+        fileio:open        = @a3open
+        fileio:write       = @a3write
+        fileio:create      = @a3create
+        fileio:readblock   = @a13readblock
+        fileio:writeblock  = @a13writeblock
         break
     otherwise // Apple ][
 wend

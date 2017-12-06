@@ -501,6 +501,21 @@ asm fixupXEL3
         STY     ESTKH,X
         RTS
 end
+asm zpSaveX#1           // Save Apple /// XDATA
+XPAGE   =       $1600
+        STX     ESP
+        LDX     #$00
+        LDY     #$33
+-       LDA     XPAGE,Y
+end
+asm fixupXS
+        STA     $FFFF,Y
+        TXA
+        STA     XPAGE,Y
+        DEY
+        BPL     -
+        LDX     ESP
+end
 asm zpSave#1
         LDY     #$33
 -       LDA     $00,Y
@@ -513,6 +528,15 @@ end
 asm zpNopSave
         DEX
         RTS
+end
+asm zpRestoreX(passthru)#1 // Restore Apple /// XDATA
+        LDY     #$33
+end
+asm fixupXR
+-       LDA     $FFFF,Y
+        STA     XPAGE,Y
+        DEY
+        BPL     -
 end
 asm zpRestore(passthru)#1
         LDY     #$33
@@ -588,13 +612,18 @@ end
 //
 // Utility test routines
 //
+//byte hexchar[] = '0','1','2','3','4','5','6','7','8','9','0','A','B','C','D','E','F'
+//def prhex(h)#0
+//    putc(hexchar[(h>>4)&$0F]);putc(hexchar[h&$0F])
+//end
 //def prbyte(h)#0
-//    putc('$')
-//    call($FDDA, h, 0, 0, 0)
+//    putc('$'); prhex(h)
+//    //call($FDDA, h, 0, 0, 0)
 //end
 //def prword(h)#0
 //    putc('$')
-//    call($F941, h >> 8, h, 0, 0)
+//    prhex(h>>8);prhex(h)
+//    //call($F941, h >> 8, h, 0, 0)
 //end
 //def putname(pchr)#0
 //    byte c
@@ -602,9 +631,6 @@ end
 //    for c = 0 to 7
 //        putc(pchr->[c])
 //    next
-//end
-//def putln#0
-//    putc('\n')
 //end
 //def dumpheader(phdr)#0
 //    byte i
@@ -704,14 +730,19 @@ def loadcode(codefile)
     //puts(codefile); puts(":\n")
     pcode = 0
     ref   = fileio:open(codefile)
+    //puts("ref = "); prbyte(ref); puts(" perr = "); prbyte(perr); putln
     if ref
         pcode = heapmark
         fileio:read(ref, pcode, 512)
+        //puts("Read header bytes: "); puti(seglen)
+        //if seglen == 0; puts(" perr = "); prbyte(perr); fin
+        //getc; putln
         //dumpheader(pcode)
         //putname(pcode + segname + 8); putc('='); prword(pcode); putln
         seglen = fileio:read(ref, pcode, (pcode + t_diskinfo)=>codeaddr)
+        //puts("Read segment bytes: "); puti(seglen); putln
         fileio:close(ref)
-        if !fp6502 and (MACHID & $30 == $30)
+        if !fp6502 and (MACHID & $F0 == $B0) // 128K Apple //e or //c
             seglen = fixup(AUXADDR, pcode + seglen - 2) - pcode
             auxmove(AUXADDR, pcode, seglen)
             pcode = AUXADDR
@@ -800,24 +831,32 @@ def fpInit()
             //
             // Fixup MAIN calls in interface routines
             //
-            fpzpsave       = heapalloc($0034)
-            (@fixupZPS)=>1 = fpzpsave
-            (@fixupZPR)=>1 = fpzpsave
+            if MACHID & $F0 == $F0 // Apple ///
+                fpzpsave      = heapalloc($0034*2)
+                (@fixupXS)=>1 = fpzpsave+$34
+                (@fixupXR)=>1 = fpzpsave+$34
+                sane[9]       = @zpSaveX
+                sane[10]      = @zpRestoreX
+            else // Apple II
+                fpzpsave = heapalloc($0034)
+                sane[9]  = @zpSave
+                sane[10] = @zpRestore
+            fin
             (@fixupFP0)=>1 = fp6502
             (@fixupFP1)=>1 = fp6502
             (@fixupFP2)=>1 = fp6502
             (@fixupFP3)=>1 = fp6502
+            (@fixupZPS)=>1 = fpzpsave
+            (@fixupZPR)=>1 = fpzpsave
             sane[2]  = @fpOp0
             sane[3]  = @fpOp1
             sane[4]  = @fpOp2
             sane[5]  = @fpOp3
-            sane[9]  = @zpSave
-            sane[10] = @zpRestore
             //
             // Install MAIN HALT handler
             //
-            zpSave()
-            zpRestore(fpOp1($0005, @fpHalt))
+            sane[9]()
+            sane[10](fpOp1($0005, @fpHalt))
         fin
         sane[6] = @elemsLoad1
         sane[7] = @elemsLoad2
