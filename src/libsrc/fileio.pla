@@ -10,6 +10,16 @@ const CFFA1AuxType  = $07
 const CFFA1FileSize = $09
 const CFFA1EntryPtr = $0B
 //
+// SOS access modes
+//
+const O_READ       = 1
+const O_WRITE      = 2
+const O_READ_WRITE = 3
+//
+// System I/O buffer for PLASMA. Used when loading modules, free otherwise
+//
+const sysbuf = $0800
+//
 // All our file I/O routines
 //
 struc t_fileio
@@ -48,6 +58,10 @@ word        = @a1newline, @a13readblock, @a13writeblock
 // SOS/ProDOS error code
 //
 export byte perr
+//
+// ProDOS default system buffer
+//
+word iobuf = $0000
 //
 // ProDOS/SOS routines
 //
@@ -90,7 +104,7 @@ def a1getfileinfo(path, fileinfo)
 end
 def a2getfileinfo(path, fileinfo)
     byte params[18]
-    
+
     params.0 = 10
     params:1 = path
     perr     = syscall($C4, @params)
@@ -99,7 +113,7 @@ def a2getfileinfo(path, fileinfo)
 end
 def a3getfileinfo(path, fileinfo)
     byte params[6]
-    
+
     params.0 = 3
     params:1 = path
     params:3 = fileinfo
@@ -107,24 +121,28 @@ def a3getfileinfo(path, fileinfo)
     perr     = syscall($C4, @params)
     return perr
 end
-def a1open(path, buf)
+def a1open(path)
     *CFFA1FileName = path
-    *CFFA1Dest     = buf
     return 0
 end
-def a2open(path, buf)
+def a2open(path)
     byte params[6]
 
+    if !iobuf
+        iobuf = sysbuf
+    fin
     params.0 = 3
     params:1 = path
-    params:3 = buf
+    params:3 = iobuf
     params.5 = 0
     perr     = syscall($C8, @params)
     return params.5
 end
-def a3open(path, access)
+def a3open(path)
     byte params[7]
+    word access
 
+    access   = O_READ_WRITE
     params.0 = 4
     params:1 = path
     params.3 = 0
@@ -145,6 +163,7 @@ def a23close(refnum)
     return perr
 end
 def a1read(refnum, buf, len)
+    *CFFA1Dest = buf
     perr = syscall($22) // This reads the entire file on CFFA
     return perr
 end
@@ -183,15 +202,15 @@ def a3write(refnum, buff, len)
     perr     = syscall($CB, @params)
     return perr
 end
-def a1create(path, access, type, aux)
+def a1create(path, type, aux)
     return perr
 end
-def a2create(path, access, type, aux)
+def a2create(path, type, aux)
     byte params[12]
 
     params.0  = 7
     params:1  = path
-    params.3  = access
+    params.3  = $C3
     params.4  = type
     params:5  = aux
     params.7  = $1
@@ -200,7 +219,7 @@ def a2create(path, access, type, aux)
     perr      = syscall($C0, @params)
     return perr
 end
-def a3create(path, access, type, aux)
+def a3create(path, type, aux)
     byte params[6]
     byte options[4]
 
@@ -243,7 +262,7 @@ def a13readblock(unit, buf, block)
 end
 def a2readblock(unit, buf, block)
     byte params[6]
-    
+
     params.0 = 3
     params.1 = unit
     params:2 = buf
@@ -257,7 +276,7 @@ def a13writeblock(unit, buf, block)
 end
 def a2writeblock(unit, buf, block)
     byte params[6]
-    
+
     params.0 = 3
     params.1 = unit
     params:2 = buf
