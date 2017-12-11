@@ -2,29 +2,7 @@
 // DHCP
 //
 include "inc/cmdsys.plh"
-//
-// Net object
-//
-import inet
-    word iNet
-end
-struc t_inet
-    word initIP
-    word serviceIP
-    word openUDP
-    word sendUDP
-    word closeUDP
-    word listenTCP
-    word connectTCP
-    word sendTCP
-    word closeTCP
-    word setInterfaceIP
-    word getInterfaceHA
-    word setDNS
-    word resolveIP
-    word setCallback
-    word setParam
-end
+include "inc/inet.plh"
 //
 // Needed to init subnet
 //
@@ -109,58 +87,58 @@ byte[] endDHCP
 //
 // DEBUG
 //
-byte boundstr = "Apple II bound to:\n"
-byte dnsstr = "DNS: "
-def putb(hexb)
-    return call($FDDA, hexb, 0, 0, 0)
-end
-def puth(hex)
-    return call($F941, hex >> 8, hex, 0, 0)
-end
-def putip(ipptr)
-    byte i
-
-    for i = 0 to 2
-        puti(ipptr->[i]); putc('.')
-    next
-    return puti(ipptr->[i])
-end
-def dumpbytes(buf, len)
-    word i
-
-    for i = 0 to len - 1
-        putb(buf->[i])
-	if i & 15 == 15
-	    putln
-	else
-	    putc(' ')
-	fin
-    next
-end
-def dumpdhcp(pkt)
-    putb(pkt->dhcp_op);putln
-    putb(pkt->dhcp_htype);putln
-    putb(pkt->dhcp_hlen);putln
-    putb(pkt->dhcp_hops);putln
-    dumpbytes(@pkt->dhcp_xid, 4);putln
-    putip(@pkt->dhcp_clientip);putln
-    putip(@pkt->dhcp_yourip);putln
-    putip(@pkt->dhcp_serverip);putln
-    putip(@pkt->dhcp_gatewayip);putln
-    dumpbytes(@pkt->dhcp_opts, 48);putln
-end
+//byte boundstr = "Apple II bound to:\n"
+//byte dnsstr = "DNS: "
+//def putb(hexb)
+//    return call($FDDA, hexb, 0, 0, 0)
+//end
+//def puth(hex)
+//    return call($F941, hex >> 8, hex, 0, 0)
+//end
+//def putip(ipptr)
+//    byte i
+//
+//    for i = 0 to 2
+//        puti(ipptr->[i]); putc('.')
+//    next
+//    return puti(ipptr->[i])
+//end
+//def dumpbytes(buf, len)
+//    word i
+//
+//    for i = 0 to len - 1
+//        putb(buf->[i])
+//    if i & 15 == 15
+//        putln
+//    else
+//        putc(' ')
+//    fin
+//    next
+//end
+//def dumpdhcp(pkt)
+//    putb(pkt->dhcp_op);putln
+//    putb(pkt->dhcp_htype);putln
+//    putb(pkt->dhcp_hlen);putln
+//    putb(pkt->dhcp_hops);putln
+//    dumpbytes(@pkt->dhcp_xid, 4);putln
+//    putip(@pkt->dhcp_clientip);putln
+//    putip(@pkt->dhcp_yourip);putln
+//    putip(@pkt->dhcp_serverip);putln
+//    putip(@pkt->dhcp_gatewayip);putln
+//    dumpbytes(@pkt->dhcp_opts, 48);putln
+//end
 def parseopts(opts, match)
     byte i
 
     i = 0
     while opts->[i] <> $FF and i < 64
-	while !opts->[i] and i < 64
-	    i = i + 1
-	loop
+    while !opts->[i] and i < 64
+        i = i + 1
+    loop
         if opts->[i] == match
-	    return i
-	fin
-	i = i + opts->[i + 1] + 2
+        return i
+    fin
+    i = i + opts->[i + 1] + 2
     loop
     return -1
 end
@@ -171,41 +149,41 @@ def recvDHCP(remip, remport, pkt, len, param)
     //dumpdhcp(pkt)
     if pkt=>dhcp_xid:0 == $0201 and pkt=>dhcp_xid:2 == $0403
         when pkt->dhcp_opts.[parseopts(@pkt->dhcp_opts, 53) + 2]
-	    is DHCP_OFFER
-		//
-		// Copy offer parameters to request
-		//
-		optsOP.2 = DHCP_REQUEST
-		memcpy(@optsIP.2, @pkt->dhcp_yourip, IP4ADR_SIZE)
-		servopts = parseopts(@pkt->dhcp_opts, 54) + 2
-		if servopts >= 0
-		    optsSRV = 54
-		    memcpy(@optsSRV.2, @pkt->dhcp_opts.[servopts], IP4ADR_SIZE)
-		fin
-		iNet:sendUDP(portDHCP, 0, DHCP_SERVER_PORT, @DHCP, @endDHCP - @DHCP)
-		break
-	    is DHCP_ACK
-		optsOP.2 = DHCP_ACK
-		//
-		// Copy parameters to working copy
-		//
-		memcpy(@localip, @pkt->dhcp_yourip, IP4ADR_SIZE)
-		maskopts = parseopts(@pkt->dhcp_opts, 1) + 2
-		if maskopts >= 0
-		    memcpy(@localnet, @pkt->dhcp_opts.[maskopts], IP4ADR_SIZE)
-		fin
-		gwopts = parseopts(@pkt->dhcp_opts, 3) + 2
-		if gwopts >= 0
-		    memcpy(@localgw, @pkt->dhcp_opts.[gwopts], IP4ADR_SIZE)
-		fin
-		dnsopts = parseopts(@pkt->dhcp_opts, 6) + 2
-		if dnsopts >= 0
-		    memcpy(@localdns, @pkt->dhcp_opts.[dnsopts], IP4ADR_SIZE)
-		fin
-	        break
-	    otherwise
-	        dumpdhcp(pkt)
-	wend
+            is DHCP_OFFER
+                //
+                // Copy offer parameters to request
+                //
+                optsOP.2 = DHCP_REQUEST
+                memcpy(@optsIP.2, @pkt->dhcp_yourip, IP4ADR_SIZE)
+                servopts = parseopts(@pkt->dhcp_opts, 54) + 2
+                if servopts >= 0
+                    optsSRV = 54
+                    memcpy(@optsSRV.2, @pkt->dhcp_opts.[servopts], IP4ADR_SIZE)
+                fin
+                iNet:sendUDP(portDHCP, 0, DHCP_SERVER_PORT, @DHCP, @endDHCP - @DHCP)
+                break
+            is DHCP_ACK
+                optsOP.2 = DHCP_ACK
+                //
+                // Copy parameters to working copy
+                //
+                memcpy(@localip, @pkt->dhcp_yourip, IP4ADR_SIZE)
+                maskopts = parseopts(@pkt->dhcp_opts, 1) + 2
+                if maskopts >= 0
+                    memcpy(@localnet, @pkt->dhcp_opts.[maskopts], IP4ADR_SIZE)
+                fin
+                gwopts = parseopts(@pkt->dhcp_opts, 3) + 2
+                if gwopts >= 0
+                    memcpy(@localgw, @pkt->dhcp_opts.[gwopts], IP4ADR_SIZE)
+                fin
+                dnsopts = parseopts(@pkt->dhcp_opts, 6) + 2
+                if dnsopts >= 0
+                    memcpy(@localdns, @pkt->dhcp_opts.[dnsopts], IP4ADR_SIZE)
+                fin
+                break
+            otherwise
+                //dumpdhcp(pkt)
+        wend
     fin
 end
 //
@@ -229,23 +207,23 @@ repeat
     //
     // Broadcast DHCP DISCOVER message
     //
-    optsOP.2  = DHCP_DISCOVER
-    optsIP:2  = 0
-    optsIP:4  = 0
-    optsSRV   = 255
+    optsOP.2         = DHCP_DISCOVER
+    optsIP:2         = 0
+    optsIP:4         = 0
+    optsSRV          = 255
     DHCP.dhcp_secs.1 = retry
     iNet:sendUDP(portDHCP, 0, DHCP_SERVER_PORT, @DHCP, @optsSRV - @DHCP + 1)
     for timeout = 0 to 1000
         iNet:serviceIP()
-	if optsOP.2 == DHCP_ACK
-	    break
+        if optsOP.2 == DHCP_ACK
+            break
         fin
     next
     retry = retry + 1
 until retry > 4 or optsOP.2 == DHCP_ACK
 iNet:closeUDP(portDHCP)
 iNet:setInterfaceIP(@localip, @localnet, @localgw)
-puts(@boundstr);putip(@localip);putc('/');putip(@localnet);putln
+//puts(@boundstr);putip(@localip);putc('/');putip(@localnet);putln
 iNet:setDNS(@localdns)
-puts(@dnsstr);putip(@localdns);putln
+//puts(@dnsstr);putip(@localdns);putln
 done

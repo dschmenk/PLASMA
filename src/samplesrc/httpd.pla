@@ -9,33 +9,11 @@
 // still todo: output base filename for Content-Disposition header
 //
 include "inc/cmdsys.plh"
-//
-// Net object
-//
-import inet
-    word iNet
-end
-struc t_inet
-    word initIP
-    word serviceIP
-    word openUDP
-    word sendUDP
-    word closeUDP
-    word listenTCP
-    word connectTCP
-    word sendTCP
-    word closeTCP
-    word setInterfaceIP
-    word getInterfaceHA
-    word setDNS
-    word resolveIP
-    word setCallback
-    word setParam
-end
+include "inc/inet.plh"
+include "inc/fileio.plh"
 
 word socketHTTP
 byte[65] prefix
-byte     perr
 word     filebuff, iobuff
 byte fileInfo[12] = 0 // used for get_file_info()
 byte hello = "Apple II Web Server - 12 Nov 15\n"
@@ -60,73 +38,6 @@ byte httpEnd = "\n\r\n\r"
 byte mimeTextHtml = "text/html"
 byte mimeOctetStream = "application/octet-stream"
 //
-// ProDOS routines
-//
-def getpfx(path)
-    byte params[3]
-
-    ^path    = 0
-    params.0 = 1
-    params:1 = path
-    perr     = syscall($C7, @params)
-    return path
-end
-def setpfx(path)
-    byte params[3]
-
-    params.0 = 1
-    params:1 = path
-    perr     = syscall($C6, @params)
-    return path
-end
-def open(path, buff)
-    byte params[6]
-
-    params.0 = 3
-    params:1 = path
-    params:3 = buff
-    params.5 = 0
-    perr     = syscall($C8, @params)
-    return params.5
-end
-def close(refnum)
-    byte params[2]
-
-    params.0 = 1
-    params.1 = refnum
-    perr     = syscall($CC, @params)
-    return perr
-end
-def read(refnum, buff, len)
-    byte params[8]
-
-    params.0 = 4
-    params.1 = refnum
-    params:2 = buff
-    params:4 = len
-    params:6 = 0
-    perr     = syscall($CA, @params)
-    return params:6
-end
-def get_eof(refnum)
-    byte params[5]
-
-    params.0 = 2
-    params.1 = refnum
-    params:2 = 0
-    params.4 = 0
-    syscall($D1, @params)
-    return params:2
-end
-def get_file_info(path)
-
-    fileInfo.0 = 10 // param count
-    fileInfo:1 = path // path name
-
-    perr = syscall($C4, @fileInfo)
-    return perr
-end
-//
 // DEBUG
 //
 def putb(hexb)
@@ -148,11 +59,11 @@ def dumpbytes(buf, len)
 
     for i = 0 to len - 1
         putb(buf->[i])
-	if i & 15 == 15
-	    putln
-	else
-	    putc(' ')
-	fin
+    if i & 15 == 15
+        putln
+    else
+        putc(' ')
+    fin
     next
 end
 def dumpchars(buf, len)
@@ -187,13 +98,13 @@ end
 //
 def sendFile(fd, socket, len)
     while isuge(len, 1024)
-        read(fd, filebuff, 1024)
-	len = len - 1024
-	iNet:sendTCP(socket, filebuff, 1024)
+        fileio:read(fd, filebuff, 1024)
+        len = len - 1024
+        iNet:sendTCP(socket, filebuff, 1024)
     loop
     if len
-        read(fd, filebuff, len)
-	iNet:sendTCP(socket, filebuff, len)
+        fileio:read(fd, filebuff, len)
+        iNet:sendTCP(socket, filebuff, len)
     fin
 end
 //
@@ -211,78 +122,78 @@ def servHTTP(remip, remport, lclport, data, len, param)
     if len > 0
         //dumpchars(data, len)
         //
-	// Better be 'GET'
-	//
+        // Better be 'GET'
+        //
         if data->0 == 'G' and data->1 == 'E' and data->2 == 'T' and data->3 == ' '
-	    len = len - 1
-	    if len > 64
-	        len = 64 // maximum ProDOS path
-	    fin
+            len = len - 1
+            if len > 64
+                len = 64 // maximum ProDOS path
+            fin
             for i = 4 to len // get ProDOS path from URL
                 if data->[i] <= ' '
-	            data->3= i - 4
-		    url = data + 3
-		    if url->1 == '/'
-		        if url->0 == 1
-		            url = @defhtml // Is this a directory with no file given? Use index.html
-			else
-			    url->1 = url->0 - 1
-			    url = url + 1
-			fin
-		    fin
-		    strcat(@filename, @prefix, url)
-		    puts("GET:"); puts(@filename);putln
-		    //
-		    // Get file info
-		    //
-		    //puts("getting file info "); // debug
-		    get_file_info(@filename)
-		    refnum = open(@filename, iobuff) // try to open this file with ProDOS
-		    if refnum // file was opened OK
-		        filelen = get_eof(refnum) // get length of file for Content-Length
-			lenstr = itos(@lenstr + 1, filelen) - (@lenstr + 1)
-			strcat(@okhdr, @httpOK, @httpContentLen)
-			strcat(@okhdr, @okhdr, @lenstr)
-			strcat(@okhdr, @okhdr, "\n\r")
-			//
-			// Content type header
-			//
-			if fileInfo.4 == $03 OR fileInfo.4 == $04
-			    //
-			    // this a text file
-			    //
-			    //puts(@mimeTextHtml) // debug
-			    strcat(@okhdr, @okhdr, @httpContentType)
-			    strcat(@okhdr, @okhdr, @mimeTextHtml)
-			else
-			    //
-			    // send as binary attachment
-			    //
-			    //puts(@mimeOctetStream) // debug
-			    strcat(@okhdr, @okhdr, @httpContentType)
-			    strcat(@okhdr, @okhdr, @mimeOctetStream)
-			    strcat(@okhdr, @okhdr, "\n\r")
-			    //
-			    // and send filename too
-			    //
-			    strcat(@okhdr, @okhdr, @httpContentAttach)
-			    // todo: get the base filename...
-			fin
-			strcat(@okhdr, @okhdr, @httpEnd)
-			//dumpchars(@okhdr + 1, okhdr) // debug
-			iNet:sendTCP(socketHTTP, @okhdr + 1, okhdr) // send HTTP response header to client
-			sendFile(refnum, socketHTTP, filelen) // send file data to client
-			close(refnum)
-		    else // file couldn't be opened, so return 404 on this
-		        puts("404 Not Found");putln // debug
-			iNet:sendTCP(socketHTTP, @httpNOTFOUND + 1, httpNOTFOUND)
-		    fin // if refnum
-		    break // return
-	        fin
+                    data->3 = i - 4
+                    url = data + 3
+                    if url->1 == '/'
+                        if url->0 == 1
+                            url = @defhtml // Is this a directory with no file given? Use index.html
+                        else
+                            url->1 = url->0 - 1
+                            url = url + 1
+                        fin
+                    fin
+                    strcat(@filename, @prefix, url)
+                    puts("GET:"); puts(@filename);putln
+                    //
+                    // Get file info
+                    //
+                    //puts("getting file info "); // debug
+                    fileio:getfileinfo(@filename)
+                    refnum = fileio:open(@filename) // try to open this file with ProDOS
+                    if refnum // file was opened OK
+                        filelen = fileio:geteof(refnum) // get length of file for Content-Length
+                        lenstr = itos(@lenstr + 1, filelen) - (@lenstr + 1)
+                        strcat(@okhdr, @httpOK, @httpContentLen)
+                        strcat(@okhdr, @okhdr, @lenstr)
+                        strcat(@okhdr, @okhdr, "\n\r")
+                        //
+                        // Content type header
+                        //
+                        if fileInfo.4 == $03 OR fileInfo.4 == $04
+                            //
+                            // this a text file
+                            //
+                            //puts(@mimeTextHtml) // debug
+                            strcat(@okhdr, @okhdr, @httpContentType)
+                            strcat(@okhdr, @okhdr, @mimeTextHtml)
+                        else
+                            //
+                            // send as binary attachment
+                            //
+                            //puts(@mimeOctetStream) // debug
+                            strcat(@okhdr, @okhdr, @httpContentType)
+                            strcat(@okhdr, @okhdr, @mimeOctetStream)
+                            strcat(@okhdr, @okhdr, "\n\r")
+                            //
+                            // and send filename too
+                            //
+                            strcat(@okhdr, @okhdr, @httpContentAttach)
+                            // todo: get the base filename...
+                        fin
+                        strcat(@okhdr, @okhdr, @httpEnd)
+                        //dumpchars(@okhdr + 1, okhdr) // debug
+                        iNet:sendTCP(socketHTTP, @okhdr + 1, okhdr) // send HTTP response header to client
+                        sendFile(refnum, socketHTTP, filelen) // send file data to client
+                        fileio:close(refnum)
+                    else // file couldn't be opened, so return 404 on this
+                        puts("404 Not Found");putln // debug
+                        iNet:sendTCP(socketHTTP, @httpNOTFOUND + 1, httpNOTFOUND)
+                    fin // if refnum
+                    break // return
+                fin
             next
-	else
-	    iNet:sendTCP(socketHTTP, @httpBAD + 1, httpBAD)
-	fin
+        else
+            iNet:sendTCP(socketHTTP, @httpBAD + 1, httpBAD)
+        fin
     fin
     socketHTTP = iNet:closeTCP(socketHTTP)
 end
@@ -296,7 +207,7 @@ getpfx(@prefix)
 // Alloc aligned file/io buffers
 //
 filebuff = heapallocalign(1024, 8, 0)
-iobuff   = heapallocalign(1024, 8, 0)
+//iobuff   = heapallocalign(1024, 8, 0)
 //
 // Service IP
 //

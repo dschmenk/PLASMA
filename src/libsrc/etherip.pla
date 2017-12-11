@@ -1,27 +1,5 @@
 include "inc/cmdsys.plh"
-//
-// Net object
-//
-import inet
-    word iNet
-end
-struc t_inet
-    word initIP
-    word serviceIP
-    word openUDP
-    word sendUDP
-    word closeUDP
-    word listenTCP
-    word connectTCP
-    word sendTCP
-    word closeTCP
-    word setInterfaceIP
-    word getInterfaceHA
-    word setDNS
-    word resolveIP
-    word setCallback
-    word setParam
-end
+include "inc/inet.plh"
 //
 // Predefine service routine
 //
@@ -87,14 +65,14 @@ struc t_icmp
     word[2] icmp_header
 end
 //
-// UDP IPv4 psuedo header
+// UDP IPv4 pseudo header
 //
 struc t_piphdr
     byte[IP4ADR_SIZE] pip_src
     byte[IP4ADR_SIZE] pip_dst
-    byte             pip_zero
-    byte             pip_proto
-    word             pip_len
+    byte              pip_zero
+    byte              pip_proto
+    word              pip_len
 end
 //
 // UDP header
@@ -117,19 +95,19 @@ end
 //
 // ARP packet
 //
-const HW_ETHER    = $0100 // BE format
-const ARP_PROTO   = $0008 // BE format
-const ARP_REQST   = $0100 // BE format
-const ARP_REPLY   = $0200 // BE format
+const HW_ETHER  = $0100 // BE format
+const ARP_PROTO = $0008 // BE format
+const ARP_REQST = $0100 // BE format
+const ARP_REPLY = $0200 // BE format
 struc t_arp
     word arp_hw
     word arp_proto
     byte arp_hlen
     byte arp_plen
     word arp_op
-    byte[MAC_SIZE] arp_senderha
+    byte[MAC_SIZE]    arp_senderha
     byte[IP4ADR_SIZE] arp_senderip
-    byte[MAC_SIZE] arp_targha
+    byte[MAC_SIZE]    arp_targha
     byte[IP4ADR_SIZE] arp_targip
 end
 const t_earp = t_ethrhdr+t_arp
@@ -152,14 +130,14 @@ word ePayload = PAYLOAD_ARP
 //
 // Pre-configured ARP packet - MUST follow ethernet header!
 //
-word ARP   = HW_ETHER   // HW TYPE
-word       = ARP_PROTO  // PROTO TYPE
-byte       = MAC_SIZE   // HLEN
+word ARP   = HW_ETHER    // HW TYPE
+word       = ARP_PROTO   // PROTO TYPE
+byte       = MAC_SIZE    // HLEN
 byte       = IP4ADR_SIZE // PLEN
-word opARP              // OP
-export byte[MAC_SIZE]   localha
+word opARP               // OP
+export byte[MAC_SIZE]    localha
 export byte[IP4ADR_SIZE] localip
-byte[MAC_SIZE]          remoteha
+byte[MAC_SIZE]           remoteha
 byte[IP4ADR_SIZE]        remoteip
 //
 // Local network parameters
@@ -167,8 +145,8 @@ byte[IP4ADR_SIZE]        remoteip
 byte[IP4ADR_SIZE] netmask
 byte[IP4ADR_SIZE] subnet
 byte[IP4ADR_SIZE] gateway
-const MAX_UDP_NOTIFIES	= 4
-const MAX_TCP_NOTIFIES	= 4
+const MAX_UDP_NOTIFIES    = 4
+const MAX_TCP_NOTIFIES    = 4
 //
 // Notify callbacks
 //
@@ -191,64 +169,64 @@ word setFrameLen, writeFrame, getFrameLen, readFrame
 // Defines for ASM routines
 //
 asm equates
-	!SOURCE	"vmsrc/plvmzp.inc"
+    !SOURCE    "vmsrc/plvmzp.inc"
 end
 //
 // Swap bytes in word
 //
 asm swab
-	LDA	ESTKL,X
-	LDY	ESTKH,X
-	STA	ESTKH,X
-	STY	ESTKL,X
-	RTS
+    LDA    ESTKL,X
+    LDY    ESTKH,X
+    STA    ESTKH,X
+    STY    ESTKL,X
+    RTS
 end
 //
 // 1'S COMPLIMENT SUM BE format
 // sum1(PREVSUM, BUF, LEN)
 //
 asm sum1
-	LDY	#$00
-	LDA	ESTKL+1,X
-	STA 	SRCL
-	LDA 	ESTKH+1,X
-	STA 	SRCH
-	LSR 	ESTKH,X 	; CONVERT BYTE LEN TO WORD LEN
-	LDA 	ESTKL,X
-	ROR
-	ADC 	#$00
-	STA 	ESTKL,X
-	BEQ 	+
-	!BYTE   $A9
--	CLC
-	INC 	ESTKH,X
-+	BCS	-
-CHKLP 	LDA 	(SRC),Y
-	PHA
-	INY
-	BNE 	+
-	INC 	SRCH
-+ 	LDA 	(SRC),Y
-	ADC 	ESTKH+2,X
-	STA 	ESTKH+2,X
-	PLA
-	ADC 	ESTKL+2,X
-	STA 	ESTKL+2,X
-	INY
-	BNE 	+
-	INC 	SRCH
-+ 	DEC 	ESTKL,X
-	BNE 	CHKLP
-	DEC 	ESTKH,X
-	BNE 	CHKLP
-        BCC     +
--       INC     ESTKH+2,X
-        BNE     +
-        INC     ESTKL+2,X
-        BEQ     -
-+	INX
-	INX
-	RTS
+    LDY    #$00
+    LDA    ESTKL+1,X
+    STA    SRCL
+    LDA    ESTKH+1,X
+    STA    SRCH
+    LSR    ESTKH,X     ; CONVERT BYTE LEN TO WORD LEN
+    LDA    ESTKL,X
+    ROR
+    ADC    #$00
+    STA    ESTKL,X
+    BEQ    +
+    !BYTE  $A9
+-    CLC
+    INC    ESTKH,X
++    BCS    -
+CHKLP     LDA  (SRC),Y
+    PHA
+    INY
+    BNE    +
+    INC    SRCH
++     LDA    (SRC),Y
+    ADC    ESTKH+2,X
+    STA    ESTKH+2,X
+    PLA
+    ADC    ESTKL+2,X
+    STA    ESTKL+2,X
+    INY
+    BNE    +
+    INC    SRCH
++     DEC    ESTKL,X
+    BNE    CHKLP
+    DEC    ESTKH,X
+    BNE    CHKLP
+    BCC    +
+-   INC    ESTKH+2,X
+    BNE    +
+    INC    ESTKL+2,X
+    BEQ    -
++    INX
+    INX
+    RTS
 end
 //
 // Send IP datagram
@@ -268,34 +246,34 @@ def etherSendIP(ipdst, proto, seglist, size)
     hdr:ip_chksm          = 0
     memcpy(@hdr.ip_src, @localip, IP4ADR_SIZE)
     if !ipdst // IP_BROADCAST
-	memset(@hdr.ip_dst, IP_BROADCAST, IP4ADR_SIZE)
+        memset(@hdr.ip_dst, IP_BROADCAST, IP4ADR_SIZE)
         memset(@dstMAC, MAC_BROADCAST, MAC_SIZE)
     else
         if ipdst=>0 & netmask:0 <> subnet:0 or ipdst=>2 & netmask:2 <> subnet:2
             ipdst = @gateway // External net destination
-	fin
-	memcpy(@hdr.ip_dst, ipdst, IP4ADR_SIZE)
+        fin
+        memcpy(@hdr.ip_dst, ipdst, IP4ADR_SIZE)
         retry = 0
         while hdr:ip_dst:0 <> remoteip:0 and hdr:ip_dst:2 <> remoteip:2
-  	    if retry >= 3
+              if retry >= 3
                 return -1 // ARP failed
-	    fin
-	    retry = retry + 1
+            fin
+            retry = retry + 1
             memset(@dstMAC,   MAC_BROADCAST, MAC_SIZE)
-	    memset(@remoteha, 0,             MAC_SIZE)
-	    memcpy(@remoteip, @hdr.ip_dst,   IP4ADR_SIZE)
-	    ePayload = PAYLOAD_ARP
-	    opARP    = ARP_REQST
-	    setFrameLen(t_earp)
-	    writeFrame(@eFrame, t_earp)
-	    for timeout = 1000 downto 0
-	        etherServiceIP
-		if remoteha:0 | remoteha:2 | remoteha:4
-		    break
-		fin
-	    next
-	loop
-	memcpy(@dstMAC, @remoteha, MAC_SIZE)
+            memset(@remoteha, 0,             MAC_SIZE)
+            memcpy(@remoteip, @hdr.ip_dst,   IP4ADR_SIZE)
+            ePayload = PAYLOAD_ARP
+            opARP    = ARP_REQST
+            setFrameLen(t_earp)
+            writeFrame(@eFrame, t_earp)
+            for timeout = 1000 downto 0
+                etherServiceIP
+                if remoteha:0 | remoteha:2 | remoteha:4
+                    break
+                fin
+            next
+        loop
+        memcpy(@dstMAC, @remoteha, MAC_SIZE)
     fin
     //
     // Calculate checksum
@@ -318,9 +296,9 @@ def etherSendIP(ipdst, proto, seglist, size)
     // Write the remaining segments
     //
     while size > 0
-	writeFrame(seglist=>seg_buf, seglist=>seg_len)
-	size    = size - seglist=>seg_len
-	seglist = seglist + t_segment
+        writeFrame(seglist=>seg_buf, seglist=>seg_len)
+        size    = size - seglist=>seg_len
+        seglist = seglist + t_segment
     loop
 end
 //
@@ -330,10 +308,10 @@ def etherSendUDP(port, ipdst, portdst, data, len)
     word[8] seglist // list of data and header segments
     byte[t_udphdr] hdr
 
-    hdr:udp_src    = swab(port=>notify_port)
-    hdr:udp_dst    = swab(portdst)
-    hdr:udp_len    = swab(t_udphdr + len)
-    hdr:udp_chksm  = 0
+    hdr:udp_src       = swab(port=>notify_port)
+    hdr:udp_dst       = swab(portdst)
+    hdr:udp_len       = swab(t_udphdr + len)
+    hdr:udp_chksm     = 0
     seglist:0:seg_buf = @hdr
     seglist:0:seg_len = t_udphdr
     seglist:4:seg_buf = data
@@ -354,11 +332,11 @@ def etherOpenUDP(localport, callback, param)
     port = @portsUDP
     for i = 1 to MAX_UDP_NOTIFIES
         if port=>notify_port == localport
-	    port=>notify_func = callback
-	    port=>notify_parm = param
-	    return port
-	fin
-	port = port + t_notify
+            port=>notify_func = callback
+            port=>notify_parm = param
+            return port
+        fin
+        port = port + t_notify
     next
     //
     // Add notification on localport if room
@@ -366,12 +344,12 @@ def etherOpenUDP(localport, callback, param)
     port = @portsUDP
     for i = 1 to MAX_UDP_NOTIFIES
         if !port=>notify_port
-	    port=>notify_port = localport
-	    port=>notify_func = callback
-	    port=>notify_parm = param
-	    return port
-	fin
-	port = port + t_notify
+            port=>notify_port = localport
+            port=>notify_func = callback
+            port=>notify_parm = param
+            return port
+        fin
+        port = port + t_notify
     next
 end
 //
@@ -382,13 +360,13 @@ def etherCloseUDP(port)
     byte i
 
     if isuge(port, @portsUDP) and isult(port, @portsUDP + MAX_UDP_NOTIFIES * t_notify)
-	//
-	// Clear notiications on this port
-	//
-	if port=>notify_port
+        //
+        // Clear notiications on this port
+        //
+        if port=>notify_port
             port=>notify_port = 0
-	    return 0
-	fin
+            return 0
+        fin
     fin
     //
     // Invalid port
@@ -420,13 +398,13 @@ end
 //
 def etherSetCallback(port, callback)
     if isuge(port, @portsUDP) and isult(port, @portsUDP + MAX_UDP_NOTIFIES * t_notify)
-	//
-	// Update callback on this port
-	//
-	if port=>notify_port
-            port=>notify_func = callback
-	    return 0
-	fin
+        //
+        // Update callback on this port
+        //
+        if port=>notify_port
+                port=>notify_func = callback
+            return 0
+        fin
     fin
     //
     // Invalid port
@@ -438,13 +416,13 @@ end
 //
 def etherSetParam(port, param)
     if isuge(port, @portsUDP) and isult(port, @portsUDP + MAX_UDP_NOTIFIES * t_notify)
-	//
-	// Update callback on this port
-	//
-	if port=>notify_port
-            port=>notify_parm = param
-	    return 0
-	fin
+        //
+        // Update callback on this port
+        //
+        if port=>notify_port
+                port=>notify_parm = param
+            return 0
+        fin
     fin
     //
     // Invalid port
@@ -467,109 +445,109 @@ def etherServiceIP
     rxsize = getFrameLen()
     if rxsize
         //
-	// Read the entire packet into memory
-	//
-	rxpacket = heapalloc(rxsize)
+        // Read the entire packet into memory
+        //
+        rxpacket = heapalloc(rxsize)
         readFrame(rxpacket, rxsize)
         rxptr  = rxpacket + t_ethrhdr
-	rxsize = rxsize   - t_ethrhdr
-	//
-	// What kind of packet is it?
-	//
-	when rxpacket=>ethr_payload
+        rxsize = rxsize   - t_ethrhdr
+        //
+        // What kind of packet is it?
+        //
+        when rxpacket=>ethr_payload
             is PAYLOAD_IP
-	        iphdr  = rxptr
-		rxptr  = rxptr  + t_iphdr
-		rxsize = rxsize - t_iphdr
-		if iphdr->ip_vers_hlen <> $45
-		    optlen = iphdr=>ip_vers_hlen
-		    if optlen & $F0 <> $40
-		        //
-			// Not IPv4, ignore
-			//
-			break
-		    fin
-		    optlen = (optlen & $0F) << 2
-		    if optlen > t_iphdr
-		        //
-			// Read the options and throw them on the ground!
-			//
-			rxptr  = rxptr + (optlen - t_iphdr)
-			rxsize = rxsize - (optlen - t_iphdr)
-		    fin
-		fin
-		//
-		// Filter valid destination address
-		//
-		if iphdr=>ip_dst:2 <> localip:2 // Yes, this is a little lazy
-		    if (iphdr=>ip_dst:0|netmask:0) & (iphdr=>ip_dst:2|netmask:2) <> IP_BROADCAST
-		        break
-		    fin
-		fin
-		//
-		// What kind of IP protocol is it?
-		//
-		when iphdr->ip_proto
-		    is IP_PROTO_UDP
-		        port = @portsUDP
-			if port
-			    lclport = swab(rxptr=>udp_dst)
-			    for i = 1 to MAX_UDP_NOTIFIES
-			        if port=>notify_port == lclport
-				    port=>notify_func(@iphdr=>ip_src,swab(rxptr=>udp_src),rxptr+t_udphdr,swab(rxptr=>udp_len),port=>notify_parm)
-				    break
-				fin
-				port = port + t_notify
-			    next
-		        fin
-			break
-		    is IP_PROTO_TCP
-		        break
-		    is IP_PROTO_ICMP
-			//
-			// Service ICMP packets
-			//
-			if rxptr->icmp_type == ICMP_ECHO_REQST
-			    if rxsize > 128
-                                echolen = 128
-			    else
-				echolen = rxsize
-			    fin
-			    memcpy(@echo_reply, rxptr, echolen)
-			    echo_reply.icmp_type  = ICMP_ECHO_REPLY
-			    echo_reply:icmp_chksm = 0
-			    seglist:seg_buf = @echo_reply
-			    seglist:seg_len = echolen
-			    etherSendIP(@iphdr=>ip_src, IP_PROTO_ICMP, @seglist, echolen)
-			fin
-			if hookICMP
-			    hookICMP(@iphdr=>ip_src, rxptr, rxsize)
-			fin
-   		wend
-		break
-	    is PAYLOAD_ARP
-	        when rxptr=>arp_op
-		    is ARP_REPLY
-		        //
-			// Fill in ARP cache
-			//
-			memcpy(@remoteha, @rxptr=>arp_senderha, 10) // copy ha and ip
-			break
-		    is ARP_REQST
-		        //
-			// Is this a request for me?
-			//
-			if rxptr=>arp_targip:0 == localip:0 and rxptr=>arp_targip:2 == localip:2
-			    memcpy(@dstMAC,   @rxptr=>arp_senderha, MAC_SIZE)
-			    memcpy(@remoteha, @rxptr=>arp_senderha, 10) // copy ha and ip
-			    ePayload = PAYLOAD_ARP
-			    opARP    = ARP_REPLY
-			    setFrameLen(t_earp)
-			    writeFrame(@eFrame, t_earp)
-		        fin
-		wend
+                iphdr  = rxptr
+                rxptr  = rxptr  + t_iphdr
+                rxsize = rxsize - t_iphdr
+                if iphdr->ip_vers_hlen <> $45
+                    optlen = iphdr=>ip_vers_hlen
+                    if optlen & $F0 <> $40
+                        //
+                        // Not IPv4, ignore
+                        //
+                        break
+                    fin
+                    optlen = (optlen & $0F) << 2
+                    if optlen > t_iphdr
+                        //
+                        // Read the options and throw them on the ground!
+                        //
+                        rxptr  = rxptr + (optlen - t_iphdr)
+                        rxsize = rxsize - (optlen - t_iphdr)
+                    fin
+                fin
+                //
+                // Filter valid destination address
+                //
+                if iphdr=>ip_dst:2 <> localip:2 // Yes, this is a little lazy
+                    if (iphdr=>ip_dst:0|netmask:0) & (iphdr=>ip_dst:2|netmask:2) <> IP_BROADCAST
+                        break
+                    fin
+                fin
+                //
+                // What kind of IP protocol is it?
+                //
+                when iphdr->ip_proto
+                    is IP_PROTO_UDP
+                        port = @portsUDP
+                        if port
+                            lclport = swab(rxptr=>udp_dst)
+                            for i = 1 to MAX_UDP_NOTIFIES
+                                if port=>notify_port == lclport
+                                port=>notify_func(@iphdr=>ip_src,swab(rxptr=>udp_src),rxptr+t_udphdr,swab(rxptr=>udp_len),port=>notify_parm)
+                                break
+                            fin
+                            port = port + t_notify
+                            next
+                            fin
+                        break
+                    is IP_PROTO_TCP
+                        break
+                    is IP_PROTO_ICMP
+                        //
+                        // Service ICMP packets
+                        //
+                        if rxptr->icmp_type == ICMP_ECHO_REQST
+                            if rxsize > 128
+                                            echolen = 128
+                            else
+                            echolen = rxsize
+                            fin
+                            memcpy(@echo_reply, rxptr, echolen)
+                            echo_reply.icmp_type  = ICMP_ECHO_REPLY
+                            echo_reply:icmp_chksm = 0
+                            seglist:seg_buf = @echo_reply
+                            seglist:seg_len = echolen
+                            etherSendIP(@iphdr=>ip_src, IP_PROTO_ICMP, @seglist, echolen)
+                        fin
+                        if hookICMP
+                            hookICMP(@iphdr=>ip_src, rxptr, rxsize)
+                        fin
+                wend
+                break
+            is PAYLOAD_ARP
+                when rxptr=>arp_op
+                    is ARP_REPLY
+                        //
+                        // Fill in ARP cache
+                        //
+                        memcpy(@remoteha, @rxptr=>arp_senderha, 10) // copy ha and ip
+                        break
+                    is ARP_REQST
+                        //
+                        // Is this a request for me?
+                        //
+                        if rxptr=>arp_targip:0 == localip:0 and rxptr=>arp_targip:2 == localip:2
+                            memcpy(@dstMAC,   @rxptr=>arp_senderha, MAC_SIZE)
+                            memcpy(@remoteha, @rxptr=>arp_senderha, 10) // copy ha and ip
+                            ePayload = PAYLOAD_ARP
+                            opARP    = ARP_REPLY
+                            setFrameLen(t_earp)
+                            writeFrame(@eFrame, t_earp)
+                        fin
+                wend
         wend
-	heaprelease(rxpacket)
+        heaprelease(rxpacket)
     fin
 end
 //
