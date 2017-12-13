@@ -50,7 +50,8 @@ const DNS_ANSWER = 2
 byte stateDNS
 
 def iNetSetDNS(ipptr)
-    return memcpy(@dns, ipptr, 4)
+    memcpy(@dns, ipptr, 4)
+    return 0
 end
 
 //def putb(hexb)
@@ -64,11 +65,11 @@ end
 //
 //    for i = 0 to len - 1
 //        putb(buf->[i])
-//	if i & 7 == 7
-//	    putln
-//	else
-//	    putc(' ')
-//	fin
+//  if i & 7 == 7
+//      putln
+//  else
+//      putc(' ')
+//  fin
 //    next
 //end
 //def putip(ipptr)
@@ -86,14 +87,14 @@ def parseIP(ipstr, ipaddr)
 
     endstr = ipstr + ^ipstr
     for i = 0 to 3
-	ipstr = ipstr + 1
+    ipstr = ipstr + 1
         while ^ipstr >= '0' and ^ipstr <= '9' and ipstr <= endstr
-	    ipaddr->[i] = ipaddr->[i] * 10 + ^ipstr - '0'
-	    ipstr = ipstr + 1
-	loop
-	if ^ipstr <> '.' and ipstr < endstr
-	    return 0
-	fin
+        ipaddr->[i] = ipaddr->[i] * 10 + ^ipstr - '0'
+        ipstr = ipstr + 1
+    loop
+    if ^ipstr <> '.' and ipstr < endstr
+        return 0
+    fin
     next
     return i == 3
 end
@@ -104,11 +105,11 @@ def parseDomain(domstr, msgptr)
     l = 0
     for i = 1 to ^domstr
         if domstr->[i] == '.'
-	    msgptr->[l] = i - l - 1
-	    l = i
-	else
-	    msgptr->[i] = domstr->[i]
-	fin
+        msgptr->[l] = i - l - 1
+        l = i
+    else
+        msgptr->[i] = domstr->[i]
+    fin
     next
     msgptr->[l] = i - l - 1
     msgptr  = msgptr + i
@@ -123,40 +124,41 @@ def recvDNS(remip, remport, pkt, len, ipaddr)
     if pkt=>dnsID == $BEEF
         q = pkt->dnsQdCount.1
         r = pkt->dnsAnCount.1 + pkt->dnsNsCount.1 + pkt->dnsArCount.1
-    	resptr = pkt + t_dnshdr
-    	while q
-    	    while ^resptr
+        resptr = pkt + t_dnshdr
+        while q
+            while ^resptr
                 //puts(resptr); putc('.')
                 resptr = resptr + ^resptr + 1
-    	    loop
-    	    resptr = resptr + 1
-    	    //putln; dumpbytes(resptr, 4); putln
-    	    resptr = resptr + 4
-    	    q--
-    	loop
-    	while r
-    	    //dumpbytes(resptr, 40); putln
-    	    if ^resptr & $C0 == $C0
-    	        resptr = resptr + 2
-    	    else
-    	        while ^resptr
+            loop
+            resptr = resptr + 1
+            //putln; dumpbytes(resptr, 4); putln
+            resptr = resptr + 4
+            q--
+        loop
+        while r
+            //dumpbytes(resptr, 40); putln
+            if ^resptr & $C0 == $C0
+                resptr = resptr + 2
+            else
+                while ^resptr
                     //puts(resptr); putc('.')
                     resptr = resptr + ^resptr + 1
-        		loop
-        		resptr = resptr + 1
-    	    fin
-    	    if resptr->1 == 1 and resptr->3 == 1 and resptr->9 == 4
-    	        ipaddr=>0 = resptr=>10
-        		ipaddr=>2 = resptr=>12
-    	    fin
-    	    //putln; dumpbytes(resptr, 10); putc(':'); putln
-    	    resptr = resptr + 8
-    	    //dumpbytes(resptr + 2, ^(resptr + 1))
-    	    resptr = resptr + 2 + ^(resptr + 1); putln
-    	    r = r - 1
-    	loop
+                loop
+                resptr = resptr + 1
+            fin
+            if resptr->1 == 1 and resptr->3 == 1 and resptr->9 == 4
+                ipaddr=>0 = resptr=>10
+                ipaddr=>2 = resptr=>12
+            fin
+            //putln; dumpbytes(resptr, 10); putc(':'); putln
+            resptr = resptr + 8
+            //dumpbytes(resptr + 2, ^(resptr + 1))
+            resptr = resptr + 2 + ^(resptr + 1); putln
+            r = r - 1
+        loop
     fin
     stateDNS = DNS_ANSWER
+    return 0
 end
 
 def iNetResolve(namestr, ipaddr)
@@ -167,38 +169,38 @@ def iNetResolve(namestr, ipaddr)
     ipaddr=>2 = 0
     if not parseIP(namestr, ipaddr)
         //
-    	// Query Domain Name Server for address
-    	//
-    	dnspkt             = heapmark // Use heap as working DNS query packet
-    	msgptr             = dnspkt
-    	msgptr=>dnsID      = $BEEF
-    	msgptr=>dnsCode    = $0001 // RD (Recursion Desired)
-    	msgptr=>dnsQdCount = $0100 // BE count = 1
-    	msgptr=>dnsAnCount = 0
-    	msgptr=>dnsNsCount = 0
-    	msgptr=>dnsArCount = 0
-    	msgptr             = parseDomain(namestr, msgptr + t_dnshdr)
-    	msgptr=>0          = $0100 // BE TYPE  = Address
-    	msgptr=>2          = $0100 // BE CLASS = INternet
-    	msglen             = msgptr - dnspkt + 4
-    	heapalloc(msglen)
-    	//
-    	// Prepare to receive DNS answer from server
-    	//
-    	portDNS = iNet:openUDP(3999, @recvDNS, ipaddr)
-    	//
-    	// Service IP
-    	//
-    	stateDNS = DNS_QUERY
-    	iNet:sendUDP(portDNS, @dns, 53, dnspkt, msglen)
-    	for timeout = 1 to 1000
-    	    iNet:serviceIP()
-    	    if stateDNS == DNS_ANSWER
-    	        break
-    	    fin
-    	next
-    	iNet:closeUDP(portDNS)
-    	heaprelease(dnspkt)
+        // Query Domain Name Server for address
+        //
+        dnspkt             = heapmark // Use heap as working DNS query packet
+        msgptr             = dnspkt
+        msgptr=>dnsID      = $BEEF
+        msgptr=>dnsCode    = $0001 // RD (Recursion Desired)
+        msgptr=>dnsQdCount = $0100 // BE count = 1
+        msgptr=>dnsAnCount = 0
+        msgptr=>dnsNsCount = 0
+        msgptr=>dnsArCount = 0
+        msgptr             = parseDomain(namestr, msgptr + t_dnshdr)
+        msgptr=>0          = $0100 // BE TYPE  = Address
+        msgptr=>2          = $0100 // BE CLASS = INternet
+        msglen             = msgptr - dnspkt + 4
+        heapalloc(msglen)
+        //
+        // Prepare to receive DNS answer from server
+        //
+        portDNS = iNet:openUDP(3999, @recvDNS, ipaddr)
+        //
+        // Service IP
+        //
+        stateDNS = DNS_QUERY
+        iNet:sendUDP(portDNS, @dns, 53, dnspkt, msglen)
+        for timeout = 1 to 1000
+            iNet:serviceIP()
+            if stateDNS == DNS_ANSWER
+                break
+            fin
+        next
+        iNet:closeUDP(portDNS)
+        heaprelease(dnspkt)
     fin
     return ipaddr=>0 <> 0 or ipaddr=>2 <> 0
 end
@@ -209,10 +211,10 @@ export def iNetInit
     //
     while ^driver
         //puts(driver);putln
-    	if modexec(driver) >= 0
+        if modexec(driver) >= 0
                 break
-    	fin
-    	driver = driver + ^driver + 1
+        fin
+        driver = driver + ^driver + 1
     loop
     if !^driver
         return 0

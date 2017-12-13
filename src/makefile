@@ -122,7 +122,7 @@ test:	samplesrc/test.pla samplesrc/testlib.pla $(PLVM) $(PLASM)
 	./$(PLVM) TEST
 
 $(ED): toolsrc/ed.pla $(PLVM02) $(PLASM) toolsrc/ed.pla
-	./$(PLASM) -AO < toolsrc/ed.pla > toolsrc/ed.a
+	./$(PLASM) -AOW < toolsrc/ed.pla > toolsrc/ed.a
 	acme --setpc 8192 -o $(ED) toolsrc/ed.a
 
 $(SB): toolsrc/sb.pla $(PLVM02) $(PLASM) toolsrc/sb.pla
@@ -130,23 +130,23 @@ $(SB): toolsrc/sb.pla $(PLVM02) $(PLASM) toolsrc/sb.pla
 	acme --setpc 8192 -o $(SB) toolsrc/sb.a
 
 $(ARGS): libsrc/args.pla $(PLVM02) $(PLASM)
-	./$(PLASM) -AMO < libsrc/args.pla > libsrc/args.a
+	./$(PLASM) -AMOW < libsrc/args.pla > libsrc/args.a
 	acme --setpc 4094 -o $(ARGS) libsrc/args.a
 
 $(MEMMGR): libsrc/memmgr.pla $(PLVM02) $(PLASM)
-	./$(PLASM) -AMO < libsrc/memmgr.pla > libsrc/memmgr.a
+	./$(PLASM) -AMOW < libsrc/memmgr.pla > libsrc/memmgr.a
 	acme --setpc 4094 -o $(MEMMGR) libsrc/memmgr.a
 
 $(MEMTEST): samplesrc/memtest.pla $(PLVM02) $(PLASM)
-	./$(PLASM) -AMO < samplesrc/memtest.pla > samplesrc/memtest.a
+	./$(PLASM) -AMOW < samplesrc/memtest.pla > samplesrc/memtest.a
 	acme --setpc 4094 -o $(MEMTEST) samplesrc/memtest.a
 
 $(FIBER): libsrc/fiber.pla $(PLVM02) $(PLASM)
-	./$(PLASM) -AMO < libsrc/fiber.pla > libsrc/fiber.a
+	./$(PLASM) -AMOW < libsrc/fiber.pla > libsrc/fiber.a
 	acme --setpc 4094 -o $(FIBER) libsrc/fiber.a
 
 $(MON): samplesrc/mon.pla $(PLVM02) $(PLASM)
-	./$(PLASM) -AMO < samplesrc/mon.pla > samplesrc/mon.a
+	./$(PLASM) -AMOW < samplesrc/mon.pla > samplesrc/mon.a
 	acme --setpc 4094 -o $(MON) samplesrc/mon.a
 
 $(ROD): samplesrc/rod.pla $(PLVM02) $(PLASM)
@@ -154,128 +154,128 @@ $(ROD): samplesrc/rod.pla $(PLVM02) $(PLASM)
 	acme --setpc 4094 -o $(ROD) samplesrc/rod.a
 
 $(SIEVE): samplesrc/sieve.pla $(PLVM02) $(PLASM)
-	./$(PLASM) -AMO < samplesrc/sieve.pla > samplesrc/sieve.a
+	./$(PLASM) -AMOW < samplesrc/sieve.pla > samplesrc/sieve.a
 	acme --setpc 4094 -o $(SIEVE) samplesrc/sieve.a
 
 $(UTHERNET): libsrc/uthernet.pla $(PLVM02) $(PLASM)
-	./$(PLASM) -AMO < libsrc/uthernet.pla > libsrc/uthernet.a
+	./$(PLASM) -AMOW < libsrc/uthernet.pla > libsrc/uthernet.a
 	acme --setpc 4094 -o $(UTHERNET) libsrc/uthernet.a
 
 $(UTHERNET2): libsrc/uthernet2.pla $(PLVM02) $(PLASM)
-	./$(PLASM) -AMO < libsrc/uthernet2.pla > libsrc/uthernet2.a
+	./$(PLASM) -AMOW < libsrc/uthernet2.pla > libsrc/uthernet2.a
 	acme --setpc 4094 -o $(UTHERNET2) libsrc/uthernet2.a
 
 $(ETHERIP): libsrc/etherip.pla $(PLVM02) $(PLASM)
-	./$(PLASM) -AMO < libsrc/etherip.pla > libsrc/etherip.a
+	./$(PLASM) -AMOW < libsrc/etherip.pla > libsrc/etherip.a
 	acme --setpc 4094 -o $(ETHERIP) libsrc/etherip.a
 
 $(INET): libsrc/inet.pla $(PLVM02) $(PLASM)
-	./$(PLASM) -AMO < libsrc/inet.pla > libsrc/inet.a
+	./$(PLASM) -AMOW < libsrc/inet.pla > libsrc/inet.a
 	acme --setpc 4094 -o $(INET) libsrc/inet.a
 
 $(DHCP): libsrc/dhcp.pla $(PLVM02) $(PLASM)
-	./$(PLASM) -AMO < libsrc/dhcp.pla > libsrc/dhcp.a
+	./$(PLASM) -AMOW < libsrc/dhcp.pla > libsrc/dhcp.a
 	acme --setpc 4094 -o $(DHCP) libsrc/dhcp.a
 
 $(HTTPD): samplesrc/httpd.pla $(PLVM02) $(PLASM)
-	./$(PLASM) -AMO < samplesrc/httpd.pla > samplesrc/httpd.a
+	./$(PLASM) -AMOW < samplesrc/httpd.pla > samplesrc/httpd.a
 	acme --setpc 4094 -o $(HTTPD) samplesrc/httpd.a
 
 $(FILEIO): libsrc/fileio.pla $(PLVM02) $(PLASM)
-	./$(PLASM) -AMO < libsrc/fileio.pla > libsrc/fileio.a
+	./$(PLASM) -AMOW < libsrc/fileio.pla > libsrc/fileio.a
 	acme --setpc 4094 -o $(FILEIO) libsrc/fileio.a
 
 $(CONIO): libsrc/conio.pla $(PLVM02) $(PLASM)
-	./$(PLASM) -AMO < libsrc/conio.pla > libsrc/conio.a
+	./$(PLASM) -AMOW < libsrc/conio.pla > libsrc/conio.a
 	acme --setpc 4094 -o $(CONIO) libsrc/conio.a
 
 $(SANE): libsrc/sane.pla $(PLVM02) $(PLASM)
-	./$(PLASM) -AMO < libsrc/sane.pla > libsrc/sane.a
+	./$(PLASM) -AMOW < libsrc/sane.pla > libsrc/sane.a
 	acme --setpc 4094 -o $(SANE) libsrc/sane.a
 
 $(FPSTR): libsrc/fpstr.pla $(PLVM02) $(PLASM)
-	./$(PLASM) -AMO < libsrc/fpstr.pla > libsrc/fpstr.a
+	./$(PLASM) -AMOW < libsrc/fpstr.pla > libsrc/fpstr.a
 	acme --setpc 4094 -o $(FPSTR) libsrc/fpstr.a
 
 $(FPU): libsrc/fpu.pla $(PLVM02) $(PLASM)
-	./$(PLASM) -AMO < libsrc/fpu.pla > libsrc/fpu.a
+	./$(PLASM) -AMOW < libsrc/fpu.pla > libsrc/fpu.a
 	acme --setpc 4094 -o $(FPU) libsrc/fpu.a
 
 $(SANITY): samplesrc/sanity.pla $(PLVM02) $(PLASM)
-	./$(PLASM) -AMO < samplesrc/sanity.pla > samplesrc/sanity.a
+	./$(PLASM) -AMOW < samplesrc/sanity.pla > samplesrc/sanity.a
 	acme --setpc 4094 -o $(SANITY) samplesrc/sanity.a
 
 $(RPNCALC): samplesrc/rpncalc.pla libsrc/fpu.pla inc/fpu.plh libsrc/fpstr.pla inc/fpstr.plh libsrc/conio.pla inc/conio.plh $(PLVM02) $(PLASM)
-	./$(PLASM) -AMO < samplesrc/rpncalc.pla > samplesrc/rpncalc.a
+	./$(PLASM) -AMOW < samplesrc/rpncalc.pla > samplesrc/rpncalc.a
 	acme --setpc 4094 -o $(RPNCALC) samplesrc/rpncalc.a
 
 $(TONE): libsrc/tone.pla $(PLVM02) $(PLASM)
-	./$(PLASM) -AMO < libsrc/tone.pla > libsrc/tone.a
+	./$(PLASM) -AMOW < libsrc/tone.pla > libsrc/tone.a
 	acme --setpc 4094 -o $(TONE) libsrc/tone.a
 
 $(FATCAT): samplesrc/fatcat.pla $(PLVM02) $(PLASM)
-	./$(PLASM) -AMO < samplesrc/fatcat.pla > samplesrc/fatcat.a
+	./$(PLASM) -AMOW < samplesrc/fatcat.pla > samplesrc/fatcat.a
 	acme --setpc 4094 -o $(FATCAT) samplesrc/fatcat.a
 
 $(FATGET): samplesrc/fatget.pla $(PLVM02) $(PLASM)
-	./$(PLASM) -AMO < samplesrc/fatget.pla > samplesrc/fatget.a
+	./$(PLASM) -AMOW < samplesrc/fatget.pla > samplesrc/fatget.a
 	acme --setpc 4094 -o $(FATGET) samplesrc/fatget.a
 
 $(FATPUT): samplesrc/fatput.pla $(PLVM02) $(PLASM)
-	./$(PLASM) -AMO < samplesrc/fatput.pla > samplesrc/fatput.a
+	./$(PLASM) -AMOW < samplesrc/fatput.pla > samplesrc/fatput.a
 	acme --setpc 4094 -o $(FATPUT) samplesrc/fatput.a
 
 $(FATWDSK): samplesrc/fatwritedsk.pla $(PLVM02) $(PLASM)
-	./$(PLASM) -AMO < samplesrc/fatwritedsk.pla > samplesrc/fatwritedsk.a
+	./$(PLASM) -AMOW < samplesrc/fatwritedsk.pla > samplesrc/fatwritedsk.a
 	acme --setpc 4094 -o $(FATWDSK) samplesrc/fatwritedsk.a
 
 $(FATRDSK): samplesrc/fatreaddsk.pla $(PLVM02) $(PLASM)
-	./$(PLASM) -AMO < samplesrc/fatreaddsk.pla > samplesrc/fatreaddsk.a
+	./$(PLASM) -AMOW < samplesrc/fatreaddsk.pla > samplesrc/fatreaddsk.a
 	acme --setpc 4094 -o $(FATRDSK) samplesrc/fatreaddsk.a
 
 $(SDFAT): libsrc/sdfat.pla $(PLVM02) $(PLASM)
-	./$(PLASM) -AMO < libsrc/sdfat.pla > libsrc/sdfat.a
+	./$(PLASM) -AMOW < libsrc/sdfat.pla > libsrc/sdfat.a
 	acme --setpc 4094 -o $(SDFAT) libsrc/sdfat.a
 
 $(SPIPORT): libsrc/spiport.pla $(PLVM02) $(PLASM)
-	./$(PLASM) -AMO < libsrc/spiport.pla > libsrc/spiport.a
+	./$(PLASM) -AMOW < libsrc/spiport.pla > libsrc/spiport.a
 	acme --setpc 4094 -o $(SPIPORT) libsrc/spiport.a
 
 $(PORTIO): libsrc/portio.pla $(PLVM02) $(PLASM)
-	./$(PLASM) -AMO < libsrc/portio.pla > libsrc/portio.a
+	./$(PLASM) -AMOW < libsrc/portio.pla > libsrc/portio.a
 	acme --setpc 4094 -o $(PORTIO) libsrc/portio.a
 
 $(DGR): libsrc/dgr.pla $(PLVM02) $(PLASM)
-	./$(PLASM) -AMO < libsrc/dgr.pla > libsrc/dgr.a
+	./$(PLASM) -AMOW < libsrc/dgr.pla > libsrc/dgr.a
 	acme --setpc 4094 -o $(DGR) libsrc/dgr.a
 
 $(DGRTEST): samplesrc/dgrtest.pla $(PLVM02) $(PLASM)
-	./$(PLASM) -AMO < samplesrc/dgrtest.pla > samplesrc/dgrtest.a
+	./$(PLASM) -AMOW < samplesrc/dgrtest.pla > samplesrc/dgrtest.a
 	acme --setpc 4094 -o $(DGRTEST) samplesrc/dgrtest.a
 
 $(ROGUE): samplesrc/rogue.pla $(PLVM02) $(PLASM)
-	./$(PLASM) -AMO < samplesrc/rogue.pla > samplesrc/rogue.a
+	./$(PLASM) -AMOW < samplesrc/rogue.pla > samplesrc/rogue.a
 	acme --setpc 4094 -o $(ROGUE) samplesrc/rogue.a
 
 $(ROGUEIO): samplesrc/rogue.io.pla $(PLVM02) $(PLASM)
-	./$(PLASM) -AMO < samplesrc/rogue.io.pla > samplesrc/rogue.io.a
+	./$(PLASM) -AMOW < samplesrc/rogue.io.pla > samplesrc/rogue.io.a
 	acme --setpc 4094 -o $(ROGUEIO) samplesrc/rogue.io.a
 
 $(ROGUECOMBAT): samplesrc/rogue.combat.pla $(PLVM02) $(PLASM)
-	./$(PLASM) -AMO < samplesrc/rogue.combat.pla > samplesrc/rogue.combat.a
+	./$(PLASM) -AMOW < samplesrc/rogue.combat.pla > samplesrc/rogue.combat.a
 	acme --setpc 4094 -o $(ROGUECOMBAT) samplesrc/rogue.combat.a
 
 $(ROGUEMAP): samplesrc/rogue.map.pla $(PLVM02) $(PLASM)
-	./$(PLASM) -AMO < samplesrc/rogue.map.pla > samplesrc/rogue.map.a
+	./$(PLASM) -AMOW < samplesrc/rogue.map.pla > samplesrc/rogue.map.a
 	acme --setpc 4094 -o $(ROGUEMAP) samplesrc/rogue.map.a
 
 $(HGR1):	samplesrc/hgr1.pla samplesrc/hgr1test.pla $(PLVM02) $(PLASM)
-	./$(PLASM) -AMO < samplesrc/hgr1test.pla > samplesrc/hgr1test.a
+	./$(PLASM) -AMOW < samplesrc/hgr1test.pla > samplesrc/hgr1test.a
 	acme --setpc 4094 -o $(HGR1TEST) samplesrc/hgr1test.a
-	./$(PLASM) -AMO < samplesrc/hgr1.pla > samplesrc/hgr1.a
+	./$(PLASM) -AMOW < samplesrc/hgr1.pla > samplesrc/hgr1.a
 	acme --setpc 4094 -o $(HGR1) samplesrc/hgr1.a
 
 hello:	samplesrc/hello.pla $(PLVM) $(PLASM)
-	./$(PLASM) -AMO < samplesrc/hello.pla > samplesrc/hello.a
+	./$(PLASM) -AMOW < samplesrc/hello.pla > samplesrc/hello.a
 	acme --setpc 4094 -o $(HELLO) samplesrc/hello.a
 	./$(PLVM) HELLO
