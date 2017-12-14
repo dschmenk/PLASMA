@@ -83,6 +83,7 @@ Different projects have led to the architecture of PLASMA, most notably Apple Pa
         - [Functions Without Parameters Or Local Variables](#functions-without-parameters-or-local-variables)
         - [Return Values](#return-values)
     - [Native Assembly Functions](#native-assembly-functions)
+- [Libraries and Sample Code](https://github.com/dschmenk/PLASMA/wiki)
 - [Implementation](#implementation)
     - [A New Approach](#a-new-approach)
     - [The Virtual Machine](#the-virtual-machine)
