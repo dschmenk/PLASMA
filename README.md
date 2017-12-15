@@ -945,7 +945,7 @@ Function definitions in PLASMA are what really separate PLASMA from a low level 
 
 ### Expressions and Statements
 
-PLASMA definitions are a list of statements the carry out the algorithm. Statements are generally assignment or control flow in nature. Generally there is one statement per line. The ';' symbol separates multiple statements on a single line. It is considered bad form to have multiple statements per line unless they are very short. Expressions are comprised of operators and operations. Operator precedence follows address, arithmetic, binary, and logical from highest to lowest. Parentheses can be used to force operations to happen in a specific order.
+PLASMA programs are a list of statements the carry out the algorithm. Statements are generally assignment or control flow in nature. Generally there is one statement per line. The ';' symbol separates multiple statements on a single line. It is considered bad form to have multiple statements per line unless they are very short. Expressions are comprised of operators and operations. Operator precedence follows address, arithmetic, binary, and logical from highest to lowest. Parentheses can be used to force operations to happen in a specific order.
 
 #### Address Operators
 
