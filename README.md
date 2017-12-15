@@ -1,5 +1,5 @@
 <p align="center">
-    <b>The PLASMA Programming Language</b>
+    <font size="+2"><b>The PLASMA Programming Language</b></font>
 
 ![Luc Viatour](https://upload.wikimedia.org/wikipedia/commons/thumb/2/26/Plasma-lamp_2.jpg/1200px-Plasma-lamp_2.jpg)
 image credit: Luc Viatour / www.Lucnix.be
