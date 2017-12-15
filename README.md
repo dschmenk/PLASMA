@@ -1,4 +1,4 @@
-#The PLASMA Programming Language
+# The PLASMA Programming Language
 
 ![Luc Viatour](https://upload.wikimedia.org/wikipedia/commons/thumb/2/26/Plasma-lamp_2.jpg/1200px-Plasma-lamp_2.jpg)
 image credit: Luc Viatour / www.Lucnix.be
