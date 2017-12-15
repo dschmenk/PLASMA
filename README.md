@@ -95,7 +95,7 @@ Different projects have led to the architecture of PLASMA, most notably Apple Pa
         - [The Bytecodes](#the-bytecodes)
     - [Apple 1 PLASMA](#apple-1-plasma)
     - [Apple II PLASMA](#apple-ii-plasma)
-    - [Apple /// PLASMA](#apple-///-plasma)
+    - [Apple /// PLASMA](#apple--plasma)
 - [Links](#links)
 
 <!-- /TOC -->
