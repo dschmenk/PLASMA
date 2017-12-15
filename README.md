@@ -10,7 +10,7 @@ PLASMA is a medium level programming language targeting the 8-bit 6502 processor
 
 PLASMA is a combination of virtual machine and assembler/compiler matched closely to the 6502 architecture.  It is an attempt to satisfy a few challenges surrounding code size, efficient execution, small runtime and flexible code location.  By architecting a unique bytecode that maps nearly one-to-one to the higher-level representation, the compiler can be very simple and execute quickly on the Apple II for a self-hosted environment.  A modular approach provides for incremental development and code reuse. The syntax of the language is heavily influenced by assembly, Pascal, and C. The design philosophy was to be as simple as feasible while retaining flexibility and symantic clarity. You won't find any unnecessary or redundant syntax in PLASMA.
 
-Different projects have led to the architecture of PLASMA, most notably Apple Pascal, FORTH, and my own Java VM for the 6502: VM02. Each has tried to map a generic VM to the 6502 with varying levels of success.  Apple Pascal, based on the USCD Pascal using the p-code interpreter, was a very powerful system and ran fast enough on the Apple II to be interactive but didn't win any speed contests. FORTH was the poster child for efficiency and obtuse syntax. Commonly referred to as a write only language, it was difficult to come up to speed as a developer, especially when using other's code. My own project in creating a Java VM for the Apple II uncovered the folly of shoehorning a large, 32-bit virtual memory environment into 8-bit, 64K hardware.
+Different projects have led to the architecture of PLASMA, most notably Apple Pascal, FORTH, and my own Java VM for the 6502: VM02. Each has tried to map a generic VM to the 6502 with varying levels of success.  Apple Pascal, based on the USCD Pascal using the p-code interpreter, was a very powerful system and ran fast enough on the Apple II to be interactive but didn't win any speed contests. FORTH was the poster child for efficiency and obtuse syntax. Commonly referred to as a write only language, it was difficult to come up to speed as a developer, especially when using others' code. My own project in creating a Java VM for the Apple II uncovered the folly of shoehorning a large, 32-bit virtual memory environment into 8-bit, 64K hardware.
 
 ## Contents
 
@@ -102,7 +102,7 @@ Different projects have led to the architecture of PLASMA, most notably Apple Pa
 
 # Build Environment
 
-The first step in writing PLASMA code is to get a build environment working. If you have Unix-like environment, then this is a fairly easy exercise. Windows users may want to install the [CygWin](https://www.cygwin.com/) environment to replicate a Unix-like environment under Windows. When installing CygWin, make sure **gcc-core**, **make**, and **git** are installed under the **Devel** packages. Mac OS X users may have to install the **Xcode** from the App Store.
+The first step in writing PLASMA code is to get a build environment working. If you have Unix-like environment, then this is a fairly easy exercise. Windows users may want to install the [Cygwin](https://www.cygwin.com/) environment to replicate a Unix-like environment under Windows. When installing Cygwin, make sure **gcc-core**, **make**, and **git** are installed under the **Devel** packages. Mac OS X users may have to install the **Xcode** from the App Store.
 
 Launch the command-line/terminal application for your environment to download and build PLASMA. Create a source code directory and change the working directory to it, something like:
 
@@ -431,7 +431,7 @@ a, b = b, a
 
 Expressions can be built up with constants, variables, function calls, addresses, and pointers/arrays.  Comparison operators evaluate to 0 or -1 instead of the more traditional 0 or 1.  The use of -1 allows binary operations to be applied to other non-zero values and still retain a non-zero result.  Any conditional tests check only for zero and non-zero values.
 
-Operators on values can be unary, `-myvar`, binary `var1 * var2`, and ternary  `testvar > 0 ?? trueValue :: falseValue`. The unary and binary operators are algebraic and referencing in nature. The ternary operator is logical, like an inline `if-then-else` clause (it works just like the ternary `? :` operator in C like languages).
+Operators on values can be unary: `-myvar`, binary: `var1 * var2`, and ternary: `testvar > 0 ?? trueValue :: falseValue`. The unary and binary operators are algebraic and referencing in nature. The ternary operator is logical, like an inline `if-then-else` clause (it works just like the ternary `? :` operator in C like languages).
 
 There are four basic types of data that can be manipulated: constants, variables, addresses, and functions.  Memory can only be read or written as either a byte or a word.  Bytes are unsigned 8-bit quantities, words are signed 16-bit quantities.  Everything on the evaluation stack is treated as a word.  Other than that, any value can be treated as a pointer, address, function, character, integer, etc.  There are convenience operations in PLASMA to easily manipulate addresses and expressions as pointers, arrays, structures, functions, or combinations thereof.  If a variable is declared as a byte, it can be accessed as a simple, single dimension byte array by using brackets to indicate the offset.  Any expression can calculate the indexed offset.  A word variable can be accessed as a word array in the same fashion.  In order to access expressions or constants as arrays, a type identifier has to be inserted before the brackets.  a `.` character denotes a byte type, a `:` character denotes a word type.  Along with brackets to calculate an indexed offset, a constant can be used after the `.` or `:` and will be added to the base address.  The constant can be a defined const to allow for structure style syntax.  If the offset is a known constant, using the constant offset is a much more efficient way to address the elements over an array index.  Multidimensional arrays are treated as arrays of array pointers.
 
@@ -442,7 +442,7 @@ word           = $2080,$2480,$2880,$2C80,$3080,$3480,$3880,$3C80
 hgrscan.[ypos, xpos] = fillval
 ```
 
-Values can be treated as pointers by preceding them with a `^` for byte pointers, `*` for word pointers. Addresses of variables and functions can be taken with a proceeding `@`, address-of operator. Parenthesis can surround an expression to be used as a pointer, but not address-of.
+Values can be treated as pointers by preceding them with a `^` for byte pointers, and `*` for word pointers. Addresses of variables and functions can be taken with a proceeding `@`, the address-of operator. Parenthesis can surround an expression to be used as a pointer, but not address-of.
 
 
 ```
@@ -480,7 +480,7 @@ def keyin(x, y, key)
     fin
 end
 ````
-Control statements affect the flow of control through the program.  There are conditional and looping constructs.  The most widely used is probably the `if`/`elsif`/`else`/`fin` construct.
+Control statements affect the flow of control through the program.  There are conditional and looping constructs.  The most widely used conditional is probably the `if`/`elsif`/`else`/`fin` construct.
 
 ```
 if ^pushbttn3 < 128
@@ -528,7 +528,7 @@ when keypressed
 wend
 ```
 
-The most common looping statement is the `for`/`next` construct.
+The most commonly used looping statement is the `for`/`next` construct.
 
 ```
 for xscan = 0 to 19
@@ -611,7 +611,7 @@ A return value is system specific. The default of zero should mean "no error". N
 
 ### Module Done
 
-The final declaration of a module source file is the `done` statement. This declares the end of the source file. Anything following this statement is ignored.
+The final declaration of a module source file is the `done` statement. This declares the end of the source file. Anything following this statement is ignored.  It might be useful to add documentation or other incidental information after this statement.
 
 ## Runtime
 
