@@ -516,7 +516,7 @@ end
 // MEMSET(ADDR, VALUE, SIZE)
 //   With optimizations from Peter Ferrie
 //
-asm memset(addr, val, size)#0
+asm memset(addr, val, size)
         LDA     ESTKL+2,X
         STA     DSTL
         LDA     ESTKH+2,X
@@ -543,39 +543,37 @@ SETMLPH STA     (DST),Y
         BCS     SETMLPH
 SETMEX  INX
         INX
-        INX
         RTS
 end
 //
 // COPY MEMORY
 // MEMCPY(DSTADDR, SRCADDR, SIZE)
 //
-asm memcpy(dst, src, size)#0
+asm memcpy(dst, src, size)
         INX
         INX
-        INX
-        LDA     ESTKL-3,X
-        ORA     ESTKH-3,X
-        BEQ     CPYMEX
         LDA     ESTKL-2,X
-        CMP     ESTKL-1,X
-        LDA     ESTKH-2,X
-        SBC     ESTKH-1,X
+        ORA     ESTKH-2,X
+        BEQ     CPYMEX
+        LDA     ESTKL-1,X
+        CMP     ESTKL,X
+        LDA     ESTKH-1,X
+        SBC     ESTKH,X
         BCC     REVCPY
 ;
 ; FORWARD COPY
 ;
-        LDA     ESTKL-1,X
+        LDA     ESTKL,X
         STA     DSTL
-        LDA     ESTKH-1,X
+        LDA     ESTKH,X
         STA     DSTH
-        LDA     ESTKL-2,X
+        LDA     ESTKL-1,X
         STA     SRCL
-        LDA     ESTKH-2,X
+        LDA     ESTKH-1,X
         STA     SRCH
-        LDY     ESTKL-3,X
+        LDY     ESTKL-2,X
         BEQ     FORCPYLP
-        INC     ESTKH-3,X
+        INC     ESTKH-2,X
         LDY     #$00
 FORCPYLP LDA    (SRC),Y
         STA     (DST),Y
@@ -583,34 +581,34 @@ FORCPYLP LDA    (SRC),Y
         BNE     +
         INC     DSTH
         INC     SRCH
-+       DEC     ESTKL-3,X
++       DEC     ESTKL-2,X
         BNE     FORCPYLP
-        DEC     ESTKH-3,X
+        DEC     ESTKH-2,X
         BNE     FORCPYLP
         RTS
 ;
 ; REVERSE COPY
 ;
 REVCPY  ;CLC
-        LDA     ESTKL-3,X
-        ADC     ESTKL-1,X
+        LDA     ESTKL-2,X
+        ADC     ESTKL,X
         STA     DSTL
-        LDA     ESTKH-3,X
-        ADC     ESTKH-1,X
+        LDA     ESTKH-2,X
+        ADC     ESTKH,X
         STA     DSTH
         CLC
-        LDA     ESTKL-3,X
-        ADC     ESTKL-2,X
+        LDA     ESTKL-2,X
+        ADC     ESTKL-1,X
         STA     SRCL
-        LDA     ESTKH-3,X
-        ADC     ESTKH-2,X
+        LDA     ESTKH-2,X
+        ADC     ESTKH-1,X
         STA     SRCH
         DEC     DSTH
         DEC     SRCH
         LDY     #$FF
-        LDA     ESTKL-3,X
+        LDA     ESTKL-2,X
         BEQ     REVCPYLP
-        INC     ESTKH-3,X
+        INC     ESTKH-2,X
 REVCPYLP LDA    (SRC),Y
         STA     (DST),Y
         DEY
@@ -618,9 +616,9 @@ REVCPYLP LDA    (SRC),Y
         BNE     +
         DEC     DSTH
         DEC     SRCH
-+       DEC     ESTKL-3,X
++       DEC     ESTKL-2,X
         BNE     REVCPYLP
-        DEC     ESTKH-3,X
+        DEC     ESTKH-2,X
         BNE     REVCPYLP
 CPYMEX  RTS
 end
@@ -628,9 +626,8 @@ end
 // CHAR OUT
 // COUT(CHAR)
 //
-asm cout(char)#0
+asm cout(char)
         LDA     ESTKL,X
-        INX
 COUT1   BIT     $BF98
         BMI     +
         JSR     TOUPR
@@ -659,13 +656,12 @@ end
 // PRINT STRING
 // PRSTR(STR)
 //
-asm prstr(pstr)#0
+asm prstr(pstr)
         LDY     #$00
         LDA     ESTKL,X
         STA     SRCL
         LDA     ESTKH,X
         STA     SRCH
-        INX
         LDA     (SRC),Y
         STA     TMP
         BEQ     ++
@@ -903,12 +899,12 @@ end
 //
 // Runtime routines
 //
-def home#0
-    call($FC58, 0, 0, 0, 0)
+def home
+    return call($FC58, 0, 0, 0, 0)
 end
-def gotoxy(x, y)#0
+def gotoxy(x, y)
     ^$24 = x + ^$20
-    call($FB5B, y + ^$22, 0, 0, 0)
+    return call($FB5B, y + ^$22, 0, 0, 0)
 end
 //
 // ProDOS routines
@@ -1171,7 +1167,7 @@ def prword(h)#0
     cout('$')
     call($F941, h >> 8, h, 0, 0)
 end
-def print(i)#0
+def print(i)
     byte numstr[7]
     byte place, sign
 
@@ -1194,7 +1190,7 @@ def print(i)#0
         place--
     fin
     numstr[place] = 6 - place
-    prstr(@numstr[place])
+    return prstr(@numstr[place])
 end
 def nametostr(namestr, len, strptr)#0
     ^strptr = len
@@ -2608,14 +2604,14 @@ end
 // Alebraic op to stack op
 //
 def push_op(op, prec)#0
-    opsp = opsp + 1
+    opsp++
     if opsp == 16; parse_err(@estk_overflw); return; fin
     opstack[opsp]   = op
     precstack[opsp] = prec
 end
 def pop_op
     if opsp < 0; return parse_err(@estk_underflw); fin
-    opsp = opsp - 1
+    opsp--
     return opstack[opsp + 1]
 end
 def tos_op
@@ -2631,7 +2627,7 @@ def tos_op_prec(tos)
     return precstack[opsp]
 end
 def push_val(value, size, type)#0
-    valsp = valsp + 1
+    valsp++
     if valsp == 16; parse_err(@estk_overflw); return; fin
     valstack[valsp]  = value
     sizestack[valsp] = size
@@ -2642,7 +2638,7 @@ def pop_val(valptr, sizeptr, typeptr)
     *valptr  = valstack[valsp]
     ^sizeptr = sizestack[valsp]
     ^typeptr = typestack[valsp]
-    valsp = valsp - 1
+    valsp--
     return valsp  + 1
 end
 //
@@ -2685,7 +2681,7 @@ def scan
         // ID, either variable name or reserved word
         //
         repeat
-            scanptr = scanptr + 1
+            scanptr++
         until !isalphanum(^scanptr)
         tknlen = scanptr - tknptr
         token  = keymatch
@@ -2697,7 +2693,7 @@ def scan
         constval = 0
         repeat
             constval = constval * 10 + ^scanptr - '0'
-            scanptr  = scanptr + 1
+            scanptr++
         until !isnum(^scanptr)
     else
         //
@@ -2710,9 +2706,9 @@ def scan
                     ^scanptr = $00
                 else
                     token   = DIV_TKN
-                    scanptr = scanptr + 1
+                    scanptr++
                 fin
-        break
+                break
             is '='
                 if ^(scanptr + 1) == '='
                     token   = EQ_TKN
@@ -2722,9 +2718,9 @@ def scan
                     scanptr = scanptr + 2
                 else
                     token   = SET_TKN
-                    scanptr = scanptr + 1
+                    scanptr++
                 fin
-        break
+                break
             is '-'
                 if ^(scanptr + 1) == '>'
                     token   = PTRB_TKN
@@ -2734,19 +2730,19 @@ def scan
                     scanptr = scanptr + 2
                 else
                     token   = SUB_TKN
-                    scanptr = scanptr + 1
+                    scanptr++
                 fin
-        break
+                break
             is '+'
                 if ^(scanptr + 1) == '+'
                     token   = INC_TKN
                     scanptr = scanptr + 2
                 else
                     token   = ADD_TKN
-                    scanptr = scanptr + 1
+                    scanptr++
                 fin
-        break
-        is '>'
+                break
+            is '>'
                 if ^(scanptr + 1) == '>'
                     token   = SHR_TKN
                     scanptr = scanptr + 2
@@ -2755,9 +2751,9 @@ def scan
                     scanptr = scanptr + 2
                 else
                     token   = GT_TKN
-                    scanptr = scanptr + 1
+                    scanptr++
                 fin
-        break
+                break
             is '<'
                 if ^(scanptr + 1) == '<'
                     token   = SHL_TKN
@@ -2770,41 +2766,41 @@ def scan
                     scanptr = scanptr + 2
                 else
                     token   = LT_TKN
-                    scanptr = scanptr + 1
+                    scanptr++
                 fin
-        break
-        is '$'
-            //
-        // Hexadecimal constant
-        //
-        token    = INT_TKN
-        constval = 0
-        repeat
-                    scanptr = scanptr + 1
-            if ^scanptr >= '0' and ^scanptr <= '9'
+                break
+            is '$'
+                //
+                // Hexadecimal constant
+                //
+                token    = INT_TKN
+                constval = 0
+                repeat
+                    scanptr++
+                    if ^scanptr >= '0' and ^scanptr <= '9'
                         constval = (constval << 4) + ^scanptr - '0'
-            elsif ^scanptr >= 'A' and ^scanptr <= 'F'
+                    elsif ^scanptr >= 'A' and ^scanptr <= 'F'
                         constval = (constval << 4) + ^scanptr - '7'// 'A'-10
                     elsif ^scanptr >= 'a' and ^scanptr <= 'f'
                         constval = (constval << 4) + ^scanptr - 'W'// 'a'-10
-            else
+                    else
                         break
                     fin
                 until !^scanptr
-            break
+                break
             is $27 // '
-            //
-        // Character constant
-        //
-        token = CHR_TKN
-        if ^(scanptr + 1) <> $5C // \
-            constval = ^(scanptr + 1)
-            if ^(scanptr + 2) <> $27 // '
+                //
+                // Character constant
+                //
+                token = CHR_TKN
+                if ^(scanptr + 1) <> $5C // \
+                    constval = ^(scanptr + 1)
+                    if ^(scanptr + 2) <> $27 // '
                         return parse_err(@bad_cnst)
                     fin
-            scanptr = scanptr + 3
-        else
-            when ^(scanptr + 2)
+                    scanptr = scanptr + 3
+                else
+                    when ^(scanptr + 2)
                         is 'n'
                             constval = $0D; break
                         is 'r'
@@ -2819,34 +2815,34 @@ def scan
                     fin
                     scanptr = scanptr + 4
                 fin
-            break
-        is '"'
-            //
-        // String constant
-        //
-        token    = STR_TKN
-        scanptr  = scanptr + 1
-        constval = scanptr
-        while ^scanptr and ^scanptr <> '"'
-            scanptr = scanptr + 1
-        loop
-        if !^scanptr
-            return parse_err(@bad_cnst)
-        fin
-        scanptr = scanptr + 1
-        break
-        is 0
-        is ';'
-            if token <> EOF_TKN
-            token = EOL_TKN
-        fin
-        break
+                break
+            is '"'
+                //
+                // String constant
+                //
+                token    = STR_TKN
+                constval = scanptr
+                scanptr++
+                while ^scanptr and ^scanptr <> '"'
+                    scanptr++
+                loop
+                if !^scanptr
+                    return parse_err(@bad_cnst)
+                fin
+                scanptr++
+                break
+            is 0
+            is ';'
+                if token <> EOF_TKN
+                    token = EOL_TKN
+                fin
+                break
             otherwise
                 //
                 // Simple single character tokens
                 //
-                token    = scanchr | $80
-                scanptr = scanptr + 1
+                token = scanchr | $80
+                scanptr++
         wend
     fin
     tknlen = scanptr - tknptr
@@ -2874,21 +2870,24 @@ end
 //
 def nextln
     if ^scanptr == ';'
-        scanptr = scanptr + 1
+        scanptr++
         scan
     else
         scanptr = inbuff
         if lineno < numlines
             cpyln(strlinbuf:[lineno], instr)
-            lineno  = lineno + 1
+            lineno++
             if !(lineno & $0F); cout('.'); fin
-            //cout('>')
-            //prstr(instr)
-            //crout
+            print(lineno);cout(':');print(numlines)
+            cout('>')
+            prstr(instr)
+            crout
             scan
         else
-        ^instr  = 0
-        ^inbuff = 0
+            cout('<')
+            crout
+            ^instr  = 0
+            ^inbuff = 0
             token   = DONE_TKN
         fin
     fin
@@ -3848,6 +3847,7 @@ def parse_var(type)
     byte consttype, constsize, idlen
     word idptr, constval, arraysize, size
 
+    cout('T')
     idlen = 0
     size  = 1
     if scan == OPEN_BRACKET_TKN
@@ -3903,15 +3903,16 @@ def parse_struc
     byte type, idlen, struclen, constsize
     word size, offset, idstr
 
+    cout('S')
     struclen = 0
     if scan == ID_TKN
         struclen = tknlen
-    if struclen > 16
-        struclen = 16
-    fin
-    for idlen = 0 to struclen
-        strucid[idlen] = ^(tknptr + idlen)
-    next
+        if struclen > 16
+            struclen = 16
+        fin
+        for idlen = 0 to struclen
+            strucid[idlen] = ^(tknptr + idlen)
+        next
     fin
     offset = 0
     while nextln == BYTE_TKN or token == WORD_TKN
@@ -3941,10 +3942,10 @@ def parse_struc
             fin
             if type & WORD_TYPE
                 size = size * 2
-        fin
+            fin
             if idlen
                 idconst_add(idstr, idlen, offset)
-        fin
+            fin
             offset = offset + size
         until token <> COMMA_TKN
         if token <> EOL_TKN; return FALSE; fin
@@ -3958,6 +3959,7 @@ def parse_vars
     byte idlen, type, size
     word value, idptr
 
+    cout('V')
     when token
         is CONST_TKN
             if scan <> ID_TKN
@@ -3972,7 +3974,7 @@ def parse_vars
                 return parse_err(@bad_cnst)
             fin
             idconst_add(idptr, idlen, value)
-        break
+            break
         is STRUC_TKN
             if !parse_struc; parse_err(@bad_struc); fin
             break
@@ -3988,7 +3990,7 @@ def parse_vars
                     return FALSE
                 fin
             until token <> COMMA_TKN
-        break
+            break
         is PREDEF_TKN
             repeat
                 if scan == ID_TKN
@@ -3997,7 +3999,7 @@ def parse_vars
                     return parse_err(@bad_decl)
                 fin
             until scan <> COMMA_TKN
-        break
+            break
         is EOL_TKN
             break
         otherwise
@@ -4010,6 +4012,7 @@ def parse_defs
     word func_tag, idptr
 
     if token == DEF_TKN
+        cout('D')
         if scan <> ID_TKN; return parse_err(@bad_decl); fin
         cfnparms = 0
         infunc   = TRUE
@@ -4067,6 +4070,7 @@ def parse_module
         while parse_defs
             nextln
         loop
+        cout('I')
         framesize  = 0
         entrypoint = codeptr
         emit_enter(0)
@@ -4076,6 +4080,7 @@ def parse_module
                 nextln
             loop
         fin
+        cout('!')
         if prevstmnt <> RETURN_TKN
             emit_const(0)
             emit_leave
