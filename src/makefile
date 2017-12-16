@@ -126,7 +126,7 @@ $(ED): toolsrc/ed.pla $(PLVM02) $(PLASM) toolsrc/ed.pla
 	acme --setpc 8192 -o $(ED) toolsrc/ed.a
 
 $(SB): toolsrc/sb.pla $(PLVM02) $(PLASM) toolsrc/sb.pla
-	./$(PLASM) -AO < toolsrc/sb.pla > toolsrc/sb.a
+	./$(PLASM) -AOW < toolsrc/sb.pla > toolsrc/sb.a
 	acme --setpc 8192 -o $(SB) toolsrc/sb.a
 
 $(ARGS): libsrc/args.pla $(PLVM02) $(PLASM)
