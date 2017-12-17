@@ -493,6 +493,13 @@ void call(uword pc)
             putchar('\n');
             fflush(stdout);
             break;
+        case 9: // LIBRARY STDLIB::MACHID
+            PUSH(0x0000);
+            break;
+        case 10: // LIBRARY STDLIB::PUTI
+            i = POP;
+            printf("%d", i);
+            break;
         default:
             printf("\nBad call code:$%02X\n", mem_data[pc - 1]);
             exit(1);
@@ -878,6 +885,7 @@ char *syslib_exp[] = {
     "GETS",
     "PUTLN",
     "MACHID",
+    "PUTI",
     0
 };
 

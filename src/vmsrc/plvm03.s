@@ -11,6 +11,14 @@ SELFMODIFY  =   1
 ;
 MEMBANK =       $FFEF
         !SOURCE "vmsrc/plvmzp.inc"
+DROP    =       $EF
+NEXTOP  =       $F0
+FETCHOP =       NEXTOP+3
+IP      =       FETCHOP+1
+IPL     =       IP
+IPH     =       IPL+1
+OPIDX   =       FETCHOP+6
+OPPAGE  =       OPIDX+1
 ;
 ; XPAGE ADDRESSES
 ;
@@ -98,7 +106,7 @@ SEGREQ  !BYTE   4
         !BYTE   $10
         !BYTE   $00
 PAGE0   =       *
-        !PSEUDOPC       $00EF {
+        !PSEUDOPC       DROP {
 ;*
 ;* INTERP BYTECODE INNER LOOP
 ;*
@@ -278,6 +286,10 @@ DIV     JSR     _DIV
 ;* MOD TOS-1 BY TOS
 ;*
 MOD     JSR     _DIV
+        LDA     ESTKL,X         ; SAVE IN CASE OF DIVMOD
+        STA     DSTL
+        LDA     ESTKH,X
+        STA     DSTH
         LDA     TMPL            ; REMNDRL
         STA     ESTKL,X
         LDA     TMPH            ; REMNDRH
@@ -604,7 +616,7 @@ LB      LDA     ESTKL,X
         STA     LBLDA+1
         LDA     ESTKH,X
         STA     LBLDA+2
-LBLDA	LDA     $FFFF
+LBLDA   LDA     $FFFF
         STA     ESTKL,X
         LDA     #$00
         STA     ESTKH,X
@@ -684,7 +696,7 @@ LAB     +INC_IP
         +INC_IP
         LDA     (IP),Y
         STA     LABLDA+2
-LABLDA	LDA      $FFFF
+LABLDA  LDA      $FFFF
         DEX
         STA     ESTKL,X
         LDA     #$00
@@ -1048,23 +1060,23 @@ CALL    +INC_IP
         +INC_IP
         LDA     (IP),Y
         STA     CALLADR+2
-        LDA     IPX
+        TYA
+        CLC
+        ADC     IPL
         PHA
         LDA     IPH
+        ADC     #$00
         PHA
-        LDA     IPL
-        PHA
-        TYA
+        LDA     IPX
         PHA
 CALLADR JSR     $FFFF
         PLA
-        TAY
-        PLA
-        STA     IPL
+        STA     IPX
         PLA
         STA     IPH
         PLA
-        STA     IPX
+        STA     IPL
+        LDY     #$00
         JMP     NEXTOP
 ;*
 ;* INDIRECT CALL TO ADDRESS (NATIVE CODE)
@@ -1074,23 +1086,23 @@ ICAL    LDA     ESTKL,X
         LDA     ESTKH,X
         STA     ICALADR+2
         INX
-        LDA     IPX
+        TYA
+        CLC
+        ADC     IPL
         PHA
         LDA     IPH
+        ADC     #$00
         PHA
-        LDA     IPL
-        PHA
-        TYA
+        LDA     IPX
         PHA
 ICALADR JSR     $FFFF
         PLA
-        TAY
-        PLA
-        STA     IPL
+        STA     IPX
         PLA
         STA     IPH
         PLA
-        STA     IPX
+        STA     IPL
+        LDY     #$00
         JMP     NEXTOP
 ;*
 ;* ENTER FUNCTION WITH FRAME SIZE AND PARAM COUNT
@@ -1109,9 +1121,9 @@ ENTER   INY
         STA     IFPH
         INY
         LDA     (IP),Y
+        BEQ     +
         ASL
         TAY
-        BEQ     +
 -       LDA     ESTKH,X
         DEY
         STA     (IFP),Y

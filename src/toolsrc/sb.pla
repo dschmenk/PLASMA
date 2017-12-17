@@ -2,7 +2,7 @@
 // Global constants
 //
 const FALSE         = 0
-const TRUE          = 1
+const TRUE          = !FALSE
 //
 // Hardware constants
 //
@@ -77,7 +77,7 @@ const shiftlock     = 128
 //
 // Argument buffer (must be first declared variables)
 //
-word signature	  = $EEEE // buffer signature
+word signature    = $EEEE // buffer signature
 byte              = 32    // buffer length
 byte[32] argbuff  = ""    // buffer
 //
@@ -106,7 +106,7 @@ word keyin, cursrow, scrntop, cursptr
 //
 // Predeclared functions
 //
-predef cmdmode
+predef cmdmode(clrscrn)#0
 //
 // Compiler variables
 //
@@ -391,38 +391,38 @@ byte prevstmnt   = 0
 word retfunc_tag = 0
 word break_tag   = 0
 word cont_tag    = 0
-predef parse_constexpr, parse_expr, parse_module
+predef parse_constexpr(str,val), parse_expr, parse_module
 //
 // ASM utility functions
 //
 // Defines for ASM routines
 //
 asm equates
-INTERP	=	$03D0
-LCRDEN 	=	$C080
-LCWTEN	=	$C081
-ROMEN	=	$C082
-LCRWEN 	=	$C083
-LCBNK2	=	$00
-LCBNK1	=	$08
-	!SOURCE	"vmsrc/plvmzp.inc"
+INTERP  =   $03D0
+LCRDEN  =   $C080
+LCWTEN  =   $C081
+ROMEN   =   $C082
+LCRWEN  =   $C083
+LCBNK2  =   $00
+LCBNK1  =   $08
+    !SOURCE "vmsrc/plvmzp.inc"
 end
 //
 // SAVE VM STATE
 //
 asm save_vmstate
-    	LDA 	$03F2
-        STA 	VMRESET
-        LDA 	$03F3
-        STA 	VMRESET+1
-        LDA 	$03F4
-        STA 	VMRESET+2
-        LDA 	#<RESETENTRY
-        STA 	$03F2
-        LDA 	#>RESETENTRY
-        STA 	$03F3
-        EOR 	#$A5
-        STA 	$03F4
+        LDA     $03F2
+        STA     VMRESET
+        LDA     $03F3
+        STA     VMRESET+1
+        LDA     $03F4
+        STA     VMRESET+2
+        LDA     #<RESETENTRY
+        STA     $03F2
+        LDA     #>RESETENTRY
+        STA     $03F3
+        EOR     #$A5
+        STA     $03F4
         DEX
         RTS
 end
@@ -431,29 +431,29 @@ end
 //
 asm restore_vmstate
 RESETENTRY
-    	LDA 	VMRESET
-        STA 	$03F2
-        LDA 	VMRESET+1
-        STA 	$03F3
-        LDA 	VMRESET+2
-        STA 	$03F4
-        LDX 	#$00
-        STX 	IFPL
-        LDA 	#$BF
-        STA 	IFPH
-        LDX 	#$FE
+        LDA     VMRESET
+        STA     $03F2
+        LDA     VMRESET+1
+        STA     $03F3
+        LDA     VMRESET+2
+        STA     $03F4
+        LDX     #$00
+        STX     IFPL
+        LDA     #$BF
+        STA     IFPH
+        LDX     #$FE
         TXS
-        LDX 	#ESTKSZ/2
-        BIT 	ROMEN
-        JMP 	$2000
-VMRESET	!FILL	3
+        LDX     #ESTKSZ/2
+        BIT     ROMEN
+        JMP     $2000
+VMRESET !FILL   3
 end
 //
 // CALL 6502 ROUTINE
 // CALL(ADDR, AREG, XREG, YREG, STATUS)
 //
-asm call
-REGVALS	=	SRC
+asm call(addr, areg, xreg, yreg, status)
+REGVALS =   SRC
         PHP
         LDA     ESTKL+4,X
         STA     TMPL
@@ -490,174 +490,174 @@ REGVALS	=	SRC
         STY     ESTKH,X
         PLP
         RTS
-JMPTMP	JMP	(TMP)
+JMPTMP  JMP (TMP)
 end
 //
 // CALL PRODOS
 // SYSCALL(CMD, PARAMS)
 //
-asm syscall
-    	LDA 	ESTKL,X
-        LDY 	ESTKH,X
-        STA 	PARAMS
-        STY 	PARAMS+1
+asm syscall(cmd, params)
+        LDA     ESTKL,X
+        LDY     ESTKH,X
+        STA     PARAMS
+        STY     PARAMS+1
         INX
-        LDA 	ESTKL,X
-        STA 	CMD
-        JSR 	$BF00
-CMD:	!BYTE	00
-PARAMS:	!WORD	0000
-    	LDY    	#$00
-        STA 	ESTKL,X
-        STY 	ESTKH,X
+        LDA     ESTKL,X
+        STA     CMD
+        JSR     $BF00
+CMD:    !BYTE   00
+PARAMS: !WORD   0000
+        LDY     #$00
+        STA     ESTKL,X
+        STY     ESTKH,X
         RTS
 end
 // SET MEMORY TO VALUE
 // MEMSET(ADDR, VALUE, SIZE)
 //   With optimizations from Peter Ferrie
 //
-asm memset
-	    LDA     ESTKL+2,X
+asm memset(addr, val, size)
+        LDA     ESTKL+2,X
         STA     DSTL
         LDA     ESTKH+2,X
         STA     DSTH
         LDY     ESTKL,X
-        BEQ	+
+        BEQ +
         INC     ESTKH,X
         LDY     #$00
-+       LDA	    ESTKH,X
-        BEQ	    SETMEX
-SETMLPL	CLC
-	    LDA     ESTKL+1,X
-SETMLPH	STA     (DST),Y
-	    DEC     ESTKL,X
-	    BNE     +
-	    DEC     ESTKH,X
-	    BEQ     SETMEX
-+	    INY
-	    BNE	    +
-	    INC     DSTH
-+	    BCS	    SETMLPL
-	    SEC
-	    LDA     ESTKH+1,X
-	    BCS	    SETMLPH
-SETMEX	INX
-	    INX
-	    RTS
++       LDA     ESTKH,X
+        BEQ     SETMEX
+SETMLPL CLC
+        LDA     ESTKL+1,X
+SETMLPH STA     (DST),Y
+        DEC     ESTKL,X
+        BNE     +
+        DEC     ESTKH,X
+        BEQ     SETMEX
++       INY
+        BNE     +
+        INC     DSTH
++       BCS     SETMLPL
+        SEC
+        LDA     ESTKH+1,X
+        BCS     SETMLPH
+SETMEX  INX
+        INX
+        RTS
 end
 //
 // COPY MEMORY
 // MEMCPY(DSTADDR, SRCADDR, SIZE)
 //
-asm memcpy
-    	INX
+asm memcpy(dst, src, size)
         INX
-        LDA 	ESTKL-2,X
-        ORA 	ESTKH-2,X
-        BEQ 	CPYMEX
-        LDA 	ESTKL-1,X
-        CMP 	ESTKL,X
-        LDA 	ESTKH-1,X
-        SBC 	ESTKH,X
-        BCC 	REVCPY
+        INX
+        LDA     ESTKL-2,X
+        ORA     ESTKH-2,X
+        BEQ     CPYMEX
+        LDA     ESTKL-1,X
+        CMP     ESTKL,X
+        LDA     ESTKH-1,X
+        SBC     ESTKH,X
+        BCC     REVCPY
 ;
 ; FORWARD COPY
 ;
-    	LDA 	ESTKL,X
-        STA 	DSTL
-        LDA 	ESTKH,X
-        STA 	DSTH
-        LDA 	ESTKL-1,X
-        STA 	SRCL
-        LDA 	ESTKH-1,X
-        STA 	SRCH
-        LDY 	ESTKL-2,X
-        BEQ 	FORCPYLP
-        INC 	ESTKH-2,X
-        LDY 	#$00
-FORCPYLP LDA	(SRC),Y
-    	STA 	(DST),Y
+        LDA     ESTKL,X
+        STA     DSTL
+        LDA     ESTKH,X
+        STA     DSTH
+        LDA     ESTKL-1,X
+        STA     SRCL
+        LDA     ESTKH-1,X
+        STA     SRCH
+        LDY     ESTKL-2,X
+        BEQ     FORCPYLP
+        INC     ESTKH-2,X
+        LDY     #$00
+FORCPYLP LDA    (SRC),Y
+        STA     (DST),Y
         INY
-        BNE 	+
-        INC 	DSTH
-        INC 	SRCH
-+	    DEC 	ESTKL-2,X
-        BNE    	FORCPYLP
-        DEC  	ESTKH-2,X
-        BNE 	FORCPYLP
+        BNE     +
+        INC     DSTH
+        INC     SRCH
++       DEC     ESTKL-2,X
+        BNE     FORCPYLP
+        DEC     ESTKH-2,X
+        BNE     FORCPYLP
         RTS
 ;
 ; REVERSE COPY
 ;
-REVCPY	;CLC
-    	LDA 	ESTKL-2,X
-        ADC 	ESTKL,X
-        STA  	DSTL
-        LDA 	ESTKH-2,X
-        ADC 	ESTKH,X
-        STA 	DSTH
+REVCPY  ;CLC
+        LDA     ESTKL-2,X
+        ADC     ESTKL,X
+        STA     DSTL
+        LDA     ESTKH-2,X
+        ADC     ESTKH,X
+        STA     DSTH
         CLC
-        LDA 	ESTKL-2,X
-        ADC 	ESTKL-1,X
-        STA 	SRCL
-        LDA 	ESTKH-2,X
-        ADC 	ESTKH-1,X
-        STA 	SRCH
-        DEC 	DSTH
-        DEC 	SRCH
-        LDY 	#$FF
-        LDA 	ESTKL-2,X
-        BEQ 	REVCPYLP
-        INC 	ESTKH-2,X
-REVCPYLP LDA	(SRC),Y
-    	STA 	(DST),Y
+        LDA     ESTKL-2,X
+        ADC     ESTKL-1,X
+        STA     SRCL
+        LDA     ESTKH-2,X
+        ADC     ESTKH-1,X
+        STA     SRCH
+        DEC     DSTH
+        DEC     SRCH
+        LDY     #$FF
+        LDA     ESTKL-2,X
+        BEQ     REVCPYLP
+        INC     ESTKH-2,X
+REVCPYLP LDA    (SRC),Y
+        STA     (DST),Y
         DEY
-        CPY 	#$FF
-        BNE 	+
-        DEC 	DSTH
-        DEC 	SRCH
-+   	DEC 	ESTKL-2,X
-    	BNE 	REVCPYLP
-        DEC 	ESTKH-2,X
-        BNE 	REVCPYLP
-CPYMEX	RTS
+        CPY     #$FF
+        BNE     +
+        DEC     DSTH
+        DEC     SRCH
++       DEC     ESTKL-2,X
+        BNE     REVCPYLP
+        DEC     ESTKH-2,X
+        BNE     REVCPYLP
+CPYMEX  RTS
 end
 //
 // CHAR OUT
 // COUT(CHAR)
 //
-asm cout
-    	LDA 	ESTKL,X
-COUT1   BIT 	$BF98
-        BMI 	+
-        JSR 	TOUPR
-+   	ORA 	#$80
-    	BIT 	ROMEN
-        JSR 	$FDED
-        BIT 	LCRDEN+LCBNK2
+asm cout(char)
+        LDA     ESTKL,X
+COUT1   BIT     $BF98
+        BMI     +
+        JSR     TOUPR
++       ORA     #$80
+        BIT     ROMEN
+        JSR     $FDED
+        BIT     LCRDEN+LCBNK2
         RTS
 end
 //
 // CHAR IN
 // RDKEY()
 //
-asm cin
-    	BIT 	ROMEN
-        JSR 	$FD0C
-        BIT 	LCRDEN+LCBNK2
+asm cin()
+        BIT     ROMEN
+        JSR     $FD0C
+        BIT     LCRDEN+LCBNK2
         DEX
-        LDY 	#$00
-        AND 	#$7F
-        STA 	ESTKL,X
-        STY 	ESTKH,X
+        LDY     #$00
+        AND     #$7F
+        STA     ESTKL,X
+        STY     ESTKH,X
         RTS
 end
 //
 // PRINT STRING
 // PRSTR(STR)
 //
-asm prstr
-    	LDY 	#$00
+asm prstr(pstr)
+        LDY     #$00
         LDA     ESTKL,X
         STA     SRCL
         LDA     ESTKH,X
@@ -665,24 +665,24 @@ asm prstr
         LDA     (SRC),Y
         STA     TMP
         BEQ     ++
--    	INY
-    	LDA 	(SRC),Y
-	JSR	COUT1
-        CPY 	TMP
-        BNE 	-
-++   	RTS
+-       INY
+        LDA     (SRC),Y
+    JSR COUT1
+        CPY     TMP
+        BNE     -
+++      RTS
 end
 //
 // READ STRING
 // STR = RDSTR(PROMPTCHAR)
 //
-asm rdstr
+asm rdstr(prompt)
         LDA     ESTKL,X
         STA     $33
         STX     ESP
         BIT     ROMEN
         JSR     $FD6A
-        BIT 	LCRDEN+LCBNK2
+        BIT     LCRDEN+LCBNK2
         STX     $01FF
 -       LDA     $01FF,X
         AND     #$7F
@@ -694,18 +694,18 @@ asm rdstr
         STA     ESTKL,X
         LDA     #$01
         STA     ESTKH,X
-	RTS
+    RTS
 end
 //
 // EXIT
 //
-asm exit
-        JSR 	$BF00
-        !BYTE	$65
-        !WORD	EXITTBL
+asm exit#0
+        JSR     $BF00
+        !BYTE   $65
+        !WORD   EXITTBL
 EXITTBL:
-        !BYTE	4
-        !BYTE	0
+        !BYTE   4
+        !BYTE   0
 end
 //def toupper_11(c)
 //   if c >= 'a'
@@ -715,22 +715,23 @@ end
 //   fin
 //   return c
 //end
-asm toupper
+asm toupper(char)
         LDA     ESTKL,X
-TOUPR	AND     #$7F
+TOUPR   AND     #$7F
         CMP     #'z'+1
         BCS     +
         CMP     #'a'
         BCC     +
         SBC     #$20
 +       STA     ESTKL,X
-	RTS
+    RTS
 end
-asm clrhibit(strptr)
+asm clrhibit(strptr)#0
         LDA     ESTKL,X
         STA     SRCL
         LDA     ESTKH,X
         STA     SRCH
+        INX
         LDY     #$00
         LDA     (SRC),Y
         BEQ     +
@@ -740,13 +741,14 @@ CLHILP  LDA     (SRC),Y
         STA     (SRC),Y
         DEY
         BNE     CLHILP
-+	RTS
++   RTS
 end
-asm sethibit(strptr)
+asm sethibit(strptr)#0
         LDA     ESTKL,X
         STA     SRCL
         LDA     ESTKH,X
         STA     SRCH
+        INX
         LDY     #$00
         LDA     (SRC),Y
         BEQ     +
@@ -756,18 +758,19 @@ STHILP  LDA     (SRC),Y
         STA     (SRC),Y
         DEY
         BNE     STHILP
-+	RTS
++   RTS
 end
-asm cpyln(srcstr, dststr)
+asm cpyln(srcstr, dststr)#0
         LDA     ESTKL,X
         STA     DSTL
         LDA     ESTKH,X
         STA     DSTH
-	INX
+        INX
         LDA     ESTKL,X
         STA     SRCL
         LDA     ESTKH,X
         STA     SRCH
+        INX
         LDY     #$00
         LDA     (SRC),Y
         TAY
@@ -786,7 +789,7 @@ CPLNLP  LDA     (SRC),Y
         BNE     CPLNLP
         LDA     (SRC),Y
 ++      STA     (DST),Y
-	RTS
+        RTS
 end
 //
 //def skipspace(scanptr)
@@ -796,21 +799,21 @@ end
 //    return scanptr
 //end
 asm skipspace(scanptr)
-    	LDA 	#$00
-        STA 	SRCL
+        LDA     #$00
+        STA     SRCL
         LDA     ESTKH,X
         STA     SRCH
         LDY     ESTKL,X
--   	LDA 	(SRC),Y
-    	CMP 	#' '
-        BNE 	+
+-       LDA     (SRC),Y
+        CMP     #' '
+        BNE     +
         INY
-        BNE 	-
-        INC 	SRCH
-        BNE 	-
-+    	STY 	ESTKL,X
-        LDA 	SRCH
-        STA 	ESTKH,X
+        BNE     -
+        INC     SRCH
+        BNE     -
++       STY     ESTKL,X
+        LDA     SRCH
+        STA     ESTKH,X
         RTS
 end
 //def isalpha(c)
@@ -823,7 +826,7 @@ end
 //    fin
 //    return FALSE
 //end
-asm isalpha
+asm isalpha(char)
         LDY     #$00
         LDA     ESTKL,X
         CMP     #'_'
@@ -835,7 +838,7 @@ asm isalpha
         CMP     #'a'
         BCC     ISALRET
         CMP     #'z'+1
-        BCS 	ISALRET
+        BCS     ISALRET
 ISALTRU DEY
 ISALRET STY     ESTKL,X
         STY     ESTKH,X
@@ -847,7 +850,7 @@ end
 //    fin
 //    return FALSE
 //end
-asm isnum
+asm isnum(char)
         LDY     #$00
         LDA     ESTKL,X
         CMP     #'0'
@@ -871,7 +874,7 @@ end
 //    fin
 //    return FALSE
 //end
-asm isalphanum
+asm isalphanum(char)
         LDY     #$00
         LDA     ESTKL,X
         CMP     #'_'
@@ -879,15 +882,15 @@ asm isalphanum
         CMP     #'0'
         BCC     ISANRET
         CMP     #'9'+1
-        BCC 	ISANTRU
+        BCC     ISANTRU
         CMP     #'A'
         BCC     ISANRET
         CMP     #'Z'+1
-        BCC 	ISANTRU
+        BCC     ISANTRU
         CMP     #'a'
         BCC     ISANRET
         CMP     #'z'+1
-        BCS 	ISANRET
+        BCS     ISANRET
 ISANTRU DEY
 ISANRET STY     ESTKL,X
         STY     ESTKH,X
@@ -1002,16 +1005,16 @@ end
 //
 //=====================================
 
-def crout
+def crout#0
     cout($0D)
 end
-def bell
-    return call($FBDD, 0, 0, 0, 0)
+def bell#0
+    call($FBDD, 0, 0, 0, 0)
 end
 //
 // Memory management routines
 //
-def strcpy(dststr, srcstr)
+def strcpy(dststr, srcstr)#0
     byte strlen
 
     strlen = ^srcstr
@@ -1067,7 +1070,7 @@ def heapalloc(size)
     prstr(@outofmem)
     return 0
 end
-def freestr(strptr)
+def freestr(strptr)#0
     byte mask, ofst
 
     if strptr and strptr <> @nullstr
@@ -1097,9 +1100,7 @@ def newstr(strptr)
     fin
     return @nullstr
 end
-def inittxtbuf
-    word i
-
+def inittxtbuf#0
     memset(strheapmap, 0, strheapmsz)
     memset(strlinbuf, @nullstr, maxfill * 2)
     numlines   = 1
@@ -1122,7 +1123,7 @@ def caseconv(chr)
     fin
     return chr
 end
-def strupper(strptr)
+def strupper(strptr)#0
     byte i, chr
 
     for i = ^strptr downto 1
@@ -1132,7 +1133,7 @@ def strupper(strptr)
         fin
     next
 end
-def strlower(strptr)
+def strlower(strptr)#0
     byte i, chr
 
     for i = ^strptr downto 1
@@ -1142,7 +1143,7 @@ def strlower(strptr)
         fin
     next
 end
-def txtupper
+def txtupper#0
     word i, strptr
 
     flags = flags | uppercase
@@ -1150,7 +1151,7 @@ def txtupper
         strupper(strlinbuf:[i])
     next
 end
-def txtlower
+def txtlower#0
     word i, strptr
 
     flags = flags & ~uppercase
@@ -1158,13 +1159,13 @@ def txtlower
         strlower(strlinbuf:[i])
     next
 end
-def prbyte(h)
+def prbyte(h)#0
     cout('$')
-    return call($FDDA, h, 0, 0, 0)
+    call($FDDA, h, 0, 0, 0)
 end
-def prword(h)
+def prword(h)#0
     cout('$')
-    return call($F941, h >> 8, h, 0, 0)
+    call($F941, h >> 8, h, 0, 0)
 end
 def print(i)
     byte numstr[7]
@@ -1180,25 +1181,25 @@ def print(i)
     while i >= 10
         numstr[place] = i % 10 + '0'
         i             = i / 10
-        place         = place - 1
+        place--
     loop
     numstr[place] = i + '0'
-    place         = place - 1
+    place--
     if sign
         numstr[place] = '-'
-        place         = place - 1
+        place--
     fin
     numstr[place] = 6 - place
     return prstr(@numstr[place])
 end
-def nametostr(namestr, len, strptr)
+def nametostr(namestr, len, strptr)#0
     ^strptr = len
-    return memcpy(strptr + 1, namestr, len)
+    memcpy(strptr + 1, namestr, len)
 end
 //
 // File routines
 //
-def readtxt(filename)
+def readtxt(filename)#0
     byte txtbuf[81], refnum, i, j
 
     refnum = open(filename, iobuffer)
@@ -1214,17 +1215,17 @@ def readtxt(filename)
             fin
             if !(numlines & $0F); cout('.'); fin
         until txtbuf == 0 or numlines == maxlines
-	//
-	// Make sure there is a blank line at the end of the buffer
-	//
-	if numlines < maxlines and strlinbuf:[numlines - 1] <> @nullstr
-	    strlinbuf:[numlines] = @nullstr
-	    numlines = numlines + 1
-	fin
+        //
+        // Make sure there is a blank line at the end of the buffer
+        //
+        if numlines < maxlines and strlinbuf:[numlines - 1] <> @nullstr
+            strlinbuf:[numlines] = @nullstr
+            numlines++
+        fin
     fin
     if refnum; close(refnum); fin
 end
-def writetxt(filename)
+def writetxt(filename)#0
     byte txtbuf[81], refnum
     byte j, chr
     word i, strptr
@@ -1244,20 +1245,20 @@ def writetxt(filename)
     //
     for i = 0 to numlines - 1
         cpyln(strlinbuf:[i], @txtbuf)
-        txtbuf = txtbuf + 1
+        txtbuf++
         txtbuf[txtbuf] = $0D
         write(refnum, @txtbuf + 1, txtbuf)
         if !(i & $0F); cout('.'); fin
     next
-    return close(refnum)
+    close(refnum)
 end
 //
 // Screen routines
 //
-def clrscrn
-    return call($FC58, 0, 0, 0, 0)
+def clrscrn#0
+    call($FC58, 0, 0, 0, 0)
 end
-def drawrow(row, ofst, strptr)
+def drawrow(row, ofst, strptr)#0
     byte numchars
     word scrnptr
 
@@ -1272,35 +1273,31 @@ def drawrow(row, ofst, strptr)
     else
         memset(scrnptr + numchars, $A0A0, 40 - numchars)
     fin
-    return memcpy(scrnptr, strptr + ofst + 1, numchars)
+    memcpy(scrnptr, strptr + ofst + 1, numchars)
 end
-def drawscrn(toprow, ofst)
+def drawscrn(toprow, ofst)#0
     byte row, numchars
     word strptr, scrnptr
 
     for row = 0 to 23
         strptr   = strlinbuf:[toprow + row]
-	scrnptr  = txtscrn[row]
-	if ofst >= ^strptr
-	    numchars = 0
-	else
-	    numchars = ^strptr - ofst
-	fin
-	if numchars >= 40
+        scrnptr  = txtscrn[row]
+        numchars = ofst >= ^strptr ?? 0 :: ^strptr - ofst
+        if numchars >= 40
             numchars = 40
-	else
-	    memset(scrnptr + numchars, $A0A0, 40 - numchars)
-       	fin
-	memcpy(scrnptr, strptr + ofst + 1, numchars)
+        else
+            memset(scrnptr + numchars, $A0A0, 40 - numchars)
+        fin
+        memcpy(scrnptr, strptr + ofst + 1, numchars)
     next
 end
-def cursoff
+def cursoff#0
     if flags & showcurs
         ^cursptr = underchr
         flags = flags & ~showcurs
     fin
 end
-def curson
+def curson#0
     if !(flags & showcurs)
         cursptr  = txtscrn[cursy] + cursx
         underchr = ^cursptr
@@ -1308,22 +1305,22 @@ def curson
         flags = flags | showcurs
     fin
 end
-def cursflash
+def cursflash#0
     if flags & showcurs
         if flash == 0
             ^cursptr = curschr
         elsif flash == 128
             ^cursptr = underchr
         fin
-        flash = flash + 1
+        flash++
     fin
 end
-def redraw
+def redraw#0
     cursoff
     drawscrn(scrntop, scrnleft)
     curson
 end
-def curshome
+def curshome#0
     cursoff
     cursrow  = 0
     curscol  = 0
@@ -1332,9 +1329,9 @@ def curshome
     scrnleft = 0
     scrntop  = 0
     drawscrn(scrntop, scrnleft)
-    return curson
+    curson
 end
-def cursend
+def cursend#0
     cursoff
     if numlines > 23
         cursrow  = numlines - 1
@@ -1349,14 +1346,14 @@ def cursend
     cursx    = 0
     scrnleft = 0
     drawscrn(scrntop, scrnleft)
-    return curson
+    curson
 end
-def cursup
+def cursup#0
     if cursrow > 0
         cursoff
-        cursrow = cursrow - 1
+        cursrow--
         if cursy > 0
-            cursy = cursy - 1
+            cursy--
         else
             scrntop = cursrow
             drawscrn(scrntop, scrnleft)
@@ -1364,19 +1361,19 @@ def cursup
         curson
     fin
 end
-def pgup
+def pgup#0
     byte i
 
     for i = pgjmp downto 0
         cursup
     next
 end
-def cursdown
+def cursdown#0
     if cursrow < numlines - 1
         cursoff
-        cursrow = cursrow + 1
+        cursrow++
         if cursy < 23
-            cursy = cursy + 1
+            cursy++
         else
             scrntop = cursrow - 23
             drawscrn(scrntop, scrnleft)
@@ -1384,19 +1381,19 @@ def cursdown
         curson
     fin
 end
-def pgdown
+def pgdown#0
     byte i
 
     for i = pgjmp downto 0
         cursdown
     next
 end
-def cursleft
+def cursleft#0
     if curscol > 0
         cursoff
-        curscol = curscol - 1
+        curscol--
         if cursx > 0
-            cursx = cursx - 1
+            cursx--
         else
             scrnleft = curscol
             drawscrn(scrntop, scrnleft)
@@ -1404,19 +1401,19 @@ def cursleft
         curson
     fin
 end
-def pgleft
+def pgleft#0
     byte i
 
     for i = 7 downto 0
         cursleft
     next
 end
-def cursright
+def cursright#0
     if curscol < 80
         cursoff
-        curscol = curscol + 1
+        curscol++
         if cursx < 39
-            cursx = cursx + 1
+            cursx++
         else
             scrnleft = curscol - 39
             drawscrn(scrntop, scrnleft)
@@ -1424,7 +1421,7 @@ def cursright
         curson
     fin
 end
-def pgright
+def pgright#0
     byte i
 
     for i = 7 downto 0
@@ -1443,22 +1440,17 @@ def keyin2e
     ^keystrobe
     if ^$C062 & 128 // Closed Apple pressed
         when key
-	    is keyarrowleft
-	        key = keyctrla
-		break
-	    is keyarrowright
-	        key = keyctrls
-		break
-	    is keyarrowup
-	        key = keyctrlw
-		break
-	    is keyarrowdown
-	        key = keyctrlz
-		break
-	    is keyenter
-	        key = keyctrlf
-		break
-	wend
+            is keyarrowleft
+                key = keyctrla; break
+            is keyarrowright
+                key = keyctrls; break
+            is keyarrowup
+                key = keyctrlw; break
+            is keyarrowdown
+                key = keyctrlz; break
+            is keyenter
+                key = keyctrlf; break
+        wend
     fin
     return key
 end
@@ -1475,37 +1467,42 @@ def keyin2
         fin
     until key >= 128
     ^keystrobe
-    if key == keyctrln
-        key = $DB // [
-    elsif key == keyctrlp
-        key = $DF // _
-    elsif key == keyctrlb
-        key = $FC // |
-    elsif key == keyctrly
-        key = $FE // ~
-//    elsif key == keyarrowleft
-//        if ^pushbttn3 < 128
-//            key = $FF
-//        fin
-    elsif key >= $C0 and flags < shiftlock
-        if ^pushbttn3 < 128
-            if key == $C0
-                key = $D0 // P
-            elsif key == $DD
-                key = $CD // M
-            elsif key == $DE
-                key = $CE // N
+    when key
+        is keyctrln
+            key = $DB; break // [
+        is keyctrlp
+            key = $DF; break // _
+        is keyctrlb
+            key = $FC; break // |
+        is keyctrly
+            key = $FE; break // ~
+//      is keyarrowleft
+//          if ^pushbttn3 < 128
+//              key = $FF
+//          fin
+//          break
+        otherwise
+            if key >= $C0 and flags < shiftlock
+                if ^pushbttn3 < 128
+                    when key
+                        is $C0
+                            key = $D0; break // P
+                         is $DD
+                            key = $CD; break // M
+                        is $DE
+                            key = $CE; break // N
+                    wend
+                else
+                    key = key | $E0
+                fin
             fin
-        else
-           key = key | $E0
-        fin
-    fin
+    wend
     return key
 end
 //
 // Printer routines
 //
-def printtxt(slot)
+def printtxt(slot)#0
     byte txtbuf[80]
     word i, scrncsw
 
@@ -1522,38 +1519,38 @@ def openline(row)
     if numlines < maxlines
         memcpy(@strlinbuf:[row + 1], @strlinbuf:[row], (numlines - row) * 2)
         strlinbuf:[row] = @nullstr
-        numlines = numlines + 1
+        numlines++
         flags = flags | changed
         return 1
     fin
     bell
     return 0
 end
-def cutline
+def cutline#0
     freestr(cutbuf)
     cutbuf = strlinbuf:[cursrow]
     memcpy(@strlinbuf:[cursrow], @strlinbuf:[cursrow + 1], (numlines - cursrow) * 2)
     if numlines > 1
-        numlines = numlines - 1
+        numlines--
     fin
     flags = flags | changed
     if cursrow == numlines
         cursup
     fin
-    return redraw
+    redraw
 end
-def pasteline
+def pasteline#0
     if cutbuf and numlines < maxlines
         memcpy(@strlinbuf:[cursrow + 1], @strlinbuf:[cursrow], (numlines - cursrow) * 2)
         strlinbuf:[cursrow] = newstr(cutbuf)
-        numlines = numlines + 1
+        numlines++
         flags = flags | changed
         redraw
     else
         bell
     fin
 end
-def joinline
+def joinline#0
     byte joinstr[80], joinlen
 
     if cursrow < numlines - 1
@@ -1565,7 +1562,7 @@ def joinline
             freestr(strlinbuf:[cursrow])
             strlinbuf:[cursrow] = newstr(@joinstr)
             freestr(strlinbuf:[cursrow + 1])
-            numlines = numlines - 1
+            numlines--
             memcpy(@strlinbuf:[cursrow + 1], @strlinbuf:[cursrow + 2], (numlines - cursrow) * 2)
             flags = flags | changed
             redraw
@@ -1574,7 +1571,7 @@ def joinline
         fin
     fin
 end
-def splitline
+def splitline#0
     byte splitstr[80], splitlen
 
     if openline(cursrow + 1)
@@ -1628,15 +1625,15 @@ def editline(key)
                     if curscol > 0
                         if curscol <= editstr
                             memcpy(@editstr[curscol], @editstr[curscol + 1], editstr - curscol)
-                            editstr = editstr - 1
+                            editstr--
                         fin
-                        curscol = curscol - 1
+                        curscol--
                         cursoff
                         if cursx > 0
-                            cursx = cursx - 1
+                            cursx--
                             drawrow(cursy, scrnleft, @editstr)
                         else
-                            scrnleft = scrnleft - 1
+                            scrnleft--
                             drawscrn(scrntop, scrnleft)
                         fin
                         curson
@@ -1653,23 +1650,21 @@ def editline(key)
                                 memcpy(@editstr[curscol + 1], @editstr[curscol], editstr - curscol)
                             fin
                         else
-                            curscol = curscol - 1
-                            cursx   = cursx   - 1
-                            key     = editstr[curscol]
+                            curscol--
+                            cursx--
+                            key = editstr[curscol]
                             bell
                         fin
-                    else
-                        if curscol > editstr
-                            editstr = curscol
-                        fin
+                    elsif curscol > editstr
+                        editstr = curscol
                     fin
                     editstr[curscol] = caseconv(key)
                     cursoff
                     if cursx <= 39
                         drawrow(cursy, scrnleft, @editstr)
                     else
-                        scrnleft = scrnleft + 1
-                        cursx    = 39
+                        scrnleft++
+                        cursx = 39
                         drawscrn(scrntop, scrnleft)
                     fin
                     curson
@@ -1680,7 +1675,7 @@ def editline(key)
                 if curscol < editstr
                     strcpy(undoline, @editstr)
                     memcpy(@editstr[curscol + 1], @editstr[curscol + 2], editstr - curscol)
-                    editstr = editstr - 1
+                    editstr--
                     cursoff
                     drawrow(cursy, scrnleft, @editstr)
                     curson
@@ -1702,7 +1697,7 @@ def editline(key)
     fin
     return key
 end
-def editmode
+def editmode#0
     repeat
         when editline(keyin())
             is keyarrowup
@@ -1730,29 +1725,29 @@ def editmode
             is keyctrlv
                 pasteline; break
             is keyctrlf
-	        if numlines < maxlines and cursrow == numlines - 1
+                if numlines < maxlines and cursrow == numlines - 1
                     strlinbuf:[numlines] = @nullstr
-		    numlines = numlines + 1
-		fin
-	        cursdown
+                    numlines++
+                fin
+                cursdown
             is keyctrlo
                 openline(cursrow)
-		curscol  = 0
-		cursx    = 0
-		scrnleft = 0
+                curscol  = 0
+                cursx    = 0
+                scrnleft = 0
                 redraw
-		break
+                break
             is keyenter
                 if flags & insmode
                     splitline
                 else
                     cursdown
-		    curscol  = 0
-		    cursx    = 0
-		    scrnleft = 0
-		    redraw
+                    curscol  = 0
+                    cursx    = 0
+                    scrnleft = 0
+                    redraw
                 fin
-		break
+                break
             is keyctrlt
                 joinline; break
             is keyctrli
@@ -1763,7 +1758,7 @@ def editmode
                     flags = flags | insmode
                     curschr = '+'
                 fin
-		break
+                break
             is keyctrlc
                 if flags & uppercase
                     txtlower
@@ -1771,19 +1766,19 @@ def editmode
                     txtupper
                 fin
                 redraw
-		break
+                break
             is keyescape
                 cursoff
                 cmdmode(TRUE)
                 redraw
-		break
+                break
         wend
     until FALSE
 end
 //
 // Command mode
 //
-def prfiles(optpath)
+def prfiles(optpath)#0
     byte path[64]
     byte refnum
     byte firstblk
@@ -1799,8 +1794,8 @@ def prfiles(optpath)
         crout
     fin
     refnum = open(@path, iobuffer)
-    if perr
-        return perr
+    if !refnum
+        return
     fin
     firstblk = 1
     repeat
@@ -1836,12 +1831,11 @@ def prfiles(optpath)
     until filecnt == 0
     close(refnum)
     crout
-    return 0
 end
-def striplead(strptr, chr)
+def striplead(strptr, chr)#0
     while ^strptr and ^(strptr + 1) == chr
         memcpy(strptr + 1, strptr + 2, ^strptr)
-        ^strptr = ^strptr - 1
+        ^strptr--
     loop
 end
 def parsecmd(strptr)
@@ -1852,7 +1846,7 @@ def parsecmd(strptr)
     if ^strptr
         cmd = ^(strptr + 1)
         memcpy(strptr + 1, strptr + 2, ^strptr)
-        ^strptr = ^strptr - 1
+        ^strptr--
     fin
     if ^strptr
         striplead(strptr, ' ')
@@ -1870,12 +1864,12 @@ def chkchng
     fin
     return TRUE
 end
-def quit
+def quit#0
     if chkchng
         exit
     fin
 end
-def cmdmode(clearscr)
+def cmdmode(clearscr)#0
     byte slot
     word cmdptr
 
@@ -1891,18 +1885,18 @@ def cmdmode(clearscr)
             is 'A'
                 readtxt(cmdptr)
                 flags = flags | changed
-		break
+                break
             is 'R'
                 if chkchng
                     inittxtbuf
-		    numlines   = 0
-		    entrypoint = 0
+                    numlines   = 0
+                    entrypoint = 0
                     strcpy(@txtfile, cmdptr)
                     readtxt(@txtfile)
-		    if numlines == 0; numlines = 1; fin
+                    if numlines == 0; numlines = 1; fin
                     flags = flags & ~changed
                 fin
-		break
+                break
             is 'W'
                 if ^cmdptr
                     strcpy(@txtfile, cmdptr)
@@ -1910,7 +1904,7 @@ def cmdmode(clearscr)
                 writetxt(@txtfile)
                 if flags & changed; entrypoint = 0; fin
                 flags = flags & ~changed
-		break
+                break
             is 'C'
                 prfiles(cmdptr); break
             is 'P'
@@ -1922,7 +1916,7 @@ def cmdmode(clearscr)
                     slot = 1
                 fin
                 printtxt(slot)
-		break
+                break
             is 'Q'
                 quit
             is 'E'
@@ -1932,9 +1926,9 @@ def cmdmode(clearscr)
                 if chkchng
                     inittxtbuf
                     strcpy(@txtfile, @untitled)
-		    entrypoint = 0
+                    entrypoint = 0
                 fin
-		break
+                break
             is 'X'
                 if flags & changed or !entrypoint
                     parse_module
@@ -1946,18 +1940,18 @@ def cmdmode(clearscr)
                         curscol    = parserrpos
                         scrnleft   = curscol & $FFE0
                         cursx      = curscol - scrnleft
-			entrypoint = 0
-		    else
-		        crout
+                        entrypoint = 0
+                    else
+                        crout
                     fin
                 fin
                 if entrypoint
-		    save_vmstate
+                    save_vmstate
                     entrypoint()
-		    restore_vmstate
-		fin
+                    restore_vmstate
+                fin
                 crout
-		break
+                break
             otherwise
                 bell
                 cout('?')
@@ -2004,23 +1998,23 @@ def ctag_new
     ctag_tbl:[codetag] = 0 // Unresolved, nothing to update yet
     return codetag | IS_CTAG
 end
-def ctag_resolve(ctag)
+def ctag_resolve(ctag)#0
     word updtptr, nextptr
 
     ctag = ctag & MASK_CTAG // Better be a ctag!
-    if ctag_tbl:[ctag] & IS_RESOLVED; return parse_err(@dup_id); fin
+    if ctag_tbl:[ctag] & IS_RESOLVED;parse_err(@dup_id); return; fin
     updtptr = ctag_tbl:[ctag] & MASK_CTAG
     while updtptr
         //
         // Update list of addresses needing resolution
         //
-	updtptr  = updtptr + codebuff
+        updtptr  = updtptr + codebuff
         nextptr  = *updtptr & MASK_CTAG
-	if *updtptr & IS_RELATIVE
-	    *updtptr = codeptr - updtptr
-	else
+        if *updtptr & IS_RELATIVE
+            *updtptr = codeptr - updtptr
+        else
             *updtptr = codeptr
-	fin
+        fin
         updtptr = nextptr
     loop
     ctag_tbl:[ctag] = (codeptr - codebuff) | IS_RESOLVED
@@ -2028,34 +2022,34 @@ end
 //
 // Emit data/bytecode
 //
-def emit_byte(bval)
+def emit_byte(bval)#0
     ^codeptr = bval
     codeptr  = codeptr + 1
 end
-def emit_word(wval)
+def emit_word(wval)#0
     *codeptr = wval
     codeptr  = codeptr + 2
 end
-def emit_fill(size)
+def emit_fill(size)#0
     memset(codeptr, 0, size)
     codeptr = codeptr + size
 end
-def emit_op(op)
+def emit_op(op)#0
     lastop = op
-    return emit_byte(op)
+    emit_byte(op)
 end
-def emit_addr(tag)
+def emit_addr(tag)#0
     word updtptr
 
     if tag & IS_CTAG
         tag = tag & MASK_CTAG
         if ctag_tbl:[tag] & IS_RESOLVED
-	    updtptr = (ctag_tbl:[tag] & MASK_CTAG) + codebuff
-	else
+        updtptr = (ctag_tbl:[tag] & MASK_CTAG) + codebuff
+    else
             //
             // Add to list of tags needing resolution
             //
-	    updtptr = ctag_tbl:[tag] & MASK_CTAG
+        updtptr = ctag_tbl:[tag] & MASK_CTAG
             ctag_tbl:[tag] = codeptr - codebuff
         fin
         emit_word(updtptr)
@@ -2063,18 +2057,18 @@ def emit_addr(tag)
         emit_word(tag + codebuff)
     fin
 end
-def emit_reladdr(tag)
+def emit_reladdr(tag)#0
     word updtptr
 
     if tag & IS_CTAG
         tag = tag & MASK_CTAG
         if ctag_tbl:[tag] & IS_RESOLVED
-	    updtptr = ((ctag_tbl:[tag] & MASK_CTAG) + codebuff) - codeptr
-	else
+        updtptr = ((ctag_tbl:[tag] & MASK_CTAG) + codebuff) - codeptr
+    else
             //
             // Add to list of tags needing resolution
             //
-	    updtptr = ctag_tbl:[tag] | IS_RELATIVE
+        updtptr = ctag_tbl:[tag] | IS_RELATIVE
             ctag_tbl:[tag] = codeptr - codebuff
         fin
         emit_word(updtptr)
@@ -2082,8 +2076,8 @@ def emit_reladdr(tag)
         emit_word(tag - (codeptr - codebuff))
     fin
 end
-def emit_iddata(value, size, namestr)
-    return emit_fill(size)
+def emit_iddata(value, size, namestr)#0
+    emit_fill(size)
 end
 def emit_data(vartype, consttype, constval, constsize)
     byte i
@@ -2108,16 +2102,16 @@ def emit_data(vartype, consttype, constval, constsize)
             emit_byte(constval)
         else
             size = 2
-	    if consttype == CONSTADDR_TYPE
-	        emit_addr(constval)
-	    else
+        if consttype == CONSTADDR_TYPE
+            emit_addr(constval)
+        else
                 emit_word(constval)
-	    fin
+        fin
         fin
     fin
     return size
 end
-def emit_const(cval)
+def emit_const(cval)#0
     if cval == 0
         emit_op($00)
     elsif cval > 0 and cval < 256
@@ -2128,106 +2122,126 @@ def emit_const(cval)
         emit_word(cval)
     fin
 end
-def emit_constr(str, size)
+def emit_constr(str, size)#0
     emit_op($2E)
-    return emit_data(0, STR_TYPE, str, size)
+    emit_data(0, STR_TYPE, str, size)
 end
-def emit_lb
-    return emit_op($60)
+def emit_lb#0
+    emit_op($60)
 end
-def emit_lw
-    return emit_op($62)
+def emit_lw#0
+    emit_op($62)
 end
-def emit_llb(offset)
+def emit_llb(offset)#0
     emit_op($64)
-    return emit_byte(offset)
+    emit_byte(offset)
 end
-def emit_llw(offset)
+def emit_llw(offset)#0
     emit_op($66)
-    return emit_byte(offset)
+    emit_byte(offset)
 end
-def emit_lab(tag, offset)
-    if tag & IS_CTAG and offset; return parse_err(@no_ctag_offst); fin
-    emit_op($68)
-    return emit_addr(tag+offset)
+def emit_lab(tag, offset)#0
+    if tag & IS_CTAG and offset
+        parse_err(@no_ctag_offst)
+    else
+        emit_op($68)
+        emit_addr(tag+offset)
+    fin
 end
-def emit_law(tag, offset)
-    if tag & IS_CTAG and offset; return parse_err(@no_ctag_offst); fin
-    emit_op($6A)
-    return emit_addr(tag+offset)
+def emit_law(tag, offset)#0
+    if tag & IS_CTAG and offset
+        parse_err(@no_ctag_offst)
+    else
+        emit_op($6A)
+        emit_addr(tag+offset)
+    fin
 end
-def emit_sb
-    return emit_op($70)
+def emit_sb#0
+    emit_op($70)
 end
-def emit_sw
-    return emit_op($72)
+def emit_sw#0
+    emit_op($72)
 end
-def emit_slb(offset)
+def emit_slb(offset)#0
     emit_op($74)
-    return emit_byte(offset)
+    emit_byte(offset)
 end
-def emit_slw(offset)
+def emit_slw(offset)#0
     emit_op($76)
-    return emit_byte(offset)
+    emit_byte(offset)
 end
-def emit_dup
-    return emit_op($32)
+def emit_dup#0
+    parse_err("No DUP op!")
 end
-def emit_dlb(offset)
+def emit_dlb(offset)#0
     emit_op($6C)
-    return emit_byte(offset)
+    emit_byte(offset)
 end
-def emit_dlw(offset)
+def emit_dlw(offset)#0
     emit_op($6E)
-    return emit_byte(offset)
+    emit_byte(offset)
 end
-def emit_sab(tag, offset)
-    if tag & IS_CTAG and offset; return parse_err(@no_ctag_offst); fin
-    emit_op($78)
-    return emit_addr(tag+offset)
+def emit_sab(tag, offset)#0
+    if tag & IS_CTAG and offset
+        parse_err(@no_ctag_offst)
+    else
+        emit_op($78)
+        emit_addr(tag+offset)
+    fin
 end
-def emit_saw(tag, offset)
-    if tag & IS_CTAG and offset; return parse_err(@no_ctag_offst); fin
-    emit_op($7A)
-    return emit_addr(tag+offset)
+def emit_saw(tag, offset)#0
+    if tag & IS_CTAG and offset
+        parse_err(@no_ctag_offst)
+    else
+        emit_op($7A)
+        emit_addr(tag+offset)
+    fin
 end
-def emit_dab(tag, offset)
-    if tag & IS_CTAG and offset; return parse_err(@no_ctag_offst); fin
-    emit_op($7C)
-    return emit_addr(tag+offset)
+def emit_dab(tag, offset)#0
+    if tag & IS_CTAG and offset
+        parse_err(@no_ctag_offst)
+    else
+        emit_op($7C)
+        emit_addr(tag+offset)
+    fin
 end
-def emit_daw(tag, offset)
-    if tag & IS_CTAG and offset; return parse_err(@no_ctag_offst); fin
-    emit_op($7E)
-    return emit_addr(tag+offset)
+def emit_daw(tag, offset)#0
+    if tag & IS_CTAG and offset
+        parse_err(@no_ctag_offst)
+    else
+        emit_op($7E)
+        emit_addr(tag+offset)
+    fin
 end
-def emit_call(tag)
+def emit_call(tag)#0
     emit_op($54)
-    return emit_addr(tag)
+    emit_addr(tag)
 end
-def emit_ical
-    return emit_op($56)
+def emit_ical#0
+    emit_op($56)
 end
-def emit_push
-    emit_op($34)
+def emit_push#0
+    parse_err("Function call too complex")
 end
-def emit_pull
-    emit_op($36)
+def emit_pull#0
 end
-def emit_localaddr(offset)
+def emit_localaddr(offset)#0
     emit_op($28)
-    return emit_byte(offset)
+    emit_byte(offset)
 end
-def emit_globaladdr(tag, offset)
-    if tag & IS_CTAG and offset; return parse_err(@no_ctag_offst); fin
-    emit_op($26)
-    return emit_addr(tag+offset)
+def emit_globaladdr(tag, offset)#0
+    if tag & IS_CTAG and offset
+        parse_err(@no_ctag_offst)
+    else
+        emit_op($26)
+        emit_addr(tag+offset)
+    fin
 end
-def emit_indexbyte
-    return emit_op($02)
+def emit_indexbyte#0
+    emit_op($02)
 end
-def emit_indexword
-    return emit_op($1E)
+def emit_indexword#0
+    emit_op($1E)
 end
 def emit_unaryop(op)
     when op
@@ -2264,7 +2278,7 @@ def emit_binaryop(op)
             else
                 emit_op($06)
             fin
-	    break
+        break
         is DIV_TKN
             //
             // Replace DIV 2 with SHR 1
@@ -2276,7 +2290,7 @@ def emit_binaryop(op)
             else
                 emit_op($08)
             fin
-	    break
+        break
         is MOD_TKN
             emit_op($0A); break
         is ADD_TKN
@@ -2289,7 +2303,7 @@ def emit_binaryop(op)
             else
                 emit_op($02)
             fin
-	    break
+        break
         is SUB_TKN
             //
             // Replace SUB 1 with DECR
@@ -2300,7 +2314,7 @@ def emit_binaryop(op)
             else
                 emit_op($04)
             fin
-	    break
+        break
         is SHL_TKN
             emit_op($1A); break
         is SHR_TKN
@@ -2332,41 +2346,41 @@ def emit_binaryop(op)
     wend
     return TRUE
 end
-def emit_brtru(tag)
+def emit_brtru(tag)#0
     emit_op($4E)
-    return emit_reladdr(tag)
+    emit_reladdr(tag)
 end
-def emit_brfls(tag)
+def emit_brfls(tag)#0
     emit_op($4C)
-    return emit_reladdr(tag)
+    emit_reladdr(tag)
 end
-def emit_brgt(tag)
+def emit_brgt(tag)#0
     emit_op($38)
-    return emit_reladdr(tag)
+    emit_reladdr(tag)
 end
-def emit_brlt(tag)
+def emit_brlt(tag)#0
     emit_op($3A)
-    return emit_reladdr(tag)
+    emit_reladdr(tag)
 end
-def emit_brne(tag)
+def emit_brne(tag)#0
     emit_op($3E)
-    return emit_reladdr(tag)
+    emit_reladdr(tag)
 end
-def emit_branch(tag)
+def emit_branch(tag)#0
     emit_op($50)
-    return emit_reladdr(tag)
+    emit_reladdr(tag)
 end
-def emit_drop
-    return emit_op($30)
+def emit_drop#0
+    emit_op($30)
 end
-def emit_leave
+def emit_leave#0
     if framesize
           emit_op($5A)
     else
           emit_op($5C)
     fin
 end
-def emit_enter(cparams)
+def emit_enter(cparams)#0
     emit_byte(emit_enter.[0])
     emit_byte(emit_enter.[1])
     emit_byte(emit_enter.[2])
@@ -2398,7 +2412,7 @@ def idmatch(nameptr, len, idptr, idcnt)
     loop
     return 0
 end
-def dumpsym(idptr, idcnt)
+def dumpsym(idptr, idcnt)#0
     while idcnt
         prword(idptr=>idval)
         cout(' ')
@@ -2469,7 +2483,7 @@ def iddata_add(namestr, len, type, size)
     datasize = datasize + size
     return TRUE
 end
-def iddata_size(type, varsize, initsize)
+def iddata_size(type, varsize, initsize)#0
     if varsize > initsize
         datasize = datasize + varsize
         emit_data(0, 0, 0, varsize - initsize)
@@ -2496,7 +2510,7 @@ end
 def idconst_add(namestr, len, value)
     return idglobal_add(namestr, len, CONST_TYPE, value)
 end
-def idglobal_init
+def idglobal_init#0
     word ctag
 
     lineno       = 0
@@ -2581,7 +2595,7 @@ def idglobal_init
     //
     datasize = codeptr - codebuff
 end
-def idlocal_init
+def idlocal_init#0
     locals    = 0
     framesize = 0
     lastlocal = idlocal_tbl
@@ -2589,19 +2603,15 @@ end
 //
 // Alebraic op to stack op
 //
-def push_op(op, prec)
-    opsp = opsp + 1
-    if opsp == 16
-        return parse_err(@estk_overflw)
-    fin
+def push_op(op, prec)#0
+    opsp++
+    if opsp == 16; parse_err(@estk_overflw); return; fin
     opstack[opsp]   = op
     precstack[opsp] = prec
 end
 def pop_op
-    if opsp < 0
-        return parse_err(@estk_underflw)
-    fin
-    opsp = opsp - 1
+    if opsp < 0; return parse_err(@estk_underflw); fin
+    opsp--
     return opstack[opsp + 1]
 end
 def tos_op
@@ -2616,23 +2626,19 @@ def tos_op_prec(tos)
     fin
     return precstack[opsp]
 end
-def push_val(value, size, type)
-    valsp = valsp + 1
-    if valsp == 16
-        return parse_err(@estk_overflw)
-    fin
+def push_val(value, size, type)#0
+    valsp++
+    if valsp == 16; parse_err(@estk_overflw); return; fin
     valstack[valsp]  = value
     sizestack[valsp] = size
     typestack[valsp] = type
 end
 def pop_val(valptr, sizeptr, typeptr)
-    if valsp < 0
-        return parse_err(@estk_underflw)
-    fin
+    if valsp < 0; return parse_err(@estk_underflw); fin
     *valptr  = valstack[valsp]
     ^sizeptr = sizestack[valsp]
     ^typeptr = typestack[valsp]
-    valsp = valsp - 1
+    valsp--
     return valsp  + 1
 end
 //
@@ -2675,7 +2681,7 @@ def scan
         // ID, either variable name or reserved word
         //
         repeat
-            scanptr = scanptr + 1
+            scanptr++
         until !isalphanum(^scanptr)
         tknlen = scanptr - tknptr
         token  = keymatch
@@ -2687,7 +2693,7 @@ def scan
         constval = 0
         repeat
             constval = constval * 10 + ^scanptr - '0'
-            scanptr  = scanptr + 1
+            scanptr++
         until !isnum(^scanptr)
     else
         //
@@ -2700,9 +2706,9 @@ def scan
                     ^scanptr = $00
                 else
                     token   = DIV_TKN
-                    scanptr = scanptr + 1
+                    scanptr++
                 fin
-		break
+                break
             is '='
                 if ^(scanptr + 1) == '='
                     token   = EQ_TKN
@@ -2712,9 +2718,9 @@ def scan
                     scanptr = scanptr + 2
                 else
                     token   = SET_TKN
-                    scanptr = scanptr + 1
+                    scanptr++
                 fin
-		break
+                break
             is '-'
                 if ^(scanptr + 1) == '>'
                     token   = PTRB_TKN
@@ -2724,19 +2730,19 @@ def scan
                     scanptr = scanptr + 2
                 else
                     token   = SUB_TKN
-                    scanptr = scanptr + 1
+                    scanptr++
                 fin
-		break
+                break
             is '+'
                 if ^(scanptr + 1) == '+'
                     token   = INC_TKN
                     scanptr = scanptr + 2
                 else
                     token   = ADD_TKN
-                    scanptr = scanptr + 1
+                    scanptr++
                 fin
-		break
-	    is '>'
+                break
+            is '>'
                 if ^(scanptr + 1) == '>'
                     token   = SHR_TKN
                     scanptr = scanptr + 2
@@ -2745,9 +2751,9 @@ def scan
                     scanptr = scanptr + 2
                 else
                     token   = GT_TKN
-                    scanptr = scanptr + 1
+                    scanptr++
                 fin
-		break
+                break
             is '<'
                 if ^(scanptr + 1) == '<'
                     token   = SHL_TKN
@@ -2760,41 +2766,41 @@ def scan
                     scanptr = scanptr + 2
                 else
                     token   = LT_TKN
-                    scanptr = scanptr + 1
+                    scanptr++
                 fin
-		break
-	    is '$'
-	        //
-		// Hexadecimal constant
-		//
-		token    = INT_TKN
-		constval = 0
-		repeat
-                    scanptr = scanptr + 1
-		    if ^scanptr >= '0' and ^scanptr <= '9'
+                break
+            is '$'
+                //
+                // Hexadecimal constant
+                //
+                token    = INT_TKN
+                constval = 0
+                repeat
+                    scanptr++
+                    if ^scanptr >= '0' and ^scanptr <= '9'
                         constval = (constval << 4) + ^scanptr - '0'
-		    elsif ^scanptr >= 'A' and ^scanptr <= 'F'
+                    elsif ^scanptr >= 'A' and ^scanptr <= 'F'
                         constval = (constval << 4) + ^scanptr - '7'// 'A'-10
                     elsif ^scanptr >= 'a' and ^scanptr <= 'f'
                         constval = (constval << 4) + ^scanptr - 'W'// 'a'-10
-		    else
+                    else
                         break
                     fin
                 until !^scanptr
-	        break
+                break
             is $27 // '
-	        //
-		// Character constant
-		//
-		token = CHR_TKN
-		if ^(scanptr + 1) <> $5C // \
-		    constval = ^(scanptr + 1)
-		    if ^(scanptr + 2) <> $27 // '
+                //
+                // Character constant
+                //
+                token = CHR_TKN
+                if ^(scanptr + 1) <> $5C // \
+                    constval = ^(scanptr + 1)
+                    if ^(scanptr + 2) <> $27 // '
                         return parse_err(@bad_cnst)
                     fin
-		    scanptr = scanptr + 3
-		else
-   		    when ^(scanptr + 2)
+                    scanptr = scanptr + 3
+                else
+                    when ^(scanptr + 2)
                         is 'n'
                             constval = $0D; break
                         is 'r'
@@ -2809,40 +2815,40 @@ def scan
                     fin
                     scanptr = scanptr + 4
                 fin
-	        break
-	    is '"'
-	        //
-		// String constant
-		//
-		token    = STR_TKN
-		scanptr  = scanptr + 1
-		constval = scanptr
-		while ^scanptr and ^scanptr <> '"'
-		    scanptr = scanptr + 1
-		loop
-		if !^scanptr
-		    return parse_err(@bad_cnst)
-		fin
-		scanptr = scanptr + 1
-		break
-	    is 0
-	    is ';'
-	        if token <> EOF_TKN
-		    token = EOL_TKN
-		fin
-		break
+                break
+            is '"'
+                //
+                // String constant
+                //
+                token    = STR_TKN
+                constval = scanptr
+                scanptr++
+                while ^scanptr and ^scanptr <> '"'
+                    scanptr++
+                loop
+                if !^scanptr
+                    return parse_err(@bad_cnst)
+                fin
+                scanptr++
+                break
+            is 0
+            is ';'
+                if token <> EOF_TKN
+                    token = EOL_TKN
+                fin
+                break
             otherwise
                 //
                 // Simple single character tokens
                 //
-                token    = scanchr | $80
-                scanptr = scanptr + 1
+                token = scanchr | $80
+                scanptr++
         wend
     fin
     tknlen = scanptr - tknptr
     return token
 end
-def rewind(ptr)
+def rewind(ptr)#0
     scanptr = ptr
 end
 def lookahead
@@ -2864,21 +2870,24 @@ end
 //
 def nextln
     if ^scanptr == ';'
-        scanptr = scanptr + 1
+        scanptr++
         scan
     else
         scanptr = inbuff
         if lineno < numlines
             cpyln(strlinbuf:[lineno], instr)
-            lineno  = lineno + 1
+            lineno++
             if !(lineno & $0F); cout('.'); fin
-            //cout('>')
-            //prstr(instr)
-            //crout
+            print(lineno);cout(':');print(numlines)
+            cout('>')
+            prstr(instr)
+            crout
             scan
         else
-	    ^instr  = 0
-	    ^inbuff = 0
+            cout('<')
+            crout
+            ^instr  = 0
+            ^inbuff = 0
             token   = DONE_TKN
         fin
     fin
@@ -2900,19 +2909,19 @@ def calc_binaryop(op)
     when op
         is MUL_TKN
             val1 = val1 * val2
-	        break
+            break
         is DIV_TKN
             val1 = val1 / val2
-    	    break
+            break
         is MOD_TKN
             val1 = val1 % val2
             break
         is ADD_TKN
             val1 = val1 + val2
-	        break
+            break
         is SUB_TKN
             val1 = val1 - val2
-    	    break
+            break
         is SHL_TKN
             val1 = val1 << val2
             break
@@ -2964,7 +2973,7 @@ def parse_constval
             when token
                 is SUB_TKN
                     mod = mod | 1; break
-		is ALT_COMP_TKN
+        is ALT_COMP_TKN
                 is COMP_TKN
                     mod = mod | 2; break
                 is LOGIC_NOT_TKN
@@ -3003,11 +3012,11 @@ def parse_constval
             if !idptr; return parse_err(@bad_cnst); fin
             type = idptr->idtype
             if type & ADDR_TYPE
-	        if mod <> 8; return parse_err(@bad_cnst); fin
+            if mod <> 8; return parse_err(@bad_cnst); fin
                 type = CONSTADDR_TYPE
             fin
             value = idptr=>idval
-    	    break
+            break
         otherwise
             return 0
     wend
@@ -3125,7 +3134,7 @@ def parse_value(rvalue)
     while !parse_term
         when token
             is ADD_TKN
-	        break
+            break
             is BPTR_TKN
                 if deref
                     push_op(token, 0)
@@ -3175,14 +3184,14 @@ def parse_value(rvalue)
             // type  = type | WORD_TYPE
             emit_val = TRUE
             break
-	is STR_TKN
-	    //
-	    // Special case
-	    //
-	    emit_constr(constval, tknlen - 1)
-	    scan
-	    return WORD_TYPE
-	    break
+    is STR_TKN
+        //
+        // Special case
+        //
+        emit_constr(constval, tknlen - 1)
+        scan
+        return WORD_TYPE
+        break
         otherwise
             return 0
     wend
@@ -3196,16 +3205,16 @@ def parse_value(rvalue)
                 is NEG_TKN
                     pop_op
                     value = -value
-		    break
+            break
                 is ALT_COMP_TKN
                 is COMP_TKN
                     pop_op
                     value = ~value
-		    break
+            break
                 is LOGIC_NOT_TKN
                     pop_op
                     value = !value
-		    break
+            break
                 otherwise
                     cparams = FALSE
             wend
@@ -3270,19 +3279,19 @@ def parse_value(rvalue)
                 break
             is OPEN_BRACKET_TKN
                 //
-		// Array of arrays
-		//
-		if !emit_val
-		    if type & CONST_TYPE
-		        emit_const(value)
+                // Array of arrays
+                //
+                if !emit_val
+                    if type & CONST_TYPE
+                        emit_const(value)
                     elsif type & ADDR_TYPE
-		        if type & LOCAL_TYPE
-			    emit_localaddr(value + ref_offset)
+                        if type & LOCAL_TYPE
+                            emit_localaddr(value + ref_offset)
                         else
-			    emit_globaladdr(value, ref_offset)
+                            emit_globaladdr(value, ref_offset)
                         fin
                         ref_offset = 0
-		    fin
+                    fin
                     emit_val = TRUE
                 else
                     if ref_offset <> 0
@@ -3291,21 +3300,21 @@ def parse_value(rvalue)
                         ref_offset = 0
                     fin
                 fin
-		while parse_expr
-		    if token <> COMMA_TKN
-		        break
+                while parse_expr
+                    if token <> COMMA_TKN
+                        break
                     fin
-		    emit_indexword
-		    emit_lw
+                    emit_indexword
+                    emit_lw
                 loop
-		if token <> CLOSE_BRACKET_TKN
-		    return parse_err(@no_close_bracket)
+                if token <> CLOSE_BRACKET_TKN
+                    return parse_err(@no_close_bracket)
                 fin
-		if ref_type & (WPTR_TYPE | WORD_TYPE)
-		    emit_indexword
+                if ref_type & (WPTR_TYPE | WORD_TYPE)
+                    emit_indexword
                     ref_type = WPTR_TYPE
                 else
-		    emit_indexbyte
+                    emit_indexbyte
                     ref_type = BPTR_TYPE
                 fin
                 break
@@ -3332,7 +3341,7 @@ def parse_value(rvalue)
                             fin
                         fin
                     fin
-		    emit_val = 1;
+                    emit_val = 1;
                 else
                     if ref_offset <> 0
                         emit_const(ref_offset)
@@ -3389,23 +3398,23 @@ def parse_value(rvalue)
                         ref_offset = 0
                         emit_val   = TRUE
                     fin
-		fin
+                fin
                 break
         wend
     loop
     if emit_val
         if ref_offset <> 0
-	    emit_const(ref_offset)
-	    emit_op($02)
-	    ref_offset = 0
-	fin
-        if deref
-            if ref_type & BPTR_TYPE
-                emit_lb
-            elsif ref_type & WPTR_TYPE
-                emit_lw
-            fin
+        emit_const(ref_offset)
+        emit_op($02)
+        ref_offset = 0
+    fin
+    if deref
+        if ref_type & BPTR_TYPE
+            emit_lb
+        elsif ref_type & WPTR_TYPE
+            emit_lw
         fin
+    fin
     else // emit_val
         if deref
             if ref_type & CONST_TYPE
@@ -3527,7 +3536,7 @@ def parse_stmnt
                 ctag_resolve(tag_endif)
             fin
             if token <> FIN_TKN; return parse_err(@no_fin); fin
-	    break
+            break
         is WHILE_TKN
             tag_while   = ctag_new
             tag_wend    = ctag_new
@@ -3546,7 +3555,7 @@ def parse_stmnt
             ctag_resolve(tag_wend)
             break_tag = tag_prevbrk
             cont_tag  = tag_prevcnt
-	    break
+            break
         is REPEAT_TKN
             tag_repeat  = ctag_new
             tag_prevbrk = break_tag
@@ -3565,7 +3574,7 @@ def parse_stmnt
             emit_brfls(tag_repeat)
             ctag_resolve(break_tag)
             break_tag = tag_prevbrk
-	    break
+            break
         is FOR_TKN
             stack_loop  = stack_loop + 1
             tag_for     = ctag_new
@@ -3634,7 +3643,7 @@ def parse_stmnt
             emit_drop
             break_tag  = tag_prevbrk
             stack_loop = stack_loop - 1
-	    break
+            break
         is CASE_TKN
             stack_loop  = stack_loop + 1
             tag_prevbrk = break_tag
@@ -3645,58 +3654,58 @@ def parse_stmnt
             nextln
             while token <> ENDCASE_TKN
                 when token
-		    is OF_TKN
+                    is OF_TKN
                         if !parse_expr; return parse_err(@bad_stmnt); fin
-			emit_brne(tag_choice)
-			ctag_resolve(tag_of)
-			while parse_stmnt
+                        emit_brne(tag_choice)
+                        ctag_resolve(tag_of)
+                        while parse_stmnt
                             nextln
-			loop
-			tag_of = ctag_new
-			if prevstmnt <> BREAK_TKN // Fall through to next OF if no break
+                        loop
+                        tag_of = ctag_new
+                        if prevstmnt <> BREAK_TKN // Fall through to next OF if no break
                             emit_branch(tag_of)
-			fin
-			ctag_resolve(tag_choice)
-			tag_choice = ctag_new
-			break
+                        fin
+                        ctag_resolve(tag_choice)
+                        tag_choice = ctag_new
+                        break
                     is DEFAULT_TKN
                         ctag_resolve(tag_of)
-			tag_of = 0
-			scan
-			while parse_stmnt
+                        tag_of = 0
+                        scan
+                        while parse_stmnt
                             nextln
-			loop
-			if token <> ENDCASE_TKN; return parse_err(@bad_stmnt); fin
-			break
-		    is EOL_TKN
+                        loop
+                        if token <> ENDCASE_TKN; return parse_err(@bad_stmnt); fin
+                        break
+                    is EOL_TKN
                         nextln
-			break
+                        break
                     otherwise
                         return parse_err(@bad_stmnt)
-		wend
+                wend
             loop
             if (tag_of)
                 ctag_resolve(tag_of)
-	    fin
+            fin
             ctag_resolve(break_tag)
             emit_drop
             break_tag = tag_prevbrk
             stack_loop = stack_loop - 1
-	    break
+            break
         is BREAK_TKN
             if break_tag
                 emit_branch(break_tag)
             else
                 return parse_err(@bad_stmnt)
             fin
-	    break
+            break
         is CONT_TKN
             if cont_tag
                 emit_branch(cont_tag)
             else
                 return parse_err(@bad_stmnt)
             fin
-	    break
+            break
         is RETURN_TKN
             if infunc
                 for i = 1 to stack_loop
@@ -3707,7 +3716,7 @@ def parse_stmnt
                 emit_const(0)
             fin
             emit_leave
-	    break
+            break
         is EOL_TKN
             return TRUE
         is ELSE_TKN
@@ -3838,6 +3847,7 @@ def parse_var(type)
     byte consttype, constsize, idlen
     word idptr, constval, arraysize, size
 
+    cout('T')
     idlen = 0
     size  = 1
     if scan == OPEN_BRACKET_TKN
@@ -3893,15 +3903,16 @@ def parse_struc
     byte type, idlen, struclen, constsize
     word size, offset, idstr
 
+    cout('S')
     struclen = 0
     if scan == ID_TKN
         struclen = tknlen
-	if struclen > 16
-	    struclen = 16
-	fin
-	for idlen = 0 to struclen
-	    strucid[idlen] = ^(tknptr + idlen)
-	next
+        if struclen > 16
+            struclen = 16
+        fin
+        for idlen = 0 to struclen
+            strucid[idlen] = ^(tknptr + idlen)
+        next
     fin
     offset = 0
     while nextln == BYTE_TKN or token == WORD_TKN
@@ -3931,10 +3942,10 @@ def parse_struc
             fin
             if type & WORD_TYPE
                 size = size * 2
-	    fin
+            fin
             if idlen
                 idconst_add(idstr, idlen, offset)
-	    fin
+            fin
             offset = offset + size
         until token <> COMMA_TKN
         if token <> EOL_TKN; return FALSE; fin
@@ -3948,6 +3959,7 @@ def parse_vars
     byte idlen, type, size
     word value, idptr
 
+    cout('V')
     when token
         is CONST_TKN
             if scan <> ID_TKN
@@ -3962,7 +3974,7 @@ def parse_vars
                 return parse_err(@bad_cnst)
             fin
             idconst_add(idptr, idlen, value)
-	    break
+            break
         is STRUC_TKN
             if !parse_struc; parse_err(@bad_struc); fin
             break
@@ -3978,7 +3990,7 @@ def parse_vars
                     return FALSE
                 fin
             until token <> COMMA_TKN
-	    break
+            break
         is PREDEF_TKN
             repeat
                 if scan == ID_TKN
@@ -3987,7 +3999,7 @@ def parse_vars
                     return parse_err(@bad_decl)
                 fin
             until scan <> COMMA_TKN
-	    break
+            break
         is EOL_TKN
             break
         otherwise
@@ -4000,6 +4012,7 @@ def parse_defs
     word func_tag, idptr
 
     if token == DEF_TKN
+        cout('D')
         if scan <> ID_TKN; return parse_err(@bad_decl); fin
         cfnparms = 0
         infunc   = TRUE
@@ -4057,28 +4070,30 @@ def parse_module
         while parse_defs
             nextln
         loop
-	framesize  = 0
-	entrypoint = codeptr
-	emit_enter(0)
-	prevstmnt = 0
+        cout('I')
+        framesize  = 0
+        entrypoint = codeptr
+        emit_enter(0)
+        prevstmnt = 0
         if token <> DONE_TKN
             while parse_stmnt
                 nextln
             loop
         fin
-	if prevstmnt <> RETURN_TKN
-	    emit_const(0)
-	    emit_leave
-	fin
-	if not parserr
+        cout('!')
+        if prevstmnt <> RETURN_TKN
+            emit_const(0)
+            emit_leave
+        fin
+        if not parserr
             //dumpsym(idglobal_tbl, globals)
             //prstr(@entrypt_str)
             //prword(entrypoint)
-	    prstr(@bytes_compiled_str)
-	    prword(codeptr - codebuff)
+            prstr(@bytes_compiled_str)
+            prword(codeptr - codebuff)
             crout
             keyin()
-	fin
+        fin
         return not parserr
     fin
     return FALSE

@@ -26,10 +26,10 @@ const O_READ_WRITE = 3
 // Pedefined functions.
 //
 predef syscall(cmd,params)#1, call(addr,areg,xreg,yreg,status)#1
-predef crout()#0, cout(c)#0, prstr(s)#0, cin()#1, rdstr(p)#1
+predef crout()#0, cout(c)#0, prstr(s)#0, print(i)#0, cin()#1, rdstr(p)#1, toupper(c)#1
 predef markheap()#1, allocheap(size)#1, allocalignheap(size, pow2, freeaddr), releaseheap(newheap)#1, availheap()#1
 predef memset(addr,value,size)#0, memcpy(dst,src,size)#0
-predef uword_isgt(a,b)#1, uword_isge(a,b)#1, uword_islt(a,b)#1, uword_isle(a,b)#1
+predef uword_isgt(a,b)#1, uword_isge(a,b)#1, uword_islt(a,b)#1, uword_isle(a,b)#1, divmod(a,b)#2
 predef loadmod(mod)#1, execmod(modfile)#1, lookupstrmod(str)#1
 //
 // System variables.
@@ -68,18 +68,22 @@ byte callstr[]    = "CALL"
 byte putcstr[]    = "PUTC"
 byte putlnstr[]   = "PUTLN"
 byte putsstr[]    = "PUTS"
+byte putistr[]    = "PUTI"
 byte getcstr[]    = "GETC"
 byte getsstr[]    = "GETS"
+byte toupstr[]    = "TOUPPER"
 byte hpmarkstr[]  = "HEAPMARK"
 byte hpalignstr[] = "HEAPALLOCALIGN"
 byte hpallocstr[] = "HEAPALLOC"
 byte hprelstr[]   = "HEAPRELEASE"
+byte hpavlstr[]   = "HEAPAVAIL"
 byte memsetstr[]  = "MEMSET"
 byte memcpystr[]  = "MEMCPY"
 byte uisgtstr[]   = "ISUGT"
 byte uisgestr[]   = "ISUGE"
 byte uisltstr[]   = "ISULT"
 byte uislestr[]   = "ISULE"
+byte divmodstr[]  = "DIVMOD"
 byte loadstr[]    = "MODLOAD"
 byte execstr[]    = "MODEXEC"
 byte modadrstr[]  = "MODADDR"
@@ -90,18 +94,22 @@ word              = @callstr,   @call
 word              = @putcstr,   @cout
 word              = @putlnstr,  @crout
 word              = @putsstr,   @prstr
+word              = @putistr,   @print
 word              = @getcstr,   @cin
 word              = @getsstr,   @rdstr
+word              = @toupstr,   @toupper
 word              = @hpmarkstr, @markheap
 word              = @hpallocstr,@allocheap
 word              = @hpalignstr,@allocalignheap
 word              = @hprelstr,  @releaseheap
+word              = @hpavlstr,  @availheap
 word              = @memsetstr, @memset
 word              = @memcpystr, @memcpy
 word              = @uisgtstr,  @uword_isgt
 word              = @uisgestr,  @uword_isge
 word              = @uisltstr,  @uword_islt
 word              = @uislestr,  @uword_isle
+word              = @divmodstr, @divmod
 word              = @loadstr,   @loadmod
 word              = @execstr,   @execmod
 word              = @modadrstr, @lookupstrmod
@@ -226,9 +234,9 @@ asm memcpy(dst,src,size)#0
 ;
 ; FORWARD COPY
 ;
-        LDA     ESTKL-2,X
+        LDA     ESTKL-1,X
         STA     DSTL
-        LDA     ESTKH-2,X
+        LDA     ESTKH-1,X
         STA     DSTH
         LDA     ESTKL-2,X
         STA     SRCL
@@ -402,6 +410,30 @@ asm uword_islt(a,b)#1
         STA     ESTKL+1,X
         STA     ESTKH+1,X
         INX
+        RTS
+end
+asm divmod(a,b)#2
+        LDA     #>(_divmod-1)
+        PHA
+        LDA     #<(_divmod-1)
+        PHA
+        JSR     INTERP
+        !BYTE   $0A, $5C        ; MOD, RET
+_divmod DEX
+        LDA     DSTL            ; DVDNDL
+        STA     ESTKL,X
+        LDA     DSTH            ; DVDNDH
+        STA     ESTKH,X
+        LSR     DVSIGN          ; SIGN(RESULT) = (SIGN(DIVIDEND) + SIGN(DIVISOR)) & 1
+        BCS     +
+        RTS
++       LDA     #$00
+;       SEC
+        SBC     ESTKL,X
+        STA     ESTKL,X
+        LDA     #$00
+        SBC     ESTKH,X
+        STA     ESTKH,X
         RTS
 end
 //
@@ -650,14 +682,14 @@ def volume(devname, volname, ttlblks, freblks)#1
     *freblks = params:7
     return perr
 end
-def open(path, access)#1
+def open(path)#1
     byte params[7]
 
     params.0 = 4
     params:1 = path
     params.3 = 0
-    params:4 = @access
-    params.6 = 1
+    params:4 = 0
+    params.6 = 0
     perr     = syscall($C8, @params)
     return params.3
 end
@@ -777,7 +809,7 @@ end
 def init_cons()#0
     byte nlmode[2]
     if !refcons
-        refcons = open(@console, O_READ_WRITE)
+        refcons = open(@console)
     fin
     write(refcons, @textmode, 3)
     devcons  = dev_getnum(@console)
@@ -803,6 +835,11 @@ def prstr(str)#0
     if str->[^str] == $0D
         cout($0A)
     fin
+end
+def print(i)#0
+    if i < 0; cout('-'); i = -i; fin
+    if i >= 10; print(i / 10); fin
+    cout(i % 10 + '0')
 end
 def rdstr(prompt)#1
     cout(prompt)
@@ -945,13 +982,13 @@ def loadmod(mod)#1
     // Read the RELocatable module header (first 128 bytes)
     //
     dcitos(mod, @filename)
-    refnum = open(@filename, O_READ)
+    refnum = open(@filename)
     if refnum > 0
         rdlen   = read(refnum, @header, 128)
         modsize = header:0
-        moddep  = @header.1
-        defofst = modsize
-        init    = 0
+        //moddep  = @header.1
+        //defofst = modsize
+        //init    = 0
         if rdlen > 4 and header:2 == $DA7F // DAVE+1 = magic number :-)
             //
             // This is an EXTended RELocatable (data+bytecode) module.
@@ -986,7 +1023,7 @@ def loadmod(mod)#1
                 //
                 // Reset read pointer.
                 //
-                refnum = open(@filename, O_READ)
+                refnum = open(@filename)
                 rdlen  = read(refnum, @header, 128)
             fin
         else
@@ -1160,7 +1197,7 @@ def catalog(optpath)#1
         prstr(@path)
         crout()
     fin
-    refnum = open(@path, O_READ)
+    refnum = open(@path)
     if perr
         return perr
     fin
@@ -1291,7 +1328,7 @@ loop
 //
 cmdptr  = heap
 ^cmdptr = 0
-autorun = open(@autorun, O_READ)
+autorun = open(@autorun)
 if autorun > 0
     ^cmdptr = read(autorun, cmdptr + 1, 64)
     close(autorun)

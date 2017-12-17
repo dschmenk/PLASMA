@@ -1,13 +1,7 @@
 //
 // Cooperative multi-threading (fiber) scheduler
 //
-import cmdsys
-    predef syscall, call, getc, gets, putc, puts, putln
-    predef memset, memcpy, modaddr, modexec
-    predef heapmark, heapallocalign, heapalloc, heaprelease
-    predef isugt, isuge, isult, isule
-    byte MACHID
-end
+include "inc/cmdsys.plh"
 //
 // Maximum number of fibers
 //
@@ -66,7 +60,7 @@ asm fbrSwap(saveVM, restoreVM)
     STA ESTK,Y
     DEY
     BPL -
-+   TXA
+    TXA
     TAY
 -   LDA $100,Y
     STA (DST),Y
@@ -122,25 +116,26 @@ export def fbrInit(numPool)
     fbrPool = heapalloc(fbrMax * 512 + 256)
     if fbrPool
         //
-	// Each fiber gets 256 bytes of stack and 256 bytes
-	// for frame (local) data - except fiber 0 uses original frame data
-	//
+        // Each fiber gets 256 bytes of stack and 256 bytes
+        // for frame (local) data - except fiber 0 uses original frame data
+        //
         pool = fbrPool + 256
-	for i = fbrMax downto 1
-	    if i < numPool
-                fbrState[i]   = FIBER_FREE
-                fbrVMState[i] = pool
-	        pool          = pool + 512
-	    fin
-	next
-	//
-	// Set fiber 0 to the RUNning fiber
-	//
-	fbrState   = FIBER_RUN
-	fbrVMState = fbrPool
+        for i = fbrMax downto 1
+            if i < numPool
+                    fbrState[i]   = FIBER_FREE
+                    fbrVMState[i] = pool
+                pool          = pool + 512
+            fin
+        next
+        //
+        // Set fiber 0 to the RUNning fiber
+        //
+        fbrState   = FIBER_RUN
+        fbrVMState = fbrPool
     else
         return -1
     fin
+    return 0
 end
 //
 // Stop fiber and return it to FREE pool
@@ -153,19 +148,20 @@ export def fbrStop(fid)
     //
     if fid
         //
-	// Remove fiber from RUN list and tag as free
-	//
+        // Remove fiber from RUN list and tag as free
+        //
         fbrState[fid] = FIBER_FREE
         i = 0
         while fbrNext[i] <> fid
-	    i = fbrNext[i]
-	loop
-	fbrNext[i] = fbrNext[fid]
-	if fid == fbrRunning
-	    fbrRunning = fbrNext[fbrRunning]
-	    return fbrLoad(fbrVMState[fbrRunning])
-	fin
+            i = fbrNext[i]
+        loop
+        fbrNext[i] = fbrNext[fid]
+        if fid == fbrRunning
+            fbrRunning = fbrNext[fbrRunning]
+            return fbrLoad(fbrVMState[fbrRunning])
+        fin
     fin
+    return 0
 end
 //
 // Stop current fiber
@@ -174,7 +170,7 @@ export def fbrExit
     //
     // Stop running fiber
     //
-    fbrStop(fbrRunning)
+    return fbrStop(fbrRunning)
 end
 //
 // Start a fiber RUNning
@@ -185,40 +181,40 @@ export def fbrStart(defaddr, param)
 
     for i = fbrMax downto 1
         if fbrState[i] == FIBER_FREE
-	    //
-	    // Allocate fiber from pool
-	    //
-	    fbrState[i]         = FIBER_RUN
-	    vmstate             = fbrVMState[i]
-	    vmstate=>ifp        = vmstate + 512
+            //
+            // Allocate fiber from pool
+            //
+            fbrState[i]         = FIBER_RUN
+            vmstate             = fbrVMState[i]
+            vmstate=>ifp        = vmstate + 512
             vmstate=>pp         = vmstate + 512
-	    //
-	    // Set fiber parameters to fiber ID and passed-in value
-	    //
+            //
+            // Set fiber parameters to fiber ID and passed-in value
+            //
             vmstate->esp        = $0E
-	    vmstate->estklo.$0F = i
-	    vmstate->estkhi.$0F = 0
-	    vmstate->estklo.$0E = param.0 // param lo byte
-	    vmstate->estkhi.$0E = param.1 // param hi byte
-	    //
-	    // Initialize stack to point to fiber def and fbrExit
-	    // This allows a fiber to return and it will fall into fbrExit
-	    //
+            vmstate->estklo.$0F = i
+            vmstate->estkhi.$0F = 0
+            vmstate->estklo.$0E = param.0 // param lo byte
+            vmstate->estkhi.$0E = param.1 // param hi byte
+            //
+            // Initialize stack to point to fiber def and fbrExit
+            // This allows a fiber to return and it will fall into fbrExit
+            //
             vmstate->hwsp = $FB
             vmstate=>$FE  = @fbrExit - 1
             vmstate=>$FC  = defaddr  - 1
-	    //
-	    // Link into RUN list
-	    //
-	    fbrNext[i]          = fbrNext[fbrRunning]
-	    fbrNext[fbrRunning] = i
-	    //
-	    // Return fiber ID (index)
-	    //
-	    return i
-	fin
-     next
-     return -1
+            //
+            // Link into RUN list
+            //
+            fbrNext[i]          = fbrNext[fbrRunning]
+            fbrNext[fbrRunning] = i
+            //
+            // Return fiber ID (index)
+            //
+            return i
+        fin
+    next
+    return -1
 end
 //
 // Round-robin schedule RUNning fibers
@@ -232,13 +228,14 @@ export def fbrYield
     if fbrNext[fbrRunning] <> fbrRunning
         prev       = fbrRunning
         fbrRunning = fbrNext[fbrRunning]
-	return fbrSwap(fbrVMState[prev], fbrVMState[fbrRunning])
+        return fbrSwap(fbrVMState[prev], fbrVMState[fbrRunning])
     fin
+    return 0
 end
 //
 // HALT current fiber and await a RESUME
 //
-export def fbrHalt
+export def fbrHalt#0
     byte i
 
     //
@@ -246,30 +243,30 @@ export def fbrHalt
     //
     if fbrRunning
         //
-	// Remove fiber from RUN list
-	//
+        // Remove fiber from RUN list
+        //
         i = 0
         while fbrNext[i] <> fbrRunning
-	    i = fbrNext[i]
-	loop
-	fbrState[fbrRunning] = FIBER_HALT
-	fbrNext[i]           = fbrNext[fbrRunning]
-	i                    = fbrRunning
-	fbrRunning           = fbrNext[fbrRunning]
-	return fbrSwap(fbrVMState[i], fbrVMState[fbrRunning])
+            i = fbrNext[i]
+        loop
+        fbrState[fbrRunning] = FIBER_HALT
+        fbrNext[i]           = fbrNext[fbrRunning]
+        i                    = fbrRunning
+        fbrRunning           = fbrNext[fbrRunning]
+        fbrSwap(fbrVMState[i], fbrVMState[fbrRunning])
     fin
 end
 //
 // Restore HALTed fiber to RUN list
 //
-export def fbrResume(fid)
+export def fbrResume(fid)#0
     if fbrState[fid] == FIBER_HALT
         //
-	// Insert HALTed fiber back into RUN list
-	//
-	fbrState[fid]       = FIBER_RUN
-	fbrNext[fid]        = fbrNext[fbrRunning]
-	fbrNext[fbrRunning] = fid
+        // Insert HALTed fiber back into RUN list
+        //
+        fbrState[fid]       = FIBER_RUN
+        fbrNext[fid]        = fbrNext[fbrRunning]
+        fbrNext[fbrRunning] = fid
     fin
 end
 
@@ -277,7 +274,7 @@ end
 // Test Fiber library
 //
 
-def puth(h)
+def puth(h)#0
     putc('$')
     putc(valstr[(h >> 12) & $0F])
     putc(valstr[(h >> 8)  & $0F])
@@ -285,12 +282,12 @@ def puth(h)
     putc(valstr[ h        & $0F])
 end
 
-def fbrTest(fid, param)
+def fbrTest(fid, param)#0
     byte i
 
     for i = 1 to param
         puth(fid); putc($0D)
-	fbrYield
+        fbrYield
     next
 end
 

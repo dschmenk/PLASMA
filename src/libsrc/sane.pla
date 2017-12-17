@@ -1,0 +1,893 @@
+include "inc/cmdsys.plh"
+include "inc/fileio.plh"
+const AUXADDR = $E000 // Location of SANE on 128K //e or //c
+struc t_diskinfo
+    word codelen
+    word codeaddr
+end
+struc t_codefile
+    byte[16*t_diskinfo] diskinfo
+    byte[16*8]          segname
+    word[16]            segkind
+    word[16]            textaddr
+    word[16]            seginfo
+end
+//
+// External interface to SANE libraries
+//
+predef fpInit(), fpDefaultHalt(pstatus), uninit0(), uninit1(op, dst), uninit2(op, dst, src), uninit3(op, dst, src, src2)
+export word sane = @fpInit, @fpDefaultHalt, @uninit0, @uninit1, @uninit2, @uninit3, @uninit1, @uninit2, @uninit3, @uninit0, @uninit0
+//
+// Pointer to FP6502 entry
+//
+word fp6502
+//
+// PLASMA <-> SANE interface routines
+//
+asm equates
+        !SOURCE "vmsrc/plvmzp.inc"
+end
+//
+// HALT exception handling
+//
+asm xfpHalt
+        STX     SRC         ; COPY STATUS RECORD TO MAIN MEMORY
+        STY     SRC+1
+        LDY     #$08
+-       LDA     (SRC),Y
+        STA     $02F7,Y
+        DEY
+        BPL     -
+        PLA
+        TAX
+        PLA
+        TAY
+        STA     $C008       ; BACK TO MAINZP
+        PLP
+        TYA
+        PHA
+        TXA
+        PHA
+        LDY     #$02        ; POINT TO MOVED STATUS RECORD
+        LDX     #$F7
+end
+asm fpHalt
+        STA     $C008
+        TXA
+        LDX     ESP
+        STA     ESTKL,X
+        STY     ESTKH,X
+        PLA                 ; POP RETURN TO fpOp?
+        PLA
+end
+asm fixupHLT
+        JMP     ($FFF0)     ; JUMP THROUGH PLASMA HALT VECTOR
+end
+//
+// Main memory FP6502 API
+//
+asm fpOp0(op)#1
+        LDA     ESTKH,X
+        PHA
+        LDA     ESTKL,X
+        PHA
+        STX     ESP
+end
+asm fixupFP0
+        JSR     $FFF0
+        TXA
+        LDX     ESP
+        STA     ESTKL,X
+        STY     ESTKH,X
+        RTS
+end
+asm fpOp1(op, dst)#1
+        LDA     ESTKH,X
+        PHA
+        LDA     ESTKL,X
+        PHA
+        LDA     ESTKH+1,X
+        PHA
+        LDA     ESTKL+1,X
+        PHA
+        INX
+        STX     ESP
+end
+asm fixupFP1
+        JSR     $FFF0
+        TXA
+        LDX     ESP
+        STA     ESTKL,X
+        STY     ESTKH,X
+        RTS
+end
+asm fpOp2(op, dst, src)#1
+        LDA     ESTKH,X
+        PHA
+        LDA     ESTKL,X
+        PHA
+        LDA     ESTKH+1,X
+        PHA
+        LDA     ESTKL+1,X
+        PHA
+        LDA     ESTKH+2,X
+        PHA
+        LDA     ESTKL+2,X
+        PHA
+        INX
+        INX
+        STX     ESP
+end
+asm fixupFP2
+        JSR     $FFF0
+        TXA
+        LDX     ESP
+        STA     ESTKL,X
+        STY     ESTKH,X
+        RTS
+end
+asm fpOp3(op, dst, src, src2)#1
+        LDA     ESTKH,X
+        PHA
+        LDA     ESTKL,X
+        PHA
+        LDA     ESTKH+1,X
+        PHA
+        LDA     ESTKL+1,X
+        PHA
+        LDA     ESTKH+2,X
+        PHA
+        LDA     ESTKL+2,X
+        PHA
+        LDA     ESTKH+3,X
+        PHA
+        LDA     ESTKL+3,X
+        PHA
+        INX
+        INX
+        INX
+        STX     ESP
+end
+asm fixupFP3
+        JSR     $FFF0
+        TXA
+        LDX     ESP
+        STA     ESTKL,X
+        STY     ESTKH,X
+        RTS
+end
+//
+// AUX memory FP6502 API
+//
+asm xfpOp0(op)#1
+        LDY     ESTKL,X
+        LDA     ESTKH,X
+        STX     ESP
+        PHP
+        SEI
+        STA     $C009       ; SELECT ALTZP
+        BIT     $C083       ; R/W LC BANK2
+        BIT     $C083
+        PHA
+        TYA
+        PHA
+        JSR     $E000
+        STA     $C008       ; BACK TO MAINZP
+        PLP
+        TXA
+        LDX     ESP
+        STA     ESTKL,X
+        STY     ESTKH,X
+        RTS
+end
+asm xfpOp1(op, dst)#1
+        LDA     ESTKL+1,X
+        STA     $02FE
+        LDA     ESTKH+1,X
+        STA     $02FF
+        LDY     ESTKL,X
+        LDA     ESTKH,X
+        INX
+        STX     ESP
+        PHP
+        SEI
+        STA     $C009       ; SELECT ALTZP
+        BIT     $C083       ; R/W LC BANK2
+        BIT     $C083
+        PHA
+        TYA
+        PHA
+        LDA     $02FF
+        PHA
+        LDA     $02FE
+        PHA
+        JSR     $E000
+        STA     $C008       ; BACK TO MAINZP
+        PLP
+        TXA
+        LDX     ESP
+        STA     ESTKL,X
+        STY     ESTKH,X
+        RTS
+end
+asm xfpOp2(op, dst, src)#1
+        LDA     ESTKL+2,X
+        STA     $02FC
+        LDA     ESTKH+2,X
+        STA     $02FD
+        LDA     ESTKL+1,X
+        STA     $02FE
+        LDA     ESTKH+1,X
+        STA     $02FF
+        LDY     ESTKL,X
+        LDA     ESTKH,X
+        INX
+        INX
+        STX     ESP
+        PHP
+        SEI
+        STA     $C009       ; SELECT ALTZP
+        BIT     $C083       ; R/W LC BANK2
+        BIT     $C083
+        PHA
+        TYA
+        PHA
+        LDA     $02FF
+        PHA
+        LDA     $02FE
+        PHA
+        LDA     $02FD
+        PHA
+        LDA     $02FC
+        PHA
+        JSR     $E000
+        STA     $C008       ; BACK TO MAINZP
+        PLP
+        TXA
+        LDX     ESP
+        STA     ESTKL,X
+        STY     ESTKH,X
+        RTS
+end
+asm xfpOp3(op, dst, src, src2)#1
+        LDA     ESTKL+3,X
+        STA     $02FA
+        LDA     ESTKH+3,X
+        STA     $02FB
+        LDA     ESTKL+2,X
+        STA     $02FC
+        LDA     ESTKH+2,X
+        STA     $02FD
+        LDA     ESTKL+1,X
+        STA     $02FE
+        LDA     ESTKH+1,X
+        STA     $02FF
+        LDY     ESTKL,X
+        LDA     ESTKH,X
+        INX
+        INX
+        INX
+        STX     ESP
+        PHP
+        SEI
+        STA     $C009       ; SELECT ALTZP
+        BIT     $C083       ; R/W LC BANK2
+        BIT     $C083
+        PHA
+        TYA
+        PHA
+        LDA     $02FF
+        PHA
+        LDA     $02FE
+        PHA
+        LDA     $02FD
+        PHA
+        LDA     $02FC
+        PHA
+        LDA     $02FB
+        PHA
+        LDA     $02FA
+        PHA
+        JSR     $E000
+        STA     $C008       ; BACK TO MAINZP
+        PLP
+        TXA
+        LDX     ESP
+        STA     ESTKL,X
+        STY     ESTKH,X
+        RTS
+end
+//
+// Main memory ELEMS6502 API
+//
+asm elemsOp1(op, dst)#1
+        LDA     ESTKH,X
+        PHA
+        LDA     ESTKL,X
+        PHA
+        LDA     ESTKH+1,X
+        PHA
+        LDA     ESTKL+1,X
+        PHA
+        INX
+        STX     ESP
+end
+asm fixupEL1
+        JSR     $FFF0
+        TXA
+        LDX     ESP
+        STA     ESTKL,X
+        STY     ESTKH,X
+        RTS
+end
+asm elemsOp2(op, dst, src)#1
+        LDA     ESTKH,X
+        PHA
+        LDA     ESTKL,X
+        PHA
+        LDA     ESTKH+1,X
+        PHA
+        LDA     ESTKL+1,X
+        PHA
+        LDA     ESTKH+2,X
+        PHA
+        LDA     ESTKL+2,X
+        PHA
+        INX
+        INX
+        STX     ESP
+end
+asm fixupEL2
+        JSR     $FFF0
+        TXA
+        LDX     ESP
+        STA     ESTKL,X
+        STY     ESTKH,X
+        RTS
+end
+asm elemsOp3(op, dst, src, src2)#1
+        LDA     ESTKH,X
+        PHA
+        LDA     ESTKL,X
+        PHA
+        LDA     ESTKH+1,X
+        PHA
+        LDA     ESTKL+1,X
+        PHA
+        LDA     ESTKH+2,X
+        PHA
+        LDA     ESTKL+2,X
+        PHA
+        LDA     ESTKH+3,X
+        PHA
+        LDA     ESTKL+3,X
+        PHA
+        INX
+        INX
+        INX
+        STX     ESP
+end
+asm fixupEL3
+        JSR     $FFF0
+        TXA
+        LDX     ESP
+        STA     ESTKL,X
+        STY     ESTKH,X
+        RTS
+end
+//
+// AUX memory ELEMS6502 API
+//
+asm xelemsOp1(op, dst)#1
+        LDA     ESTKL+1,X
+        STA     $02FE
+        LDA     ESTKH+1,X
+        STA     $02FF
+        LDY     ESTKL,X
+        LDA     ESTKH,X
+        INX
+        STX     ESP
+        PHP
+        SEI
+        STA     $C009       ; SELECT ALTZP
+        BIT     $C083       ; R/W LC BANK2
+        BIT     $C083
+        PHA
+        TYA
+        PHA
+        LDA     $02FF
+        PHA
+        LDA     $02FE
+        PHA
+end
+asm fixupXEL1
+        JSR     $FFF0
+        STA     $C008       ; BACK TO MAINZP
+        PLP
+        TXA
+        LDX     ESP
+        STA     ESTKL,X
+        STY     ESTKH,X
+        RTS
+end
+asm xelemsOp2(op, dst, src)#1
+        LDA     ESTKL+2,X
+        STA     $02FC
+        LDA     ESTKH+2,X
+        STA     $02FD
+        LDA     ESTKL+1,X
+        STA     $02FE
+        LDA     ESTKH+1,X
+        STA     $02FF
+        LDY     ESTKL,X
+        LDA     ESTKH,X
+        INX
+        INX
+        STX     ESP
+        PHP
+        SEI
+        STA     $C009       ; SELECT ALTZP
+        BIT     $C083       ; R/W LC BANK2
+        BIT     $C083
+        PHA
+        TYA
+        PHA
+        LDA     $02FF
+        PHA
+        LDA     $02FE
+        PHA
+        LDA     $02FD
+        PHA
+        LDA     $02FC
+        PHA
+end
+asm fixupXEL2
+        JSR     $FFF0
+        STA     $C008       ; BACK TO MAINZP
+        PLP
+        TXA
+        LDX     ESP
+        STA     ESTKL,X
+        STY     ESTKH,X
+        RTS
+end
+asm xelemsOp3(op, dst, src, src2)#1
+        LDA     ESTKL+2,X
+        STA     $02FA
+        LDA     ESTKH+2,X
+        STA     $02FB
+        LDA     ESTKL+2,X
+        STA     $02FC
+        LDA     ESTKH+2,X
+        STA     $02FD
+        LDA     ESTKL+1,X
+        STA     $02FE
+        LDA     ESTKH+1,X
+        STA     $02FF
+        LDY     ESTKL,X
+        LDA     ESTKH,X
+        INX
+        INX
+        INX
+        STX     ESP
+        PHP
+        SEI
+        STA     $C009       ; SELECT ALTZP
+        BIT     $C083       ; R/W LC BANK2
+        BIT     $C083
+        PHA
+        TYA
+        PHA
+        LDA     $02FF
+        PHA
+        LDA     $02FE
+        PHA
+        LDA     $02FD
+        PHA
+        LDA     $02FC
+        PHA
+        LDA     $02FB
+        PHA
+        LDA     $02FA
+        PHA
+end
+asm fixupXEL3
+        JSR     $FFF0
+        STA     $C008       ; BACK TO MAINZP
+        PLP
+        TXA
+        LDX     ESP
+        STA     ESTKL,X
+        STY     ESTKH,X
+        RTS
+end
+asm zpSaveX#1           // Save Apple /// XDATA
+XPAGE   =       $1600
+        STX     ESP
+        LDX     #$00
+        LDY     #$33
+-       LDA     XPAGE,Y
+end
+asm fixupXS
+        STA     $FFFF,Y
+        TXA
+        STA     XPAGE,Y
+        DEY
+        BPL     -
+        LDX     ESP
+end
+asm zpSave#1
+        LDY     #$33
+-       LDA     $00,Y
+end
+asm fixupZPS
+        STA     $FFFF,Y
+        DEY
+        BPL     -
+end
+asm zpNopSave
+        DEX
+        RTS
+end
+asm zpRestoreX(passthru)#1 // Restore Apple /// XDATA
+        LDY     #$33
+end
+asm fixupXR
+-       LDA     $FFFF,Y
+        STA     XPAGE,Y
+        DEY
+        BPL     -
+end
+asm zpRestore(passthru)#1
+        LDY     #$33
+end
+asm fixupZPR
+-       LDA     $FFFF,Y
+        STA     $00,Y
+        DEY
+        BPL     -
+end
+asm zpNopRestore(passthru)#1
+        RTS
+end
+asm auxmove(dst, src, len)#0
+        LDA     ESTKL+2,X
+        STA     $02FA
+        LDA     ESTKH+2,X
+        STA     $02FB
+        LDA     ESTKL+1,X
+        STA     $02FC
+        LDA     ESTKH+1,X
+        STA     $02FD
+        LDA     ESTKL,X
+        STA     $02FE
+        CLC
+        BEQ     +
+        SEC
++       LDA     ESTKH,X
+        ADC     #$00
+        STA     $02FF
+        INX
+        INX
+        INX
+        STX     ESP
+        PHP
+        SEI
+        STA     $C009       ; SELECT ALTZP
+        BIT     $C083       ; R/W LC BANK2
+        BIT     $C083
+        LDA     $02FA       ; DST ADDRESS
+        STA     $42
+        LDA     $02FB
+        STA     $43
+        LDA     $02FC       ; SRC ADDRESS
+        STA     $3C
+        LDA     $02FD
+        STA     $3D
+        LDY     #$00
+-       LDA     ($3C),Y
+        STA     ($42),Y
+        INY
+        BNE     +
+        INC     $3D
+        INC     $43
++       DEC     $02FE
+        BNE     -
+        DEC     $02FF
+        BNE     -
+        STA     $C008       ; SELECT MAINZP
+        PLP
+        LDX     ESP
+        RTS
+end
+//
+// Default HALT handler
+//
+def fpDefaultHalt(pstatus)
+    sane[10](0) // zpRestore
+    puts("SANE Exception="); puti(pstatus->8); puts("!\n")
+    sane[9]() // zpSave
+    return pstatus=>4
+end
+//
+// Utility test routines
+//
+//byte hexchar[] = '0','1','2','3','4','5','6','7','8','9','0','A','B','C','D','E','F'
+//def prhex(h)#0
+//    putc(hexchar[(h>>4)&$0F]);putc(hexchar[h&$0F])
+//end
+//def prbyte(h)#0
+//    putc('$'); prhex(h)
+//    //call($FDDA, h, 0, 0, 0)
+//end
+//def prword(h)#0
+//    putc('$')
+//    prhex(h>>8);prhex(h)
+//    //call($F941, h >> 8, h, 0, 0)
+//end
+//def putname(pchr)#0
+//    byte c
+//
+//    for c = 0 to 7
+//        putc(pchr->[c])
+//    next
+//end
+//def dumpheader(phdr)#0
+//    byte i
+//
+//    puts("Seg Info\n")
+//    for i = 0 to 15
+//        if (phdr + i * t_diskinfo)=>codelen
+//            prword((phdr + i * t_diskinfo)=>codelen)
+//            putc(':')
+//            prword((phdr + i * t_diskinfo)=>codeaddr)
+//            putc('=')
+//            putname(phdr + i * 8 + segname)
+//            putc(',')
+//            prword((phdr + segkind)=>[i])
+//            putc(',')
+//            prword((phdr + textaddr)=>[i])
+//            putc(',')
+//            prword((phdr + seginfo)=>[i])
+//            putln
+//        fin
+//    next
+//    putname(phdr + $01F4); putln
+//end
+//
+// Fix-up external references and local relocations
+//
+def fixup(base, list)
+    word len
+    byte listcnt
+
+    //puts("Reloc = "); prword(list); putln
+    if *list <> $0101
+        //puts("Reloc table not found!\n")
+        return list
+    fin
+    list = list - 10
+    //
+    // External reference fixup (only have fp6502 in our case)
+    //
+    len  = *list
+    list = list - 2
+    //puts("Extern list len = "); prword(len); putln; getc
+    while len
+        //puts(" *"); prword(list - *list); putln
+        *(list - *list) = fp6502
+        list = list - 2
+        len--
+    loop
+    //
+    // Internal relocation
+    //
+    len  = *list
+    list = list - 2
+    //puts("Reloc list len = "); prword(len); putln; getc
+    while len
+        //puts(" *"); prword(list - *list); putln
+        *(list - *list) = *(list - *list) + base
+        list = list - 2
+        len--
+    loop
+    return list
+end
+//
+// Linker Information that we don't need
+//
+//def resolve(base, pli)
+//    byte fixups
+//    word basend
+//
+//    puts("LinkInfo "); prword(pli); putc(':'); putln
+//    basend = preloc
+//    while ^pli
+//        putname(pli); putc(':')
+//        prword(pli=>8); putc(' ')
+//        prword(pli=>10); putc(' ')
+//        prword(pli=>12); putc(' ')
+//        prword(pli=>14); putln
+//        fixups = 0
+//        if pli=>8 == $0002
+//            fixups = pli=>12
+//        fin
+//        pli = pli + 16
+//        while fixups
+//            *(base + *pli) = fp6502
+//            pli = pli + 2
+//            fixups--
+//        loop
+//    loop
+//end
+//
+// Load Pascal CODE file
+//
+def loadcode(codefile)
+    byte ref
+    word pcode, seglen
+
+    //puts(codefile); puts(":\n")
+    pcode = 0
+    ref   = fileio:open(codefile)
+    //puts("ref = "); prbyte(ref); puts(" perr = "); prbyte(perr); putln
+    if ref
+        pcode = heapmark
+        fileio:read(ref, pcode, 512)
+        //puts("Read header bytes: "); puti(seglen)
+        //if seglen == 0; puts(" perr = "); prbyte(perr); fin
+        //getc; putln
+        //dumpheader(pcode)
+        //putname(pcode + segname + 8); putc('='); prword(pcode); putln
+        seglen = fileio:read(ref, pcode, (pcode + t_diskinfo)=>codeaddr)
+        //puts("Read segment bytes: "); puti(seglen); putln
+        fileio:close(ref)
+        if !fp6502 and (MACHID & $F0 == $B0) // 128K Apple //e or //c
+            seglen = fixup(AUXADDR, pcode + seglen - 2) - pcode
+            auxmove(AUXADDR, pcode, seglen)
+            pcode = AUXADDR
+        else
+            heaprelease(fixup(pcode, pcode + seglen - 2)) // Set heap to beginning of relocation list
+        fin
+    fin
+    return pcode
+end
+//
+// Load ELEMS6502 library
+//
+def loadElems
+    word elems
+
+    elems = loadcode("ELEMS.CODE")
+    if !elems
+        puts("ELEMS library not found.\n")
+        return 0
+    fin
+    if fp6502 == AUXADDR
+        (@fixupXEL1)=>1 = elems
+        (@fixupXEL2)=>1 = elems
+        (@fixupXEL3)=>1 = elems
+        sane[6] = @xelemsOp1
+        sane[7] = @xelemsOp2
+        sane[8] = @xelemsOp3
+    else
+        (@fixupEL1)=>1 = elems
+        (@fixupEL2)=>1 = elems
+        (@fixupEL3)=>1 = elems
+        sane[6] = @elemsOp1
+        sane[7] = @elemsOp2
+        sane[8] = @elemsOp3
+    fin
+    return 1
+end
+//
+// Don't load ELEMS6502 until referenced
+//
+def elemsLoad1(op, dst)#1
+    if loadElems
+        return sane[6](op, dst)
+    fin
+    return -1
+end
+def elemsLoad2(op, dst, src)#1
+    if loadElems
+        return sane[7](op, dst, src)
+    fin
+    return -1
+end
+def elemsLoad3(op, dst, src, src2)#1
+    if loadElems
+        return sane[8](op, dst, src, src2)
+    fin
+    return -1
+end
+//
+// Load SANE library and fixup function pointers
+//
+def fpInit()
+    word fpzpsave
+
+    if !fp6502
+        fp6502 = loadcode("FP6502.CODE")
+        if !fp6502
+            puts("SANE library not found.\n")
+            return -1
+        fin
+        if fp6502 == AUXADDR
+            //
+            // Fixup AUX calls in interface routines
+            //
+            sane[2]  = @xfpOp0
+            sane[3]  = @xfpOp1
+            sane[4]  = @xfpOp2
+            sane[5]  = @xfpOp3
+            sane[9]  = @zpNopSave
+            sane[10] = @zpNopRestore
+            //
+            // Install AUX HALT handler
+            //
+            xfpOp1($0005, @xfpHalt)
+        else
+            //
+            // Fixup MAIN calls in interface routines
+            //
+            if MACHID & $F0 == $F0 // Apple ///
+                fpzpsave      = heapalloc($0034*2)
+                (@fixupXS)=>1 = fpzpsave+$34
+                (@fixupXR)=>1 = fpzpsave+$34
+                sane[9]       = @zpSaveX
+                sane[10]      = @zpRestoreX
+            else // Apple II
+                fpzpsave = heapalloc($0034)
+                sane[9]  = @zpSave
+                sane[10] = @zpRestore
+            fin
+            (@fixupFP0)=>1 = fp6502
+            (@fixupFP1)=>1 = fp6502
+            (@fixupFP2)=>1 = fp6502
+            (@fixupFP3)=>1 = fp6502
+            (@fixupZPS)=>1 = fpzpsave
+            (@fixupZPR)=>1 = fpzpsave
+            sane[2]  = @fpOp0
+            sane[3]  = @fpOp1
+            sane[4]  = @fpOp2
+            sane[5]  = @fpOp3
+            //
+            // Install MAIN HALT handler
+            //
+            sane[9]()
+            sane[10](fpOp1($0005, @fpHalt))
+        fin
+        sane[6] = @elemsLoad1
+        sane[7] = @elemsLoad2
+        sane[8] = @elemsLoad3
+    fin
+    (@fixupHLT)=>1 = @sane+2
+    sane[1]        = @fpDefaultHalt
+    //
+    // Reset environment word
+    //
+    sane[9]()
+    sane[3]($0001, $0000)
+    return sane[10](0)
+end
+//
+// Uninitialized placeholders of API
+//
+def uninit
+    puts("SANE not initialized\n")
+    return -1
+end
+def uninit0()
+    return uninit
+end
+def uninit1(op, dst)
+    return uninit
+end
+def uninit2(op, dst, src)
+    return uninit
+end
+def uninit3(op, dst, src, src2)
+    return uninit
+end
+done

@@ -9,7 +9,7 @@ const LOWER_DIFF = 'a' - 'A'
 word arg
 byte[24] fatName
 
-def putByte(val)
+def putByte(val)#0
     byte c
     c = ((val >> 4) & $0F) + '0'
     if c > '9'
@@ -20,12 +20,12 @@ def putByte(val)
     if c > '9'
         c = c + 7
     fin
-    return putc(c)
+    putc(c)
 end
 
-def hexChars(cptr, b)
+def hexChars(cptr, b)#0
     byte h
-    
+
     h = ((b >> 4) & $0F) + '0'
     if h > '9'
         h = h + 7
@@ -42,8 +42,8 @@ end
 def mkFatName(proName, fatName)
     word l, n
     byte fileinfo[t_fileinfo]
-    
-    if !getfileinfo(proName, @fileinfo)
+
+    if !fileio:getfileinfo(proName, @fileinfo)
         //
         // Scan backward looking for dir seperator
         //
@@ -68,12 +68,14 @@ def mkFatName(proName, fatName)
         // Error getting info on file
         //
         puts("Error reading "); puts(proName); putln
+        return -1
     fin
+    return 0
 end
 
 def getYN(prompt)
     byte yn
-    
+
     puts(prompt)
     yn = getc
     return yn == 'Y' or yn == 'y'
@@ -81,7 +83,7 @@ end
 
 def bigFatWrite(buf, len)
     word xferLen, fatLen
-    
+
     xferLen = 0
     repeat
         if len > MAX_FAT_BUF_SIZE
@@ -89,7 +91,7 @@ def bigFatWrite(buf, len)
         else
             fatLen = len
         fin
-        fatLen = sdFAT:fileWrite(buf, fatLen)
+        fatLen = sdFAT:writeFile(buf, fatLen)
         if fatLen > 0
             xferLen = xferLen + fatLen
             len     = len     - fatLen
@@ -104,13 +106,13 @@ end
 def fatCopyTo(src, dst)
     word copyBuf, copyLen, freeAddr
     byte ref
-    
+
     copyBuf = heapallocalign(COPY_BUF_SIZE, 8, @freeAddr)
     if not copyBuf
         puts("Not enough free memory!\n"); putln
         return -1
     fin
-    ref = open(src, sysbuf)
+    ref = fileio:open(src)
     if not ref
         puts("Error opening file: "); puts(src); putln
         puts("Open file error: "); putByte(perr); putln
@@ -119,21 +121,22 @@ def fatCopyTo(src, dst)
     //
     // Copy file over in big chunks
     //
-    if sdFAT:fileOpen(dst, O_READ | O_WRITE | O_CREAT)
+    if sdFAT:openFile(dst, O_READ | O_WRITE | O_CREAT)
         repeat
-            copyLen = read(ref, copyBuf, COPY_BUF_SIZE)
+            copyLen = fileio:read(ref, copyBuf, COPY_BUF_SIZE)
             if copyLen
                 copyLen = bigFatWrite(copyBuf, copyLen)
                 if !copyLen
                 fin
             fin
         until copyLen == 0
-        sdFAT:fileClose()
+        sdFAT:closeFile()
     else
         puts("Error opening FAT file:"); puts(dst); putln
     fin
-    close(ref)
+    fileio:close(ref)
     heaprelease(freeAddr)
+    return 0
 end
 
 arg = argNext(argFirst)

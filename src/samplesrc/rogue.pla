@@ -1,9 +1,4 @@
-import cmdsys
-  predef syscall, call, memset, getc, gets, putc, puts, putln
-  predef memset, memcpy
-  predef heapmark, heapallocalign, heapalloc, heaprelease, heapavail
-  byte MACHID
-end
+include "inc/cmdsys.plh"
 
 import roguemap
   const xcentr     = 20
@@ -34,16 +29,18 @@ import roguemap
   const INV_TILE    = $3F
   const MAP_TILE    = $7F
 
-  predef loadmap, getmaptile, setmaptile, updtmaptile, lighttorches, drawmap, drawvisentity
+  predef loadmap(level), getmaptile(xmap, ymap), setmaptile(xmap, ymap, tile)#0
+  predef updtmaptile(xmap, ymap, tile)#0, lighttorches#0
+  predef drawmap(xorg, yorg, viewfield, viewdir, lightdist, viewdist)
+  predef drawvisentity(xofst, yofst, tile)#0
 end
 
 import roguecombat
-  predef fight
+  predef fight(player, enemy)
   word entity, entities
 end
 
 import rogueio
-  predef puti, toupper
   word rnd, getkb, home, gotoxy, tone
 end
 
@@ -105,7 +102,7 @@ byte        = 0   // key
 byte        = 0   // raft
 byte[16]    = "Player"
 
-predef moveplayer
+predef moveplayer(dir)#0
 
 //
 // Other monsters
@@ -161,16 +158,16 @@ end
 // Sound functions
 //
 
-def ouch
+def ouch#0
   tone(128,5)
 end
 
-def gotit
+def gotit#0
   tone(10,8)
   tone(80,2)
 end
 
-def fall
+def fall#0
   byte i
 
   for i = 0 to 10
@@ -178,7 +175,7 @@ def fall
   next
 end
 
-def drown
+def drown#0
   word i
 
   tone(10,20)
@@ -193,7 +190,7 @@ def drown
   tone(10,3)
 end
 
-def groan
+def groan#0
   byte i
 
   for i = 0 to 5
@@ -205,7 +202,7 @@ end
 // Update status line
 //
 
-def status
+def status#0
   gotoxy(0, statusline)
   puts(@helthstr)
   puti(player.health)
@@ -228,17 +225,17 @@ def status
   fin
 end
 
-def clearstatus
-  return memset($07D0, $A0A0, 40)
+def clearstatus#0
+  memset($07D0, $A0A0, 40)
 end
 
 //
 // Move player, check for obstacles
 //
 
-def moveplayer(dir)
+def moveplayer(dir)#0
   byte xmove, ymove
-  
+
   xmove = player.xpos + dir * xdir[player.angle]
   ymove = player.ypos + dir * ydir[player.angle]
   when getmaptile(xmove, ymove) & MAP_TILE
@@ -279,7 +276,7 @@ end
 // Find other entities in map and put in database
 //
 
-def findentities
+def findentities#0
   word newother
   byte xmap, ymap, what
 
@@ -296,33 +293,33 @@ def findentities
             player.angle = 4
           fin
           break
-	is 'R' // Rogue
-	  what = what + 1
-	is 'Z' // Zombie
-	  what = what + 1
+    is 'R' // Rogue
+      what = what + 1
+    is 'Z' // Zombie
+      what = what + 1
         is 'O' // Ogre
-	  what = what + 1
+      what = what + 1
         is 'T' // Thief
-	  newother         = heapalloc(t_other)
-	  newother->xpos   = xmap
-	  newother->ypos   = ymap
-	  newother->kind   = what
-	  newother->tileid = ^(entity[what] + 1) // First character of name string
-	  newother->power  = ^(entity[what] + ^entity[what] + 1)
-	  newother->life   = 100
-	  //
-	  // Insert into head of entities list
-	  //
-	  newother=>prev_other = 0
-	  newother=>next_other = entities
-	  if entities
-	    entities=>prev_other = newother
-	  fin
-	  entities = newother
-	  //
-	  // Clear entity from map, replace with floor
-	  //
-	  setmaptile(xmap, ymap, FLOOR_TILE)
+      newother         = heapalloc(t_other)
+      newother->xpos   = xmap
+      newother->ypos   = ymap
+      newother->kind   = what
+      newother->tileid = ^(entity[what] + 1) // First character of name string
+      newother->power  = ^(entity[what] + ^entity[what] + 1)
+      newother->life   = 100
+      //
+      // Insert into head of entities list
+      //
+      newother=>prev_other = 0
+      newother=>next_other = entities
+      if entities
+        entities=>prev_other = newother
+      fin
+      entities = newother
+      //
+      // Clear entity from map, replace with floor
+      //
+      setmaptile(xmap, ymap, FLOOR_TILE)
       wend
     next
     if not (ymap & 7)
@@ -335,7 +332,7 @@ end
 // Draw other entities on map if visible
 //
 
-def drawentities
+def drawentities#0
   word other, xofst, yofst
 
   other = entities
@@ -409,7 +406,7 @@ def lineofsight(x1, y1, x2, y2)
   return TRUE
 end
 
-def moveentities(playerisvis)
+def moveentities(playerisvis)#0
   byte xmove, ymove
   word other
 
@@ -449,7 +446,7 @@ def moveentities(playerisvis)
         if player.energy > RUN_ENERGY
           moveplayer(1)
         fin
-        return moveplayer(1)
+        moveplayer(1)
       fin
       return
     fin
@@ -531,11 +528,11 @@ def play
           fin
         is DOOR_TILE
           updtmaptile(player.xpos + xdir[player.angle], player.ypos + ydir[player.angle], FLOOR_TILE)
-	  break
-	is ENTER_TILE
-	  break
-	is EXIT_TILE
-	  return FALSE
+      break
+    is ENTER_TILE
+      break
+    is EXIT_TILE
+      return FALSE
       wend
       break
     is $0D // Return
@@ -543,47 +540,47 @@ def play
         is KEY_TILE
           player.key = 1
           updtmaptile(player.xpos, player.ypos, FLOOR_TILE)
-	  gotit
-	  break
+      gotit
+      break
         is RAFT_TILE
           player.raft = 1
           updtmaptile(player.xpos, player.ypos, FLOOR_TILE)
-	  gotit
-	  break
+      gotit
+      break
         is GOLD_TILE
           player.gold = player.gold + 1
           updtmaptile(player.xpos, player.ypos, FLOOR_TILE)
-	  gotit
+      gotit
           break
         is TORCH_TILE
-	  if player.oil < 1000
+      if player.oil < 1000
             player:oil = player:oil + TORCH_OIL
-	    if player:oil > 1000
-	      player:oil = 1000
-	    fin
+        if player:oil > 1000
+          player:oil = 1000
+        fin
             setmaptile(player.xpos, player.ypos, FLOOR_TILE)
             for yt = player.ypos - 1 to player.ypos + 1
-  	      for xt = player.xpos - 1 to player.xpos + 1
-	        setmaptile(xt, yt, getmaptile(xt, yt) & MAP_TILE)
-	      next
-	    next
-	    gotit
-	  fin
+          for xt = player.xpos - 1 to player.xpos + 1
+            setmaptile(xt, yt, getmaptile(xt, yt) & MAP_TILE)
+          next
+        next
+        gotit
+      fin
           break
         is FOOD_TILE
-	  if player.health < 100 or player.energy < 100
-    	    player.health = player.health + MANA/2
-	    if player.health > 100
-	      player.health = 100
-	    fin
+      if player.health < 100 or player.energy < 100
+            player.health = player.health + MANA/2
+        if player.health > 100
+          player.health = 100
+        fin
             player.energy = player.energy + MANA
-	    if player.energy > 100
-	      player.energy = 100
-	    fin
-	    updtmaptile(player.xpos, player.ypos, FLOOR_TILE)
-	    player.fov = 1
-	    gotit
-	  fin
+        if player.energy > 100
+          player.energy = 100
+        fin
+        updtmaptile(player.xpos, player.ypos, FLOOR_TILE)
+        player.fov = 1
+        gotit
+      fin
           break
       wend
       break
@@ -608,7 +605,7 @@ def play
       puts(@quitstr)
       if toupper(getkb()) == 'Y'
         player.health = 0
-	return FALSE
+    return FALSE
       fin
   wend
   if player.energy and player.health < 100
@@ -666,4 +663,3 @@ else
 fin
 puts(@againstr)
 done
-

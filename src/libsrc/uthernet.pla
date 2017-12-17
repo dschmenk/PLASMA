@@ -1,24 +1,13 @@
 //
 // Original Uthernet ethernet card based on Cirrus Logic cs8900a
 //
-import cmdsys
-    predef syscall, call, getc, gets, putc, puts, putln
-    predef isugt, isuge, isult, isule
-    predef memset, memcpy, modaddr, modexec
-    predef heapmark, heapallocalign, heapalloc, heaprelease, heapavail
-    byte MACHID
-end
+include "inc/cmdsys.plh"
 //
 // Include dependency on S/W IP stack
 //
 import etherip
-    predef setEtherDriver
+    predef setEtherDriver(MAC, getlen, readframe, setlen, writeframe)#0
 end
-//
-// Module don't free memory
-//
-const modkeep     = $2000
-const modinitkeep = $4000
 //
 // Uthernet register offsets
 //
@@ -48,129 +37,129 @@ byte[6] utherMAC = $00,$0A,$99,$1E,$02,$A0
 // Defines for ASM routines
 //
 asm equates
-	!SOURCE	"vmsrc/plvmzp.inc"
+    !SOURCE    "vmsrc/plvmzp.inc"
 end
 //
 // Uthernet I/O functions
 //
-asm _pokeiow
-	LDA	ESTKL,X
+asm _pokeiow(val)
+    LDA    ESTKL,X
 end
 asm _pokeiowl
-	STA	$C000
-	LDA	ESTKH,X
+    STA    $C000
+    LDA    ESTKH,X
 end
 asm _pokeiowh
-	STA	$C000
-	RTS
+    STA    $C000
+    RTS
 end
 //
 // PEEK BYTE FROM I/O SPACE
 // _peekio()
 //
 asm _peekio
-	DEX
+    DEX
 end
 asm _peekiol
-	LDA	$C000
-	STA	ESTKL,X
-	LDA	#$00
-	STA	ESTKH,X
-	RTS
+    LDA    $C000
+    STA    ESTKL,X
+    LDA    #$00
+    STA    ESTKH,X
+    RTS
 end
 //
 // PEEK WORD FROM I/O SPACE
 // _peekiow()
 //
 asm _peekiow
-	DEX
+    DEX
 end
 asm _peekiowl
-	LDA	$C000
-	STA	ESTKL,X
+    LDA    $C000
+    STA    ESTKL,X
 end
 asm _peekiowh
-	LDA	$C000
-	STA	ESTKH,X
-	RTS
+    LDA    $C000
+    STA    ESTKH,X
+    RTS
 end
 //
 // WRITE FRAME DATA INTO I/O SPACE
 // pokefrm(BUF, LEN)
 //
-asm pokefrm
-	LDY	#$00
-	LDA	ESTKL+1,X
-	STA	SRCL
-	LDA	ESTKH+1,X
-	STA	SRCH
-	LSR	ESTKH,X	; CONVERT BYTE LEN TO WORD LEN
-	LDA	ESTKL,X
-	ROR
-	ADC	#$00
-	STA	ESTKL,X
-	BEQ 	+
-	!BYTE   $A9
--	CLC
-	INC 	ESTKH,X
-+	BCS	-
-POKELP	LDA	(SRC),Y
+asm pokefrm(buf, len)
+    LDY    #$00
+    LDA    ESTKL+1,X
+    STA    SRCL
+    LDA    ESTKH+1,X
+    STA    SRCH
+    LSR    ESTKH,X    ; CONVERT BYTE LEN TO WORD LEN
+    LDA    ESTKL,X
+    ROR
+    ADC    #$00
+    STA    ESTKL,X
+    BEQ     +
+    !BYTE   $A9
+-    CLC
+    INC     ESTKH,X
++    BCS    -
+POKELP    LDA    (SRC),Y
 end
 asm _pokefrml
-	STA	$C000
-	INY
-	LDA	(SRC),Y
+    STA    $C000
+    INY
+    LDA    (SRC),Y
 end
 asm _pokefrmh
-	STA	$C000
-	INY
-	BNE	+
-    	INC	SRCH
-+	DEC	ESTKL,X
-	BNE	POKELP
-	DEC	ESTKH,X
-	BNE	POKELP
-	INX
-	RTS
+    STA    $C000
+    INY
+    BNE    +
+        INC    SRCH
++    DEC    ESTKL,X
+    BNE    POKELP
+    DEC    ESTKH,X
+    BNE    POKELP
+    INX
+    RTS
 end
 //
 // READ FRAME DATA FROM I/O SPACE
 // peekfrm(BUF, LEN)
 //
-asm peekfrm
-	LDY	#$00
-	LDA	ESTKL+1,X
-	STA	DSTL
-	LDA	ESTKH+1,X
-	STA	DSTH
-	LSR	ESTKH,X	; CONVERT BYTE LEN TO WORD LEN
-	LDA	ESTKL,X
-	ROR
-	ADC	#$00
-	STA	ESTKL,X
-	BEQ 	+
-	!BYTE   $A9
--	CLC
-	INC 	ESTKH,X
-+	BCS	-
+asm peekfrm(buf, len)
+    LDY    #$00
+    LDA    ESTKL+1,X
+    STA    DSTL
+    LDA    ESTKH+1,X
+    STA    DSTH
+    LSR    ESTKH,X    ; CONVERT BYTE LEN TO WORD LEN
+    LDA    ESTKL,X
+    ROR
+    ADC    #$00
+    STA    ESTKL,X
+    BEQ     +
+    !BYTE   $A9
+-    CLC
+    INC     ESTKH,X
++    BCS    -
 end
 asm _peekfrml
-PEEKLP	LDA	$C000
-	STA	(DST),Y
-	INY
+PEEKLP    LDA    $C000
+    STA    (DST),Y
+    INY
 end
 asm _peekfrmh
-+	LDA	$C000
-        STA	(DST),Y
-	INY
-	BNE	+
-    	INC	DSTH
-+	DEC	ESTKL,X
-	BNE	PEEKLP
-	DEC	ESTKH,X
-	BNE	PEEKLP
-EXPSW	INX
-	RTS
++    LDA    $C000
+        STA    (DST),Y
+    INY
+    BNE    +
+        INC    DSTH
++    DEC    ESTKL,X
+    BNE    PEEKLP
+    DEC    ESTKH,X
+    BNE    PEEKLP
+EXPSW    INX
+    RTS
 end
 def pokeiow(io, data)
     _pokeiowl.1 = io
@@ -201,6 +190,7 @@ def pokefrmlen(len)
     pokeiow(txcmd, $C0)
     pokeiow(txlen, len)
     repeat; until peekpreg($0138) & $0100
+    return 0
 end
 //
 // Return the length of awaiting packet, 0 otherwise
@@ -211,12 +201,12 @@ def peekfrmlen
     if peekiow(isq) & $3F == $04
         if peekio(rxdata_hi) & $01
             peekio(rxdata_lo)
-	    len.1 = peekio(rxdata_hi)
-	    len.0 = peekio(rxdata_lo)
-	else
-	    peekio(rxdata_lo)
-	    pokepreg($0102, $0140) // Skip pkt
-	fin
+            len.1 = peekio(rxdata_hi)
+            len.0 = peekio(rxdata_lo)
+        else
+            peekio(rxdata_lo)
+            pokepreg($0102, $0140) // Skip pkt
+        fin
     fin
     return len
 end
@@ -226,10 +216,10 @@ end
 for slot = $90 to $F0 step $10
     if (peekiow(slot+TXCMD) & $CC3F) == $09
         pokeiow(slot+PREG_INDEX, 0)
-	if peekiow(slot+PREG_DATA) == $630E
+        if peekiow(slot+PREG_DATA) == $630E
             pokepreg($0114, $40)   // RESET
-	    rxdata_hi   = slot + 1
-	    txcmd       = slot + TXCMD
+            rxdata_hi   = slot + 1
+            txcmd       = slot + TXCMD
             txlen       = slot + TXLEN
             isq         = slot + INT_STATUS
             pregidx     = slot + PREG_INDEX
@@ -245,13 +235,13 @@ for slot = $90 to $F0 step $10
             pokepreg($0104, $0D00) // Recv ctrl
             pokepreg($0106, $8200) // Xmit cfg
             pokepreg($0112, $00C0) // Line ctrl
-	    //
-	    // Install etherip driver
-	    //
-	    puts("Found Uthernet I in slot #")
-	    putc('0' + ((slot - $80) >> 4))
-	    putln
-	    setEtherDriver(@utherMAC, @peekfrmlen, @peekfrm, @pokefrmlen, @pokefrm)
+            //
+            // Install etherip driver
+            //
+            puts("Found Uthernet I in slot #")
+            putc('0' + ((slot - $80) >> 4))
+            putln
+            setEtherDriver(@utherMAC, @peekfrmlen, @peekfrm, @pokefrmlen, @pokefrm)
             return modkeep
         fin
     fin

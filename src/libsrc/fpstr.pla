@@ -1,0 +1,248 @@
+//
+// SANE Extended FP to String conversion library
+//
+include "inc/cmdsys.plh"
+include "inc/sane.plh"
+//
+// Structures for DEC2BIN, BIN2DEC
+//
+struc t_decrecord
+    word sgn
+    word exp
+    byte sig[29]
+end
+struc t_decformat
+    word style
+    word digits
+end
+//
+// Parse string into decrecord, return SANE conversion output
+//
+export def str2ext(str, ext)
+    byte i, s, d
+    byte decrec[t_decrecord]
+    word sgnadj, expadj
+
+    decrec:sgn  = 0
+    decrec:exp  = 0
+    decrec.sig  = 0
+    s           = 1
+    i           = 1
+    //
+    // Skip whitespace
+    //
+    while ^(str+i) <= ' ' and i <= ^str; i++; loop
+    //
+    // Check for sign
+    //
+    if ^(str+i) == '-'
+        decrec:sgn = 1
+        i++
+    elsif ^(str+i) == '+'
+        i++
+    fin
+    //
+    // Skip leading zeros
+    //
+    while i <= ^str and ^(str+i) == '0'
+        i++
+    loop
+    //
+    // Parse number
+    //
+    while i <= ^str
+        d = toupper(^(str+i))
+        if d >= '0' and d <= '9'
+            //
+            // Parse digit
+            //
+            decrec.sig[s] = ^(str+i)
+            decrec:sig++
+            s++
+        elsif d == '.'
+            //
+            // Parse decimal point
+            //
+            i++
+            while i <= ^str
+                d = toupper(^(str+i))
+                if d >= '0' and d <= '9'
+                    decrec.sig[s] = ^(str+i)
+                    decrec.sig++
+                    decrec:exp--
+                    s++
+                elsif d == 'E'
+                    i--
+                    break
+                else
+                    i = ^str
+                fin
+                i++
+            loop
+        elsif d == 'E'
+            //
+            // Parse exponent
+            //
+            i++
+            expadj = 0
+            sgnadj = 1
+            if ^(str+i) == '-'
+                sgnadj = -1
+                i++
+            elsif ^(str+i) == '+'
+                i++
+            fin
+            while i <= ^str
+                d = ^(str+i)
+                i++
+                if d >= '0' and d <= '9'
+                    expadj = expadj * 10 + (d - '0')
+                else
+                    i = ^str
+                fin
+            loop
+            decrec:exp = decrec:exp + (sgnadj * expadj)
+        else
+            i = ^str
+        fin
+        i++
+    loop
+    //
+    // Strip leading zeros from sig
+    //
+    while decrec.sig > 1 and decrec.sig.1 == '0'
+        decrec.sig--
+        if decrec:exp < 0
+            decrec:exp--
+        fin
+        memcpy(@decrec.sig.1, @decrec.sig.2, decrec.sig)
+    loop
+    //
+    // Check for zero
+    //
+    if !decrec.sig
+        decrec.sig = 1
+        decrec.sig.1 = '0'
+    fin
+    sane:saveZP()
+    return sane:restoreZP(sane:op2FP(FFEXT|FOD2B, ext, @decrec))
+end
+//
+// Convert extended FP to string using , return string
+//
+export def ext2str(ext, str, intdigits, fracdigits, format)
+    byte d, i, sigdigits, numdigits
+    word dp, tens
+    byte decform[t_decformat]
+    byte decrec[t_decrecord]
+
+    numdigits = intdigits + fracdigits
+    decform:style  = format & $01
+    decform:digits = decform:style ?? fracdigits :: numdigits
+    sane:saveZP()
+    sane:restoreZP(sane:op3FP(FFEXT|FOB2D, @decrec, ext, @decform))
+    ^(str+1) = decrec.sgn ?? '-' :: ' '
+    if decrec.sig.1 == 'I'
+        ^(str+2) = 'I'
+        ^(str+3) = 'n'
+        ^(str+4) = 'f'
+        ^str     = 4
+        return str
+    fin
+    if decrec.sig.1 == 'N'
+        ^(str+2) = 'N'
+        ^(str+3) = 'a'
+        ^(str+4) = 'N'
+        ^str     = 4
+        return str
+    fin
+    if decrec.sig.1 == '0'
+        while decrec.sig < fracdigits
+            decrec.sig++
+            decrec.sig[decrec.sig] = '0'
+        loop
+        decrec:exp = -decrec.sig
+    fin
+    dp = decrec.sig + decrec:exp
+    sigdigits = decrec.sig
+    if decrec:exp < 0 and format & $02
+        //
+        // Strip off trailing fractional zeros
+        //
+        while sigdigits > dp and decrec.sig[sigdigits] == '0'
+            sigdigits--
+            decrec:exp++
+        loop
+    fin
+    if -decrec:exp > numdigits or sigdigits + decrec:exp >= (decform:style ?? intdigits :: numdigits) or format & $04
+        //
+        // Convert to exponential format
+        //
+        ^(str+2) = decrec.sig.1
+        ^(str+3) = '.'
+        i = 3
+        for d = 0 to fracdigits
+            i++
+            ^(str+i) = decrec.sig.2[d]
+        next
+        //
+        // Copy over all significant digits
+        //
+        if ^(str+i) == '.'; i--; fin
+        i++
+        ^(str+i) = 'E'
+        i++
+        dp--
+        if dp < 0
+            ^(str+i) = '-'
+            dp = -dp
+        else
+            ^(str+i) = '+'
+            if dp == 0
+                i++
+                ^(str+i) = '0'
+            fin
+        fin
+        //
+        // Pretty output the exponent (preceding zero for values less than 10)
+        //
+        d    = 0
+        tens = 10000
+        while dp
+            d = d or tens <= 10
+            if dp >= tens or d
+                d = 1
+                i++
+                ^(str+i) = (dp / tens) + '0'
+            fin
+            dp = dp % tens
+            tens = tens / 10
+            if !tens; break; fin
+        loop
+    else
+        //
+        // Convert as floating point
+        //
+        i = 1
+        if dp <= 0
+            *(str+2) = '0'|('.'<<8)
+            i = 3
+            while dp < 0
+                dp++
+                i++
+                ^(str+i) = '0'
+            loop
+        fin
+        for d = 1 to sigdigits
+            i++
+            ^(str+i) = decrec.sig[d]
+            if d == dp
+                i++
+                ^(str+i) = '.'
+            fin
+        next
+        if ^(str+i) == '.'; i--; fin
+    fin
+    ^str = i
+    return str
+end

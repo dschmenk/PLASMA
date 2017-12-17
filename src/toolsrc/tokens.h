@@ -45,6 +45,11 @@
 #define CONTINUE_TOKEN      TOKEN(32)
 //#define EVAL_TOKEN          TOKEN(32)
 /*
+ * Ternary operand operators.
+ */
+#define TERNARY_TOKEN       TOKEN('?')
+#define TRIELSE_TOKEN       TOKEN('_')
+/*
  * Double operand operators.
  */
 #define SET_TOKEN           TOKEN('=')

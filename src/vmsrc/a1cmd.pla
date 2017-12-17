@@ -30,11 +30,11 @@ const CFFAEntryPtr = $0B
 //
 // Pedefined functions.
 //
-predef syscall(cmd)#1, call(addr,areg,xreg,yreg,status)#1
-predef crout()#0, cout(c)#0, prstr(s)#0, cin()#1, rdstr(p)#1
+predef syscall(cmd,null)#1, call(addr,areg,xreg,yreg,status)#1
+predef crout()#0, cout(c)#0, prstr(s)#0, print(i)#0, cin()#1, rdstr(p)#1, toupper(c)#1
 predef markheap()#1, allocheap(size)#1, allocalignheap(size, pow2, freeaddr), releaseheap(newheap)#1, availheap()#1
 predef memset(addr,value,size)#0, memcpy(dst,src,size)#0
-predef uword_isgt(a,b)#1, uword_isge(a,b)#1, uword_islt(a,b)#1, uword_isle(a,b)#1
+predef uword_isgt(a,b)#1, uword_isge(a,b)#1, uword_islt(a,b)#1, uword_isle(a,b)#1, divmod(a,b)#2
 predef loadmod(mod)#1, execmod(modfile)#1, lookupstrmod(str)#1
 //
 // System variables.
@@ -71,20 +71,24 @@ byte machidstr[]  = "MACHID"
 byte putcstr[]    = "PUTC"
 byte putlnstr[]   = "PUTLN"
 byte putsstr[]    = "PUTS"
+byte putistr[]    = "PUTI"
 byte getcstr[]    = "GETC"
 byte getsstr[]    = "GETS"
+byte toupstr[]    = "TOUPPER"
 byte sysstr[]     = "SYSCALL"
 byte callstr[]    = "CALL"
 byte hpmarkstr[]  = "HEAPMARK"
 byte hpalignstr[] = "HEAPALLOCALIGN"
 byte hpallocstr[] = "HEAPALLOC"
 byte hprelstr[]   = "HEAPRELEASE"
+byte hpavlstr[]   = "HEAPAVAIL"
 byte memsetstr[]  = "MEMSET"
 byte memcpystr[]  = "MEMCPY"
 byte uisgtstr[]   = "ISUGT"
 byte uisgestr[]   = "ISUGE"
 byte uisltstr[]   = "ISULT"
 byte uislestr[]   = "ISULE"
+byte divmodstr[]  = "DIVMOD"
 byte loadstr[]    = "MODLOAD"
 byte execstr[]    = "MODEXEC"
 byte modadrstr[]  = "MODADDR"
@@ -94,18 +98,22 @@ word              = @callstr,   @call
 word              = @putcstr,   @cout
 word              = @putlnstr,  @crout
 word              = @putsstr,   @prstr
+word              = @putistr,   @print
 word              = @getcstr,   @cin
 word              = @getsstr,   @rdstr
+word              = @toupstr,   @toupper
 word              = @hpmarkstr, @markheap
 word              = @hpallocstr,@allocheap
 word              = @hpalignstr,@allocalignheap
 word              = @hprelstr,  @releaseheap
+word              = @hpavlstr,  @availheap
 word              = @memsetstr, @memset
 word              = @memcpystr, @memcpy
 word              = @uisgtstr,  @uword_isgt
 word              = @uisgestr,  @uword_isge
 word              = @uisltstr,  @uword_islt
 word              = @uislestr,  @uword_isle
+word              = @divmodstr, @divmod
 word              = @loadstr,   @loadmod
 word              = @execstr,   @execmod
 word              = @modadrstr, @lookupstrmod
@@ -115,14 +123,15 @@ word              = 0
 word syslibsym    = @exports
 //
 // CALL CFFA1 API ENTRYPOINT
-// SYSCALL(CMD)
+// SYSCALL(CMD, 0)
 //
-asm syscall(cmd)#1
+asm syscall(cmd, null)#1
         LDA     ESTKL,X
         STX     ESP
         TAX
         JSR     $900C
         LDX     ESP
+        INX
         LDY     #$00
         STA     ESTKL,X
         STY     ESTKH,X
@@ -340,6 +349,30 @@ asm uword_islt(a,b)#1
     STA ESTKL+1,X
     STA ESTKH+1,X
     INX
+    RTS
+end
+asm divmod(a,b)#2
+    LDA #>(_divmod-1)
+    PHA
+    LDA #<(_divmod-1)
+    PHA
+    JSR INTERP
+    !BYTE   $0A, $5C    ; MOD, RET
+_divmod DEX
+    LDA DSTL            ; DVDNDL
+    STA ESTKL,X
+    LDA DSTH            ; DVDNDH
+    STA ESTKH,X
+    LSR DVSIGN          ; SIGN(RESULT) = (SIGN(DIVIDEND) + SIGN(DIVISOR)) & 1
+    BCS +
+    RTS
++   LDA #$00
+;   SEC
+    SBC ESTKL,X
+    STA ESTKL,X
+    LDA #$00
+    SBC ESTKH,X
+    STA ESTKH,X
     RTS
 end
 //
@@ -577,6 +610,11 @@ def prstr(str)#0
     i = i + 1
     loop
 end
+def print(i)#0
+    if i < 0; cout('-'); i = -i; fin
+    if i >= 10; print(i / 10); fin
+    cout(i % 10 + '0')
+end
 def rdstr(prompt)#1
     byte ch, maxlen
     maxlen = 0
@@ -642,22 +680,22 @@ end
 // FILE I/O
 //
 //def opendir
-//    perr = syscall($10)
+//    perr = syscall($10, 0)
 //    return perr
 //end
 //def readdir
-//    perr = syscall($12)
+//    perr = syscall($12, 0)
 //    return *CFFAEntryPtr
 //end
 def finddirentry(filename)#1
     *CFFAFileName = filename
-    perr = syscall($14)
+    perr = syscall($14, 0)
     return *CFFAEntryPtr
 end
 def readfile(filename, buffer)#1
     *CFFADest     = buffer
     *CFFAFileName = filename
-    perr = syscall($22)
+    perr = syscall($22, 0)
     return perr
 end
 //
@@ -1037,7 +1075,7 @@ while 1
             is 'Q'
             quit
         is 'M'
-            syscall($02)
+            syscall($02, 0)
         break
         is '+'
             execmod(cmdptr)
