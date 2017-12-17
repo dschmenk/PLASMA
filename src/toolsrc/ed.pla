@@ -7,6 +7,8 @@
 include "inc/cmdsys.plh"
 include "inc/args.plh"
 include "inc/fileio.plh"
+const FALSE = 0
+const TRUE  = not FALSE
 //
 // Hardware constants
 //
@@ -16,6 +18,7 @@ const pushbttn2     = $C062
 const pushbttn3     = $C063
 const keyboard      = $C000
 const keystrobe     = $C010
+const cmdline       = $01FF
 //
 // ASCII key values
 //
@@ -75,21 +78,22 @@ word              = $0450,$04D0,$0550,$05D0,$0650,$06D0,$0750,$07D0
 //
 byte nullstr      = ""
 byte[64] txtfile  = "UNTITLED"
-word strlinbuf     = $1000
-word strpoolmap    = $1F00
-word strpoolmsz    = 224 // $E0 = 28K is memory@16 bytes per bit map, 128 bytes per 8 bit map, 1K bytes per 8 byte map
-word strpool       = $4800
-word strpoolsz     = $7000
+word strlinbuf    = $1000
+word strpoolmap   = $1F00
+word strpoolmsz   = 224 // $E0 = 28K is memory@16 bytes per bit map, 128 bytes per 8 bit map, 1K bytes per 8 byte map
+word strpool      = $4800
+word strpoolsz    = $7000
+byte exit         = FALSE
 byte flags        = 0
 byte flash        = 0
 word numlines     = 0
 word cutbuf       = 0
-byte perr, cursx, cursy, scrnleft, curscol, underchr, curschr
+byte cursx, cursy, scrnleft, curscol, underchr, curschr
 word keyin, cursrow, scrntop, cursptr
 //
 // Predeclared functions
 //
-predef cmdmode
+predef cmdmode#0
 //
 // Utility functions
 //
@@ -97,26 +101,6 @@ predef cmdmode
 //
 asm equates
     !SOURCE "vmsrc/plvmzp.inc"
-end
-//def toupper(c)
-//   if c >= 'a'
-//       if c <= 'z'
-//           return c - $20
-//       fin
-//   fin
-//   return c
-//end
-asm toupper
-        LDA     ESTKL,X
-        AND     #$7F
-        CMP     #'a'
-        BCC     +
-        CMP     #'z'+1
-        BCS     +
-        SEC
-        SBC     #$20
-+       STA     ESTKL,X
-        RTS
 end
 asm clrhibit(strptr)
         LDA     ESTKL,X
@@ -181,11 +165,8 @@ CPLNLP  LDA     (SRC),Y
         RTS
 end
 
-def crout
-    cout($0D)
-end
 def bell
-    cout($07)
+    putc($07)
 end
 //
 // Memory management routines
@@ -204,11 +185,11 @@ def delstr(strptr)
     byte mask, ofst
 
     if strptr and strptr <> @nullstr
-        mask = sizemask(^strptr + 1)
-        ofst = (strptr - strheap) >> 4
-        mask = mask << (ofst & $07)
-        ofst = ofst >> 3
-        strpoolmap->[ofst] = strpoolmap->[ofst] & ~mask
+//        mask = sizemask(^strptr + 1)
+//        ofst = (strptr - strheap) >> 4
+//        mask = mask << (ofst & $07)
+//        ofst = ofst >> 3
+//        strpoolmap->[ofst] = strpoolmap->[ofst] & ~mask
     fin
 end
 def newstr(strptr)
@@ -222,24 +203,24 @@ def newstr(strptr)
     if strlen == 0
         return @nullstr
     fin
-    newptr = strpoolalloc(strlen + 1)
-    if newptr
-        memcpy(newptr, strptr, strlen + 1)
-        ^newptr = strlen
-        return newptr
-    fin
+//    newptr = strpoolalloc(strlen + 1)
+//    if newptr
+//        memcpy(newptr, strptr, strlen + 1)
+//        ^newptr = strlen
+//        return newptr
+//    fin
     return @nullstr
 end
 def inittxtbuf#0
     word i
 
-    strlinbuf     = $1000
-    strpoolmap    = $1F00
-    strpoolmsz    = 224 // $E0 = 28K is memory@16 bytes per bit map, 128 bytes per 8 bit map, 1K bytes per 8 byte map
-    strpool       = $4800
-    strpoolsz     = $7000
-    memset(strpoolmap, strheapmsz, 0)
-    memset(strlinbuf, maxfill * 2, @nullstr)
+//    strlinbuf     = $1000
+//    strpoolmap    = $1F00
+//    strpoolmsz    = 224 // $E0 = 28K is memory@16 bytes per bit map, 128 bytes per 8 bit map, 1K bytes per 8 byte map
+//    strpool       = $4800
+//    strpoolsz     = $7000
+//    memset(strpoolmap, strheapmsz, 0)
+//    memset(strlinbuf, maxfill * 2, @nullstr)
     numlines   = 1
     cursrow    = 0
     curscol    = 0
@@ -342,7 +323,7 @@ def readtxt(filename)#0
                 strlinbuf:[numlines] = newstr(@txtbuf)
                 numlines++
             fin
-            if !(numlines & $0F); cout('.'); fin
+            if !(numlines & $0F); putc('.'); fin
         until txtbuf == 0 or numlines == maxlines
         fileio:close(refnum)
         //
@@ -377,7 +358,7 @@ def writetxt(filename)#0
         txtbuf = txtbuf + 1
         txtbuf[txtbuf] = $0D
         fileio:write(refnum, @txtbuf + 1, txtbuf)
-        if !(i & $0F); cout('.'); fin
+        if !(i & $0F); putc('.'); fin
     next
     fileio:close(refnum)
 end
@@ -634,7 +615,7 @@ def printtxt(slot)#0
     for i = 0 to numlines - 1
         cpyln(strlinbuf:[i], @txtbuf)
         puts(@txtbuf)
-        crout
+        putln
     next
     *csw = scrncsw
 end
@@ -650,7 +631,7 @@ def openline(row)
     return FALSE
 end
 def cutline#0
-    freestr(cutbuf)
+    delstr(cutbuf)
     cutbuf = strlinbuf:[cursrow]
     memcpy(@strlinbuf:[cursrow], @strlinbuf:[cursrow + 1], (numlines - cursrow) * 2)
     if numlines > 1
@@ -682,9 +663,9 @@ def joinline#0
         if joinlen < 80
             memcpy(@joinstr + joinstr + 1, strlinbuf:[cursrow + 1] + 1, ^(strlinbuf:[cursrow + 1]))
             joinstr = joinlen
-            freestr(strlinbuf:[cursrow])
+            delstr(strlinbuf:[cursrow])
             strlinbuf:[cursrow] = newstr(@joinstr)
-            freestr(strlinbuf:[cursrow + 1])
+            delstr(strlinbuf:[cursrow + 1])
             numlines--
             memcpy(@strlinbuf:[cursrow + 1], @strlinbuf:[cursrow + 2], (numlines - cursrow) * 2)
             flags = flags | changed
@@ -706,7 +687,7 @@ def splitline#0
                 strlinbuf:[cursrow + 1] = newstr(@splitstr)
                 memcpy(@splitstr + 1, strlinbuf:[cursrow] + 1, curscol)
                 splitstr = curscol
-                freestr(strlinbuf:[cursrow])
+                delstr(strlinbuf:[cursrow])
                 strlinbuf:[cursrow] = newstr(@splitstr)
             fin
         else
@@ -818,7 +799,7 @@ def editline(key)
         else
             strlinbuf:[cursrow] = @nullstr
         fin
-        freestr(undoline)
+        delstr(undoline)
     fin
     return key
 end
@@ -893,7 +874,7 @@ def editmode#0
                 redraw
                 break
         wend
-    until false
+    until exit
 end
 //
 // Command mode
@@ -904,22 +885,23 @@ def prfiles(optpath)
     byte firstblk
     byte entrylen, entriesblk
     byte i, type, len
-    word entry, filecnt
+    word databuff, entry, filecnt
 
     if ^optpath
         strcpy(@path, optpath)
     else
         getpfx(@path)
         puts(@path)
-        crout
+        putln
     fin
-    refnum = open(@path, sysbuf)
+    databuff = heapalloc(512)
+    refnum = fileio:open(@path)
     if perr
         return perr
     fin
     firstblk = 1
     repeat
-        if read(refnum, databuff, 512) == 512
+        if fileio:read(refnum, databuff, 512) == 512
             entry = databuff + 4
             if firstblk
                 entrylen   = databuff.$23
@@ -934,11 +916,11 @@ def prfiles(optpath)
                     ^entry = len
                     puts(entry)
                     if type & $F0 == $D0 // Is it a directory?
-                        cout('/')
+                        putc('/')
                         len++
                     fin
                     for len = 20 - len downto 1
-                        cout(' ')
+                        putc(' ')
                     next
                     filecnt--
                 fin
@@ -949,8 +931,9 @@ def prfiles(optpath)
             filecnt = 0
         fin
     until filecnt == 0
-    close(refnum)
-    crout
+    fileio:close(refnum)
+    heaprelease(databuff)
+    putln
     return 0
 end
 def striplead(strptr, chr)#0
@@ -978,28 +961,22 @@ def chkchng
     if flags & changed
         puts("LOSE CHANGES TO FILE (Y/N)?")
         if toupper(keyin()) == 'N'
-            crout
+            putln
             return FALSE
         fin
-        crout
+        putln
     fin
     return TRUE
-end
-def quit#0
-    if chkchng
-        exit
-    fin
 end
 def cmdmode#0
     byte slot
     word cmdptr
 
     clrscrn
-    puts("PLASMA ][ EDITOR VERSION 0.99")
-    crout
-    while TRUE
+    puts("PLASMA ][ EDITOR VERSION 0.99\n")
+    while not exit
         puts(@txtfile)
-        cmdptr = rdstr($BA)
+        cmdptr = gets($BA)
         when toupper(parsecmd(cmdptr))
             is 'A'
                 readtxt(cmdptr)
@@ -1036,7 +1013,7 @@ def cmdmode#0
                 printtxt(slot)
                 break
             is 'Q'
-                quit
+                exit = chkchng
             is 'E'
             is 0
                 return
@@ -1048,8 +1025,8 @@ def cmdmode#0
                 break
             otherwise
                 bell
-                cout('?')
-                crout
+                putc('?')
+                putln
         wend
         if perr
             puts("ERROR: $")
@@ -1057,7 +1034,7 @@ def cmdmode#0
         else
             puts("OK")
         fin
-        crout
+        putln
     loop
 end
 //
@@ -1070,8 +1047,8 @@ else
     keyin = @keyin2e
 fin
 inittxtbuf
-if argbuff
-    strcpy(@txtfile, @argbuff)
+if ^argNext(argFirst)
+    strcpy(@txtfile, cmdline)
     puts(@txtfile)
     numlines = 0
     readtxt(@txtfile)
