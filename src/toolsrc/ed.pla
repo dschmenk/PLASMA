@@ -7,8 +7,6 @@
 include "inc/cmdsys.plh"
 include "inc/args.plh"
 include "inc/fileio.plh"
-const FALSE = 0
-const TRUE  = not FALSE
 //
 // Hardware constants
 //
@@ -58,9 +56,11 @@ const getbuff       = $01FF
 //
 // Data and text buffer constants
 //
-const maxlines      = 1500
-const maxfill       = 1524
-const maxlnlen      = 79
+const MAXLINES      = 1500
+const MAXLINESSIZE  = MAXLINES+24
+const MAXLNLEN      = 79
+const MAXSTRPLSIZE  = $8000 // $7000
+//const STRPLMAPSIZE  = 224 // $E0 = 28K is memory@16 bytes per bit map, 128 bytes per 8 bit map, 1K bytes per 8 byte map
 const pgjmp         = 16
 const changed       = 1
 const insmode       = 2
@@ -78,16 +78,14 @@ word              = $0450,$04D0,$0550,$05D0,$0650,$06D0,$0750,$07D0
 //
 byte nullstr      = ""
 byte[64] txtfile  = "UNTITLED"
-word strlinbuf    = $1000
-word strpoolmap   = $1F00
-word strpoolmsz   = 224 // $E0 = 28K is memory@16 bytes per bit map, 128 bytes per 8 bit map, 1K bytes per 8 byte map
-word strpool      = $4800
-word strpoolsz    = $7000
 byte exit         = FALSE
 byte flags        = 0
 byte flash        = 0
 word numlines     = 0
 word cutbuf       = 0
+word strplsize    = MAXSTRPLSIZE
+word strplmapsize
+word strlinbuf, strpoolmap, strpool
 byte cursx, cursy, scrnleft, curscol, underchr, curschr
 word keyin, cursrow, scrntop, cursptr
 //
@@ -102,11 +100,12 @@ predef cmdmode#0
 asm equates
     !SOURCE "vmsrc/plvmzp.inc"
 end
-asm clrhibit(strptr)
+asm clrhibit(strptr)#0
         LDA     ESTKL,X
         STA     SRCL
         LDA     ESTKH,X
         STA     SRCH
+        INX
         LDY     #$00
         LDA     (SRC),Y
         BEQ     +
@@ -118,11 +117,12 @@ CLHILP  LDA     (SRC),Y
         BNE     CLHILP
 +       RTS
 end
-asm sethibit(strptr)
+asm sethibit(strptr)#0
         LDA     ESTKL,X
         STA     SRCL
         LDA     ESTKH,X
         STA     SRCH
+        INX
         LDY     #$00
         LDA     (SRC),Y
         BEQ     +
@@ -134,7 +134,7 @@ STHILP  LDA     (SRC),Y
         BNE     STHILP
 +       RTS
 end
-asm cpyln(srcstr, dststr)
+asm cpyln(srcstr, dststr)#0
         LDA     ESTKL,X
         STA     DSTL
         LDA     ESTKH,X
@@ -144,6 +144,7 @@ asm cpyln(srcstr, dststr)
         STA     SRCL
         LDA     ESTKH,X
         STA     SRCH
+        INX
         LDY     #$00
         LDA     (SRC),Y
         TAY
@@ -165,31 +166,73 @@ CPLNLP  LDA     (SRC),Y
         RTS
 end
 
-def bell
+def bell#0
     putc($07)
 end
 //
 // Memory management routines
 //
-def strcpy(dststr, srcstr)
+def sizemask(size)
+    if size <= 16
+        return $01
+    elsif size <= 32
+        return $03
+    elsif size <= 48
+        return $07
+    elsif size <= 64
+        return $0F
+    elsif size <= 80
+        return $1F
+    fin
+    return 0
+end
+def strpoolalloc(size)
+    byte szmask, i
+    word mapmask, addr
+
+    szmask = sizemask(size)
+    for i = strplmapsize - 1 downto 0
+        if ^(strpoolmap + i) <> $FF
+            mapmask = szmask
+            repeat
+                if ^(strpoolmap + i) & mapmask
+                    mapmask = mapmask << 1
+                else
+                    ^(strpoolmap + i) = ^(strpoolmap + i) | mapmask
+                    addr = (i << 7) + strpool
+                    while !(mapmask & 1)
+                        addr = addr + 16
+                        mapmask = mapmask >> 1
+                    loop
+                    return addr
+                fin
+            until mapmask & $100
+        fin
+    next
+    bell()
+    puts("OUT OF MEMORY!")
+    return 0
+end
+
+def strcpy(dststr, srcstr)#0
     byte strlen
 
     strlen = ^srcstr
-    while (srcstr).[strlen] == $8D or (srcstr).[strlen] == $A0
+    while ^(srcstr + strlen) == $8D or ^(srcstr + strlen) == $A0
         strlen--
     loop
     ^dststr = strlen
     memcpy(dststr + 1, srcstr + 1, strlen)
 end
-def delstr(strptr)
+def delstr(strptr)#0
     byte mask, ofst
 
     if strptr and strptr <> @nullstr
-//        mask = sizemask(^strptr + 1)
-//        ofst = (strptr - strheap) >> 4
-//        mask = mask << (ofst & $07)
-//        ofst = ofst >> 3
-//        strpoolmap->[ofst] = strpoolmap->[ofst] & ~mask
+        mask = sizemask(^strptr + 1)
+        ofst = (strptr - strpool) >> 4
+        mask = mask << (ofst & $07)
+        ofst = ofst >> 3
+        ^(strpoolmap + ofst) = ^(strpoolmap + ofst) & ~mask
     fin
 end
 def newstr(strptr)
@@ -197,30 +240,35 @@ def newstr(strptr)
     word newptr
 
     strlen = ^strptr
-    while (strptr).[strlen] == $8D or (strptr).[strlen] == $A0
+    while ^(strptr + strlen) == $8D or ^(strptr + strlen) == $A0
         strlen--
     loop
     if strlen == 0
         return @nullstr
     fin
-//    newptr = strpoolalloc(strlen + 1)
-//    if newptr
-//        memcpy(newptr, strptr, strlen + 1)
-//        ^newptr = strlen
-//        return newptr
-//    fin
+    newptr = strpoolalloc(strlen + 1)
+    if newptr
+        memcpy(newptr, strptr, strlen + 1)
+        ^newptr = strlen
+        return newptr
+    fin
     return @nullstr
 end
 def inittxtbuf#0
     word i
 
-//    strlinbuf     = $1000
-//    strpoolmap    = $1F00
-//    strpoolmsz    = 224 // $E0 = 28K is memory@16 bytes per bit map, 128 bytes per 8 bit map, 1K bytes per 8 byte map
-//    strpool       = $4800
-//    strpoolsz     = $7000
-//    memset(strpoolmap, strheapmsz, 0)
-//    memset(strlinbuf, maxfill * 2, @nullstr)
+    strlinbuf = heapalloc(MAXLINESSIZE*2)
+    memset(strlinbuf, MAXLINESSIZE*2, @nullstr)
+    while isult(heapavail, strplsize)
+        strplsize = strplsize - 4096
+    loop
+    if isult(heapavail - strplsize, 4096) // Keep at least 4096 free
+        strplsize = strplsize - 4096
+    fin
+    strplmapsize = strplsize / 128
+    strpoolmap   = heapalloc(strplmapsize)
+    strpool      = heapalloc(strplsize)
+    memset(strpoolmap, strplmapsize, 0)
     numlines   = 1
     cursrow    = 0
     curscol    = 0
@@ -316,7 +364,7 @@ def readtxt(filename)#0
     if refnum
         newline(refnum, $7F, $0D)
         repeat
-            txtbuf = fileio:read(refnum, @txtbuf + 1, maxlnlen)
+            txtbuf = fileio:read(refnum, @txtbuf + 1, MAXLNLEN)
             if txtbuf
                 sethibit(@txtbuf)
                 if flags & uppercase; strupper(@txtbuf); fin
@@ -324,12 +372,12 @@ def readtxt(filename)#0
                 numlines++
             fin
             if !(numlines & $0F); putc('.'); fin
-        until txtbuf == 0 or numlines == maxlines
+        until txtbuf == 0 or numlines == MAXLINES
         fileio:close(refnum)
         //
         // Make sure there is a blank line at the end of the buffer
         //
-        if numlines < maxlines and strlinbuf:[numlines - 1] <> @nullstr
+        if numlines < MAXLINES and strlinbuf:[numlines - 1] <> @nullstr
             strlinbuf:[numlines] = @nullstr
             numlines++
         fin
@@ -620,7 +668,7 @@ def printtxt(slot)#0
     *csw = scrncsw
 end
 def openline(row)
-    if numlines < maxlines
+    if numlines < MAXLINES
         memcpy(@strlinbuf:[row + 1], @strlinbuf:[row], (numlines - row) * 2)
         strlinbuf:[row] = @nullstr
         numlines++
@@ -644,7 +692,7 @@ def cutline#0
     redraw
 end
 def pasteline#0
-    if cutbuf and numlines < maxlines
+    if cutbuf and numlines < MAXLINES
         memcpy(@strlinbuf:[cursrow + 1], @strlinbuf:[cursrow], (numlines - cursrow) * 2)
         strlinbuf:[cursrow] = newstr(cutbuf)
         numlines++
@@ -742,11 +790,11 @@ def editline(key)
                         fin
                         curson
                     fin
-                elsif curscol < maxlnlen
+                elsif curscol < MAXLNLEN
                     curscol++
                     cursx++
                     if flags & insmode
-                        if editstr < maxlnlen or editstr.maxlnlen == $A0
+                        if editstr < MAXLNLEN or editstr.MAXLNLEN == $A0
                             editstr++
                             if curscol >= editstr
                                 editstr = curscol
@@ -831,7 +879,7 @@ def editmode#0
             is keyctrlv
                 pasteline; break
             is keyctrlf
-                if numlines < maxlines and cursrow == numlines - 1
+                if numlines < MAXLINES and cursrow == numlines - 1
                     strlinbuf:[numlines] = @nullstr
                     numlines++
                 fin
