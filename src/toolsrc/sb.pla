@@ -2024,7 +2024,7 @@ end
 //
 def emit_byte(bval)#0
     ^codeptr = bval
-    codeptr  = codeptr + 1
+    codeptr++
 end
 def emit_word(wval)#0
     *codeptr = wval
@@ -2087,14 +2087,14 @@ def emit_data(vartype, consttype, constval, constsize)
         size = constsize
         emit_fill(constsize)
     elsif consttype == STR_TYPE
-        size      = constsize
-        chrptr    = constval
-        constsize = constsize - 1
+        size   = constsize
+        chrptr = constval
+        constsize--
         emit_byte(constsize)
         while constsize > 0
             emit_byte(^chrptr)
-            chrptr    = chrptr + 1
-            constsize = constsize - 1
+            chrptr++
+            constsize--
         loop
     else
         if vartype & BYTE_TYPE
@@ -2105,7 +2105,7 @@ def emit_data(vartype, consttype, constval, constsize)
         if consttype == CONSTADDR_TYPE
             emit_addr(constval)
         else
-                emit_word(constval)
+            emit_word(constval)
         fin
         fin
     fin
@@ -2375,9 +2375,9 @@ def emit_drop#0
 end
 def emit_leave#0
     if framesize
-          emit_op($5A)
+        emit_op($5A)
     else
-          emit_op($5C)
+        emit_op($5C)
     fin
 end
 def emit_enter(cparams)#0
@@ -2408,7 +2408,7 @@ def idmatch(nameptr, len, idptr, idcnt)
             fin
         fin
         idptr = idptr + idptr->idname + idrecsz
-        idcnt = idcnt - 1
+        idcnt--
     loop
     return 0
 end
@@ -2431,7 +2431,7 @@ def dumpsym(idptr, idcnt)#0
         fin
         crout
         idptr = idptr + idptr->idname + idrecsz
-        idcnt = idcnt - 1
+        idcnt--
     loop
 end
 def id_lookup(nameptr, len)
@@ -2455,7 +2455,7 @@ def idlocal_add(namestr, len, type, size)
     lastlocal=>idval  = framesize
     lastlocal->idtype = type | LOCAL_TYPE
     nametostr(namestr, len, lastlocal + idname)
-    locals    = locals + 1
+    locals++
     lastlocal = lastlocal + idrecsz + len
     if lastlocal > idlocal_tbl + idlocal_tblsz
         prstr(@local_sym_overflw)
@@ -2463,8 +2463,7 @@ def idlocal_add(namestr, len, type, size)
     fin
     framesize = framesize + size
     if framesize > 255
-        prstr(@local_overflw)
-        return FALSE
+        return parse_err(@local_overflw)
     fin
     return TRUE
 end
@@ -2474,7 +2473,7 @@ def iddata_add(namestr, len, type, size)
     lastglobal->idtype = type
     nametostr(namestr, len, lastglobal + idname)
     emit_iddata(datasize, size, lastglobal + idname)
-    globals    = globals + 1
+    globals++
     lastglobal = lastglobal + idrecsz + len
     if lastglobal > idglobal_tbl + idglobal_tblsz
         prstr(@global_sym_overflw)
@@ -2496,7 +2495,7 @@ def idglobal_add(namestr, len, type, value)
     lastglobal=>idval  = value
     lastglobal->idtype = type
     nametostr(namestr, len, lastglobal + idname)
-    globals    = globals + 1
+    globals++
     lastglobal = lastglobal + idrecsz + len
     if lastglobal > idglobal_tbl + idglobal_tblsz
         prstr(@global_sym_overflw)
@@ -2639,7 +2638,7 @@ def pop_val(valptr, sizeptr, typeptr)
     ^sizeptr = sizestack[valsp]
     ^typeptr = typestack[valsp]
     valsp--
-    return valsp  + 1
+    return valsp + 1
 end
 //
 // Lexical anaylzer
@@ -2878,16 +2877,12 @@ def nextln
             cpyln(strlinbuf:[lineno], instr)
             lineno++
             if !(lineno & $0F); cout('.'); fin
-            print(lineno);cout(':');print(numlines)
-            cout('>')
-            prstr(instr)
-            crout
+            //print(lineno);cout(':');print(numlines);cout('>');prstr(instr);crout
             scan
         else
-            cout('<')
-            crout
-            ^instr  = 0
-            ^inbuff = 0
+            //cout('<');crout
+            *instr  = 0
+            //^inbuff = 0
             token   = DONE_TKN
         fin
     fin
@@ -2973,7 +2968,7 @@ def parse_constval
             when token
                 is SUB_TKN
                     mod = mod | 1; break
-        is ALT_COMP_TKN
+                is ALT_COMP_TKN
                 is COMP_TKN
                     mod = mod | 2; break
                 is LOGIC_NOT_TKN
@@ -3012,7 +3007,7 @@ def parse_constval
             if !idptr; return parse_err(@bad_cnst); fin
             type = idptr->idtype
             if type & ADDR_TYPE
-            if mod <> 8; return parse_err(@bad_cnst); fin
+                if mod <> 8; return parse_err(@bad_cnst); fin
                 type = CONSTADDR_TYPE
             fin
             value = idptr=>idval
@@ -3139,20 +3134,20 @@ def parse_value(rvalue)
                 if deref
                     push_op(token, 0)
                 else
-                    deref = deref + 1
-                    type  = type | BPTR_TYPE
+                    deref++
+                    type = type | BPTR_TYPE
                 fin
                 break
             is WPTR_TKN
                 if deref
                     push_op(token, 0)
                 else
-                    deref = deref + 1
-                    type  = type | WPTR_TYPE
+                    deref++
+                    type = type | WPTR_TYPE
                 fin
                 break
             is AT_TKN
-                deref = deref - 1
+                deref--
                 break
             is SUB_TKN
             is ALT_COMP_TKN
@@ -3184,14 +3179,14 @@ def parse_value(rvalue)
             // type  = type | WORD_TYPE
             emit_val = TRUE
             break
-    is STR_TKN
-        //
-        // Special case
-        //
-        emit_constr(constval, tknlen - 1)
-        scan
-        return WORD_TYPE
-        break
+        is STR_TKN
+            //
+            // Special case
+            //
+            emit_constr(constval, tknlen - 1)
+            scan
+            return WORD_TYPE
+            break
         otherwise
             return 0
     wend
@@ -3205,16 +3200,16 @@ def parse_value(rvalue)
                 is NEG_TKN
                     pop_op
                     value = -value
-            break
+                    break
                 is ALT_COMP_TKN
                 is COMP_TKN
                     pop_op
                     value = ~value
-            break
+                    break
                 is LOGIC_NOT_TKN
                     pop_op
                     value = !value
-            break
+                    break
                 otherwise
                     cparams = FALSE
             wend
@@ -3238,7 +3233,8 @@ def parse_value(rvalue)
                         ref_offset = 0
                     fin
                     if    ref_type & BPTR_TYPE; emit_lb
-                    elsif ref_type & WPTR_TYPE; emit_lw; fin
+                    elsif ref_type & WPTR_TYPE; emit_lw
+                    fin
                     if lookahead <> CLOSE_PAREN_TKN
                         emit_push
                     fin
@@ -3847,7 +3843,7 @@ def parse_var(type)
     byte consttype, constsize, idlen
     word idptr, constval, arraysize, size
 
-    cout('T')
+    //cout('T')
     idlen = 0
     size  = 1
     if scan == OPEN_BRACKET_TKN
@@ -3903,7 +3899,7 @@ def parse_struc
     byte type, idlen, struclen, constsize
     word size, offset, idstr
 
-    cout('S')
+    //cout('S')
     struclen = 0
     if scan == ID_TKN
         struclen = tknlen
@@ -3959,7 +3955,7 @@ def parse_vars
     byte idlen, type, size
     word value, idptr
 
-    cout('V')
+    //cout('V')
     when token
         is CONST_TKN
             if scan <> ID_TKN
@@ -4012,7 +4008,7 @@ def parse_defs
     word func_tag, idptr
 
     if token == DEF_TKN
-        cout('D')
+        //cout('D')
         if scan <> ID_TKN; return parse_err(@bad_decl); fin
         cfnparms = 0
         infunc   = TRUE
@@ -4028,12 +4024,12 @@ def parse_defs
         idlocal_init
         if scan == OPEN_PAREN_TKN
             repeat
-        if scan == ID_TKN
-            cfnparms = cfnparms + 1
-            idlocal_add(tknptr, tknlen, WORD_TYPE, 2)
-            scan
-        fin
-        until token <> COMMA_TKN
+                if scan == ID_TKN
+                    cfnparms = cfnparms + 1
+                    idlocal_add(tknptr, tknlen, WORD_TYPE, 2)
+                    scan
+                fin
+            until token <> COMMA_TKN
             if token <> CLOSE_PAREN_TKN
                 return parse_err(@bad_decl)
             fin
@@ -4070,7 +4066,7 @@ def parse_module
         while parse_defs
             nextln
         loop
-        cout('I')
+        //cout('I')
         framesize  = 0
         entrypoint = codeptr
         emit_enter(0)
@@ -4080,7 +4076,7 @@ def parse_module
                 nextln
             loop
         fin
-        cout('!')
+        //cout('!')
         if prevstmnt <> RETURN_TKN
             emit_const(0)
             emit_leave

@@ -6,7 +6,7 @@ PLVM02	= PLASMA.SYSTEM\#FF2000
 PLVM802	= PLASMA16.SYSTEM\#FF2000
 PLVM03	= SOS.INTERP\#050000
 CMD     = CMD\#FF2000
-ED      = ED\#FF2000
+ED      = ED\#FE1000
 SB      = SB\#FF2000
 ROD     = ROD\#FE1000
 SIEVE   = SIEVE\#FE1000
@@ -69,7 +69,7 @@ TXTTYPE	= .TXT
 #SYSTYPE	= \#FF2000
 #TXTTYPE	= \#040000
 
-all: $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVM802) $(PLVM03) $(CMD) $(ARGS) $(MEMMGR) $(MEMTEST) $(FIBER) $(SB) $(MON) $(ROD) $(SIEVE) $(UTHERNET2) $(UTHERNET) $(ETHERIP) $(INET) $(DHCP) $(HTTPD) $(ROGUE) $(ROGUEMAP) $(ROGUECOMBAT) $(ROGUEIO) $(HGR1) $(TONE) $(DGR) $(DGRTEST) $(FILEIO) $(CONIO) $(PORTIO) $(SPIPORT) $(SDFAT) $(FATCAT) $(FATGET) $(FATPUT) $(FATWDSK) $(FATRDSK) $(SANE) $(FPSTR) $(FPU) $(SANITY) $(RPNCALC)
+all: $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVM802) $(PLVM03) $(CMD) $(ARGS) $(MEMMGR) $(MEMTEST) $(FIBER) $(ED) $(MON) $(ROD) $(SIEVE) $(UTHERNET2) $(UTHERNET) $(ETHERIP) $(INET) $(DHCP) $(HTTPD) $(ROGUE) $(ROGUEMAP) $(ROGUECOMBAT) $(ROGUEIO) $(HGR1) $(TONE) $(DGR) $(DGRTEST) $(FILEIO) $(CONIO) $(PORTIO) $(SPIPORT) $(SDFAT) $(FATCAT) $(FATGET) $(FATPUT) $(FATWDSK) $(FATRDSK) $(SANE) $(FPSTR) $(FPU) $(SANITY) $(RPNCALC)
 
 clean:
 	-rm *FE1000 *FF2000 $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVM03)
@@ -122,8 +122,8 @@ test:	samplesrc/test.pla samplesrc/testlib.pla $(PLVM) $(PLASM)
 	./$(PLVM) TEST
 
 $(ED): toolsrc/ed.pla $(PLVM02) $(PLASM) toolsrc/ed.pla
-	./$(PLASM) -AOW < toolsrc/ed.pla > toolsrc/ed.a
-	acme --setpc 8192 -o $(ED) toolsrc/ed.a
+	./$(PLASM) -AMOW < toolsrc/ed.pla > toolsrc/ed.a
+	acme --setpc 4094 -o $(ED) toolsrc/ed.a
 
 $(SB): toolsrc/sb.pla $(PLVM02) $(PLASM) toolsrc/sb.pla
 	./$(PLASM) -AOW < toolsrc/sb.pla > toolsrc/sb.a
