@@ -1,0 +1,331 @@
+//
+// Lexical anaylzer
+//
+def isalpha(c)
+    if c >= 'A' and c <= 'Z'
+        return TRUE
+    elsif c >= 'a' and c <= 'z'
+        return TRUE
+    elsif c == '_'
+        return TRUE
+    fin
+    return FALSE
+end
+def isnum(c)
+    return c >= '0' and c <= '9'
+end
+def isalphanum(c)
+    if c >= 'A' and c <= 'Z'
+        return TRUE
+    elsif c >= '0' and c <= '9'
+        return TRUE
+    elsif c >= 'a' and c <= 'z'
+        return TRUE
+    elsif c == '_'
+        return TRUE
+    fin
+    return FALSE
+end
+def keymatch
+    byte i, keypos
+    word chrptr
+
+    keypos = 0
+    while keywrds[keypos] < tknlen
+        keypos = keypos + keywrds[keypos] + 2
+    loop
+    chrptr = tknptr - 1
+    while keywrds[keypos] == tknlen
+        for i = 1 to tknlen
+            if toupper(^(chrptr + i)) <> keywrds[keypos + i]
+                break
+            fin
+        next
+        if i > tknlen
+            return keywrds[keypos + keywrds[keypos] + 1]
+        fin
+        keypos = keypos + keywrds[keypos] + 2
+    loop
+    return ID_TKN
+end
+def scan
+    //
+    // Skip whitespace
+    //
+    while ^scanptr == ' '
+        scanptr++
+    loop
+    tknptr  = scanptr
+    scanchr = ^scanptr
+    //
+    // Scan for token based on first character
+    //
+    if isalpha(scanchr)
+        //
+        // ID, either variable name or reserved word
+        //
+        repeat
+            scanptr++
+        until not isalphanum(^scanptr)
+        tknlen = scanptr - tknptr
+        token  = keymatch
+    elsif scanchr >= '0' and scanchr <= '9' // isnum()
+        //
+        // Decimal constant
+        //
+        token    = INT_TKN
+        constval = 0
+        repeat
+            constval = constval * 10 + ^scanptr - '0'
+            scanptr++
+        until ^scanptr < '0' or ^scanptr > '9'
+    else
+        //
+        // Potential multiple character tokens
+        //
+        when scanchr
+            is '$'
+                //
+                // Hexadecimal constant
+                //
+                token    = INT_TKN
+                constval = 0
+                repeat
+                    scanptr++
+                    if ^scanptr >= '0' and ^scanptr <= '9'
+                        constval = (constval << 4) + ^scanptr - '0'
+                    elsif ^scanptr >= 'A' and ^scanptr <= 'F'
+                        constval = (constval << 4) + ^scanptr - '7'// 'A'-10
+                    elsif ^scanptr >= 'a' and ^scanptr <= 'f'
+                        constval = (constval << 4) + ^scanptr - 'W'// 'a'-10
+                    else
+                        break
+                    fin
+                until !^scanptr
+                break
+            is '\''
+                //
+                // Character constant
+                //
+                token = CHR_TKN
+                scanptr++
+                if ^scanptr <> '\\'
+                    constval = ^scanptr
+                else
+                    scanptr++
+                    when ^scanptr
+                        is 'n'
+                            constval = $0D; break
+                        is 'r'
+                            constval = $0A; break
+                        is 't'
+                            constval = $09; break
+                        otherwise
+                            constval = ^scanptr
+                    wend
+                fin
+                if ^(scanptr + 1) <> '\''
+                    return parse_err(@bad_cnst)
+                fin
+                scanptr = scanptr + 2
+                break
+            is '"'
+                //
+                // String constant
+                //
+                token    = STR_TKN
+                constval = @strconst+1
+                strconst = 0
+                scanptr++
+                while ^scanptr and ^scanptr <> '"'
+                    if ^scanptr <> '\\'
+                        ^constval = ^scanptr
+                   else
+                        scanptr++
+                        when ^scanptr
+                            is 'n'
+                                ^constval = $0D; break
+                            is 'r'
+                                ^constval = $0A; break
+                            is 't'
+                                ^constval = $09; break
+                            otherwise
+                                constval = ^scanptr
+                        wend
+                    fin
+                    constval++
+                    strconst++
+                    scanptr++
+                loop
+                if !^scanptr; return parse_err(@bad_cnst); fin
+                constval = @strconst
+                scanptr++
+                break
+            is '/'
+                if ^(scanptr + 1) == '/'
+                    token    = EOL_TKN
+                    ^scanptr = $00
+                else
+                    token = DIV_TKN
+                    scanptr++
+                fin
+                break
+            is '='
+                if ^(scanptr + 1) == '='
+                    token   = EQ_TKN
+                    scanptr = scanptr + 2
+                elsif ^(scanptr + 1) == '>'
+                    token   = PTRW_TKN
+                    scanptr = scanptr + 2
+                else
+                    token = SET_TKN
+                    scanptr++
+                fin
+                break
+            is '-'
+                if ^(scanptr + 1) == '>'
+                    token   = PTRB_TKN
+                    scanptr = scanptr + 2
+                elsif ^(scanptr + 1) == '-'
+                    token   = DEC_TKN
+                    scanptr = scanptr + 2
+                else
+                    token = SUB_TKN
+                    scanptr++
+                fin
+                break
+            is '+'
+                if ^(scanptr + 1) == '+'
+                    token   = INC_TKN
+                    scanptr = scanptr + 2
+                else
+                    token = ADD_TKN
+                    scanptr++
+                fin
+                break
+            is '>'
+                if ^(scanptr + 1) == '>'
+                    token   = SHR_TKN
+                    scanptr = scanptr + 2
+                elsif ^(scanptr + 1) == '='
+                    token   = GE_TKN
+                    scanptr = scanptr + 2
+                else
+                    token = GT_TKN
+                    scanptr++
+                fin
+                break
+            is '<'
+                if ^(scanptr + 1) == '<'
+                    token   = SHL_TKN
+                    scanptr = scanptr + 2
+                elsif ^(scanptr + 1) == '='
+                    token   = LE_TKN
+                    scanptr = scanptr + 2
+                elsif ^(scanptr + 1) == '>'
+                    token   = NE_TKN
+                    scanptr = scanptr + 2
+                else
+                    token = LT_TKN
+                    scanptr++
+                fin
+                break
+            is ':
+                if ^(scanptr + 1) == ':'
+                    token = TRIELSE_TKN;
+                    scanptr = scanptr + 2
+                else
+                    token = COLON_TKN;
+                    scanptr++
+                fin
+                break
+            is '?'
+                if ^(scanptr + 1) == '?'
+                    token = TERNARY_TKN;
+                    scanptr = scanptr + 2
+                else
+                    token = TERNARY_TKN;
+                    scanptr++
+                fin
+                break
+            is 0
+            is ';'
+                if token <> EOF_TKN
+                    token = EOL_TKN
+                fin
+                break
+            otherwise
+                //
+                // Simple single character tokens
+                //
+                token = scanchr | $80
+                scanptr++
+        wend
+    fin
+    tknlen = scanptr - tknptr
+    return token
+end
+def rewind(ptr)#0
+    scanptr = ptr
+end
+def lookahead
+    word backptr, backtkn
+    byte prevtkn, prevlen, look
+    backptr = scanptr
+    backtkn = tknptr
+    prevtkn = token
+    prevlen = tknlen
+    look    = scan
+    scanptr = backptr
+    tknptr  = backtkn
+    token   = prevtkn
+    tknlen  = prevlen
+    return look
+end
+//
+// Get next line of input
+//
+def nextln
+    if ^scanptr == ';'
+        scanptr++
+        scan
+    else
+        if token <> EOL_TKN or token <> EOF_TKN; return parse_err("Extraneous characters"); fin
+        scanptr = inbuff
+        instr = fileio:read(refnum, inbuff, 127)
+        if instr
+            ^(inbuff + instr + 1) = 0 // NULL terminate string
+            lineno++
+            if !(lineno & $0F); putc('.'); fin
+            if scan == INCLUDE_TKN
+                if incref; return parse_err("Nested INCLUDEs not allowed"); fin
+                if scan <> STRING_TKN; return parse_err("Missing INCLUDE file"); fin
+                incfile = scanptr - constval
+                memcpy(@incfile + 1, constval, incfile)
+                sysincbuf = heapallocalign(1024, 256)
+                incref = fileio:opensys(@incfile, sysincbuf)
+                if not incref; return parse_err("Unable to open INCLUDE file"); fin
+                fileio:newline(incref, $7F, $0D)
+                refnum    = incref
+                parsefile = @incfile
+                srcline   = lineno
+                lineno    = 0
+                return nextln
+            fin
+        else
+            if refnum == incref
+                fileio:close(incnum)
+                heaprelease(sysincbuf)
+                incref    = 0
+                refnum    = srcref
+                parsefile = srcfile
+                lineno    = srcline
+                return nextln
+            else
+                *instr = 0
+                token  = EOF_TKN
+            fin
+        fin
+    fin
+    return token
+end

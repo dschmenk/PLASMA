@@ -1,0 +1,793 @@
+//
+// Symbol table
+//
+//def dumpsym(idptr, idcnt)#0
+//    while idcnt
+//        prword(idptr=>idval)
+//        cout(' ')
+//        prbyte(idptr->idtype)
+//        cout(' ')
+//        prstr(@idptr->idname)
+//        cout('=')
+//        if idptr->idtype & ADDR_TYPE
+//            if idptr=>idval & IS_CTAG
+//                prword((ctag_tbl:[idptr=>idval & MASK_CTAG] & MASK_CTAG) + codebuff)
+//            else
+//                prword(idptr=>idval + codebuff)
+//            fin
+//        else
+//            prword(idptr=>idval)
+//        fin
+//        crout
+//        idptr = idptr + idptr->idname + idrecsz
+//        idcnt--
+//    loop
+//end
+def idmatch(nameptr, len, idptr, idcnt)
+    byte i
+
+    while idcnt
+        if len == idptr->idname
+            for i = 1 to len
+                if nameptr->[i - 1] <> idptr->idname.[i]
+                    break
+                fin
+            next
+            if i > len
+                return idptr
+            fin
+        fin
+        idptr = idptr + idptr->idname + idrecsz
+        idcnt--
+    loop
+    return 0
+end
+def id_lookup(nameptr, len)
+    word idptr
+
+    idptr = idmatch(nameptr, len, idlocal_tbl, locals)
+    if idptr
+        return idptr
+    fin
+    idptr = idmatch(nameptr, len, idglobal_tbl, globals)
+    if idptr
+        return idptr
+    fin
+    return parse_err(@undecl_id)
+end
+def idglobal_lookup(nameptr, len)
+    return idmatch(nameptr, len, idglobal_tbl, globals)
+end
+def idlocal_add(namestr, len, type, size)
+    if idmatch(namestr, len, @idlocal_tbl, locals); return parse_err(@dup_id); fin
+    lastlocal=>idval  = framesize
+    lastlocal->idtype = type | LOCAL_TYPE
+    nametostr(namestr, len, lastlocal + idname)
+    locals++
+    lastlocal = lastlocal + idrecsz + len
+    if lastlocal > idlocal_tbl + idlocal_tblsz
+        prstr(@local_sym_overflw)
+        exit
+    fin
+    framesize = framesize + size
+    if framesize > 255
+        return parse_err(@local_overflw)
+    fin
+    return TRUE
+end
+def iddata_add(namestr, len, type, size)
+    if idmatch(namestr, len, idglobal_tbl, globals); return parse_err(@dup_id); fin
+    lastglobal=>idval  = datasize
+    lastglobal->idtype = type
+    nametostr(namestr, len, lastglobal + idname)
+    emit_iddata(datasize, size, lastglobal + idname)
+    globals++
+    lastglobal = lastglobal + idrecsz + len
+    if lastglobal > idglobal_tbl + idglobal_tblsz
+        prstr(@global_sym_overflw)
+        exit
+    fin
+    datasize = datasize + size
+    return TRUE
+end
+def iddata_size(type, varsize, initsize)#0
+    if varsize > initsize
+        datasize = datasize + varsize
+        emit_data(0, 0, 0, varsize - initsize)
+    else
+        datasize = datasize + initsize
+    fin
+end
+def idglobal_add(namestr, len, type, value)
+    if idmatch(namestr, len, idglobal_tbl, globals); return parse_err(@dup_id); fin
+    lastglobal=>idval  = value
+    lastglobal->idtype = type
+    nametostr(namestr, len, lastglobal + idname)
+    globals++
+    lastglobal = lastglobal + idrecsz + len
+    if lastglobal > idglobal_tbl + idglobal_tblsz
+        prstr(@global_sym_overflw)
+        exit
+    fin
+    return TRUE
+end
+def idfunc_add(namestr, len, tag)
+    return idglobal_add(namestr, len, FUNC_TYPE, tag)
+end
+def idconst_add(namestr, len, value)
+    return idglobal_add(namestr, len, CONST_TYPE, value)
+end
+def idglobal_init#0
+    word op
+    byte i
+
+    idglobal_tbl = heapalloc(IDGLOBALSZ)
+    idlocal_tbl  = heapalloc(IDLOCALSZ)
+    codebuff     = heapalloc(CODEBUFSZ)
+    codeptr      = codebuff
+    entrypoint   = 0
+    globals      = 0
+    lastglobal   = idglobal_tbl
+    codetag      = -1
+    //
+    //Init free op sequence list
+    //
+    freeop_lst = heapalloc(OPSEQNUM*t_opseq)
+    op = freeop_lst
+    for i = OPSEQNUM-1 downto 0
+        op=>nextop = op + t_opseq
+        op = op + t_opseq
+    next
+    op=>nextop = NULL
+end
+def idlocal_init#0
+    locals    = 0
+    framesize = 0
+    lastlocal = idlocal_tbl
+end
+//
+// Code tags. Upper bit is IS_RESOLVED flag, lower 15 is offset into codebuff
+// Flags are:
+//
+def ctag_new
+    if codetag >= ctag_max; return parse_err(@ctag_full); fin
+    codetag = codetag + 1
+    ctag_tbl:[codetag] = 0 // Unresolved, nothing to update yet
+    return codetag | IS_CTAG
+end
+def ctag_resolve(ctag)#0
+    word updtptr, nextptr
+
+    ctag = ctag & MASK_CTAG // Better be a ctag!
+    if ctag_tbl:[ctag] & IS_RESOLVED;parse_err(@dup_id); return; fin
+    updtptr = ctag_tbl:[ctag] & MASK_CTAG
+    while updtptr
+        //
+        // Update list of addresses needing resolution
+        //
+        updtptr  = updtptr + codebuff
+        nextptr  = *updtptr & MASK_CTAG
+        if *updtptr & IS_RELATIVE
+            *updtptr = codeptr - updtptr
+        else
+            *updtptr = codeptr
+        fin
+        updtptr = nextptr
+    loop
+    ctag_tbl:[ctag] = (codeptr - codebuff) | IS_RESOLVED
+end
+//
+// Emit data/bytecode
+//
+def emit_byte(bval)#0
+    ^codeptr = bval
+    codeptr++
+end
+def emit_word(wval)#0
+    *codeptr = wval
+    codeptr  = codeptr + 2
+end
+def emit_fill(size)#0
+    memset(codeptr, 0, size)
+    codeptr = codeptr + size
+end
+def emit_op(op)#0
+    lastop = op
+    emit_byte(op)
+end
+def emit_addr(tag)#0
+    word updtptr
+
+    if tag & IS_CTAG
+        tag = tag & MASK_CTAG
+        if ctag_tbl:[tag] & IS_RESOLVED
+            updtptr = (ctag_tbl:[tag] & MASK_CTAG) + codebuff
+        else
+            //
+            // Add to list of tags needing resolution
+            //
+            updtptr = ctag_tbl:[tag] & MASK_CTAG
+            ctag_tbl:[tag] = codeptr - codebuff
+        fin
+        emit_word(updtptr)
+    else
+        emit_word(tag + codebuff)
+    fin
+end
+def emit_reladdr(tag)#0
+    word updtptr
+
+    if tag & IS_CTAG
+        tag = tag & MASK_CTAG
+        if ctag_tbl:[tag] & IS_RESOLVED
+            updtptr = ((ctag_tbl:[tag] & MASK_CTAG) + codebuff) - codeptr
+        else
+            //
+            // Add to list of tags needing resolution
+            //
+            updtptr = ctag_tbl:[tag] | IS_RELATIVE
+            ctag_tbl:[tag] = codeptr - codebuff
+        fin
+        emit_word(updtptr)
+    else
+        emit_word(tag - (codeptr - codebuff))
+    fin
+end
+def emit_iddata(value, size, namestr)#0
+    emit_fill(size)
+end
+def emit_data(vartype, consttype, constval, constsize)
+    byte i
+    word size, chrptr
+
+    if consttype == 0
+        size = constsize
+        emit_fill(constsize)
+    elsif consttype == STR_TYPE
+        size   = constsize
+        chrptr = constval
+        constsize--
+        emit_byte(constsize)
+        while constsize > 0
+            emit_byte(^chrptr)
+            chrptr++
+            constsize--
+        loop
+    else
+        if vartype & BYTE_TYPE
+            size = 1
+            emit_byte(constval)
+        else
+            size = 2
+        if consttype == CONSTADDR_TYPE
+            emit_addr(constval)
+        else
+            emit_word(constval)
+        fin
+        fin
+    fin
+    return size
+end
+def emit_const(cval)#0
+    if cval == 0
+        emit_op($00)
+    elsif cval > 0 and cval < 256
+        emit_op($2A)
+        emit_byte(cval)
+    else
+        emit_op($2C)
+        emit_word(cval)
+    fin
+end
+def emit_constr(str, size)#0
+    emit_op($2E)
+    emit_data(0, STR_TYPE, str, size)
+end
+def emit_lb#0
+    emit_op($60)
+end
+def emit_lw#0
+    emit_op($62)
+end
+def emit_llb(offset)#0
+    emit_op($64)
+    emit_byte(offset)
+end
+def emit_llw(offset)#0
+    emit_op($66)
+    emit_byte(offset)
+end
+def emit_lab(tag, offset)#0
+    if tag & IS_CTAG and offset
+        parse_err(@no_ctag_offst)
+    else
+        emit_op($68)
+        emit_addr(tag+offset)
+    fin
+end
+def emit_law(tag, offset)#0
+    if tag & IS_CTAG and offset
+        parse_err(@no_ctag_offst)
+    else
+        emit_op($6A)
+        emit_addr(tag+offset)
+    fin
+end
+def emit_sb#0
+    emit_op($70)
+end
+def emit_sw#0
+    emit_op($72)
+end
+def emit_slb(offset)#0
+    emit_op($74)
+    emit_byte(offset)
+end
+def emit_slw(offset)#0
+    emit_op($76)
+    emit_byte(offset)
+end
+def emit_dlb(offset)#0
+    emit_op($6C)
+    emit_byte(offset)
+end
+def emit_dlw(offset)#0
+    emit_op($6E)
+    emit_byte(offset)
+end
+def emit_sab(tag, offset)#0
+    if tag & IS_CTAG and offset
+        parse_err(@no_ctag_offst)
+    else
+        emit_op($78)
+        emit_addr(tag+offset)
+    fin
+end
+def emit_saw(tag, offset)#0
+    if tag & IS_CTAG and offset
+        parse_err(@no_ctag_offst)
+    else
+        emit_op($7A)
+        emit_addr(tag+offset)
+    fin
+end
+def emit_dab(tag, offset)#0
+    if tag & IS_CTAG and offset
+        parse_err(@no_ctag_offst)
+    else
+        emit_op($7C)
+        emit_addr(tag+offset)
+    fin
+end
+def emit_daw(tag, offset)#0
+    if tag & IS_CTAG and offset
+        parse_err(@no_ctag_offst)
+    else
+        emit_op($7E)
+        emit_addr(tag+offset)
+    fin
+end
+def emit_call(tag)#0
+    emit_op($54)
+    emit_addr(tag)
+end
+def emit_ical#0
+    emit_op($56)
+end
+def emit_localaddr(offset)#0
+    emit_op($28)
+    emit_byte(offset)
+end
+def emit_globaladdr(tag, offset)#0
+    if tag & IS_CTAG and offset
+        parse_err(@no_ctag_offst)
+    else
+        emit_op($26)
+        emit_addr(tag+offset)
+    fin
+end
+def emit_indexbyte#0
+    emit_op($02)
+end
+def emit_indexword#0
+    emit_op($1E)
+end
+def emit_unaryop(op)
+    when op
+        is NEG_TKN
+            emit_op($10); break
+        is ALT_COMP_TKN
+        is COMP_TKN
+            emit_op($12); break
+        is LOGIC_NOT_TKN
+            emit_op($20); break
+        is INC_TKN
+            emit_op($0C); break
+        is DEC_TKN
+            emit_op($0E); break
+        is BPTR_TKN
+            emit_op($60); break
+        is WPTR_TKN
+            emit_op($62); break
+        otherwise
+            return FALSE
+    wend
+    return TRUE
+end
+def emit_binaryop(op)
+    when op
+        is MUL_TKN
+            //
+            // Replace MUL 2 with SHL 1
+            //
+            if lastop == $2A and ^(codeptr - 1) == 2 // CB 2
+                codeptr = codeptr - 1
+                emit_byte(1) // CB 1
+                emit_op($1A) // SHL
+            else
+                emit_op($06)
+            fin
+        break
+        is DIV_TKN
+            //
+            // Replace DIV 2 with SHR 1
+            //
+            if lastop == $2A and ^(codeptr - 1) == 2 // CB 2
+                codeptr = codeptr - 1
+                emit_byte(1) // CB 1
+                emit_op($1C) // SHR
+            else
+                emit_op($08)
+            fin
+        break
+        is MOD_TKN
+            emit_op($0A); break
+        is ADD_TKN
+            //
+            // Replace ADD 1 with INCR
+            //
+            if lastop == $2A and ^(codeptr - 1) == 1 // CB 1
+                codeptr = codeptr - 2
+                emit_op($0C) // INC_OP
+            else
+                emit_op($02)
+            fin
+        break
+        is SUB_TKN
+            //
+            // Replace SUB 1 with DECR
+            //
+            if lastop == $2A and ^(codeptr - 1)  == 1 // CB 1
+                codeptr = codeptr - 2
+                emit_op($0E) // DEC_OP
+            else
+                emit_op($04)
+            fin
+        break
+        is SHL_TKN
+            emit_op($1A); break
+        is SHR_TKN
+            emit_op($1C); break
+        is AND_TKN
+            emit_op($14); break
+        is OR_TKN
+            emit_op($16); break
+        is EOR_TKN
+            emit_op($18); break
+        is EQ_TKN
+            emit_op($40); break
+        is NE_TKN
+            emit_op($42); break
+        is GE_TKN
+            emit_op($48); break
+        is LT_TKN
+            emit_op($46); break
+        is GT_TKN
+            emit_op($44); break
+        is LE_TKN
+            emit_op($4A); break
+        is LOGIC_OR_TKN
+            emit_op($22); break
+        is LOGIC_AND_TKN
+            emit_op($24); break
+        otherwise
+            return FALSE
+    wend
+    return TRUE
+end
+def emit_brtru(tag)#0
+    emit_op($4E)
+    emit_reladdr(tag)
+end
+def emit_brfls(tag)#0
+    emit_op($4C)
+    emit_reladdr(tag)
+end
+def emit_brgt(tag)#0
+    emit_op($38)
+    emit_reladdr(tag)
+end
+def emit_brlt(tag)#0
+    emit_op($3A)
+    emit_reladdr(tag)
+end
+def emit_brne(tag)#0
+    emit_op($3E)
+    emit_reladdr(tag)
+end
+def emit_branch(tag)#0
+    emit_op($50)
+    emit_reladdr(tag)
+end
+def emit_drop#0
+    emit_op($30)
+end
+def emit_leave#0
+    if framesize
+        emit_op($5A)
+    else
+        emit_op($5C)
+    fin
+end
+def emit_enter(cparams)#0
+    emit_byte(emit_enter.[0])
+    emit_byte(emit_enter.[1])
+    emit_byte(emit_enter.[2])
+    if framesize
+        emit_op($58)
+        emit_byte(framesize)
+        emit_byte(cparams)
+    fin
+end
+//
+//New/release sequence ops
+//
+def new_op
+    word op
+    op = freeop_lst
+    if not op
+        puts("Compiler out of sequence ops!")
+        return NULL
+    fin
+    freeop_lst = freeop_lst=>nextop
+    op=>nextop = NULL
+    return op
+end
+def release_op(op)#0
+    if op
+        op=>nextop = freeop_lst
+        freeop_lst = op
+    fin
+end
+def release_seq(seq)#0
+{
+    word op
+    while seq
+        op = seq
+        seq = seq=>nextop
+        //
+        //Free this op
+        //
+        op=>nextop = freeop_lst
+        freeop_lst = op
+    loop
+end
+//
+//Generate a sequence of code
+//
+def gen_seq(seq, opcode, cval, tag, offsz, type)
+{
+    word op
+
+    if not seq
+        seq = new_op
+        op = seq
+    else
+        op = seq
+        while op=>nextop; op = op=>nextop; loop
+        op=>nextop = new_op
+        op = op=>nextop
+    fin
+    op->code  = opcode
+    op=>val   = cval
+    op=>tag   = tag
+    op=>offsz = offsz
+    op->type  = type
+    return seq
+end
+//
+//Append one sequence to the end of another
+//
+def cat_seq(seq1, seq2)
+{
+    word op
+
+    if not seq1; return seq2; fin
+    op = seq1
+    while op=>nextop; op = op=>nextop; loop
+    op=>nextop = seq2
+    return seq1
+fin
+//
+//Emit the pending sequence
+//
+def emit_pending_seq#0
+    word lcl_pending, op
+    // This is called by some of the emit_*() functions to ensure that any
+    // pending ops are emitted before they emit their own op when they are
+    // called from the parser. However, this function itself calls some of those
+    // emit_*() functions to emit instructions from the pending sequence, which
+    // would cause an infinite loop if we weren't careful. We therefore set
+    // pending_seq to null on entry and work with a local copy, so if this
+    // function calls back into itself it is a no-op.
+    if not pending_seq; return; fin
+    lcl_pending = pending_seq
+    pending_seq = NULL
+    //if outflags & OPTIMIZE
+    //    while crunch_seq(@lcl_pending, 0); loop
+    //    while crunch_seq(@lcl_pending, 1); loop
+    //fin
+    while lcl_pending
+        op = lcl_pending
+        when op->code
+            is NEG_CODE
+            is COMP_CODE
+            is LOGIC_NOT_CODE
+            is INC_CODE
+            is DEC_CODE
+            is BPTR_CODE
+            is WPTR_CODE
+                emit_unaryop(op->code)
+                break
+            is MUL_CODE
+            is DIV_CODE
+            is MOD_CODE
+            is ADD_CODE
+            is SUB_CODE
+            is SHL_CODE
+            is SHR_CODE
+            is AND_CODE
+            is OR_CODE
+            is EOR_CODE
+            is EQ_CODE
+            is NE_CODE
+            is GE_CODE
+            is LT_CODE
+            is GT_CODE
+            is LE_CODE
+            is LOGIC_OR_CODE
+            is LOGIC_AND_CODE
+                emit_op(op->code)
+                break
+            is CONST_CODE
+                emit_const(op=>val)
+                break
+            is STR_CODE
+                emit_conststr(op=>val)
+                break
+            is LB_CODE
+                emit_lb()
+                break
+            is LW_CODE
+                emit_lw()
+                break
+            is LLB_CODE
+                emit_llb(op=>offsz)
+                break
+            is LLW_CODE
+                emit_llw(op=>offsz)
+                break
+            is LAB_CODE
+                emit_lab(op=>tag, op=>offsz, op->type)
+                break
+            is LAW_CODE
+                emit_law(op=>tag, op=>offsz, op->type)
+                break
+            is SB_CODE
+                emit_sb()
+                break
+            is SW_CODE
+                emit_sw()
+                break;
+            is SLB_CODE
+                emit_slb(op-=>offsz)
+                break
+            is SLW_CODE
+                emit_slw(op=>offsz)
+                break
+            is DLB_CODE
+                emit_dlb(op=>offsz)
+                break
+            is DLW_CODE
+                emit_dlw(op=>offsz)
+                break
+            is SAB_CODE
+                emit_sab(op=>tag, op=>offsz, op->type)
+                break
+            is SAW_CODE
+                emit_saw(op=>tag, op=>offsz, op->type)
+                break
+            is DAB_CODE
+                emit_dab(op=>tag, op=>offsz, op->type)
+                break
+            is DAW_CODE
+                emit_daw(op=>tag, op=>offsz, op->type)
+                break
+            is CALL_CODE
+                emit_call(op=>tag, op->type)
+                break
+            is ICAL_CODE
+                emit_ical()
+                break
+            is LADDR_CODE
+                emit_localaddr(op=>offsz)
+                break
+            is GADDR_CODE
+                emit_globaladdr(op=>tag, op=>offsz, op->type)
+                break
+            is INDEXB_CODE
+                emit_indexbyte
+                break
+            is INDEXW_CODE
+                emit_indexword
+                break
+            is DROP_CODE
+                emit_drop
+                break
+            is DUP_CODE
+                emit_dup
+                break
+            is PUSH_EXP_CODE
+                emit_push_exp
+                break
+            is PULL_EXP_CODE
+                emit_pull_exp
+                break
+            is BRNCH_CODE
+                emit_brnch(op=>tag)
+                break
+            is BRFALSE_CODE
+                emit_brfls(op=>tag)
+                break
+            is BRTRUE_CODE
+                emit_brtru(op=>tag)
+                break
+            is CODETAG_CODE
+                printf("_B%03d%c\n", op->tag, LBL);
+                break;
+            is NOP_CODE
+                break
+            otherwise
+                return
+        wend
+        lcl_pending = lcl_pending=>nextop;
+        //
+        //Free this op
+        //
+        op=>nextop = freeop_lst
+        freeop_lst = op
+    loop
+end
+//
+//Emit a sequence of ops (into the pending sequence)
+//
+def emit_seq(seq)#0
+    word op
+    byte string
+    string = 0
+    op = seq
+    while op
+        if op->code == STR_CODE; string = 1; fin
+        op = op=>nextop
+    loop
+    pending_seq = cat_seq(pending_seq, seq)
+    // The source code comments in the output are much more logical if we don't
+    // merge multiple sequences together. There's no value in doing this merging
+    // if we're not optimizing, and we optionally allow it to be prevented even
+    // when we are optimizing by specifing the -N (NO_COMBINE) flag.
+    //
+    // We must also force output if the sequence includes a CS opcode, as the
+    // associated 'constant' is only temporarily valid.
+    if !(outflags & OPTIMIZE) or (outflags & NO_COMBINE) or string
+        emit_pending_seq
+end

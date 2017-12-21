@@ -1,0 +1,1249 @@
+//
+// Alebraic op to stack op
+//
+def push_op(op, prec)#0
+    opsp++
+    if opsp == 16; parse_err("Op stack overflow"); return; fin
+    opstack[opsp]   = op
+    precstack[opsp] = prec
+end
+def pop_op
+    if opsp < 0; return parse_err("Op stack underflow"); fin
+    opsp--
+    return opstack[opsp + 1]
+end
+def tos_op
+    if opsp < 0
+        return 0
+    fin
+    return opstack[opsp]
+end
+def tos_op_prec(tos)
+    if opsp <= tos
+        return 100
+    fin
+    return precstack[opsp]
+end
+def push_val(value, size, type)#0
+    valsp++
+    if valsp == 16; parse_err("Eval stack overflow"); return; fin
+    valstack[valsp]  = value
+    sizestack[valsp] = size
+    typestack[valsp] = type
+end
+def pop_val(valptr, sizeptr, typeptr)
+    if valsp < 0; return parse_err("Eval stack underflow"); fin
+    *valptr  = valstack[valsp]
+    ^sizeptr = sizestack[valsp]
+    ^typeptr = typestack[valsp]
+    valsp--
+    return valsp + 1
+end
+//
+// Constant expression parsing
+//
+def calc_binaryop(op)
+    word val1, val2
+    byte size1, size2, type1, type2
+
+    if not pop_val(@val2, @size2, @type2); return 0; fin
+    pop_val(@val1, @size1, @type1)
+    if type1 <> CONST_TYPE and type2 <> CONST_TYPE; return parse_err(@bad_cnst); fin
+    when op
+        is MUL_TKN
+            val1 = val1 * val2
+            break
+        is DIV_TKN
+            val1 = val1 / val2
+            break
+        is MOD_TKN
+            val1 = val1 % val2
+            break
+        is ADD_TKN
+            val1 = val1 + val2
+            break
+        is SUB_TKN
+            val1 = val1 - val2
+            break
+        is SHL_TKN
+            val1 = val1 << val2
+            break
+        is SHR_TKN
+            val1 = val1 >> val2
+            break
+        is AND_TKN
+            val1 = val1 & val2
+            break
+        is OR_TKN
+            val1 = val1 | val2
+            break
+        is EOR_TKN
+            val1 = val1 ^ val2
+            break
+        otherwise
+            return FALSE
+    wend
+    if size2 > size1; size1 = size2; fin
+    push_val(val1, size1, type1)
+    return TRUE
+end
+def parse_constterm(valptr, sizeptr)
+    word type
+
+    when scan
+        is OPEN_PAREN_TKN
+            type = parse_constexpr(valptr, sizeptr)
+            if token <> CLOSE_PAREN_TKN; return parse_err(@no_close_paren); fin
+            return type
+        is ID_TKN
+        is INT_TKN
+        is CHR_TKN
+        is STR_TKN
+            return token
+    wend
+    return FALSE
+end
+def parse_constval
+    byte mod, type, size
+    word idptr, ctag, value
+
+    value = 0
+    size  = 1
+    mod   = 0
+    repeat
+        type = parse_constterm(@value, @size)
+        if !type
+            when token
+                is SUB_TKN
+                    mod = mod | 1; break
+                is ALT_COMP_TKN
+                is COMP_TKN
+                    mod = mod | 2; break
+                is LOGIC_NOT_TKN
+                    mod = mod | 4; break
+                is AT_TKN
+                    mod = mod | 8; break
+                is ADD_TKN
+                    break
+                otherwise
+                    return 0
+            wend
+        fin
+    until type
+    when token
+        is CLOSE_PAREN_TKN
+            break
+        is STR_TKN
+            size  = tknlen - 1
+            value = constval
+            type  = STR_TYPE
+            if mod; return parse_err(@bad_op); fin
+            break
+        is CHR_TKN
+            size  = 1
+            value = constval
+            type  = CONST_TYPE
+            break
+        is INT_TKN
+            size  = 2
+            value = constval
+            type  = CONST_TYPE
+            break
+        is ID_TKN
+            size  = 2
+            idptr = id_lookup(tknptr, tknlen)
+            if !idptr; return parse_err(@bad_cnst); fin
+            type = idptr->idtype
+            if type & ADDR_TYPE
+                if mod <> 8; return parse_err(@bad_cnst); fin
+                type = CONSTADDR_TYPE
+            fin
+            value = idptr=>idval
+            break
+        otherwise
+            return 0
+    wend
+    if mod & 1
+        value = -value
+    fin
+    if mod & 2
+        value = ~value
+    fin
+    if mod & 4
+        value = !value
+    fin
+    push_val(value, size, type)
+    return type
+end
+def parse_constexpr(valptr, sizeptr)
+    byte prevmatch, matchop, i, type
+    word optos
+
+    *valptr  = 0
+    ^sizeptr = 1
+    matchop  = 0
+    optos    = opsp
+    repeat
+        prevmatch = matchop
+        matchop   = 0
+        if parse_constval
+            matchop = 1
+            scan
+            for i = 0 to bops_tblsz
+                if token == bops_tbl[i]
+                    matchop = 2
+                    if bops_prec[i] >= tos_op_prec(optos)
+                        if !calc_binaryop(pop_op); return parse_err(@bad_op); fin
+                    fin
+                    push_op(token, bops_prec[i])
+                    break
+                fin
+            next
+        fin
+    until matchop <> 2
+    if matchop == 0 and prevmatch == 0; return 0; fin
+    if matchop == 0 and prevmatch == 2; return parse_err(@missing_op); fin
+    while optos < opsp
+        if !calc_binaryop(pop_op); return parse_err(@bad_op); fin
+    loop
+    pop_val(valptr, sizeptr, @type)
+    return type
+end
+def parse_const(valptr)
+    word idptr
+
+    when scan
+        is CHR_TKN
+        is INT_TKN
+            *valptr = constval
+            break
+        is ID_TKN
+            idptr = id_lookup(tknptr, tknlen)
+            if !idptr; return parse_err(@bad_cnst); fin
+            if idptr->idtype & CONST_TYPE
+                *valptr = idptr=>idval
+                break
+            fin
+        otherwise
+            return 0
+    wend
+    return CONST_TYPE
+end
+//
+// Normal expression parsing
+//
+def ispostop
+    when scan
+        is OPEN_PAREN_TKN
+        is OPEN_BRACKET_TKN
+        is DOT_TKN
+        is COLON_TKN
+        is PTRB_TKN
+        is PTRW_TKN
+            return TRUE
+    wend
+    return FALSE
+end
+def parse_term
+    when scan
+        is OPEN_PAREN_TKN
+            if !parse_expr
+                return FALSE
+            fin
+            if token <> CLOSE_PAREN_TKN; return parse_err(@no_close_paren); fin
+        is ID_TKN
+        is INT_TKN
+        is CHR_TKN
+        is STR_TKN
+            return TRUE
+    wend
+    return FALSE
+end
+def parse_value(rvalue)
+    byte cparams, deref, type, emit_val
+    word optos, idptr, value
+    byte const_size, ref_type
+    word ref_offset, const_offset
+
+    deref    = rvalue
+    optos    = opsp
+    type     = 0
+    emit_val = FALSE
+    value    = 0
+
+    //
+    // Parse pre-ops
+    //
+    while !parse_term
+        when token
+            is ADD_TKN
+            break
+            is BPTR_TKN
+                if deref
+                    push_op(token, 0)
+                else
+                    deref++
+                    type = type | BPTR_TYPE
+                fin
+                break
+            is WPTR_TKN
+                if deref
+                    push_op(token, 0)
+                else
+                    deref++
+                    type = type | WPTR_TYPE
+                fin
+                break
+            is AT_TKN
+                deref--
+                break
+            is SUB_TKN
+            is COMP_TKN
+            is LOGIC_NOT_TKN
+                push_op(token, 0)
+                break
+            otherwise
+                return 0
+        wend
+    loop
+    //
+    // Determine terminal type
+    //
+    when token
+        is INT_TKN
+        is CHR_TKN
+            value = constval
+            type  = type | CONST_TYPE
+            break
+        is ID_TKN
+            idptr = id_lookup(tknptr, tknlen)
+            if !idptr; return 0; fin
+            if !(idptr->idtype); return 0; fin
+            type  = type | idptr->idtype
+            value = idptr=>idval
+            break
+        is CLOSE_PAREN_TKN
+            // type  = type | WORD_TYPE
+            emit_val = TRUE
+            break
+        is STR_TKN
+            //
+            // Special case
+            //
+            emit_constr(constval, tknlen - 1)
+            scan
+            return WORD_TYPE
+            break
+        otherwise
+            return 0
+    wend
+    //
+    // Constant optimizations
+    //
+    if type & CONST_TYPE
+        cparams = TRUE
+        while optos < opsp and cparams
+            when tos_op
+                is NEG_TKN
+                    pop_op
+                    value = -value
+                    break
+                is ALT_COMP_TKN
+                is COMP_TKN
+                    pop_op
+                    value = ~value
+                    break
+                is LOGIC_NOT_TKN
+                    pop_op
+                    value = !value
+                    break
+                otherwise
+                    cparams = FALSE
+            wend
+        loop
+    fin
+    //
+    // Parse post-ops
+    //
+    ref_type   = type & ~PTR_TYPE
+    ref_offset = 0
+    while ispostop
+        when token
+            is OPEN_PAREN_TKN
+                //
+                // Function call
+                //
+                if emit_val
+                    if ref_offset <> 0
+                        emit_const(ref_offset)
+                        emit_op($02)
+                        ref_offset = 0
+                    fin
+                    if    ref_type & BPTR_TYPE; emit_lb
+                    elsif ref_type & WPTR_TYPE; emit_lw
+                    fin
+                    if lookahead <> CLOSE_PAREN_TKN
+                        emit_push
+                    fin
+                fin
+                cparams = 0
+                while parse_expr
+                    cparams = cparams + 1
+                    if token <> COMMA_TKN
+                        break
+                    fin
+                loop
+                if token <> CLOSE_PAREN_TKN
+                    return parse_err(@no_close_paren)
+                fin
+                if ref_type & FUNC_CONST_TYPE
+                    emit_call(value)
+                else
+                    if !emit_val
+                        if ref_type & CONST_TYPE
+                            emit_const(value)
+                        elsif ref_type & VAR_TYPE
+                            if type & LOCAL_TYPE
+                                emit_llw(value + ref_offset)
+                            else
+                                emit_law(value, ref_offset)
+                            fin
+                            ref_offset = 0
+                        fin
+                    else
+                        if cparams
+                            emit_pull
+                        fin
+                    fin
+                    emit_ical
+                fin
+                emit_val = TRUE
+                ref_type = 0
+                break
+            is OPEN_BRACKET_TKN
+                //
+                // Array of arrays
+                //
+                if !emit_val
+                    if type & CONST_TYPE
+                        emit_const(value)
+                    elsif type & ADDR_TYPE
+                        if type & LOCAL_TYPE
+                            emit_localaddr(value + ref_offset)
+                        else
+                            emit_globaladdr(value, ref_offset)
+                        fin
+                        ref_offset = 0
+                    fin
+                    emit_val = TRUE
+                else
+                    if ref_offset <> 0
+                        emit_const(ref_offset)
+                        emit_op($02)
+                        ref_offset = 0
+                    fin
+                fin
+                while parse_expr
+                    if token <> COMMA_TKN
+                        break
+                    fin
+                    emit_indexword
+                    emit_lw
+                loop
+                if token <> CLOSE_BRACKET_TKN
+                    return parse_err(@no_close_bracket)
+                fin
+                if ref_type & (WPTR_TYPE | WORD_TYPE)
+                    emit_indexword
+                    ref_type = WPTR_TYPE
+                else
+                    emit_indexbyte
+                    ref_type = BPTR_TYPE
+                fin
+                break
+            is PTRB_TKN
+            is PTRW_TKN
+                //
+                // Structure member pointer
+                //
+                if !emit_val
+                    if (type & CONST_TYPE)
+                        emit_const(value)
+                    elsif type & ADDR_TYPE
+                        if type & LOCAL_TYPE
+                            if ref_type & BYTE_TYPE
+                                emit_llb(value + ref_offset)
+                            else
+                                emit_llw(value + ref_offset)
+                            fin
+                        else
+                            if ref_type & BYTE_TYPE
+                                emit_lab(value, ref_offset)
+                            else
+                                emit_law(value, ref_offset)
+                            fin
+                        fin
+                    fin
+                    emit_val = 1;
+                else
+                    if ref_offset <> 0
+                        emit_const(ref_offset)
+                        emit_op($02)
+                        ref_offset = 0
+                    fin
+                    if    ref_type & BPTR_TYPE; emit_lb
+                    elsif ref_type & WPTR_TYPE; emit_lw; fin
+                fin
+                if token == PTRB_TKN
+                    ref_type = BPTR_TYPE
+                else
+                    ref_type = WPTR_TYPE
+                fin
+                ref_offset = 0
+                if !parse_const(@ref_offset)
+                    rewind(tknptr)
+                fin
+                if ref_offset <> 0
+                    emit_const(ref_offset)
+                    emit_op($02)
+                    ref_offset = 0
+                fin
+                break
+            is DOT_TKN
+            is COLON_TKN
+                //
+                // Structure member offset
+                //
+                if ref_type & (VAR_TYPE | CONST_TYPE)
+                    if token == DOT_TKN
+                        ref_type = BYTE_TYPE
+                    else
+                        ref_type = WORD_TYPE
+                    fin
+                else
+                    if token == DOT_TKN
+                        ref_type = BPTR_TYPE
+                    else
+                        ref_type = WPTR_TYPE
+                    fin
+                fin
+                if parse_const(@const_offset)
+                    ref_offset = ref_offset + const_offset
+                else
+                    rewind(tknptr)
+                fin
+                if !emit_val
+                    if type & CONST_TYPE
+                        value = value + ref_offset
+                        ref_offset = 0
+                    elsif type & FUNC_TYPE
+                        emit_globaladdr(value, ref_offset)
+                        ref_offset = 0
+                        emit_val   = TRUE
+                    fin
+                fin
+                break
+        wend
+    loop
+    if emit_val
+        if ref_offset <> 0
+            emit_const(ref_offset)
+            emit_op($02)
+            ref_offset = 0
+        fin
+        if deref
+            if ref_type & BPTR_TYPE
+                emit_lb
+            elsif ref_type & WPTR_TYPE
+                emit_lw
+            fin
+        fin
+    else // emit_val
+        if deref
+            if ref_type & CONST_TYPE
+                emit_const(value)
+                if ref_type & VAR_TYPE
+                    if ref_type & BYTE_TYPE
+                        emit_lb()
+                    else
+                        emit_lw()
+                    fin
+                fin
+            elsif ref_type & FUNC_TYPE
+                emit_call(value)
+            elsif ref_type & VAR_TYPE
+                if type & LOCAL_TYPE
+                    if ref_type & BYTE_TYPE
+                        emit_llb(value + ref_offset)
+                    else
+                        emit_llw(value + ref_offset)
+                    fin
+                else
+                    if ref_type & BYTE_TYPE
+                        emit_lab(value, ref_offset)
+                    else
+                        emit_law(value, ref_offset)
+                    fin
+                fin
+            fin
+        else
+            if type & CONST_TYPE
+                emit_const(value)
+            elsif type & ADDR_TYPE
+                if type & LOCAL_TYPE
+                    emit_localaddr(value + ref_offset)
+                else
+                    emit_globaladdr(value, ref_offset)
+                fin
+            fin
+        fin
+    fin // emit_val
+    while optos < opsp
+        if !emit_unaryop(pop_op); return parse_err(@bad_op); fin
+    loop
+    if type & PTR_TYPE
+        ref_type = type
+    fin
+    if !ref_type
+        ref_type = WORD_TYPE
+    fin
+    return ref_type
+end
+def parse_expr
+    byte prevmatch, matchop, i
+    word optos
+
+    matchop = 0
+    optos   = opsp
+    repeat
+        prevmatch = matchop
+        matchop   = 0
+        if parse_value(1)
+            matchop = 1
+            for i = 0 to bops_tblsz
+                if token == bops_tbl[i]
+                    matchop = 2
+                    if bops_prec[i] >= tos_op_prec(optos)
+                        if !emit_binaryop(pop_op); return parse_err(@bad_op); fin
+                    fin
+                    push_op(token, bops_prec[i])
+                    break
+                fin
+            next
+        fin
+    until matchop <> 2
+    if matchop == 0 and prevmatch == 2; return parse_err(@missing_op); fin
+    while optos < opsp
+        if !emit_binaryop(pop_op); return parse_err(@bad_op); fin
+    loop
+    return matchop or prevmatch
+end
+def parse_stmnt
+    byte type, elem_type, elem_size, i
+    word elem_offset, tag_prevbrk, tag_prevcnt, tag_else, tag_endif, tag_while, tag_wend
+    word tag_repeat, tag_for, tag_choice, tag_of, idptr, saveptr, addr, stepdir
+
+    if token <> END_TKN and token <> DONE_TKN and token <> OF_TKN and token <> DEFAULT_TKN
+        prevstmnt = token
+    fin
+    when token
+        is IF_TKN
+            if !parse_expr; return 0; fin
+            tag_else  = ctag_new
+            tag_endif = ctag_new
+            emit_brfls(tag_else)
+            scan
+            repeat
+                while parse_stmnt
+                    nextln
+                loop
+                if token <> ELSEIF_TKN
+                    break
+                fin
+                emit_branch(tag_endif)
+                ctag_resolve(tag_else)
+                if !parse_expr; return FALSE; fin
+                tag_else = ctag_new
+                emit_brfls(tag_else)
+            until FALSE
+            if token == ELSE_TKN
+                emit_branch(tag_endif)
+                ctag_resolve(tag_else)
+                scan
+                while parse_stmnt
+                    nextln
+                loop
+                ctag_resolve(tag_endif)
+            else
+                ctag_resolve(tag_else)
+                ctag_resolve(tag_endif)
+            fin
+            if token <> FIN_TKN; return parse_err(@no_fin); fin
+            break
+        is WHILE_TKN
+            tag_while   = ctag_new
+            tag_wend    = ctag_new
+            tag_prevcnt = cont_tag
+            cont_tag    = tag_while
+            tag_prevbrk = break_tag
+            break_tag   = tag_wend
+            ctag_resolve(tag_while)
+            if !parse_expr; return FALSE; fin
+            emit_brfls(tag_wend)
+            while parse_stmnt
+                nextln
+            loop
+            if token <> LOOP_TKN; return parse_err(@no_loop); fin
+            emit_branch(tag_while)
+            ctag_resolve(tag_wend)
+            break_tag = tag_prevbrk
+            cont_tag  = tag_prevcnt
+            break
+        is REPEAT_TKN
+            tag_repeat  = ctag_new
+            tag_prevbrk = break_tag
+            break_tag   = ctag_new
+            tag_prevcnt = cont_tag
+            cont_tag    = ctag_new
+            ctag_resolve(tag_repeat)
+            scan
+            while parse_stmnt
+                nextln
+            loop
+            if token <> UNTIL_TKN; return parse_err(@no_until); fin
+            ctag_resolve(cont_tag)
+            cont_tag = tag_prevcnt
+            if !parse_expr; return FALSE; fin
+            emit_brfls(tag_repeat)
+            ctag_resolve(break_tag)
+            break_tag = tag_prevbrk
+            break
+        is FOR_TKN
+            stack_loop  = stack_loop + 1
+            tag_for     = ctag_new
+            tag_prevcnt = cont_tag
+            cont_tag    = tag_for
+            tag_prevbrk = break_tag
+            break_tag   = ctag_new
+            if scan <> ID_TKN; return parse_err(@bad_stmnt); fin
+            idptr = id_lookup(tknptr, tknlen)
+            if idptr
+                type  = idptr->idtype
+                addr  = idptr=>idval
+            else
+                return FALSE
+            fin
+            if scan <> SET_TKN; return parse_err(@bad_stmnt); fin
+            if !parse_expr; return parse_err(@bad_stmnt); fin
+            ctag_resolve(tag_for)
+            if type & LOCAL_TYPE
+                if type & BYTE_TYPE
+                    emit_dlb(addr)
+                else
+                    emit_dlw(addr)
+                fin
+            else
+                if type & BYTE_TYPE
+                    emit_dab(addr, 0)
+                else
+                    emit_daw(addr, 0)
+                fin
+            fin
+            if token == TO_TKN
+                stepdir = 1
+            elsif token == DOWNTO_TKN
+                stepdir = -1
+            else
+                return parse_err(@bad_stmnt)
+            fin
+            if !parse_expr; return parse_err(@bad_stmnt); fin
+            if stepdir > 0
+                emit_brgt(break_tag)
+            else
+                emit_brlt(break_tag)
+            fin
+            if token == STEP_TKN
+                if !parse_expr; return parse_err(@bad_stmnt); fin
+                if stepdir > 0
+                    emit_binaryop(ADD_TKN)
+                else
+                    emit_binaryop(SUB_TKN)
+                fin
+            else
+                if stepdir > 0
+                    emit_unaryop(INC_TKN)
+                else
+                    emit_unaryop(DEC_TKN)
+                fin
+            fin
+            while parse_stmnt
+                nextln
+            loop
+            if token <> NEXT_TKN; return parse_err(@bad_stmnt); fin
+            emit_branch(tag_for)
+            cont_tag = tag_prevcnt
+            ctag_resolve(break_tag)
+            emit_drop
+            break_tag  = tag_prevbrk
+            stack_loop = stack_loop - 1
+            break
+        is CASE_TKN
+            stack_loop  = stack_loop + 1
+            tag_prevbrk = break_tag
+            break_tag   = ctag_new
+            tag_choice  = ctag_new
+            tag_of      = ctag_new
+            if !parse_expr; return parse_err(@bad_stmnt); fin
+            nextln
+            while token <> ENDCASE_TKN
+                when token
+                    is OF_TKN
+                        if !parse_expr; return parse_err(@bad_stmnt); fin
+                        emit_brne(tag_choice)
+                        ctag_resolve(tag_of)
+                        while parse_stmnt
+                            nextln
+                        loop
+                        tag_of = ctag_new
+                        if prevstmnt <> BREAK_TKN // Fall through to next OF if no break
+                            emit_branch(tag_of)
+                        fin
+                        ctag_resolve(tag_choice)
+                        tag_choice = ctag_new
+                        break
+                    is DEFAULT_TKN
+                        ctag_resolve(tag_of)
+                        tag_of = 0
+                        scan
+                        while parse_stmnt
+                            nextln
+                        loop
+                        if token <> ENDCASE_TKN; return parse_err(@bad_stmnt); fin
+                        break
+                    is EOL_TKN
+                        nextln
+                        break
+                    otherwise
+                        return parse_err(@bad_stmnt)
+                wend
+            loop
+            if (tag_of)
+                ctag_resolve(tag_of)
+            fin
+            ctag_resolve(break_tag)
+            emit_drop
+            break_tag = tag_prevbrk
+            stack_loop = stack_loop - 1
+            break
+        is BREAK_TKN
+            if break_tag
+                emit_branch(break_tag)
+            else
+                return parse_err(@bad_stmnt)
+            fin
+            break
+        is CONT_TKN
+            if cont_tag
+                emit_branch(cont_tag)
+            else
+                return parse_err(@bad_stmnt)
+            fin
+            break
+        is RETURN_TKN
+            if infunc
+                for i = 1 to stack_loop
+                    emit_drop
+                next
+            fin
+            if !parse_expr
+                emit_const(0)
+            fin
+            emit_leave
+            break
+        is EOL_TKN
+            return TRUE
+        is ELSE_TKN
+        is ELSEIF_TKN
+        is FIN_TKN
+        is LOOP_TKN
+        is UNTIL_TKN
+        is NEXT_TKN
+        is OF_TKN
+        is DEFAULT_TKN
+        is ENDCASE_TKN
+        is END_TKN
+        is DONE_TKN
+        is DEF_TKN
+            return FALSE
+        is ID_TKN
+            saveptr = tknptr
+            idptr = id_lookup(tknptr, tknlen)
+            if !idptr; return FALSE; fin
+            type = idptr->idtype
+            addr = idptr=>idval
+            if type & VAR_TYPE
+                elem_type   = type
+                elem_offset = 0
+                if scan == DOT_TKN or token == COLON_TKN
+                    //
+                    // Structure member offset
+                    //
+                    if token == DOT_TKN
+                        elem_type = BYTE_TYPE
+                    else
+                        elem_type = WORD_TYPE
+                    fin
+                    if !parse_const(@elem_offset)
+                        token = ID_TKN
+                    else
+                        scan
+                    fin
+                fin
+                if token == SET_TKN
+                    if !parse_expr; return parse_err(@bad_expr); fin
+                    if type & LOCAL_TYPE
+                        if elem_type & BYTE_TYPE
+                            emit_slb(addr + elem_offset)
+                        else
+                            emit_slw(addr + elem_offset)
+                        fin
+                    else
+                        if elem_type & BYTE_TYPE
+                            emit_sab(addr, elem_offset)
+                        else
+                            emit_saw(addr, elem_offset)
+                        fin
+                    fin
+                    break
+                elsif token == INC_TKN or token == DEC_TKN
+                    if type & LOCAL_TYPE
+                        if elem_type & BYTE_TYPE
+                            emit_llb(addr + elem_offset)
+                            emit_unaryop(token)
+                            emit_slb(addr + elem_offset)
+                        else
+                            emit_llw(addr + elem_offset)
+                            emit_unaryop(token)
+                            emit_slw(addr + elem_offset)
+                        fin
+                    else
+                        if elem_type & BYTE_TYPE
+                            emit_lab(addr, elem_offset)
+                            emit_unaryop(token)
+                            emit_sab(addr, elem_offset)
+                        else
+                            emit_law(addr, elem_offset)
+                            emit_unaryop(token)
+                            emit_saw(addr, elem_offset)
+                        fin
+                    fin
+                    break
+                fin
+            elsif type & FUNC_TYPE
+                if scan == EOL_TKN
+                    emit_call(addr)
+                    emit_drop
+                    break
+                fin
+            fin
+            tknptr = saveptr
+        otherwise
+            rewind(tknptr)
+            type = parse_value(0)
+            if type
+                if token == SET_TKN
+                    if !parse_expr; return parse_err(@bad_expr); fin
+                    if type & XBYTE_TYPE
+                        emit_sb
+                    else
+                        emit_sw
+                    fin
+                elsif token == INC_TKN or token == DEC_TKN
+                    emit_dup
+                    if type & XBYTE_TYPE
+                        emit_lb
+                        emit_unaryop(token)
+                        emit_sb
+                    else
+                        emit_lw
+                        emit_unaryop(token)
+                        emit_sw
+                    fin
+                else
+                    if type & BPTR_TYPE
+                        emit_lb
+                    elsif type & WPTR_TYPE
+                        emit_lw
+                    fin
+                    emit_drop
+                fin
+            else
+                return parse_err(@bad_syntax)
+            fin
+    wend
+    if scan <> EOL_TKN
+        return parse_err(@bad_syntax)
+    fin
+    return TRUE
+end
+def parse_var(type)
+    byte consttype, constsize, idlen
+    word idptr, constval, arraysize, size
+
+    //cout('T')
+    idlen = 0
+    size  = 1
+    if scan == OPEN_BRACKET_TKN
+      size = 0
+      parse_constexpr(@size, @constsize)
+      if token <> CLOSE_BRACKET_TKN;  return parse_err(@no_close_bracket); fin
+      scan
+    fin
+    if token == ID_TKN
+        idptr = tknptr
+        idlen = tknlen
+        if scan == OPEN_BRACKET_TKN
+            size = 0
+            parse_constexpr(@size, @constsize)
+            if token <> CLOSE_BRACKET_TKN; return parse_err(@no_close_bracket); fin
+            scan
+        fin
+    fin
+    if type == WORD_TYPE
+        size = size * 2
+    fin
+    if token == SET_TKN
+        if infunc; return parse_err(@no_local_init); fin
+        if idlen
+            iddata_add(idptr, idlen, type, 0)
+        fin
+        consttype = parse_constexpr(@constval, @constsize)
+        if consttype
+            arraysize = emit_data(type, consttype, constval, constsize)
+            while token == COMMA_TKN
+                consttype = parse_constexpr(@constval, @constsize)
+                if consttype
+                    arraysize = arraysize + emit_data(type, consttype, constval, constsize)
+                else
+                    return parse_err(@bad_decl)
+                fin
+            loop
+            iddata_size(PTR_TYPE, size, arraysize)
+        else
+            return parse_err(@bad_decl)
+        fin
+    elsif idlen
+        if infunc
+            idlocal_add(idptr, idlen, type, size)
+        else
+            iddata_add(idptr, idlen, type, size)
+        fin
+    fin
+    return TRUE
+end
+def parse_struc
+    byte strucid[16]
+    byte type, idlen, struclen, constsize
+    word size, offset, idstr
+
+    //cout('S')
+    struclen = 0
+    if scan == ID_TKN
+        struclen = tknlen
+        if struclen > 16
+            struclen = 16
+        fin
+        for idlen = 0 to struclen
+            strucid[idlen] = ^(tknptr + idlen)
+        next
+    fin
+    offset = 0
+    while nextln == BYTE_TKN or token == WORD_TKN
+        size = 1
+        if token == BYTE_TKN
+            type = BYTE_TYPE
+        else
+            type = WORD_TYPE
+        fin
+        if scan == OPEN_BRACKET_TKN
+            size = 0
+            parse_constexpr(@size, @constsize)
+            if token <> CLOSE_BRACKET_TKN;  return parse_err(@no_close_bracket); fin
+            scan
+        fin
+        repeat
+            idlen = 0;
+            if token == ID_TKN
+                idstr = tknptr
+                idlen = tknlen
+                if scan == OPEN_BRACKET_TKN
+                    size = 0
+                    parse_constexpr(@size, @constsize)
+                    if token <> CLOSE_BRACKET_TKN;  return parse_err(@no_close_bracket); fin
+                    scan
+                fin
+            fin
+            if type & WORD_TYPE
+                size = size * 2
+            fin
+            if idlen
+                idconst_add(idstr, idlen, offset)
+            fin
+            offset = offset + size
+        until token <> COMMA_TKN
+        if token <> EOL_TKN; return FALSE; fin
+    loop
+    if struclen
+        idconst_add(@strucid, struclen, offset)
+    fin
+    return token == END_TKN
+end
+def parse_vars
+    byte idlen, type, size
+    word value, idptr
+
+    //cout('V')
+    when token
+        is CONST_TKN
+            if scan <> ID_TKN
+                return parse_err(@bad_cnst)
+            fin
+            idptr = tknptr
+            idlen = tknlen
+            if scan <> SET_TKN
+                return parse_err(@bad_cnst)
+            fin
+            if !parse_constexpr(@value, @size)
+                return parse_err(@bad_cnst)
+            fin
+            idconst_add(idptr, idlen, value)
+            break
+        is STRUC_TKN
+            if !parse_struc; parse_err(@bad_struc); fin
+            break
+        is BYTE_TKN
+        is WORD_TKN
+            if token == BYTE_TKN
+                type = BYTE_TYPE
+            else
+                type = WORD_TYPE
+            fin
+            repeat
+                if !parse_var(type)
+                    return FALSE
+                fin
+            until token <> COMMA_TKN
+            break
+        is PREDEF_TKN
+            repeat
+                if scan == ID_TKN
+                    idfunc_add(tknptr, tknlen, ctag_new)
+                else
+                    return parse_err(@bad_decl)
+                fin
+            until scan <> COMMA_TKN
+            break
+        is EOL_TKN
+            break
+        otherwise
+            return FALSE
+    wend
+    return TRUE
+end
+def parse_defs
+    byte cfnparms
+    word func_tag, idptr
+
+    if token == DEF_TKN
+        //cout('D')
+        if scan <> ID_TKN; return parse_err(@bad_decl); fin
+        cfnparms = 0
+        infunc   = TRUE
+        idptr    = idglobal_lookup(tknptr, tknlen)
+        if idptr
+            func_tag = idptr=>idval
+        else
+            func_tag = ctag_new
+            idfunc_add(tknptr, tknlen, func_tag)
+        fin
+        ctag_resolve(func_tag)
+        retfunc_tag = ctag_new
+        idlocal_init
+        if scan == OPEN_PAREN_TKN
+            repeat
+                if scan == ID_TKN
+                    cfnparms = cfnparms + 1
+                    idlocal_add(tknptr, tknlen, WORD_TYPE, 2)
+                    scan
+                fin
+            until token <> COMMA_TKN
+            if token <> CLOSE_PAREN_TKN
+                return parse_err(@bad_decl)
+            fin
+            scan
+        fin
+        while parse_vars
+            nextln
+        loop
+        emit_enter(cfnparms)
+        prevstmnt = 0
+        while parse_stmnt
+            nextln
+        loop
+        infunc = FALSE
+        if token <> END_TKN; return parse_err(@bad_syntax); fin
+        if scan <> EOL_TKN; return parse_err(@bad_syntax); fin
+        if prevstmnt <> RETURN_TKN
+            emit_const(0)
+            emit_leave
+        fin
+        return TRUE
+    elsif token == EOL_TKN
+        return TRUE
+    fin
+    return FALSE
+end
+def parse_module
+    idglobal_init
+    idlocal_init
+    srcref = fileio:open(@srcfile)
+    if srcref
+        fileio:newline(srcref, $7F, $0D)
+        refnum    = srcref
+        parsefile = @srcfile
+        if nextln
+            //
+            // Compile module
+            //
+            while parse_vars
+                nextln
+            loop
+            while parse_defs
+                nextln
+            loop
+            framesize  = 0
+            entrypoint = codeptr
+            emit_enter(0)
+            prevstmnt = 0
+            if token <> DONE_TKN
+                while parse_stmnt
+                    nextln
+                loop
+            fin
+            if prevstmnt <> RETURN_TKN
+                emit_const(0)
+                emit_leave
+            fin
+            fileio:close(srcref)
+            //dumpsym(idglobal_tbl, globals)
+            //
+            // Write REL file
+            //
+
+            return not parserr
+        fin
+    else
+        puts("Error opening: "); puts(@srcfile); putln
+    fin
+    return FALSE
+end
