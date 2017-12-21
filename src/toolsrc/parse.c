@@ -429,6 +429,14 @@ t_opseq *parse_value(t_opseq *codeseq, int rvalue, int *stackdepth)
         if (scantoken != CLOSE_PAREN_TOKEN)
             parse_error("Missing closing parenthesis");
     }
+    else if (scantoken == DROP_TOKEN)
+    {
+        if (rvalue)
+            parse_error("DROP is LVALUE only");
+        codeseq = gen_drop(codeseq);
+        scan();
+        return (codeseq);
+    }
     else
         return (NULL);
     /*

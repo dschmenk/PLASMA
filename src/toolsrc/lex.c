@@ -41,6 +41,7 @@ t_token keywords[] = {
     IMPORT_TOKEN,           'I', 'M', 'P', 'O', 'R', 'T',
     INCLUDE_TOKEN,          'I', 'N', 'C', 'L', 'U', 'D', 'E',
     RETURN_TOKEN,           'R', 'E', 'T', 'U', 'R', 'N',
+    DROP_TOKEN,             'D', 'R', 'O', 'P',
     END_TOKEN,              'E', 'N', 'D',
     DONE_TOKEN,             'D', 'O', 'N', 'E',
     LOGIC_NOT_TOKEN,        'N', 'O', 'T',
