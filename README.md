@@ -1018,6 +1018,12 @@ predef bivalfunc#2
 a, b = bivalfunc() // Two values returned from function
 stack[0], stack[1], stack[3] = 0, stack[0], stack[1] // Push 0 to bottom of three element stack
 ```
+Should multiple values be returned, but only a subset is interesting, the special value `drop` can be used to ignore values.
+```
+predef trivalfunc#3
+
+drop, drop, c = trivalfunc() // Three values returned from function, but we're only interested in the last one
+```
 #### Empty Assignments
 
 An assignment doesn't even need to save the expression into memory, although the expression will be evaluated. This can be useful when referencing hardware that responds just to being accessed. On the Apple II, the keyboard is read from location $C000, then the strobe, telling the hardware to prepare for another key press is cleared by just reading the address $C010. In PLASMA, this looks like:
