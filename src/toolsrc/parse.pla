@@ -2,14 +2,14 @@
 // Alebraic op to stack op
 //
 def push_op(op, prec)#0
-    if opsp == 16; parse_err("Op stack overflow"); return; fin
+    if opsp == 16; exit_err("Op stack overflow"); fin
     opstack[opsp]   = op
     precstack[opsp] = prec
     opsp++
 end
 def pop_op
     opsp--
-    if opsp < 0; return parse_err("Op stack underflow"); fin
+    if opsp < 0; exit_err("Op stack underflow"); fin
     return opstack[opsp]
 end
 def tos_op
@@ -25,7 +25,7 @@ def tos_op_prec(tos)
     return precstack[opsp]
 end
 def push_val(value, size, type)#0
-    if valsp == 16; parse_err("Eval stack overflow"); return; fin
+    if valsp == 16; exit_err("Eval stack overflow"); fin
     valstack[valsp]  = value
     sizestack[valsp] = size
     typestack[valsp] = type
@@ -33,19 +33,19 @@ def push_val(value, size, type)#0
 end
 def pop_val#3
     valsp--
-    if valsp < 0; return parse_err("Eval stack underflow"), 0, 0; fin
+    if valsp < 0; exit_err("Eval stack underflow"); fin
     return valstack[valsp], sizestack[valsp], typestack[valsp]
 end
 //
 // Constant expression parsing
 //
-def calc_binaryop(op)
+def calc_binaryop(op)#0
     word val1, val2
     byte size1, size2, type1, type2
 
     val2, size2, type2 = pop_val
     val1, size1, type1 = pop_val
-    if type1 <> CONST_TYPE and type2 <> CONST_TYPE; return parse_err(@bad_cnst); fin
+    if type1 <> CONST_TYPE and type2 <> CONST_TYPE; exit_err(@bad_cnst); fin
     when op
         is MUL_TKN
             val1 = val1 * val2
@@ -78,17 +78,16 @@ def calc_binaryop(op)
             val1 = val1 ^ val2
             break
         otherwise
-            return FALSE
+            exit_err(@bad_cnst)
     wend
     if size2 > size1; size1 = size2; fin
     push_val(val1, size1, type1)
-    return TRUE
 end
-def parse_constterm // (valptr, sizeptr)
+def parse_constterm
     when scan
         is OPEN_PAREN_TKN
             parse_constexpr
-            if token <> CLOSE_PAREN_TKN; return parse_err(@no_close_paren); fin
+            if token <> CLOSE_PAREN_TKN; exit_err(@no_close_paren); fin
             return TRUE
         is ID_TKN
         is INT_TKN
@@ -126,7 +125,7 @@ def parse_constval
             size  = tknlen - 1
             value = constval
             type  = STR_TYPE
-            if mod; return parse_err(@bad_op); fin
+            if mod; exit_err(@bad_op); fin
             break
         is CHR_TKN
             size  = 1
@@ -141,10 +140,9 @@ def parse_constval
         is ID_TKN
             size  = 2
             idptr = id_lookup(tknptr, tknlen)
-            if !idptr; return parse_err(@bad_cnst); fin
             type = idptr->idtype
             if type & ADDR_TYPE
-                if mod <> 8; return parse_err(@bad_cnst); fin
+                if mod <> 8; exit_err(@bad_cnst); fin
                 type = CONSTADDR_TYPE
             fin
             value = idptr=>idval
@@ -164,7 +162,7 @@ def parse_constval
     push_val(value, size, type)
     return TRUE
 end
-def parse_constexpr#3 //(valptr, sizeptr)
+def parse_constexpr#3
     byte prevmatch, matchop, i
     word optos
 
@@ -180,7 +178,7 @@ def parse_constexpr#3 //(valptr, sizeptr)
                 if token == bops_tbl[i]
                     matchop = 2
                     if bops_prec[i] >= tos_op_prec(optos)
-                        if !calc_binaryop(pop_op); return parse_err(@bad_op); fin
+                        calc_binaryop(pop_op)
                     fin
                     push_op(token, bops_prec[i])
                     break
@@ -189,9 +187,9 @@ def parse_constexpr#3 //(valptr, sizeptr)
         fin
     until matchop <> 2
     if matchop == 0 and prevmatch == 0; return 0; fin
-    if matchop == 0 and prevmatch == 2; return parse_err(@missing_op); fin
+    if matchop == 0 and prevmatch == 2; exit_err(@missing_op); fin
     while optos < opsp
-        if !calc_binaryop(pop_op); return parse_err(@bad_op); fin
+        calc_binaryop(pop_op)
     loop
     return pop_val
 end
@@ -205,7 +203,6 @@ def parse_const(valptr)
             break
         is ID_TKN
             idptr = id_lookup(tknptr, tknlen)
-            if !idptr; return parse_err(@bad_cnst); fin
             if idptr->idtype & CONST_TYPE
                 *valptr = idptr=>idval
                 break
@@ -220,55 +217,20 @@ end
 //
 def parse_list#2
 {
-    byte stackdepth, elemdepth
-    word codeseq, elemseq;
-    codeseq    = NULL
-    stackdepth = 0
+    byte listdepth, stackdepth
+    word listseq
+    listseq   = NULL
+    listdepth = 0
     repeat
-        elemseq, elemdepth = parse_expr(codeseq)
-        if not elemseq; break; fin
-        codeseq    = elemseq
-        stackdepth = stackdepth + elemdepth
-    until scantoken <> COMMA_TOKEN
-    return codeseq, stackdepth
+        listseq, stackdepth = parse_expr(listseq)
+        listdepth = listdepth + stackdepth
+    until not listseq or token <> COMMA_TOKEN
+    return listseq, listdepth
 }
-//
-// Flag token as post-op
-//
-def ispostop
-    when scan
-        is OPEN_PAREN_TKN
-        is OPEN_BRACKET_TKN
-        is DOT_TKN
-        is COLON_TKN
-        is PTRB_TKN
-        is PTRW_TKN
-            return TRUE
-    wend
-    return FALSE
-end
-//def parse_term(codeseq)
-//    byte stackdepth
-//    word codeseq
-//
-//    stackdepth = 0
-//    when scan
-//        is OPEN_PAREN_TKN
-//        codeseq, stackdepth = parse_expr(codeseq)
-//            if not parse_expr; return FALSE; fin
-//            if token <> CLOSE_PAREN_TKN; return parse_err(@no_close_paren); fin
-//        is ID_TKN
-//        is INT_TKN
-//        is CHR_TKN
-//        is STR_TKN
-//            return TRUE
-//    wend
-//    return FALSE
-//end
 def parse_value(codeseq, rvalue)
-    byte cfnparms, cfnvals, stackdepth, deref, type
-    word optos, idptr, value
-    word const_offset, uopseq, valseq, idxseq
+    byte cfnparms, cfnvals, stackdepth, deref, type, operation
+    word optos, idptr, value, const_offset
+    word uopseq, valseq, idxseq
 
     deref      = rvalue
     optos      = opsp
@@ -283,101 +245,86 @@ def parse_value(codeseq, rvalue)
     //
     // Parse pre-ops
     //
-    while !parse_term
-        when token
+    operation = TRUE
+    repeat
+        when scan
+            is NEG_TKN
+            is COMP_TKN
+            is LOGIC_NOT_TKN
+                uopseq = gen_uop(uopseq, token);
             is ADD_TKN
-            break
+                if not rvalue; exit_err("Invalid op for LVALUE"); fin
+                break
             is BPTR_TKN
-                if deref
-                    push_op(token, 0)
-                else
-                    deref++
-                    type = type | BPTR_TYPE
-                fin
+                deref++
+                type = type | BPTR_TYPE
                 break
             is WPTR_TKN
-                if deref
-                    push_op(token, 0)
-                else
-                    deref++
-                    type = type | WPTR_TYPE
-                fin
+                deref++
+                type = type | WPTR_TYPE
                 break
             is AT_TKN
                 deref--
-                break
-            is SUB_TKN
-            is COMP_TKN
-            is LOGIC_NOT_TKN
-                push_op(token, 0)
+                if not deref; exit_err("Invalid ADDRESS-OF"); fin
                 break
             otherwise
-                return 0
+                operation = FALSE
         wend
-    loop
+    until not operation
     //
     // Determine terminal type
     //
     when token
+        is ID_TKN
+            idptr = id_lookup(tknptr, tknlen)
+            if !idptr; return NULL, 0; fin
+            if !(idptr->idtype); return NULL, 0; fin
+            type  = type | idptr->idtype
+            value = idptr=>idval
+            if type & CONST_TYPE
+                valseq = gen_const(NULL, value)
+            else
+                valseq = type & LOCAL_TYPE ?? gen_lcladr(NULL, value) :: gen_gbladr(NULL, value, type)
+            fin
+            if type & FUNC_TYPE
+                cfnparms = idptr->funcparms
+                cfnvals  = idptr->funcvals
+            fin
+            break
         is INT_TKN
         is CHR_TKN
             value = constval
             type  = type | CONST_TYPE
-            break
-        is ID_TKN
-            idptr = id_lookup(tknptr, tknlen)
-            if !idptr; return 0; fin
-            if !(idptr->idtype); return 0; fin
-            type  = type | idptr->idtype
-            value = idptr=>idval
-            break
-        is CLOSE_PAREN_TKN
-            // type  = type | WORD_TYPE
-            emit_val = TRUE
+            valseq = gen_const(NULL, value)
             break
         is STR_TKN
-            //
-            // Special case
-            //
-            emit_constr(constval, tknlen - 1)
+            codeseq = gen_str(codeseq, constval)
             scan
-            return WORD_TYPE
+            return codeseq, stackdepth // Special case return
+            break
+        is OPEN_PAREN_TKN
+            valseq, stackdepth = parse_expr(NULL)
+            if scantoken <> CLOSE_PAREN_TOKEN; exit_err("Missing closing parenthesis"); fin
+            break
+        is DROP_TOKEN
+            if rvalue; exit_err("DROP is LVALUE only"); fin
+            codeseq = gen_drop(codeseq)
+            scan
+            return codeseq, 0 // Special case return
+        is LAMBDA_TOKEN
+            type  |= CONST_TYPE
+            value  = parse_lambda
+            valseq = gen_gbladr(NULL, value, FUNC_TYPE)
             break
         otherwise
-            return 0
+            return NULL, 0
     wend
-    //
-    // Constant optimizations
-    //
-    if type & CONST_TYPE
-        cparams = TRUE
-        while optos < opsp and cparams
-            when tos_op
-                is NEG_TKN
-                    pop_op
-                    value = -value
-                    break
-                is ALT_COMP_TKN
-                is COMP_TKN
-                    pop_op
-                    value = ~value
-                    break
-                is LOGIC_NOT_TKN
-                    pop_op
-                    value = !value
-                    break
-                otherwise
-                    cparams = FALSE
-            wend
-        loop
-    fin
     //
     // Parse post-ops
     //
-    ref_type   = type & ~PTR_TYPE
-    ref_offset = 0
-    while ispostop
-        when token
+    operation = TRUE
+    repeat
+        when scan
             is OPEN_PAREN_TKN
                 //
                 // Function call
@@ -402,7 +349,7 @@ def parse_value(codeseq, rvalue)
                         break
                     fin
                 loop
-                if token <> CLOSE_PAREN_TKN; return parse_err(@no_close_paren); fin
+                if token <> CLOSE_PAREN_TKN; exit_err(@no_close_paren); fin
                 if ref_type & FUNC_CONST_TYPE
                     emit_call(value)
                 else
@@ -457,7 +404,7 @@ def parse_value(codeseq, rvalue)
                     emit_indexword
                     emit_lw
                 loop
-                if token <> CLOSE_BRACKET_TKN; return parse_err(@no_close_bracket); fin
+                if token <> CLOSE_BRACKET_TKN; exit_err(@no_close_bracket); fin
                 if ref_type & (WPTR_TYPE | WORD_TYPE)
                     emit_indexword
                     ref_type = WPTR_TYPE
@@ -549,7 +496,7 @@ def parse_value(codeseq, rvalue)
                 fin
                 break
         wend
-    loop
+    until not operation
     if emit_val
         if ref_offset <> 0
             emit_const(ref_offset)
@@ -604,7 +551,7 @@ def parse_value(codeseq, rvalue)
         fin
     fin // emit_val
     while optos < opsp
-        if !emit_unaryop(pop_op); return parse_err(@bad_op); fin
+        emit_unaryop(pop_op)
     loop
     if type & PTR_TYPE
         ref_type = type
@@ -614,7 +561,7 @@ def parse_value(codeseq, rvalue)
     fin
     return ref_type
 end
-def parse_expr
+def parse_expr(codeseq)
     byte prevmatch, matchop, i
     word optos
 
@@ -629,7 +576,7 @@ def parse_expr
                 if token == bops_tbl[i]
                     matchop = 2
                     if bops_prec[i] >= tos_op_prec(optos)
-                        if !emit_binaryop(pop_op); return parse_err(@bad_op); fin
+                        emit_binaryop(pop_op)
                     fin
                     push_op(token, bops_prec[i])
                     break
@@ -637,13 +584,13 @@ def parse_expr
             next
         fin
     until matchop <> 2
-    if matchop == 0 and prevmatch == 2; return parse_err(@missing_op); fin
+    if matchop == 0 and prevmatch == 2; exit_err(@missing_op); fin
     while optos < opsp
-        if !emit_binaryop(pop_op); return parse_err(@bad_op); fin
+        emit_binaryop(pop_op)
     loop
     return matchop or prevmatch
 end
-def parse_stmnt
+def parse_stmnt(codeseq)
     byte type, elem_type, elem_size, i
     word elem_offset, tag_prevbrk, tag_prevcnt, tag_else, tag_endif, tag_while, tag_wend
     word tag_repeat, tag_for, tag_choice, tag_of, idptr, saveptr, addr, stepdir
@@ -683,7 +630,7 @@ def parse_stmnt
                 ctag_resolve(tag_else)
                 ctag_resolve(tag_endif)
             fin
-            if token <> FIN_TKN; return parse_err(@no_fin); fin
+            if token <> FIN_TKN; exit_err(@no_fin); fin
             break
         is WHILE_TKN
             tag_while   = ctag_new
@@ -698,7 +645,7 @@ def parse_stmnt
             while parse_stmnt
                 nextln
             loop
-            if token <> LOOP_TKN; return parse_err(@no_loop); fin
+            if token <> LOOP_TKN; exit_err(@no_loop); fin
             emit_branch(tag_while)
             ctag_resolve(tag_wend)
             break_tag = tag_prevbrk
@@ -715,7 +662,7 @@ def parse_stmnt
             while parse_stmnt
                 nextln
             loop
-            if token <> UNTIL_TKN; return parse_err(@no_until); fin
+            if token <> UNTIL_TKN; exit_err(@no_until); fin
             ctag_resolve(cont_tag)
             cont_tag = tag_prevcnt
             if !parse_expr; return FALSE; fin
@@ -730,7 +677,7 @@ def parse_stmnt
             cont_tag    = tag_for
             tag_prevbrk = break_tag
             break_tag   = ctag_new
-            if scan <> ID_TKN; return parse_err(@bad_stmnt); fin
+            if scan <> ID_TKN; exit_err(@bad_stmnt); fin
             idptr = id_lookup(tknptr, tknlen)
             if idptr
                 type  = idptr->idtype
@@ -738,8 +685,8 @@ def parse_stmnt
             else
                 return FALSE
             fin
-            if scan <> SET_TKN; return parse_err(@bad_stmnt); fin
-            if !parse_expr; return parse_err(@bad_stmnt); fin
+            if scan <> SET_TKN; exit_err(@bad_stmnt); fin
+            parse_expr
             ctag_resolve(tag_for)
             if type & LOCAL_TYPE
                 if type & BYTE_TYPE
@@ -759,16 +706,16 @@ def parse_stmnt
             elsif token == DOWNTO_TKN
                 stepdir = -1
             else
-                return parse_err(@bad_stmnt)
+                exit_err(@bad_stmnt)
             fin
-            if !parse_expr; return parse_err(@bad_stmnt); fin
+            parse_expr
             if stepdir > 0
                 emit_brgt(break_tag)
             else
                 emit_brlt(break_tag)
             fin
             if token == STEP_TKN
-                if !parse_expr; return parse_err(@bad_stmnt); fin
+                parse_expr
                 if stepdir > 0
                     emit_binaryop(ADD_TKN)
                 else
@@ -784,7 +731,7 @@ def parse_stmnt
             while parse_stmnt
                 nextln
             loop
-            if token <> NEXT_TKN; return parse_err(@bad_stmnt); fin
+            if token <> NEXT_TKN; exit_err(@bad_stmnt); fin
             emit_branch(tag_for)
             cont_tag = tag_prevcnt
             ctag_resolve(break_tag)
@@ -798,12 +745,12 @@ def parse_stmnt
             break_tag   = ctag_new
             tag_choice  = ctag_new
             tag_of      = ctag_new
-            if !parse_expr; return parse_err(@bad_stmnt); fin
+            parse_expr
             nextln
             while token <> ENDCASE_TKN
                 when token
                     is OF_TKN
-                        if !parse_expr; return parse_err(@bad_stmnt); fin
+                        parse_expr
                         emit_brne(tag_choice)
                         ctag_resolve(tag_of)
                         while parse_stmnt
@@ -823,13 +770,13 @@ def parse_stmnt
                         while parse_stmnt
                             nextln
                         loop
-                        if token <> ENDCASE_TKN; return parse_err(@bad_stmnt); fin
+                        if token <> ENDCASE_TKN; exit_err(@bad_stmnt); fin
                         break
                     is EOL_TKN
                         nextln
                         break
                     otherwise
-                        return parse_err(@bad_stmnt)
+                        exit_err(@bad_stmnt)
                 wend
             loop
             if (tag_of)
@@ -844,14 +791,14 @@ def parse_stmnt
             if break_tag
                 emit_branch(break_tag)
             else
-                return parse_err(@bad_stmnt)
+                exit_err(@bad_stmnt)
             fin
             break
         is CONT_TKN
             if cont_tag
                 emit_branch(cont_tag)
             else
-                return parse_err(@bad_stmnt)
+                exit_err(@bad_stmnt)
             fin
             break
         is RETURN_TKN
@@ -905,7 +852,7 @@ def parse_stmnt
                     fin
                 fin
                 if token == SET_TKN
-                    if !parse_expr; return parse_err(@bad_expr); fin
+                    parse_expr
                     if type & LOCAL_TYPE
                         if elem_type & BYTE_TYPE
                             emit_slb(addr + elem_offset)
@@ -957,7 +904,7 @@ def parse_stmnt
             type = parse_value(0)
             if type
                 if token == SET_TKN
-                    if !parse_expr; return parse_err(@bad_expr); fin
+                    parse_expr
                     if type & XBYTE_TYPE
                         emit_sb
                     else
@@ -983,10 +930,10 @@ def parse_stmnt
                     emit_drop
                 fin
             else
-                return parse_err(@bad_syntax)
+                exit_err(@bad_syntax)
             fin
     wend
-    if scan <> EOL_TKN; return parse_err(@bad_syntax); fin
+    //if scan <> EOL_TKN; exit_err(@bad_syntax); fin
     return TRUE
 end
 def parse_var(type)
@@ -998,7 +945,7 @@ def parse_var(type)
     size  = 1
     if scan == OPEN_BRACKET_TKN
       size, constsize, consttype = parse_constexpr
-      if token <> CLOSE_BRACKET_TKN; return parse_err(@no_close_bracket); fin
+      if token <> CLOSE_BRACKET_TKN; exit_err(@no_close_bracket); fin
       scan
     fin
     if token == ID_TKN
@@ -1006,7 +953,7 @@ def parse_var(type)
         idlen = tknlen
         if scan == OPEN_BRACKET_TKN
             size, constsize, consttype = parse_constexpr
-            if token <> CLOSE_BRACKET_TKN; return parse_err(@no_close_bracket); fin
+            if token <> CLOSE_BRACKET_TKN; exit_err(@no_close_bracket); fin
             scan
         fin
     fin
@@ -1014,16 +961,14 @@ def parse_var(type)
         size = size * 2
     fin
     if token == SET_TKN
-        if infunc; return parse_err(@no_local_init); fin
+        if infunc; exit_err(@no_local_init); fin
         if idlen
             iddata_add(idptr, idlen, type, 0)
         fin
         constval, constsize, consttype = parse_constexpr
-        if not consttype; return parse_err(@bad_decl); fin
         arraysize = emit_data(type, consttype, constval, constsize)
         while token == COMMA_TKN
             constval, constsize, consttype = parse_constexpr
-            if not consttype; return parse_err(@bad_decl); fin
             arraysize = arraysize + emit_data(type, consttype, constval, constsize)
         loop
         iddata_size(PTR_TYPE, size, arraysize)
@@ -1062,7 +1007,7 @@ def parse_struc
         fin
         if scan == OPEN_BRACKET_TKN
             size, constsize, consttype = parse_constexpr
-            if token <> CLOSE_BRACKET_TKN;  return parse_err(@no_close_bracket); fin
+            if token <> CLOSE_BRACKET_TKN; exit_err(@no_close_bracket); fin
             scan
         fin
         repeat
@@ -1072,7 +1017,7 @@ def parse_struc
                 idlen = tknlen
                 if scan == OPEN_BRACKET_TKN
                     size, constsize, consttype = parse_constexpr
-                    if token <> CLOSE_BRACKET_TKN;  return parse_err(@no_close_bracket); fin
+                    if token <> CLOSE_BRACKET_TKN; exit_err(@no_close_bracket); fin
                     scan
                 fin
             fin
@@ -1098,16 +1043,15 @@ def parse_vars
     //cout('V')
     when token
         is CONST_TKN
-            if scan <> ID_TKN; return parse_err(@bad_cnst); fin
+            if scan <> ID_TKN; exit_err(@bad_cnst); fin
             idptr = tknptr
             idlen = tknlen
-            if scan <> SET_TKN; return parse_err(@bad_cnst); fin
+            if scan <> SET_TKN; exit_err(@bad_cnst); fin
             value, size, type = parse_constexpr
-            if not type; return parse_err(@bad_cnst); fin
             idconst_add(idptr, idlen, value)
             break
         is STRUC_TKN
-            if !parse_struc; parse_err(@bad_struc); fin
+            parse_struc
             break
         is BYTE_TKN
         is WORD_TKN
@@ -1127,7 +1071,7 @@ def parse_vars
                 if scan == ID_TKN
                     idfunc_add(tknptr, tknlen, ctag_new)
                 else
-                    return parse_err(@bad_decl)
+                    exit_err(@bad_decl)
                 fin
             until scan <> COMMA_TKN
             break
@@ -1142,7 +1086,7 @@ def parse_defs
 
     if token == DEF_TKN
         //cout('D')
-        if scan <> ID_TKN; return parse_err(@bad_decl); fin
+        if scan <> ID_TKN; exit_err(@bad_decl); fin
         cfnparms = 0
         infunc   = TRUE
         idptr    = idglobal_lookup(tknptr, tknlen)
@@ -1163,7 +1107,7 @@ def parse_defs
                     scan
                 fin
             until token <> COMMA_TKN
-            if token <> CLOSE_PAREN_TKN; return parse_err(@bad_decl); fin
+            if token <> CLOSE_PAREN_TKN; exit_err(@bad_decl); fin
             scan
         fin
         while parse_vars
@@ -1175,7 +1119,7 @@ def parse_defs
             nextln
         loop
         infunc = FALSE
-        if token <> END_TKN; return parse_err(@bad_syntax); fin
+        if token <> END_TKN; exit_err(@bad_syntax); fin
         if prevstmnt <> RETURN_TKN
             emit_const(0)
             emit_leave
@@ -1220,7 +1164,6 @@ def parse_module
             //
             // Write REL file
             //
-
             return not parserr
         fin
     else

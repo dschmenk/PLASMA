@@ -347,7 +347,7 @@ t_opseq *parse_value(t_opseq *codeseq, int rvalue, int *stackdepth)
     /*
      * Parse pre operators.
      */
-    while (scan())
+    while (scan)
     {
         if (scantoken == ADD_TOKEN)
         {
@@ -364,7 +364,8 @@ t_opseq *parse_value(t_opseq *codeseq, int rvalue, int *stackdepth)
         {
             deref++;
             if (!type)
-                type |= scantoken == BPTR_TOKEN ? BPTR_TYPE : WPTR_TYPE;
+                //type |= scantoken == BPTR_TOKEN ? BPTR_TYPE : WPTR_TYPE;
+                type = scantoken == BPTR_TOKEN ? BPTR_TYPE : WPTR_TYPE;
             else if (scantoken == BPTR_TOKEN)
                 parse_error("Byte value used as pointer");
         }

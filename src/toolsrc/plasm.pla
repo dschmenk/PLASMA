@@ -1,14 +1,6 @@
-//
-// Data and text buffer constants
-//
-const machid        = $BF98
-const iobuffer      = $0800
-const databuff      = $0C00
-const codebuff      = $A900
-const codebuffsz    = $1000
-//
-// Compiler variables
-//
+include "inc/cmdsys.plh"
+include "inc/fileio.plh"
+include "inc/longjmp.plh"
 //
 // Tokens
 //
@@ -204,41 +196,50 @@ byte[16] sizestack
 byte[16] typestack
 word valsp = 0
 //
+// Generated code buffers
+//
+const databuff      = $0C00
+const codebuff      = $A900
+const codebuffsz    = $1000
+//
 // Symbol table variables
 //
 struc t_opseq
-    byte code
-    word val
-    word tag
-    word offsz
-    byte type
-    word nextop
+    byte opcode
+    word opval
+    word optag
+    word opoffsz
+    byte optype
+    word opnext
 end
 const OPSEQNUM          = 200
+struc t_id
+    word idval
+    byte idtype
+    byte idname
+    byte funcparms
+    byte funcvals
+end
 const idglobal_tblsz    = 2048
 const idlocal_tblsz     = 512
 const idglobal_tbl      = $1600
 const idlocal_tbl       = $1E00
 const ctag_max          = 1024
 const ctag_tbl          = $800
-const idval             = 0
-const idtype            = 2
-const idname            = 3
-const idrecsz           = 4
 word globals            = 0
 word datasize           = 0
 word lastglobal
 byte locals             = 0
 word framesize          = 0
 word lastlocal
+byte lastop             = $FF
 const IS_RESOLVED       = $8000
 const IS_RELATIVE       = $8000
 const IS_CTAG           = $8000
 const MASK_CTAG         = $7FFF
 word codetag            = -1
-word codeptr, entrypoint = 0
+word codeptr, entrypoint
 word modsysflags        = 0
-byte lastop             = $FF
 //
 // Scanner variables
 //
@@ -295,7 +296,11 @@ byte prevstmnt   = 0
 word retfunc_tag = 0
 word break_tag   = 0
 word cont_tag    = 0
-predef parse_constexpr#3, parse_expr, parse_lambda
+predef parse_constexpr#3, parse_expr(codeseq), parse_lambda
+//
+// Long jump environment
+//
+word exit
 
 //=====================================
 //
@@ -306,19 +311,17 @@ predef parse_constexpr#3, parse_expr, parse_lambda
 //
 // Error handler
 //
-def parse_err(errstr)
-    if !parserr
-        parserr    = TRUE
-        parserrln  = lineno - 1
-        parserrpos = tknptr - inbuff
-        puts(parsefile); putc('['); puti(lineno); putc(']'); putc(':'); puts(errstr); putln
-        puts(instr)
-        for i = parseerrpos-1 downto 0
-            putc(' ')
-        next
-        puts("^\n")
-    fin
-    return ERR_TKN
+def exit_err(errstr)#0
+    byte i
+
+    puts(parsefile); putc('['); puti(lineno); putc(']'); putc(':'); puts(errstr); putln
+    puts(instr)
+    for i = tknptr - inbuff - 1 downto 0
+        putc(' ')
+    next
+    puts("^\n")
+    fileio:close(0) // Close all open files
+    longjump(exit, TRUE)
 end
 //
 // Include code to reduce size of this file
@@ -332,11 +335,12 @@ include "toolsrc/parse.pla"
 arg = argNext(argFirst)
 if arg
     strcpy(@srcfile, arg)
-    if parsemodule
+    exit = heapalloc(t_longjmp)
+    if not setjmp(exit)
+        parsemodule
         puts("Bytes compiled: "); puti(codeptr - codebuff); putln
     fin
 else
     puts("Usage: +PLASM [srcfile]\n")
 fin
-
 done
