@@ -171,13 +171,7 @@ MOD     JSR     _DIV
 ;*
 ;* NEGATE TOS
 ;*
-NEG     LDA     #$00
-        SEC
-        SBC     ESTKL,X
-        STA     ESTKL,X
-        LDA     #$00
-        SBC     ESTKH,X
-        STA     ESTKH,X
+NEG     JSR     _NEG
         JMP     NEXTOP
 ;*
 ;* INTERNAL DIVIDE ALGORITHM
@@ -857,32 +851,18 @@ IBRNCH  LDA     IPL
 ;*
 CALL    +INC_IP
         LDA     (IP),Y
-        STA     CALLADR+1
+        STA     ICALADR+1
         +INC_IP
         LDA     (IP),Y
-        STA     CALLADR+2
-        LDA     IPH
-        PHA
-        LDA     IPL
-        PHA
-        TYA
-        PHA
-CALLADR JSR     $FFFF
-        PLA
-        TAY
-        PLA
-        STA     IPL
-        PLA
-        STA     IPH
-        JMP     NEXTOP
+        BNE     ICALGO
 ;*
 ;* INDIRECT CALL TO ADDRESS (NATIVE CODE)
 ;*
 ICAL    LDA     ESTKL,X
         STA     ICALADR+1
         LDA     ESTKH,X
-        STA     ICALADR+2
         INX
+ICALGO  STA     ICALADR+2
         LDA     IPH
         PHA
         LDA     IPL
