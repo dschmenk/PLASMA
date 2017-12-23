@@ -50,6 +50,7 @@ PROFILE = PROFILE\#FE1000
 MEMMGR  = MEMMGR\#FE1000
 MEMTEST = MEMTEST\#FE1000
 FIBER   = FIBER\#FE1000
+LONGJMP = LONGJMP\#FE1000
 PLASM   = plasm
 INCS    = toolsrc/plasm.h toolsrc/tokens.h toolsrc/symbols.h toolsrc/lex.h toolsrc/parse.h toolsrc/codegen.h
 OBJS	= toolsrc/plasm.c toolsrc/parse.c toolsrc/lex.c toolsrc/codegen.c
@@ -69,7 +70,7 @@ TXTTYPE	= .TXT
 #SYSTYPE	= \#FF2000
 #TXTTYPE	= \#040000
 
-all: $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVM802) $(PLVM03) $(CMD) $(ARGS) $(MEMMGR) $(MEMTEST) $(FIBER) $(ED) $(MON) $(ROD) $(SIEVE) $(UTHERNET2) $(UTHERNET) $(ETHERIP) $(INET) $(DHCP) $(HTTPD) $(ROGUE) $(ROGUEMAP) $(ROGUECOMBAT) $(ROGUEIO) $(HGR1) $(TONE) $(DGR) $(DGRTEST) $(FILEIO) $(CONIO) $(PORTIO) $(SPIPORT) $(SDFAT) $(FATCAT) $(FATGET) $(FATPUT) $(FATWDSK) $(FATRDSK) $(SANE) $(FPSTR) $(FPU) $(SANITY) $(RPNCALC)
+all: $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVM802) $(PLVM03) $(CMD) $(ARGS) $(MEMMGR) $(MEMTEST) $(FIBER) $(LONGJMP) $(ED) $(MON) $(ROD) $(SIEVE) $(UTHERNET2) $(UTHERNET) $(ETHERIP) $(INET) $(DHCP) $(HTTPD) $(ROGUE) $(ROGUEMAP) $(ROGUECOMBAT) $(ROGUEIO) $(HGR1) $(TONE) $(DGR) $(DGRTEST) $(FILEIO) $(CONIO) $(PORTIO) $(SPIPORT) $(SDFAT) $(FATCAT) $(FATGET) $(FATPUT) $(FATWDSK) $(FATRDSK) $(SANE) $(FPSTR) $(FPU) $(SANITY) $(RPNCALC)
 
 clean:
 	-rm *FE1000 *FF2000 $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVM03)
@@ -144,6 +145,10 @@ $(MEMTEST): samplesrc/memtest.pla $(PLVM02) $(PLASM)
 $(FIBER): libsrc/fiber.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AMOW < libsrc/fiber.pla > libsrc/fiber.a
 	acme --setpc 4094 -o $(FIBER) libsrc/fiber.a
+
+$(LONGJMP): libsrc/longjmp.pla $(PLVM02) $(PLASM)
+	./$(PLASM) -AMOW < libsrc/longjmp.pla > libsrc/longjmp.a
+	acme --setpc 4094 -o $(LONGJMP) libsrc/longjmp.a
 
 $(MON): samplesrc/mon.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AMOW < samplesrc/mon.pla > samplesrc/mon.a
