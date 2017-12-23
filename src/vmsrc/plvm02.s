@@ -541,13 +541,7 @@ _DIVEX  INX
 ;*
 ;* NEGATE TOS
 ;*
-NEG     LDA     #$00
-        SEC
-        SBC     ESTKL,X
-        STA     ESTKL,X
-        LDA     #$00
-        SBC     ESTKH,X
-        STA     ESTKH,X
+NEG     JSR     _NEG
         JMP     NEXTOP
 ;*
 ;* DIV TOS-1 BY TOS
@@ -1565,7 +1559,7 @@ LEAVEX  STA     ALTRDOFF
         PHA
         PLP
 LEAVE   PLA                     ; DEALLOCATE POOL + FRAME
-        CLC
+LEAVEQ  CLC
         ADC     IFPL
         STA     PPL
         LDA     #$00
@@ -1581,14 +1575,7 @@ RETX    STA     ALTRDOFF
         LDA     PSR
         PHA
         PLP
-RET     LDA     IFPL            ; DEALLOCATE POOL
-        STA     PPL
-        LDA     IFPH
-        STA     PPH
-        PLA                     ; RESTORE PREVIOUS FRAME
-        STA     IFPL
-        PLA
-        STA     IFPH
-        RTS
+        LDA     #$00
+        BEQ     LEAVEQ
 VMEND   =       *
 }

@@ -267,13 +267,7 @@ MULLP   LSR     TMPH            ; MULTPLRH
 ;*
 ;* NEGATE TOS
 ;*
-NEG     LDA     #$00
-        SEC
-        SBC     ESTKL,X
-        STA     ESTKL,X
-        LDA     #$00
-        SBC     ESTKH,X
-        STA     ESTKH,X
+NEG     JSR     _NEG
         JMP     NEXTOP
 ;*
 ;* DIV TOS-1 BY TOS
@@ -1056,36 +1050,18 @@ IBRNCH  LDA     IPL
 ;*
 CALL    +INC_IP
         LDA     (IP),Y
-        STA     CALLADR+1
+        STA     ICALADR+1
         +INC_IP
         LDA     (IP),Y
-        STA     CALLADR+2
-        TYA
-        CLC
-        ADC     IPL
-        PHA
-        LDA     IPH
-        ADC     #$00
-        PHA
-        LDA     IPX
-        PHA
-CALLADR JSR     $FFFF
-        PLA
-        STA     IPX
-        PLA
-        STA     IPH
-        PLA
-        STA     IPL
-        LDY     #$00
-        JMP     NEXTOP
+        BNE     ICALGO
 ;*
 ;* INDIRECT CALL TO ADDRESS (NATIVE CODE)
 ;*
 ICAL    LDA     ESTKL,X
         STA     ICALADR+1
         LDA     ESTKH,X
-        STA     ICALADR+2
         INX
+ICALGO  STA     ICALADR+2
         TYA
         CLC
         ADC     IPL
@@ -1134,6 +1110,10 @@ ENTER   INY
         BNE     -
 +       LDY     #$02
         JMP     NEXTOP
+;
+RET     LDA     #$00
+        PHA
+        ;fall through
 ;*
 ;* LEAVE FUNCTION
 ;*
@@ -1143,16 +1123,6 @@ LEAVE   PLA
         STA     PPL
         LDA     #$00
         ADC     IFPH
-        STA     PPH
-        PLA                     ; RESTORE PREVIOUS FRAME
-        STA     IFPL
-        PLA
-        STA     IFPH
-        RTS
-;
-RET     LDA     IFPL            ; DEALLOCATE POOL
-        STA     PPL
-        LDA     IFPH
         STA     PPH
         PLA                     ; RESTORE PREVIOUS FRAME
         STA     IFPL
