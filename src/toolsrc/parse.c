@@ -418,6 +418,11 @@ t_opseq *parse_value(t_opseq *codeseq, int rvalue, int *stackdepth)
     }
     else if (scantoken == LAMBDA_TOKEN)
     {
+        if (!rvalue) // Lambdas can't be LVALUEs
+        {
+            release_seq(uopseq);
+            return (codeseq);
+        }
         type |= CONST_TYPE;
         value = parse_lambda();
         valseq = gen_gbladr(NULL, value, FUNC_TYPE);
@@ -438,7 +443,11 @@ t_opseq *parse_value(t_opseq *codeseq, int rvalue, int *stackdepth)
         return (codeseq);
     }
     else
+    {
+        release_seq(uopseq);
+        release_seq(codeseq);
         return (NULL);
+    }
     /*
      * Parse post operators.
      */
@@ -452,6 +461,10 @@ t_opseq *parse_value(t_opseq *codeseq, int rvalue, int *stackdepth)
             valseq = cat_seq(parse_list(NULL, &value), valseq);
             if (scantoken != CLOSE_PAREN_TOKEN)
                 parse_error("Missing function call closing parenthesis");
+            if (!(type & FUNC_TYPE)) // Can't check parm count on function pointers
+                cfnparms = value;
+            else if (cfnparms != value)
+                parse_error("Parameter count mismatch");
             if (scan() == POUND_TOKEN)
             {
                 /*
@@ -464,10 +477,6 @@ t_opseq *parse_value(t_opseq *codeseq, int rvalue, int *stackdepth)
             }
             else
                 scan_rewind(tokenstr);
-            if ((type & FUNC_TYPE) && (cfnparms != value))
-                parse_error("Parameter count mismatch");
-            if (stackdepth)
-                *stackdepth = cfnvals + cfnparms - value;
             if (type & (VAR_TYPE | PTR_TYPE)) //!(type & (FUNC_TYPE | CONST_TYPE)))
             {
                 valseq = gen_lw(valseq);
@@ -476,8 +485,8 @@ t_opseq *parse_value(t_opseq *codeseq, int rvalue, int *stackdepth)
             }
             valseq = gen_icall(valseq);
             if (stackdepth)
-                *stackdepth = cfnvals;
-            cfnvals = 1;
+                *stackdepth += cfnvals + cfnparms - value - 1;
+            cfnparms = 0; cfnvals = 1;
             type &= ~(FUNC_TYPE | VAR_TYPE);
         }
         else if (scantoken == OPEN_BRACKET_TOKEN)
@@ -492,13 +501,16 @@ t_opseq *parse_value(t_opseq *codeseq, int rvalue, int *stackdepth)
                  */
                 valseq = gen_icall(valseq);
                 if (stackdepth)
-                    *stackdepth = cfnvals;
+                    *stackdepth += cfnvals + cfnparms - 1;
+                cfnparms = 0; cfnvals = 1;
+                type &= ~FUNC_TYPE;
             }
-            while ((idxseq = parse_expr(NULL, stackdepth)))
+            //while ((idxseq = parse_expr(NULL, stackdepth)))
+            while ((valseq = parse_expr(valseq, stackdepth)) && scantoken == COMMA_TOKEN)
             {
-                valseq = cat_seq(valseq, idxseq);
-                if (scantoken != COMMA_TOKEN)
-                    break;
+//                valseq = cat_seq(valseq, idxseq);
+//                if (scantoken != COMMA_TOKEN)
+//                    break;
                 valseq = gen_idxw(valseq);
                 valseq = gen_lw(valseq);
             }
@@ -527,7 +539,8 @@ t_opseq *parse_value(t_opseq *codeseq, int rvalue, int *stackdepth)
                  */
                 valseq = gen_icall(valseq);
                 if (stackdepth)
-                    *stackdepth = cfnvals;
+                    *stackdepth += cfnvals + cfnparms - 1;
+                cfnparms = 0; cfnvals = 1;
                 type &= ~FUNC_TYPE;
             }
             else if (type & (VAR_TYPE | PTR_TYPE))
@@ -568,7 +581,8 @@ t_opseq *parse_value(t_opseq *codeseq, int rvalue, int *stackdepth)
                  */
                 valseq = gen_icall(valseq);
                 if (stackdepth)
-                    *stackdepth = cfnvals;
+                    *stackdepth += cfnvals + cfnparms - 1;
+                cfnparms = 0; cfnvals = 1;
                 type &= ~FUNC_TYPE;
             }
             type = (type & (VAR_TYPE | CONST_TYPE))
@@ -605,7 +619,8 @@ t_opseq *parse_value(t_opseq *codeseq, int rvalue, int *stackdepth)
         {
             valseq = gen_icall(valseq);
             if (stackdepth)
-                *stackdepth = cfnvals;
+                *stackdepth += cfnvals + cfnparms - 1;
+            cfnparms = 0; cfnvals = 1;
             type &= ~FUNC_TYPE;
         }
         else if (type & VAR_TYPE)
@@ -617,7 +632,8 @@ t_opseq *parse_value(t_opseq *codeseq, int rvalue, int *stackdepth)
         {
             valseq = gen_icall(valseq);
             if (stackdepth)
-                *stackdepth = cfnvals;
+                *stackdepth += cfnvals + cfnparms - 1;
+            cfnparms = 0; cfnvals = 1;
             type &= ~FUNC_TYPE;
         }
         else if (type & (BYTE_TYPE | BPTR_TYPE))
@@ -784,7 +800,6 @@ int parse_stmnt(void)
             tag_endif = tag_new(BRANCH_TYPE);
             seq = gen_brfls(seq, tag_else);
             emit_seq(seq);
-            //scan();
             do
             {
                 while (parse_stmnt()) next_line();
