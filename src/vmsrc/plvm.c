@@ -873,6 +873,7 @@ void interp(code *ip)
                  */
             default:
                 fprintf(stderr, "Illegal opcode 0x%02X @ 0x%04X\n", ip[-1], ip - mem_data);
+                exit(-1);
         }
     }
 }

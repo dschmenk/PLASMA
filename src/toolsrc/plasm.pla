@@ -272,17 +272,24 @@ byte no_ctag_offst[]        = "CODE OFFSET NOT SUPPORTED"
 byte no_close_paren[]       = "MISSING CLOSING PAREN"
 byte no_close_bracket[]     = "MISSING CLOSING BRACKET"
 byte missing_op[]           = "MISSING OPERAND"
-byte no_fin[]               = "MISSING FIN"
 byte no_loop[]              = "MISSING LOOP"
 byte no_until[]             = "MISSING UNTIL"
 byte no_done[]              = "MISSING DONE"
 byte no_local_init[]        = "NO INITIALIZED LOCALS"
+//
+// Compiler optimizer flags
+//
+const OPTIMIZE   = 1
+const OPTIMIZE2  = 2
+const NO_COMBINE = 4
+byte outflags
 //
 // ProDOS/SOS file references
 //
 byte refnum, srcref, incref
 byte[32] srcfile
 byte[32] incfile
+byte[32] relfile
 word parsefile // Pointer to current file
 word sysincbuf // System I/O buffer for include files
 word srcline   // Saved source line number
@@ -293,6 +300,7 @@ byte[128] strconst
 byte infunc      = 0
 byte stack_loop  = 0
 byte prevstmnt   = 0
+word infunvals   = 0
 word retfunc_tag = 0
 word break_tag   = 0
 word cont_tag    = 0
@@ -308,6 +316,17 @@ word exit
 //
 //=====================================
 
+//
+// Handy functions
+//
+def strcpy(dst, src)
+    if ^src
+        memcpy(dst, src, ^src + 1)
+    else
+        ^dst = 0
+    fin
+    return ^dst
+end
 //
 // Error handler
 //
@@ -333,14 +352,45 @@ include "toolsrc/parse.pla"
 // Look at command line arguments and compile module
 //
 arg = argNext(argFirst)
+if ^arg and ^(arg + 1) == '-'
+    arg = arg + 2
+    while TRUE
+        if toupper(^arg) == 'O'
+            outflags = outflags | OPTIMIZE
+            arg++
+            if ^arg == '2'
+                outflags = outflags | OPTIMIZE
+                arg++
+            fin
+        elsif toupper(^arg) == 'N'
+            outflags = outflags | NO_COMBINE
+        else
+            break
+        fin
+    loop
+    arg = argNext(arg)
+fin
 if arg
     strcpy(@srcfile, arg)
+    arg = argNext(arg)
+    if arg
+        strcpy(@relfile, arg)
+    fin
+fin
+if srcfile and relfile
     exit = heapalloc(t_longjmp)
     if not setjmp(exit)
+        //
+        // Parse source code module
+        //
         parsemodule
         puts("Bytes compiled: "); puti(codeptr - codebuff); putln
+        //
+        // Write REL file
+        //
+        writerel
     fin
 else
-    puts("Usage: +PLASM [srcfile]\n")
+    puts("Usage: +PLASM [-O[2]] <srcfile> <relfile>\n")
 fin
 done
