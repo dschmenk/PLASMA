@@ -29,64 +29,52 @@ def idmatch(nameptr, len, idptr, idcnt)
     while idcnt
         if len == idptr->idname
             for i = 1 to len
-                if nameptr->[i - 1] <> idptr->idname.[i]
-                    break
-                fin
+                if nameptr->[i - 1] <> idptr->idname.[i]; break; fin
             next
-            if i > len
-                return idptr
-            fin
+            if i > len; return idptr; fin
         fin
-        idptr = idptr + idptr->idname + idrecsz
+        idptr = idptr + idptr->idname + t_id
         idcnt--
     loop
-    return 0
+    return NULL
 end
 def id_lookup(nameptr, len)
     word idptr
 
     idptr = idmatch(nameptr, len, idlocal_tbl, locals)
-    if idptr
-        return idptr
+    if not idptr
+        idptr = idmatch(nameptr, len, idglobal_tbl, globals)
+        if not idptr; exit_err(@undecl_id); fin
     fin
-    idptr = idmatch(nameptr, len, idglobal_tbl, globals)
-    if idptr
-        return idptr
-    fin
-    exit_err(@undecl_id)
-    return 0
+    return idptr
 end
 def idglobal_lookup(nameptr, len)
-    return idmatch(nameptr, len, idglobal_tbl, globals)
+    word idptr
+    idptr idmatch(nameptr, len, idglobal_tbl, globals)
+    if not idptr; exit_err(@undecl_id); fin
+    return idptr
 end
 def idlocal_add(namestr, len, type, size)
-    if idmatch(namestr, len, @idlocal_tbl, locals); return exit_err(@dup_id); fin
+    if idmatch(namestr, len, @idlocal_tbl, locals); exit_err(@dup_id); fin
     lastlocal=>idval  = framesize
     lastlocal->idtype = type | LOCAL_TYPE
     nametostr(namestr, len, lastlocal + idname)
     locals++
     lastlocal = lastlocal + idrecsz + len
-    if lastlocal > idlocal_tbl + idlocal_tblsz
-        exit_err(@local_sym_overflw)
-    fin
+    if lastlocal > idlocal_tbl + idlocal_tblsz; exit_err(@local_sym_overflw); fin
     framesize = framesize + size
-    if framesize > 255
-        return exit_err(@local_overflw)
-    fin
+    if framesize > 255; exit_err(@local_overflw); fin
     return TRUE
 end
 def iddata_add(namestr, len, type, size)
-    if idmatch(namestr, len, idglobal_tbl, globals); return exit_err(@dup_id); fin
+    if idmatch(namestr, len, idglobal_tbl, globals); exit_err(@dup_id); fin
     lastglobal=>idval  = datasize
     lastglobal->idtype = type
     nametostr(namestr, len, lastglobal + idname)
     emit_iddata(datasize, size, lastglobal + idname)
     globals++
     lastglobal = lastglobal + idrecsz + len
-    if lastglobal > idglobal_tbl + idglobal_tblsz
-        prstr(@global_sym_overflw)
-        exit
-    fin
+    if lastglobal > idglobal_tbl + idglobal_tblsz; exit_err((@global_sym_overflw); fin
     datasize = datasize + size
     return TRUE
 end
@@ -99,7 +87,7 @@ def iddata_size(type, varsize, initsize)#0
     fin
 end
 def idglobal_add(namestr, len, type, value)
-    if idmatch(namestr, len, idglobal_tbl, globals); return exit_err(@dup_id); fin
+    if idmatch(namestr, len, idglobal_tbl, globals); exit_err(@dup_id); fin
     lastglobal=>idval  = value
     lastglobal->idtype = type
     nametostr(namestr, len, lastglobal + idname)
@@ -150,7 +138,7 @@ end
 // Flags are:
 //
 def ctag_new
-    if codetag >= ctag_max; return exit_err(@ctag_full); fin
+    if codetag >= ctag_max; exit_err(@ctag_full); fin
     codetag = codetag + 1
     ctag_tbl:[codetag] = 0 // Unresolved, nothing to update yet
     return codetag | IS_CTAG
@@ -159,7 +147,7 @@ def ctag_resolve(ctag)#0
     word updtptr, nextptr
 
     ctag = ctag & MASK_CTAG // Better be a ctag!
-    if ctag_tbl:[ctag] & IS_RESOLVED;exit_err(@dup_id); return; fin
+    if ctag_tbl:[ctag] & IS_RESOLVED;exit_err(@dup_id); fin
     updtptr = ctag_tbl:[ctag] & MASK_CTAG
     while updtptr
         //
@@ -392,11 +380,10 @@ end
 def emit_indexword#0
     emit_op($1E)
 end
-def emit_unaryop(op)
+def emit_unaryop(op)#0
     when op
         is NEG_TKN
             emit_op($10); break
-        is ALT_COMP_TKN
         is COMP_TKN
             emit_op($12); break
         is LOGIC_NOT_TKN
@@ -410,60 +397,21 @@ def emit_unaryop(op)
         is WPTR_TKN
             emit_op($62); break
         otherwise
-            return FALSE
+            exit_err("Invalid unary operation")
     wend
-    return TRUE
 end
-def emit_binaryop(op)
+def emit_binaryop(op)#0
     when op
         is MUL_TKN
-            //
-            // Replace MUL 2 with SHL 1
-            //
-            if lastop == $2A and ^(codeptr - 1) == 2 // CB 2
-                codeptr = codeptr - 1
-                emit_byte(1) // CB 1
-                emit_op($1A) // SHL
-            else
-                emit_op($06)
-            fin
-        break
+            emit_op($06); break
         is DIV_TKN
-            //
-            // Replace DIV 2 with SHR 1
-            //
-            if lastop == $2A and ^(codeptr - 1) == 2 // CB 2
-                codeptr = codeptr - 1
-                emit_byte(1) // CB 1
-                emit_op($1C) // SHR
-            else
-                emit_op($08)
-            fin
-        break
+            emit_op($08); break
         is MOD_TKN
             emit_op($0A); break
         is ADD_TKN
-            //
-            // Replace ADD 1 with INCR
-            //
-            if lastop == $2A and ^(codeptr - 1) == 1 // CB 1
-                codeptr = codeptr - 2
-                emit_op($0C) // INC_OP
-            else
-                emit_op($02)
-            fin
-        break
+            emit_op($02); break
         is SUB_TKN
-            //
-            // Replace SUB 1 with DECR
-            //
-            if lastop == $2A and ^(codeptr - 1)  == 1 // CB 1
-                codeptr = codeptr - 2
-                emit_op($0E) // DEC_OP
-            else
-                emit_op($04)
-            fin
-        break
+            emit_op($04); break
         is SHL_TKN
             emit_op($1A); break
         is SHR_TKN
@@ -491,9 +439,8 @@ def emit_binaryop(op)
         is LOGIC_AND_TKN
             emit_op($24); break
         otherwise
-            return FALSE
+            exit_err("Invalid operation")
     wend
-    return TRUE
 end
 def emit_brtru(tag)#0
     emit_op($4E)
@@ -540,7 +487,7 @@ def emit_enter(cparams)#0
     fin
 end
 //
-//New/release sequence ops
+// New/release sequence ops
 //
 def new_op
     word op
@@ -573,7 +520,448 @@ def release_seq(seq)#0
     loop
 end
 //
-//Generate a sequence of code
+// Replace all but the first of a series of identical load opcodes by DUP. This
+// doesn't reduce the number of opcodes but does reduce their size in bytes.
+// This is only called on the second optimisation pass because the DUP opcodes
+// may inhibit other peephole optimisations which are more valuable.
+//
+def try_dupify(op)
+    byte crunched
+    word opnext
+    
+    crunched = 0
+    opnext   = op=>nextop
+    while opnext
+        if op->code <> opn->code
+            return crunched
+        when op->code
+            is CONST_CODE
+                if op->val <> opnext->val; return crunched; fin
+                break
+            is LADDR_CODE
+            is LLB_CODE
+            is LLW_CODE
+                if op=>offsz <> opnext=>offsz; return crunched; fin
+                break
+            is GADDR_CODE
+            is LAB_CODE
+            is LAW_CODE
+                if (op=>tag <> opnext=>tag) or (op=>offsz <> opnext=>offsz) or (op->type <> opnext->type); return crunched; fin
+                break
+            otherwise
+                return crunched
+        wend
+        opnext->code = DUP_CODE
+        opnext       = opnext=>nextop
+        crunched     = 1
+    loop
+    return crunched
+end
+//
+// Crunch sequence (peephole optimize)
+//
+def crunch_seq(seq, pass)
+    word opnext opnextnext opprev, op
+    byte crunched, freeops, shiftcnt
+    opprev   = NULL
+    op       = *seq
+    opnext   = op=>nextop
+    crunched = FALSE
+    freeops  = 0
+    while op and opnext
+        when op->code
+            is CONST_CODE
+                if op=>val == 1
+                {
+                    if opnext->code == BINARY_CODE|ADD_TOKEN
+                        op->code = INC_CODE
+                        freeops  = 1
+                        break
+                    fin
+                    if opnext->code == BINARY_CODE|SUB_TOKEN
+                        op->code = DEC_CODE
+                        freeops  = 1
+                        break
+                    fin
+                    if opnext->code == BINARY_CODE|SHL_TOKEN
+                        op->code     = DUP_CODE
+                        opnext->code = BINARY_CODE|ADD_TOKEN
+                        crunched     = 1
+                        break
+                    fin
+                fin
+                when opnext->code
+                    is NEG_CODE
+                        op=>val = -(op=>val)
+                        freeops = 1
+                        break
+                    is COMP_CODE
+                        op->val = ~(op=>val)
+                        freeops = 1
+                        break
+                    is LOGIC_NOT_CODE
+                        op=>val = op=>val ?? FALSE :: TRUE
+                        freeops = 1
+                        break
+                    is UNARY_CODE|BPTR_TOKEN
+                    is LB_CODE
+                        op=>offsz = op=>val
+                        op->code  = LAB_CODE
+                        freeops   = 1
+                        break
+                    is UNARY_CODE|WPTR_TOKEN
+                    is LW_CODE
+                        op=>offsz = op=>val
+                        op->code  = LAW_CODE
+                        freeops   = 1
+                        break
+                    is SB_CODE
+                        op=>offsz = op=>val
+                        op->code  = SAB_CODE
+                        freeops   = 1
+                        break
+                    is SW_CODE
+                        op=>offsz = op=>val
+                        op->code  = SAW_CODE
+                        freeops   = 1
+                        break
+                    is BRFALSE_CODE
+                        if op=>val
+                            freeops = -2 // Remove constant and never taken branch
+                        else
+                            op->code = BRNCH_CODE // Always taken branch
+                            op=>tag  = opnext=>tag
+                            freeops  = 1
+                        fin
+                        break
+                    is BRTRUE_CODE
+                        if not op=>val
+                            freeops = -2 // Remove constant never taken branch
+                        else
+                            op->code = BRNCH_CODE // Always taken branch
+                            op=>tag  = opnext=>tag
+                            freeops  = 1
+                        fin
+                        break
+                    is NE_CODE
+                        if not op=>val
+                            freeops = -2 // Remove ZERO:ISNE
+                        fin
+                        break
+                    is EQ_CODE
+                        if not op=>val
+                            op->code = LOGIC_NOT_CODE
+                            freeops = 1
+                        fin
+                        break
+                    is CONST_CODE // Collapse constant operation
+                        opnextnext = opnext->nextop
+                        if opnextnext
+                            when opnextnext->code
+                                is BINARY_CODE|MUL_TOKEN
+                                    op=>val = op=>val * opnext=>val
+                                    freeops = 2
+                                    break
+                                is BINARY_CODE|DIV_TOKEN
+                                    op=>val = op=>val / opnext=>val
+                                    freeops = 2
+                                    break
+                                is BINARY_CODE|MOD_TOKEN
+                                    op=>val = op=>val % opnext=>val
+                                    freeop  = 2
+                                    break
+                                is BINARY_CODE|ADD_TOKEN
+                                    op=>val = op=>val + opnext=>val
+                                    freeops = 2
+                                    break
+                                is BINARY_CODE|SUB_TOKEN
+                                    op=>val = op=>val - opnext=>val
+                                    freeops = 2
+                                    break
+                                is BINARY_CODE|SHL_TOKEN
+                                    op=>val = op=>val << opnext=>val
+                                    freeops = 2
+                                    break
+                                is BINARY_CODE|SHR_TOKEN
+                                    op=>val = op=>val >> opnext=>val
+                                    freeops = 2
+                                    break
+                                is BINARY_CODE|AND_TOKEN
+                                    op=>val = op=>val & opnext=>val
+                                    freeops = 2
+                                    break
+                                is BINARY_CODE|OR_TOKEN
+                                    op=>val = op=>val | opnext=>val
+                                    freeops = 2
+                                    break
+                                is BINARY_CODE|EOR_TOKEN
+                                    op=>val = op=>val ^ opnext=>val
+                                    freeops = 2
+                                    break
+                                is BINARY_CODE|EQ_TOKEN
+                                    op=>val = op=>val == opnext=>val
+                                    freeops = 2
+                                    break
+                                is BINARY_CODE|NE_TOKEN
+                                    op=>val = op=>val <> opnext=>val
+                                    freeops = 2
+                                    break
+                                is BINARY_CODE|GE_TOKEN
+                                    op=>val = op=>val >= opnext=>val
+                                    freeops  = 2
+                                    break
+                                is BINARY_CODE|LT_TOKEN
+                                    op=>val = op=>val < opnext=>val
+                                    freeops = 2
+                                    break
+                                is BINARY_CODE|GT_TOKEN
+                                    op=>val = op=>val > opnext=>val
+                                    freeops = 2
+                                    break
+                                is BINARY_CODE|LE_TOKEN
+                                    op=>val = op=>val <= opnext=>val
+                                    freeops = 2
+                                    break
+                                is BINARY_CODE|LOGIC_OR_TOKEN
+                                    op=>val = op=>val or opnext=>val
+                                    freeops = 2
+                                    break
+                                is BINARY_CODE|LOGIC_AND_TOKEN
+                                    op=>val = op=>val and opnext=>val
+                                    freeops = 2
+                                    break
+                            wend // End of collapse constant operation
+                        if pass > 0 and freeops == 0 and op=>val
+                            crunched = try_dupify(op)
+                        fin
+                        break // CONST_CODE
+                    is BINARY_CODE|MUL_TOKEN
+                        for shiftcnt = 0 to 15
+                            if op=>val == 1 << shiftcnt
+                                op=>val = shiftcnt
+                                opnext->code = BINARY_CODE|SHL_TOKEN
+                                break
+                            fin
+                        next
+                        break
+                    is BINARY_CODE|DIV_TOKEN
+                       for shiftcnt = 0 to 15
+                            if op=>val == 1 << shiftcnt
+                                op=>val = shiftcnt
+                                opnext->code = BINARY_CODE|SHR_TOKEN
+                                break
+                            fin
+                        next
+                        break
+                }
+                break // CONST_CODE
+            is LADDR_CODE
+                when opnext->code
+                    is CONST_CODE
+                        if opnext=>nextop
+                            opnextnext = opnext=>nextop
+                            when opnextnext->code
+                                is ADD_CODE
+                                is INDEXB_CODE
+                                    op=>offsz = op=>offsz + opnext=>val
+                                    freeops   = 2
+                                    break
+                                is INDEXW_CODE
+                                    op=>offsz = op=>offsz + opnext=>val * 2
+                                    freeops   = 2
+                                    break
+                            wend
+                        fin
+                        break
+                    is LB_CODE
+                        op->code = LLB_CODE
+                        freeops  = 1
+                        break
+                    is LW_CODE
+                        op->code = LLW_CODE
+                        freeops  = 1
+                        break
+                    is SB_CODE
+                        op->code = SLB_CODE
+                        freeops  = 1
+                        break
+                    is SW_CODE
+                        op->code = SLW_CODE
+                        freeops  = 1
+                        break
+                wend
+                if pass > 0 and not freeops
+                    crunched = try_dupify(op)
+                fin
+                break // LADDR_CODE
+            is GADDR_CODE
+                when opnext->code
+                    is CONST_CODE
+                        if opnext=>nextop
+                            opnextnext = opnext=>nextop
+                            when opnextnext->code
+                                is ADD_CODE
+                                is INDEXB_CODE
+                                    op=>offsz = op=>offsz + opnext=>val
+                                    freeops   = 2
+                                    break
+                                is INDEXW_CODE
+                                    op=>offsz = op=>offsz + opnext=>val * 2
+                                    freeops   = 2
+                                    break
+                            wend
+                        fin
+                        break
+                    is LB_CODE:
+                        op->code = LAB_CODE
+                        freeops  = 1
+                        break
+                    is LW_CODE
+                        op->code = LAW_CODE
+                        freeops  = 1
+                        break
+                    is SB_CODE
+                        op->code = SAB_CODE
+                        freeops  = 1
+                        break
+                    is SW_CODE
+                        op->code = SAW_CODE
+                        freeops  = 1
+                        break
+                    is ICAL_CODE
+                        op->code = CALL_CODE
+                        freeops  = 1
+                        break
+                wend
+                if pass > 0 and not freeops
+                    crunched = try_dupify(op)
+                fin
+                break // GADDR_CODE
+            is LLB_CODE:
+                if pass > 0
+                    crunched = try_dupify(op)
+                break // LLB_CODE
+            is LLW_CODE
+                // LLW [n]:CB 8:SHR -> LLB [n+1]
+                if opnext->code == CONST_CODE and opnext=>val == 8
+                    if opnext=>nextop
+                        opnextnext = opnext=>nextop
+                        if opnextnext->code == SHR_CODE
+                            op->code = LLB_CODE
+                            op=>offsz++
+                            freeops = 2
+                            break
+                        fin
+                    fin
+                fin
+                if pass > 0 and not freeops
+                    crunched = try_dupify(op)
+                fin
+                break // LLW_CODE
+            is LAB_CODE
+                if pass > 0 and (op->type) // || !is_hardware_address(op->offsz)))
+                    crunched = try_dupify(op)
+                break // LAB_CODE
+            is LAW_CODE
+                // LAW x:CB 8:SHR -> LAB x+1
+                if opnext->code == CONST_CODE and opnext=>val == 8
+                    if opnext=>nextop
+                        opnextnext = opnext=>nextop
+                        if opnextnext->code == SHR_CODE
+                            op->code = LAB_CODE
+                            op=>offsz++
+                            freeops = 2
+                            break
+                        fin
+                    fin
+                fin
+                if pass > 0 and not freeops and (op->type) // || !is_hardware_address(op->offsz)))
+                    crunched = try_dupify(op)
+                fin
+                break // LAW_CODE
+            is LOGIC_NOT_CODE
+                when opnext->code
+                    is BRFALSE_CODE
+                        op->code = BRTRUE_CODE
+                        op=>tag  = opnext=>tag
+                        freeops  = 1
+                        break
+                    is BRTRUE_CODE
+                        op->code = BRFALSE_CODE
+                        op=>tag  = opnext=>tag
+                        freeops  = 1
+                        break
+                wend
+                break // LOGIC_NOT_CODE
+            is SLB_CODE
+                if opnext->code == LLB_CODE and op=>offsz == opnext=>offsz
+                    op->code = DLB_CODE
+                    freeops  = 1
+                fin
+                break // SLB_CODE
+            is SLW_CODE
+                if opnext->code == LLW_CODE and op=>offsz == opnext=>offsz
+                    op->code = DLW_CODE
+                    freeops  = 1
+                fin
+                break // SLW_CODE
+            is SAB_CODE
+                if opnext->code == LAB_CODE and op=>tag == opnext=>tag and op=>offsz == opnext=>offsz and op->type == opnext->type
+                    op->code = DAB_CODE
+                    freeops  = 1
+                fin
+                break // SAB_CODE
+            is SAW_CODE
+                if opnext->code == LAW_CODE and op=>tag == opnext=>tag and op=>offsz == opnext=>offsz and op->type == opnext->type
+                    op->code = DAW_CODE
+                    freeops  = 1
+                fin
+                break // SAW_CODE
+        wend
+        //
+        // Free up crunched ops. If freeops is positive we free up that many ops
+        // *after* op; if it's negative, we free up abs(freeops) ops *starting
+        // with* op.
+        //
+        if freeops < 0
+            freeops = -freeops
+            if op == *seq
+                //
+                // If op is at the start of the sequence, we treat this as a special case.
+                //
+                while freeops > 0
+                    opnext = op=>nextop
+                    release_op(op)
+                    *seq = opnext
+                    op   = opnext
+                    freeops--
+                loop
+                crunched = TRUE
+            else
+                //
+                // Otherwise we just move op back to point to the previous op and
+                // let the following loop remove the required number of ops.
+                //
+                op      = opprev
+                opnext  = op=>nextop
+            fin
+        fin
+        while freeops
+            op=>nextop     = opnext=>nextop
+            opnext=>nextop = freeop_lst
+            freeop_lst     = opnext
+            opnext         = op=>nextop
+            crunched       = TRUE
+            freeops--
+        loop
+        opprev = op
+        op     = opnext
+        opnext = op=>nextop
+    loop
+    return crunched
+end
+//
+// Generate a sequence of code
 //
 def gen_seq(seq, opcode, cval, tag, offsz, type)
 {
@@ -596,7 +984,7 @@ def gen_seq(seq, opcode, cval, tag, offsz, type)
     return seq
 end
 //
-//Append one sequence to the end of another
+// Append one sequence to the end of another
 //
 def cat_seq(seq1, seq2)
 {
@@ -609,10 +997,11 @@ def cat_seq(seq1, seq2)
     return seq1
 fin
 //
-//Emit the pending sequence
+// Emit the pending sequence
 //
 def emit_pending_seq#0
     word lcl_pending, op
+    //
     // This is called by some of the emit_*() functions to ensure that any
     // pending ops are emitted before they emit their own op when they are
     // called from the parser. However, this function itself calls some of those
@@ -620,6 +1009,7 @@ def emit_pending_seq#0
     // would cause an infinite loop if we weren't careful. We therefore set
     // pending_seq to null on entry and work with a local copy, so if this
     // function calls back into itself it is a no-op.
+    //
     if not pending_seq; return; fin
     lcl_pending = pending_seq
     pending_seq = NULL
@@ -661,7 +1051,7 @@ def emit_pending_seq#0
                 break
             is SW_CODE
                 emit_sw()
-                break;
+                break
             is SLB_CODE
                 emit_slb(op-=>offsz)
                 break
@@ -727,7 +1117,7 @@ def emit_pending_seq#0
                 break
             is CODETAG_CODE
                 printf("_B%03d%c\n", op->tag, LBL);
-                break;
+                break
             is NEG_CODE
             is COMP_CODE
             is LOGIC_NOT_CODE
@@ -811,6 +1201,7 @@ def emit_seq(seq)#0
         op = op=>nextop
     loop
     pending_seq = cat_seq(pending_seq, seq)
+    //
     // The source code comments in the output are much more logical if we don't
     // merge multiple sequences together. There's no value in doing this merging
     // if we're not optimizing, and we optionally allow it to be prevented even
@@ -818,6 +1209,8 @@ def emit_seq(seq)#0
     //
     // We must also force output if the sequence includes a CS opcode, as the
     // associated 'constant' is only temporarily valid.
-    if !(outflags & (OPTIMIZE|OPTIMIZE2)) or (outflags & NO_COMBINE) or string
+    //
+    if not (outflags & (OPTIMIZE|OPTIMIZE2)) or (outflags & NO_COMBINE) or string
         emit_pending_seq
+    fin
 end
