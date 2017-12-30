@@ -52,6 +52,7 @@ MEMTEST = MEMTEST\#FE1000
 FIBER   = FIBER\#FE1000
 LONGJMP = LONGJMP\#FE1000
 PLASM   = plasm
+PLASMAPLASM = PLASM\#FE1000
 INCS    = toolsrc/plasm.h toolsrc/tokens.h toolsrc/symbols.h toolsrc/lex.h toolsrc/parse.h toolsrc/codegen.h
 OBJS	= toolsrc/plasm.c toolsrc/parse.c toolsrc/lex.c toolsrc/codegen.c
 #
@@ -83,6 +84,10 @@ clean:
 #
 $(PLASM): $(OBJS) $(INCS)
 	cc $(OBJS) -o $(PLASM)
+
+$(PLASMAPLASM): toolsrc/plasm.pla toolsrc/lex.pla toolsrc/parse.pla toolsrc/codegen.pla
+	./$(PLASM) -AMOW < toolsrc/plasm.pla > toolsrc/plasm.a
+	acme --setpc 4094 -o $(PLASMAPLASM) toolsrc/plasm.a
 
 #
 # PLASMA VMs
