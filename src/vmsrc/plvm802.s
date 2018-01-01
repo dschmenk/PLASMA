@@ -129,7 +129,7 @@ BADCPU  !TEXT   "65C802/65C816 CPU REQUIRED.", 13
 
 ;*
 ;* INITIALIZE STACK
-;*      
+;*
 INITSP  LDX     #$FE
         TXS
         LDX     #$00
@@ -246,7 +246,7 @@ VMCORE  =        *
 OPTBL   !WORD   ZERO,ADD,SUB,MUL,DIV,MOD,INCR,DECR              ; 00 02 04 06 08 0A 0C 0E
         !WORD   NEG,COMP,BAND,IOR,XOR,SHL,SHR,IDXW              ; 10 12 14 16 18 1A 1C 1E
         !WORD   LNOT,LOR,LAND,LA,LLA,CB,CW,CS                   ; 20 22 24 26 28 2A 2C 2E
-        !WORD   DROP,DUP,PUSHEP,PULLEP,BRGT,BRLT,BREQ,BRNE      ; 30 32 34 36 38 3A 3C 3E
+        !WORD   DROP,DUP,NEXTOP,NEXTOP,BRGT,BRLT,BREQ,BRNE      ; 30 32 34 36 38 3A 3C 3E
         !WORD   ISEQ,ISNE,ISGT,ISLT,ISGE,ISLE,BRFLS,BRTRU       ; 40 42 44 46 48 4A 4C 4E
         !WORD   BRNCH,IBRNCH,CALL,ICAL,ENTER,LEAVE,RET,CFFB     ; 50 52 54 56 58 5A 5C 5E
         !WORD   LB,LW,LLB,LLW,LAB,LAW,DLB,DLW                   ; 60 62 64 66 68 6A 6C 6E
@@ -510,7 +510,7 @@ LCDEFCMD =      *-28            ; DEFCMD IN LC MEMORY
 OPXTBL  !WORD   ZERO,ADD,SUB,MUL,DIV,MOD,INCR,DECR              ; 00 02 04 06 08 0A 0C 0E
         !WORD   NEG,COMP,BAND,IOR,XOR,SHL,SHR,IDXW              ; 10 12 14 16 18 1A 1C 1E
         !WORD   LNOT,LOR,LAND,LA,LLA,CB,CW,CSX                  ; 20 22 24 26 28 2A 2C 2E
-        !WORD   DROP,DUP,PUSHEP,PULLEP,BRGT,BRLT,BREQ,BRNE      ; 30 32 34 36 38 3A 3C 3E
+        !WORD   DROP,DUP,NEXTOP,NEXTOP,BRGT,BRLT,BREQ,BRNE      ; 30 32 34 36 38 3A 3C 3E
         !WORD   ISEQ,ISNE,ISGT,ISLT,ISGE,ISLE,BRFLS,BRTRU       ; 40 42 44 46 48 4A 4C 4E
         !WORD   BRNCH,IBRNCH,CALLX,ICALX,ENTER,LEAVEX,RETX,CFFB ; 50 52 54 56 58 5A 5C 5E
         !WORD   LBX,LWX,LLBX,LLWX,LABX,LAWX,DLB,DLW             ; 60 62 64 66 68 6A 6C 6E
@@ -727,55 +727,6 @@ LOR1    JMP     NEXTOP
 ;*
 DUP     LDA     TOS,S
         PHA
-        JMP     NEXTOP
-;*
-;* PRIVATE EP STASH
-;*
-EPSAVE  !BYTE   $01             ; INDEX INTO STASH ARRAY (16 SHOULD BE ENOUGH)
-        !WORD   $0000, $0000, $0000, $0000, $0000, $0000, $0000, $0000
-        !WORD   $0000, $0000, $0000, $0000, $0000, $0000, $0000, $0000
-;*
-;* PUSH EVAL STACK POINTER TO PRIVATE STASH
-;*
-PUSHEP  LDX     LCRWEN+LCBNK2   ; RWEN LC MEM
-        LDX     LCRWEN+LCBNK2
-        LDX     EPSAVE
-        TSC
-        STA     EPSAVE,X
-        INX
-        INX
-!IF     DEBUG {
-        CPX     #33
-        BCC     +
-        LDX     #$80+'>'
-        STX     $7D0+30
--       BRA     -
-        LDX     #$32
-+
-}
-        STX     EPSAVE
-        LDX     LCRDEN+LCBNK2   ; REN LC MEM
-        JMP     NEXTOP
-;*
-;* PULL EVAL STACK POINTER FROM PRIVATE STASH
-;*
-PULLEP  LDX     LCRWEN+LCBNK2   ; RWEN LC MEM
-        LDX     LCRWEN+LCBNK2
-        LDX     EPSAVE
-        DEX
-        DEX
-!IF     DEBUG {
-        BPL     +
-        LDX     #$80+'<'
-        STX     $7D0+30
--       BRA     -
-        LDX     #$00
-+
-}
-        LDA     EPSAVE,X
-        TCS
-        STX     EPSAVE
-        LDX     LCRDEN+LCBNK2   ; REN LC MEM
         JMP     NEXTOP
 ;*
 ;* CONSTANT

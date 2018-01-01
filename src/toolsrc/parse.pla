@@ -218,7 +218,7 @@ end
 def parse_list#2
     byte listdepth, stackdepth
     word listseq
-    
+
     listseq   = NULL
     listdepth = 0
     repeat
@@ -564,16 +564,16 @@ def parse_set(codeseq)
     fin
     rseq, rparms = parse_list(NULL)
     if lparms > rparms; exit_err("Set value list underflow"); fin
-    if lparms <> rparms and rparms - lparms <> 1
-        codeseq = gen_pushexp(codeseq)
-    fin
     codeseq = cat_seq(codeseq, rseq)
-    for i = lparms - 1 downto 0
+    if lparms < rparms
+        parse_warn("Silently dropping extra set values")
+        for i = rparms - lparms downto 1
+            codeseq = gen_drop(codeseq)
+        next
+    fin
+    for i = lparms downto 1
         codeseq = cat_seq(codeseq, setseq[i])
     next
-    if lparms <> rparms
-        codeseq = rparms - lparms == 1 ?? gen_drop(codeseq) :: gen_pullexp(codeseq)
-    fin
     return codeseq
 end
 def parse_stmnt
@@ -875,12 +875,10 @@ def parse_stmnt
                         seq, drop = parse_value(NULL, LVALUE)
                         emit_seq(seq)
                     elsif token <> SET_TKN
-                        if cfnvals > 1
-                            seq = cat_seq(gen_pushexp(NULL), seq)
-                            seq = cat_seq(seq, gen_pullexp(NULL)
-                        elsif cfnvals == 1
+                        while cfnvals > 1
                             seq = cat_seq(seg, gen_drop(NULL))
-                        fin
+                            cfnvals--
+                        loop
                         emit_seq(seq)
                     else
                         exit_err("Invalid LVALUE")

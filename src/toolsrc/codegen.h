@@ -59,8 +59,6 @@ typedef struct _opseq {
 #define INDEXW_CODE 0x0317
 #define DROP_CODE   0x0318
 #define DUP_CODE    0x0319
-#define PUSH_EXP_CODE 0x031A
-#define PULL_EXP_CODE 0x031B
 #define BRNCH_CODE  0x031C
 #define BRFALSE_CODE 0x031D
 #define BRTRUE_CODE 0x031E
@@ -80,8 +78,6 @@ typedef struct _opseq {
 #define gen_sb(seq)         gen_seq(seq,SB_CODE,0,0,0,0)
 #define gen_sw(seq)         gen_seq(seq,SW_CODE,0,0,0,0)
 #define gen_icall(seq)      gen_seq(seq,ICAL_CODE,0,0,0,0)
-#define gen_pushexp(seq)    gen_seq(seq,PUSH_EXP_CODE,0,0,0,0)
-#define gen_pullexp(seq)    gen_seq(seq,PULL_EXP_CODE,0,0,0,0)
 #define gen_drop(seq)       gen_seq(seq,DROP_CODE,0,0,0,0)
 #define gen_brfls(seq,tag)  gen_seq(seq,BRFALSE_CODE,0,tag,0,0)
 #define gen_brtru(seq,tag)  gen_seq(seq,BRTRUE_CODE,0,tag,0,0)
@@ -137,8 +133,6 @@ void emit_brlt(int tag);
 void emit_brne(int tag);
 void emit_brnch(int tag);
 void emit_empty(void);
-void emit_push_exp(void);
-void emit_pull_exp(void);
 void emit_drop(void);
 void emit_dup(void);
 void emit_leave(void);

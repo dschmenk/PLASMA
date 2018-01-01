@@ -761,18 +761,15 @@ t_opseq *parse_set(t_opseq *codeseq)
     rseq = parse_list(NULL, &rparms);
     if (lparms > rparms)
         parse_error("Set value list underflow");
-    if ((lparms != rparms) && (rparms - lparms != 1))
-        codeseq = gen_pushexp(codeseq);
     codeseq = cat_seq(codeseq, rseq);
+    if (lparms < rparms)
+    {
+        parse_warn("Silently dropping extra rvalues");
+        for (i = rparms - lparms; i > 0; i--)
+            codeseq = gen_drop(codeseq);
+    }
     for (i = lparms - 1; i >= 0; i--)
         codeseq = cat_seq(codeseq, setseq[i]);
-    if (lparms != rparms)
-    {
-        if (rparms - lparms == 1)
-            codeseq = gen_drop(codeseq);
-        else
-            codeseq = gen_pullexp(codeseq);
-    }
     return (codeseq);
 }
 int parse_stmnt(void)
@@ -1077,13 +1074,11 @@ int parse_stmnt(void)
                     }
                     else if (scantoken != SET_TOKEN)
                     {
-                        if (stackdepth > 1)
+                        while (stackdepth)
                         {
-                            rseq = cat_seq(gen_pushexp(NULL), rseq);
-                            rseq = cat_seq(rseq, gen_pullexp(NULL));
-                        }
-                        else if (stackdepth == 1)
                             rseq = cat_seq(rseq, gen_drop(NULL));
+                            stackdepth--;
+                        }
                         emit_seq(rseq);
                     }
                     else

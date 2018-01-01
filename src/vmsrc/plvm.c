@@ -658,12 +658,9 @@ void interp(code *ip)
                 val = TOS;
                 PUSH(val);
                 break;
-            case 0x34: // PUSH : TOSP = TOS
-                val = esp - eval_stack;
-                PHA(val);
+            case 0x34: // NOP
                 break;
-            case 0x36: // PULL : TOS = TOSP
-                esp = eval_stack + PLA;
+            case 0x36: // NOP
                 break;
             case 0x38: // BRGT : TOS-1 > TOS ? IP += (IP)
                 val = POP;

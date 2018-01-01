@@ -814,14 +814,6 @@ void emit_start(void)
     outflags |= INIT;
     defs++;
 }
-void emit_push_exp(void)
-{
-    printf("\t%s\t$34\t\t\t; PUSH EXP\n", DB);
-}
-void emit_pull_exp(void)
-{
-    printf("\t%s\t$36\t\t\t; PULL EXP\n", DB);
-}
 void emit_drop(void)
 {
     emit_pending_seq();
@@ -1648,13 +1640,6 @@ int emit_pending_seq()
                 break;
             case DUP_CODE:
                 emit_dup();
-                break;
-                break;
-            case PUSH_EXP_CODE:
-                emit_push_exp();
-                break;
-            case PULL_EXP_CODE:
-                emit_pull_exp();
                 break;
             case BRNCH_CODE:
                 emit_brnch(op->tag);
