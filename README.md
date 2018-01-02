@@ -1304,8 +1304,8 @@ The compact code representation comes through the use of opcodes closely matched
 | $2E    | CS     | constant string
 | $30    | DROP   | drop top stack value
 | $32    | DUP    | duplicate top stack value
-| $34    | PUSHEP | push eval stack pointer call stack
-| $36    | PULLEP | pull eval stack pointer from call stack
+| $34    | NOP    |
+| $36    | NOP    |
 | $38    | BRGT   | branch next from top greater than top
 | $3A    | BRLT   | branch next from top less than top
 | $3C    | BREQ   | branch next from top equal to top
