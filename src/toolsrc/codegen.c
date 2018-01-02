@@ -750,6 +750,7 @@ void emit_brnch(int tag)
 }
 void emit_breq(int tag)
 {
+    emit_pending_seq();
     printf("\t%s\t$3C\t\t\t; BREQ\t_B%03d\n", DB, tag);
     printf("\t%s\t_B%03d-*\n", DW, tag);
 }

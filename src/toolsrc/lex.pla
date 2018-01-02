@@ -124,7 +124,7 @@ def scan
                             constval = ^scanptr
                     wend
                 fin
-                if ^(scanptr + 1) <> '\''; exit_err(@bad_cnst); fin
+                if ^(scanptr + 1) <> '\''; exit_err(ERR_INVAL|ERR_CONST); fin
                 scanptr = scanptr + 2
                 break
             is '"'
@@ -155,7 +155,7 @@ def scan
                     strconst++
                     scanptr++
                 loop
-                if !^scanptr; exit_err(@bad_cnst); fin
+                if !^scanptr; exit_err(ERR_INVAL|ERR_CONST); fin
                 constval = @strconst
                 scanptr++
                 break
@@ -228,7 +228,7 @@ def scan
                     scanptr++
                 fin
                 break
-            is ':
+            is ':'
                 if ^(scanptr + 1) == ':'
                     token = TRIELSE_TKN;
                     scanptr = scanptr + 2
@@ -290,18 +290,18 @@ def nextln
     else
         if token <> EOL_TKN or token <> EOF_TKN; exit_err("Extraneous characters"); fin
         scanptr = inbuff
-        instr = fileio:read(refnum, inbuff, 127)
+        ^instr = fileio:read(refnum, inbuff, 127)
         if instr
             ^(inbuff + instr + 1) = 0 // NULL terminate string
             lineno++
             if !(lineno & $0F); putc('.'); fin
             if scan == INCLUDE_TKN
                 if incref; exit_err("Nested INCLUDEs not allowed"); fin
-                if scan <> STRING_TKN; exit_err("Missing INCLUDE file"); fin
+                if scan <> STR_TKN; exit_err("Missing INCLUDE file"); fin
                 incfile = scanptr - constval
                 memcpy(@incfile + 1, constval, incfile)
-                sysincbuf = heapallocalign(1024, 256)
-                incref = fileio:opensys(@incfile, sysincbuf)
+                sysincbuf = heapallocalign(1024, 8, @sysincfre)
+                incref = fileio:openbuf(@incfile, sysincbuf)
                 if not incref; exit_err("Unable to open INCLUDE file"); fin
                 fileio:newline(incref, $7F, $0D)
                 refnum    = incref
@@ -312,8 +312,8 @@ def nextln
             fin
         else
             if refnum == incref
-                fileio:close(incnum)
-                heaprelease(sysincbuf)
+                fileio:close(incref)
+                heaprelease(sysincfre)
                 incref    = 0
                 refnum    = srcref
                 parsefile = srcfile
