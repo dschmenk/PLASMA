@@ -196,11 +196,11 @@ byte                    = 10
                                  // Lowest precedence
 byte[16] opstack
 byte[16] precstack
-word opsp = 0
+word opsp
 word[16] valstack
 byte[16] sizestack
 byte[16] typestack
-word valsp = 0
+word valsp
 //
 // Constant code group
 //
@@ -333,22 +333,22 @@ byte outflags
 // ProDOS/SOS file references
 //
 byte refnum, srcref, incref
-byte[32] srcfile
-byte[32] incfile
-byte[32] relfile
+byte[32] srcfile, incfile, relfile
 word parsefile            // Pointer to current file
 word sysincbuf, sysincfre // System I/O buffer for include files
 word srcline              // Saved source line number
 //
 // Scanner variables
 //
-const inbuff            = $0200
-const instr             = $01FF
-word  scanptr           = inbuff
-byte  scanchr, token, tknlen
+//const inbuff            = $0200
+//const instr             = $01FF
+//word  scanptr           = inbuff
+byte  token             = EOL_TKN
+word instr, inbuff, scanptr
+byte  scanchr, tknlen
 word  tknptr, parserrln
 word  constval
-word  lineno = 0
+word  lineno
 //
 // Parser variables
 //
@@ -369,9 +369,9 @@ word[LAMBDANUM] lambda_seq
 word[LAMBDANUM] lambda_tag
 predef parse_constexpr#3, parse_expr(codeseq)#2, parse_lambda
 //
-// Arg pointer - overlay setjmp pointer
+// Arg pointer
 //
-word[] arg
+word arg, opt
 //
 // Long jump environment
 //
@@ -418,13 +418,9 @@ def nametostr(namestr, len, strptr)#0
     memcpy(strptr + 1, namestr, len)
 end
 def putcurln#0
-    puts(parsefile); putc('['); puti(lineno); puts("] ")
-end
-def putmrkr#0
     byte i
-
-    putln
-    puts(instr)
+    putln; puts(parsefile); putc('['); puti(lineno); puts("]\n")
+    puts(instr); putln
     for i = tknptr - inbuff downto 1
         putc(' ')
     next
@@ -436,8 +432,7 @@ end
 def exit_err(err)#0
     byte i
 
-    putcurln
-    puts("Error:")
+    puts("\nError:")
     if err & ERR_DUP;    puts("duplicate ");  fin
     if err & ERR_UNDECL; puts("undeclared "); fin
     if err & ERR_INVAL;  puts("invalid ");    fin
@@ -447,14 +442,14 @@ def exit_err(err)#0
     if err & ERR_LOCAL;  puts("local ");      fin
     if err & ERR_GLOBAL; puts("global ");     fin
     if err & ERR_CODE;   puts("code ");       fin
-    if err & ERR_ID;     puts("identifier ");  fin
+    if err & ERR_ID;     puts("identifier "); fin
     if err & ERR_CONST;  puts("constant");    fin
     if err & ERR_INIT;   puts("initializer"); fin
     if err & ERR_STATE;  puts("statement");   fin
-    if err * ERR_FRAME;  puts("frame");      fin
+    if err & ERR_FRAME;  puts("frame");       fin
     if err & ERR_TABLE;  puts("table");       fin
     if err & ERR_SYNTAX; puts("syntax");      fin
-    putmrkr
+    putcurln
     fileio:close(0) // Close all open files
     longjmp(exit, TRUE)
 end
@@ -463,10 +458,9 @@ end
 //
 def parse_warn(msg)#0
     if outflags & WARNINGS
-        putcurln
-        puts("Warning:")
+        puts("\nWarning:")
         puts(msg)
-        putmrkr
+        putcurln
     fin
 end
 //
@@ -480,19 +474,21 @@ include "toolsrc/parse.pla"
 //
 arg = argNext(argFirst)
 if ^arg and ^(arg + 1) == '-'
-    arg = arg + 2
+    opt = arg + 2
     while TRUE
-        if toupper(^arg) == 'O'
+        if toupper(^opt) == 'O'
             outflags = outflags | OPTIMIZE
-            arg++
-            if ^arg == '2'
+            opt++
+            if ^opt == '2'
                 outflags = outflags | OPTIMIZE2
-                arg++
+                opt++
             fin
-        elsif toupper(^arg) == 'N'
+        elsif toupper(^opt) == 'N'
             outflags = outflags | NO_COMBINE
-        elsif toupper(^arg) == 'W'
+            opt++
+        elsif toupper(^opt) == 'W'
             outflags = outflags | WARNINGS
+            opt++
         else
             break
         fin
@@ -512,7 +508,11 @@ if srcfile and relfile
         fileio:newline(srcref, $7F, $0D)
         refnum    = srcref
         parsefile = @srcfile
-        exit = heapalloc(t_longjmp)
+        instr     = heapalloc(128)
+        *instr    = 0
+        inbuff    = instr + 1
+        scanptr   = inbuff
+        exit      = heapalloc(t_longjmp)
         if not setjmp(exit)
             //
             // Parse source code module
@@ -537,6 +537,6 @@ if srcfile and relfile
         puts("Error opening: "); puts(@srcfile); putln
     fin
 else
-    puts("Usage: +PLASM [-[W][O[2]][N]] <srcfile> <relfile>\n")
+    puts("Usage: +PLASM [-[W][O[2]][N]] <src> <rel>\n")
 fin
 done

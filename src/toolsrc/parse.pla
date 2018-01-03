@@ -13,16 +13,10 @@ def pop_op
     return opstack[opsp]
 end
 def tos_op
-    if opsp < 0
-        return 0
-    fin
-    return opstack[opsp]
+    return opsp < 0 ?? 0 :: opstack[opsp-1]
 end
 def tos_op_prec(tos)
-    if opsp < tos
-        return 100
-    fin
-    return precstack[opsp]
+    return opsp <= tos ?? 100 :: precstack[opsp-1]
 end
 def push_val(value, size, type)#0
     if valsp == 16; exit_err(ERR_OVER|ERR_CODE|ERR_FRAME); fin
@@ -277,14 +271,14 @@ def parse_value(codeseq, rvalue)#2
     when token
         is ID_TKN
             idptr = id_lookup(tknptr, tknlen)
-            if !idptr; return NULL, 0; fin
-            if !(idptr=>idtype); return NULL, 0; fin
+            if not idptr; return NULL, 0; fin
+            if not idptr=>idtype; return NULL, 0; fin
             type  = type | idptr=>idtype
             value = idptr=>idval
             if type & CONST_TYPE
                 valseq = gen_const(NULL, value)
             else
-                valseq = type & LOCAL_TYPE ?? gen_oplcl(NULL, LADDR_CODE, value) :: gen_opglbl(NULL, GADDR_CODE, value, type)
+                valseq = type & LOCAL_TYPE ?? gen_oplcl(NULL, LADDR_CODE, value) :: gen_opglbl(NULL, GADDR_CODE, value, 0)
             fin
             if type & FUNC_TYPE
                 cfnparms = idptr->funcparms
@@ -858,6 +852,7 @@ def parse_stmnt
         is END_TKN
         is DONE_TKN
         is DEF_TKN
+        is EOF_TKN
             return FALSE
         otherwise
             rewind(tknptr)
@@ -1165,14 +1160,10 @@ def parse_defs
         fin
         emit_ctag(func_tag)
         retfunc_tag = ctag_new
-        while parse_vars(LOCAL_TYPE)
-            nextln
-        loop
+        while parse_vars(LOCAL_TYPE); nextln; loop
         emit_enter(cfnparms)
         prevstmnt = 0
-        while parse_stmnt
-            nextln
-        loop
+        while parse_stmnt; nextln; loop
         infunc = FALSE
         if token <> END_TKN; exit_err(ERR_MISS|ERR_CLOSE|ERR_STATE); fin
         scan
@@ -1198,8 +1189,9 @@ def parse_module#0
         //
         // Compile module
         //
+        while parse_mods;              nextln; loop
         while parse_vars(GLOBAL_TYPE); nextln; loop
-        while parse_defs; nextln; loop
+        while parse_defs;              nextln; loop
         entrypoint = codeptr
         prevstmnt  = 0
         idlocal_init
@@ -1211,6 +1203,7 @@ def parse_module#0
             emit_const(0)
             emit_leave
         fin
+        if token <> DONE_TKN; parse_warn("Missing DONE\n"); fin
         //dumpsym(idglobal_tbl, globals)
     fin
 end
