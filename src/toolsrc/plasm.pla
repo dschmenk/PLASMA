@@ -202,96 +202,13 @@ byte[16] sizestack
 byte[16] typestack
 word valsp
 //
-// Constant code group
+// Code sequence shared with optimizer
 //
-const CONST_GROUP       = $00
-const CONST_CODE        = $2C
-const CONSTR_GROUP      = $01
-const CONSTR_CODE       = $2E
+include "toolsrc/codeseq.plh"
 //
-// Stack code group
-//
-const STACK_GROUP       = $02
-const INDEXB_CODE       = $02
-const ADD_CODE          = $02
-const SUB_CODE          = $04
-const MUL_CODE          = $06
-const DIV_CODE          = $08
-const MOD_CODE          = $0A
-const INC_CODE          = $0C
-const DEC_CODE          = $0E
-const NEG_CODE          = $10
-const COMP_CODE         = $12
-const AND_CODE          = $14
-const OR_CODE           = $16
-const EOR_CODE          = $18
-const SHL_CODE          = $1A
-const SHR_CODE          = $1C
-const INDEXW_CODE       = $1E
-const LOGIC_NOT_CODE    = $20
-const LOGIC_OR_CODE     = $22
-const LOGIC_AND_CODE    = $24
-const DROP_CODE         = $30
-const DUP_CODE          = $32
-const EQ_CODE           = $40
-const NE_CODE           = $42
-const GT_CODE           = $44
-const LT_CODE           = $46
-const GE_CODE           = $48
-const LE_CODE           = $4A
-const ICAL_CODE         = $56
-const RET_CODE          = $5C
-const LB_CODE           = $60
-const BPTR_CODE         = $60
-const LW_CODE           = $62
-const WPTR_CODE         = $62
-const SB_CODE           = $70
-const SW_CODE           = $72
-//
-// Local address code group
-//
-const LOCAL_GROUP       = $03
-const LADDR_CODE        = $28
-const LLB_CODE          = $64
-const LLW_CODE          = $66
-const DLB_CODE          = $6C
-const DLW_CODE          = $6E
-const SLB_CODE          = $74
-const SLW_CODE          = $76
-//
-// Global address code group
-//
-const GLOBAL_GROUP      = $04
-const GADDR_CODE        = $26
-const LAB_CODE          = $68
-const LAW_CODE          = $6A
-const SAB_CODE          = $78
-const SAW_CODE          = $7A
-const DAB_CODE          = $7C
-const DAW_CODE          = $7E
-const CALL_CODE         = $54
-//
-// Relative address code group
-//
-const RELATIVE_GROUP    = $05
-const BRFALSE_CODE      = $4C
-const BRTRUE_CODE       = $4E
-const BRNCH_CODE        = $50
-//
-// Code tag address group
-//
-const CODETAG_GROUP     = $06
 //
 // Symbol table variables
 //
-struc t_opseq
-    byte opcode
-    byte opgroup
-    word opval[]
-    word optag
-    word opoffset
-    word opnext
-end
 struc t_id
     word idval
     word idtype
@@ -312,7 +229,7 @@ const IDGLOBALSZ        = 2048
 const IDLOCALSZ         = 512
 word codetag            = -1
 word idglobal_tbl, idlocal_tbl, ctag_tbl
-word freeop_lst, pending_seq
+word pending_seq
 word globals, lastglobal, lastlocal, savelast
 word codebufsz, datasize, framesize, savesize
 byte locals, savelocals
@@ -321,6 +238,11 @@ word modsysflags
 byte[16] moddep_tbl[8]
 byte moddep_cnt
 predef emit_pending_seq#0
+//
+// Exports for optimizer module
+//
+export word freeop_lst
+export word optimize_seq
 //
 // Compiler flags
 //
@@ -467,6 +389,8 @@ end
 // Include code to reduce size of this file
 //
 include "toolsrc/codegen.pla"
+//include "toolsrc/codeopt.pla"
+//include "toolsrc/writerel.pla"
 include "toolsrc/lex.pla"
 include "toolsrc/parse.pla"
 //
@@ -474,10 +398,17 @@ include "toolsrc/parse.pla"
 //
 arg = argNext(argFirst)
 if ^arg and ^(arg + 1) == '-'
-    opt = arg + 2
+    opt          = arg + 2
     while TRUE
         if toupper(^opt) == 'O'
-            outflags = outflags | OPTIMIZE
+            //
+            // Load optimizer module here
+            //
+            if modexec("CODEOPT") >= 0
+                outflags = outflags | OPTIMIZE
+            else
+                puts("\nOptimizer disabled\n")
+            fin
             opt++
             if ^opt == '2'
                 outflags = outflags | OPTIMIZE2
@@ -519,7 +450,7 @@ if srcfile and relfile
             //
             parse_module
             fileio:close(srcref)
-            puts("Bytes compiled: "); puti(codeptr - codebuff); putln
+            puts("\nBytes compiled: "); puti(codeptr - codebuff); putln
             //
             // Write REL file
             //
@@ -530,13 +461,13 @@ if srcfile and relfile
                 //writerel(srcref)
                 fileio:close(srcref)
             else
-                puts("Error opening: "); puts(@relfile); putln
+                puts("\nError opening: "); puts(@relfile); putln
             fin
         fin
     else
-        puts("Error opening: "); puts(@srcfile); putln
+        puts("\nError opening: "); puts(@srcfile); putln
     fin
 else
-    puts("Usage: +PLASM [-[W][O[2]][N]] <src> <rel>\n")
+    puts("Usage:+PLASM [-[W][O[2]][N]] <src> <rel>\n")
 fin
 done
