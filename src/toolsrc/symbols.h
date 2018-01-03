@@ -20,6 +20,7 @@
 #define EXPORT_TYPE     (1 << 12)
 #define PREDEF_TYPE     (1 << 13)
 #define FUNC_TYPE       (ASM_TYPE | DEF_TYPE | PREDEF_TYPE)
+#define ACCESSED_TYPE   (1 << 15)
 #define FUNC_PARMS      (0x0F << 16)
 #define FUNC_VALS       (0x0F << 20)
 #define FUNC_PARMVALS   (FUNC_PARMS|FUNC_VALS)
@@ -44,5 +45,6 @@ int idconst_add(char *name, int len, int value);
 int id_tag(char *name, int len);
 int id_const(char *name, int len);
 int id_type(char *name, int len);
+int id_access(char *name, int len);
 void idglobal_size(int type, int size, int constsize);
 int tag_new(int type);

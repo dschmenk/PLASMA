@@ -414,6 +414,8 @@ t_opseq *parse_value(t_opseq *codeseq, int rvalue, int *stackdepth)
         {
             cfnparms = funcparms_cnt(type);
             cfnvals  = funcvals_cnt(type);
+            if (type & EXTERN_TYPE)
+                id_access(tokenstr, tokenlen);
         }
     }
     else if (scantoken == LAMBDA_TOKEN)

@@ -256,6 +256,17 @@ int id_type(char *name, int len)
     parse_error("Undeclared identifier");
     return (0);
 }
+int id_access(char *name, int len)
+{
+    int i;
+    if ((i = idglobal_lookup(name, len)) >= 0)
+    {
+        idglobal_type[i] |= ACCESSED_TYPE;
+        return (idglobal_type[i]);
+    }
+    parse_error("Undeclared external function");
+    return (0);
+}
 int tag_new(int type)
 {
     if (type & EXTERN_TYPE)
@@ -409,13 +420,13 @@ void emit_esd(void)
     printf(";\n; EXTERNAL/ENTRY SYMBOL DICTIONARY\n;\n");
     for (i = 0; i < globals; i++)
     {
-        if (idglobal_type[i] & EXTERN_TYPE)
+        if (idglobal_type[i] & ACCESSED_TYPE) // Only refer to accessed externals
         {
             emit_dci(&idglobal_name[i][1], idglobal_name[i][0]);
             printf("\t%s\t$10\t\t\t; EXTERNAL SYMBOL FLAG\n", DB);
             printf("\t%s\t%d\t\t\t; ESD INDEX\n", DW, idglobal_tag[i]);
         }
-        else if  (idglobal_type[i] & EXPORT_TYPE)
+        else if (idglobal_type[i] & EXPORT_TYPE)
         {
             emit_dci(&idglobal_name[i][1], idglobal_name[i][0]);
             printf("\t%s\t$08\t\t\t; ENTRY SYMBOL FLAG\n", DB);
