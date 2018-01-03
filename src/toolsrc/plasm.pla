@@ -262,11 +262,10 @@ word srcline              // Saved source line number
 //
 // Scanner variables
 //
-//const inbuff            = $0200
-//const instr             = $01FF
-//word  scanptr           = inbuff
+const inbuff            = $0200
+const instr             = $01FF
+word  scanptr           = inbuff
 byte  token             = EOL_TKN
-word instr, inbuff, scanptr
 byte  scanchr, tknlen
 word  tknptr, parserrln
 word  constval
@@ -389,8 +388,6 @@ end
 // Include code to reduce size of this file
 //
 include "toolsrc/codegen.pla"
-//include "toolsrc/codeopt.pla"
-//include "toolsrc/writerel.pla"
 include "toolsrc/lex.pla"
 include "toolsrc/parse.pla"
 //
@@ -429,8 +426,23 @@ fin
 if arg
     strcpy(@srcfile, arg)
     arg = argNext(arg)
-    if arg
+    if arg and ^arg
         strcpy(@relfile, arg)
+    else
+        strcpy(@relfile, @srcfile)
+        //
+        // Strip trailing extension
+        //
+        while relfile and relfile[relfile] <> '.'
+            relfile--
+        loop
+        if relfile; relfile--; fin // Strip '.'
+        if not relfile
+            //
+            // Copy default name over
+            //
+            strcpy(@relfile, "A.OUT")
+        fin
     fin
 fin
 if srcfile and relfile
@@ -439,9 +451,7 @@ if srcfile and relfile
         fileio:newline(srcref, $7F, $0D)
         refnum    = srcref
         parsefile = @srcfile
-        instr     = heapalloc(128)
         *instr    = 0
-        inbuff    = instr + 1
         scanptr   = inbuff
         exit      = heapalloc(t_longjmp)
         if not setjmp(exit)
@@ -458,7 +468,7 @@ if srcfile and relfile
             fileio:create(@relfile, $FE, $1000) // full access, REL file
             srcref = fileio:open(@relfile)
             if srcref
-                //writerel(srcref)
+                writemodule(srcref)
                 fileio:close(srcref)
             else
                 puts("\nError opening: "); puts(@relfile); putln
@@ -468,6 +478,6 @@ if srcfile and relfile
         puts("\nError opening: "); puts(@srcfile); putln
     fin
 else
-    puts("Usage:+PLASM [-[W][O[2]][N]] <src> <rel>\n")
+    puts("Usage:+PLASM [-[W][O[2]][N]] <src> [out]\n")
 fin
 done
