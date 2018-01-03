@@ -415,7 +415,6 @@ def id_lookup(nameptr, len)
     idptr = idmatch(nameptr, len, idlocal_tbl, locals)
     if not idptr
         idptr = idmatch(nameptr, len, idglobal_tbl, globals)
-//        if not idptr; exit_err(ERR_UNDECL|ERR_ID); fin
     fin
     return idptr
 end
@@ -423,11 +422,7 @@ def idglobal_lookup(nameptr, len)
     word idptr
 
     idptr = idmatch(nameptr, len, idglobal_tbl, globals)
-//    if not idptr; exit_err(ERR_UNDECL|ERR_ID); fin
     return idptr
-end
-def emit_iddata(value, size, namestr)#0
-    emit_fill(size)
 end
 def iddata_add(namestr, len, type, size)#0
     if idmatch(namestr, len, idglobal_tbl, globals); exit_err(ERR_DUP|ERR_ID); fin
@@ -464,6 +459,7 @@ def idconst_add(namestr, len, value)#0
 end
 def idfunc_add(namestr, len, type, tag, cfnparms, cfnvals)#0
     idglobal_add(namestr, len, type|FUNC_TYPE, tag, cfnparms, cfnvals)
+    def_cnt++
 end
 def idfunc_set(namestr, len, tag, cparms, cvals)#0
     word idptr
@@ -760,18 +756,151 @@ def gen_bop(tkn, seq)
     return seq
 end
 //
-// Write REL file
+// A DCI string is one that has the high bit set for every character except the last.
+// More efficient than C or Pascal strings.
+//
+def dcitos(dci, str)
+    byte len, c
+    len = 0
+    repeat
+        c = ^(dci + len)
+        len++
+        ^(str + len) = c & $7F
+    until not c & $80
+    ^str = len
+    return len
+end
+def stodci(str, dci)
+    byte len, c
+    len = ^str
+    if not len; return 0; fin
+    c = toupper(^(str + len)) & $7F
+    len--
+    ^(dci + len) = c
+    while len
+      c = toupper(^(str + len)) | $80
+      len--
+      ^(dci + len) = c
+    loop
+    return ^str
+end
+//
+// Write Extended REL header
+//
+def writeheader(refnum)#0
+    word moddep
+    byte header[128]
+
+    moddep = @header:12 // Beginning of module dependency list
+    while moddep_cnt
+        moddep_cnt--
+        moddep = moddep + stodci(@moddep_tbl[moddep_cnt*16], moddep)
+    loop
+    ^moddep = 0 // Terminate dependency list
+    moddep++
+    header:0  = moddep - @header + codeptr - codebuff // sizeof header+data+bytecode
+    header:2  = $DA7F                                 // Magic #
+    header:4  = modsysflags                           // Module SYSFLAGS
+    header:6  = datasize + MODADDR                    // Byte code offset
+    header:8  = def_cnt                               // DEFinition count
+    header:10 = entrypoint - codebuff + MODADDR       // Init entrypoint
+    fileio:write(refnum, @header, moddep - @header)
+end
+//
+// Write DeFinition Directory
+//
+def writeDFD(refnum)#0
+    word dirptr, idptr, idcnt
+    byte defdir[128]
+
+    dirptr, idptr, idcnt = @defdir, idglobal_tbl, globals
+    while idcnt
+        if idptr=>idtype & FUNC_TYPE and not idptr=>idtype & EXTERN_TYPE
+            dirptr->0 = $02
+            dirptr=>1 = (ctag_tbl=>[idptr=>idval] & MASK_CTAG) + MODADDR
+            dirptr = dirptr + 4
+        fin
+        idptr = idptr + idptr->idname + t_id
+        idcnt--
+    loop
+    fileio:write(refnum, @defdir, dirptr - @defdir)
+end
+//
+// Build External Symbol Directory on heap
+//
+def buildESD#2
+    byte symnum
+    word dirptr, idptr, idcnt, dirlen
+
+    symnum, dirptr, idptr, idcnt = 0, heapmark, idglobal_tbl, globals
+    while idcnt
+        if idptr=>idtype & EXPORT_TYPE
+            dirptr    = dirptr + stodci(idptr=>idname, dirptr)
+            dirptr->0 = $08
+            dirptr=>1 = (ctag_tbl[idptr=>idval] & MASK_CTAG) + MODADDR
+            dirptr    = dirptr + 3
+        elsif idptr=>idtype & EXTERN_TYPE
+            dirptr        = dirptr + stodci(idptr=>idname, dirptr)
+            dirptr->0     = $10
+            dirptr->1     = symnum
+            dirptr        = dirptr + 3
+            idptr->extnum = symnum
+            symnum++
+        fin
+        idptr = idptr + idptr->idname + t_id
+        idcnt--
+    loop
+    ^dirptr = 0
+    dirlen  = dirptr - heapmark + 1
+    dirptr  = heapalloc(dirlen)
+    return dirptr, dirlen
+end
+//
+// Write ReLocation Directory
+//
+def writeRLD(refnum)#0
+    word rld, i
+
+    rld = heapmark
+    for i = 0 to fixup_cnt
+        if i & $7F == $40 // Write out blocks of entries
+            fileio:write(refnum, heapmark, rld - heapmark)
+            rld = heapmark
+        fin
+        rld->0 = $01
+        rld = rld + 4
+    next
+    ^rld = 0
+    fileio:write(refnum, heapmark, rld - heapmark + 1)
+end
+//
+// Write Extended REL file
 //
 def writemodule(refnum)#0
+    word esd, esdlen
     //
-    // Build module header
+    // Write module header
     //
-    
+    writeheader(refnum)
     //
     // Write data/code buffer
     //
-    
+    fileio:write(refnum, codebuff, codeptr - codebuff)
+    //
+    // Write bytecode definition directory
+    //
+    writeDFD(refnum)
+    //
+    // Build EXERN/ENTRY directory
+    //
+    esd, esdlen = buildESD
     //
     // Write relocation directory
     //
+    writeRLD(refnum)
+    //
+    // Write EXTERN/EBTRY directory
+    //
+    fileio:write(refnum, esd, esdlen)
+    heaprelease(esd)
 end
