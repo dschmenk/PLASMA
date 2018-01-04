@@ -73,7 +73,11 @@ int idglobal_lookup(char *name, int len)
     int i;
     for (i = 0; i < globals; i++)
         if (id_match(name, len, &(idglobal_name[i][0])))
+        {
+            if (idglobal_type[i] & EXTERN_TYPE)
+                idglobal_type[i] |= ACCESSED_TYPE;
             return (i);
+        }
     return (-1);
 }
 int idconst_add(char *name, int len, int value)
@@ -254,17 +258,6 @@ int id_type(char *name, int len)
     if ((i = idglobal_lookup(name, len)) >= 0)
         return (idglobal_type[i]);
     parse_error("Undeclared identifier");
-    return (0);
-}
-int id_access(char *name, int len)
-{
-    int i;
-    if ((i = idglobal_lookup(name, len)) >= 0)
-    {
-        idglobal_type[i] |= ACCESSED_TYPE;
-        return (idglobal_type[i]);
-    }
-    parse_error("Undeclared external function");
     return (0);
 }
 int tag_new(int type)
