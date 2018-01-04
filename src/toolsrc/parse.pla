@@ -93,7 +93,7 @@ def parse_constterm
 end
 def parse_constval
     byte mod, size
-    word type, idptr, ctag, value
+    word type, idptr, value
 
     mod = 0
     while not parse_constterm
@@ -133,9 +133,9 @@ def parse_constval
             break
         is ID_TKN
             size  = 2
-            idptr = id_lookup(tknptr, tknlen)
-            type = idptr=>idtype
-            if type & ADDR_TYPE
+            idptr = lookup_id(tknptr, tknlen)
+            type  = idptr=>idtype
+            if type & (FUNC_TYPE|ADDR_TYPE)
                 if mod <> 8; exit_err(ERR_INVAL|ERR_CONST); fin
                 type = CONSTADDR_TYPE
             fin
@@ -196,7 +196,7 @@ def parse_const(valptr)
             *valptr = constval
             break
         is ID_TKN
-            idptr = id_lookup(tknptr, tknlen)
+            idptr = lookup_id(tknptr, tknlen)
             if idptr=>idtype & CONST_TYPE
                 *valptr = idptr=>idval
                 break
@@ -270,7 +270,7 @@ def parse_value(codeseq, rvalue)#2
     //
     when token
         is ID_TKN
-            idptr = id_lookup(tknptr, tknlen)
+            idptr = lookup_id(tknptr, tknlen)
             if not idptr; return NULL, 0; fin
             if not idptr=>idtype; return NULL, 0; fin
             type  = type | idptr=>idtype
@@ -512,8 +512,8 @@ def parse_expr(codeseq)#2
     //
     if token == TERNARY_TKN
         if stackdepth <> 1; exit_err(ERR_OVER|ERR_SYNTAX); fin
-        tag_else            = ctag_new
-        tag_endtri          = ctag_new
+        tag_else            = new_tag(RELATIVE_FIXUP)
+        tag_endtri          = new_tag(RELATIVE_FIXUP)
         codeseq             = gen_oprel(codeseq, BRFALSE_CODE, tag_else)
         codeseq, stkdepth1  = parse_expr(codeseq)
         if token <> TRIELSE_TKN; exit_err(ERR_MISS|ERR_SYNTAX); fin
@@ -586,8 +586,8 @@ def parse_stmnt
                 parse_warn("Expression value overflow")
                 while cfnvals > 1; cfnvals--; seq = gen_op(seq, DROP_CODE); loop
             fin
-            tag_else  = ctag_new
-            tag_endif = ctag_new
+            tag_else  = new_tag(RELATIVE_FIXUP)
+            tag_endif = new_tag(RELATIVE_FIXUP)
             seq = gen_oprel(seq, BRFALSE_CODE, tag_else)
             emit_seq(seq)
             repeat
@@ -598,39 +598,39 @@ def parse_stmnt
                     break
                 fin
                 emit_branch(tag_endif)
-                emit_ctag(tag_else)
+                emit_tag(tag_else)
                 seq, cfnvals = parse_expr(NULL)
                 if !seq; exit_err(ERR_INVAL|ERR_STATE); fin
                 if cfnvals > 1
                     parse_warn("Expression value overflow")
                     while cfnvals > 1; cfnvals--; seq = gen_op(seq, DROP_CODE); loop
                 fin
-                tag_else = ctag_new
+                tag_else = new_tag(RELATIVE_FIXUP)
                 seq = gen_oprel(seq, BRFALSE_CODE, tag_else)
                 emit_seq(seq)
             until FALSE
             if token == ELSE_TKN
                 emit_branch(tag_endif)
-                emit_ctag(tag_else)
+                emit_tag(tag_else)
                 scan
                 while parse_stmnt
                     nextln
                 loop
-                emit_ctag(tag_endif)
+                emit_tag(tag_endif)
             else
-                emit_ctag(tag_else)
-                emit_ctag(tag_endif)
+                emit_tag(tag_else)
+                emit_tag(tag_endif)
             fin
             if token <> FIN_TKN; exit_err(ERR_MISS|ERR_CLOSE|ERR_STATE); fin
             break
         is WHILE_TKN
-            tag_while   = ctag_new
-            tag_wend    = ctag_new
+            tag_while   = new_tag(RELATIVE_FIXUP)
+            tag_wend    = new_tag(RELATIVE_FIXUP)
             tag_prevcnt = cont_tag
             cont_tag    = tag_while
             tag_prevbrk = break_tag
             break_tag   = tag_wend
-            emit_ctag(tag_while)
+            emit_tag(tag_while)
             seq, cfnvals = parse_expr(NULL)
             if !seq; exit_err(ERR_INVAL|ERR_STATE); fin
             if cfnvals > 1
@@ -644,23 +644,23 @@ def parse_stmnt
             loop
             if token <> LOOP_TKN; exit_err(ERR_MISS|ERR_CLOSE|ERR_STATE); fin
             emit_branch(tag_while)
-            emit_ctag(tag_wend)
+            emit_tag(tag_wend)
             break_tag = tag_prevbrk
             cont_tag  = tag_prevcnt
             break
         is REPEAT_TKN
-            tag_repeat  = ctag_new
+            tag_repeat  = new_tag(RELATIVE_FIXUP)
             tag_prevbrk = break_tag
-            break_tag   = ctag_new
+            break_tag   = new_tag(RELATIVE_FIXUP)
             tag_prevcnt = cont_tag
-            cont_tag    = ctag_new
-            emit_ctag(tag_repeat)
+            cont_tag    = new_tag(RELATIVE_FIXUP)
+            emit_tag(tag_repeat)
             scan
             while parse_stmnt
                 nextln
             loop
             if token <> UNTIL_TKN; exit_err(ERR_MISS|ERR_CLOSE|ERR_STATE); fin
-            emit_ctag(cont_tag)
+            emit_tag(cont_tag)
             cont_tag = tag_prevcnt
             seq, cfnvals = parse_expr(NULL)
             if !seq; exit_err(ERR_INVAL|ERR_STATE); fin
@@ -670,18 +670,18 @@ def parse_stmnt
             fin
             seq = gen_oprel(seq, BRFALSE_CODE, tag_repeat)
             emit_seq(seq)
-            emit_ctag(break_tag)
+            emit_tag(break_tag)
             break_tag = tag_prevbrk
             break
         is FOR_TKN
             stack_loop++
-            tag_for     = ctag_new
+            tag_for     = new_tag(RELATIVE_FIXUP)
             tag_prevcnt = cont_tag
             cont_tag    = tag_for
             tag_prevbrk = break_tag
-            break_tag   = ctag_new
+            break_tag   = new_tag(RELATIVE_FIXUP)
             if scan <> ID_TKN; exit_err(ERR_MISS|ERR_ID); fin
-            idptr = id_lookup(tknptr, tknlen)
+            idptr = lookup_id(tknptr, tknlen)
             if idptr
                 type  = idptr=>idtype
                 addr  = idptr=>idval
@@ -695,7 +695,7 @@ def parse_stmnt
                 parse_warn("Expression value overflow")
                 while cfnvals > 1;cfnvals--; seq = gen_op(seq, DROP_CODE); loop
             fin
-            emit_ctag(tag_for)
+            emit_tag(tag_for)
             if type & LOCAL_TYPE
                 if type & BYTE_TYPE; emit_dlb(addr); else; emit_dlw(addr); fin
             else
@@ -733,7 +733,7 @@ def parse_stmnt
             if token <> NEXT_TKN; exit_err(ERR_MISS|ERR_CLOSE|ERR_STATE); fin
             emit_branch(tag_for)
             cont_tag = tag_prevcnt
-            emit_ctag(break_tag)
+            emit_tag(break_tag)
             emit_byte(DROP_CODE)
             break_tag = tag_prevbrk
             stack_loop--
@@ -741,9 +741,9 @@ def parse_stmnt
         is CASE_TKN
             stack_loop++
             tag_prevbrk = break_tag
-            break_tag   = ctag_new
-            tag_choice  = ctag_new
-            tag_of      = ctag_new
+            break_tag   = new_tag(RELATIVE_FIXUP)
+            tag_choice  = new_tag(RELATIVE_FIXUP)
+            tag_of      = new_tag(RELATIVE_FIXUP)
             seq, cfnvals = parse_expr(NULL)
             if !seq; exit_err(ERR_INVAL|ERR_STATE); fin
             if cfnvals > 1
@@ -761,19 +761,19 @@ def parse_stmnt
                             while cfnvals > 1;cfnvals--; seq = gen_op(seq, DROP_CODE); loop
                         fin
                         emit_brne(tag_choice)
-                        emit_ctag(tag_of)
+                        emit_tag(tag_of)
                         while parse_stmnt
                             nextln
                         loop
-                        tag_of = ctag_new
+                        tag_of = new_tag(RELATIVE_FIXUP)
                         if prevstmnt <> BREAK_TKN // Fall through to next OF if no break
                             emit_branch(tag_of)
                         fin
-                        emit_ctag(tag_choice)
-                        tag_choice = ctag_new
+                        emit_tag(tag_choice)
+                        tag_choice = new_tag(RELATIVE_FIXUP)
                         break
                     is DEFAULT_TKN
-                        emit_ctag(tag_of)
+                        emit_tag(tag_of)
                         tag_of = 0
                         scan
                         while parse_stmnt
@@ -789,9 +789,9 @@ def parse_stmnt
                 wend
             loop
             if (tag_of)
-                emit_ctag(tag_of)
+                emit_tag(tag_of)
             fin
-            emit_ctag(break_tag)
+            emit_tag(break_tag)
             emit_byte(DROP_CODE)
             break_tag = tag_prevbrk
             stack_loop--
@@ -904,7 +904,7 @@ def parse_var(type, basesize)#0
     if token == SET_TKN
         if type & (EXTERN_TYPE|LOCAL_TYPE); exit_err(ERR_INVAL|ERR_LOCAL|ERR_INIT); fin
         if idlen
-            iddata_add(idptr, idlen, type, 0)
+            add_iddata(idptr, idlen, type, 0)
         fin
         constval, constsize, consttype = parse_constexpr
         arraysize = emit_data(type, consttype, constval, constsize)
@@ -912,12 +912,12 @@ def parse_var(type, basesize)#0
             constval, constsize, consttype = parse_constexpr
             arraysize = arraysize + emit_data(type, consttype, constval, constsize)
         loop
-        iddata_size(PTR_TYPE, size, arraysize)
+        size_iddata(PTR_TYPE, size, arraysize)
     elsif idlen
         if infunc
-            idlocal_add(idptr, idlen, type, size)
+            add_idlocal(idptr, idlen, type, size)
         else
-            iddata_add(idptr, idlen, type, size)
+            add_iddata(idptr, idlen, type, size)
         fin
     fin
 end
@@ -961,14 +961,14 @@ def parse_struc#0
                     size = size * 2
                 fin
                 if idlen
-                    idconst_add(idstr, idlen, offset)
+                    add_idconst(idstr, idlen, offset)
                 fin
                 offset = offset + size
             until token <> COMMA_TKN
         fin
     loop
     if struclen
-        idconst_add(@strucid, struclen, offset)
+        add_idconst(@strucid, struclen, offset)
     fin
     if token <> END_TKN; exit_err(ERR_MISS|ERR_CLOSE|ERR_STATE); fin
     scan
@@ -988,7 +988,7 @@ def parse_vars(type)
             idlen = tknlen
             if scan <> SET_TKN; exit_err(ERR_INVAL|ERR_CONST); fin
             value, size, type = parse_constexpr
-            idconst_add(idptr, idlen, value)
+            add_idconst(idptr, idlen, value)
             break
         is STRUC_TKN
             parse_struc
@@ -1038,7 +1038,7 @@ def parse_vars(type)
                         if not parse_const(@cfnvals); exit_err(ERR_INVAL|ERR_CONST); fin
                         scan
                     fin
-                    idfunc_add(idptr, idlen, type, ctag_new, cfnparms, cfnvals)
+                    add_idfunc(idptr, idlen, type, new_tag(type & EXTERN_TYPE ?? EXTERN_FIXUP|WORD_FIXUP :: WORD_FIXUP), cfnparms, cfnvals)
                 else
                     exit_err(ERR_MISS|ERR_ID)
                 fin
@@ -1054,7 +1054,7 @@ end
 def parse_mods
     if token == IMPORT_TKN
         if scan <> ID_TKN; exit_err(ERR_MISS|ERR_ID); fin
-        moddep_add(tknptr, tknlen)
+        add_moddep(tknptr, tknlen)
         scan
         while parse_vars(EXTERN_TYPE); nextln; loop
         if token <> END_TKN; exit_err(ERR_MISS|ERR_CLOSE|ERR_STATE); fin
@@ -1067,7 +1067,7 @@ def parse_lambda
     byte cfnparms
 
     if not infunc; exit_err(ERR_INVAL|ERR_STATE); fin
-    idlocal_save
+    save_idlocal
     //
     // Parse parameters and return value count
     //
@@ -1076,7 +1076,7 @@ def parse_lambda
         repeat
             if scan == ID_TKN
                 cfnparms++
-                idlocal_add(tknptr, tknlen, WORD_TYPE, 2)
+                add_idlocal(tknptr, tknlen, WORD_TYPE, 2)
                 scan
             fin
         until token <> COMMA_TKN
@@ -1098,24 +1098,24 @@ def parse_lambda
     strcpy(@lambda_id[lambda_cnt * 8], "_LAMB__")
     lambda_id[lambda_cnt * 8 + 6] = (lambda_num >> 3) & $07 + '0'
     lambda_id[lambda_cnt * 8 + 7] =  lambda_num       & $07 + '0'
-    if idglobal_lookup(@lambda_id[lambda_cnt * 8], 7) >= 0
+    if lookup_idglobal(@lambda_id[lambda_cnt * 8], 7) >= 0
         //
         // Lambda ID already exists (from failed scanning for '=')
         //
         func_tag = lambda_tag[lambda_cnt]
-        idfunc_set(@lambda_id[lambda_cnt * 8 + 1], 7, func_tag, cfnparms, 1) // Override any predef type & tag
+        set_idfunc(@lambda_id[lambda_cnt * 8 + 1], 7, func_tag, cfnparms, 1) // Override any predef type & tag
     else
         //
         // Creat new Lambda ID
         //
-        func_tag                  = ctag_new
+        func_tag                  = new_tag(WORD_FIXUP)
         lambda_tag[lambda_cnt]    = func_tag
         lambda_cparms[lambda_cnt] = cfnparms
-        idfunc_add(@lambda_id[lambda_cnt * 8 + 1], 7, FUNC_TYPE, func_tag, cfnparms, 1)
+        add_idfunc(@lambda_id[lambda_cnt * 8 + 1], 7, FUNC_TYPE, func_tag, cfnparms, 1)
     fin
     lambda_cnt++
     if lambda_cnt >= LAMBDANUM; parse_warn("Lambda function overflow"); fin
-    idlocal_restore
+    restore_idlocal
     return func_tag
 end
 def parse_defs
@@ -1135,12 +1135,12 @@ def parse_defs
         infunc     = TRUE
         idstr      = tknptr
         idlen      = tknlen
-        idlocal_init
+        init_idlocal
         if scan == OPEN_PAREN_TKN
             repeat
                 if scan == ID_TKN
                     cfnparms++
-                    idlocal_add(tknptr, tknlen, WORD_TYPE, 2)
+                    add_idlocal(tknptr, tknlen, WORD_TYPE, 2)
                     scan
                 fin
             until token <> COMMA_TKN
@@ -1151,17 +1151,17 @@ def parse_defs
             if not parse_const(@infuncvals); exit_err(ERR_INVAL|ERR_CONST); fin
             scan
         fin
-        idptr = idglobal_lookup(idstr, idlen)
+        idptr = lookup_idglobal(idstr, idlen)
         if idptr
             if not idptr=>idtype & PREDEF_TYPE; exit_err(ERR_DUP|ERR_ID); fin
             if idptr->funcparms <> cfnparms or idptr->funcvals <> infuncvals; exit_err(ERR_DUP|ERR_CODE|ERR_ID); fin
             func_tag = idptr=>idval
+            idptr=>idtype = idptr=>idtype | type
         else
-            func_tag = ctag_new
-            idfunc_add(idstr, idlen, type, func_tag, cfnparms, infuncvals)
+            func_tag = new_tag(WORD_FIXUP)
+            add_idfunc(idstr, idlen, type, func_tag, cfnparms, infuncvals)
         fin
-        emit_ctag(func_tag)
-        retfunc_tag = ctag_new
+        emit_tag(func_tag)
         while parse_vars(LOCAL_TYPE); nextln; loop
         emit_enter(cfnparms)
         prevstmnt = 0
@@ -1185,8 +1185,8 @@ def parse_defs
     return token == EOL_TKN ?? TRUE :: FALSE
 end
 def parse_module#0
-    idglobal_init
-    idlocal_init
+    init_idglobal
+    init_idlocal
     if nextln
         //
         // Compile module
@@ -1196,7 +1196,7 @@ def parse_module#0
         while parse_defs;              nextln; loop
         entrypoint = codeptr
         prevstmnt  = 0
-        idlocal_init
+        init_idlocal
         emit_enter(0)
         if token <> DONE_TKN
             while parse_stmnt; nextln; loop

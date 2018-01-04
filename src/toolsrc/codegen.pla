@@ -24,6 +24,16 @@
 //    loop
 //end
 //
+// Address tags
+//
+def new_tag(type)
+    tag_cnt++
+    if tag_cnt >= TAGNUM; exit_err(ERR_OVER|ERR_CODE|ERR_TABLE); fin
+    tag_addr=>[tag_cnt] = 0 // Unresolved, nothing to update yet
+    tag_type->[tag_cnt] = type
+    return tag_cnt
+end
+//
 // New/release sequence ops
 //
 def new_op
@@ -86,46 +96,29 @@ def emit_fill(size)#0
     codeptr = codeptr + size
     if codeptr - codebuff > codebufsz; exit_err(ERR_OVER|ERR_CODE|ERR_TABLE); fin
 end
-def emit_addr(tag)#0
-    word updtptr
-
-    if tag & IS_CTAG
-        tag = tag & MASK_CTAG
-        if ctag_tbl=>[tag] & IS_RESOLVED
-            updtptr = (ctag_tbl=>[tag] & MASK_CTAG) + codebuff
-        else
-            //
-            // Add to list of tags needing resolution
-            //
-            updtptr = ctag_tbl=>[tag] & MASK_CTAG
-            ctag_tbl=>[tag] = codeptr - codebuff
-        fin
-        emit_word(updtptr)
-    else
-        emit_word(tag + codebuff)
-    fin
+def emit_addr(tag, offset)#0
+    fixup_tag=>[fixup_cnt]  = tag
+    fixup_addr=>[fixup_cnt] = codeptr
+    fixup_cnt++
+    if fixup_cnt >= FIXUPNUM; exit_err(ERR_OVER|ERR_ID|ERR_TABLE); fin
+    emit_word(offset + tag_addr=>[tag])
 end
 def emit_reladdr(tag)#0
     word updtptr
 
-    if tag & IS_CTAG
-        tag = tag & MASK_CTAG
-        if ctag_tbl=>[tag] & IS_RESOLVED
-            updtptr = ((ctag_tbl=>[tag] & MASK_CTAG) + codebuff) - codeptr
-        else
-            //
-            // Add to list of tags needing resolution
-            //
-            updtptr = ctag_tbl=>[tag] | IS_RELATIVE
-            ctag_tbl=>[tag] = codeptr - codebuff
-        fin
-        emit_word(updtptr)
+    if tag_type->[tag] & RESOLVED_FIXUP
+        updtptr = codeptr - tag_addr=>[tag]
     else
-        emit_word(tag - (codeptr - codebuff))
+        //
+        // Add to list of tags needing resolution
+        //
+        updtptr         = tag_addr=>[tag]
+        tag_addr=>[tag] = codeptr
     fin
+    emit_word(updtptr)
 end
 def emit_data(vartype, consttype, constval, constsize)
-    byte i
+    byte type
     word size, chrptr
 
     if consttype == 0
@@ -141,17 +134,16 @@ def emit_data(vartype, consttype, constval, constsize)
             chrptr++
             constsize--
         loop
+    elsif consttype == CONSTADDR_TYPE
+        size = 2
+        emit_addr(constval, 0)
     else
         if vartype & BYTE_TYPE
             size = 1
             emit_byte(constval)
         else
             size = 2
-        if consttype == CONSTADDR_TYPE
-            emit_addr(constval)
-        else
             emit_word(constval)
-        fin
         fin
     fin
     return size
@@ -183,21 +175,13 @@ def emit_dlw(offset)#0
 end
 def emit_dab(tag, offset)#0
     emit_pending_seq
-    if tag & IS_CTAG and offset
-        exit_err(ERR_INVAL|ERR_CODE|ERR_CONST)
-    else
-        emit_byte($7C)
-        emit_addr(tag+offset)
-    fin
+    emit_byte($7C)
+    emit_addr(tag, offset)
 end
 def emit_daw(tag, offset)#0
     emit_pending_seq
-    if tag & IS_CTAG and offset
-        exit_err(ERR_INVAL|ERR_CODE|ERR_CONST)
-    else
-        emit_byte($7E)
-        emit_addr(tag+offset)
-    fin
+    emit_byte($7E)
+    emit_addr(tag, offset)
 end
 def emit_brgt(tag)#0
     emit_pending_seq
@@ -234,27 +218,31 @@ def emit_enter(cparms)#0
         emit_byte(cparms)
     fin
 end
-def emit_ctag(ctag)#0
-    word updtptr, nextptr
+def emit_tag(tag)#0
+    word fixups, updtptr, nextptr
 
     emit_pending_seq
-    ctag = ctag & MASK_CTAG // Better be a ctag!
-    if ctag_tbl=>[ctag] & IS_RESOLVED;exit_err(ERR_DUP|ERR_ID); fin
-    updtptr = ctag_tbl=>[ctag] & MASK_CTAG
-    while updtptr
-        //
-        // Update list of addresses needing resolution
-        //
-        updtptr = updtptr + codebuff
-        nextptr = *updtptr & MASK_CTAG
-        if *updtptr & IS_RELATIVE
+    if tag_type->[tag] & RESOLVED_FIXUP; exit_err(ERR_DUP|ERR_ID); fin // DEBUG
+    //
+    // Update list of addresses needing resolution
+    //
+    if tag_type->[tag] & RELATIVE_FIXUP
+        updtptr = tag_addr=>[tag]
+        while updtptr
+            nextptr  = *updtptr
             *updtptr = codeptr - updtptr
-        else
-            *updtptr = codeptr
-        fin
-        updtptr = nextptr
-    loop
-    ctag_tbl=>[ctag] = (codeptr - codebuff) | IS_RESOLVED
+            updtptr  = nextptr
+        loop
+    else
+        for fixups = fixup_cnt-1 downto 0
+            if fixup_tag->[fixups] == tag
+                updtptr = fixup_addr=>[fixups]
+                *updtptr = *updtptr + codeptr
+            fin
+        next
+    fin
+    tag_addr=>[tag] = codeptr
+    tag_type->[tag] = tag_type->[tag] | RESOLVED_FIXUP
 end
 //
 // Emit the pending sequence
@@ -323,12 +311,8 @@ def emit_pending_seq#0
             // Global address codes
             //
             is GLOBAL_GROUP
-                if op=>optag & IS_CTAG and op=>opoffset
-                    exit_err(ERR_INVAL|ERR_CODE|ERR_CONST)
-                else
-                    emit_byte(op->opcode)
-                    emit_addr(op=>optag+op=>opoffset)
-                fin
+                emit_byte(op->opcode)
+                emit_addr(op=>optag, op=>opoffset)
                 break
             //
             // Relative address codes
@@ -341,7 +325,7 @@ def emit_pending_seq#0
             // Code tags
             //
             is CODETAG_GROUP
-                emit_ctag(op=>optag)
+                emit_tag(op=>optag)
                 break
             otherwise
                 return
@@ -363,7 +347,7 @@ def emit_seq(seq)#0
     string = FALSE
     op = seq
     while op
-        if op->opgroup == CONSTR_GROUP; string = TRUE; break; fin
+        if op->opcode == CONSTR_CODE; string = TRUE; break; fin
         op = op=>opnext
     loop
     pending_seq = cat_seq(pending_seq, seq)
@@ -384,7 +368,7 @@ end
 // Emit lambda function
 //
 def emit_lambdafunc(tag, cparms, lambda_seq)#0
-    emit_ctag(tag)
+    emit_tag(tag)
     framesize = cparms * 2
     emit_enter(cparms)
     emit_seq(lambda_seq)
@@ -409,7 +393,7 @@ def idmatch(nameptr, len, idptr, idcnt)
     loop
     return NULL
 end
-def id_lookup(nameptr, len)
+def lookup_id(nameptr, len)
     word idptr
 
     idptr = idmatch(nameptr, len, idlocal_tbl, locals)
@@ -417,24 +401,24 @@ def id_lookup(nameptr, len)
         idptr = idmatch(nameptr, len, idglobal_tbl, globals)
         if idptr
             if idptr=>idtype & EXTERN_TYPE
-                idptr=>idtype = idptr=>idtype | ACCESSED_TYPE
+                idptr=>idtype = idptr=>idtype | EXTACCESS_TYPE
             fin
         fin
     fin
     return idptr
 end
-def idglobal_lookup(nameptr, len)
+def lookup_idglobal(nameptr, len)
     word idptr
 
     idptr = idmatch(nameptr, len, idglobal_tbl, globals)
     if idptr
         if idptr=>idtype & EXTERN_TYPE
-            idptr=>idtype = idptr=>idtype | ACCESSED_TYPE
+            idptr=>idtype = idptr=>idtype | EXTACCESS_TYPE
         fin
     fin
     return idptr
 end
-def iddata_add(namestr, len, type, size)#0
+def add_iddata(namestr, len, type, size)#0
     if idmatch(namestr, len, idglobal_tbl, globals); exit_err(ERR_DUP|ERR_ID); fin
     lastglobal=>idval  = datasize
     lastglobal=>idtype = type
@@ -445,7 +429,7 @@ def iddata_add(namestr, len, type, size)#0
     if lastglobal - idglobal_tbl >  IDGLOBALSZ; exit_err(ERR_OVER|ERR_GLOBAL|ERR_ID|ERR_TABLE); fin
     datasize = datasize + size
 end
-def iddata_size(type, varsize, initsize)#0
+def size_iddata(type, varsize, initsize)#0
     if varsize > initsize
         datasize = datasize + varsize
         emit_data(0, 0, 0, varsize - initsize)
@@ -453,7 +437,7 @@ def iddata_size(type, varsize, initsize)#0
         datasize = datasize + initsize
     fin
 end
-def idglobal_add(namestr, len, type, value, cparms, cvals)#0
+def add_idglobal(namestr, len, type, value, cparms, cvals)#0
     if idmatch(namestr, len, idglobal_tbl, globals); exit_err(ERR_DUP|ERR_ID); fin
     lastglobal=>idval     = value
     lastglobal=>idtype    = type
@@ -464,17 +448,17 @@ def idglobal_add(namestr, len, type, value, cparms, cvals)#0
     lastglobal = lastglobal + t_id + len
     if lastglobal - idglobal_tbl > IDGLOBALSZ; exit_err(ERR_OVER|ERR_GLOBAL|ERR_ID|ERR_TABLE); fin
 end
-def idconst_add(namestr, len, value)#0
-    idglobal_add(namestr, len, CONST_TYPE, value, 0, 0)
+def add_idconst(namestr, len, value)#0
+    add_idglobal(namestr, len, CONST_TYPE, value, 0, 0)
 end
-def idfunc_add(namestr, len, type, tag, cfnparms, cfnvals)#0
-    idglobal_add(namestr, len, type|FUNC_TYPE, tag, cfnparms, cfnvals)
+def add_idfunc(namestr, len, type, tag, cfnparms, cfnvals)#0
+    add_idglobal(namestr, len, type|FUNC_TYPE, tag, cfnparms, cfnvals)
     def_cnt++
 end
-def idfunc_set(namestr, len, tag, cparms, cvals)#0
+def set_idfunc(namestr, len, tag, cparms, cvals)#0
     word idptr
 
-    idptr = idglobal_lookup(namestr, len)
+    idptr = lookup_idglobal(namestr, len)
     if idptr
         if not idptr=>idtype & FUNC_TYPE; exit_err(ERR_UNDECL|ERR_CODE); fin
         idptr=>idval     = tag
@@ -484,11 +468,14 @@ def idfunc_set(namestr, len, tag, cparms, cvals)#0
         exit_err(ERR_UNDECL|ERR_ID)
     fin
 end
-def idglobal_init#0
-    word op, codebuffsz
+def init_idglobal#0
+    word op
     byte i
 
-    ctag_tbl     = heapalloc(CTAGNUM*2)
+    tag_addr     = heapalloc(TAGNUM*2)
+    tag_type     = heapalloc(TAGNUM)
+    fixup_tag    = heapalloc(FIXUPNUM*2)
+    fixup_addr   = heapalloc(FIXUPNUM*2)
     idglobal_tbl = heapalloc(IDGLOBALSZ)
     idlocal_tbl  = heapalloc(IDLOCALSZ)
     codebufsz    = heapavail - 4096
@@ -506,7 +493,7 @@ def idglobal_init#0
     next
     op=>opnext = NULL
 end
-def idlocal_add(namestr, len, type, size)#0
+def add_idlocal(namestr, len, type, size)#0
     if idmatch(namestr, len, @idlocal_tbl, locals); exit_err(ERR_DUP|ERR_ID); fin
     lastlocal=>idval  = framesize
     lastlocal=>idtype = type | LOCAL_TYPE
@@ -517,18 +504,18 @@ def idlocal_add(namestr, len, type, size)#0
     framesize = framesize + size
     if framesize > 255; exit_err(ERR_OVER|ERR_LOCAL|ERR_FRAME); fin
 end
-def idlocal_init#0
+def init_idlocal#0
     locals    = 0
     framesize = 0
     lastlocal = idlocal_tbl
 end
-def idlocal_save#0
+def save_idlocal#0
     savelocals = locals
     savesize   = framesize
     savelast   = lastlocal
-    idlocal_init
+    init_idlocal
 end
-def idlocal_restore#0
+def restore_idlocal#0
     locals    = savelocals
     framesize = savesize
     lastlocal = savelast
@@ -536,28 +523,12 @@ end
 //
 // Module dependency list
 //
-def moddep_add(strptr, strlen)#0
+def add_moddep(strptr, strlen)#0
     if strlen > 15; strlen = 15; fin
     memcpy(@moddep_tbl[moddep_cnt*16] + 1, strptr, strlen)
     moddep_tbl[moddep_cnt*16] = strlen
     moddep_cnt++
     if moddep_cnt > 8; parse_warn("Module dependency overflow"); fin
-end
-//
-// Code tags. Upper bit is IS_RESOLVED flag, lower 15 is offset into codebuff
-//
-def ctag_new
-    codetag++
-    if codetag >= CTAGNUM; exit_err(ERR_OVER|ERR_CODE|ERR_TABLE); fin
-    ctag_tbl=>[codetag] = 0 // Unresolved, nothing to update yet
-    return codetag | IS_CTAG
-end
-def fixup_new(tag, type, size)#0
-    fixup_tag->[fixup_cnt]  = tag
-    fixup_type->[fixup_cnt] = type
-    fixup_size->[fixup_cnt] = size
-    fixup_cnt++
-    if fixup_cnt >= FIXUPNUM; exit_err(ERR_OVER|ERR_ID|ERR_TABLE); fin
 end
 //
 // Generate/add to a sequence of code
@@ -567,7 +538,7 @@ def gen_op(seq, code)
 
     if not seq
         seq = new_op
-        op = seq
+        op  = seq
     else
         op = seq
         while op=>opnext; op = op=>opnext; loop
@@ -583,7 +554,7 @@ def gen_const(seq, cval)
 
     if not seq
         seq = new_op
-        op = seq
+        op  = seq
     else
         op = seq
         while op=>opnext; op = op=>opnext; loop
@@ -600,7 +571,7 @@ def gen_str(seq, cval)
 
     if not seq
         seq = new_op
-        op = seq
+        op  = seq
     else
         op = seq
         while op=>opnext; op = op=>opnext; loop
@@ -617,15 +588,15 @@ def gen_oplcl(seq, code, offsz)
 
     if not seq
         seq = new_op
-        op = seq
+        op  = seq
     else
         op = seq
         while op=>opnext; op = op=>opnext; loop
         op=>opnext = new_op
         op = op=>opnext
     fin
-    op->opcode  = code
-    op->opgroup = LOCAL_GROUP
+    op->opcode   = code
+    op->opgroup  = LOCAL_GROUP
     op=>opoffset = offsz
     return seq
 end
@@ -634,16 +605,16 @@ def gen_opglbl(seq, code, tag, offsz)
 
     if not seq
         seq = new_op
-        op = seq
+        op  = seq
     else
         op = seq
         while op=>opnext; op = op=>opnext; loop
         op=>opnext = new_op
         op = op=>opnext
     fin
-    op->opcode  = code
-    op->opgroup = GLOBAL_GROUP
-    op=>optag   = tag
+    op->opcode   = code
+    op->opgroup  = GLOBAL_GROUP
+    op=>optag    = tag
     op=>opoffset = offsz
     return seq
 end
@@ -652,7 +623,7 @@ def gen_oprel(seq, code, tag)
 
     if not seq
         seq = new_op
-        op = seq
+        op  = seq
     else
         op = seq
         while op=>opnext; op = op=>opnext; loop
@@ -669,7 +640,7 @@ def gen_ctag(seq, tag)
 
     if not seq
         seq = new_op
-        op = seq
+        op  = seq
     else
         op = seq
         while op=>opnext; op = op=>opnext; loop
@@ -677,7 +648,7 @@ def gen_ctag(seq, tag)
         op = op=>opnext
     fin
     op->opgroup = CODETAG_GROUP
-    op=>optag   = IS_CTAG | tag
+    op=>optag   = tag
     return seq
 end
 def gen_uop(tkn, seq)
@@ -686,7 +657,7 @@ def gen_uop(tkn, seq)
 
     if not seq
         seq = new_op
-        op = seq
+        op  = seq
     else
         op = seq
         while op=>opnext; op = op=>opnext; loop
@@ -804,29 +775,31 @@ end
 //
 // Write Extended REL header
 //
-def writeheader(refnum)#0
-    word moddep
-    byte header[128]
+def writeheader(refnum)
+    word moddep, modfix
+    byte len, header[128]
 
     moddep = @header:12 // Beginning of module dependency list
     while moddep_cnt
         moddep_cnt--
         moddep = moddep + stodci(@moddep_tbl[moddep_cnt*16], moddep)
     loop
-    ^moddep = 0 // Terminate dependency list
-    moddep++
-    header:0  = moddep - @header + codeptr - codebuff // sizeof header+data+bytecode
-    header:2  = $DA7F                                 // Magic #
-    header:4  = modsysflags                           // Module SYSFLAGS
-    header:6  = datasize + MODADDR                    // Byte code offset
-    header:8  = def_cnt                               // DEFinition count
-    header:10 = entrypoint - codebuff + MODADDR       // Init entrypoint
-    fileio:write(refnum, @header, moddep - @header)
+    ^moddep   = 0                        // Terminate dependency list
+    len       = moddep + 1 - @header
+    modfix    = len + MODADDR - codebuff
+    header:0  = len + codeptr - codebuff // sizeof header+data+bytecode
+    header:2  = $DA7F                    // Magic #
+    header:4  = modsysflags              // Module SYSFLAGS
+    header:6  = len + datasize           // Byte code offset
+    header:8  = def_cnt                  // DEFinition count
+    header:10 = entrypoint + modfix      // Init entrypoint
+    fileio:write(refnum, @header, len)
+    return modfix
 end
 //
 // Write DeFinition Directory
 //
-def writeDFD(refnum)#0
+def writeDFD(refnum, modfix)#0
     word dirptr, idptr, idcnt
     byte defdir[128]
 
@@ -834,7 +807,7 @@ def writeDFD(refnum)#0
     while idcnt
         if idptr=>idtype & FUNC_TYPE and not idptr=>idtype & EXTERN_TYPE
             dirptr->0 = $02
-            dirptr=>1 = (ctag_tbl=>[idptr=>idval] & MASK_CTAG) + MODADDR
+            dirptr=>1 = tag_addr=>[idptr=>idval] + modfix
             dirptr = dirptr + 4
         fin
         idptr = idptr + idptr->idname + t_id
@@ -845,7 +818,7 @@ end
 //
 // Build External Symbol Directory on heap
 //
-def buildESD#2
+def buildESD(modfix)#2
     byte symnum
     word dirptr, idptr, idcnt, dirlen
 
@@ -854,9 +827,9 @@ def buildESD#2
         if idptr=>idtype & EXPORT_TYPE
             dirptr    = dirptr + stodci(idptr=>idname, dirptr)
             dirptr->0 = $08
-            dirptr=>1 = (ctag_tbl[idptr=>idval] & MASK_CTAG) + MODADDR
+            dirptr=>1 = tag_addr=>[idptr=>idval] + modfix
             dirptr    = dirptr + 3
-        elsif idptr=>idtype & (EXTERN_TYPE|ACCESSED_TYPE) == EXTERN_TYPE|ACCESSED_TYPE
+        elsif idptr=>idtype & EXTACCESS_TYPE
             dirptr        = dirptr + stodci(idptr=>idname, dirptr)
             dirptr->0     = $10
             dirptr->1     = symnum
@@ -875,16 +848,31 @@ end
 //
 // Write ReLocation Directory
 //
-def writeRLD(refnum)#0
-    word rld, i
+def writeRLD(refnum, modfix)#0
+    word rld, fixups, updtptr, idptr, idcnt
+    byte tag
 
     rld = heapmark
-    for i = 0 to fixup_cnt
-        if i & $7F == $40 // Write out blocks of entries
+    for fixups = fixup_cnt-1 downto 0
+        if fixups & $7F == $40 // Write out blocks of entries
             fileio:write(refnum, heapmark, rld - heapmark)
             rld = heapmark
         fin
-        rld->0 = $01
+        tag = fixup_tag->[fixups]
+        if tag_type->[tag] & EXTERN_FIXUP
+            idptr = idglobal_tbl
+            for idcnt = globals-1 downto 0
+                if idptr=>idtype & EXPORT_TYPE and idptr=>idval == tag
+                    rld->3 = idptr->extnum
+                    break
+                fin
+            next
+        else
+            updtptr  = fixup_addr=>[fixups]
+            *updtptr = *updtptr + modfix
+        fin
+        rld->0 = $01 | (tag & MASK_FIXUP)
+        rld=>1 = fixup_addr=>[fixups] + modfix
         rld = rld + 4
     next
     ^rld = 0
@@ -894,11 +882,11 @@ end
 // Write Extended REL file
 //
 def writemodule(refnum)#0
-    word esd, esdlen
+    word esd, esdlen, modfix
     //
     // Write module header
     //
-    writeheader(refnum)
+    modfix = writeheader(refnum)
     //
     // Write data/code buffer
     //
@@ -906,15 +894,15 @@ def writemodule(refnum)#0
     //
     // Write bytecode definition directory
     //
-    writeDFD(refnum)
+    writeDFD(refnum, modfix)
     //
     // Build EXERN/ENTRY directory
     //
-    esd, esdlen = buildESD
+    esd, esdlen = buildESD(modfix)
     //
     // Write relocation directory
     //
-    writeRLD(refnum)
+    writeRLD(refnum, modfix)
     //
     // Write EXTERN/EBTRY directory
     //

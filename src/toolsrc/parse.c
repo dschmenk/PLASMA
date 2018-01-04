@@ -228,8 +228,12 @@ int parse_constval(void)
             type = id_type(tokenstr, tokenlen);
             if (type & CONST_TYPE)
                 value = id_const(tokenstr, tokenlen);
-            else if ((type & (FUNC_TYPE | EXTERN_TYPE)) || ((type & ADDR_TYPE) && (mod == 8)))
+            else if (type & (FUNC_TYPE | ADDR_TYPE))
+            {
+                if (mod != 8)
+                    parse_error("Invalid address constant");
                 value = id_tag(tokenstr, tokenlen);
+            }
             else
                 return (0);
             break;
