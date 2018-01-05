@@ -1200,6 +1200,7 @@ int parse_struc(void)
     if (scantoken != END_TOKEN)
         parse_error("Missing STRUC/END");
     scan();
+    return (1);
 }
 int parse_vars(int type)
 {
