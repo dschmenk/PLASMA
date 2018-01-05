@@ -97,6 +97,7 @@ def emit_fill(size)#0
     if codeptr - codebuff > codebufsz; exit_err(ERR_OVER|ERR_CODE|ERR_TABLE); fin
 end
 def emit_addr(tag, offset)#0
+    if tag_type->[tag] & RELATIVE_FIXUP; puts("Global fixup to relative tag"); exit_err(0); fin // DEBUG
     fixup_tag=>[fixup_cnt]  = tag
     fixup_addr=>[fixup_cnt] = codeptr
     fixup_cnt++
@@ -106,6 +107,7 @@ end
 def emit_reladdr(tag)#0
     word updtptr
 
+    if not tag_type->[tag] & RELATIVE_FIXUP; puts("Not relative tag fixup"); exit_err(0); fin // DEBUG
     if tag_type->[tag] & RESOLVED_FIXUP
         updtptr = codeptr - tag_addr=>[tag]
     else
@@ -222,7 +224,7 @@ def emit_tag(tag)#0
     word codeofst, fixups, updtptr, nextptr
 
     emit_pending_seq
-    if tag_type->[tag] & RESOLVED_FIXUP; exit_err(ERR_DUP|ERR_ID); fin // DEBUG
+    if tag_type->[tag] & RESOLVED_FIXUP; puts("Tag already resolved"); exit_err(0); fin // DEBUG
     //
     // Update list of addresses needing resolution
     //
@@ -805,7 +807,7 @@ def writeDFD(refnum, modofst)#0
 
     dfd, idptr, idcnt = @defdir, idglobal_tbl, globals
     while idcnt
-        if idptr=>idtype & FUNC_TYPE and not idptr=>idtype & EXTERN_TYPE
+        if idptr=>idtype & (FUNC_TYPE|EXTERN_TYPE) == FUNC_TYPE
             dfd->0 = $02
             dfd=>1 = tag_addr=>[idptr=>idval] + modofst
             dfd    = dfd + 4
@@ -849,28 +851,34 @@ end
 // Write ReLocation Directory
 //
 def writeRLD(refnum, modfix)#0
-    word rld, fixups, updtptr, idptr, idcnt
-    byte tag
+    word rld, rldlen, fixups, updtptr, idptr, idcnt
+    byte tag, type
 
-    rld = heapmark
+    rld    = heapmark
+    rldlen = 0
     for fixups = fixup_cnt-1 downto 0
-        if fixups & $7F == $40 // Write out blocks of entries
-            fileio:write(refnum, heapmark, rld - heapmark)
-            rld = heapmark
-        fin
         tag = fixup_tag->[fixups]
-        if tag_type->[tag] & EXTERN_FIXUP
-            idptr = idglobal_tbl
-            for idcnt = globals-1 downto 0
-                if idptr=>idtype & EXTERN_TYPE and idptr=>idval == tag
-                    rld->3 = idptr->extnum
-                    break
-                fin
-            next
+        type = tag_type->[tag]
+        if not type & RELATIVE_FIXUP
+            if rldlen == 64 // Write out blocks of entries
+                fileio:write(refnum, heapmark, rld - heapmark)
+                rld = heapmark
+                rldlen = 0
+            fin
+            if type & EXTERN_FIXUP
+                idptr = idglobal_tbl
+                for idcnt = globals-1 downto 0
+                    if idptr=>idtype & EXTERN_TYPE and idptr=>idval == tag
+                        rld->3 = idptr->extnum
+                        break
+                    fin
+                next
+            fin
+            rld->0 = $01 | (type & MASK_FIXUP)
+            rld=>1 = fixup_addr=>[fixups] + modfix
+            rld    = rld + 4
+            rldlen++
         fin
-        rld->0 = $01 | (tag_type->[tag] & MASK_FIXUP)
-        rld=>1 = fixup_addr=>[fixups] + modfix
-        rld = rld + 4
     next
     ^rld = 0
     fileio:write(refnum, heapmark, rld - heapmark + 1)
@@ -889,7 +897,7 @@ def writemodule(refnum)#0
     // Adjust internal fixups for header size
     //
     for fixups = fixup_cnt-1 downto 0
-        if not tag_type->[fixup_tag->[fixups]] & EXTERN_FIXUP
+        if not tag_type->[fixup_tag->[fixups]] & (EXTERN_FIXUP|RELATIVE_FIXUP)
             updtptr  = fixup_addr=>[fixups]
             *updtptr = *updtptr + modofst
         fin
