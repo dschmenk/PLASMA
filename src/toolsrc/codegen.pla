@@ -453,7 +453,6 @@ def add_idconst(namestr, len, value)#0
 end
 def add_idfunc(namestr, len, type, tag, cfnparms, cfnvals)#0
     add_idglobal(namestr, len, type|FUNC_TYPE, tag, cfnparms, cfnvals)
-    def_cnt++
 end
 def set_idfunc(namestr, len, tag, cparms, cvals)#0
     word idptr
@@ -785,65 +784,65 @@ def writeheader(refnum)
         moddep = moddep + stodci(@moddep_tbl[moddep_cnt*16], moddep)
     loop
     ^moddep   = 0                        // Terminate dependency list
-    len       = moddep + 1 - @header
+    len       = moddep - 2 - @header
     modfix    = len + MODADDR - codebuff
     header:0  = len + codeptr - codebuff // sizeof header+data+bytecode
     header:2  = $DA7F                    // Magic #
     header:4  = modsysflags              // Module SYSFLAGS
-    header:6  = len + datasize           // Byte code offset
+    header:6  = len + MODADDR + datasize // Byte code offset
     header:8  = def_cnt                  // DEFinition count
     header:10 = entrypoint + modfix      // Init entrypoint
-    fileio:write(refnum, @header, len)
+    fileio:write(refnum, @header, len + 2)
     return modfix
 end
 //
 // Write DeFinition Directory
 //
-def writeDFD(refnum, modfix)#0
-    word dirptr, idptr, idcnt
+def writeDFD(refnum, modofst)#0
+    word dfd, idptr, idcnt
     byte defdir[128]
 
-    dirptr, idptr, idcnt = @defdir, idglobal_tbl, globals
+    dfd, idptr, idcnt = @defdir, idglobal_tbl, globals
     while idcnt
         if idptr=>idtype & FUNC_TYPE and not idptr=>idtype & EXTERN_TYPE
-            dirptr->0 = $02
-            dirptr=>1 = tag_addr=>[idptr=>idval] + modfix
-            dirptr = dirptr + 4
+            dfd->0 = $02
+            dfd=>1 = tag_addr=>[idptr=>idval] + modofst
+            dfd    = dfd + 4
         fin
         idptr = idptr + idptr->idname + t_id
         idcnt--
     loop
-    fileio:write(refnum, @defdir, dirptr - @defdir)
+    fileio:write(refnum, @defdir, dfd - @defdir)
 end
 //
 // Build External Symbol Directory on heap
 //
 def buildESD(modfix)#2
     byte symnum
-    word dirptr, idptr, idcnt, dirlen
+    word modofst, esd, idptr, idcnt, len
 
-    symnum, dirptr, idptr, idcnt = 0, heapmark, idglobal_tbl, globals
+    symnum, esd, idptr, idcnt = 0, heapmark, idglobal_tbl, globals
     while idcnt
         if idptr=>idtype & EXPORT_TYPE
-            dirptr    = dirptr + stodci(idptr=>idname, dirptr)
-            dirptr->0 = $08
-            dirptr=>1 = tag_addr=>[idptr=>idval] + modfix
-            dirptr    = dirptr + 3
+            esd           = esd + stodci(@idptr->idname, esd)
+            esd->0        = $08
+            esd=>1        = tag_addr=>[idptr=>idval] + modfix
+            esd           = esd + 3
         elsif idptr=>idtype & EXTACCESS_TYPE
-            dirptr        = dirptr + stodci(idptr=>idname, dirptr)
-            dirptr->0     = $10
-            dirptr->1     = symnum
-            dirptr        = dirptr + 3
+            esd           = esd + stodci(@idptr->idname, esd)
+            esd->0        = $10
+            esd->1        = symnum
+            esd           = esd + 3
             idptr->extnum = symnum
             symnum++
         fin
         idptr = idptr + idptr->idname + t_id
         idcnt--
     loop
-    ^dirptr = 0
-    dirlen  = dirptr - heapmark + 1
-    dirptr  = heapalloc(dirlen)
-    return dirptr, dirlen
+    ^esd = 0
+    len  = esd - heapmark + 1
+    esd  = heapalloc(len)
+    return esd, len
 end
 //
 // Write ReLocation Directory
@@ -862,16 +861,13 @@ def writeRLD(refnum, modfix)#0
         if tag_type->[tag] & EXTERN_FIXUP
             idptr = idglobal_tbl
             for idcnt = globals-1 downto 0
-                if idptr=>idtype & EXPORT_TYPE and idptr=>idval == tag
+                if idptr=>idtype & EXTERN_TYPE and idptr=>idval == tag
                     rld->3 = idptr->extnum
                     break
                 fin
             next
-        else
-            updtptr  = fixup_addr=>[fixups]
-            *updtptr = *updtptr + modfix
         fin
-        rld->0 = $01 | (tag & MASK_FIXUP)
+        rld->0 = $01 | (tag_type->[tag] & MASK_FIXUP)
         rld=>1 = fixup_addr=>[fixups] + modfix
         rld = rld + 4
     next
@@ -882,11 +878,21 @@ end
 // Write Extended REL file
 //
 def writemodule(refnum)#0
-    word esd, esdlen, modfix
+    word esd, esdlen, modfix, modofst, fixups, updtptr
     //
     // Write module header
     //
-    modfix = writeheader(refnum)
+    modfix  = writeheader(refnum)
+    modofst = modfix - MODADDR
+    //
+    // Adjust internal fixups for header size
+    //
+    for fixups = fixup_cnt-1 downto 0
+        if not tag_type->[fixup_tag->[fixups]] & EXTERN_FIXUP
+            updtptr  = fixup_addr=>[fixups]
+            *updtptr = *updtptr + modofst
+        fin
+    next
     //
     // Write data/code buffer
     //
@@ -898,7 +904,7 @@ def writemodule(refnum)#0
     //
     // Build EXERN/ENTRY directory
     //
-    esd, esdlen = buildESD(modfix)
+    esd, esdlen = buildESD(modofst)
     //
     // Write relocation directory
     //
