@@ -96,23 +96,6 @@ predef cmdmode#0
 asm equates
     !SOURCE "vmsrc/plvmzp.inc"
 end
-asm clrhibit(strptr)#0
-        LDA     ESTKL,X
-        STA     SRCL
-        LDA     ESTKH,X
-        STA     SRCH
-        INX
-        LDY     #$00
-        LDA     (SRC),Y
-        BEQ     +
-        TAY
-CLHILP  LDA     (SRC),Y
-        AND     #$7F
-        STA     (SRC),Y
-        DEY
-        BNE     CLHILP
-+       RTS
-end
 asm sethibit(strptr)#0
         LDA     ESTKL,X
         STA     SRCL
@@ -640,6 +623,9 @@ def keyin2
     fin
     return key
 end
+def tabkeyin
+    return cursx < MAXLNLEN and cursx & $01 ?? keyspace :: 0
+end
 //
 // Printer routines
 //
@@ -889,6 +875,11 @@ def editmode#0
             is keyctrlt
                 joinline; break
             is keyctrli
+                keyin = @tabkeyin
+                editline(keyspace)
+                keyin = !(MACHID & $80) ?? @keyin2 :: @keyin2e
+                break
+            is keyctrlb
                 if flags & insmode
                     flags = flags & ~insmode
                     curschr = ' '
@@ -929,7 +920,7 @@ def prfiles(optpath)
     if ^optpath
         strcpy(@path, optpath)
     else
-        getpfx(@path)
+        fileio:getpfx(@path)
         puts(@path)
         putln
     fin
@@ -943,9 +934,9 @@ def prfiles(optpath)
         if fileio:read(refnum, databuff, 512) == 512
             entry = databuff + 4
             if firstblk
-                entrylen   = databuff.$23
-                entriesblk = databuff.$24
-                filecnt    = databuff:$25
+                entrylen   = databuff->$23
+                entriesblk = databuff->$24
+                filecnt    = databuff=>$25
                 entry      = entry + entrylen
             fin
             for i = firstblk to entriesblk
@@ -1042,7 +1033,7 @@ def cmdmode#0
             is 'C'
                 prfiles(cmdptr); break
             is 'P'
-                setpfx(cmdptr); break
+                fileio:setpfx(cmdptr); break
             is 'H'
                 if ^cmdptr
                     slot = cmdptr.1 - '0'
