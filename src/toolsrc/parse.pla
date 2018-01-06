@@ -211,19 +211,19 @@ end
 //
 def parse_list#2
     byte listdepth, stackdepth
-    word listseq
+    word listseq, exprseq
 
     listseq   = NULL
     listdepth = 0
     repeat
         listseq, stackdepth = parse_expr(listseq)
         listdepth = listdepth + stackdepth
-    until (not listseq) or (token <> COMMA_TKN)
+    until token <> COMMA_TKN
     return listseq, listdepth
 end
 def parse_value(codeseq, rvalue)#2
-    byte cfnparms, cfnvals, stackdepth, deref, type, operation
-    word optos, idptr, value, const_offset
+    byte cfnparms, cfnvals, stackdepth, deref, operation
+    word type, optos, idptr, value, const_offset
     word uopseq, valseq, idxseq
 
     deref      = rvalue
@@ -271,8 +271,8 @@ def parse_value(codeseq, rvalue)#2
     when token
         is ID_TKN
             idptr = lookup_id(tknptr, tknlen)
-            if not idptr; return NULL, 0; fin
-            if not idptr=>idtype; return NULL, 0; fin
+            if not idptr; return codeseq, 0; fin
+            if not idptr=>idtype; return codeseq, 0; fin
             type  = type | idptr=>idtype
             value = idptr=>idval
             if type & CONST_TYPE
@@ -533,18 +533,16 @@ def parse_set(codeseq)
     rparms     = 0
     lambda_set = lambda_cnt
     setptr     = tknptr
-    memset(@setseq, 0, 16)
     repeat
         setseq[lparms], drop = parse_value(NULL, LVALUE)
         if not setseq[lparms]; break; fin
         lparms++
     until token <> COMMA_TKN
-    if (not lparms) or (token <> SET_TKN)
+    if not lparms or token <> SET_TKN
         //
         // Not a set list - free everything up
         //
-        tknptr = setptr
-        rewind(tknptr)
+        rewind(setptr)
         while lparms
             lparms--
             release_seq(setseq[lparms])
@@ -565,9 +563,10 @@ def parse_set(codeseq)
             codeseq = gen_op(codeseq, DROP_CODE)
         next
     fin
-    for i = lparms-1 downto 0
-        codeseq = cat_seq(codeseq, setseq[i])
-    next
+    while lparms
+        lparms--
+        codeseq = cat_seq(codeseq, setseq[lparms])
+    loop
     return codeseq
 end
 def parse_stmnt
@@ -691,6 +690,7 @@ def parse_stmnt
             if scan <> SET_TKN; exit_err(ERR_INVAL|ERR_STATE); fin
             seq, cfnvals = parse_expr(NULL)
             if !seq; exit_err(ERR_INVAL|ERR_STATE); fin
+            emit_seq(seq)
             if cfnvals > 1
                 parse_warn("Expression value overflow")
                 while cfnvals > 1;cfnvals--; seq = gen_op(seq, DROP_CODE); loop
@@ -815,8 +815,8 @@ def parse_stmnt
                 for i = 1 to stack_loop
                     emit_byte(DROP_CODE)
                 next
-                seq, cfnvals = parse_expr(NULL)
-                if !seq; exit_err(ERR_INVAL|ERR_STATE); fin
+                seq, cfnvals = parse_list
+                emit_seq(seq)
                 if cfnvals > infuncvals
                     exit_err(ERR_OVER|ERR_CLOSE|ERR_STATE)
                 elsif cfnvals < infuncvals
@@ -935,6 +935,7 @@ def parse_struc#0
         for idlen = 0 to struclen
             strucid[idlen] = ^(tknptr + idlen)
         next
+        scan
     fin
     offset = 0
     while nextln == BYTE_TKN or token == WORD_TKN or token == EOL_TKN
@@ -1095,15 +1096,19 @@ def parse_lambda
     //
     // Build an anonymous ID string for the Lambda function
     //
-    strcpy(@lambda_id[lambda_cnt * 8], "_LAMB__")
-    lambda_id[lambda_cnt * 8 + 6] = (lambda_num >> 3) & $07 + '0'
-    lambda_id[lambda_cnt * 8 + 7] =  lambda_num       & $07 + '0'
-    if lookup_idglobal(@lambda_id[lambda_cnt * 8], 7) >= 0
+    //strcpy(@lambda_id[lambda_cnt * 4], "&00")
+    lambda_id[lambda_cnt * 4 + 0] = 3
+    lambda_id[lambda_cnt * 4 + 1] = '&'
+    lambda_id[lambda_cnt * 4 + 2] = ((lambda_num >> 3) & $07) + '0'
+    lambda_id[lambda_cnt * 4 + 3] =  (lambda_num       & $07) + '0'
+    puts(@lambda_id[lambda_cnt * 4]); putln
+    lambda_num++
+    if lookup_idglobal(@lambda_id[lambda_cnt * 4 + 1], 3)
         //
         // Lambda ID already exists (from failed scanning for '=')
         //
         func_tag = lambda_tag[lambda_cnt]
-        set_idfunc(@lambda_id[lambda_cnt * 8 + 1], 7, func_tag, cfnparms, 1) // Override any predef type & tag
+        set_idfunc(@lambda_id[lambda_cnt * 4 + 1], 3, func_tag, cfnparms, 1) // Override any predef type & tag
     else
         //
         // Creat new Lambda ID
@@ -1111,7 +1116,7 @@ def parse_lambda
         func_tag                  = new_tag(WORD_FIXUP)
         lambda_tag[lambda_cnt]    = func_tag
         lambda_cparms[lambda_cnt] = cfnparms
-        add_idfunc(@lambda_id[lambda_cnt * 8 + 1], 7, FUNC_TYPE, func_tag, cfnparms, 1)
+        add_idfunc(@lambda_id[lambda_cnt * 4 + 1], 3, FUNC_TYPE, func_tag, cfnparms, 1)
     fin
     lambda_cnt++
     if lambda_cnt >= LAMBDANUM; parse_warn("Lambda function overflow"); fin
