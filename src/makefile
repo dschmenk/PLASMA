@@ -169,7 +169,7 @@ $(ROD): samplesrc/rod.pla $(PLVM02) $(PLASM)
 	acme --setpc 4094 -o $(ROD) samplesrc/rod.a
 
 $(SIEVE): samplesrc/sieve.pla $(PLVM02) $(PLASM)
-	./$(PLASM) -AMOW < samplesrc/sieve.pla > samplesrc/sieve.a
+	./$(PLASM) -AMW < samplesrc/sieve.pla > samplesrc/sieve.a
 	acme --setpc 4094 -o $(SIEVE) samplesrc/sieve.a
 
 $(UTHERNET): libsrc/uthernet.pla $(PLVM02) $(PLASM)
