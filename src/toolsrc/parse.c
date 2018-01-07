@@ -465,31 +465,33 @@ t_opseq *parse_value(t_opseq *codeseq, int rvalue, int *stackdepth)
             valseq = cat_seq(parse_list(NULL, &value), valseq);
             if (scantoken != CLOSE_PAREN_TOKEN)
                 parse_error("Missing function call closing parenthesis");
-            if (!(type & FUNC_TYPE)) // Can't check parm count on function pointers
-                cfnparms = value;
-            else if (cfnparms != value)
-                parse_error("Parameter count mismatch");
-            if (scan() == POUND_TOKEN)
+            if (type & FUNC_TYPE)
             {
-                /*
-                 * Set function pointer return vals count - can't do this to regular function call
-                 */
-                if (type & FUNC_TYPE)
-                    parse_error("Overriding function return count");
-                if (!parse_const(&cfnvals))
-                    parse_error("Invalid def return value count");
+                if (cfnparms != value) // Can't check parm count on function pointers
+                    parse_error("Parameter count mismatch");
             }
             else
-                scan_rewind(tokenstr);
-            if (type & (VAR_TYPE | PTR_TYPE)) //!(type & (FUNC_TYPE | CONST_TYPE)))
             {
-                valseq = gen_lw(valseq);
-                if (deref)
-                    deref--;
+                if (scan() == POUND_TOKEN)
+                {
+                    /*
+                     * Set function pointer return vals count - can't do this to regular function call
+                     */
+                    if (!parse_const(&cfnvals))
+                        parse_error("Invalid def return value count");
+                }
+                else
+                    scan_rewind(tokenstr);
+                if (type & (VAR_TYPE | PTR_TYPE))
+                {
+                    valseq = gen_lw(valseq);
+                    if (deref)
+                        deref--;
+                }
             }
             valseq = gen_icall(valseq);
             if (stackdepth)
-                *stackdepth += cfnvals + cfnparms - value - 1;
+                *stackdepth += cfnvals - 1;
             cfnparms = 0; cfnvals = 1;
             type &= ~(FUNC_TYPE | VAR_TYPE);
         }
@@ -501,13 +503,10 @@ t_opseq *parse_value(t_opseq *codeseq, int rvalue, int *stackdepth)
             if (type & FUNC_TYPE)
             {
                 /*
-                 * Function call dereference
+                 * Function address dereference
                  */
-                valseq = gen_icall(valseq);
-                if (stackdepth)
-                    *stackdepth += cfnvals + cfnparms - 1;
                 cfnparms = 0; cfnvals = 1;
-                type &= ~FUNC_TYPE;
+                type     = BPTR_TYPE;
             }
             while ((valseq = parse_expr(valseq, stackdepth)) && scantoken == COMMA_TOKEN)
             {
@@ -537,9 +536,11 @@ t_opseq *parse_value(t_opseq *codeseq, int rvalue, int *stackdepth)
                 /*
                  * Function call dereference
                  */
+                if (cfnparms)
+                    parse_error("Parameter count mismatch");
                 valseq = gen_icall(valseq);
                 if (stackdepth)
-                    *stackdepth += cfnvals + cfnparms - 1;
+                    *stackdepth += cfnvals - 1;
                 cfnparms = 0; cfnvals = 1;
                 type &= ~FUNC_TYPE;
             }
@@ -553,8 +554,6 @@ t_opseq *parse_value(t_opseq *codeseq, int rvalue, int *stackdepth)
             type = (scantoken == PTRB_TOKEN) ? BPTR_TYPE : WPTR_TYPE;
             if (!parse_const(&const_offset))
             {
-                if (scantoken == EOL_TOKEN || scantoken == CLOSE_PAREN_TOKEN)
-                    parse_error("Syntax");
                 /*
                  * Setting type override for following operations
                  */
@@ -577,21 +576,16 @@ t_opseq *parse_value(t_opseq *codeseq, int rvalue, int *stackdepth)
             if (type & FUNC_TYPE)
             {
                 /*
-                 * Function call dereference
+                 * Function address dereference
                  */
-                valseq = gen_icall(valseq);
-                if (stackdepth)
-                    *stackdepth += cfnvals + cfnparms - 1;
                 cfnparms = 0; cfnvals = 1;
-                type &= ~FUNC_TYPE;
+                type     = 0;
             }
             type = (type & (VAR_TYPE | CONST_TYPE))
                  ? ((scantoken == DOT_TOKEN) ? BYTE_TYPE : WORD_TYPE)
                  : ((scantoken == DOT_TOKEN) ? BPTR_TYPE : WPTR_TYPE);
             if (!parse_const(&const_offset))
             {
-                if (scantoken == EOL_TOKEN || scantoken == CLOSE_PAREN_TOKEN)
-                    parse_error("Syntax");
                 /*
                  * Setting type override for following operations
                  */
@@ -617,9 +611,11 @@ t_opseq *parse_value(t_opseq *codeseq, int rvalue, int *stackdepth)
         deref--;
         if (type & FUNC_TYPE)
         {
+            if (cfnparms)
+                parse_error("Parameter count mismatch");
             valseq = gen_icall(valseq);
             if (stackdepth)
-                *stackdepth += cfnvals + cfnparms - 1;
+                *stackdepth += cfnvals - 1;
             cfnparms = 0; cfnvals = 1;
             type &= ~FUNC_TYPE;
         }
@@ -630,9 +626,11 @@ t_opseq *parse_value(t_opseq *codeseq, int rvalue, int *stackdepth)
     {
         if (type & FUNC_TYPE)
         {
+            if (cfnparms)
+                parse_error("Parameter count mismatch");
             valseq = gen_icall(valseq);
             if (stackdepth)
-                *stackdepth += cfnvals + cfnparms - 1;
+                *stackdepth += cfnvals - 1;
             cfnparms = 0; cfnvals = 1;
             type &= ~FUNC_TYPE;
         }
@@ -750,8 +748,7 @@ t_opseq *parse_set(t_opseq *codeseq)
     }
     if (lparms == 0 || scantoken != SET_TOKEN)
     {
-        tokenstr = setptr;
-        scan_rewind(tokenstr);
+        scan_rewind(setptr);
         while (lparms--)
             release_seq(setseq[lparms]);
         while (lambda_cnt > lambda_set)
@@ -772,8 +769,8 @@ t_opseq *parse_set(t_opseq *codeseq)
         for (i = rparms - lparms; i > 0; i--)
             codeseq = gen_drop(codeseq);
     }
-    for (i = lparms - 1; i >= 0; i--)
-        codeseq = cat_seq(codeseq, setseq[i]);
+    while (lparms--)
+        codeseq = cat_seq(codeseq, setseq[lparms]);
     return (codeseq);
 }
 int parse_stmnt(void)
@@ -1076,7 +1073,7 @@ int parse_stmnt(void)
                         scan_rewind(idptr);
                         emit_seq(parse_value(NULL, LVALUE, NULL));
                     }
-                    else if (scantoken != SET_TOKEN)
+                    else
                     {
                         while (stackdepth)
                         {
@@ -1085,8 +1082,6 @@ int parse_stmnt(void)
                         }
                         emit_seq(rseq);
                     }
-                    else
-                        parse_error("Invalid LVALUE");
                 }
                 else
                     parse_error("Syntax error");

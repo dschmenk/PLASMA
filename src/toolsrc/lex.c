@@ -425,7 +425,7 @@ t_token scan(void)
 }
 void scan_rewind(char *backptr)
 {
-    scanpos = backptr;
+    scanpos = tokenstr = backptr;
 }
 int scan_lookahead(void)
 {
