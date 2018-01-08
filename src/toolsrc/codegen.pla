@@ -28,7 +28,7 @@
 //
 def new_tag(type)
     tag_cnt++
-    if tag_cnt >= TAGNUM; exit_err(ERR_OVER|ERR_CODE|ERR_TABLE); fin
+    if tag_cnt >= tag_num; exit_err(ERR_OVER|ERR_CODE|ERR_TABLE); fin
     tag_addr=>[tag_cnt] = 0 // Unresolved, nothing to update yet
     tag_type->[tag_cnt] = type
     return tag_cnt
@@ -101,7 +101,7 @@ def emit_addr(tag, offset)#0
     fixup_tag=>[fixup_cnt]  = tag
     fixup_addr=>[fixup_cnt] = codeptr
     fixup_cnt++
-    if fixup_cnt >= FIXUPNUM; exit_err(ERR_OVER|ERR_ID|ERR_TABLE); fin
+    if fixup_cnt >= fixup_num; exit_err(ERR_OVER|ERR_ID|ERR_TABLE); fin
     emit_word(offset + tag_addr=>[tag])
 end
 def emit_reladdr(tag)#0
@@ -434,7 +434,7 @@ def lookup_idglobal(nameptr, len)
     fin
     return idptr
 end
-def add_iddata(namestr, len, type, size)#0
+def new_iddata(namestr, len, type, size)#0
     if idmatch(namestr, len, idglobal_tbl, globals); exit_err(ERR_DUP|ERR_ID); fin
     nametostr(namestr, len, lastglobal + idname)
     lastglobal=>idtype = type
@@ -450,7 +450,7 @@ def add_iddata(namestr, len, type, size)#0
     fin
     globals++
     lastglobal = lastglobal + t_id + len
-    if lastglobal - idglobal_tbl >  IDGLOBALSZ; exit_err(ERR_OVER|ERR_GLOBAL|ERR_ID|ERR_TABLE); fin
+    if lastglobal - idglobal_tbl >  globalbufsz; exit_err(ERR_OVER|ERR_GLOBAL|ERR_ID|ERR_TABLE); fin
 end
 def size_iddata(type, varsize, initsize)#0
     if varsize > initsize
@@ -460,7 +460,7 @@ def size_iddata(type, varsize, initsize)#0
         datasize = datasize + initsize
     fin
 end
-def add_idglobal(namestr, len, type, value, cparms, cvals)#0
+def new_idglobal(namestr, len, type, value, cparms, cvals)#0
     if idmatch(namestr, len, idglobal_tbl, globals); exit_err(ERR_DUP|ERR_ID); fin
     lastglobal=>idval     = value
     lastglobal=>idtype    = type
@@ -469,13 +469,13 @@ def add_idglobal(namestr, len, type, value, cparms, cvals)#0
     nametostr(namestr, len, lastglobal + idname)
     globals++
     lastglobal = lastglobal + t_id + len
-    if lastglobal - idglobal_tbl > IDGLOBALSZ; exit_err(ERR_OVER|ERR_GLOBAL|ERR_ID|ERR_TABLE); fin
+    if lastglobal - idglobal_tbl > globalbufsz; exit_err(ERR_OVER|ERR_GLOBAL|ERR_ID|ERR_TABLE); fin
 end
-def add_idconst(namestr, len, value)#0
-    add_idglobal(namestr, len, CONST_TYPE, value, 0, 0)
+def new_idconst(namestr, len, value)#0
+    new_idglobal(namestr, len, CONST_TYPE, value, 0, 0)
 end
-def add_idfunc(namestr, len, type, tag, cfnparms, cfnvals)#0
-    add_idglobal(namestr, len, type|FUNC_TYPE, tag, cfnparms, cfnvals)
+def new_idfunc(namestr, len, type, tag, cfnparms, cfnvals)#0
+    new_idglobal(namestr, len, type|FUNC_TYPE, tag, cfnparms, cfnvals)
 end
 def set_idfunc(namestr, len, tag, cparms, cvals)#0
     word idptr
@@ -494,19 +494,24 @@ def init_idglobal#0
     word op
     byte i
 
-    puts("Mem free: "); puth(heapavail); putln
-    tag_addr     = heapalloc(TAGNUM*2)
-    tag_type     = heapalloc(TAGNUM)
-    puts("Mem free after tag allocate: "); puth(heapavail); putln
-    fixup_tag    = heapalloc(FIXUPNUM*2)
-    fixup_addr   = heapalloc(FIXUPNUM*2)
-    puts("Mem free after fixup allocate: "); puth(heapavail); putln
-    idglobal_tbl = heapalloc(IDGLOBALSZ)
-    idlocal_tbl  = heapalloc(IDLOCALSZ)
-    puts("Mem free after global allocate: "); puth(heapavail); putln
+    tag_num     = TAGNUM
+    fixup_num   = FIXUPNUM
+    globalbufsz = IDGLOBALSZ
+    localbufsz  = IDLOCALSZ
+    if isult(heapavail, $4000)
+        tag_num     = TAGNUM/2
+        fixup_num   = FIXUPNUM/2
+        globalbufsz = IDGLOBALSZ/2
+        localbufsz  = IDLOCALSZ/2
+    fin
+    tag_addr     = heapalloc(tag_num*2)
+    tag_type     = heapalloc(tag_num)
+    fixup_tag    = heapalloc(fixup_num*2)
+    fixup_addr   = heapalloc(fixup_num*2)
+    idglobal_tbl = heapalloc(globalbufsz)
+    idlocal_tbl  = heapalloc(localbufsz)
     codebufsz    = heapavail - 4096
     codebuff     = heapalloc(codebufsz)
-    puts("Mem free after data+code allocate: "); puth(heapavail); putln
     codeptr      = codebuff
     lastglobal   = idglobal_tbl
     puts("Data+Code buffer size = "); puti(codebufsz); putln
@@ -521,14 +526,14 @@ def init_idglobal#0
     next
     op=>opnext = NULL
 end
-def add_idlocal(namestr, len, type, size)#0
+def new_idlocal(namestr, len, type, size)#0
     if idmatch(namestr, len, @idlocal_tbl, locals); exit_err(ERR_DUP|ERR_ID); fin
     lastlocal=>idval  = framesize
     lastlocal=>idtype = type | LOCAL_TYPE
     nametostr(namestr, len, lastlocal + idname)
     locals++
     lastlocal = lastlocal + t_id + len
-    if lastlocal - idlocal_tbl > IDLOCALSZ; exit_err(ERR_OVER|ERR_LOCAL|ERR_TABLE); fin
+    if lastlocal - idlocal_tbl > localbufsz; exit_err(ERR_OVER|ERR_LOCAL|ERR_TABLE); fin
     framesize = framesize + size
     if framesize > 255; exit_err(ERR_OVER|ERR_LOCAL|ERR_FRAME); fin
 end
@@ -553,7 +558,7 @@ end
 //
 // Module dependency list
 //
-def add_moddep(strptr, strlen)#0
+def new_moddep(strptr, strlen)#0
     if strlen > 15; strlen = 15; fin
     memcpy(@moddep_tbl[moddep_cnt*16] + 1, strptr, strlen)
     moddep_tbl[moddep_cnt*16] = strlen
