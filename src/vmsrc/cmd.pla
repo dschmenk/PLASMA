@@ -870,9 +870,6 @@ end
 //
 // Symbol table routines.
 //
-def lookupsym(sym)#1
-    return lookuptbl(sym, symtbl)
-end
 def addsym(sym, addr)#0
     while ^sym & $80
         ^lastsym = ^sym
@@ -907,12 +904,10 @@ def lookupextern(esd, index)#1
         sym = esd
         esd = esd + dcitos(esd, @str)
         if esd->0 & $10 and esd->1 == index
-            addr = lookupsym(sym)
+            addr = lookuptbl(sym, symtbl)
             if !addr
                 perr = $81
-                cout('?')
-                prstr(@str)
-                crout
+                cout('?'); prstr(@str); crout
             fin
             return addr
         fin
@@ -945,7 +940,7 @@ def lookupdef(addr, deftbl)#1
 end
 def loadmod(mod)#1
     word refnum, rdlen, modsize, bytecode, defofst, defcnt, init, fixup
-    word addr, defaddr, modaddr, modfix, modend
+    word addr, defaddr, modaddr, modfix, modofst, modend
     word deftbl, deflast
     word moddep, rld, esd, sym
     byte defbank, str[16], filename[64]
@@ -1025,7 +1020,8 @@ def loadmod(mod)#1
         // Apply all fixups and symbol import/export.
         //
         modfix   = modaddr - modfix
-        bytecode = defofst + modfix - MODADDR
+        modofst  = modfix  - MODADDR
+        bytecode = defofst + modofst
         modend   = modaddr + modsize
         rld      = modend  // Re-Locatable Directory
         esd      = rld     // Extern+Entry Symbol Directory
@@ -1064,7 +1060,7 @@ def loadmod(mod)#1
                     if ^rld & $10 // EXTERN reference.
                         fixup = fixup + lookupextern(esd, rld->3)
                     else          // INTERN fixup.
-                        fixup = fixup + modfix - MODADDR
+                        fixup = fixup + modofst
                         if uword_isge(fixup, bytecode)
                             //
                             // Bytecode address - replace with call def directory.
@@ -1091,7 +1087,7 @@ def loadmod(mod)#1
                 //
                 // EXPORT symbol - add it to the global symbol table.
                 //
-                addr = esd=>1 + modfix - MODADDR
+                addr = esd=>1 + modofst
                 if uword_isge(addr, bytecode)
                     //
                     // Use the def directory address for bytecode.
