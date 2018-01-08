@@ -221,7 +221,7 @@ def emit_enter(cparms)#0
     fin
 end
 def emit_tag(tag)#0
-    word fixups, updtptr, nextptr
+    word fixups, updtptr, nextptr, codeofst
 
     emit_pending_seq
     if tag_type->[tag] & RESOLVED_FIXUP; puts("Tag already resolved"); exit_err(0); fin // DEBUG
@@ -235,15 +235,18 @@ def emit_tag(tag)#0
             *updtptr = codeptr - updtptr
             updtptr  = nextptr
         loop
+        updtptr = codeptr
     else
+        codeofst = codeptr - codebuff
         for fixups = fixup_cnt-1 downto 0
             if fixup_tag=>[fixups] == tag
                 updtptr  = fixup_addr=>[fixups]
-                *updtptr = *updtptr + codeptr - codebuff
+                *updtptr = *updtptr + codeofst
             fin
         next
+        updtptr = codeptr - codebuff
     fin
-    tag_addr=>[tag] = codeptr
+    tag_addr=>[tag] = updtptr
     tag_type->[tag] = tag_type->[tag] | RESOLVED_FIXUP
 end
 //
@@ -429,8 +432,10 @@ def add_iddata(namestr, len, type, size)#0
     else
         lastglobal=>idval = new_tag(WORD_FIXUP)//datasize
         emit_tag(lastglobal=>idval)
-        emit_fill(size)
-        datasize = datasize + size
+        if size
+            emit_fill(size)
+            datasize = datasize + size
+        fin
     fin
     globals++
     lastglobal = lastglobal + t_id + len
@@ -801,7 +806,7 @@ def writeheader(refnum)
     header:8  = def_cnt                  // DEFinition count
     header:10 = entrypoint + modfix      // Init entrypoint
     fileio:write(refnum, @header, len + 2)
-    return modfix
+    return len
 end
 //
 // Write DeFinition Directory
@@ -896,12 +901,13 @@ end
 // Write Extended REL file
 //
 def writemodule(refnum)#0
-    word esd, esdlen, modfix, modofst, fixups, updtptr
+    word hdrlen, esd, esdlen, modfix, modadj, modofst, fixups, updtptr
     //
     // Write module header
     //
-    modfix  = writeheader(refnum)
-    modofst = modfix - MODADDR
+    hdrlen  = writeheader(refnum)
+    modfix  = hdrlen + MODADDR
+    modofst = hdrlen - codebuff
     //
     // Adjust internal fixups for header size
     //

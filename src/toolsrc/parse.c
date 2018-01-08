@@ -896,13 +896,14 @@ int parse_stmnt(void)
             addr = id_tag(tokenstr, tokenlen);
             if (scan() != SET_TOKEN)
                 parse_error("Missing FOR =");
-            if (!emit_seq(parse_expr(NULL, &cfnvals)))
+            if (!(seq = parse_expr(NULL, &cfnvals)))
                 parse_error("Bad FOR expression");
             if (cfnvals > 1)
             {
                 parse_warn("Expression value overflow");
                 while (cfnvals-- > 1) seq = gen_drop(seq);
             }
+            emit_seq(seq);
             emit_codetag(tag_for);
             if (type & LOCAL_TYPE)
                 type & BYTE_TYPE ? emit_dlb(addr) : emit_dlw(addr);
@@ -914,23 +915,25 @@ int parse_stmnt(void)
                 step = -1;
             else
                 parse_error("Missing FOR TO");
-            if (!emit_seq(parse_expr(NULL, &cfnvals)))
+            if (!(seq = parse_expr(NULL, &cfnvals)))
                 parse_error("Bad FOR TO expression");
             if (cfnvals > 1)
             {
                 parse_warn("Expression value overflow");
                 while (cfnvals-- > 1) seq = gen_drop(seq);
             }
+            emit_seq(seq);
             step > 0 ? emit_brgt(break_tag) : emit_brlt(break_tag);
             if (scantoken == STEP_TOKEN)
             {
-                if (!emit_seq(parse_expr(NULL, &cfnvals)))
+                if (!(seq = parse_expr(NULL, &cfnvals)))
                     parse_error("Bad FOR STEP expression");
                 if (cfnvals > 1)
                 {
                     parse_warn("Expression value overflow");
                     while (cfnvals-- > 1) seq = gen_drop(seq);
                 }
+                emit_seq(seq);
                 emit_op(step > 0 ? ADD_TOKEN : SUB_TOKEN);
             }
             else
@@ -951,25 +954,27 @@ int parse_stmnt(void)
             break_tag   = tag_new(BRANCH_TYPE);
             tag_choice  = tag_new(BRANCH_TYPE);
             tag_of      = tag_new(BRANCH_TYPE);
-            if (!emit_seq(parse_expr(NULL, &cfnvals)))
+            if (!(seq = parse_expr(NULL, &cfnvals)))
                 parse_error("Bad CASE expression");
             if (cfnvals > 1)
             {
                 parse_warn("Expression value overflow");
                 while (cfnvals-- > 1) seq = gen_drop(seq);
             }
+            emit_seq(seq);
             next_line();
             while (scantoken != ENDCASE_TOKEN)
             {
                 if (scantoken == OF_TOKEN)
                 {
-                    if (!emit_seq(parse_expr(NULL, &cfnvals)))
+                    if (!(seq = parse_expr(NULL, &cfnvals)))
                         parse_error("Bad CASE OF expression");
                     if (cfnvals > 1)
                     {
                         parse_warn("Expression value overflow");
                         while (cfnvals-- > 1) seq = gen_drop(seq);
                     }
+                    emit_seq(seq);
                     emit_brne(tag_choice);
                     emit_codetag(tag_of);
                     while (parse_stmnt()) next_line();
@@ -1032,12 +1037,13 @@ int parse_stmnt(void)
             }
             else
             {
-                if (!emit_seq(parse_expr(NULL, &cfnvals)))
+                if (!(seq = parse_expr(NULL, &cfnvals)))
                     emit_const(0);
                 else if (cfnvals > 1)
                 {
                     parse_warn("Expression value overflow");
                     while (cfnvals-- > 1) seq = gen_drop(seq);
+                    emit_seq(seq);
                 }
                 emit_ret();
             }

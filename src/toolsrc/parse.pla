@@ -19,6 +19,7 @@ def tos_op_prec(tos)
     return opsp <= tos ?? 100 :: precstack[opsp-1]
 end
 def push_val(value, size, type)#0
+    byte i
     if valsp == 16; exit_err(ERR_OVER|ERR_CODE|ERR_FRAME); fin
     valstack[valsp]  = value
     sizestack[valsp] = size
@@ -26,6 +27,7 @@ def push_val(value, size, type)#0
     valsp++
 end
 def pop_val#3
+    byte i
     valsp--
     if valsp < 0; exit_err(ERR_INVAL|ERR_CODE|ERR_FRAME); fin
     return valstack[valsp], sizestack[valsp], typestack[valsp]
@@ -78,9 +80,12 @@ def calc_binaryop(op)#0
     push_val(val1, size1, type1)
 end
 def parse_constterm
+    word val
+    byte size, type
+    
     when scan
         is OPEN_PAREN_TKN
-            parse_constexpr
+            push_val(parse_constexpr)
             if token <> CLOSE_PAREN_TKN; exit_err(ERR_MISS|ERR_CLOSE|ERR_SYNTAX); fin
             return TRUE
         is ID_TKN
@@ -114,6 +119,7 @@ def parse_constval
     loop
     when token
         is CLOSE_PAREN_TKN
+            value, size, type = pop_val
             break
         is STR_TKN
             size  = tknlen - 1
@@ -686,11 +692,11 @@ def parse_stmnt
             if scan <> SET_TKN; exit_err(ERR_INVAL|ERR_STATE); fin
             seq, cfnvals = parse_expr(NULL)
             if !seq; exit_err(ERR_INVAL|ERR_STATE); fin
-            emit_seq(seq)
             if cfnvals > 1
                 parse_warn("Expression value overflow")
                 while cfnvals > 1;cfnvals--; seq = gen_op(seq, DROP_CODE); loop
             fin
+            emit_seq(seq)
             emit_tag(tag_for)
             if type & LOCAL_TYPE
                 if type & BYTE_TYPE; emit_dlb(addr); else; emit_dlw(addr); fin
@@ -719,6 +725,7 @@ def parse_stmnt
                     parse_warn("Expression value overflow")
                     while cfnvals > 1;cfnvals--; seq = gen_op(seq, DROP_CODE); loop
                 fin
+                emit_seq(seq)
                 emit_byte(stepdir > 0 ?? ADD_CODE :: SUB_CODE)
             else
                 emit_byte(stepdir > 0 ?? INC_CODE :: DEC_CODE)
@@ -746,6 +753,7 @@ def parse_stmnt
                 parse_warn("Expression value overflow")
                 while cfnvals > 1;cfnvals--; seq = gen_op(seq, DROP_CODE); loop
             fin
+            emit_seq(seq)
             nextln
             while token <> ENDCASE_TKN
                 when token
@@ -756,6 +764,7 @@ def parse_stmnt
                             parse_warn("Expression value overflow")
                             while cfnvals > 1;cfnvals--; seq = gen_op(seq, DROP_CODE); loop
                         fin
+                        emit_seq(seq)
                         emit_brne(tag_choice)
                         emit_tag(tag_of)
                         while parse_stmnt
@@ -825,11 +834,12 @@ def parse_stmnt
                 emit_leave
             else
                 seq, cfnvals = parse_expr(NULL)
-                if !seq
+                if not seq
                     emit_const(0)
                 elsif cfnvals > 1
                     exit_err(ERR_OVER|ERR_CLOSE|ERR_STATE)
                     while cfnvals > 1;cfnvals--; seq = gen_op(seq, DROP_CODE); loop
+                    emit_seq(seq)
                 fin
                 emit_byte(RET_CODE)
             fin
