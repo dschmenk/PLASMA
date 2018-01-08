@@ -165,6 +165,12 @@ def emit_const(cval)#0
         emit_word(cval)
     fin
 end
+def emit_code(bval)#0
+    emit_pending_seq
+    ^codeptr = bval
+    codeptr++
+    if codeptr - codebuff > codebufsz; exit_err(ERR_OVER|ERR_CODE|ERR_TABLE); fin
+end
 def emit_dlb(offset)#0
     emit_pending_seq
     emit_byte($6C)
@@ -279,16 +285,21 @@ def emit_pending_seq#0
             // Constant value
             //
             is CONST_GROUP
-                if op=>opval == $0000            // ZERO
-                    emit_byte($00)
-                elsif op=>opval & $FF00 == $0000 // Constant BYTE
-                    emit_byte($2A)
-                    emit_byte(op->opval)
-                elsif op=>opval & $FF00 == $FF00 // Constant $FF00 | BYTE
-                    emit_byte($5E)
-                    emit_byte(op->opval)
-                else                             // Constant WORD
-                    emit_byte($2C)
+                if op->opcode == CONST_CODE
+                    if op=>opval == $0000            // ZERO
+                        emit_byte($00)
+                    elsif op=>opval & $FF00 == $0000 // Constant BYTE
+                        emit_byte($2A)
+                        emit_byte(op->opval)
+                    elsif op=>opval & $FF00 == $FF00 // Constant $FF00 | BYTE
+                        emit_byte($5E)
+                        emit_byte(op->opval)
+                    else                             // Constant WORD
+                        emit_byte($2C)
+                        emit_word(op=>opval)
+                    fin
+                else                                 // Constant LOAD/STORE/CALL
+                    emit_byte(op->opcode)
                     emit_word(op=>opval)
                 fin
                 break

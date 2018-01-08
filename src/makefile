@@ -126,9 +126,9 @@ $(PLVM03): vmsrc/plvm03.s vmsrc/soscmd.a
 # Sample code
 #
 test:	samplesrc/test.pla samplesrc/testlib.pla $(PLVM) $(PLASM)
-	./$(PLASM) -AMW  < samplesrc/test.pla > samplesrc/test.a
+	./$(PLASM) -AMOW  < samplesrc/test.pla > samplesrc/test.a
 	acme --setpc 4094 -o $(TEST) samplesrc/test.a
-	./$(PLASM) -AMW  < samplesrc/testlib.pla > samplesrc/testlib.a
+	./$(PLASM) -AMOW  < samplesrc/testlib.pla > samplesrc/testlib.a
 	acme --setpc 4094 -o $(TESTLIB) samplesrc/testlib.a
 	./$(PLVM) TEST
 

@@ -55,8 +55,8 @@ end
 // Crunch sequence (peephole optimize)
 //
 def crunch_seq(seq, pass)
-    word nextop, nextopnext, opprev, op
-    byte crunched, freeops, shiftcnt
+    word nextop, nextopnext, opprev, op, freeops
+    byte crunched, shiftcnt
 
     opprev   = NULL
     op       = *seq
@@ -67,18 +67,21 @@ def crunch_seq(seq, pass)
         when op->opcode
             is CONST_CODE
                 if op=>opval == 1
-                    if nextop>opcode == ADD_CODE
-                        op->opcode = INC_CODE
-                        freeops    = 1
+                    if nextop->opcode == ADD_CODE
+                        op->opcode  = INC_CODE
+                        op->opgroup = STACK_GROUP
+                        freeops     = 1
                         break
                     fin
                     if nextop->opcode == SUB_CODE
                         op->opcode = DEC_CODE
+                        op->opgroup = STACK_GROUP
                         freeops    = 1
                         break
                     fin
                     if nextop->opcode == SHL_CODE
                         op->opcode     = DUP_CODE
+                        op->opgroup    = STACK_GROUP
                         nextop->opcode = ADD_CODE
                         crunched       = 1
                         break
@@ -86,40 +89,16 @@ def crunch_seq(seq, pass)
                 fin
                 when nextop->opcode
                     is NEG_CODE
-                        op=>opval = -(op=>opval)
+                        op=>opval = -op=>opval
                         freeops   = 1
                         break
                     is COMP_CODE
-                        op=>opval = ~(op=>opval)
+                        op=>opval = ~op=>opval
                         freeops   = 1
                         break
                     is LOGIC_NOT_CODE
                         op=>opval = op=>opval ?? FALSE :: TRUE
                         freeops   = 1
-                        break
-                    is LB_CODE // BPTR_CODE
-                        op=>opoffset = op=>opval
-                        op->opcode  = LAB_CODE
-                        op->opgroup = GLOBAL_GROUP
-                        freeops     = 1
-                        break
-                    is LW_CODE // WPTR_CODE
-                        op=>opoffset = op=>opval
-                        op->opcode  = LAW_CODE
-                        op->opgroup = LOCAL_GROUP
-                        freeops     = 1
-                        break
-                    is SB_CODE
-                        op=>opoffset = op=>opval
-                        op->opcode  = SAB_CODE
-                        op->opgroup = GLOBAL_GROUP
-                        freeops     = 1
-                        break
-                    is SW_CODE
-                        op=>opoffset = op=>opval
-                        op->opcode  = SAW_CODE
-                        op->opgroup = GLOBAL_GROUP
-                        freeops     = 1
                         break
                     is BRFALSE_CODE
                         if op=>opval
@@ -148,8 +127,9 @@ def crunch_seq(seq, pass)
                         break
                     is EQ_CODE
                         if not op=>opval
-                            op->opcode = LOGIC_NOT_CODE
-                            freeops    = 1
+                            op->opcode  = LOGIC_NOT_CODE // Replace ZERO:ISEQ
+                            op->opgroup = STACK_GROUP
+                      freeops    = 1
                         fin
                         break
                     is CONST_CODE // Collapse constant operation
@@ -230,7 +210,7 @@ def crunch_seq(seq, pass)
                                     break
                             wend // End of collapse constant operation
                         fin
-                        if pass > 0 and freeops == 0 and op=>opval
+                        if pass and not freeops and op=>opval
                             crunched = try_dupify(op)
                         fin
                         break // CONST_CODE
@@ -239,7 +219,6 @@ def crunch_seq(seq, pass)
                             if op=>opval == 1 << shiftcnt
                                 op=>opval       = shiftcnt
                                 nextop->opcode  = SHL_CODE
-                                nextop->opgroup = STACK_GROUP
                                 break
                             fin
                         next
@@ -249,11 +228,33 @@ def crunch_seq(seq, pass)
                             if op=>opval == 1 << shiftcnt
                                 op=>opval      = shiftcnt
                                 nextop->opcode = SHR_CODE
-                                nextop->opcode = STACK_GROUP
                                 break
                             fin
                         next
                         break
+                    //
+                    // Constant addresses
+                    //
+                    is LB_CODE
+                        op->opcode = LAB_CODE
+                        freeops    = 1
+                        break
+                    is LW_CODE
+                        op->opcode = LAW_CODE
+                        freeops    = 1
+                        break
+                    is SB_CODE
+                        op->opcode = SAB_CODE
+                        freeops    = 1
+                        break
+                    is SW_CODE
+                        op->opcode = SAW_CODE
+                        freeops    = 1
+                        break
+                    is ICAL_CODE
+                        op->opcode = CALL_CODE
+                        freeops    = 1
+                        break                        
                 wend
                 break // CONST_CODE
             is LADDR_CODE
@@ -262,37 +263,32 @@ def crunch_seq(seq, pass)
                         if nextop=>opnext
                             nextopnext = nextop=>opnext
                             when nextopnext->opcode
-                                is ADD_CODE
-                                is INDEXB_CODE
+                                is INDEXB_CODE // ADD_CODE
                                     op=>opoffset = op=>opoffset + nextop=>opval
-                                    freeops     = 2
+                                    freeops      = 2
                                     break
                                 is INDEXW_CODE
                                     op=>opoffset = op=>opoffset + nextop=>opval * 2
-                                    freeops     = 2
+                                    freeops      = 2
                                     break
                             wend
                         fin
                         break
                     is LB_CODE
-                        op->opcode  = LLB_CODE
-                        op->opgroup = LOCAL_GROUP
-                        freeops     = 1
+                        op->opcode = LLB_CODE
+                        freeops    = 1
                         break
                     is LW_CODE
-                        op->opcode  = LLW_CODE
-                        op->opgroup = LOCAL_GROUP
-                        freeops      = 1
+                        op->opcode = LLW_CODE
+                        freeops    = 1
                         break
                     is SB_CODE
-                        op->opcode  = SLB_CODE
-                        op->opgroup = LOCAL_GROUP
-                        freeops     = 1
+                        op->opcode = SLB_CODE
+                        freeops    = 1
                         break
                     is SW_CODE
-                        op->opcode  = SLW_CODE
-                        op->opgroup = LOCAL_GROUP
-                        freeops     = 1
+                        op->opcode = SLW_CODE
+                        freeops    = 1
                         break
                 wend
                 if pass > 0 and not freeops
@@ -305,50 +301,44 @@ def crunch_seq(seq, pass)
                         if nextop=>opnext
                             nextopnext = nextop=>opnext
                             when nextopnext->opcode
-                                is ADD_CODE
-                                is INDEXB_CODE
+                                is INDEXB_CODE // ADD_CODE
                                     op=>opoffset = op=>opoffset + nextop=>opval
-                                    freeops     = 2
+                                    freeops      = 2
                                     break
                                 is INDEXW_CODE
                                     op=>opoffset = op=>opoffset + nextop=>opval * 2
-                                    freeops     = 2
+                                    freeops      = 2
                                     break
                             wend
                         fin
                         break
                     is LB_CODE
-                        op->opcode  = LAB_CODE
-                        op->opgroup = GLOBAL_GROUP
-                        freeops     = 1
+                        op->opcode = LAB_CODE
+                        freeops    = 1
                         break
                     is LW_CODE
-                        op->opcode  = LAW_CODE
-                        op->opgroup = GLOBAL_GROUP
-                        freeops     = 1
+                        op->opcode = LAW_CODE
+                        freeops    = 1
                         break
                     is SB_CODE
-                        op->opcode  = SAB_CODE
-                        op->opgroup = GLOBAL_GROUP
-                        freeops     = 1
+                        op->opcode = SAB_CODE
+                        freeops    = 1
                         break
                     is SW_CODE
-                        op->opcode  = SAW_CODE
-                        op->opgroup = GLOBAL_GROUP
-                        freeops     = 1
+                        op->opcode = SAW_CODE
+                        freeops    = 1
                         break
                     is ICAL_CODE
-                        op->opcode  = CALL_CODE
-                        op->opgroup = GLOBAL_GROUP
-                        freeops     = 1
+                        op->opcode = CALL_CODE
+                        freeops    = 1
                         break
                 wend
-                if pass > 0 and not freeops
+                if pass and not freeops
                     crunched = try_dupify(op)
                 fin
                 break // GADDR_CODE
             is LLB_CODE
-                if pass > 0
+                if pass
                     crunched = try_dupify(op)
                 fin
                 break // LLB_CODE
@@ -443,7 +433,7 @@ def crunch_seq(seq, pass)
                 //
                 // If op is at the start of the sequence, we treat this as a special case.
                 //
-                while freeops > 0
+                while freeops
                     nextop     = op=>opnext
                     op=>opnext = freeop_lst
                     freeop_lst = op
