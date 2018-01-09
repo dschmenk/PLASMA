@@ -259,7 +259,7 @@ end
 // Emit the pending sequence
 //
 def emit_pending_seq#0
-    word lcl_pending, op
+    word op, pending
     //
     // This is called by some of the emit_*() functions to ensure that any
     // pending ops are emitted before they emit their own op when they are
@@ -270,16 +270,15 @@ def emit_pending_seq#0
     // function calls back into itself it is a no-op.
     //
     if not pending_seq; return; fin
-    lcl_pending = pending_seq
-    pending_seq = NULL
+    pending = pending_seq; pending_seq = NULL
     if outflags & OPTIMIZE
-        while optimize_seq(@lcl_pending, 0); loop
+        while optimize_seq(@pending, 0); loop
         if outflags & OPTIMIZE2
-            while optimize_seq(@lcl_pending, 1); loop
+            while optimize_seq(@pending, 1); loop
         fin
     fin
-    while lcl_pending
-        op = lcl_pending
+    while pending
+        op = pending
         when op->opgroup
             //
             // Constant value
@@ -287,54 +286,61 @@ def emit_pending_seq#0
             is CONST_GROUP
                 if op->opcode == CONST_CODE
                     if op=>opval == $0000            // ZERO
-                        emit_byte($00)
+                        ^codeptr = $00
+                        codeptr++
                     elsif op=>opval & $FF00 == $0000 // Constant BYTE
-                        emit_byte($2A)
-                        emit_byte(op->opval)
+                        *codeptr = $2A | (op->opval << 8)
+                        codeptr  = codeptr + 2
                     elsif op=>opval & $FF00 == $FF00 // Constant $FF00 | BYTE
-                        emit_byte($5E)
-                        emit_byte(op->opval)
+                        *codeptr = $5E | (op->opval << 8)
+                        codeptr  = codeptr + 2
                     else                             // Constant WORD
-                        emit_byte($2C)
-                        emit_word(op=>opval)
+                        codeptr->0 = $2C
+                        codeptr=>1 = op=>opval
+                        codeptr  = codeptr + 3
                     fin
                 else                                 // Constant LOAD/STORE/CALL
-                    emit_byte(op->opcode)
-                    emit_word(op=>opval)
+                    codeptr->0 = op->opcode
+                    codeptr=>1 = op=>opval
+                    codeptr    = codeptr + 3
                 fin
                 break
             //
             // Constant string
             //
             is CONSTR_GROUP
-                emit_byte($2E)
+                ^codeptr = $2E
+                codeptr++
                 emit_data(0, STR_TYPE, op=>opval, 0)
                 break
             //
             // Single op codes
             //
             is STACK_GROUP
-                emit_byte(op->opcode)
+                ^codeptr = op->opcode
+                codeptr++
                 break
             //
             // Local address codes
             //
             is LOCAL_GROUP
-                emit_byte(op->opcode)
-                emit_byte(op->opoffset)
+                *codeptr = op->opcode | (op->opoffset << 8)
+                codeptr  = codeptr + 2
                 break
             //
             // Global address codes
             //
             is GLOBAL_GROUP
-                emit_byte(op->opcode)
+                ^codeptr = op->opcode
+                codeptr++
                 emit_addr(op=>optag, op=>opoffset)
                 break
             //
             // Relative address codes
             //
             is RELATIVE_GROUP
-                emit_byte(op->opcode)
+                ^codeptr = op->opcode
+                codeptr++
                 emit_reladdr(op=>optag)
                 break
             //
@@ -346,13 +352,14 @@ def emit_pending_seq#0
             otherwise
                 return
         wend
-        lcl_pending = lcl_pending=>opnext;
+        pending = pending=>opnext;
         //
         // Free this op
         //
         op=>opnext = freeop_lst
         freeop_lst = op
     loop
+    if codeptr - codebuff > codebufsz; exit_err(ERR_OVER|ERR_CODE|ERR_TABLE); fin
 end
 //
 // Emit a sequence of ops (into the pending sequence)
@@ -896,7 +903,7 @@ def writeRLD(refnum, modofst)#0
         if not (type & RELATIVE_FIXUP)
             if rldlen == 64 // Write out blocks of entries
                 fileio:write(refnum, heapmark, rld - heapmark)
-                rld = heapmark
+                rld    = heapmark
                 rldlen = 0
             fin
             if type & EXTERN_FIXUP
@@ -925,6 +932,7 @@ end
 //
 def writemodule(refnum)#0
     word hdrlen, esd, esdlen, modfix, modadj, modofst, fixups, updtptr
+    
     //
     // Write module header
     //
