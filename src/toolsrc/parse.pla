@@ -1070,13 +1070,17 @@ end
 def parse_lambda
     word func_tag
     byte cfnparms
+    byte lambda_id[4]
 
     if not infunc; exit_err(ERR_INVAL|ERR_STATE); fin
-    save_idlocal
+    if inlambda; puts("Nested lambdas!\n"); exit_err(0); fin
     //
     // Parse parameters and return value count
     //
+    save_idlocal
+    init_idlocal
     cfnparms = 0
+    inlambda = TRUE
     if scan == OPEN_PAREN_TKN
         repeat
             if scan == ID_TKN
@@ -1100,17 +1104,16 @@ def parse_lambda
     //
     // Build an anonymous ID string for the Lambda function
     //
-    lambda_id[lambda_cnt * 4 + 0] = 3
-    lambda_id[lambda_cnt * 4 + 1] = '&'
-    lambda_id[lambda_cnt * 4 + 2] = ((lambda_num >> 3) & $07) + '0'
-    lambda_id[lambda_cnt * 4 + 3] =  (lambda_num       & $07) + '0'
+    lambda_id:0 = 3 | ('&' << 8)
+    lambda_id.2 = ((lambda_num >> 3) & $07) + '0'
+    lambda_id.3 =  (lambda_num       & $07) + '0'
     lambda_num++
-    if lookup_idglobal(@lambda_id[lambda_cnt * 4 + 1], 3)
+    if lookup_idglobal(@lambda_id.1, 3)
         //
         // Lambda ID already exists (from failed scanning for '=')
         //
         func_tag = lambda_tag[lambda_cnt]
-        set_idfunc(@lambda_id[lambda_cnt * 4 + 1], 3, func_tag, cfnparms, 1) // Override any predef type & tag
+        set_idfunc(@lambda_id.1, 3, func_tag, cfnparms, 1) // Override any predef type & tag
     else
         //
         // Creat new Lambda ID
@@ -1118,10 +1121,11 @@ def parse_lambda
         func_tag                  = new_tag(WORD_FIXUP)
         lambda_tag[lambda_cnt]    = func_tag
         lambda_cparms[lambda_cnt] = cfnparms
-        new_idfunc(@lambda_id[lambda_cnt * 4 + 1], 3, FUNC_TYPE, func_tag, cfnparms, 1)
+        new_idfunc(@lambda_id.1, 3, FUNC_TYPE, func_tag, cfnparms, 1)
     fin
     lambda_cnt++
     if lambda_cnt >= LAMBDANUM; parse_warn("Lambda function overflow"); fin
+    inlambda = FALSE
     restore_idlocal
     return func_tag
 end
@@ -1136,7 +1140,6 @@ def parse_defs
     fin
     if token == DEF_TKN
         if scan <> ID_TKN; exit_err(ERR_INVAL|ERR_ID); fin
-        def_cnt++
         lambda_cnt = 0
         cfnparms   = 0
         infuncvals = 1

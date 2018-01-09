@@ -395,7 +395,6 @@ def emit_lambdafunc(tag, cparms, lambda_seq)#0
     framesize = cparms * 2
     emit_enter(cparms)
     emit_seq(lambda_seq)
-    emit_pending_seq
     emit_leave
 end
 //
@@ -441,9 +440,9 @@ def lookup_idglobal(nameptr, len)
     fin
     return idptr
 end
-def new_iddata(namestr, len, type, size)#0
-    if idmatch(namestr, len, idglobal_tbl, globals); exit_err(ERR_DUP|ERR_ID); fin
-    nametostr(namestr, len, lastglobal + idname)
+def new_iddata(nameptr, len, type, size)#0
+    if idmatch(nameptr, len, idglobal_tbl, globals); exit_err(ERR_DUP|ERR_ID); fin
+    nametostr(nameptr, len, lastglobal + idname)
     lastglobal=>idtype = type
     if type & EXTERN_TYPE
         lastglobal=>idval = new_tag(EXTERN_FIXUP|WORD_FIXUP)//datasize
@@ -467,29 +466,30 @@ def size_iddata(type, varsize, initsize)#0
         datasize = datasize + initsize
     fin
 end
-def new_idglobal(namestr, len, type, value, cparms, cvals)#0
-    if idmatch(namestr, len, idglobal_tbl, globals); exit_err(ERR_DUP|ERR_ID); fin
+def new_idglobal(nameptr, len, type, value, cparms, cvals)#0
+    if idmatch(nameptr, len, idglobal_tbl, globals); exit_err(ERR_DUP|ERR_ID); fin
     lastglobal=>idval     = value
     lastglobal=>idtype    = type
     lastglobal->funcparms = cparms
     lastglobal->funcvals  = cvals
-    nametostr(namestr, len, lastglobal + idname)
+    nametostr(nameptr, len, lastglobal + idname)
     globals++
     lastglobal = lastglobal + t_id + len
     if lastglobal - idglobal_tbl > globalbufsz; exit_err(ERR_OVER|ERR_GLOBAL|ERR_ID|ERR_TABLE); fin
 end
-def new_idconst(namestr, len, value)#0
-    new_idglobal(namestr, len, CONST_TYPE, value, 0, 0)
+def new_idconst(nameptr, len, value)#0
+    new_idglobal(nameptr, len, CONST_TYPE, value, 0, 0)
 end
-def new_idfunc(namestr, len, type, tag, cfnparms, cfnvals)#0
-    new_idglobal(namestr, len, type|FUNC_TYPE, tag, cfnparms, cfnvals)
+def new_idfunc(nameptr, len, type, tag, cfnparms, cfnvals)#0
+    new_idglobal(nameptr, len, type|FUNC_TYPE, tag, cfnparms, cfnvals)
+    if not (type & EXTERN_TYPE); def_cnt++; fin
 end
-def set_idfunc(namestr, len, tag, cparms, cvals)#0
+def set_idfunc(nameptr, len, tag, cparms, cvals)#0
     word idptr
 
-    idptr = lookup_idglobal(namestr, len)
+    idptr = lookup_idglobal(nameptr, len)
     if idptr
-        if not (idptr=>idtype & FUNC_TYPE); exit_err(ERR_UNDECL|ERR_CODE); fin
+        if not (idptr=>idtype & FUNC_TYPE); exit_err(ERR_UNDECL|ERR_CODE); fin // DEBUG
         idptr=>idval     = tag
         idptr->funcparms = cparms
         idptr->funcvals  = cvals
@@ -533,11 +533,11 @@ def init_idglobal#0
     next
     op=>opnext = NULL
 end
-def new_idlocal(namestr, len, type, size)#0
-    if idmatch(namestr, len, @idlocal_tbl, locals); exit_err(ERR_DUP|ERR_ID); fin
+def new_idlocal(nameptr, len, type, size)#0
+    if idmatch(nameptr, len, @idlocal_tbl, locals); exit_err(ERR_DUP|ERR_ID); fin
     lastlocal=>idval  = framesize
     lastlocal=>idtype = type | LOCAL_TYPE
-    nametostr(namestr, len, lastlocal + idname)
+    nametostr(nameptr, len, lastlocal + idname)
     locals++
     lastlocal = lastlocal + t_id + len
     if lastlocal - idlocal_tbl > localbufsz; exit_err(ERR_OVER|ERR_LOCAL|ERR_TABLE); fin
@@ -554,7 +554,6 @@ def save_idlocal#0
     savesize   = framesize
     savelast   = lastlocal
     memcpy(heapmark, idlocal_tbl, lastlocal - idlocal_tbl)
-    init_idlocal
 end
 def restore_idlocal#0
     locals    = savelocals
