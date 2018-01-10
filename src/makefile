@@ -165,7 +165,7 @@ $(MON): samplesrc/mon.pla $(PLVM02) $(PLASM)
 	acme --setpc 4094 -o $(MON) samplesrc/mon.a
 
 $(ROD): samplesrc/rod.pla $(PLVM02) $(PLASM)
-	./$(PLASM) -AMOW < samplesrc/rod.pla > samplesrc/rod.a
+	./$(PLASM) -AMO < samplesrc/rod.pla > samplesrc/rod.a
 	acme --setpc 4094 -o $(ROD) samplesrc/rod.a
 
 $(SIEVE): samplesrc/sieve.pla $(PLVM02) $(PLASM)
