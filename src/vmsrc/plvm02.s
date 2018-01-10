@@ -336,6 +336,13 @@ CMDENTRY =      *
         !WORD   CLOSEPARMS
         BNE     FAIL
 ;
+; CHANGE CMD STRING TO SYSPATH STRING
+;
+        LDA     STRBUF
+        SEC
+        SBC     #$03
+        STA     STRBUF
+;
 ; INIT VM ENVIRONMENT STACK POINTERS
 ;
 ;        LDA #$00               ; INIT FRAME POINTER
