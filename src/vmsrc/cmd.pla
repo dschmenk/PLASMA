@@ -28,12 +28,12 @@ predef syscall(cmd,params)#1, call(addr,areg,xreg,yreg,status)#1
 predef crout()#0, cout(c)#0, prstr(s)#0, print(i)#0, cin()#1, rdstr(p)#1, toupper(c)#1
 predef markheap()#1, allocheap(size)#1, allocalignheap(size, pow2, freeaddr)#1, releaseheap(newheap)#1, availheap()#1
 predef memset(addr,value,size)#0, memcpy(dst,src,size)#0
-predef uword_isgt(a,b)#1, uword_isge(a,b)#1, uword_islt(a,b)#1, uword_isle(a,b)#1, divmod(a,b)#2
+predef uword_isgt(a,b)#1, uword_isge(a,b)#1, uword_islt(a,b)#1, uword_isle(a,b)#1, sext(a)#1, divmod(a,b)#2
 predef loadmod(mod)#1, execmod(modfile)#1, lookupstrmod(str)#1
 //
 // System variable.
 //
-word version     = $0099 // 00.99
+word version     = $0100 // 01.00
 word systemflags = 0
 word heap
 word xheap       = $0800
@@ -59,12 +59,14 @@ byte hpalignstr = "HEAPALLOCALIGN"
 byte hpallocstr = "HEAPALLOC"
 byte hprelstr   = "HEAPRELEASE"
 byte hpavlstr   = "HEAPAVAIL"
-byte memsetstr  = "MEMSET"
+word memsetstr  = "MEMSET"
 byte memcpystr  = "MEMCPY"
 byte uisgtstr   = "ISUGT"
 byte uisgestr   = "ISUGE"
 byte uisltstr   = "ISULT"
 byte uislestr   = "ISULE"
+byte syspath[] // overlay with exported strings
+byte sextstr    = "SEXT"
 byte divmodstr  = "DIVMOD"
 byte loadstr    = "MODLOAD"
 byte execstr    = "MODEXEC"
@@ -92,6 +94,7 @@ word            = @uisgtstr,  @uword_isgt
 word            = @uisgestr,  @uword_isge
 word            = @uisltstr,  @uword_islt
 word            = @uislestr,  @uword_isle
+word            = @sextstr,   @sext
 word            = @divmodstr, @divmod
 word            = @loadstr,   @loadmod
 word            = @execstr,   @execmod
@@ -534,6 +537,14 @@ _divmod DEX
         STA     ESTKH,X
         RTS
 end
+asm sext(a)#1
+        LDY     #$00
+        LDA     ESTKL,X
+        BPL     +
+        DEY
++       STY     ESTKH,X
+        RTS
+end
 //
 // Utility routines.
 //
@@ -757,12 +768,12 @@ def setpfx(path)#1
     perr     = syscall($C6, @params)
     return path
 end
-def open(path, buff)#1
+def open(path)#1
     byte params[6]
 
     params.0 = 3
     params:1 = path
-    params:3 = buff
+    params:3 = iobuffer
     params.5 = 0
     perr     = syscall($C8, @params)
     return params.5
@@ -882,6 +893,19 @@ def addsym(sym, addr)#0
     ^lastsym    = 0
 end
 //
+// String routines.
+//
+def strcpy(dst, src)#1
+    memcpy(dst+1, src+1, ^src)
+    ^dst = ^src
+    return dst
+end
+def strcat(dst, src)#1
+    memcpy(dst + ^dst + 1, src + 1, ^src)
+    ^dst = ^dst + ^src
+    return dst
+end
+//
 // Module routines.
 //
 def lookupmod(mod)#1
@@ -939,18 +963,24 @@ def lookupdef(addr, deftbl)#1
     return 0
 end
 def loadmod(mod)#1
-    word refnum, rdlen, modsize, bytecode, codefix, defofst, defcnt, init, fixup
+    word rdlen, modsize, bytecode, codefix, defofst, defcnt, init, fixup
     word addr, defaddr, modaddr, modfix, modofst, modend
     word deftbl, deflast
     word moddep, rld, esd, sym
-    byte defbank, str[16], filename[64]
+    byte refnum, defbank, str[16], filename[64]
     byte header[128]
     //
     // Read the RELocatable module header (first 128 bytes)
     //
     dcitos(mod, @filename)
-    refnum = open(@filename, iobuffer)
-    if refnum > 0
+    refnum = open(@filename)
+    if !refnum
+        //
+        // Try system path
+        //
+        refnum = open(strcpy(@filename,strcat(strcpy(@header, @syspath), @filename)))
+    fin
+    if refnum
         rdlen   = read(refnum, @header, 128)
         modsize = header:0
         moddep  = @header.1
@@ -988,7 +1018,7 @@ def loadmod(mod)#1
                 //
                 // Reset read pointer.
                 //
-                refnum = open(@filename, iobuffer)
+                refnum = open(@filename)
                 rdlen  = read(refnum, @header, 128)
             fin
         fin
@@ -1181,7 +1211,7 @@ def catalog(optpath)#1
         prstr(@path)
         crout()
     fin
-    refnum = open(@path, iobuffer)
+    refnum = open(@path)
     if perr
         return perr
     fin
@@ -1287,7 +1317,7 @@ def execsys(sysfile)#0
     if ^sysfile
         memcpy($280, sysfile, ^sysfile + 1)
         striptrail(sysfile)
-        refnum = open(sysfile, iobuffer)
+        refnum = open(sysfile)
         if refnum
             len = read(refnum, databuff, $FFFF)
             resetmemfiles()
@@ -1340,9 +1370,13 @@ while *syslibsym
     syslibsym = syslibsym + 4
 loop
 //
+// Set system path
+//
+strcat(getpfx(@syspath), "SYS/"))
+//
 // Try to load autorun.
 //
-autorun = open(@autorun, iobuffer)
+autorun = open(@autorun)
 if autorun > 0
     cmdln = read(autorun, @syslibstr, 128)
     close(autorun)
@@ -1350,14 +1384,8 @@ else
     //
     // Print some startup info.
     //
-    prstr("PLASMA ")
-    prbyte(version.1)
-    cout('.')
-    prbyte(version.0)
-    crout
-    prstr("MEM FREE:$")
-    prword(availheap)
-    crout
+    prstr("PLASMA "); prbyte(version.1); cout('.'); prbyte(version.0); crout
+    prstr("MEM FREE:$"); prword(availheap); crout
 fin
 perr = 0
 while 1

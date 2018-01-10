@@ -29,12 +29,12 @@ predef syscall(cmd,params)#1, call(addr,areg,xreg,yreg,status)#1
 predef crout()#0, cout(c)#0, prstr(s)#0, print(i)#0, cin()#1, rdstr(p)#1, toupper(c)#1
 predef markheap()#1, allocheap(size)#1, allocalignheap(size, pow2, freeaddr), releaseheap(newheap)#1, availheap()#1
 predef memset(addr,value,size)#0, memcpy(dst,src,size)#0
-predef uword_isgt(a,b)#1, uword_isge(a,b)#1, uword_islt(a,b)#1, uword_isle(a,b)#1, divmod(a,b)#2
+predef uword_isgt(a,b)#1, uword_isge(a,b)#1, uword_islt(a,b)#1, uword_isle(a,b)#1, sext(a)#1, divmod(a,b)#2
 predef loadmod(mod)#1, execmod(modfile)#1, lookupstrmod(str)#1
 //
 // System variables.
 //
-word version     = $0099 // 00.99
+word version     = $0100 // 01.00
 word systemflags = 0
 byte refcons     = 0
 byte devcons     = 0
@@ -83,6 +83,8 @@ byte uisgtstr[]   = "ISUGT"
 byte uisgestr[]   = "ISUGE"
 byte uisltstr[]   = "ISULT"
 byte uislestr[]   = "ISULE"
+byte syspath[] // overlay with exported strings
+byte sextstr[]    = "SEXT"
 byte divmodstr[]  = "DIVMOD"
 byte loadstr[]    = "MODLOAD"
 byte execstr[]    = "MODEXEC"
@@ -109,6 +111,7 @@ word              = @uisgtstr,  @uword_isgt
 word              = @uisgestr,  @uword_isge
 word              = @uisltstr,  @uword_islt
 word              = @uislestr,  @uword_isle
+word              = @sextstr,   @sext
 word              = @divmodstr, @divmod
 word              = @loadstr,   @loadmod
 word              = @execstr,   @execmod
@@ -434,6 +437,14 @@ _divmod DEX
         LDA     #$00
         SBC     ESTKH,X
         STA     ESTKH,X
+        RTS
+end
+asm sext(a)#1
+        LDY     #$00
+        LDA     ESTKL,X
+        BPL     +
+        DEY
++       STY     ESTKH,X
         RTS
 end
 //
@@ -913,6 +924,19 @@ def addsym(sym, addr)#0
     lastsym = lastsym + 3
 end
 //
+// String routines.
+//
+def strcpy(dst, src)#1
+    memcpy(dst+1, src+1, ^src)
+    ^dst = ^src
+    return dst
+end
+def strcat(dst, src)#1
+    memcpy(dst + ^dst + 1, src + 1, ^src)
+    ^dst = ^dst + ^src
+    return dst
+end
+//
 // Module routines.
 //
 def lookupmod(mod)#1
@@ -980,7 +1004,13 @@ def loadmod(mod)#1
     //
     dcitos(mod, @filename)
     refnum = open(@filename)
-    if refnum > 0
+    if !refnum
+        //
+        // Try system path
+        //
+        refnum = open(strcpy(@filename,strcat(strcpy(@header, @syspath), @filename)))
+    fin
+    if refnum
         rdlen   = read(refnum, @header, 128)
         modsize = header:0
         moddep  = @header.1
@@ -1324,6 +1354,10 @@ while *syslibsym
     addsym(heap, syslibsym=>2)
     syslibsym = syslibsym + 4
 loop
+//
+// Set system path
+//
+strcat(getpfx(@syspath), "SYS/"))
 //
 // Try to load autorun.
 //
