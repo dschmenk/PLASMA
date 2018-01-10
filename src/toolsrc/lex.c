@@ -47,6 +47,7 @@ t_token keywords[] = {
     LOGIC_NOT_TOKEN,        'N', 'O', 'T',
     LOGIC_AND_TOKEN,        'A', 'N', 'D',
     LOGIC_OR_TOKEN,         'O', 'R',
+    BYTE_TOKEN,             'R', 'E', 'S',
     BYTE_TOKEN,             'B', 'Y', 'T', 'E',
     BYTE_TOKEN,             'C', 'H', 'A', 'R',
     WORD_TOKEN,             'W', 'O', 'R', 'D',
