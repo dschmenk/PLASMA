@@ -769,15 +769,15 @@ def lookupextern(esd, index)#1
     byte str[16]
     while ^esd
         sym = esd
-        esd = esd + dcitos(esd, @str)
+        esd = sym + dcitos(sym, @str)
         if esd->0 & $10 and esd->1 == index
             addr = lookuptbl(sym, symtbl)
-        if !addr
+            if !addr
                 perr = $81
-            cout('?')
-        prstr(@str)
-        crout
-        fin
+                cout('?')
+                prstr(@str)
+                crout
+            fin
             return addr
         fin
         esd = esd + 3
@@ -808,7 +808,7 @@ def loadmod(mod)#1
     word addr, modaddr, modfix, modofst, modend
     word deftbl, deflast
     word moddep, rld, esd, sym
-    byte str[17], filename[17]
+    byte type, str[17], filename[17]
     byte header[128]
     //
     // Read the RELocatable module header (first 128 bytes)
@@ -875,6 +875,7 @@ def loadmod(mod)#1
         modofst  = modfix  - MODADDR
         modend   = modaddr + modsize
         bytecode = defofst + modofst
+        defofst  = bytecode - defofst
         rld      = modend  // Re-Locatable Directory
         esd      = rld     // Extern+Entry Symbol Directory
         while ^esd         // Scan to end of ESD
@@ -882,40 +883,43 @@ def loadmod(mod)#1
         loop
         esd = esd + 1
         //
+        // Run through the DeFinition Dictionary.
+        //
+        while ^rld == $02
+            //
+            // This is a bytcode def entry - add it to the def directory.
+            //
+            adddef(rld=>1 + defofst, @deflast)
+            rld = rld + 4
+        loop
+        //
         // Run through the Re-Location Dictionary.
         //
         while ^rld
-            if ^rld == $02
-                //
-                // This is a bytcode def entry - add it to the def directory.
-                //
-                adddef(rld=>1 - defofst + bytecode, @deflast)
-            else
-                addr = rld=>1 + modfix
-                if uword_isge(addr, modaddr) // Skip fixups to header
-                    if ^rld & $80 // WORD sized fixup.
-                        fixup = *addr
-                    else      // BYTE sized fixup.
-                        fixup = ^addr
-                    fin
-                    if ^rld & $10 // EXTERN reference.
-                        fixup = fixup + lookupextern(esd, rld->3)
-                    else      // INTERN fixup.
-                        fixup = fixup + modofst
-                        if uword_isge(fixup, bytecode)
-                            //
-                            // Bytecode address - replace with call def directory.
-                            //
-                            fixup = lookupdef(fixup - bytecode + bytecode, deftbl)
-                        fin
-                    fin
-                    if ^rld & $80 // WORD sized fixup.
-                        *addr = fixup
-                    else      // BYTE sized fixup.
-                        ^addr = fixup
+            addr = rld=>1 + modfix
+            //if uword_isge(addr, modaddr) // Skip fixups to header
+                //if type & $80 // WORD sized fixup.
+                //    fixup = *addr
+                //else      // BYTE sized fixup.
+                    fixup = ^addr
+                //fin
+                if ^rld & $10 // EXTERN reference.
+                    fixup = fixup + lookupextern(esd, rld->3)
+                else      // INTERN fixup.
+                    fixup = fixup + modofst
+                    if uword_isge(fixup, bytecode)
+                        //
+                        // Bytecode address - replace with call def directory.
+                        //
+                        fixup = lookupdef(fixup + defofst, deftbl)
                     fin
                 fin
-            fin
+                //if type & $80 // WORD sized fixup.
+                    *addr = fixup
+                //else      // BYTE sized fixup.
+                //    ^addr = fixup
+                //fin
+            //fin
             rld = rld + 4
         loop
         //
@@ -933,7 +937,7 @@ def loadmod(mod)#1
                     //
                     // Use the def directory address for bytecode.
                     //
-                    addr = lookupdef(addr - bytecode + bytecode, deftbl)
+                    addr = lookupdef(addr + defofst, deftbl)
                 fin
                 addsym(sym, addr)
             fin
