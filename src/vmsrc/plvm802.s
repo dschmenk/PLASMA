@@ -1575,7 +1575,7 @@ LEAVE   +ACCMEM8                ; 8 BIT A/M
         INX
 +       CPX     ESP
         BNE     -
- !IF    DEBUG {
+!IF     DEBUG {
         STX     TMPL
         TSX
         CPX     HWSP
