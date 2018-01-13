@@ -7,7 +7,7 @@ PLASMA: **P**roto **L**anguage **A**s**S**e**M**bler for **A**pple
 
 PLASMA is a medium level programming language targeting the 8-bit 6502 processor. Historically, there were simple languages developed in the early years of computers that improved on the tedium of assembly language programming while still being low level enough for system coding. Languages like B, FORTH, and PLASMA fall into this category.
 
-PLASMA is a combination of virtual machine and assembler/compiler matched closely to the 6502 architecture.  It is an attempt to satisfy a few challenges surrounding code size, efficient execution, small runtime and flexible code location.  By architecting a unique bytecode that maps nearly one-to-one to the higher-level representation, the compiler can be very simple and execute quickly on the Apple II for a self-hosted environment.  A modular approach provides for incremental development and code reuse. The syntax of the language is heavily influenced by assembly, Pascal, and C. The design philosophy was to be as simple as feasible while retaining flexibility and symantic clarity. You won't find any unnecessary or redundant syntax in PLASMA.
+PLASMA is a combination of operating environment, virtual machine, and assembler/compiler matched closely to the 6502 architecture.  It is an attempt to satisfy a few challenges surrounding code size, efficient execution, small runtime and flexible code location.  By architecting a unique bytecode that maps nearly one-to-one to the higher-level representation, the compiler can be very simple and execute quickly on the Apple II for a self-hosted environment.  A modular approach provides for incremental development and code reuse. The syntax of the language is heavily influenced by assembly, Pascal, and C. The design philosophy was to be as simple as feasible while retaining flexibility and symantic clarity. You won't find any unnecessary or redundant syntax in PLASMA.
 
 Different projects have led to the architecture of PLASMA, most notably Apple Pascal, FORTH, and my own Java VM for the 6502: VM02. Each has tried to map a generic VM to the 6502 with varying levels of success.  Apple Pascal, based on the USCD Pascal using the p-code interpreter, was a very powerful system and ran fast enough on the Apple II to be interactive but didn't win any speed contests. FORTH was the poster child for efficiency and obtuse syntax. Commonly referred to as a write only language, it was difficult to come up to speed as a developer, especially when using others' code. My own project in creating a Java VM for the Apple II uncovered the folly of shoehorning a large, 32-bit virtual memory environment into 8-bit, 64K hardware.
 
@@ -101,6 +101,8 @@ Different projects have led to the architecture of PLASMA, most notably Apple Pa
 
 # Build Environment
 
+## PLASMA Cross-Compiler
+
 The first step in writing PLASMA code is to get a build environment working. If you have Unix-like environment, then this is a fairly easy exercise. Windows users may want to install the [Cygwin](https://www.cygwin.com/) environment to replicate a Unix-like environment under Windows. When installing Cygwin, make sure **gcc-core**, **make**, and **git** are installed under the **Devel** packages. Mac OS X users may have to install the **Xcode** from the App Store.
 
 Launch the command-line/terminal application for your environment to download and build PLASMA. Create a source code directory and change the working directory to it, something like:
@@ -110,7 +112,7 @@ mkdir Src
 cd Src
 ```
 
-## acme Cross-Assembler
+### acme Cross-Assembler
 
 There are two source projects you need to download: the first is a nice cross-platform 6502 assembler called [acme](http://sourceforge.net/p/acme-crossass/code-0/6/tree/trunk/docs/QuickRef.txt). Download, build, and install the acme assembler by typing:
 
@@ -124,7 +126,7 @@ cd ../..
 
 Under Unix that `cp` command may have to be preceded by `sudo` to elevate the privileges to copy into `/usr/local/bin`.
 
-## PLASMA Source
+### PLASMA Source
 
 Now, to download PLASMA and build it, type:
 
@@ -134,7 +136,7 @@ cd PLASMA/src
 make
 ```
 
-### Portable VM
+#### Portable VM
 
 To see if everything built correctly, type:
 
@@ -165,6 +167,22 @@ to run the module. You will be rewarded with `Hello, world.` printed to the scre
 ```
 
 and you should see the same screenful of gibberish you saw from the portable VM, but on the Apple II this time. Both VMs are running the exact same module binaries. To view the source of these modules refer to `PLASMA/src/samplesrc/hello.pla`, `PLASMA/src/samplesrc/test.pla`, and `PLASMA/src/samplesrc/testlib.pla`. To get even more insight into the compiled source, view the corresponding `.a` files.
+
+## Target Compiler
+
+The PLASMA compiler is also self-hosted on the Apple II and III. The PLASMA system and development disks can be run on a real or emulated machine. It is recommended to copy the file to a hard disk, or similar mass storage device. Boot the PLASMA system and change prefix to the development disk/directory. The 'HELLO.PLA' source file should be there. To compile the module, type:
+
+```
++PLASMA HELLO.PLA
+```
+
+After the compiler loads (which can take some time on an un-accelerated machine), you will see the compiler banner message. The complilation process prints out a `.` once in awhile. When compilation is complete, the module will be written to disk, and the prompt will return. To execute the module, type:
+
+```
++HELLO
+```
+
+and just like with the cross-compiled module, you will get the `Hello, word.` message printed to the screen.
 
 # Tutorial
 
