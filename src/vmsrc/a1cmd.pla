@@ -34,12 +34,12 @@ predef syscall(cmd,null)#1, call(addr,areg,xreg,yreg,status)#1
 predef crout()#0, cout(c)#0, prstr(s)#0, print(i)#0, cin()#1, rdstr(p)#1, toupper(c)#1
 predef markheap()#1, allocheap(size)#1, allocalignheap(size, pow2, freeaddr), releaseheap(newheap)#1, availheap()#1
 predef memset(addr,value,size)#0, memcpy(dst,src,size)#0
-predef uword_isgt(a,b)#1, uword_isge(a,b)#1, uword_islt(a,b)#1, uword_isle(a,b)#1, divmod(a,b)#2
+predef uword_isgt(a,b)#1, uword_isge(a,b)#1, uword_islt(a,b)#1, uword_isle(a,b)#1, sext(a)#1, divmod(a,b)#2
 predef loadmod(mod)#1, execmod(modfile)#1, lookupstrmod(str)#1
 //
 // System variables.
 //
-word version     = $0099 // 00.99
+word version     = $0100 // 01.00
 word systemflags = 0
 word heap
 word symtbl, lastsym
@@ -68,6 +68,7 @@ word cmdptr       = @hexchar // make it point to a zero
 //
 byte syslibstr[]  = "CMDSYS"
 byte machidstr[]  = "MACHID"
+byte syspathstr[] = "SYSPATH"
 byte putcstr[]    = "PUTC"
 byte putlnstr[]   = "PUTLN"
 byte putsstr[]    = "PUTS"
@@ -88,12 +89,12 @@ byte uisgtstr[]   = "ISUGT"
 byte uisgestr[]   = "ISUGE"
 byte uisltstr[]   = "ISULT"
 byte uislestr[]   = "ISULE"
+byte sextstr[]    = "SEXT"
 byte divmodstr[]  = "DIVMOD"
-byte loadstr[]    = "MODLOAD"
-byte execstr[]    = "MODEXEC"
-byte modadrstr[]  = "MODADDR"
 byte argstr[]     = "ARGS"
-word exports[]    = @sysstr,    @syscall
+byte syspath[]    = "" // Set to NULL
+word exports[]    = @syslibstr, @version
+word              = @sysstr,    @syscall
 word              = @callstr,   @call
 word              = @putcstr,   @cout
 word              = @putlnstr,  @crout
@@ -113,11 +114,10 @@ word              = @uisgtstr,  @uword_isgt
 word              = @uisgestr,  @uword_isge
 word              = @uisltstr,  @uword_islt
 word              = @uislestr,  @uword_isle
+word              = @sextstr,   @sext
 word              = @divmodstr, @divmod
-word              = @loadstr,   @loadmod
-word              = @execstr,   @execmod
-word              = @modadrstr, @lookupstrmod
 word              = @machidstr, @machid
+word              = @syspathstr,@syspath
 word              = @argstr,    @cmdptr
 word              = 0
 word syslibsym    = @exports
@@ -375,6 +375,14 @@ _divmod DEX
     STA ESTKH,X
     RTS
 end
+asm sext(a)#1
+    LDY #$00
+    LDA ESTKL,X
+    BPL +
+    DEY
++   STY ESTKH,X
+    RTS
+end
 //
 // Addresses of internal routines.
 //
@@ -485,38 +493,6 @@ end
 // pre-pended with a '#' to differentiate them
 // from normal symbols.
 //
-//def modtosym(mod, dci)
-//    byte len, c
-//    (dci).0 = '#'|$80
-//    len = 0
-//    repeat
-//        c = (mod).[len]
-//        len = len + 1
-//        (dci).[len] = c
-//    until !(c & $80)
-//    return dci
-//end
-asm modtosym(mod, dci)#1
-    LDA ESTKL+1,X
-    STA SRCL
-    LDA ESTKH+1,X
-    STA SRCH
-    LDA ESTKL,X
-    STA ESTKL+1,X
-    STA DSTL
-    LDA ESTKH,X
-    STA ESTKH+1,X
-    STA DSTH
-    INX
-    LDY #$00
-    LDA #'#'+$80
--   STA (DST),Y
-    ASL
-    LDA (SRC),Y
-    INY
-    BCS -
-    RTS
-end
 //
 // Lookup routines.
 //
@@ -622,47 +598,53 @@ def rdstr(prompt)#1
     cout(prompt)
     repeat
         ch = cin
-    when ch
-        is $15 // right arrow
-            if inbuff.0 < maxlen
-            inbuff.0 = inbuff.0 + 1
-            ch = inbuff[inbuff.0]
-            cout(ch)
-        fin
-        is $08 // left arrow
-            if inbuff.0
-            cout('\\')
-            cout(inbuff[inbuff.0])
-            inbuff.0 = inbuff.0 - 1
-        fin
-        is $04 // ctrl-d
-            if inbuff.0
-            cout('#')
-            cout(inbuff[inbuff.0])
-            memcpy(inbuff + inbuff.0, inbuff + inbuff.0 + 1, maxlen - inbuff.0)
-            maxlen   = maxlen   - 1
-            inbuff.0 = inbuff.0 - 1
-        fin
-        is $0C // ctrl-l
-            crout
-        prstr(inbuff)
-        is $0D // return
-        is $18 // ctrl-x
-            crout
-        inbuff.0 = 0
-        is $9B // escape
-            inbuff.0 = 0
-        ch = $0D
-        otherwise
-            if ch >= ' '
-                cout(ch)
-            inbuff.0 = inbuff.0 + 1
-            inbuff[inbuff.0] = ch
-            if inbuff.0 > maxlen
-                maxlen = inbuff.0
-            fin
-        fin
-    wend
+        when ch
+            is $15 // right arrow
+                if ^inbuff < maxlen //inbuff.0 < maxlen
+                    inbuff.0 = inbuff.0 + 1
+                    ch = inbuff[inbuff.0]
+                    cout(ch)
+                fin
+                break
+            is $08 // left arrow
+                if inbuff.0
+                    cout('\\')
+                    cout(inbuff[inbuff.0])
+                    inbuff.0 = inbuff.0 - 1
+                fin
+                break
+            is $04 // ctrl-d
+                if inbuff.0
+                    cout('#')
+                    cout(inbuff[inbuff.0])
+                    memcpy(inbuff + inbuff.0, inbuff + inbuff.0 + 1, maxlen - inbuff.0)
+                    maxlen   = maxlen   - 1
+                    inbuff.0 = inbuff.0 - 1
+                fin
+                break
+            is $0C // ctrl-l
+                crout
+                prstr(inbuff)
+                break
+            is $0D // return
+            is $18 // ctrl-x
+                crout
+                inbuff.0 = 0
+                break
+            is $9B // escape
+                inbuff.0 = 0
+                ch = $0D
+                break
+            otherwise
+                if ch >= ' '
+                    cout(ch)
+                    inbuff.0 = inbuff.0 + 1
+                    inbuff[inbuff.0] = ch
+                    if inbuff.0 > maxlen
+                        maxlen = inbuff.0
+                    fin
+                fin
+        wend
     until ch == $0D or inbuff.0 == $7F
     cout($0D)
     return inbuff
@@ -751,19 +733,6 @@ end
 //
 // Module routines.
 //
-def lookupmod(mod)#1
-    byte dci[17]
-    return lookuptbl(modtosym(mod, @dci), symtbl)
-end
-def lookupstrmod(str)#1
-    byte mod[17]
-    stodci(str, @mod)
-    return lookupmod(@mod)
-end
-def addmod(mod, addr)#0
-    byte dci[17]
-    addsym(modtosym(mod, @dci), addr)
-end
 def lookupextern(esd, index)#1
     word sym, addr
     byte str[16]
@@ -837,7 +806,7 @@ def loadmod(mod)#1
             // Load module dependencies.
             //
             while ^moddep
-                if !lookupmod(moddep)
+                if !lookuptbl(moddep, symtbl)
                     if loadmod(moddep) < 0
                         return -perr
                     fin
@@ -867,7 +836,7 @@ def loadmod(mod)#1
         //
         // Add module to symbol table.
         //
-        addmod(mod, modaddr)
+        addsym(mod, modaddr)
         //
         // Apply all fixups and symbol import/export.
         //
@@ -1032,13 +1001,15 @@ end
 //
 heap = *freemem
 //
+// Print PLASMA version
+//
+prstr(@verstr); prbyte(version.1); cout('.'); prbyte(version.0); crout
+//
 // Init symbol table.
 //
 symtbl   = allocheap($200)
 lastsym  = symtbl
 ^lastsym = 0
-stodci(@syslibstr, heap)
-addmod(heap, @version)
 while *syslibsym
     stodci(syslibsym=>0, heap)
     addsym(heap, syslibsym=>2)
@@ -1058,11 +1029,6 @@ perr = 0
 // Print some startup info.
 //
 if not ^cmdptr
-    prstr(@verstr)
-    prbyte(version.1)
-    cout('.')
-    prbyte(version.0)
-    crout
     prstr(@freestr)
     prword(availheap)
     crout

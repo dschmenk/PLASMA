@@ -152,6 +152,7 @@ byte                    = "AND",      LOGIC_AND_TKN
 byte                    = "NOT",      LOGIC_NOT_TKN
 byte                    = "RES",      BYTE_TKN
 byte                    = "VAR",      WORD_TKN
+byte                    = "RES",      BYTE_TKN
 byte                    = "WORD",     WORD_TKN
 byte                    = "CHAR",     BYTE_TKN
 byte                    = "BYTE",     BYTE_TKN
@@ -281,21 +282,21 @@ word srcline              // Saved source line number
 //
 // Scanner variables
 //
-const inbuff            = $0200
-const instr             = $01FF
-word  scanptr           = inbuff
-byte  token             = EOL_TKN
-byte  scanchr, tknlen
-word  tknptr, parserrln
-word  constval
-word  lineno
+word instr
+word inbuff
+word scanptr
+byte token             = EOL_TKN
+byte scanchr, tknlen
+word tknptr, parserrln
+word constval
+word lineno
 //
 // Parser variables
 //
 const LVALUE            = 0
 const RVALUE            = 1
 const LAMBDANUM         = 16
-byte[80] strconst
+word strconstbuff
 word strconstptr
 byte infunc, inlambda
 byte stack_loop
@@ -348,14 +349,6 @@ def puth(hex)#0
     putc('$')
     call($F941, hex >> 8, hex, 0, 0)
 end
-def strcpy(dst, src)
-    if ^src
-        memcpy(dst, src, ^src + 1)
-    else
-        ^dst = 0
-    fin
-    return ^dst
-end
 def nametostr(namestr, len, strptr)#0
     ^strptr = len
     memcpy(strptr + 1, namestr, len)
@@ -394,7 +387,7 @@ def exit_err(err)#0
     if err & ERR_SYNTAX; puts("syntax");      fin
     putcurln
     fileio:close(0) // Close all open files
-    longjmp(exit, TRUE)
+    throw(exit, TRUE)
 end
 //
 // Warning
@@ -415,16 +408,17 @@ include "toolsrc/parse.pla"
 //
 // Look at command line arguments and compile module
 //
+puts("PLASMA Compiler, Version 1.0\n")
 arg = argNext(argFirst)
 if ^arg and ^(arg + 1) == '-'
-    opt          = arg + 2
+    opt = arg + 2
     while TRUE
         if toupper(^opt) == 'O'
             //
             // Load optimizer module here
             //
             if MACHID & $30 == $30
-                if modexec("CODEOPT") >= 0
+                if cmdsys:modexec("CODEOPT") >= 0
                     outflags = outflags | OPTIMIZE
                 fin
             fin
@@ -448,10 +442,10 @@ if ^arg and ^(arg + 1) == '-'
     loop
     arg = argNext(arg)
 fin
-if arg
+if ^arg
     strcpy(@srcfile, arg)
     arg = argNext(arg)
-    if arg and ^arg
+    if ^arg
         strcpy(@relfile, arg)
     else
         strcpy(@relfile, @srcfile)
@@ -474,12 +468,15 @@ if srcfile and relfile
     srcref = fileio:open(@srcfile)
     if srcref
         fileio:newline(srcref, $7F, $0D)
-        refnum    = srcref
-        parsefile = @srcfile
-        *instr    = 0
-        scanptr   = inbuff
-        exit      = heapalloc(t_longjmp)
-        if not setjmp(exit)
+        refnum       = srcref
+        parsefile    = @srcfile
+        strconstbuff = heapalloc(80)
+        instr        = cmdsys:cmdline
+        inbuff       = instr + 1
+        scanptr      = inbuff
+        *instr       = NULL
+        exit         = heapalloc(t_except)
+        if not except(exit)
             //
             // Parse source code module
             //

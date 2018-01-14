@@ -130,10 +130,10 @@ BADCPU  !TEXT   "65C802/65C816 CPU REQUIRED.", 13
 ;*
 ;* INITIALIZE STACK
 ;*
-INITSP  LDX     #$FE
-        TXS
-        LDX     #$00
-        STX     $01FF
+;INITSP  LDX     #$FE
+;        TXS
+;        LDX     #$00
+;        STX     $01FF
 ;*
 ;* DISCONNECT /RAM
 ;*
@@ -361,8 +361,8 @@ BYE     LDY     DEFCMD
         STA     STRBUF,Y
         DEY
         BPL     -
-        INY                     ; CLEAR CMDLINE BUFF
-        STY     $01FF
+;        INY                     ; CLEAR CMDLINE BUFF
+;        STY     $01FF
 CMDENTRY =      *
 ;
 ; DEACTIVATE 80 COL CARDS
@@ -425,8 +425,9 @@ CMDENTRY =      *
 ;
 ; INIT VM ENVIRONMENT STACK POINTERS
 ;
-;        LDA #$00               ; INIT FRAME POINTER
-        STA     PPL
+;        LDA     #$00
+        STA     $01FF           ; CLEAR CMDLINE BUFF
+        STA     PPL             ; INIT FRAME POINTER
         STA     IFPL
         LDA     #$BF
         STA     PPH
@@ -434,6 +435,13 @@ CMDENTRY =      *
         LDX     #$FE            ; INIT STACK POINTER (YES, $FE. SEE GETS)
         TXS
         LDX     #ESTKSZ/2       ; INIT EVAL STACK INDEX
+;
+; CHANGE CMD STRING TO SYSPATH STRING
+;
+        LDA     STRBUF
+        SEC
+        SBC     #$03
+        STA     STRBUF
         JMP     $2000           ; JUMP TO LOADED SYSTEM COMMAND
 ;
 ; PRINT FAIL MESSAGE, WAIT FOR KEYPRESS, AND REBOOT
@@ -1238,8 +1246,8 @@ BRGT    PLA
         SEC
         SBC     TOS,S
         BVS     +
-        BMI     BRNCH
         BPL     NOBRNCH
+        BMI     BRNCH
 +       BMI     NOBRNCH
         BPL     BRNCH
 BRLT    PLA
@@ -1567,7 +1575,7 @@ LEAVE   +ACCMEM8                ; 8 BIT A/M
         INX
 +       CPX     ESP
         BNE     -
- !IF    DEBUG {
+!IF     DEBUG {
         STX     TMPL
         TSX
         CPX     HWSP

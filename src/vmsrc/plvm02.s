@@ -281,8 +281,8 @@ BYE     LDY     DEFCMD
         STA     STRBUF,Y
         DEY
         BPL     -
-        INY                     ; CLEAR CMDLINE BUFF
-        STY     $01FF
+;        INY                     ; CLEAR CMDLINE BUFF
+;        STY     $01FF
 CMDENTRY =      *
 ;
 ; DEACTIVATE 80 COL CARDS
@@ -338,8 +338,9 @@ CMDENTRY =      *
 ;
 ; INIT VM ENVIRONMENT STACK POINTERS
 ;
-;        LDA #$00               ; INIT FRAME POINTER
-        STA     PPL
+;       LDA     #$00
+        STA     $01FF           ; CLEAR CMDLINE BUFF
+        STA     PPL             ; INIT FRAME POINTER
         STA     IFPL
         LDA     #$BF
         STA     PPH
@@ -347,6 +348,13 @@ CMDENTRY =      *
         LDX     #$FE            ; INIT STACK POINTER (YES, $FE. SEE GETS)
         TXS
         LDX     #ESTKSZ/2       ; INIT EVAL STACK INDEX
+;
+; CHANGE CMD STRING TO SYSPATH STRING
+;
+        LDA     STRBUF
+        SEC
+        SBC     #$03
+        STA     STRBUF
         JMP     $2000           ; JUMP TO LOADED SYSTEM COMMAND
 ;
 ; PRINT FAIL MESSAGE, WAIT FOR KEYPRESS, AND REBOOT
@@ -1367,15 +1375,15 @@ BRGT    INX
         CMP     ESTKL,X
         LDA     ESTKH-1,X
         SBC     ESTKH,X
-        BMI     BRNCH
         BPL     NOBRNCH
+        BMI     BRNCH
 BRLT    INX
         LDA     ESTKL,X
         CMP     ESTKL-1,X
         LDA     ESTKH,X
         SBC     ESTKH-1,X
-        BMI     BRNCH
         BPL     NOBRNCH
+        BMI     BRNCH
 IBRNCH  LDA     IPL
         CLC
         ADC     ESTKL,X

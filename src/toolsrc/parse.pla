@@ -228,8 +228,8 @@ def parse_list#2
     return listseq, listdepth
 end
 def parse_value(codeseq, rvalue)#2
-    byte cfnparms, cfnvals, stackdepth, deref, operation
-    word type, optos, idptr, value, const_offset
+    byte cfnparms, cfnvals, stackdepth, operation
+    word deref, type, optos, idptr, value, const_offset
     word uopseq, valseq, idxseq
 
     deref      = rvalue
@@ -256,12 +256,10 @@ def parse_value(codeseq, rvalue)#2
                 if not rvalue; exit_err(ERR_INVAL|ERR_SYNTAX); fin
                 break
             is BPTR_TKN
-                deref++
-                type = type | BPTR_TYPE
-                break
             is WPTR_TKN
+                if type & BPTR_TYPE; exit_err(ERR_INVAL|ERR_SYNTAX); fin
+                type = token == BPTR_TKN ?? BPTR_TYPE :: WPTR_TYPE
                 deref++
-                type = type | WPTR_TYPE
                 break
             is AT_TKN
                 if not deref; exit_err(ERR_INVAL|ERR_SYNTAX); fin
@@ -278,24 +276,25 @@ def parse_value(codeseq, rvalue)#2
         is ID_TKN
             idptr = lookup_id(tknptr, tknlen)
             if not idptr; return codeseq, 0; fin
-            if not idptr=>idtype; return codeseq, 0; fin
+            if not idptr=>idtype; return codeseq, 0; fin // DEBUG
             type  = type | idptr=>idtype
             value = idptr=>idval
             if type & CONST_TYPE
                 valseq = gen_const(NULL, value)
+                deref--
             else
                 valseq = type & LOCAL_TYPE ?? gen_oplcl(NULL, LADDR_CODE, value) :: gen_opglbl(NULL, GADDR_CODE, value, 0)
-            fin
-            if type & FUNC_TYPE
-                cfnparms = idptr->funcparms
-                cfnvals  = idptr->funcvals
+                if type & FUNC_TYPE
+                    cfnparms = idptr->funcparms
+                    cfnvals  = idptr->funcvals
+                fin
             fin
             break
         is INT_TKN
         is CHR_TKN
             value  = constval
-            type   = type | CONST_TYPE
             valseq = gen_const(NULL, value)
+            deref--
             break
         is STR_TKN
             codeseq = gen_str(codeseq, constval)
@@ -305,6 +304,7 @@ def parse_value(codeseq, rvalue)#2
         is OPEN_PAREN_TKN
             valseq, stackdepth = parse_expr(NULL)
             if token <> CLOSE_PAREN_TKN; exit_err(ERR_MISS|ERR_CLOSE|ERR_SYNTAX); fin
+            deref--
             break
         is DROP_TKN
             if rvalue; exit_err(ERR_INVAL|ERR_STATE); fin
@@ -313,9 +313,9 @@ def parse_value(codeseq, rvalue)#2
             return codeseq, 0 // Special case return
         is LAMBDA_TKN
             if not rvalue; return codeseq, 0; fin // Lambdas can't be LVALUES
-            type   = type | CONST_TYPE
             value  = parse_lambda
             valseq = gen_opglbl(NULL, GADDR_CODE, value, 0)
+            deref--
             break
         otherwise
             if uopseq;  release_seq(uopseq);  fin
@@ -344,39 +344,44 @@ def parse_value(codeseq, rvalue)#2
                     else
                         rewind(tknptr)
                     fin
-                    if type & (VAR_TYPE | PTR_TYPE)
+                    if type & WORD_TYPE
                         valseq = gen_op(valseq, LW_CODE)
-                        if deref; deref--; fin
+                    elsif type & BYTE_TYPE
+                        exit_err(ERR_INVAL|ERR_CODE)
+                    else
+                        deref++
                     fin
                 fin
                 valseq     = gen_op(valseq, ICAL_CODE)
                 stackdepth = stackdepth + cfnvals - 1
                 cfnparms   = 0
                 cfnvals    = 1
-                type       = type & ~(FUNC_TYPE | VAR_TYPE)
+                type       = type & PTR_TYPE
+                deref--
                 break
             is OPEN_BRACKET_TKN
                 //
                 // Array of arrays
                 //
                 if type & FUNC_TYPE // Function address dereference
-                    cfnparms   = 0
-                    cfnvals    = 1
-                    type       = BPTR_TYPE
+                    cfnparms = 0
+                    cfnvals  = 1
                 fin
                 repeat
                     valseq, drop = parse_expr(valseq)
                     if token <> COMMA_TKN; break; fin
                     valseq = gen_op(valseq, INDEXW_CODE)
-                    valseq = gen_op(valseq, LW_CODE)
+                    valseq = gen_op(valseq, LW_CODE) // Multi-dimenstion arrays are array pointers to arrays
                 until FALSE
                 if token <> CLOSE_BRACKET_TKN; exit_err(ERR_MISS|ERR_CLOSE|ERR_SYNTAX); fin
-                if type & (WPTR_TYPE | WORD_TYPE)
+                if type & WORD_TYPE
                     valseq = gen_op(valseq, INDEXW_CODE)
-                    type = (type & PTR_TYPE) | WORD_TYPE
                 else
                     valseq = gen_op(valseq, INDEXB_CODE)
-                    type = (type & PTR_TYPE) | BYTE_TYPE
+                    if not (type & BYTE_TYPE)
+                        type = (type & PTR_TYPE) | BYTE_TYPE
+                        deref++
+                    fin
                 fin
                 break
             is PTRB_TKN
@@ -390,11 +395,14 @@ def parse_value(codeseq, rvalue)#2
                     stackdepth = stackdepth + cfnvals - 1
                     cfnparms   = 0
                     cfnvals    = 1
-                    type       = type & ~FUNC_TYPE
-                elsif type & (VAR_TYPE | PTR_TYPE)
+                elsif type & WORD_TYPE
                     valseq = gen_op(valseq, LW_CODE) // Pointer dereference
+                elsif type & BYTE_TYPE
+                    exit_err(ERR_INVAL|ERR_CODE)
+                else
+                    deref++
                 fin
-                type = token == PTRB_TKN ?? BPTR_TYPE :: WPTR_TYPE
+                type = (type & PTR_TYPE) | token == PTRB_TKN ?? BYTE_TYPE :: WORD_TYPE
                 if not parse_const(@const_offset)
                     rewind(tknptr) // Setting type override for following operations
                 elsif const_offset <> 0
@@ -410,13 +418,10 @@ def parse_value(codeseq, rvalue)#2
                 if type & FUNC_TYPE // Function address dereference
                     cfnparms   = 0
                     cfnvals    = 1
-                    type       = VAR_TYPE
+                elsif not (type & VAR_TYPE)
+                    deref++
                 fin
-                if type & (VAR_TYPE | CONST_TYPE)
-                    type = token == DOT_TKN ?? BYTE_TYPE :: WORD_TYPE
-                else
-                    type = token == DOT_TKN ?? BPTR_TYPE :: WPTR_TYPE
-                fin
+                type = (type & VAR_TYPE) | (token == DOT_TKN ?? BYTE_TYPE :: WORD_TYPE)
                 if not parse_const(@const_offset)
                     rewind(tknptr) // Setting type override for following operations
                 elsif const_offset <> 0
@@ -429,10 +434,17 @@ def parse_value(codeseq, rvalue)#2
         wend
     until not operation
     //
+    //Probably parsing RVALUE as LVALUE
+    //
+    if deref < 0
+        release_seq(valseq)
+        release_seq(uopseq)
+        return codeseq, 0
+    fin
+    //
     // Resolve outstanding dereference pointer loads
     //
     while deref > rvalue
-        deref--
         if type & FUNC_TYPE
             if cfnparms; exit_err(ERR_MISS|ERR_ID); fin
             valseq     = gen_op(valseq, ICAL_CODE)
@@ -440,9 +452,10 @@ def parse_value(codeseq, rvalue)#2
             cfnparms   = 0
             cfnvals    = 1
             type       = type & ~FUNC_TYPE;
-        elsif type & VAR_TYPE
+        else
             valseq = gen_op(valseq, LW_CODE)
         fin
+        deref--
     loop
     if deref
         if type & FUNC_TYPE
@@ -454,6 +467,8 @@ def parse_value(codeseq, rvalue)#2
             valseq = gen_op(valseq, LB_CODE)
         elsif type & (WORD_TYPE | WPTR_TYPE)
             valseq = gen_op(valseq, LW_CODE)
+        else
+            exit_err(ERR_INVAL|ERR_CODE)
         fin
     fin
     //
@@ -464,15 +479,15 @@ def parse_value(codeseq, rvalue)#2
     // Wrap up LVALUE store
     //
     if not rvalue
-        stackdepth--
         if type & (BYTE_TYPE | BPTR_TYPE)
             valseq = gen_op(valseq, SB_CODE)
         elsif type & (WORD_TYPE | WPTR_TYPE)
             valseq = gen_op(valseq, SW_CODE)
         else
             release_seq(valseq)
-            return NULL, 0 // Function or const cannot be LVALUE, must be RVALUE
+            return codeseq, 0 // Function or const cannot be LVALUE, must be RVALUE
         fin
+        stackdepth--
     fin
     return cat_seq(codeseq, valseq), stackdepth
 end
@@ -836,9 +851,11 @@ def parse_stmnt
                 seq, cfnvals = parse_expr(NULL)
                 if not seq
                     emit_const(0)
-                elsif cfnvals > 1
-                    exit_err(ERR_OVER|ERR_CLOSE|ERR_STATE)
-                    while cfnvals > 1;cfnvals--; seq = gen_op(seq, DROP_CODE); loop
+                else
+                    if cfnvals > 1
+                        exit_err(ERR_OVER|ERR_CLOSE|ERR_STATE)
+                        while cfnvals > 1;cfnvals--; seq = gen_op(seq, DROP_CODE); loop
+                    fin
                     emit_seq(seq)
                 fin
                 emit_code(RET_CODE)
@@ -917,18 +934,22 @@ def parse_var(type, basesize)#0
             arraysize = arraysize + emit_data(type, consttype, constval, constsize)
         loop
         size_iddata(PTR_TYPE, size, arraysize)
-    elsif idlen
-        if infunc
-            new_idlocal(idptr, idlen, type, size)
-        else
-            new_iddata(idptr, idlen, type, size)
+    else
+        if idlen
+            if infunc
+                new_idlocal(idptr, idlen, type, size)
+            else
+                new_iddata(idptr, idlen, type, size)
+            fin
+        elsif not (type & (EXTERN_TYPE|LOCAL_TYPE))
+            emit_fill(size)
         fin
     fin
 end
 def parse_struc#0
     byte strucid[16]
     byte idlen, struclen, constsize, consttype
-    word type, size, offset, idstr
+    word type, basesize, size, offset, idstr
 
     struclen = 0
     if scan == ID_TKN
@@ -944,15 +965,16 @@ def parse_struc#0
     offset = 0
     while nextln == BYTE_TKN or token == WORD_TKN or token == EOL_TKN
         if token <> EOL_TKN
-            size = 1
+            basesize = 1
             type = token == BYTE_TKN ?? BYTE_TYPE :: WORD_TYPE
             if scan == OPEN_BRACKET_TKN
-                size, constsize, consttype = parse_constexpr
+                basesize, constsize, consttype = parse_constexpr
                 if token <> CLOSE_BRACKET_TKN; exit_err(ERR_MISS|ERR_CLOSE|ERR_SYNTAX); fin
                 scan
             fin
             repeat
-                idlen = 0;
+                size  = 1
+                idlen = 0
                 if token == ID_TKN
                     idstr = tknptr
                     idlen = tknlen
@@ -962,6 +984,7 @@ def parse_struc#0
                         scan
                     fin
                 fin
+                size = size * basesize
                 if type & WORD_TYPE
                     size = size * 2
                 fin

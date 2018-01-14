@@ -29,20 +29,17 @@ predef syscall(cmd,params)#1, call(addr,areg,xreg,yreg,status)#1
 predef crout()#0, cout(c)#0, prstr(s)#0, print(i)#0, cin()#1, rdstr(p)#1, toupper(c)#1
 predef markheap()#1, allocheap(size)#1, allocalignheap(size, pow2, freeaddr), releaseheap(newheap)#1, availheap()#1
 predef memset(addr,value,size)#0, memcpy(dst,src,size)#0
-predef uword_isgt(a,b)#1, uword_isge(a,b)#1, uword_islt(a,b)#1, uword_isle(a,b)#1, divmod(a,b)#2
-predef loadmod(mod)#1, execmod(modfile)#1, lookupstrmod(str)#1
+predef uword_isgt(a,b)#1, uword_isge(a,b)#1, uword_islt(a,b)#1, uword_isle(a,b)#1, sext(a)#1, divmod(a,b)#2
+predef execmod(modfile)#1
 //
 // System variables.
 //
-word version     = $0099 // 00.99
-word systemflags = 0
+word version     = $0100 // 01.00
+word syspath
+word cmdptr
+word             = @execmod
 byte refcons     = 0
 byte devcons     = 0
-word heap        = $2000
-byte modid       = 0
-byte modseg[15]
-word symtbl, lastsym
-byte perr, terr, lerr
 //
 // String pool.
 //
@@ -55,13 +52,9 @@ byte hexchar[]    = '0','1','2','3','4','5','6','7','8','9','A','B','C','D','E',
 //
 byte machid       = $F2 // Apple ///, 80 columns
 //
-// Command line pointer
-//
-word cmdptr
-//
 // Standard Library exported functions.
 //
-byte syslibstr[]  = "CMDSYS"
+byte sysmodstr[]  = "CMDSYS"
 byte machidstr[]  = "MACHID"
 byte sysstr[]     = "SYSCALL"
 byte callstr[]    = "CALL"
@@ -83,13 +76,15 @@ byte uisgtstr[]   = "ISUGT"
 byte uisgestr[]   = "ISUGE"
 byte uisltstr[]   = "ISULT"
 byte uislestr[]   = "ISULE"
+byte sysmods[] // overlay with exported strings
+byte sextstr[]    = "SEXT"
 byte divmodstr[]  = "DIVMOD"
 byte loadstr[]    = "MODLOAD"
 byte execstr[]    = "MODEXEC"
 byte modadrstr[]  = "MODADDR"
-byte argstr[]     = "ARGS"
 byte prefix[] // Overlay with exported symbols table
-word exports[]    = @sysstr,    @syscall
+word exports[]    = @sysmodstr, @version
+word              = @sysstr,    @syscall
 word              = @callstr,   @call
 word              = @putcstr,   @cout
 word              = @putlnstr,  @crout
@@ -109,14 +104,20 @@ word              = @uisgtstr,  @uword_isgt
 word              = @uisgestr,  @uword_isge
 word              = @uisltstr,  @uword_islt
 word              = @uislestr,  @uword_isle
+word              = @sextstr,   @sext
 word              = @divmodstr, @divmod
-word              = @loadstr,   @loadmod
-word              = @execstr,   @execmod
-word              = @modadrstr, @lookupstrmod
 word              = @machidstr, @machid
-word              = @argstr,    @cmdptr
 word              = 0
-word syslibsym    = @exports
+word sysmodsym    = @exports
+//
+// System variables.
+//
+word systemflags = 0
+word heap        = $2000
+byte modid       = 0
+byte modseg[15]
+word symtbl, lastsym
+byte perr, terr, lerr
 //
 // CALL SOS
 // SYSCALL(CMD, PARAMS)
@@ -436,6 +437,14 @@ _divmod DEX
         STA     ESTKH,X
         RTS
 end
+asm sext(a)#1
+        LDY     #$00
+        LDA     ESTKL,X
+        BPL     +
+        DEY
++       STY     ESTKH,X
+        RTS
+end
 //
 // Addresses of internal routines.
 //
@@ -557,27 +566,27 @@ end
 //    until !(c & $80)
 //    return dci
 //end
-asm modtosym(mod, dci)#1
-        LDA     ESTKL+1,X
-        STA     SRCL
-        LDA     ESTKH+1,X
-        STA     SRCH
-        LDA     ESTKL,X
-        STA     ESTKL+1,X
-        STA     DSTL
-        LDA     ESTKH,X
-        STA     ESTKH+1,X
-        STA     DSTH
-        INX
-        LDY     #$00
-        LDA     #'#'+$80
--       STA     (DST),Y
-        ASL
-        LDA     (SRC),Y
-        INY
-        BCS     -
-        RTS
-end
+//asm modtosym(mod, dci)#1
+//        LDA     ESTKL+1,X
+//        STA     SRCL
+//        LDA     ESTKH+1,X
+//        STA     SRCH
+//        LDA     ESTKL,X
+//        STA     ESTKL+1,X
+//        STA     DSTL
+//        LDA     ESTKH,X
+//        STA     ESTKH+1,X
+//        STA     DSTH
+//        INX
+//        LDY     #$00
+//        LDA     #'#'+$80
+//-       STA     (DST),Y
+//        ASL
+//        LDA     (SRC),Y
+//        INY
+//        BCS     -
+//        RTS
+//end
 //
 // Lookup routines.
 //
@@ -913,21 +922,29 @@ def addsym(sym, addr)#0
     lastsym = lastsym + 3
 end
 //
+// String routines.
+//
+def strcpy(dst, src)#1
+    memcpy(dst+1, src+1, ^src)
+    ^dst = ^src
+    return dst
+end
+def strcat(dst, src)#1
+    memcpy(dst + ^dst + 1, src + 1, ^src)
+    ^dst = ^dst + ^src
+    return dst
+end
+//
 // Module routines.
 //
-def lookupmod(mod)#1
-    byte dci[17]
-    return lookuptbl(modtosym(mod, @dci), symtbl)
-end
-def lookupstrmod(str)#1
-    byte mod[17]
-    stodci(str, @mod)
-    return lookupmod(@mod)
-end
-def addmod(mod, addr)#0
-    byte dci[17]
-    addsym(modtosym(mod, @dci), addr)
-end
+//def lookupmod(mod)#1
+//    byte dci[17]
+//    return lookuptbl(modtosym(mod, @dci), symtbl)
+//end
+//def addmod(mod, addr)#0
+//    byte dci[17]
+//    addsym(modtosym(mod, @dci), addr)
+//end
 def lookupextern(esd, index)#1
     word sym, addr
     byte str[16]
@@ -980,7 +997,13 @@ def loadmod(mod)#1
     //
     dcitos(mod, @filename)
     refnum = open(@filename)
-    if refnum > 0
+    if !refnum
+        //
+        // Try system path
+        //
+        refnum = open(strcpy(@filename,strcat(strcpy(@header, @sysmods), @filename)))
+    fin
+    if refnum
         rdlen   = read(refnum, @header, 128)
         modsize = header:0
         moddep  = @header.1
@@ -999,7 +1022,7 @@ def loadmod(mod)#1
             // Load module dependencies.
             //
             while ^moddep
-                if !lookupmod(moddep)
+                if !lookuptbl(moddep, symtbl)
                     if refnum
                         close(refnum)
                         refnum = 0
@@ -1045,7 +1068,7 @@ def loadmod(mod)#1
         //
         // Add module to symbol table.
         //
-        addmod(mod, modaddr)
+        addsym(mod, modaddr)
         //
         // Apply all fixups and symbol import/export.
         //
@@ -1260,15 +1283,16 @@ def stripspaces(strptr)#0
         ^strptr = ^strptr - 1
     loop
 end
-def striptrail(strptr)#0
+def striptrail(strptr)#1
     byte i
 
     for i = 1 to ^strptr
         if (strptr)[i] <= ' '
             ^strptr = i - 1
-            return
+            break
         fin
     next
+    return strptr
 end
 def parsecmd(strptr)#1
     byte cmd
@@ -1312,18 +1336,25 @@ end
 //
 init_cons
 //
+// Print PLASMA version
+//
+prstr("PLASMA "); prbyte(version.1); cout('.'); prbyte(version.0); crout
+//
 // Init 2K symbol table.
 //
 seg_find($00, @symtbl, @lastsym, $08, $11)
 lastsym = symtbl & $FF00
 xpokeb(symtbl.0, lastsym, 0)
-stodci(@syslibstr, heap)
-addmod(heap, @version)
-while *syslibsym
-    stodci(syslibsym=>0, heap)
-    addsym(heap, syslibsym=>2)
-    syslibsym = syslibsym + 4
+while *sysmodsym
+    stodci(sysmodsym=>0, heap)
+    addsym(heap, sysmodsym=>2)
+    sysmodsym = sysmodsym + 4
 loop
+//
+// Clear system path
+//
+sysmods = 0
+syspath = @sysmods
 //
 // Try to load autorun.
 //
@@ -1337,11 +1368,6 @@ else
     //
     // Print some startup info.
     //
-    prstr("PLASMA ")
-    prbyte(version.1)
-    cout('.')
-    prbyte(version.0)
-    crout
     prstr("MEM:$")
     prword(availheap)
     crout
@@ -1361,11 +1387,15 @@ while 1
             is 'P'
                 setpfx(cmdptr)
                 break
+            is 'S'
+                setpfx(cmdptr)
+                strcat(getpfx(@sysmods), "SYS/"))
+                break
             is 'V'
                 volumes
                 break
             is '+'
-                execmod(cmdptr)
+                execmod(striptrail(cmdptr))
                 write(refcons, @textmode, 3)
                 break
             otherwise

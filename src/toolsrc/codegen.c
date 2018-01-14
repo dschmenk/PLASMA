@@ -449,7 +449,10 @@ void emit_moddep(char *name, int len)
     if (outflags & MODULE)
     {
         if (name)
+        {
             emit_dci(name, len);
+            idglobal_add(name, len, EXTERN_TYPE | WORD_TYPE, 2); // Add to symbol table
+        }
         else
             printf("\t%s\t$00\t\t\t; END OF MODULE DEPENDENCIES\n", DB);
     }
@@ -989,7 +992,6 @@ int try_dupify(t_opseq *op)
     {
         if (op->code != opn->code)
             return crunched;
-
         switch (op->code)
         {
             case CONST_CODE:
@@ -1005,19 +1007,16 @@ int try_dupify(t_opseq *op)
             case GADDR_CODE:
             case LAB_CODE:
             case LAW_CODE:
-                if ((op->tag != opn->tag) || (op->offsz != opn->offsz) ||
-                    (op->type != opn->type))
+                if ((op->tag != opn->tag) || (op->offsz != opn->offsz) /*|| (op->type != opn->type)*/)
                     return crunched;
                 break;
 
             default:
                 return crunched;
         }
-
         opn->code = DUP_CODE;
-        crunched = 1;
+        crunched  = 1;
     }
-
     return crunched;
 }
 /*
