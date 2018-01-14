@@ -1419,8 +1419,8 @@ CALL    +INC_IP
         BIT     LCRWEN+LCBNK2
         BIT     LCRWEN+LCBNK2
 }
-        LDY     #$00
-        JMP     NEXTOP
+        LDY     #$01
+        JMP     FETCHOP
 ;
 CALLX   +INC_IP
         LDA     (IP),Y
@@ -1455,8 +1455,8 @@ CALLX   +INC_IP
         BIT     LCRWEN+LCBNK2
         BIT     LCRWEN+LCBNK2
 }
-        LDY     #$00
-        JMP     NEXTOP
+        LDY     #$01
+        JMP     FETCHOP
 ;*
 ;* INDIRECT CALL TO ADDRESS (NATIVE CODE)
 ;*
@@ -1483,8 +1483,8 @@ ICAL    LDA     ESTKL,X
         BIT     LCRWEN+LCBNK2
         BIT     LCRWEN+LCBNK2
 }
-        LDY     #$00
-        JMP     NEXTOP
+        LDY     #$01
+        JMP     FETCHOP
 ;
 ICALX   LDA     ESTKL,X
         STA     TMPL
@@ -1517,8 +1517,8 @@ ICALX   LDA     ESTKL,X
         BIT     LCRWEN+LCBNK2
         BIT     LCRWEN+LCBNK2
 }
-        LDY     #$00
-        JMP     NEXTOP
+        LDY     #$01
+        JMP     FETCHOP
 ;*
 ;* JUMP INDIRECT TRHOUGH TMP
 ;*
@@ -1551,8 +1551,8 @@ ENTER   INY
         DEY
         STA     (IFP),Y
         BNE     -
-+       LDY     #$02
-        JMP     NEXTOP
++       LDY     #$03
+        JMP     FETCHOP
 ;*
 ;* LEAVE FUNCTION
 ;*
