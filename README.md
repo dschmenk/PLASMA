@@ -168,12 +168,12 @@ to run the module. You will be rewarded with `Hello, world.` printed to the scre
 
 and you should see the same screenful of gibberish you saw from the portable VM, but on the Apple II this time. Both VMs are running the exact same module binaries. To view the source of these modules refer to `PLASMA/src/samplesrc/hello.pla`, `PLASMA/src/samplesrc/test.pla`, and `PLASMA/src/samplesrc/testlib.pla`. To get even more insight into the compiled source, view the corresponding `.a` files.
 
-## Target Compiler
+## Target Hosted Compiler
 
-The PLASMA compiler is also self-hosted on the Apple II and III. The PLASMA system and development disks can be run on a real or emulated machine. It is recommended to copy the file to a hard disk, or similar mass storage device. Boot the PLASMA system and change prefix to the development disk/directory. The 'HELLO.PLA' source file should be there. To compile the module, type:
+The PLASMA compiler is also self-hosted on the Apple II and III. The PLASMA system and development disks can be run on a real or emulated machine. It is recommended to copy the file to a hard disk, or similar mass storage device. Boot the PLASMA system and change the prefix to the development disk/directory. The 'HELLO.PLA' source file should be there. To compile the module, type:
 
 ```
-+PLASMA HELLO.PLA
++PLASM HELLO.PLA
 ```
 
 After the compiler loads (which can take some time on an un-accelerated machine), you will see the compiler banner message. The complilation process prints out a `.` once in awhile. When compilation is complete, the module will be written to disk, and the prompt will return. To execute the module, type:
