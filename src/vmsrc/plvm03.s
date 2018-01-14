@@ -1064,8 +1064,8 @@ CALLADR JSR     $FFFF
         STA     IPH
         PLA
         STA     IPL
-        LDY     #$00
-        JMP     NEXTOP
+        LDY     #$01
+        JMP     FETCHOP
 ;*
 ;* INDIRECT CALL TO ADDRESS (NATIVE CODE)
 ;*
@@ -1090,8 +1090,8 @@ ICALADR JSR     $FFFF
         STA     IPH
         PLA
         STA     IPL
-        LDY     #$00
-        JMP     NEXTOP
+        LDY     #$01
+        JMP     FETCHOP
 ;*
 ;* ENTER FUNCTION WITH FRAME SIZE AND PARAM COUNT
 ;*
@@ -1120,8 +1120,8 @@ ENTER   INY
         DEY
         STA     (IFP),Y
         BNE     -
-+       LDY     #$02
-        JMP     NEXTOP
++       LDY     #$03
+        JMP     FETCHOP
 ;*
 ;* LEAVE FUNCTION
 ;*

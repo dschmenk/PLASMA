@@ -7,7 +7,7 @@
 ;**********************************************************
         !CPU    65816
 SELFMODIFY  =   0
-DEBUG   =       0
+DEBUG   =       1
 ;*
 ;* THE DEFAULT CPU MODE FOR EXECUTING OPCODES IS:
 ;*   16 BIT A/M
@@ -592,14 +592,14 @@ _DIV    STY     IPY
 _DIV1   ASL                     ; DVDND
         DEY
         BCC     _DIV1
-        STA     TMP             ;NOS,S           ; DVDND
+        STA     TMP             ; NOS,S           ; DVDND
         LDA     #$0000          ; REMNDR
 _DIVLP  ROL                     ; REMNDR
         CMP     TOS+2,S         ; DVSR
         BCC     +
         SBC     TOS+2,S         ; DVSR
         SEC
-+       ROL     TMP             ;NOS,S           ; DVDND
++       ROL     TMP             ; NOS,S           ; DVDND
         DEY
         BNE     _DIVLP
 _DIVEX  LDY     IPY
@@ -1379,8 +1379,8 @@ EMUSTK  STA     TMP
         LDX     LCRWEN+LCBNK2
         LDX     LCRWEN+LCBNK2
 }
-        LDY     #$00
-        JMP     NEXTOP
+        LDY     #$01
+        JMP     FETCHOP
 ;*
 ;* CALL INTO ABSOLUTE ADDRESS (NATIVE CODE)
 ;*
@@ -1497,8 +1497,8 @@ EMUSTKX STA     TMP
         LDX     LCRWEN+LCBNK2
         LDX     LCRWEN+LCBNK2
 }
-        LDY     #$00
-        JMP     NEXTOP
+        LDY     #$01
+        JMP     FETCHOP
 ;*
 ;* JUMP INDIRECT THROUGH TMP
 ;*
@@ -1543,8 +1543,8 @@ ENTER   INY
         BNE -
         STX     ESP
 +       +ACCMEM16               ; 16 BIT A/M
-        LDY     #$02
-        JMP     NEXTOP
+        LDY     #$03
+        JMP     FETCHOP
 ;*
 ;* LEAVE FUNCTION
 ;*
@@ -1598,6 +1598,7 @@ LEAVE   +ACCMEM8                ; 8 BIT A/M
         STA     IFP
         SEC                     ; SWITCH TO EMULATED MODE
         XCE
+        !AS
         LDA     PSR
         PHA
         PLP
@@ -1828,9 +1829,9 @@ STEP    STX     TMPL
         TSX
         CMP     #$10
         BCC     DBGKEY
-;        LDX     TMPL
-;        CPX     #$56            ; FORCE PAUSE AT 'ICAL'
-;        BEQ     DBGKEY
+        LDX     TMPL
+        CPX     #$54            ; FORCE PAUSE AT 'CALL'
+        BEQ     DBGKEY
 -       LDX     $C000
         CPX     #$9B
         BNE     +

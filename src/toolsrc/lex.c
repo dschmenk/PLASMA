@@ -411,11 +411,6 @@ t_token scan(void)
                     scantoken = TERNARY_TOKEN;
                     scanpos += 2;
                 }
-                else
-                {
-                    scantoken = TERNARY_TOKEN;
-                    scanpos++;
-                }
                 break;
             default:
                 /*
