@@ -45,7 +45,7 @@ int id_match(char *name, int len, char *id)
         if (len > 16) len = 16;
         while (len--)
         {
-            if (name[len] != id[1 + len])
+            if (toupper(name[len]) != id[1 + len])
                 return (0);
         }
         return (1);
@@ -94,7 +94,7 @@ int idconst_add(char *name, int len, int value)
     idconst_name[consts][0] = len;
     if (len > ID_LEN) len = ID_LEN;
     while (len--)
-        idconst_name[consts][1 + len] = name[len];
+        idconst_name[consts][1 + len] = toupper(name[len]);
     idconst_value[consts] = value;
     consts++;
     return (1);
@@ -123,7 +123,7 @@ int idlocal_add(char *name, int len, int type, int size)
     idlocal_name[locals][0] = len;
     if (len > ID_LEN) len = ID_LEN;
     while (len--)
-        idlocal_name[locals][1 + len] = name[len];
+        idlocal_name[locals][1 + len] = toupper(name[len]);
     idlocal_type[locals]   = type | LOCAL_TYPE;
     idlocal_offset[locals] = localsize;
     localsize += size;
@@ -153,7 +153,7 @@ int idglobal_add(char *name, int len, int type, int size)
     idglobal_name[globals][0] = len;
     if (len > ID_LEN) len = ID_LEN;
     while (len--)
-        idglobal_name[globals][1 + len] = name[len];
+        idglobal_name[globals][1 + len] = toupper(name[len]);
     idglobal_type[globals] = type;
     if (!(type & EXTERN_TYPE))
     {
@@ -205,7 +205,7 @@ int idfunc_add(char *name, int len, int type, int tag)
     idglobal_name[globals][0] = len;
     if (len > ID_LEN) len = ID_LEN;
     while (len--)
-        idglobal_name[globals][1 + len] = name[len];
+        idglobal_name[globals][1 + len] = toupper(name[len]);
     idglobal_type[globals]  = type;
     idglobal_tag[globals++] = tag;
     if (type & EXTERN_TYPE)
