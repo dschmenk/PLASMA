@@ -1517,8 +1517,8 @@ ENTER   INY
         STA     $7D0+31
         PLA
 }
-        PHA                     ; SAVE ON STACK FOR LEAVE
-        DEC     HWSP            ; UPDATE HWSP TO SKIP FRAME SIZE
+        ;PHA                     ; SAVE ON STACK FOR LEAVE
+        ;DEC     HWSP            ; UPDATE HWSP TO SKIP FRAME SIZE
         +ACCMEM16               ; 16 BIT A/M
 ;        AND     #$00FF
         EOR     #$FFFF          ; ALLOCATE FRAME
@@ -1549,7 +1549,16 @@ ENTER   INY
 ;* LEAVE FUNCTION
 ;*
 LEAVEX  STX     ALTRDOFF
-LEAVE   +ACCMEM8                ; 8 BIT A/M
+LEAVE   ;PLA                     ; DEALLOCATE POOL + FRAME
+        +INC_IP
+        LDA     (IP),Y
+        AND     #$00FF
+        CLC
+        ADC     IFP
+        STA     PP
+        PLA                     ; RESTORE PREVIOUS FRAME
+        STA     IFP
+        +ACCMEM8                ; 8 BIT A/M
         TSC                     ; MOVE HW EVAL STACK TO ZP EVAL STACK
         EOR     #$FF
         SEC
@@ -1587,15 +1596,7 @@ LEAVE   +ACCMEM8                ; 8 BIT A/M
         LDX     $C010
 +       LDX     TMPL
 }
-        TYX                     ; RESTORE NEW ESP
-        PLA                     ; DEALLOCATE POOL + FRAME
-        +ACCMEM16               ; 16 BIT A/M
-        AND     #$00FF
-        CLC
-        ADC     IFP
-        STA     PP
-        PLA                     ; RESTORE PREVIOUS FRAME
-        STA     IFP
+        TYX                     ; RESTORE NEW ESP        
         SEC                     ; SWITCH TO EMULATED MODE
         XCE
         !AS

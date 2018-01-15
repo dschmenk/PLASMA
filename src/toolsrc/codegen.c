@@ -354,7 +354,7 @@ void emit_header(void)
     {
         printf("\t%s\t_SEGEND-_SEGBEGIN\t; LENGTH OF HEADER + CODE/DATA + BYTECODE SEGMENT\n", DW);
         printf("_SEGBEGIN%c\n", LBL);
-        printf("\t%s\t$DA7F\t\t\t; MAGIC #\n", DW);
+        printf("\t%s\t$6502\t\t\t; MAGIC #\n", DW);
         printf("\t%s\t_SYSFLAGS\t\t\t; SYSTEM FLAGS\n", DW);
         printf("\t%s\t_SUBSEG\t\t\t; BYTECODE SUB-SEGMENT\n", DW);
         printf("\t%s\t_DEFCNT\t\t\t; BYTECODE DEF COUNT\n", DW);
@@ -802,7 +802,7 @@ void emit_leave(void)
 {
     emit_pending_seq();
     if (localsize)
-        printf("\t%s\t$5A\t\t\t; LEAVE\n", DB);
+        printf("\t%s\t$5A,$%02X\t\t\t; LEAVE\t%d\n", DB, localsize, localsize);
     else
         printf("\t%s\t$5C\t\t\t; RET\n", DB);
 }

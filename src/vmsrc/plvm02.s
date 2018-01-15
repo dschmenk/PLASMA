@@ -1528,7 +1528,7 @@ JMPTMP  JMP     (TMP)
 ;*
 ENTER   INY
         LDA     (IP),Y
-        PHA                     ; SAVE ON STACK FOR LEAVE
+;        PHA                     ; SAVE ON STACK FOR LEAVE
         EOR     #$FF            ; ALLOCATE FRAME
         SEC
         ADC     PPL
@@ -1560,7 +1560,9 @@ LEAVEX  STA     ALTRDOFF
         LDA     PSR
         PHA
         PLP
-LEAVE   PLA                     ; DEALLOCATE POOL + FRAME
+LEAVE   ;PLA                     ; DEALLOCATE POOL + FRAME
+        +INC_IP
+        LDA     (IP),Y
         CLC
         ADC     IFPL
         STA     PPL
