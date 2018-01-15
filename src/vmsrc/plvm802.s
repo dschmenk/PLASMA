@@ -7,7 +7,7 @@
 ;**********************************************************
         !CPU    65816
 SELFMODIFY  =   0
-DEBUG   =       1
+DEBUG   =       0
 ;*
 ;* THE DEFAULT CPU MODE FOR EXECUTING OPCODES IS:
 ;*   16 BIT A/M
