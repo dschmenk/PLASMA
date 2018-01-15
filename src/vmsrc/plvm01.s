@@ -10,6 +10,7 @@ SELFMODIFY  =   1
 ;* VM ZERO PAGE LOCATIONS
 ;*
     !SOURCE "vmsrc/plvmzp.inc"
+DVSIGN  =   TMP+2
 DROP    =   $EF
 NEXTOP  =   $F0
 FETCHOP =   NEXTOP+3
@@ -122,7 +123,7 @@ COMP    LDA #$FF
 OPTBL   !WORD   ZERO,ADD,SUB,MUL,DIV,MOD,INCR,DECR      ; 00 02 04 06 08 0A 0C 0E
     !WORD   NEG,COMP,BAND,IOR,XOR,SHL,SHR,IDXW      ; 10 12 14 16 18 1A 1C 1E
     !WORD   LNOT,LOR,LAND,LA,LLA,CB,CW,CS           ; 20 22 24 26 28 2A 2C 2E
-    !WORD   DROP,DUP,NEXTOP,NEXTOP,BRGT,BRLT,BREQ,BRNE      ; 30 32 34 36 38 3A 3C 3E
+    !WORD   DROP,DUP,NEXTOP,DIVMOD,BRGT,BRLT,BREQ,BRNE      ; 30 32 34 36 38 3A 3C 3E
     !WORD   ISEQ,ISNE,ISGT,ISLT,ISGE,ISLE,BRFLS,BRTRU   ; 40 42 44 46 48 4A 4C 4E
     !WORD   BRNCH,IBRNCH,CALL,ICAL,ENTER,LEAVE,RET,CFFB     ; 50 52 54 56 58 5A 5C 5E
     !WORD   LB,LW,LLB,LLW,LAB,LAW,DLB,DLW           ; 60 62 64 66 68 6A 6C 6E
@@ -130,25 +131,37 @@ OPTBL   !WORD   ZERO,ADD,SUB,MUL,DIV,MOD,INCR,DECR      ; 00 02 04 06 08 0A 0C 0
 ;*
 ;* DIV TOS-1 BY TOS
 ;*
-DIV     JSR _DIV
-    LSR DVSIGN      ; SIGN(RESULT) = (SIGN(DIVIDEND) + SIGN(DIVISOR)) & 1
-    BCS NEG
-    JMP NEXTOP
+DIV     JSR     _DIV
+        LSR     DVSIGN          ; SIGN(RESULT) = (SIGN(DIVIDEND) + SIGN(DIVISOR)) & 1
+        BCS     NEG
+        JMP     NEXTOP
 ;*
 ;* MOD TOS-1 BY TOS
 ;*
-MOD JSR _DIV
-    LDA ESTKL,X     ; SAVE IN CASE OF DIVMOD
-    STA DSTL
-    LDA ESTKH,X
-    STA DSTH
-    LDA TMPL        ; REMNDRL
-    STA ESTKL,X
-    LDA TMPH        ; REMNDRH
-    STA ESTKH,X
-    LDA DVSIGN      ; REMAINDER IS SIGN OF DIVIDEND
-    BMI NEG
-    JMP NEXTOP
+MOD     JSR     _DIV
+        LDA     TMPL            ; REMNDRL
+        STA     ESTKL,X
+        LDA     TMPH            ; REMNDRH
+        STA     ESTKH,X
+        LDA     DVSIGN          ; REMAINDER IS SIGN OF DIVIDEND
+        BMI     NEG
+        JMP     NEXTOP
+;*
+;* DIVMOD TOS-1 BY TOS
+;*
+DIVMOD  JSR     _DIV
+        LSR     DVSIGN           ; SIGN(RESULT) = (SIGN(DIVIDEND) + SIGN(DIVISOR)) & 1
+        BCC     +
+        INX
+        JSR     _NEG
+        DEX
++       LDA     TMPL            ; REMNDRL
+        STA     ESTKL,X
+        LDA     TMPH            ; REMNDRH
+        STA     ESTKH,X
+        LDA     DVSIGN          ; REMAINDER IS SIGN OF DIVIDEND
+        BMI     NEG
+        JMP     NEXTOP
 ;*
 ;* NEGATE TOS
 ;*
