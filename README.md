@@ -1342,7 +1342,7 @@ The compact code representation comes through the use of opcodes closely matched
 | $30    | DROP   | drop top stack value
 | $32    | DUP    | duplicate top stack value
 | $34    | NOP    |
-| $36    | NOP    |
+| $36    | DIVMOD | divide next from to by top, leave result and remainder on stack
 | $38    | BRGT   | branch next from top greater than top
 | $3A    | BRLT   | branch next from top less than top
 | $3C    | BREQ   | branch next from top equal to top
