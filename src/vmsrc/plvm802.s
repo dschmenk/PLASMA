@@ -620,10 +620,10 @@ DIV     JSR     _DIV
 ;*
 MOD     JSR     _DIV
         STA     NOS,S           ; REMNDR
-        PLA
+        LDA     TMP
         STA     DST             ; SAVE IN CASE OF DIVMOD
-        STX     DVSIGN
-        TXA
+        PLA
+        TXA                     ; DIVSGN
         AND     #$0080          ; REMAINDER IS SIGN OF DIVIDEND
         BNE     NEG
         JMP     NEXTOP
