@@ -678,7 +678,7 @@ t_opseq *parse_value(t_opseq *codeseq, int rvalue, int *stackdepth)
             return (NULL); // Function or const cannot be LVALUE, must be RVALUE
         }
         if (stackdepth)
-            *stackdepth--;
+            (*stackdepth)--;
     }
     return (cat_seq(codeseq, valseq));
 }
