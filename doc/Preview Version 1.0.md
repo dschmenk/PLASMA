@@ -1,6 +1,6 @@
 # Developer Preview Version 1.0
 
-PLASMA is approaching a 1.0 release after _only_ 12 years. Hopefully it was worth the wait. To work out the remaining kinks, this Developer Preview will allow programmers to kcick the tires, so to speak, to provide feedback on the system.
+PLASMA is approaching a 1.0 release after _only_ 12 years. Hopefully it was worth the wait. To work out the remaining kinks, this Developer Preview will allow programmers to kick the tires, so to speak, to provide feedback on the system.
 
 Download the two disk images:
 
@@ -50,7 +50,7 @@ The Developers Preview comes with a basic set of system modules. When PLASMA is 
 
 The build disk includes sample source, include files for the system modules, and the PLASMA compiler+optimizer modules. The compiler is invoked with:
 ```
-+PLASM [-[W][O[2]] \<SOURCE FILE\> [OUTPUT FILE]
++PLASM [-[W][O[2]] <SOURCE FILE> [OUTPUT FILE]
 ```
 Compiler warnings are enabled with `-W`. The optional optimizer is enabled with `-O` and extra optimizations are enabled with `-O2`. The source code for a few sample programs are included. The big one, `RPNCALC.PLA`, is the sample RPN calculator that uses many of PLASMA's advanced features. The self-hosted compiler is the same compiler as the cross-compiler, just transcribed from C to PLASMA (yes, the self-hosted PLASMA compiler is written in PLASMA). It requires patience when compiling: it is a fairly large and extensive program.
 
@@ -60,7 +60,7 @@ There are some demo programs included for your perusal. Check out `ROGUE` for so
 
 ## Source Code
 
-This is a Developers Preview, so sample source code is included from the project. It all builds without alteration and shloud be a good starting point for further explorations. There was a PLASMA SANDBOX in previous versions that was a minimal editor+compiler playground. It wasn't the full language and has been superceded by the real PLASMA compiler. However, the examples that accompanied the SANDBOX are included here. They have been updated to use the `INCLUDE "INC/CMDSYS.PLH` line so that they may compile arnd run, but no gaurentees. You will probably have to fix whatever differences you come accross. An exercise, as they say, left up to the student.
+This is a Developers Preview, so sample source code is included from the project. It all builds without alteration and shloud be a good starting point for further explorations. There was a PLASMA SANDBOX in previous versions that was a minimal editor+compiler playground. It wasn't the full language and has been superceded by the real PLASMA compiler. However, the examples that accompanied the SANDBOX are included here. They have been updated to use the `INCLUDE "INC/CMDSYS.PLH"` line so that they may compile arnd run, but no gaurentees. You will probably have to fix whatever differences you come accross. An exercise, as they say, left up to the student.
 
 ## Issues
 
@@ -121,7 +121,7 @@ drop, h, drop = func()
 ```
 a = func() // Two values silently dropped
 ```
-To generate compiler warning for this issue, and a few others, use the -W option when compiling.
+To generate compiler warning for this issue, and a few others, use the `-W` option when compiling.
 
 10. Lambda (Anonymous) Functions. The ability to code a quick function in-line can be very powerful when used properly. Look here, https://en.wikipedia.org/wiki/Anonymous_function, for more information.
 
@@ -136,3 +136,6 @@ I wish to thank the people who have contributed the the PLASMA project. They hav
 - Peter Ferrie: Assembly optimizer extraordinaire. He has made significant improvements into the code footprint in PLASMA so all the functionality can exist in just a few bytes.
 - David Schmidt (DaveX): His help in documentation have made it much more accessible and professional. Of course any errors are all his. Just kidding, they're mine ;-)
 - HandyAndy (6502.org): Catching the grammatical errors that I ain't no good at.
+
+Dave Schmenk
+http://schmenk.is-a-geek.com
