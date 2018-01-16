@@ -1,6 +1,6 @@
 # Developer Preview Version 1.0
 
-PLASMA is approaching a 1.0 release after _only_ 12 years. Hopefully iy was worth the wait. To work out the remaining kinks, this Developer Preview will allow programmers to kcick the tires, so to speak, to provide feedback on the system.
+PLASMA is approaching a 1.0 release after _only_ 12 years. Hopefully it was worth the wait. To work out the remaining kinks, this Developer Preview will allow programmers to kcick the tires, so to speak, to provide feedback on the system.
 
 Download the two disk images:
 
@@ -14,7 +14,7 @@ System Files => /HARDISK/PLASMA.PRE1/
 
 Build Files => /HARDISK/BLD/
 
-Keeping the system files seperate from the build directory will make upgrading to the final 1.0 Release later a little easier. To boot directly into PLASMA, you will need to put the system files in the root prefix of the boot device and make sure PLASMA.SYSTEM is the first SYSTEM file in the directory.
+Keeping the system files seperate from the build directory will make upgrading to the final 1.0 Release later a little easier. To boot directly into PLASMA, you will need to put the system files in the root prefix of the boot device and make sure PLASMA.SYSTEM is the first SYSTEM file in the directory. Otherwise, launch PLASMA.SYSTEM from your command processor of choice.
 
 ## 65802/65816 Support
 
@@ -32,4 +32,9 @@ PLASMA incorporates a very basic command line shell to facilitate navigating the
 | V                   | show online Volumes
 | -\<SYSTEM PROGRAM\> | launch SYSTEM program
 | +\<PLASMA MODULE\>  | exec PLASMA module
+```
+[Optional parameters]
+<Required parameters>
+```
 
+The shell is very breif with error messages. It is meant solely as a way to run programs that accept command line parameters and take up as little memory as possible. It does, however, provide a rich runtime for PLASMA modules.
