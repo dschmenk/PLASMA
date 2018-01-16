@@ -1,280 +1,41 @@
 include "inc/cmdsys.plh"
+include "inc/conio.plh"
 //
-// Handy constants.
+// Rod's Colors
 //
-const FALSE=0
-const TRUE=!FALSE
-const FULLMODE=0
-const MIXMODE=1
-//
-// Apple II hardware constants.
-//
-const speaker      = $C030
-const showgraphics = $C050
-const showtext     = $C051
-const showfull     = $C052
-const showmix      = $C053
-const showpage1    = $C054
-const showpage2    = $C055
-const showlores    = $C056
-const showhires    = $C057
-const keyboard     = $C000
-const keystrobe    = $C010
-const hgr1         = $2000
-const hgr2         = $4000
-const page1        = 0
-const page2        = 1
-//
-// Predefined functions.
-//
-predef a2keypressed#1, a2gotoxy(x,y)#0, a2grmode(m)#0, a2textmode#0
-//
-// String data.
-//
-byte a1err[]   = "Apple 1 not supported.\n"
-byte a3err[]   = "Apple 3 version mismatch.\n"
-byte exitmsg[] = "Press any key to exit.\n"
-byte goodbye[] = "That's all, folks!\n"
-byte cmdsys[]  = "cmdsys"
-//
-// Screen row address arrays.
-//
-word txt1scrn[]     = $0400,$0480,$0500,$0580,$0600,$0680,$0700,$0780
-word                = $0428,$04A8,$0528,$05A8,$0628,$06A8,$0728,$07A8
-word                = $0450,$04D0,$0550,$05D0,$0650,$06D0,$0750,$07D0
-word txt2scrn[]     = $0800,$0880,$0900,$0980,$0A00,$0A80,$0B00,$0B80
-word                = $0828,$08A8,$0928,$09A8,$0A28,$0AA8,$0B28,$0BA8
-word                = $0850,$08D0,$0950,$09D0,$0A50,$0AD0,$0B50,$0BD0
-//
-// Apple 3 console codes.
-//
-byte textbwmode[]   = 2, 16, 0
-byte textclrmode[]  = 2, 16, 1
-byte grcharset[]    = 1, 0, $7F, $7F, $7F, $7F, $00, $00, $00, $00
-byte devcons
-//
-// Function pointers.
-//
-word keypressed = @a2keypressed
-word gotoxy     = @a2gotoxy
-word grmode     = @a2grmode
-word textmode   = @a2textmode
-//
-// Common routines.
-//
-asm equates
-    !SOURCE "vmsrc/plvmzp.inc"
-end
-//
-// def grscrn(rowaddrs)
-//
-asm grscrn(rowaddrs)#0
-GRSCRN  =   $26
-GRSCRNL =   GRSCRN
-GRSCRNH =   GRSCRNL+1
-    LDA ESTKL,X
-    STA GRSCRNL
-    LDA ESTKH,X
-    STA GRSCRNH
-    INX
-    RTS
-end
-//
-// def grcolor(color)
-//
-asm grcolor(color)#0
-GRCLR   =   $30
-    LDA #$0F
-    AND ESTKL,X
-    STA GRCLR
-    ASL
-    ASL
-    ASL
-    ASL
-    ORA GRCLR
-    STA GRCLR
-    INX
-    RTS
-end
-//
-// def grplot(x, y)
-//
-asm grplot(x, y)#0
-    STY IPY
-    LDA ESTKL,X
-    AND #$FE
-    CMP ESTKL,X
-    TAY
-    LDA (GRSCRN),Y
-    STA DSTL
-    INY
-    LDA (GRSCRN),Y
-    STA DSTH
-    LDA #$FF
-    ADC #$00
-    EOR #$0F
-    TAY
-    AND GRCLR
-    STA TMPL
-    TYA
-    EOR #$FF
-    LDY ESTKL+1,X
-    AND (DST),Y
-    ORA TMPL
-    STA (DST),Y
-    LDY IPY
-    INX
-    INX
-    RTS
-end
-//
-// Apple II routines.
-//
-def a2keypressed#1
-    if ^keyboard >= 128
-        return ^keystrobe
-    fin
-    return FALSE
-end
-def a2gotoxy(x, y)#0
-    ^$24 = x + ^$20
-    call($FB5B, y + ^$22, 0, 0, 0)
-end
-def a2grmode(mix)#0
-    call($FB2F, 0, 0, 0, 0) // initmode()
-    call($FB40, 0, 0, 0, 0) // grmode()
-    if !mix
-        ^showfull
-    fin
-    call($FC58, 0, 0, 0, 0)  // home()
-    grscrn(@txt1scrn) // point to lo-res screen
-end
-def a2textmode#0
-    call($FB39, 0, 0, 0, 0)        // textmode()
-    call($FC58, 0, 0, 0, 0) // home()
-end
-//
-// Apple III routines.
-//
-def dev_control(devnum, code, list)#1
-    byte params[5]
+def rod
+  var i, j, k, w, fmi, fmk, color
 
-    params.0 = 3
-    params.1 = devnum
-    params.2 = code
-    params:3 = list
-    return syscall($83, @params)
-end
-def dev_status(devnum, code, list)#1
-    byte params[5]
-
-    params.0 = 3
-    params.1 = devnum
-    params.2 = code
-    params:3 = list
-    return syscall($82, @params)
-end
-def a3keypressed#1
-    byte count
-    dev_status(devcons, 5, @count)
-    if count
-        return getc
-    fin
-    return FALSE
-end
-def a3gotoxy(x, y)#0
-    putc(24)
-    putc(x)
-    putc(25)
-    putc(y)
-end
-def a3viewport(left, top, width, height)#0
-    putc(1) // Reset viewport
-    putc(26)
-    putc(left)
-    putc(top)
-    putc(2)
-    putc(26)
-    putc(left + width  - 1)
-    putc(top  + height - 1)
-    putc(3)
-    a3gotoxy(0, 0)
-end
-def a3grmode(mix)#0
-    byte i
-    if mix
-        mix = 19
-    else
-        mix = 23
-    fin
-    puts(@textclrmode)
-    dev_control(devcons, 17, @grcharset)
-    a3viewport(0, 20, 40, 4)
-    for i = 0 to mix
-        memset(txt1scrn[i], $0000, 40) // text  screen
-        memset(txt2scrn[i], $0000, 40) // color screen
-    next
-    grscrn(@txt2scrn) // point to color screen
-end
-def a3textmode#0
-    puts(@textbwmode)
-    a3viewport(0, 0, 40, 24)
-    putc(28)
-end
-//
-// Rod's Colors.
-//
-def rod#0
-    byte i, j, k, w, fmi, fmk, color
-    while TRUE
-        for w = 3 to 50
-            for i = 1 to 19
-                for j = 0 to 19
-                    k = i + j
-                    color = (j * 3) / (i + 3) + i * w / 12
-                    fmi = 40 - i
-                    fmk = 40 - k
-                    grcolor(color)
-                    grplot(i, k)
-                    grplot(k, i)
-                    grplot(fmi, fmk)
-                    grplot(fmk, fmi)
-                    grplot(k, fmi)
-                    grplot(fmi, k)
-                    grplot(i, fmk)
-                    grplot(fmk, i)
-                    if keypressed()#1
-                        return
-                    fin
-                next
-            next
+  while TRUE
+    for w = 3 to 50
+      for i = 1 to 19
+        for j = 0 to 19
+          k = i + j
+          color = (j * 3) / (i + 3) + i * w / 12
+          fmi = 40 - i
+          fmk = 40 - k
+          conio:grcolor(color)
+          conio:grplot(i, k)
+          conio:grplot(k, i)
+          conio:grplot(fmi, fmk)
+          conio:grplot(fmk, fmi)
+          conio:grplot(k, fmi)
+          conio:grplot(fmi, k)
+          conio:grplot(i, fmk)
+          conio:grplot(fmk, i)
+          if conio:keypressed()
+            return getc
+          fin
         next
-    loop
+      next
+    next
+  loop
 end
-//
-// Machine specific initialization.
-//
-when MACHID & $C8
-    is $08 // Apple 1
-        puts(@a1err)
-        return
-    is $C0 // Apple ///
-        keypressed = @a3keypressed
-        gotoxy     = @a3gotoxy
-        grmode     = @a3grmode
-        textmode   = @a3textmode
-        if modaddr(@cmdsys):0 == $0099
-            devcons = modaddr(@cmdsys).5 // devcons variable from cmdsys
-        else
-            puts(@a3err)
-            return
-        fin
-    otherwise // Apple ][
-wend
-grmode(MIXMODE)#0
-gotoxy(11, 1)#0
-puts(@exitmsg)
+
+conio:grmode(TRUE)
+conio:gotoxy(11, 1)
+puts("Press any key to exit.")
 rod
-textmode()#0
-puts(@goodbye)
+conio:textmode(40)
+puts("That's all, folks!\n")
 done

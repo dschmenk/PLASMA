@@ -41,13 +41,18 @@ t_token keywords[] = {
     IMPORT_TOKEN,           'I', 'M', 'P', 'O', 'R', 'T',
     INCLUDE_TOKEN,          'I', 'N', 'C', 'L', 'U', 'D', 'E',
     RETURN_TOKEN,           'R', 'E', 'T', 'U', 'R', 'N',
+    DROP_TOKEN,             'D', 'R', 'O', 'P',
     END_TOKEN,              'E', 'N', 'D',
     DONE_TOKEN,             'D', 'O', 'N', 'E',
     LOGIC_NOT_TOKEN,        'N', 'O', 'T',
     LOGIC_AND_TOKEN,        'A', 'N', 'D',
     LOGIC_OR_TOKEN,         'O', 'R',
+    BYTE_TOKEN,             'R', 'E', 'S',
     BYTE_TOKEN,             'B', 'Y', 'T', 'E',
+    BYTE_TOKEN,             'C', 'H', 'A', 'R',
+    BYTE_TOKEN,             'R', 'E', 'S',
     WORD_TOKEN,             'W', 'O', 'R', 'D',
+    WORD_TOKEN,             'V', 'A', 'R',
     CONST_TOKEN,            'C', 'O', 'N', 'S', 'T',
     STRUC_TOKEN,            'S', 'T', 'R', 'U', 'C',
     PREDEF_TOKEN,           'P', 'R', 'E', 'D', 'E', 'F',
@@ -406,11 +411,6 @@ t_token scan(void)
                     scantoken = TERNARY_TOKEN;
                     scanpos += 2;
                 }
-                else
-                {
-                    scantoken = TERNARY_TOKEN;
-                    scanpos++;
-                }
                 break;
             default:
                 /*
@@ -424,7 +424,7 @@ t_token scan(void)
 }
 void scan_rewind(char *backptr)
 {
-    scanpos = backptr;
+    scanpos = tokenstr = backptr;
 }
 int scan_lookahead(void)
 {

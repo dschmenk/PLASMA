@@ -20,13 +20,14 @@ const O_READ_WRITE = 3
 //
 const sysbuf = $0800
 //
-// All our file I/O routines
+// External interface
 //
 struc t_fileio
     word getpfx
     word setpfx
     word getfileinfo
     word geteof
+    word openbuf
     word open
     word close
     word read
@@ -37,15 +38,16 @@ struc t_fileio
     word readblock
     word writeblock
 end
-predef a2getpfx(path), a23setpfx(path), a2getfileinfo(path, fileinfo), a23geteof(refnum), a2open(path), a23close(refnum)
+predef a2getpfx(path), a23setpfx(path), a2getfileinfo(path, fileinfo), a23geteof(refnum), a2openbuf(path, iobuf), a2open(path), a23close(refnum)
 predef a23read(refnum, buf, len), a2write(refnum, buf, len), a2create(path, type, aux), a23destroy(path)
 predef a23newline(refnum, emask, nlchar), a2readblock(unit, buf, block), a2writeblock(unit, buf, block)
 //
 // Exported function table.
 //
-export word fileio[] = @a2getpfx, @a23setpfx, @a2getfileinfo, @a23geteof, @a2open, @a23close
-word                 = @a23read, @a2write, @a2create, @a23destroy
-word                 = @a23newline, @a2readblock, @a2writeblock
+word fileio[]
+word = @a2getpfx, @a23setpfx, @a2getfileinfo, @a23geteof, @a2openbuf, @a2open, @a23close
+word = @a23read, @a2write, @a2create, @a23destroy
+word = @a23newline, @a2readblock, @a2writeblock
 //
 // SOS/ProDOS error code
 //
@@ -126,6 +128,15 @@ def a1open(path)
     *CFFA1FileName = path
     return 0
 end
+def a2openbuf(path, iobuf)
+    byte params[6]
+    params.0 = 3
+    params:1 = path
+    params:3 = iobuf
+    params.5 = 0
+    perr     = syscall($C8, @params)
+    return params.5
+end
 def a2open(path)
     byte params[6]
     params.0 = 3
@@ -134,6 +145,17 @@ def a2open(path)
     params.5 = 0
     perr     = syscall($C8, @params)
     return params.5
+end
+def a3openbuf(path, iobuf)
+    byte params[7]
+
+    params.0 = 4
+    params:1 = path
+    params.3 = 0
+    params:4 = iobuf
+    params.6 = 0
+    perr = syscall($C8, @params)
+    return params.3
 end
 def a3open(path)
     byte params[7]

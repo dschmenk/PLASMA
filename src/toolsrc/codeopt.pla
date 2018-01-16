@@ -1,0 +1,453 @@
+include "inc/cmdsys.plh"
+//
+// Imports from main compiler
+//
+import plasm
+    word freeop_lst
+    word optimize_seq
+end
+//
+// Code sequence values shares with main compiler
+//
+include "toolsrc/codeseq.plh"
+//
+// Replace all but the first of a series of identical load opcodes by DUP. This
+// doesn't reduce the number of opcodes but does reduce their size in bytes.
+// This is only called on the second optimisation pass because the DUP opcodes
+// may inhibit other peephole optimisations which are more valuable.
+//
+def try_dupify(op)
+    byte crunched
+    word nextop
+
+    crunched = FALSE
+    nextop   = op=>opnext
+    while nextop
+        if op->opcode <> nextop->opcode; return crunched; fin
+        when op->opcode
+            is CONST_CODE
+                if op=>opval <> nextop=>opval; return crunched; fin
+                break
+            is LADDR_CODE
+            is LLB_CODE
+            is LLW_CODE
+                if op=>opoffset <> nextop=>opoffset; return crunched; fin
+                break
+            is GADDR_CODE
+            is LAB_CODE
+            is LAW_CODE
+                if (op=>optag <> nextop=>optag) or (op=>opoffset <> nextop=>opoffset); return crunched; fin
+                break
+            otherwise
+                return crunched
+        wend
+        nextop->opcode  = DUP_CODE
+        nextop->opgroup = STACK_GROUP
+        nextop          = nextop=>opnext
+        crunched        = TRUE
+    loop
+    return crunched
+end
+def is_hardware_address(addr)
+    return isuge(addr, $C000) and isult(addr, $D000)
+end
+//
+// Crunch sequence (peephole optimize)
+//
+def crunch_seq(seq, pass)
+    word nextop, nextopnext, opprev, op, freeops
+    byte crunched, shiftcnt
+
+    opprev   = NULL
+    op       = *seq
+    nextop   = op=>opnext
+    crunched = FALSE
+    freeops  = 0
+    while op and nextop
+        when op->opcode
+            is CONST_CODE
+                if op=>opval == 1
+                    if nextop->opcode == ADD_CODE
+                        op->opcode  = INC_CODE
+                        op->opgroup = STACK_GROUP
+                        freeops     = 1
+                        break
+                    fin
+                    if nextop->opcode == SUB_CODE
+                        op->opcode  = DEC_CODE
+                        op->opgroup = STACK_GROUP
+                        freeops     = 1
+                        break
+                    fin
+                    if nextop->opcode == SHL_CODE
+                        op->opcode     = DUP_CODE
+                        op->opgroup    = STACK_GROUP
+                        nextop->opcode = ADD_CODE
+                        crunched       = 1
+                        break
+                    fin
+                fin
+                when nextop->opcode
+                    is NEG_CODE
+                        op=>opval = -op=>opval
+                        freeops   = 1
+                        break
+                    is COMP_CODE
+                        op=>opval = ~op=>opval
+                        freeops   = 1
+                        break
+                    is LOGIC_NOT_CODE
+                        op=>opval = op=>opval ?? FALSE :: TRUE
+                        freeops   = 1
+                        break
+                    is BRFALSE_CODE
+                        if op=>opval
+                            freeops = -2 // Remove constant and never taken branch
+                        else
+                            op->opcode  = BRNCH_CODE // Always taken branch
+                            op->opgroup = RELATIVE_GROUP
+                            op=>optag   = nextop=>optag
+                            freeops     = 1
+                        fin
+                        break
+                    is BRTRUE_CODE
+                        if not op=>opval
+                            freeops = -2 // Remove constant never taken branch
+                        else
+                            op->opcode  = BRNCH_CODE // Always taken branch
+                            op->opgroup = RELATIVE_GROUP
+                            op=>optag   = nextop=>optag
+                            freeops     = 1
+                        fin
+                        break
+                    is NE_CODE
+                        if not op=>opval
+                            freeops = -2 // Remove ZERO:ISNE
+                        fin
+                        break
+                    is EQ_CODE
+                        if not op=>opval
+                            op->opcode  = LOGIC_NOT_CODE // Replace ZERO:ISEQ
+                            op->opgroup = STACK_GROUP
+                      freeops    = 1
+                        fin
+                        break
+                    is CONST_CODE // Collapse constant operation
+                        nextopnext = nextop->nextop
+                        if nextopnext
+                            when nextopnext->opcode
+                                is MUL_CODE
+                                    op=>opval = op=>opval * nextop=>opval
+                                    freeops   = 2
+                                    break
+                                is DIV_CODE
+                                    op=>opval = op=>opval / nextop=>opval
+                                    freeops   = 2
+                                    break
+                                is MOD_CODE
+                                    op=>opval = op=>opval % nextop=>opval
+                                    freeops   = 2
+                                    break
+                                is ADD_CODE
+                                    op=>opval = op=>opval + nextop=>opval
+                                    freeops   = 2
+                                    break
+                                is SUB_CODE
+                                    op=>opval = op=>opval - nextop=>opval
+                                    freeops   = 2
+                                    break
+                                is SHL_CODE
+                                    op=>opval = op=>opval << nextop=>opval
+                                    freeops   = 2
+                                    break
+                                is SHR_CODE
+                                    op=>opval = op=>opval >> nextop=>opval
+                                    freeops   = 2
+                                    break
+                                is AND_CODE
+                                    op=>opval = op=>opval & nextop=>opval
+                                    freeops   = 2
+                                    break
+                                is OR_CODE
+                                    op=>opval = op=>opval | nextop=>opval
+                                    freeops   = 2
+                                    break
+                                is EOR_CODE
+                                    op=>opval = op=>opval ^ nextop=>opval
+                                    freeops   = 2
+                                    break
+                                is EQ_CODE
+                                    op=>opval = op=>opval == nextop=>opval
+                                    freeops   = 2
+                                    break
+                                is NE_CODE
+                                    op=>opval = op=>opval <> nextop=>opval
+                                    freeops   = 2
+                                    break
+                                is GE_CODE
+                                    op=>opval = op=>opval >= nextop=>opval
+                                    freeops   = 2
+                                    break
+                                is LT_CODE
+                                    op=>opval = op=>opval < nextop=>opval
+                                    freeops   = 2
+                                    break
+                                is GT_CODE
+                                    op=>opval = op=>opval > nextop=>opval
+                                    freeops   = 2
+                                    break
+                                is LE_CODE
+                                    op=>opval = op=>opval <= nextop=>opval
+                                    freeops   = 2
+                                    break
+                                is LOGIC_OR_CODE
+                                    op=>opval = op=>opval or nextop=>opval
+                                    freeops   = 2
+                                    break
+                                is LOGIC_AND_CODE
+                                    op=>opval = op=>opval and nextop=>opval
+                                    freeops   = 2
+                                    break
+                            wend // End of collapse constant operation
+                        fin
+                        if pass and not freeops and op=>opval
+                            crunched = try_dupify(op)
+                        fin
+                        break // CONST_CODE
+                    is MUL_CODE
+                        for shiftcnt = 0 to 15
+                            if op=>opval == 1 << shiftcnt
+                                op=>opval       = shiftcnt
+                                nextop->opcode  = SHL_CODE
+                                break
+                            fin
+                        next
+                        break
+                    is DIV_CODE
+                       for shiftcnt = 0 to 15
+                            if op=>opval == 1 << shiftcnt
+                                op=>opval      = shiftcnt
+                                nextop->opcode = SHR_CODE
+                                break
+                            fin
+                        next
+                        break
+                wend
+                break // CONST_CODE
+            is LADDR_CODE
+                when nextop->opcode
+                    is CONST_CODE
+                        if nextop=>opnext
+                            nextopnext = nextop=>opnext
+                            when nextopnext->opcode
+                                is INDEXB_CODE // ADD_CODE
+                                    op=>opoffset = op=>opoffset + nextop=>opval
+                                    freeops      = 2
+                                    break
+                                is INDEXW_CODE
+                                    op=>opoffset = op=>opoffset + nextop=>opval * 2
+                                    freeops      = 2
+                                    break
+                            wend
+                        fin
+                        break
+                    is LB_CODE
+                        op->opcode = LLB_CODE
+                        freeops    = 1
+                        break
+                    is LW_CODE
+                        op->opcode = LLW_CODE
+                        freeops    = 1
+                        break
+                    is SB_CODE
+                        op->opcode = SLB_CODE
+                        freeops    = 1
+                        break
+                    is SW_CODE
+                        op->opcode = SLW_CODE
+                        freeops    = 1
+                        break
+                wend
+                if pass > 0 and not freeops
+                    crunched = try_dupify(op)
+                fin
+                break // LADDR_CODE
+            is GADDR_CODE
+                when nextop->opcode
+                    is CONST_CODE
+                        if nextop=>opnext
+                            nextopnext = nextop=>opnext
+                            when nextopnext->opcode
+                                is INDEXB_CODE // ADD_CODE
+                                    op=>opoffset = op=>opoffset + nextop=>opval
+                                    freeops      = 2
+                                    break
+                                is INDEXW_CODE
+                                    op=>opoffset = op=>opoffset + nextop=>opval * 2
+                                    freeops      = 2
+                                    break
+                            wend
+                        fin
+                        break
+                    is LB_CODE
+                        op->opcode = LAB_CODE
+                        freeops    = 1
+                        break
+                    is LW_CODE
+                        op->opcode = LAW_CODE
+                        freeops    = 1
+                        break
+                    is SB_CODE
+                        op->opcode = SAB_CODE
+                        freeops    = 1
+                        break
+                    is SW_CODE
+                        op->opcode = SAW_CODE
+                        freeops    = 1
+                        break
+                    is ICAL_CODE
+                        op->opcode = CALL_CODE
+                        freeops    = 1
+                        break
+                wend
+                if pass and not freeops
+                    crunched = try_dupify(op)
+                fin
+                break // GADDR_CODE
+            is LLB_CODE
+                if pass
+                    crunched = try_dupify(op)
+                fin
+                break // LLB_CODE
+            is LLW_CODE
+                // LLW [n]:CB 8:SHR -> LLB [n+1]
+                if nextop->opcode == CONST_CODE and nextop=>opval == 8
+                    if nextop=>opnext
+                        nextopnext = nextop=>opnext
+                        if nextopnext->opcode == SHR_CODE
+                            op->opcode = LLB_CODE
+                            op=>opoffset++
+                            freeops = 2
+                            break
+                        fin
+                    fin
+                fin
+                if pass and not freeops
+                    crunched = try_dupify(op)
+                fin
+                break // LLW_CODE
+            is LAB_CODE
+                if pass and not is_hardware_address(op=>opoffset)
+                    crunched = try_dupify(op)
+                fin
+                break // LAB_CODE
+            is LAW_CODE
+                // LAW x:CB 8:SHR -> LAB x+1
+                if nextop->opcode == CONST_CODE and nextop=>opval == 8
+                    if nextop=>opnext
+                        nextopnext = nextop=>opnext
+                        if nextopnext->opcode == SHR_CODE
+                            op->opcode = LAB_CODE
+                            op=>opoffset++
+                            freeops = 2
+                            break
+                        fin
+                    fin
+                fin
+                if pass and not freeops and not is_hardware_address(op=>opoffset)
+                    crunched = try_dupify(op)
+                fin
+                break // LAW_CODE
+            is LOGIC_NOT_CODE
+                when nextop->opcode
+                    is BRFALSE_CODE
+                        op->opcode  = BRTRUE_CODE
+                        op->opgroup = RELATIVE_GROUP
+                        op=>optag   = nextop=>optag
+                        freeops     = 1
+                        break
+                    is BRTRUE_CODE
+                        op->opcode  = BRFALSE_CODE
+                        op->opgroup = RELATIVE_GROUP
+                        op=>optag   = nextop=>optag
+                        freeops     = 1
+                        break
+                wend
+                break // LOGIC_NOT_CODE
+            is SLB_CODE
+                if nextop->opcode == LLB_CODE and op=>opoffset == nextop=>opoffset
+                    op->opcode = DLB_CODE
+                    freeops    = 1
+                fin
+                break // SLB_CODE
+            is SLW_CODE
+                if nextop->opcode == LLW_CODE and op=>opoffset == nextop=>opoffset
+                    op->opcode = DLW_CODE
+                    freeops    = 1
+                fin
+                break // SLW_CODE
+            is SAB_CODE
+                if nextop->opcode == LAB_CODE and op=>optag == nextop=>optag and op=>opoffset == nextop=>opoffset
+                    op->opcode = DAB_CODE
+                    freeops    = 1
+                fin
+                break // SAB_CODE
+            is SAW_CODE
+                if nextop->opcode == LAW_CODE and op=>optag == nextop=>optag and op=>opoffset == nextop=>opoffset
+                    op->opcode = DAW_CODE
+                    freeops    = 1
+                fin
+                break // SAW_CODE
+        wend
+        //
+        // Free up crunched ops. If freeops is positive we free up that many ops
+        // *after* op; if it's negative, we free up abs(freeops) ops *starting
+        // with* op.
+        //
+        if freeops < 0
+            freeops = -freeops
+            if op == *seq
+                //
+                // If op is at the start of the sequence, we treat this as a special case.
+                //
+                while freeops
+                    nextop     = op=>opnext
+                    op=>opnext = freeop_lst
+                    freeop_lst = op
+                    *seq       = nextop
+                    op         = nextop
+                    freeops--
+                loop
+                crunched = TRUE
+            else
+                //
+                // Otherwise we just move op back to point to the previous op and
+                // let the following loop remove the required number of ops.
+                //
+                op      = opprev
+                nextop  = op=>opnext
+            fin
+        fin
+        while freeops
+            op=>opnext     = nextop=>opnext
+            nextop=>opnext = freeop_lst
+            freeop_lst     = nextop
+            nextop         = op=>opnext
+            crunched       = TRUE
+            freeops--
+        loop
+        opprev = op
+        op     = nextop
+        nextop = op=>opnext
+    loop
+    return crunched
+end
+//
+// Point to crunch function
+//
+optimize_seq = @crunch_seq
+//
+// Keep this module in memory
+//
+return modkeep
+done

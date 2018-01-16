@@ -40,7 +40,8 @@ ALTRDON =       $C003
 ALTWROFF=       $C004
 ALTWRON =       $C005
         !SOURCE "vmsrc/plvmzp.inc"
-PSR     =       TMPH+1
+PSR     =       TMP+2
+DVSIGN  =       PSR+1
 DROP    =       $EF
 NEXTOP  =       $F0
 FETCHOP =       NEXTOP+3
@@ -181,7 +182,7 @@ VMCORE  =        *
 OPTBL   !WORD   ZERO,ADD,SUB,MUL,DIV,MOD,INCR,DECR              ; 00 02 04 06 08 0A 0C 0E
         !WORD   NEG,COMP,BAND,IOR,XOR,SHL,SHR,IDXW              ; 10 12 14 16 18 1A 1C 1E
         !WORD   LNOT,LOR,LAND,LA,LLA,CB,CW,CS                   ; 20 22 24 26 28 2A 2C 2E
-        !WORD   DROP,DUP,PUSHEP,PULLEP,BRGT,BRLT,BREQ,BRNE      ; 30 32 34 36 38 3A 3C 3E
+        !WORD   DROP,DUP,NEXTOP,DIVMOD,BRGT,BRLT,BREQ,BRNE      ; 30 32 34 36 38 3A 3C 3E
         !WORD   ISEQ,ISNE,ISGT,ISLT,ISGE,ISLE,BRFLS,BRTRU       ; 40 42 44 46 48 4A 4C 4E
         !WORD   BRNCH,IBRNCH,CALL,ICAL,ENTER,LEAVE,RET,CFFB     ; 50 52 54 56 58 5A 5C 5E
         !WORD   LB,LW,LLB,LLW,LAB,LAW,DLB,DLW                   ; 60 62 64 66 68 6A 6C 6E
@@ -281,8 +282,8 @@ BYE     LDY     DEFCMD
         STA     STRBUF,Y
         DEY
         BPL     -
-        INY                     ; CLEAR CMDLINE BUFF
-        STY     $01FF
+;        INY                     ; CLEAR CMDLINE BUFF
+;        STY     $01FF
 CMDENTRY =      *
 ;
 ; DEACTIVATE 80 COL CARDS
@@ -338,8 +339,9 @@ CMDENTRY =      *
 ;
 ; INIT VM ENVIRONMENT STACK POINTERS
 ;
-;        LDA #$00               ; INIT FRAME POINTER
-        STA     PPL
+;       LDA     #$00
+        STA     $01FF           ; CLEAR CMDLINE BUFF
+        STA     PPL             ; INIT FRAME POINTER
         STA     IFPL
         LDA     #$BF
         STA     PPH
@@ -347,6 +349,13 @@ CMDENTRY =      *
         LDX     #$FE            ; INIT STACK POINTER (YES, $FE. SEE GETS)
         TXS
         LDX     #ESTKSZ/2       ; INIT EVAL STACK INDEX
+;
+; CHANGE CMD STRING TO SYSPATH STRING
+;
+        LDA     STRBUF
+        SEC
+        SBC     #$03
+        STA     STRBUF
         JMP     $2000           ; JUMP TO LOADED SYSTEM COMMAND
 ;
 ; PRINT FAIL MESSAGE, WAIT FOR KEYPRESS, AND REBOOT
@@ -414,9 +423,9 @@ LCDEFCMD =      *-28            ; DEFCMD IN LC MEMORY
 OPXTBL  !WORD   ZERO,ADD,SUB,MUL,DIV,MOD,INCR,DECR              ; 00 02 04 06 08 0A 0C 0E
         !WORD   NEG,COMP,BAND,IOR,XOR,SHL,SHR,IDXW              ; 10 12 14 16 18 1A 1C 1E
         !WORD   LNOT,LOR,LAND,LA,LLA,CB,CW,CSX                  ; 20 22 24 26 28 2A 2C 2E
-        !WORD   DROP,DUP,PUSHEP,PULLEP,BRGT,BRLT,BREQ,BRNE      ; 30 32 34 36 38 3A 3C 3E
+        !WORD   DROP,DUP,NEXTOP,DIVMOD,BRGT,BRLT,BREQ,BRNE      ; 30 32 34 36 38 3A 3C 3E
         !WORD   ISEQ,ISNE,ISGT,ISLT,ISGE,ISLE,BRFLS,BRTRU       ; 40 42 44 46 48 4A 4C 4E
-        !WORD   BRNCH,IBRNCH,CALLX,ICALX,ENTER,LEAVEX,RETX,CFFB; 50 52 54 56 58 5A 5C 5E
+        !WORD   BRNCH,IBRNCH,CALLX,ICALX,ENTER,LEAVEX,RETX,CFFB ; 50 52 54 56 58 5A 5C 5E
         !WORD   LBX,LWX,LLBX,LLWX,LABX,LAWX,DLB,DLW             ; 60 62 64 66 68 6A 6C 6E
         !WORD   SB,SW,SLB,SLW,SAB,SAW,DAB,DAW                   ; 70 72 74 76 78 7A 7C 7E
 ;*
@@ -535,8 +544,7 @@ _DIVLP  ROL     TMPL            ; REMNDRL
         ROL     ESTKH+1,X       ; DVDNDH
         DEY
         BNE     _DIVLP
-_DIVEX  INX
-        LDY     IPY
+_DIVEX  LDY     IPY
         RTS
 ;*
 ;* NEGATE TOS
@@ -553,6 +561,7 @@ NEG     LDA     #$00
 ;* DIV TOS-1 BY TOS
 ;*
 DIV     JSR     _DIV
+        INX
         LSR     DVSIGN          ; SIGN(RESULT) = (SIGN(DIVIDEND) + SIGN(DIVISOR)) & 1
         BCS     NEG
         JMP     NEXTOP
@@ -560,11 +569,24 @@ DIV     JSR     _DIV
 ;* MOD TOS-1 BY TOS
 ;*
 MOD     JSR     _DIV
-        LDA     ESTKL,X         ; SAVE IN CASE OF DIVMOD
-        STA     DSTL
-        LDA     ESTKH,X
-        STA     DSTH
+        INX
         LDA     TMPL            ; REMNDRL
+        STA     ESTKL,X
+        LDA     TMPH            ; REMNDRH
+        STA     ESTKH,X
+        LDA     DVSIGN          ; REMAINDER IS SIGN OF DIVIDEND
+        BMI     NEG
+        JMP     NEXTOP
+;*
+;* DIVMOD TOS-1 BY TOS
+;*
+DIVMOD  JSR     _DIV
+        LSR     DVSIGN          ; SIGN(RESULT) = (SIGN(DIVIDEND) + SIGN(DIVISOR)) & 1
+        BCC     +
+        INX
+        JSR     _NEG
+        DEX
++       LDA     TMPL            ; REMNDRL
         STA     ESTKL,X
         LDA     TMPH            ; REMNDRH
         STA     ESTKH,X
@@ -717,18 +739,6 @@ DUP     DEX
         STA     ESTKL,X
         LDA     ESTKH+1,X
         STA     ESTKH,X
-        JMP     NEXTOP
-;*
-;* PUSH EVAL STACK POINTER TO CALL STACK
-;*
-PUSHEP  TXA
-        PHA
-        JMP     NEXTOP
-;*
-;* PULL EVAL STACK POINTER FROM CALL STACK
-;*
-PULLEP  PLA
-        TAX
         JMP     NEXTOP
 ;*
 ;* CONSTANT
@@ -1379,15 +1389,15 @@ BRGT    INX
         CMP     ESTKL,X
         LDA     ESTKH-1,X
         SBC     ESTKH,X
-        BMI     BRNCH
         BPL     NOBRNCH
+        BMI     BRNCH
 BRLT    INX
         LDA     ESTKL,X
         CMP     ESTKL-1,X
         LDA     ESTKH,X
         SBC     ESTKH-1,X
-        BMI     BRNCH
         BPL     NOBRNCH
+        BMI     BRNCH
 IBRNCH  LDA     IPL
         CLC
         ADC     ESTKL,X
@@ -1423,8 +1433,8 @@ CALL    +INC_IP
         BIT     LCRWEN+LCBNK2
         BIT     LCRWEN+LCBNK2
 }
-        LDY     #$00
-        JMP     NEXTOP
+        LDY     #$01
+        JMP     FETCHOP
 ;
 CALLX   +INC_IP
         LDA     (IP),Y
@@ -1459,8 +1469,8 @@ CALLX   +INC_IP
         BIT     LCRWEN+LCBNK2
         BIT     LCRWEN+LCBNK2
 }
-        LDY     #$00
-        JMP     NEXTOP
+        LDY     #$01
+        JMP     FETCHOP
 ;*
 ;* INDIRECT CALL TO ADDRESS (NATIVE CODE)
 ;*
@@ -1487,8 +1497,8 @@ ICAL    LDA     ESTKL,X
         BIT     LCRWEN+LCBNK2
         BIT     LCRWEN+LCBNK2
 }
-        LDY     #$00
-        JMP     NEXTOP
+        LDY     #$01
+        JMP     FETCHOP
 ;
 ICALX   LDA     ESTKL,X
         STA     TMPL
@@ -1521,8 +1531,8 @@ ICALX   LDA     ESTKL,X
         BIT     LCRWEN+LCBNK2
         BIT     LCRWEN+LCBNK2
 }
-        LDY     #$00
-        JMP     NEXTOP
+        LDY     #$01
+        JMP     FETCHOP
 ;*
 ;* JUMP INDIRECT TRHOUGH TMP
 ;*
@@ -1532,7 +1542,6 @@ JMPTMP  JMP     (TMP)
 ;*
 ENTER   INY
         LDA     (IP),Y
-        PHA                     ; SAVE ON STACK FOR LEAVE
         EOR     #$FF            ; ALLOCATE FRAME
         SEC
         ADC     PPL
@@ -1555,16 +1564,30 @@ ENTER   INY
         DEY
         STA     (IFP),Y
         BNE     -
-+       LDY     #$02
-        JMP     NEXTOP
++       LDY     #$03
+        JMP     FETCHOP
 ;*
 ;* LEAVE FUNCTION
 ;*
-LEAVEX  STA     ALTRDOFF
+LEAVEX  +INC_IP
+        LDA     (IP),Y
+        STA     ALTRDOFF
+        CLC
+        ADC     IFPL
+        STA     PPL
+        LDA     #$00
+        ADC     IFPH
+        STA     PPH
+        PLA                     ; RESTORE PREVIOUS FRAME
+        STA     IFPL
+        PLA
+        STA     IFPH
         LDA     PSR
         PHA
         PLP
-LEAVE   PLA                     ; DEALLOCATE POOL + FRAME
+        RTS
+LEAVE   +INC_IP
+        LDA     (IP),Y
         CLC
         ADC     IFPL
         STA     PPL

@@ -1,0 +1,504 @@
+include "inc/cmdsys.plh"
+include "inc/args.plh"
+include "inc/fileio.plh"
+include "inc/longjmp.plh"
+//
+// Tokens
+//
+const ID_TKN            = $D6 // V
+const CHR_TKN           = $C3 // C
+const INT_TKN           = $C9 // I
+const STR_TKN           = $D3 // S
+const EOL_TKN           = $02
+const EOF_TKN           = $01
+const ERR_TKN           = $00
+//
+//Ternary operand operators
+//
+const TERNARY_TKN       = $BF // ?
+const TRIELSE_TKN       = $DF // _
+//
+// Binary operand operators
+//
+const SET_TKN           = $BD // =
+const ADD_TKN           = $AB // +
+const SUB_TKN           = $AD // -
+const MUL_TKN           = $AA // *
+const DIV_TKN           = $AF // /
+const MOD_TKN           = $A5 // %
+const OR_TKN            = $FC // |
+const EOR_TKN           = $DE // ^
+const AND_TKN           = $A6 // &
+const SHR_TKN           = $D2 // R
+const SHL_TKN           = $CC // L
+const GT_TKN            = $BE // >
+const GE_TKN            = $C8 // H
+const LT_TKN            = $BC // <
+const LE_TKN            = $C2 // B
+const NE_TKN            = $D5 // U
+const EQ_TKN            = $C5 // E
+const LOGIC_AND_TKN     = $CE // N
+const LOGIC_OR_TKN      = $CF // O
+//
+// Unary operand operators
+//
+const AT_TKN            = $C0 // @
+const DOT_TKN           = $AE // .
+const COLON_TKN         = $BA // :
+const NEG_TKN           = $AD // -
+const POUND_TKN         = $A3 // #
+const COMP_TKN          = $FE // ~
+const LOGIC_NOT_TKN     = $A1 // !
+const BPTR_TKN          = $DE // ^
+const WPTR_TKN          = $AA // *
+const PTRB_TKN          = $D8 // X
+const PTRW_TKN          = $D7 // W
+const INC_TKN           = $C1 // A
+const DEC_TKN           = $C4 // D
+const LAMBDA_TKN        = $A6 // &
+//
+// Enclosure tokens
+//
+const OPEN_PAREN_TKN    = $A8 // (
+const CLOSE_PAREN_TKN   = $A9 // )
+const OPEN_BRACKET_TKN  = $DB // [
+const CLOSE_BRACKET_TKN = $DD // ]
+//
+// Misc. tokens
+//
+const COMMA_TKN         = $AC // ,
+//const COMMENT_TKN       = $BB // //
+const DROP_TKN          = $BB
+//
+// Keyword tokens
+//
+const CONST_TKN         = $80
+const BYTE_TKN          = $81
+const WORD_TKN          = $82
+const IF_TKN            = $83
+const ELSEIF_TKN        = $84
+const ELSE_TKN          = $85
+const FIN_TKN           = $86
+const END_TKN           = $87
+const WHILE_TKN         = $88
+const LOOP_TKN          = $89
+const CASE_TKN          = $8A
+const OF_TKN            = $8B
+const DEFAULT_TKN       = $8C
+const ENDCASE_TKN       = $8D
+const FOR_TKN           = $8E
+const TO_TKN            = $8F
+const DOWNTO_TKN        = $90
+const STEP_TKN          = $91
+const NEXT_TKN          = $92
+const REPEAT_TKN        = $93
+const UNTIL_TKN         = $94
+const DEF_TKN           = $95
+const STRUC_TKN         = $96
+const SYSFLAGS_TKN      = $97
+const DONE_TKN          = $98
+const RETURN_TKN        = $99
+const BREAK_TKN         = $9A
+const CONT_TKN          = $9B
+const PREDEF_TKN        = $9C
+const IMPORT_TKN        = $9D
+const EXPORT_TKN        = $9E
+const INCLUDE_TKN       = $9F
+//
+// Types
+//
+const GLOBAL_TYPE       = $0000
+const CONST_TYPE        = $0001
+const BYTE_TYPE         = $0002
+const WORD_TYPE         = $0004
+const VAR_TYPE          = $0006 // (WORD_TYPE | BYTE_TYPE)
+const FUNC_TYPE         = $0008
+const FUNC_CONST_TYPE   = $0009
+const ADDR_TYPE         = $000E // (VAR_TYPE | FUNC_TYPE)
+const LOCAL_TYPE        = $0010
+const BPTR_TYPE         = $0020
+const WPTR_TYPE         = $0040
+const PTR_TYPE          = $0060 // (BPTR_TYPE | WPTR_TYPE)
+const XBYTE_TYPE        = $0022 // (BPTR_TYPE | BYTE_TYPE)
+const XWORD_TYPE        = $0044 // (WPTR_TYPE | WORD_TYPE)
+const CONSTADDR_TYPE    = $0061 // (CONST_TYPE | PTR_TYPE)
+const STR_TYPE          = $0080
+const PREDEF_TYPE       = $0100
+const EXPORT_TYPE       = $0200
+const EXTERN_TYPE       = $0400
+const EXTACCESS_TYPE    = $0800
+const RELATIVE_TYPE     = $8000
+//
+// Fixup flags mask
+//
+const RESOLVED_FIXUP    = $01
+const RELATIVE_FIXUP    = $02
+const MASK_FIXUP        = $90
+const WORD_FIXUP        = $80
+const BYTE_FIXUP        = $00
+const EXTERN_FIXUP      = $10
+//
+// Keywords
+//
+byte keywrds            = "IF",       IF_TKN
+byte                    = "TO",       TO_TKN
+byte                    = "IS",       OF_TKN
+byte                    = "OR",       LOGIC_OR_TKN
+byte                    = "FOR",      FOR_TKN
+byte                    = "FIN",      FIN_TKN
+byte                    = "DEF",      DEF_TKN
+byte                    = "END",      END_TKN
+byte                    = "AND",      LOGIC_AND_TKN
+byte                    = "NOT",      LOGIC_NOT_TKN
+byte                    = "RES",      BYTE_TKN
+byte                    = "VAR",      WORD_TKN
+byte                    = "RES",      BYTE_TKN
+byte                    = "WORD",     WORD_TKN
+byte                    = "CHAR",     BYTE_TKN
+byte                    = "BYTE",     BYTE_TKN
+byte                    = "ELSE",     ELSE_TKN
+byte                    = "NEXT",     NEXT_TKN
+byte                    = "WHEN",     CASE_TKN
+byte                    = "LOOP",     LOOP_TKN
+byte                    = "STEP",     STEP_TKN
+byte                    = "DONE",     DONE_TKN
+byte                    = "WEND",     ENDCASE_TKN
+byte                    = "DROP",     DROP_TKN
+byte                    = "CONST",    CONST_TKN
+byte                    = "STRUC",    STRUC_TKN
+byte                    = "ELSIF",    ELSEIF_TKN
+byte                    = "WHILE",    WHILE_TKN
+byte                    = "UNTIL",    UNTIL_TKN
+byte                    = "BREAK",    BREAK_TKN
+byte                    = "IMPORT",   IMPORT_TKN
+byte                    = "EXPORT",   EXPORT_TKN
+byte                    = "DOWNTO",   DOWNTO_TKN
+byte                    = "REPEAT",   REPEAT_TKN
+byte                    = "RETURN",   RETURN_TKN
+byte                    = "PREDEF",   PREDEF_TKN
+byte                    = "INCLUDE",  INCLUDE_TKN
+byte                    = "CONTINUE", CONT_TKN
+byte                    = "SYSFLAGS", SYSFLAGS_TKN
+byte                    = "OTHERWISE",DEFAULT_TKN
+byte                    = $FF
+//
+// Mathematical ops
+//
+const bops_tblsz = 17 // minus 1
+byte[] bops_tbl // Highest precedence
+byte                    = MUL_TKN, DIV_TKN, MOD_TKN
+byte                    = ADD_TKN, SUB_TKN
+byte                    = SHR_TKN, SHL_TKN
+byte                    = AND_TKN
+byte                    = EOR_TKN
+byte                    = OR_TKN
+byte                    = GT_TKN, GE_TKN, LT_TKN, LE_TKN
+byte                    = EQ_TKN, NE_TKN
+byte                    = LOGIC_AND_TKN
+byte                    = LOGIC_OR_TKN
+                        // Lowest precedence
+byte[] bops_prec // Highest precedence
+byte                    = 1, 1, 1
+byte                    = 2, 2
+byte                    = 3, 3
+byte                    = 4
+byte                    = 5
+byte                    = 6
+byte                    = 7, 7, 7, 7
+byte                    = 8, 8
+byte                    = 9
+byte                    = 10
+                                 // Lowest precedence
+byte[16] opstack
+byte[16] precstack
+word opsp
+word[16] valstack
+byte[16] sizestack
+byte[16] typestack
+word valsp
+//
+// Code sequence shared with optimizer
+//
+include "toolsrc/codeseq.plh"
+//
+//
+// Symbol table variables
+//
+struc t_id
+    word idval
+    word idtype
+    byte funcparms
+    byte funcvals
+    byte extnum
+    byte idname
+end
+//
+// Generated code buffers
+//
+const OPSEQNUM          = 256
+const TAGNUM            = 1024
+const FIXUPNUM          = 2048
+const MODDEPNUM         = 8
+const IDGLOBALSZ        = 4096
+const IDLOCALSZ         = 512
+word fixup_cnt, tag_cnt = -1
+word fixup_tag, fixup_addr
+word tag_addr, tag_type
+word idglobal_tbl, idlocal_tbl
+word pending_seq
+word globals, lastglobal, lastlocal, savelast
+word tag_num, fixup_num, globalbufsz, localbufsz, codebufsz
+word datasize, framesize, savesize
+byte locals, savelocals
+word codebuff, codeptr, entrypoint
+word modsysflags
+byte[16] moddep_tbl[MODDEPNUM]
+byte moddep_cnt, def_cnt = 1
+predef emit_pending_seq#0
+//
+// Module relocation base address
+//
+const RELADDR           = $1000
+//
+// Exports for optimizer module
+//
+export word freeop_lst
+export word optimize_seq
+//
+// Compiler flags
+//
+const OPTIMIZE          = 1
+const OPTIMIZE2         = 2
+const NO_COMBINE        = 4
+const WARNINGS          = 8
+byte outflags
+//
+// ProDOS/SOS file references
+//
+byte refnum, srcref, incref
+byte[32] srcfile, incfile, relfile
+word parsefile            // Pointer to current file
+word sysincbuf, sysincfre // System I/O buffer for include files
+word srcline              // Saved source line number
+//
+// Scanner variables
+//
+word instr
+word inbuff
+word scanptr
+byte token             = EOL_TKN
+byte scanchr, tknlen
+word tknptr, parserrln
+word constval
+word lineno
+//
+// Parser variables
+//
+const LVALUE            = 0
+const RVALUE            = 1
+const LAMBDANUM         = 16
+word strconstbuff
+word strconstptr
+byte infunc, inlambda
+byte stack_loop
+byte prevstmnt
+word infuncvals
+word break_tag
+word cont_tag
+byte lambda_cnt, lambda_num
+byte[LAMBDANUM] lambda_cparms
+word[LAMBDANUM] lambda_seq, lambda_tag
+predef parse_constexpr#3, parse_expr(codeseq)#2, parse_lambda
+//
+// Arg pointer
+//
+word arg, opt
+//
+// Long jump environment
+//
+word exit
+//
+// Error string flags
+//
+const ERR_DUP           = $0001
+const ERR_UNDECL        = $0002
+const ERR_INVAL         = $0004
+const ERR_MISS          = $0008
+const ERR_OVER          = $0010
+const ERR_CLOSE         = $0020
+const ERR_LOCAL         = $0040
+const ERR_GLOBAL        = $0080
+const ERR_CODE          = $0100
+const ERR_ID            = $0200
+const ERR_CONST         = $0400
+const ERR_INIT          = $0800
+const ERR_STATE         = $1000
+const ERR_FRAME         = $2000
+const ERR_TABLE         = $4000
+const ERR_SYNTAX        = $8000
+
+//=====================================
+//
+//           PLASMA Compiler
+//
+//=====================================
+
+//
+// Handy functions
+//
+def puth(hex)#0
+    putc('$')
+    call($F941, hex >> 8, hex, 0, 0)
+end
+def nametostr(namestr, len, strptr)#0
+    ^strptr = len
+    memcpy(strptr + 1, namestr, len)
+end
+def putcurln#0
+    byte i
+    putln; puts(parsefile); putc('['); puti(lineno); puts("]\n")
+    puts(instr); putln
+    for i = tknptr - inbuff downto 1
+        putc(' ')
+    next
+    puts("^\n")
+end
+//
+// Error handler
+//
+def exit_err(err)#0
+    byte i
+
+    puts("\nError:")
+    if err & ERR_DUP;    puts("duplicate ");  fin
+    if err & ERR_UNDECL; puts("undeclared "); fin
+    if err & ERR_INVAL;  puts("invalid ");    fin
+    if err & ERR_MISS;   puts("missing ");    fin
+    if err & ERR_OVER;   puts("overflowed "); fin
+    if err & ERR_CLOSE;  puts("closing ");    fin
+    if err & ERR_LOCAL;  puts("local ");      fin
+    if err & ERR_GLOBAL; puts("global ");     fin
+    if err & ERR_CODE;   puts("code ");       fin
+    if err & ERR_ID;     puts("identifier "); fin
+    if err & ERR_CONST;  puts("constant");    fin
+    if err & ERR_INIT;   puts("initializer"); fin
+    if err & ERR_STATE;  puts("statement");   fin
+    if err & ERR_FRAME;  puts("frame");       fin
+    if err & ERR_TABLE;  puts("table");       fin
+    if err & ERR_SYNTAX; puts("syntax");      fin
+    putcurln
+    fileio:close(0) // Close all open files
+    throw(exit, TRUE)
+end
+//
+// Warning
+//
+def parse_warn(msg)#0
+    if outflags & WARNINGS
+        puts("\nWarning:")
+        puts(msg)
+        putcurln
+    fin
+end
+//
+// Include code to reduce size of this file
+//
+include "toolsrc/codegen.pla"
+include "toolsrc/lex.pla"
+include "toolsrc/parse.pla"
+//
+// Look at command line arguments and compile module
+//
+puts("PLASMA Compiler, Version 1.0\n")
+arg = argNext(argFirst)
+if ^arg and ^(arg + 1) == '-'
+    opt = arg + 2
+    while TRUE
+        if toupper(^opt) == 'O'
+            //
+            // Load optimizer module here
+            //
+            if cmdsys:modexec("CODEOPT") >= 0
+                outflags = outflags | OPTIMIZE
+            fin
+            if not (outflags & OPTIMIZE)
+                puts("\nOptimizer disabled\n")
+            fin
+            opt++
+            if ^opt == '2'
+                outflags = outflags | OPTIMIZE2
+                opt++
+            fin
+        elsif toupper(^opt) == 'N'
+            outflags = outflags | NO_COMBINE
+            opt++
+        elsif toupper(^opt) == 'W'
+            outflags = outflags | WARNINGS
+            opt++
+        else
+            break
+        fin
+    loop
+    arg = argNext(arg)
+fin
+if ^arg
+    strcpy(@srcfile, arg)
+    arg = argNext(arg)
+    if ^arg
+        strcpy(@relfile, arg)
+    else
+        strcpy(@relfile, @srcfile)
+        //
+        // Strip trailing extension
+        //
+        while relfile and relfile[relfile] <> '.'
+            relfile--
+        loop
+        if relfile; relfile--; fin // Strip '.'
+        if not relfile
+            //
+            // Copy default name over
+            //
+            strcpy(@relfile, "A.OUT")
+        fin
+    fin
+fin
+if srcfile and relfile
+    srcref = fileio:open(@srcfile)
+    if srcref
+        fileio:newline(srcref, $7F, $0D)
+        refnum       = srcref
+        parsefile    = @srcfile
+        strconstbuff = heapalloc(80)
+        instr        = cmdsys:cmdline
+        inbuff       = instr + 1
+        scanptr      = inbuff
+        *instr       = NULL
+        exit         = heapalloc(t_except)
+        if not except(exit)
+            //
+            // Parse source code module
+            //
+            parse_module
+            fileio:close(srcref)
+            puts("\nBytes compiled: "); puti(codeptr - codebuff); putln
+            //
+            // Write REL file
+            //
+            fileio:destroy(@relfile)
+            fileio:create(@relfile, $FE, $1000) // full access, REL file
+            srcref = fileio:open(@relfile)
+            if srcref
+                writemodule(srcref)
+                fileio:close(srcref)
+            else
+                puts("\nError opening: "); puts(@relfile); putln
+            fin
+        fin
+    else
+        puts("\nError opening: "); puts(@srcfile); putln
+    fin
+else
+    puts("Usage:+PLASM [-[W][O[2]][N]] <src> [out]\n")
+fin
+done

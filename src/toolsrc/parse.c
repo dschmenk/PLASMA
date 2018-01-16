@@ -228,8 +228,12 @@ int parse_constval(void)
             type = id_type(tokenstr, tokenlen);
             if (type & CONST_TYPE)
                 value = id_const(tokenstr, tokenlen);
-            else if ((type & (FUNC_TYPE | EXTERN_TYPE)) || ((type & ADDR_TYPE) && (mod == 8)))
+            else if (type & (FUNC_TYPE | ADDR_TYPE))
+            {
+                if (mod != 8)
+                    parse_error("Invalid address constant");
                 value = id_tag(tokenstr, tokenlen);
+            }
             else
                 return (0);
             break;
@@ -362,11 +366,11 @@ t_opseq *parse_value(t_opseq *codeseq, int rvalue, int *stackdepth)
         }
         else if (scantoken == BPTR_TOKEN || scantoken == WPTR_TOKEN)
         {
-            deref++;
-            if (!type)
-                type |= scantoken == BPTR_TOKEN ? BPTR_TYPE : WPTR_TYPE;
-            else if (scantoken == BPTR_TOKEN)
+            if (type & BPTR_TYPE)
                 parse_error("Byte value used as pointer");
+            else
+                type = scantoken == BPTR_TOKEN ? BPTR_TYPE : WPTR_TYPE;
+            deref++;
         }
         else if (scantoken == NEG_TOKEN || scantoken == COMP_TOKEN || scantoken == LOGIC_NOT_TOKEN)
         {
@@ -392,35 +396,41 @@ t_opseq *parse_value(t_opseq *codeseq, int rvalue, int *stackdepth)
     if (scantoken == INT_TOKEN || scantoken == CHAR_TOKEN)
     {
         value = constval;
-        type |= CONST_TYPE;
         valseq = gen_const(NULL, value);
+        deref--;
     }
     else if (scantoken == ID_TOKEN)
     {
         if ((type |= id_type(tokenstr, tokenlen)) & CONST_TYPE)
         {
-            value = id_const(tokenstr, tokenlen);
+            value  = id_const(tokenstr, tokenlen);
             valseq = gen_const(NULL, value);
+            deref--;
         }
-        else //if (type & (VAR_TYPE | FUNC_TYPE))
+        else
         {
             value = id_tag(tokenstr, tokenlen);
             if (type & LOCAL_TYPE)
                 valseq = gen_lcladr(NULL, value);
             else
                 valseq = gen_gbladr(NULL, value, type);
-        }
-        if (type & FUNC_TYPE)
-        {
-            cfnparms = funcparms_cnt(type);
-            cfnvals  = funcvals_cnt(type);
+            if (type & FUNC_TYPE)
+            {
+                cfnparms = funcparms_cnt(type);
+                cfnvals  = funcvals_cnt(type);
+            }
         }
     }
     else if (scantoken == LAMBDA_TOKEN)
     {
-        type |= CONST_TYPE;
-        value = parse_lambda();
+        if (!rvalue) // Lambdas can't be LVALUEs
+        {
+            release_seq(uopseq);
+            return (codeseq);
+        }
+        value  = parse_lambda();
         valseq = gen_gbladr(NULL, value, FUNC_TYPE);
+        deref--;
     }
     else if (scantoken == OPEN_PAREN_TOKEN)
     {
@@ -428,9 +438,22 @@ t_opseq *parse_value(t_opseq *codeseq, int rvalue, int *stackdepth)
             parse_error("Bad expression in parenthesis");
         if (scantoken != CLOSE_PAREN_TOKEN)
             parse_error("Missing closing parenthesis");
+        deref--;
+    }
+    else if (scantoken == DROP_TOKEN)
+    {
+        if (rvalue)
+            parse_error("DROP is LVALUE only");
+        codeseq = gen_drop(codeseq);
+        scan();
+        return (codeseq);
     }
     else
+    {
+        release_seq(uopseq);
+        release_seq(codeseq);
         return (NULL);
+    }
     /*
      * Parse post operators.
      */
@@ -444,33 +467,36 @@ t_opseq *parse_value(t_opseq *codeseq, int rvalue, int *stackdepth)
             valseq = cat_seq(parse_list(NULL, &value), valseq);
             if (scantoken != CLOSE_PAREN_TOKEN)
                 parse_error("Missing function call closing parenthesis");
-            if (scan() == POUND_TOKEN)
+            if (type & FUNC_TYPE)
             {
-                /*
-                 * Set function pointer return vals count - can't do this to regular function call
-                 */
-                if (type & FUNC_TYPE)
-                    parse_error("Overriding function return count");
-                if (!parse_const(&cfnvals))
-                    parse_error("Invalid def return value count");
+                if (cfnparms != value) // Can't check parm count on function pointers
+                    parse_error("Parameter count mismatch");
             }
             else
-                scan_rewind(tokenstr);
-            if ((type & FUNC_TYPE) && (cfnparms != value))
-                parse_error("Parameter count mismatch");
-            if (stackdepth)
-                *stackdepth = cfnvals + cfnparms - value;
-            if (type & (VAR_TYPE | PTR_TYPE)) //!(type & (FUNC_TYPE | CONST_TYPE)))
             {
-                valseq = gen_lw(valseq);
-                if (deref)
-                    deref--;
+                if (scan() == POUND_TOKEN)
+                {
+                    /*
+                     * Set function pointer return vals count - can't do this to regular function call
+                     */
+                    if (!parse_const(&cfnvals))
+                        parse_error("Invalid def return value count");
+                }
+                else
+                    scan_rewind(tokenstr);
+                if (type & WORD_TYPE)
+                    valseq = gen_lw(valseq);
+                else if (type & BYTE_TYPE)
+                    parse_error("Using BYTE value as a pointer");
+                else
+                    deref++;
             }
             valseq = gen_icall(valseq);
             if (stackdepth)
-                *stackdepth = cfnvals;
-            cfnvals = 1;
-            type &= ~(FUNC_TYPE | VAR_TYPE);
+                *stackdepth += cfnvals - 1;
+            cfnparms = 0; cfnvals = 1;
+            type &= PTR_TYPE;
+            deref--;
         }
         else if (scantoken == OPEN_BRACKET_TOKEN)
         {
@@ -480,31 +506,29 @@ t_opseq *parse_value(t_opseq *codeseq, int rvalue, int *stackdepth)
             if (type & FUNC_TYPE)
             {
                 /*
-                 * Function call dereference
+                 * Function address dereference
                  */
-                valseq = gen_icall(valseq);
-                if (stackdepth)
-                    *stackdepth = cfnvals;
+                cfnparms = 0; cfnvals = 1;
             }
-            while ((idxseq = parse_expr(NULL, stackdepth)))
+            while ((valseq = parse_expr(valseq, stackdepth)) && scantoken == COMMA_TOKEN)
             {
-                valseq = cat_seq(valseq, idxseq);
-                if (scantoken != COMMA_TOKEN)
-                    break;
                 valseq = gen_idxw(valseq);
-                valseq = gen_lw(valseq);
+                valseq = gen_lw(valseq); // Multi-dimenstion arrays are array pointers to arrays
             }
             if (scantoken != CLOSE_BRACKET_TOKEN)
                 parse_error("Missing closing bracket");
-            if (type & (WPTR_TYPE | WORD_TYPE))
+            if (type & WORD_TYPE)
             {
                 valseq = gen_idxw(valseq);
-                type = (type & PTR_TYPE) | WORD_TYPE;
             }
             else
             {
                 valseq = gen_idxb(valseq);
-                type = (type & PTR_TYPE) | BYTE_TYPE;
+                if (!(type & BYTE_TYPE))
+                {
+                    type = (type & PTR_TYPE) | BYTE_TYPE;
+                    deref++;
+                }
             }
         }
         else if (scantoken == PTRB_TOKEN || scantoken == PTRW_TOKEN)
@@ -517,23 +541,27 @@ t_opseq *parse_value(t_opseq *codeseq, int rvalue, int *stackdepth)
                 /*
                  * Function call dereference
                  */
+                if (cfnparms)
+                    parse_error("Parameter count mismatch");
                 valseq = gen_icall(valseq);
                 if (stackdepth)
-                    *stackdepth = cfnvals;
-                type &= ~FUNC_TYPE;
+                    *stackdepth += cfnvals - 1;
+                cfnparms = 0; cfnvals = 1;
             }
-            else if (type & (VAR_TYPE | PTR_TYPE))
+            else if (type & WORD_TYPE)
             {
                 /*
                  * Pointer dereference
                  */
                 valseq = gen_lw(valseq);
             }
-            type = (scantoken == PTRB_TOKEN) ? BPTR_TYPE : WPTR_TYPE;
+            else if (type & BYTE_TYPE)
+                parse_error("Using BYTE value as a pointer");
+            else
+                deref++;
+            type = (type & PTR_TYPE) | (scantoken == PTRB_TOKEN) ? BYTE_TYPE : WORD_TYPE; // Type override
             if (!parse_const(&const_offset))
             {
-                if (scantoken == EOL_TOKEN || scantoken == CLOSE_PAREN_TOKEN)
-                    parse_error("Syntax");
                 /*
                  * Setting type override for following operations
                  */
@@ -556,20 +584,15 @@ t_opseq *parse_value(t_opseq *codeseq, int rvalue, int *stackdepth)
             if (type & FUNC_TYPE)
             {
                 /*
-                 * Function call dereference
+                 * Function address dereference
                  */
-                valseq = gen_icall(valseq);
-                if (stackdepth)
-                    *stackdepth = cfnvals;
-                type &= ~FUNC_TYPE;
+                cfnparms = 0; cfnvals = 1;
             }
-            type = (type & (VAR_TYPE | CONST_TYPE))
-                 ? ((scantoken == DOT_TOKEN) ? BYTE_TYPE : WORD_TYPE)
-                 : ((scantoken == DOT_TOKEN) ? BPTR_TYPE : WPTR_TYPE);
+            else if (!(type & VAR_TYPE))
+                deref++;
+            type = (type & PTR_TYPE) | ((scantoken == DOT_TOKEN) ? BYTE_TYPE : WORD_TYPE); // Type override
             if (!parse_const(&const_offset))
             {
-                if (scantoken == EOL_TOKEN || scantoken == CLOSE_PAREN_TOKEN)
-                    parse_error("Syntax");
                 /*
                  * Setting type override for following operations
                  */
@@ -588,34 +611,53 @@ t_opseq *parse_value(t_opseq *codeseq, int rvalue, int *stackdepth)
             break;
     }
     /*
+     * Probably parsing RVALUE as LVALUE
+     */
+    if (deref < 0)
+    {
+        release_seq(valseq);
+        release_seq(uopseq);
+        return (NULL);
+    }
+    /*
      * Resolve outstanding dereference pointer loads
      */
     while (deref > rvalue)
     {
-        deref--;
         if (type & FUNC_TYPE)
         {
+            if (cfnparms)
+                parse_error("Parameter count mismatch");
             valseq = gen_icall(valseq);
             if (stackdepth)
-                *stackdepth = cfnvals;
+                *stackdepth += cfnvals - 1;
+            cfnparms = 0; cfnvals = 1;
             type &= ~FUNC_TYPE;
         }
-        else if (type & VAR_TYPE)
+        else //if (type & VAR_TYPE)
             valseq = gen_lw(valseq);
+        //else
+        //    {fprintf(stderr,"deref=%d",deref);parse_error("What are we dereferencing #1?");}
+        deref--;
     }
     if (deref)
     {
         if (type & FUNC_TYPE)
         {
+            if (cfnparms)
+                parse_error("Parameter count mismatch");
             valseq = gen_icall(valseq);
             if (stackdepth)
-                *stackdepth = cfnvals;
+                *stackdepth += cfnvals - 1;
+            cfnparms = 0; cfnvals = 1;
             type &= ~FUNC_TYPE;
         }
         else if (type & (BYTE_TYPE | BPTR_TYPE))
             valseq = gen_lb(valseq);
         else if (type & (WORD_TYPE | WPTR_TYPE))
             valseq = gen_lw(valseq);
+        else
+            parse_error("What are we dereferencing?");
     }
     /*
      * Output pre-operations
@@ -635,6 +677,8 @@ t_opseq *parse_value(t_opseq *codeseq, int rvalue, int *stackdepth)
             release_seq(valseq);
             return (NULL); // Function or const cannot be LVALUE, must be RVALUE
         }
+        if (stackdepth)
+            (*stackdepth)--;
     }
     return (cat_seq(codeseq, valseq));
 }
@@ -726,8 +770,7 @@ t_opseq *parse_set(t_opseq *codeseq)
     }
     if (lparms == 0 || scantoken != SET_TOKEN)
     {
-        tokenstr = setptr;
-        scan_rewind(tokenstr);
+        scan_rewind(setptr);
         while (lparms--)
             release_seq(setseq[lparms]);
         while (lambda_cnt > lambda_set)
@@ -741,18 +784,15 @@ t_opseq *parse_set(t_opseq *codeseq)
     rseq = parse_list(NULL, &rparms);
     if (lparms > rparms)
         parse_error("Set value list underflow");
-    if ((lparms != rparms) && (rparms - lparms != 1))
-        codeseq = gen_pushexp(codeseq);
     codeseq = cat_seq(codeseq, rseq);
-    for (i = lparms - 1; i >= 0; i--)
-        codeseq = cat_seq(codeseq, setseq[i]);
-    if (lparms != rparms)
+    if (lparms < rparms)
     {
-        if (rparms - lparms == 1)
+        parse_warn("Silently dropping extra rvalues");
+        for (i = rparms - lparms; i > 0; i--)
             codeseq = gen_drop(codeseq);
-        else
-            codeseq = gen_pullexp(codeseq);
     }
+    while (lparms--)
+        codeseq = cat_seq(codeseq, setseq[lparms]);
     return (codeseq);
 }
 int parse_stmnt(void)
@@ -770,13 +810,17 @@ int parse_stmnt(void)
     switch (scantoken)
     {
         case IF_TOKEN:
-            if (!(seq = parse_expr(NULL, NULL)))
+            if (!(seq = parse_expr(NULL, &cfnvals)))
                 parse_error("Bad expression");
+            if (cfnvals > 1)
+            {
+                parse_warn("Expression value overflow");
+                while (cfnvals-- > 1) seq = gen_drop(seq);
+            }
             tag_else  = tag_new(BRANCH_TYPE);
             tag_endif = tag_new(BRANCH_TYPE);
             seq = gen_brfls(seq, tag_else);
             emit_seq(seq);
-            //scan();
             do
             {
                 while (parse_stmnt()) next_line();
@@ -784,8 +828,13 @@ int parse_stmnt(void)
                     break;
                 emit_brnch(tag_endif);
                 emit_codetag(tag_else);
-                if (!(seq = parse_expr(NULL, NULL)))
+                if (!(seq = parse_expr(NULL, &cfnvals)))
                     parse_error("Bad expression");
+                if (cfnvals > 1)
+                {
+                    parse_warn("Expression value overflow");
+                    while (cfnvals-- > 1) seq = gen_drop(seq);
+                }
                 tag_else = tag_new(BRANCH_TYPE);
                 seq = gen_brfls(seq, tag_else);
                 emit_seq(seq);
@@ -814,11 +863,16 @@ int parse_stmnt(void)
             tag_prevbrk = break_tag;
             break_tag   = tag_wend;
             emit_codetag(tag_while);
-            if (!(seq = parse_expr(NULL, NULL)))
+            if (!(seq = parse_expr(NULL, &cfnvals)))
                 parse_error("Bad expression");
+            if (cfnvals > 1)
+            {
+                parse_warn("Expression value overflow");
+                while (cfnvals-- > 1) seq = gen_drop(seq);
+            }
             seq = gen_brfls(seq, tag_wend);
             emit_seq(seq);
-                while (parse_stmnt()) next_line();
+            while (parse_stmnt()) next_line();
             if (scantoken != LOOP_TOKEN)
                 parse_error("Missing WHILE/END");
             emit_brnch(tag_while);
@@ -839,8 +893,13 @@ int parse_stmnt(void)
                 parse_error("Missing REPEAT/UNTIL");
             emit_codetag(cont_tag);
             cont_tag = tag_prevcnt;
-            if (!(seq = parse_expr(NULL, NULL)))
+            if (!(seq = parse_expr(NULL, &cfnvals)))
                 parse_error("Bad expression");
+            if (cfnvals > 1)
+            {
+                parse_warn("Expression value overflow");
+                while (cfnvals-- > 1) seq = gen_drop(seq);
+            }
             seq = gen_brfls(seq, tag_repeat);
             emit_seq(seq);
             emit_codetag(break_tag);
@@ -859,8 +918,14 @@ int parse_stmnt(void)
             addr = id_tag(tokenstr, tokenlen);
             if (scan() != SET_TOKEN)
                 parse_error("Missing FOR =");
-            if (!emit_seq(parse_expr(NULL, NULL)))
+            if (!(seq = parse_expr(NULL, &cfnvals)))
                 parse_error("Bad FOR expression");
+            if (cfnvals > 1)
+            {
+                parse_warn("Expression value overflow");
+                while (cfnvals-- > 1) seq = gen_drop(seq);
+            }
+            emit_seq(seq);
             emit_codetag(tag_for);
             if (type & LOCAL_TYPE)
                 type & BYTE_TYPE ? emit_dlb(addr) : emit_dlw(addr);
@@ -872,13 +937,25 @@ int parse_stmnt(void)
                 step = -1;
             else
                 parse_error("Missing FOR TO");
-            if (!emit_seq(parse_expr(NULL, NULL)))
+            if (!(seq = parse_expr(NULL, &cfnvals)))
                 parse_error("Bad FOR TO expression");
+            if (cfnvals > 1)
+            {
+                parse_warn("Expression value overflow");
+                while (cfnvals-- > 1) seq = gen_drop(seq);
+            }
+            emit_seq(seq);
             step > 0 ? emit_brgt(break_tag) : emit_brlt(break_tag);
             if (scantoken == STEP_TOKEN)
             {
-                if (!emit_seq(parse_expr(NULL, NULL)))
+                if (!(seq = parse_expr(NULL, &cfnvals)))
                     parse_error("Bad FOR STEP expression");
+                if (cfnvals > 1)
+                {
+                    parse_warn("Expression value overflow");
+                    while (cfnvals-- > 1) seq = gen_drop(seq);
+                }
+                emit_seq(seq);
                 emit_op(step > 0 ? ADD_TOKEN : SUB_TOKEN);
             }
             else
@@ -899,15 +976,27 @@ int parse_stmnt(void)
             break_tag   = tag_new(BRANCH_TYPE);
             tag_choice  = tag_new(BRANCH_TYPE);
             tag_of      = tag_new(BRANCH_TYPE);
-            if (!emit_seq(parse_expr(NULL, NULL)))
+            if (!(seq = parse_expr(NULL, &cfnvals)))
                 parse_error("Bad CASE expression");
+            if (cfnvals > 1)
+            {
+                parse_warn("Expression value overflow");
+                while (cfnvals-- > 1) seq = gen_drop(seq);
+            }
+            emit_seq(seq);
             next_line();
             while (scantoken != ENDCASE_TOKEN)
             {
                 if (scantoken == OF_TOKEN)
                 {
-                    if (!emit_seq(parse_expr(NULL, NULL)))
+                    if (!(seq = parse_expr(NULL, &cfnvals)))
                         parse_error("Bad CASE OF expression");
+                    if (cfnvals > 1)
+                    {
+                        parse_warn("Expression value overflow");
+                        while (cfnvals-- > 1) seq = gen_drop(seq);
+                    }
+                    emit_seq(seq);
                     emit_brne(tag_choice);
                     emit_codetag(tag_of);
                     while (parse_stmnt()) next_line();
@@ -938,17 +1027,17 @@ int parse_stmnt(void)
             break_tag = tag_prevbrk;
             stack_loop--;
             break;
-        case CONTINUE_TOKEN:
-            if (cont_tag)
-                emit_brnch(cont_tag);
-            else
-                parse_error("CONTINUE without loop");
-            break;
         case BREAK_TOKEN:
             if (break_tag)
                 emit_brnch(break_tag);
             else
                 parse_error("BREAK without loop");
+            break;
+        case CONTINUE_TOKEN:
+            if (cont_tag)
+                emit_brnch(cont_tag);
+            else
+                parse_error("CONTINUE without loop");
             break;
         case RETURN_TOKEN:
             if (infunc)
@@ -970,13 +1059,21 @@ int parse_stmnt(void)
             }
             else
             {
-                if (!emit_seq(parse_expr(NULL, NULL)))
+                if (!(seq = parse_expr(NULL, &cfnvals)))
                     emit_const(0);
+                else
+                {
+                     if (cfnvals > 1)
+                     {
+                        parse_warn("Expression value overflow");
+                        while (cfnvals-- > 1) seq = gen_drop(seq);
+                    }
+                    emit_seq(seq);
+                }
                 emit_ret();
             }
             break;
         case EOL_TOKEN:
-        //case COMMENT_TOKEN:
             return (1);
         case ELSE_TOKEN:
         case ELSEIF_TOKEN:
@@ -1004,23 +1101,18 @@ int parse_stmnt(void)
                     {
                         emit_seq(rseq);
                         emit_unaryop(scantoken);
-                        tokenstr = idptr;
-                        scan_rewind(tokenstr);
+                        scan_rewind(idptr);
                         emit_seq(parse_value(NULL, LVALUE, NULL));
                     }
-                    else if (scantoken != SET_TOKEN)
+                    else
                     {
-                        if (stackdepth > 1)
+                        while (stackdepth)
                         {
-                            rseq = cat_seq(gen_pushexp(NULL), rseq);
-                            rseq = cat_seq(rseq, gen_pullexp(NULL));
-                        }
-                        else if (stackdepth == 1)
                             rseq = cat_seq(rseq, gen_drop(NULL));
+                            stackdepth--;
+                        }
                         emit_seq(rseq);
                     }
-                    else
-                        parse_error("Invalid LVALUE");
                 }
                 else
                     parse_error("Syntax error");
@@ -1028,22 +1120,14 @@ int parse_stmnt(void)
     }
     return (scan() == EOL_TOKEN);
 }
-int parse_var(int type)
+int parse_var(int type, long basesize)
 {
     char *idstr;
     long constval;
-    int  consttype, constsize, arraysize, idlen = 0;
     long size = 1;
+    int  consttype, constsize, arraysize, idlen = 0;
 
-    if (scan() == OPEN_BRACKET_TOKEN)
-    {
-        size = 0;
-        parse_constexpr(&size, &constsize);
-        if (scantoken != CLOSE_BRACKET_TOKEN)
-            parse_error("Missing closing bracket");
-        scan();
-    }
-    if (scantoken == ID_TOKEN)
+    if (scan() == ID_TOKEN)
     {
         idstr = tokenstr;
         idlen = tokenlen;
@@ -1056,8 +1140,7 @@ int parse_var(int type)
             scan();
         }
     }
-    if (type & WORD_TYPE)
-        size *= 2;
+    size *= basesize;
     if (scantoken == SET_TOKEN)
     {
         if (type & (EXTERN_TYPE | LOCAL_TYPE))
@@ -1083,13 +1166,18 @@ int parse_var(int type)
         else
             parse_error("Bad variable initializer");
     }
-    else if (idlen)
-        id_add(idstr, idlen, type, size);
+    else
+    {
+        if (idlen)
+            id_add(idstr, idlen, type, size);
+        else
+            emit_data(0, 0, 0, size);
+    }
     return (1);
 }
 int parse_struc(void)
 {
-    long  size;
+    long  basesize, size;
     int   type, constsize, offset = 0;
     char *idstr, strucid[80];
     int   idlen = 0, struclen = 0;
@@ -1105,17 +1193,19 @@ int parse_struc(void)
     {
         if (scantoken == EOL_TOKEN)
             continue;
-        size = 1;
+        basesize = 1;
         type = scantoken == BYTE_TOKEN ? BYTE_TYPE : WORD_TYPE;
         if (scan() == OPEN_BRACKET_TOKEN)
         {
-            size = 0;
-            parse_constexpr(&size, &constsize);
+            basesize = 0;
+            parse_constexpr(&basesize, &constsize);
             if (scantoken != CLOSE_BRACKET_TOKEN)
                 parse_error("Missing closing bracket");
             scan();
         }
-        do {
+        do
+        {
+            size  = 1;
             idlen = 0;
             if (scantoken == ID_TOKEN)
             {
@@ -1130,6 +1220,7 @@ int parse_struc(void)
                     scan();
                 }
             }
+            size *= basesize;
             if (type & WORD_TYPE)
                 size *= 2;
             if (idlen)
@@ -1140,7 +1231,7 @@ int parse_struc(void)
     if (struclen)
         idconst_add(strucid, struclen, offset);
     if (scantoken != END_TOKEN)
-        return (0);
+        parse_error("Missing STRUC/END");
     scan();
     return (1);
 }
@@ -1155,7 +1246,7 @@ int parse_vars(int type)
     {
         case SYSFLAGS_TOKEN:
             if (type & (EXTERN_TYPE | LOCAL_TYPE))
-                parse_error("sysflags must be global");
+                parse_error("SYSFLAGS must be global");
             if (!parse_constexpr(&value, &size))
                 parse_error("Bad constant");
             emit_sysflags(value);
@@ -1172,8 +1263,7 @@ int parse_vars(int type)
             idconst_add(idstr, idlen, value);
             break;
         case STRUC_TOKEN:
-            if (!parse_struc())
-                parse_error("Bad structure definition");
+            parse_struc();
             break;
         case EXPORT_TOKEN:
             if (type & (EXTERN_TYPE | LOCAL_TYPE))
@@ -1194,86 +1284,63 @@ int parse_vars(int type)
              */
         case BYTE_TOKEN:
         case WORD_TOKEN:
-            type |= (scantoken == BYTE_TOKEN) ? BYTE_TYPE : WORD_TYPE;
-            if (!parse_var(type))
-                return (0);
-            while (scantoken == COMMA_TOKEN)
+            type   |= (scantoken == BYTE_TOKEN) ? BYTE_TYPE : WORD_TYPE;
+            cfnvals = 1; // Just co-opt a long variable for this case
+            if (scan() == OPEN_BRACKET_TOKEN)
             {
-                if (!parse_var(type))
-                    return (0);
+                //
+                // Get base size for variables
+                //
+                cfnvals = 0;
+                parse_constexpr(&cfnvals, &size);
+                if (scantoken != CLOSE_BRACKET_TOKEN)
+                    parse_error("Missing closing bracket");
             }
+            else
+                scan_rewind(tokenstr);
+            if (type & WORD_TYPE)
+                cfnvals *= 2;
+            do parse_var(type, cfnvals); while (scantoken == COMMA_TOKEN);
             break;
         case PREDEF_TOKEN:
             /*
              * Pre definition.
              */
-            if (scan() == ID_TOKEN)
+            do
             {
-                type |= PREDEF_TYPE;
-                idstr = tokenstr;
-                idlen = tokenlen;
-                cfnparms = 0;
-                cfnvals  = 1; // Default to one return value for compatibility
-                if (scan() == OPEN_PAREN_TOKEN)
+                if (scan() == ID_TOKEN)
                 {
-                    do
+                    type  = (type & ~FUNC_PARMVALS) | PREDEF_TYPE;
+                    idstr = tokenstr;
+                    idlen = tokenlen;
+                    cfnparms = 0;
+                    cfnvals  = 1; // Default to one return value for compatibility
+                    if (scan() == OPEN_PAREN_TOKEN)
                     {
-                        if (scan() == ID_TOKEN)
+                        do
                         {
-                            cfnparms++;
-                            scan();
-                        }
-                    } while (scantoken == COMMA_TOKEN);
-                    if (scantoken != CLOSE_PAREN_TOKEN)
-                        parse_error("Bad function parameter list");
-                    scan();
-                }
-                if (scantoken == POUND_TOKEN)
-                {
-                    if (!parse_const(&cfnvals))
-                        parse_error("Invalid def return value count");
-                    scan();
-                }
-                type |= funcparms_type(cfnparms) | funcvals_type(cfnvals);
-                idfunc_add(idstr, idlen, type, tag_new(type));
-                while (scantoken == COMMA_TOKEN)
-                {
-                    if (scan() == ID_TOKEN)
-                    {
-                        idstr = tokenstr;
-                        idlen = tokenlen;
-                        type &= ~FUNC_PARMVALS;
-                        cfnparms = 0;
-                        cfnvals  = 1; // Default to one return value for compatibility
-                        if (scan() == OPEN_PAREN_TOKEN)
-                        {
-                            do
+                            if (scan() == ID_TOKEN)
                             {
-                                if (scan() == ID_TOKEN)
-                                {
-                                    cfnparms++;
-                                    scan();
-                                }
-                            } while (scantoken == COMMA_TOKEN);
-                            if (scantoken != CLOSE_PAREN_TOKEN)
-                                parse_error("Bad function parameter list");
-                            scan();
-                        }
-                        if (scantoken == POUND_TOKEN)
-                        {
-                            if (!parse_const(&cfnvals))
-                                parse_error("Invalid def return value count");
-                            scan();
-                        }
-                        type |= funcparms_type(cfnparms) | funcvals_type(cfnvals);
-                        idfunc_add(idstr, idlen, type, tag_new(type));
+                                cfnparms++;
+                                scan();
+                            }
+                        } while (scantoken == COMMA_TOKEN);
+                        if (scantoken != CLOSE_PAREN_TOKEN)
+                            parse_error("Bad function parameter list");
+                        scan();
                     }
-                    else
-                        parse_error("Bad function pre-declaration");
+                    if (scantoken == POUND_TOKEN)
+                    {
+                        if (!parse_const(&cfnvals))
+                            parse_error("Invalid def return value count");
+                        scan();
+                    }
+                    type |= funcparms_type(cfnparms) | funcvals_type(cfnvals);
+                    idfunc_add(idstr, idlen, type, tag_new(type));
                 }
-            }
-            else
-                parse_error("Bad function pre-declaration");
+                else
+                    parse_error("Bad function pre-declaration");
+            } while (scantoken == COMMA_TOKEN);
         case EOL_TOKEN:
             break;
         default:
@@ -1292,7 +1359,7 @@ int parse_mods(void)
         while (parse_vars(EXTERN_TYPE)) next_line();
         if (scantoken != END_TOKEN)
             parse_error("Missing END");
-        return (scan() == EOL_TOKEN);
+        scan();
     }
     if (scantoken == EOL_TOKEN)
         return (1);
@@ -1303,7 +1370,6 @@ int parse_lambda(void)
 {
     int func_tag;
     int cfnparms;
-    char *expr;
 
     if (!infunc)
         parse_error("Lambda functions only allowed inside definitions");
@@ -1328,7 +1394,6 @@ int parse_lambda(void)
     }
     else
         parse_error("Missing parameter list in lambda function");
-    expr = scanpos;
     if (scan_lookahead() == OPEN_PAREN_TOKEN)
     {
         /*

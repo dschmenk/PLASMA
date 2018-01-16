@@ -2,8 +2,6 @@ include "inc/cmdsys.plh"
 //
 // Handy constants.
 //
-const FALSE        = 0
-const TRUE         = !FALSE
 const FULLMODE     = 0
 const MIXMODE      = 1
 //
@@ -24,6 +22,9 @@ const hgr1         = $2000
 const hgr2         = $4000
 const page1        = 0
 const page2        = 1
+//
+// External interface
+//
 struc t_conio
     word keypressed
     word home
@@ -41,31 +42,9 @@ end
 predef a2keypressed,a2home,a2gotoxy(x,y),a2viewport(left, top, width, height),a2texttype(type)
 predef a2textmode(cols),a2grmode(mix),a2grcolor(color),a2grplot(x,y)
 //
-// Screen row address arrays.
-//
-word txt1scrn[]     = $0400,$0480,$0500,$0580,$0600,$0680,$0700,$0780
-word                = $0428,$04A8,$0528,$05A8,$0628,$06A8,$0728,$07A8
-word                = $0450,$04D0,$0550,$05D0,$0650,$06D0,$0750,$07D0
-word txt2scrn[]     = $0800,$0880,$0900,$0980,$0A00,$0A80,$0B00,$0B80
-word                = $0828,$08A8,$0928,$09A8,$0A28,$0AA8,$0B28,$0BA8
-word                = $0850,$08D0,$0950,$09D0,$0A50,$0AD0,$0B50,$0BD0
-//
-// Text screen parameters.
-//
-byte textcols = 40
-byte curshpos = 0
-byte cursvpos = 0
-//
-// Apple 3 console codes.
-//
-byte textbwmode[]   = 2, 16, 0
-byte textclrmode[]  = 2, 16, 1
-byte grcharset[]    = 1, 0, $7F, $7F, $7F, $7F, $00, $00, $00, $00
-byte devcons
-//
 // Exported function table.
 //
-export word conio[]
+word conio[]
 //
 // Function pointers.
 //
@@ -78,6 +57,27 @@ word = @a2textmode
 word = @a2grmode
 word = @a2grcolor
 word = @a2grplot
+//
+// Screen row address arrays.
+//
+word txt1scrn[]     = $0400,$0480,$0500,$0580,$0600,$0680,$0700,$0780
+word                = $0428,$04A8,$0528,$05A8,$0628,$06A8,$0728,$07A8
+word                = $0450,$04D0,$0550,$05D0,$0650,$06D0,$0750,$07D0
+word txt2scrn[]     = $0800,$0880,$0900,$0980,$0A00,$0A80,$0B00,$0B80
+word                = $0828,$08A8,$0928,$09A8,$0A28,$0AA8,$0B28,$0BA8
+word                = $0850,$08D0,$0950,$09D0,$0A50,$0AD0,$0B50,$0BD0
+//
+// Text screen parameters.
+//
+//byte textcols = 40
+//byte curshpos = 0
+//byte cursvpos = 0
+//
+// Apple 3 console codes.
+//
+byte textbwmode[]   = 2, 16, 0
+byte textclrmode[]  = 2, 16, 1
+byte grcharset[]    = 1, 0, $7F, $7F, $7F, $7F, $00, $00, $00, $00
 //
 // Native  routines.
 //
@@ -133,7 +133,7 @@ asm a2grplot(x, y)
     STA TMPL
     LDA #$FF
     ADC #$00
-    EOR #$0F
+    EOR #$F0
     AND TMPL
     EOR GRCLR
     STA (DST),Y
@@ -155,8 +155,8 @@ def a1home
     return 0
 end
 def a1gotoxy(x, y)
-    curshpos = x
-    cursvpos = y
+    //curshpos = x
+    //cursvpos = y
     putln
     while x
         putc(' ')
@@ -183,13 +183,13 @@ def a2keypressed
     return ^keyboard >= 128
 end
 def a2home
-    curshpos = 0
-    cursvpos = 0
+    //curshpos = 0
+    //cursvpos = 0
     return call($FC58, 0, 0, 0, 0) // home()
 end
 def a2gotoxy(x, y)
-    curshpos = x
-    cursvpos = y
+    //curshpos = x
+    //cursvpos = y
     ^$24 = x + ^$20
     return call($FB5B, y + ^$22, 0, 0, 0)
 end
@@ -246,18 +246,18 @@ def dev_status(devnum, code, list)
 end
 def a3keypressed
     byte count
-    dev_status(devcons, 5, @count)
+    dev_status(cmdsys.devcons, 5, @count)
     return count
 end
 def a3home
-    curshpos = 0
-    cursvpos = 0
+    //curshpos = 0
+    //cursvpos = 0
     putc(28)
     return 0
 end
 def a3gotoxy(x, y)
-    curshpos = x
-    cursvpos = y
+    //curshpos = x
+    //cursvpos = y
     putc(24)
     putc(x)
     putc(25)
@@ -271,7 +271,7 @@ def a3viewport(left, top, width, height)
         //
         left   = 0
         top    = 0
-        width  = textcols
+        width  = 40//textcols
         height = 24
     fin
     putc(1) // Reset viewport
@@ -306,7 +306,7 @@ def a3grmode(mix)
         mix = 23
     fin
     puts(@textclrmode)
-    dev_control(devcons, 17, @grcharset)
+    dev_control(cmdsys.devcons, 17, @grcharset)
     a3viewport(0, 20, 40, 4)
     for i = 0 to mix
         memset(txt1scrn[i], 40, $0000) // text  screen
@@ -317,8 +317,8 @@ end
 //
 // Machine specific initialization.
 //
-when MACHID & $C8
-    is $08 // Apple 1
+when MACHID & MACHID_MODEL
+    is MACHID_I
         conio:keypressed = @a1keypressed
         conio:home       = @a1home
         conio:gotoxy     = @a1gotoxy
@@ -327,7 +327,7 @@ when MACHID & $C8
         conio:textmode   = @a1textmode
         conio:grmode     = @a1grmode
         break
-    is $C0 // Apple ///
+    is MACHID_III
         conio:keypressed = @a3keypressed
         conio:home       = @a3home
         conio:gotoxy     = @a3gotoxy
@@ -335,8 +335,7 @@ when MACHID & $C8
         conio:texttype   = @a3texttype
         conio:textmode   = @a3textmode
         conio:grmode     = @a3grmode
-        devcons = modaddr("CMDSYS").5 // devcons variable from STDLIB
         break
-    otherwise // Apple ][
+    //otherwise // MACHID_II
 wend
 done

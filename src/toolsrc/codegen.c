@@ -45,7 +45,7 @@ int id_match(char *name, int len, char *id)
         if (len > 16) len = 16;
         while (len--)
         {
-            if (name[len] != id[1 + len])
+            if (toupper(name[len]) != id[1 + len])
                 return (0);
         }
         return (1);
@@ -73,7 +73,11 @@ int idglobal_lookup(char *name, int len)
     int i;
     for (i = 0; i < globals; i++)
         if (id_match(name, len, &(idglobal_name[i][0])))
+        {
+            if (idglobal_type[i] & EXTERN_TYPE)
+                idglobal_type[i] |= ACCESSED_TYPE;
             return (i);
+        }
     return (-1);
 }
 int idconst_add(char *name, int len, int value)
@@ -90,7 +94,7 @@ int idconst_add(char *name, int len, int value)
     idconst_name[consts][0] = len;
     if (len > ID_LEN) len = ID_LEN;
     while (len--)
-        idconst_name[consts][1 + len] = name[len];
+        idconst_name[consts][1 + len] = toupper(name[len]);
     idconst_value[consts] = value;
     consts++;
     return (1);
@@ -119,7 +123,7 @@ int idlocal_add(char *name, int len, int type, int size)
     idlocal_name[locals][0] = len;
     if (len > ID_LEN) len = ID_LEN;
     while (len--)
-        idlocal_name[locals][1 + len] = name[len];
+        idlocal_name[locals][1 + len] = toupper(name[len]);
     idlocal_type[locals]   = type | LOCAL_TYPE;
     idlocal_offset[locals] = localsize;
     localsize += size;
@@ -149,7 +153,7 @@ int idglobal_add(char *name, int len, int type, int size)
     idglobal_name[globals][0] = len;
     if (len > ID_LEN) len = ID_LEN;
     while (len--)
-        idglobal_name[globals][1 + len] = name[len];
+        idglobal_name[globals][1 + len] = toupper(name[len]);
     idglobal_type[globals] = type;
     if (!(type & EXTERN_TYPE))
     {
@@ -201,7 +205,7 @@ int idfunc_add(char *name, int len, int type, int tag)
     idglobal_name[globals][0] = len;
     if (len > ID_LEN) len = ID_LEN;
     while (len--)
-        idglobal_name[globals][1 + len] = name[len];
+        idglobal_name[globals][1 + len] = toupper(name[len]);
     idglobal_type[globals]  = type;
     idglobal_tag[globals++] = tag;
     if (type & EXTERN_TYPE)
@@ -350,7 +354,7 @@ void emit_header(void)
     {
         printf("\t%s\t_SEGEND-_SEGBEGIN\t; LENGTH OF HEADER + CODE/DATA + BYTECODE SEGMENT\n", DW);
         printf("_SEGBEGIN%c\n", LBL);
-        printf("\t%s\t$DA7F\t\t\t; MAGIC #\n", DW);
+        printf("\t%s\t$6502\t\t\t; MAGIC #\n", DW);
         printf("\t%s\t_SYSFLAGS\t\t\t; SYSTEM FLAGS\n", DW);
         printf("\t%s\t_SUBSEG\t\t\t; BYTECODE SUB-SEGMENT\n", DW);
         printf("\t%s\t_DEFCNT\t\t\t; BYTECODE DEF COUNT\n", DW);
@@ -409,13 +413,13 @@ void emit_esd(void)
     printf(";\n; EXTERNAL/ENTRY SYMBOL DICTIONARY\n;\n");
     for (i = 0; i < globals; i++)
     {
-        if (idglobal_type[i] & EXTERN_TYPE)
+        if (idglobal_type[i] & ACCESSED_TYPE) // Only refer to accessed externals
         {
             emit_dci(&idglobal_name[i][1], idglobal_name[i][0]);
             printf("\t%s\t$10\t\t\t; EXTERNAL SYMBOL FLAG\n", DB);
             printf("\t%s\t%d\t\t\t; ESD INDEX\n", DW, idglobal_tag[i]);
         }
-        else if  (idglobal_type[i] & EXPORT_TYPE)
+        else if (idglobal_type[i] & EXPORT_TYPE)
         {
             emit_dci(&idglobal_name[i][1], idglobal_name[i][0]);
             printf("\t%s\t$08\t\t\t; ENTRY SYMBOL FLAG\n", DB);
@@ -445,7 +449,10 @@ void emit_moddep(char *name, int len)
     if (outflags & MODULE)
     {
         if (name)
+        {
             emit_dci(name, len);
+            idglobal_add(name, len, EXTERN_TYPE | WORD_TYPE, 2); // Add to symbol table
+        }
         else
             printf("\t%s\t$00\t\t\t; END OF MODULE DEPENDENCIES\n", DB);
     }
@@ -750,6 +757,7 @@ void emit_brnch(int tag)
 }
 void emit_breq(int tag)
 {
+    emit_pending_seq();
     printf("\t%s\t$3C\t\t\t; BREQ\t_B%03d\n", DB, tag);
     printf("\t%s\t_B%03d-*\n", DW, tag);
 }
@@ -794,7 +802,7 @@ void emit_leave(void)
 {
     emit_pending_seq();
     if (localsize)
-        printf("\t%s\t$5A\t\t\t; LEAVE\n", DB);
+        printf("\t%s\t$5A,$%02X\t\t\t; LEAVE\t%d\n", DB, localsize, localsize);
     else
         printf("\t%s\t$5C\t\t\t; RET\n", DB);
 }
@@ -813,14 +821,6 @@ void emit_start(void)
     printf("_INIT%c\n", LBL);
     outflags |= INIT;
     defs++;
-}
-void emit_push_exp(void)
-{
-    printf("\t%s\t$34\t\t\t; PUSH EXP\n", DB);
-}
-void emit_pull_exp(void)
-{
-    printf("\t%s\t$36\t\t\t; PULL EXP\n", DB);
 }
 void emit_drop(void)
 {
@@ -992,7 +992,6 @@ int try_dupify(t_opseq *op)
     {
         if (op->code != opn->code)
             return crunched;
-
         switch (op->code)
         {
             case CONST_CODE:
@@ -1008,19 +1007,16 @@ int try_dupify(t_opseq *op)
             case GADDR_CODE:
             case LAB_CODE:
             case LAW_CODE:
-                if ((op->tag != opn->tag) || (op->offsz != opn->offsz) ||
-                    (op->type != opn->type))
+                if ((op->tag != opn->tag) || (op->offsz != opn->offsz) /*|| (op->type != opn->type)*/)
                     return crunched;
                 break;
 
             default:
                 return crunched;
         }
-
         opn->code = DUP_CODE;
-        crunched = 1;
+        crunched  = 1;
     }
-
     return crunched;
 }
 /*
@@ -1648,13 +1644,6 @@ int emit_pending_seq()
                 break;
             case DUP_CODE:
                 emit_dup();
-                break;
-                break;
-            case PUSH_EXP_CODE:
-                emit_push_exp();
-                break;
-            case PULL_EXP_CODE:
-                emit_pull_exp();
                 break;
             case BRNCH_CODE:
                 emit_brnch(op->tag);

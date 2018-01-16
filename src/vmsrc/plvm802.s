@@ -51,8 +51,8 @@ ALTRDON =       $C003
 ALTWROFF=       $C004
 ALTWRON =       $C005
         !SOURCE "vmsrc/plvmzp.inc"
-HWSP    =       TMPH+1
-PSR     =       HWSP+1
+PSR     =       TMP+2
+HWSP    =       PSR+1
 DROP    =       $EF
 NEXTOP  =       DROP+1
 FETCHOP =       NEXTOP+3
@@ -129,11 +129,11 @@ BADCPU  !TEXT   "65C802/65C816 CPU REQUIRED.", 13
 
 ;*
 ;* INITIALIZE STACK
-;*      
-INITSP  LDX     #$FE
-        TXS
-        LDX     #$00
-        STX     $01FF
+;*
+;INITSP  LDX     #$FE
+;        TXS
+;        LDX     #$00
+;        STX     $01FF
 ;*
 ;* DISCONNECT /RAM
 ;*
@@ -246,7 +246,7 @@ VMCORE  =        *
 OPTBL   !WORD   ZERO,ADD,SUB,MUL,DIV,MOD,INCR,DECR              ; 00 02 04 06 08 0A 0C 0E
         !WORD   NEG,COMP,BAND,IOR,XOR,SHL,SHR,IDXW              ; 10 12 14 16 18 1A 1C 1E
         !WORD   LNOT,LOR,LAND,LA,LLA,CB,CW,CS                   ; 20 22 24 26 28 2A 2C 2E
-        !WORD   DROP,DUP,PUSHEP,PULLEP,BRGT,BRLT,BREQ,BRNE      ; 30 32 34 36 38 3A 3C 3E
+        !WORD   DROP,DUP,NEXTOP,DIVMOD,BRGT,BRLT,BREQ,BRNE      ; 30 32 34 36 38 3A 3C 3E
         !WORD   ISEQ,ISNE,ISGT,ISLT,ISGE,ISLE,BRFLS,BRTRU       ; 40 42 44 46 48 4A 4C 4E
         !WORD   BRNCH,IBRNCH,CALL,ICAL,ENTER,LEAVE,RET,CFFB     ; 50 52 54 56 58 5A 5C 5E
         !WORD   LB,LW,LLB,LLW,LAB,LAW,DLB,DLW                   ; 60 62 64 66 68 6A 6C 6E
@@ -361,8 +361,8 @@ BYE     LDY     DEFCMD
         STA     STRBUF,Y
         DEY
         BPL     -
-        INY                     ; CLEAR CMDLINE BUFF
-        STY     $01FF
+;        INY                     ; CLEAR CMDLINE BUFF
+;        STY     $01FF
 CMDENTRY =      *
 ;
 ; DEACTIVATE 80 COL CARDS
@@ -425,8 +425,9 @@ CMDENTRY =      *
 ;
 ; INIT VM ENVIRONMENT STACK POINTERS
 ;
-;        LDA #$00               ; INIT FRAME POINTER
-        STA     PPL
+;        LDA     #$00
+        STA     $01FF           ; CLEAR CMDLINE BUFF
+        STA     PPL             ; INIT FRAME POINTER
         STA     IFPL
         LDA     #$BF
         STA     PPH
@@ -434,6 +435,13 @@ CMDENTRY =      *
         LDX     #$FE            ; INIT STACK POINTER (YES, $FE. SEE GETS)
         TXS
         LDX     #ESTKSZ/2       ; INIT EVAL STACK INDEX
+;
+; CHANGE CMD STRING TO SYSPATH STRING
+;
+        LDA     STRBUF
+        SEC
+        SBC     #$03
+        STA     STRBUF
         JMP     $2000           ; JUMP TO LOADED SYSTEM COMMAND
 ;
 ; PRINT FAIL MESSAGE, WAIT FOR KEYPRESS, AND REBOOT
@@ -510,7 +518,7 @@ LCDEFCMD =      *-28            ; DEFCMD IN LC MEMORY
 OPXTBL  !WORD   ZERO,ADD,SUB,MUL,DIV,MOD,INCR,DECR              ; 00 02 04 06 08 0A 0C 0E
         !WORD   NEG,COMP,BAND,IOR,XOR,SHL,SHR,IDXW              ; 10 12 14 16 18 1A 1C 1E
         !WORD   LNOT,LOR,LAND,LA,LLA,CB,CW,CSX                  ; 20 22 24 26 28 2A 2C 2E
-        !WORD   DROP,DUP,PUSHEP,PULLEP,BRGT,BRLT,BREQ,BRNE      ; 30 32 34 36 38 3A 3C 3E
+        !WORD   DROP,DUP,NEXTOP,DIVMOD,BRGT,BRLT,BREQ,BRNE      ; 30 32 34 36 38 3A 3C 3E
         !WORD   ISEQ,ISNE,ISGT,ISLT,ISGE,ISLE,BRFLS,BRTRU       ; 40 42 44 46 48 4A 4C 4E
         !WORD   BRNCH,IBRNCH,CALLX,ICALX,ENTER,LEAVEX,RETX,CFFB ; 50 52 54 56 58 5A 5C 5E
         !WORD   LBX,LWX,LLBX,LLWX,LABX,LAWX,DLB,DLW             ; 60 62 64 66 68 6A 6C 6E
@@ -584,14 +592,14 @@ _DIV    STY     IPY
 _DIV1   ASL                     ; DVDND
         DEY
         BCC     _DIV1
-        STA     TMP             ;NOS,S           ; DVDND
+        STA     TMP             ; NOS,S           ; DVDND
         LDA     #$0000          ; REMNDR
 _DIVLP  ROL                     ; REMNDR
         CMP     TOS+2,S         ; DVSR
         BCC     +
         SBC     TOS+2,S         ; DVSR
         SEC
-+       ROL     TMP             ;NOS,S           ; DVDND
++       ROL     TMP             ; NOS,S           ; DVDND
         DEY
         BNE     _DIVLP
 _DIVEX  LDY     IPY
@@ -603,7 +611,7 @@ DIV     JSR     _DIV
         LDA     TMP
         STA     NOS,S
         PLA
-        TXA
+        TXA                     ; DIVSGN
         LSR                     ; SIGN(RESULT) = (SIGN(DIVIDEND) + SIGN(DIVISOR)) & 1
         BCS     NEG
         JMP     NEXTOP
@@ -613,11 +621,47 @@ DIV     JSR     _DIV
 MOD     JSR     _DIV
         STA     NOS,S           ; REMNDR
         PLA
-        STA     DST             ; SAVE IN CASE OF DIVMOD
-        STX     DVSIGN
-        TXA
-        AND     #$0080          ; REMAINDER IS SIGN OF DIVIDEND
-        BNE     NEG
+        CPX     #$80            ; DIVSGN
+        BCS     NEG             ; REMAINDER IS SIGN OF DIVIDEND
+        JMP     NEXTOP
+;*
+;* DIVMOD TOS-1 BY TOS - !!!HACK!!! MUST COPY ESTK TO HW STACK
+;*
+DIVMOD  +ACCMEM8
+        LDX     ESP
+        LDA     ESTKH+1,X
+        PHA
+        LDA     ESTKL+1,X
+        PHA
+        LDA     ESTKH,X
+        PHA
+        LDA     ESTKL,X
+        PHA
+        +ACCMEM16
+        JSR     _DIV
+        CPX     #$80            ; DIVSGN
+        BCC     +               ; REMAINDER IS SIGN OF DIVIDEND
+        EOR     #$FFFF
+        INC
++       STA     TOS,S           ; REMNDR
+        TXA                     ; DIVSGN
+        LSR                     ; SIGN(RESULT) = (SIGN(DIVIDEND) + SIGN(DIVISOR)) & 1
+        LDA     TMP
+        BCC     +
+        EOR     #$FFFF
+        INC
++       STA     NOS,S           ; DVDND
+        +ACCMEM8
+        LDX     ESP
+        PLA
+        STA     ESTKL,X
+        PLA
+        STA     ESTKH,X
+        PLA
+        STA     ESTKL+1,X
+        PLA
+        STA     ESTKH+1,X
+        +ACCMEM16
         JMP     NEXTOP
 ;*
 ;* NEGATE TOS
@@ -727,55 +771,6 @@ LOR1    JMP     NEXTOP
 ;*
 DUP     LDA     TOS,S
         PHA
-        JMP     NEXTOP
-;*
-;* PRIVATE EP STASH
-;*
-EPSAVE  !BYTE   $01             ; INDEX INTO STASH ARRAY (16 SHOULD BE ENOUGH)
-        !WORD   $0000, $0000, $0000, $0000, $0000, $0000, $0000, $0000
-        !WORD   $0000, $0000, $0000, $0000, $0000, $0000, $0000, $0000
-;*
-;* PUSH EVAL STACK POINTER TO PRIVATE STASH
-;*
-PUSHEP  LDX     LCRWEN+LCBNK2   ; RWEN LC MEM
-        LDX     LCRWEN+LCBNK2
-        LDX     EPSAVE
-        TSC
-        STA     EPSAVE,X
-        INX
-        INX
-!IF     DEBUG {
-        CPX     #33
-        BCC     +
-        LDX     #$80+'>'
-        STX     $7D0+30
--       BRA     -
-        LDX     #$32
-+
-}
-        STX     EPSAVE
-        LDX     LCRDEN+LCBNK2   ; REN LC MEM
-        JMP     NEXTOP
-;*
-;* PULL EVAL STACK POINTER FROM PRIVATE STASH
-;*
-PULLEP  LDX     LCRWEN+LCBNK2   ; RWEN LC MEM
-        LDX     LCRWEN+LCBNK2
-        LDX     EPSAVE
-        DEX
-        DEX
-!IF     DEBUG {
-        BPL     +
-        LDX     #$80+'<'
-        STX     $7D0+30
--       BRA     -
-        LDX     #$00
-+
-}
-        LDA     EPSAVE,X
-        TCS
-        STX     EPSAVE
-        LDX     LCRDEN+LCBNK2   ; REN LC MEM
         JMP     NEXTOP
 ;*
 ;* CONSTANT
@@ -1287,8 +1282,8 @@ BRGT    PLA
         SEC
         SBC     TOS,S
         BVS     +
-        BMI     BRNCH
         BPL     NOBRNCH
+        BMI     BRNCH
 +       BMI     NOBRNCH
         BPL     BRNCH
 BRLT    PLA
@@ -1420,8 +1415,8 @@ EMUSTK  STA     TMP
         LDX     LCRWEN+LCBNK2
         LDX     LCRWEN+LCBNK2
 }
-        LDY     #$00
-        JMP     NEXTOP
+        LDY     #$01
+        JMP     FETCHOP
 ;*
 ;* CALL INTO ABSOLUTE ADDRESS (NATIVE CODE)
 ;*
@@ -1538,8 +1533,8 @@ EMUSTKX STA     TMP
         LDX     LCRWEN+LCBNK2
         LDX     LCRWEN+LCBNK2
 }
-        LDY     #$00
-        JMP     NEXTOP
+        LDY     #$01
+        JMP     FETCHOP
 ;*
 ;* JUMP INDIRECT THROUGH TMP
 ;*
@@ -1548,20 +1543,17 @@ JMPTMP  JMP     (TMP)
 ;* ENTER FUNCTION WITH FRAME SIZE AND PARAM COUNT
 ;*
 ENTER   INY
-        TYA                     ; QUICKY CLEAR OUT MSB
-        +ACCMEM8                ; 8 BIT A/M
         LDA     (IP),Y
+        AND     #$00FF
 !IF     DEBUG {
+        +ACCMEM8                ; 8 BIT A/M
         PHA
         CLC
         ADC     #$80+'0'
         STA     $7D0+31
         PLA
-}
-        PHA                     ; SAVE ON STACK FOR LEAVE
-        DEC     HWSP            ; UPDATE HWSP TO SKIP FRAME SIZE
         +ACCMEM16               ; 16 BIT A/M
-;        AND     #$00FF
+}
         EOR     #$FFFF          ; ALLOCATE FRAME
         SEC
         ADC     PP
@@ -1584,13 +1576,20 @@ ENTER   INY
         BNE -
         STX     ESP
 +       +ACCMEM16               ; 16 BIT A/M
-        LDY     #$02
-        JMP     NEXTOP
+        LDY     #$03
+        JMP     FETCHOP
 ;*
 ;* LEAVE FUNCTION
 ;*
-LEAVEX  STX     ALTRDOFF
-LEAVE   +ACCMEM8                ; 8 BIT A/M
+LEAVEX  +INC_IP
+        +ACCMEM8                ; 8 BIT A/M
+        LDA     (IP),Y          ; DEALLOCATE POOL + FRAME
+        STA     ALTRDOFF
+        BRA     +
+LEAVE   +INC_IP
+        +ACCMEM8                ; 8 BIT A/M
+        LDA     (IP),Y          ; DEALLOCATE POOL + FRAME
++       STA     TMPL
         TSC                     ; MOVE HW EVAL STACK TO ZP EVAL STACK
         EOR     #$FF
         SEC
@@ -1616,8 +1615,7 @@ LEAVE   +ACCMEM8                ; 8 BIT A/M
         INX
 +       CPX     ESP
         BNE     -
- !IF    DEBUG {
-        STX     TMPL
+!IF     DEBUG {
         TSX
         CPX     HWSP
         BEQ     +
@@ -1626,10 +1624,10 @@ LEAVE   +ACCMEM8                ; 8 BIT A/M
 -       LDX    $C000
         BPL     -
         LDX     $C010
-+       LDX     TMPL
++
 }
         TYX                     ; RESTORE NEW ESP
-        PLA                     ; DEALLOCATE POOL + FRAME
+        LDA     TMPL            ; DEALLOCATE POOL + FRAME
         +ACCMEM16               ; 16 BIT A/M
         AND     #$00FF
         CLC
@@ -1639,10 +1637,12 @@ LEAVE   +ACCMEM8                ; 8 BIT A/M
         STA     IFP
         SEC                     ; SWITCH TO EMULATED MODE
         XCE
+        !AS
         LDA     PSR
         PHA
         PLP
         RTS
+        +ACCMEM16               ; 16 BIT A/M
 ;
 RETX    STX     ALTRDOFF
 RET     +ACCMEM8                ; 8 BIT A/M
@@ -1672,19 +1672,18 @@ RET     +ACCMEM8                ; 8 BIT A/M
 +       CPX     ESP
         BNE     -
 !IF     DEBUG {
-        STX     TMPL
         TSX
         CPX     HWSP
         BEQ     +
-        LDX     #$80+'R'
+        LDX     #$80+'X'
         STX     $7D0+30
 -       LDX    $C000
         BPL     -
         LDX     $C010
-+       LDX     TMPL
++
 }
         TYX
-        +ACCMEM16               ; 16 BIT A/M
+        +ACCMEM16
         LDA     IFP             ; DEALLOCATE POOL
         STA     PP
         PLA                     ; RESTORE PREVIOUS FRAME
@@ -1870,7 +1869,7 @@ STEP    STX     TMPL
         CMP     #$10
         BCC     DBGKEY
 ;        LDX     TMPL
-;        CPX     #$56            ; FORCE PAUSE AT 'ICAL'
+;        CPX     #$54            ; FORCE PAUSE AT 'CALL'
 ;        BEQ     DBGKEY
 -       LDX     $C000
         CPX     #$9B

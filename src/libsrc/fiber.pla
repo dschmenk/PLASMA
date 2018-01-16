@@ -30,15 +30,14 @@ struc t_vm
     word pp
     byte hwsp
     byte fill[9]
-    byte drop
+    byte dropop
     byte nextop[$10]
     byte hwstk[$C0]
 end
-byte valstr[] = '0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F'
 //
 // Save current VM state and restore another
 //
-asm fbrSwap(saveVM, restoreVM)
+asm fbrSwap(saveVM, restoreVM)#0
     !SOURCE "vmsrc/plvmzp.inc"
     HWSP = IPY
     LDA ESTKL,X
@@ -50,6 +49,7 @@ asm fbrSwap(saveVM, restoreVM)
     STA DSTL
     LDA ESTKH,X
     STA DSTH
+    INX
     STX ESP
     TSX
     STX HWSP
@@ -79,7 +79,7 @@ end
 //
 // Load Zero Page VM state and 6502 stack
 //
-asm fbrLoad(loadVM)
+asm fbrLoad(loadVM)#0
     LDA ESTKL,X
     STA SRCL
     LDA ESTKH,X
@@ -122,8 +122,8 @@ export def fbrInit(numPool)
         pool = fbrPool + 256
         for i = fbrMax downto 1
             if i < numPool
-                    fbrState[i]   = FIBER_FREE
-                    fbrVMState[i] = pool
+                fbrState[i]   = FIBER_FREE
+                fbrVMState[i] = pool
                 pool          = pool + 512
             fin
         next
@@ -140,7 +140,7 @@ end
 //
 // Stop fiber and return it to FREE pool
 //
-export def fbrStop(fid)
+export def fbrStop(fid)#0
     byte i
 
     //
@@ -158,19 +158,18 @@ export def fbrStop(fid)
         fbrNext[i] = fbrNext[fid]
         if fid == fbrRunning
             fbrRunning = fbrNext[fbrRunning]
-            return fbrLoad(fbrVMState[fbrRunning])
+            fbrLoad(fbrVMState[fbrRunning]) // This doesn't actually return here - returns to next fiber
         fin
     fin
-    return 0
 end
 //
 // Stop current fiber
 //
-export def fbrExit
+export def fbrExit#0
     //
     // Stop running fiber
     //
-    return fbrStop(fbrRunning)
+    fbrStop(fbrRunning)
 end
 //
 // Start a fiber RUNning
@@ -219,7 +218,7 @@ end
 //
 // Round-robin schedule RUNning fibers
 //
-export def fbrYield
+export def fbrYield#0
     byte prev
 
     //
@@ -228,9 +227,8 @@ export def fbrYield
     if fbrNext[fbrRunning] <> fbrRunning
         prev       = fbrRunning
         fbrRunning = fbrNext[fbrRunning]
-        return fbrSwap(fbrVMState[prev], fbrVMState[fbrRunning])
+        fbrSwap(fbrVMState[prev], fbrVMState[fbrRunning])
     fin
-    return 0
 end
 //
 // HALT current fiber and await a RESUME
@@ -269,17 +267,22 @@ export def fbrResume(fid)#0
         fbrNext[fbrRunning] = fid
     fin
 end
+done
 
 //
 // Test Fiber library
 //
 
 def puth(h)#0
+    word valstr
+    
+    valstr = "0123456789ABCDEF"
+    valstr++
     putc('$')
-    putc(valstr[(h >> 12) & $0F])
-    putc(valstr[(h >> 8)  & $0F])
-    putc(valstr[(h >> 4)  & $0F])
-    putc(valstr[ h        & $0F])
+    putc(valstr->[(h >> 12) & $0F])
+    putc(valstr->[(h >> 8)  & $0F])
+    putc(valstr->[(h >> 4)  & $0F])
+    putc(valstr->[ h        & $0F])
 end
 
 def fbrTest(fid, param)#0

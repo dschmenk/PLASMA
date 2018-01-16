@@ -1,0 +1,1243 @@
+//
+// Alebraic op to stack op
+//
+def push_op(op, prec)#0
+    if opsp == 16; exit_err(ERR_OVER|ERR_CODE|ERR_FRAME); fin
+    opstack[opsp]   = op
+    precstack[opsp] = prec
+    opsp++
+end
+def pop_op
+    opsp--
+    if opsp < 0; exit_err(ERR_INVAL|ERR_CODE|ERR_FRAME); fin
+    return opstack[opsp]
+end
+def tos_op
+    return opsp < 0 ?? 0 :: opstack[opsp-1]
+end
+def tos_op_prec(tos)
+    return opsp <= tos ?? 100 :: precstack[opsp-1]
+end
+def push_val(value, size, type)#0
+    byte i
+    if valsp == 16; exit_err(ERR_OVER|ERR_CODE|ERR_FRAME); fin
+    valstack[valsp]  = value
+    sizestack[valsp] = size
+    typestack[valsp] = type
+    valsp++
+end
+def pop_val#3
+    byte i
+    valsp--
+    if valsp < 0; exit_err(ERR_INVAL|ERR_CODE|ERR_FRAME); fin
+    return valstack[valsp], sizestack[valsp], typestack[valsp]
+end
+//
+// Constant expression parsing
+//
+def calc_binaryop(op)#0
+    word val1, val2
+    byte size1, size2, type1, type2
+
+    val2, size2, type2 = pop_val
+    val1, size1, type1 = pop_val
+    if type1 <> CONST_TYPE and type2 <> CONST_TYPE; exit_err(ERR_INVAL|ERR_CONST); fin
+    when op
+        is MUL_TKN
+            val1 = val1 * val2
+            break
+        is DIV_TKN
+            val1 = val1 / val2
+            break
+        is MOD_TKN
+            val1 = val1 % val2
+            break
+        is ADD_TKN
+            val1 = val1 + val2
+            break
+        is SUB_TKN
+            val1 = val1 - val2
+            break
+        is SHL_TKN
+            val1 = val1 << val2
+            break
+        is SHR_TKN
+            val1 = val1 >> val2
+            break
+        is AND_TKN
+            val1 = val1 & val2
+            break
+        is OR_TKN
+            val1 = val1 | val2
+            break
+        is EOR_TKN
+            val1 = val1 ^ val2
+            break
+        otherwise
+            exit_err(ERR_INVAL|ERR_CONST)
+    wend
+    if size2 > size1; size1 = size2; fin
+    push_val(val1, size1, type1)
+end
+def parse_constterm
+    word val
+    byte size, type
+
+    when scan
+        is OPEN_PAREN_TKN
+            push_val(parse_constexpr)
+            if token <> CLOSE_PAREN_TKN; exit_err(ERR_MISS|ERR_CLOSE|ERR_SYNTAX); fin
+            return TRUE
+        is ID_TKN
+        is INT_TKN
+        is CHR_TKN
+        is STR_TKN
+            return TRUE
+    wend
+    return FALSE
+end
+def parse_constval
+    byte mod, size
+    word type, idptr, value
+
+    mod = 0
+    while not parse_constterm
+        when token
+            is SUB_TKN
+                mod = mod | 1; break
+            is COMP_TKN
+                mod = mod | 2; break
+            is LOGIC_NOT_TKN
+                mod = mod | 4; break
+            is AT_TKN
+                mod = mod | 8; break
+            is ADD_TKN
+                break
+            otherwise
+                return FALSE
+        wend
+    loop
+    when token
+        is CLOSE_PAREN_TKN
+            value, size, type = pop_val
+            break
+        is STR_TKN
+            size  = tknlen - 1
+            value = constval
+            type  = STR_TYPE
+            if mod; exit_err(ERR_INVAL|ERR_CONST); fin
+            break
+        is CHR_TKN
+            size  = 1
+            value = constval
+            type  = CONST_TYPE
+            break
+        is INT_TKN
+            size  = 2
+            value = constval
+            type  = CONST_TYPE
+            break
+        is ID_TKN
+            size  = 2
+            idptr = lookup_id(tknptr, tknlen)
+            type  = idptr=>idtype
+            if type & (FUNC_TYPE|ADDR_TYPE)
+                if mod <> 8; exit_err(ERR_INVAL|ERR_CONST); fin
+                type = CONSTADDR_TYPE
+            fin
+            value = idptr=>idval
+            break
+        otherwise
+            return FALSE
+    wend
+    if mod & 1
+        value = -value
+    fin
+    if mod & 2
+        value = ~value
+    fin
+    if mod & 4
+        value = !value
+    fin
+    push_val(value, size, type)
+    return TRUE
+end
+def parse_constexpr#3
+    byte prevmatch, matchop, i
+    word optos
+
+    matchop  = 0
+    optos    = opsp
+    repeat
+        prevmatch = matchop
+        matchop   = 0
+        if parse_constval
+            matchop = 1
+            scan
+            for i = 0 to bops_tblsz
+                if token == bops_tbl[i]
+                    matchop = 2
+                    if bops_prec[i] >= tos_op_prec(optos)
+                        calc_binaryop(pop_op)
+                    fin
+                    push_op(token, bops_prec[i])
+                    break
+                fin
+            next
+        fin
+    until matchop <> 2
+    if matchop == 0 and prevmatch == 0; return 0, 0, 0; fin
+    if matchop == 0 and prevmatch == 2; exit_err(ERR_INVAL|ERR_SYNTAX); fin
+    while optos < opsp
+        calc_binaryop(pop_op)
+    loop
+    return pop_val
+end
+def parse_const(valptr)
+    word idptr
+
+    when scan
+        is CHR_TKN
+        is INT_TKN
+            *valptr = constval
+            break
+        is ID_TKN
+            idptr = lookup_id(tknptr, tknlen)
+            if idptr=>idtype & CONST_TYPE
+                *valptr = idptr=>idval
+                break
+            fin
+        otherwise
+            return 0
+    wend
+    return CONST_TYPE
+end
+//
+// Normal expression parsing
+//
+def parse_list#2
+    byte listdepth, stackdepth
+    word listseq, exprseq
+
+    listseq   = NULL
+    listdepth = 0
+    repeat
+        listseq, stackdepth = parse_expr(listseq)
+        listdepth = listdepth + stackdepth
+    until token <> COMMA_TKN
+    return listseq, listdepth
+end
+def parse_value(codeseq, r_val)#2
+    byte cfnparms, cfnvals, stackdepth, operation
+    word deref, type, optos, idptr, value, const_offset
+    word uopseq, valseq, idxseq
+
+    deref      = r_val
+    optos      = opsp
+    type       = 0
+    value      = 0
+    cfnparms   = 0
+    cfnvals    = 1
+    stackdepth = 1
+    uopseq     = NULL
+    valseq     = NULL
+    idxseq     = NULL
+    //
+    // Parse pre-ops
+    //
+    operation = TRUE
+    repeat
+        when scan
+            is NEG_TKN
+            is COMP_TKN
+            is LOGIC_NOT_TKN
+                uopseq = gen_uop(uopseq, token);
+            is ADD_TKN
+                if not r_val; exit_err(ERR_INVAL|ERR_SYNTAX); fin
+                break
+            is BPTR_TKN
+            is WPTR_TKN
+                if type & BPTR_TYPE; exit_err(ERR_INVAL|ERR_SYNTAX); fin
+                type = token == BPTR_TKN ?? BPTR_TYPE :: WPTR_TYPE
+                deref++
+                break
+            is AT_TKN
+                if not deref; exit_err(ERR_INVAL|ERR_SYNTAX); fin
+                deref--
+                break
+            otherwise
+                operation = FALSE
+        wend
+    until not operation
+    //
+    // Determine terminal type
+    //
+    when token
+        is ID_TKN
+            idptr = lookup_id(tknptr, tknlen)
+            if not idptr; return codeseq, 0; fin
+            if not idptr=>idtype; return codeseq, 0; fin // DEBUG
+            type  = type | idptr=>idtype
+            value = idptr=>idval
+            if type & CONST_TYPE
+                valseq = gen_const(NULL, value)
+                deref--
+            else
+                valseq = type & LOCAL_TYPE ?? gen_oplcl(NULL, LADDR_CODE, value) :: gen_opglbl(NULL, GADDR_CODE, value, 0)
+                if type & FUNC_TYPE
+                    cfnparms = idptr->funcparms
+                    cfnvals  = idptr->funcvals
+                fin
+            fin
+            break
+        is INT_TKN
+        is CHR_TKN
+            value  = constval
+            valseq = gen_const(NULL, value)
+            deref--
+            break
+        is STR_TKN
+            codeseq = gen_str(codeseq, constval)
+            scan
+            return codeseq, stackdepth // Special case return
+            break
+        is OPEN_PAREN_TKN
+            valseq, stackdepth = parse_expr(NULL)
+            if token <> CLOSE_PAREN_TKN; exit_err(ERR_MISS|ERR_CLOSE|ERR_SYNTAX); fin
+            deref--
+            break
+        is DROP_TKN
+            if r_val; exit_err(ERR_INVAL|ERR_STATE); fin
+            codeseq = gen_op(codeseq, DROP_CODE)
+            scan
+            return codeseq, 0 // Special case return
+        is LAMBDA_TKN
+            if not r_val; return codeseq, 0; fin // Lambdas can't be LVALUES
+            value  = parse_lambda
+            valseq = gen_opglbl(NULL, GADDR_CODE, value, 0)
+            deref--
+            break
+        otherwise
+            if uopseq;  release_seq(uopseq);  fin
+            if codeseq; release_seq(codeseq); fin
+            return NULL, 0
+    wend
+    //
+    // Parse post-ops
+    //
+    operation = TRUE
+    repeat
+        when scan
+            is OPEN_PAREN_TKN
+                //
+                // Function call - parameters generate before call address
+                //
+                idxseq, value = parse_list
+                valseq = cat_seq(idxseq, valseq)
+                if token <> CLOSE_PAREN_TKN; exit_err(ERR_MISS|ERR_CLOSE|ERR_SYNTAX); fin
+                if type & FUNC_TYPE // Can't check parm count on function pointers
+                    if cfnparms <> value; exit_err(ERR_MISS|ERR_ID); fin
+                else
+                    if scan == POUND_TKN // Set function pointer return vals count - can't do this to regular function call
+                        if not parse_const(@value); exit_err(ERR_INVAL|ERR_CONST); fin
+                        cfnvals = value
+                    else
+                        rewind(tknptr)
+                    fin
+                    if type & WORD_TYPE
+                        valseq = gen_op(valseq, LW_CODE)
+                    elsif type & BYTE_TYPE
+                        exit_err(ERR_INVAL|ERR_CODE)
+                    else
+                        deref++
+                    fin
+                fin
+                valseq     = gen_op(valseq, ICAL_CODE)
+                stackdepth = stackdepth + cfnvals - 1
+                cfnparms   = 0
+                cfnvals    = 1
+                type       = type & PTR_TYPE
+                deref--
+                break
+            is OPEN_BRACKET_TKN
+                //
+                // Array of arrays
+                //
+                if type & FUNC_TYPE // Function address dereference
+                    cfnparms = 0
+                    cfnvals  = 1
+                fin
+                repeat
+                    valseq, drop = parse_expr(valseq)
+                    if token <> COMMA_TKN; break; fin
+                    valseq = gen_op(valseq, INDEXW_CODE)
+                    valseq = gen_op(valseq, LW_CODE) // Multi-dimenstion arrays are array pointers to arrays
+                until FALSE
+                if token <> CLOSE_BRACKET_TKN; exit_err(ERR_MISS|ERR_CLOSE|ERR_SYNTAX); fin
+                if type & WORD_TYPE
+                    valseq = gen_op(valseq, INDEXW_CODE)
+                else
+                    valseq = gen_op(valseq, INDEXB_CODE)
+                    if not (type & BYTE_TYPE)
+                        type = (type & PTR_TYPE) | BYTE_TYPE
+                        deref++
+                    fin
+                fin
+                break
+            is PTRB_TKN
+            is PTRW_TKN
+                //
+                // Structure member pointer
+                //
+                if type & FUNC_TYPE // Function call dereference
+                    if cfnparms; exit_err(ERR_MISS|ERR_ID); fin
+                    valseq     = gen_op(valseq, ICAL_CODE)
+                    stackdepth = stackdepth + cfnvals - 1
+                    cfnparms   = 0
+                    cfnvals    = 1
+                elsif type & WORD_TYPE
+                    valseq = gen_op(valseq, LW_CODE) // Pointer dereference
+                elsif type & BYTE_TYPE
+                    exit_err(ERR_INVAL|ERR_CODE)
+                else
+                    deref++
+                fin
+                type = (type & PTR_TYPE) | token == PTRB_TKN ?? BYTE_TYPE :: WORD_TYPE
+                if not parse_const(@const_offset)
+                    rewind(tknptr) // Setting type override for following operations
+                elsif const_offset <> 0
+                    valseq = gen_const(valseq, const_offset) // Structure member pointer
+                    valseq = gen_op(valseq, ADD_CODE)
+                fin
+                break
+            is DOT_TKN
+            is COLON_TKN
+                //
+                // Structure member offset
+                //
+                if type & FUNC_TYPE // Function address dereference
+                    cfnparms   = 0
+                    cfnvals    = 1
+                elsif not (type & VAR_TYPE)
+                    deref++
+                fin
+                type = (type & VAR_TYPE) | (token == DOT_TKN ?? BYTE_TYPE :: WORD_TYPE)
+                if not parse_const(@const_offset)
+                    rewind(tknptr) // Setting type override for following operations
+                elsif const_offset <> 0
+                    valseq = gen_const(valseq, const_offset) // Structure member offset
+                    valseq = gen_op(valseq, ADD_CODE)
+                fin
+                break
+            otherwise
+                operation = FALSE
+        wend
+    until not operation
+    //
+    //Probably parsing RVALUE as LVALUE
+    //
+    if deref < 0
+        release_seq(valseq)
+        release_seq(uopseq)
+        return codeseq, 0
+    fin
+    //
+    // Resolve outstanding dereference pointer loads
+    //
+    while deref > r_val
+        if type & FUNC_TYPE
+            if cfnparms; exit_err(ERR_MISS|ERR_ID); fin
+            valseq     = gen_op(valseq, ICAL_CODE)
+            stackdepth = stackdepth + cfnvals - 1
+            cfnparms   = 0
+            cfnvals    = 1
+            type       = type & ~FUNC_TYPE;
+        else
+            valseq = gen_op(valseq, LW_CODE)
+        fin
+        deref--
+    loop
+    if deref
+        if type & FUNC_TYPE
+            if cfnparms; exit_err(ERR_MISS|ERR_ID); fin
+            valseq     = gen_op(valseq, ICAL_CODE)
+            stackdepth = stackdepth + cfnvals - 1
+            type       = type & ~FUNC_TYPE
+        elsif type & (BYTE_TYPE | BPTR_TYPE)
+            valseq = gen_op(valseq, LB_CODE)
+        elsif type & (WORD_TYPE | WPTR_TYPE)
+            valseq = gen_op(valseq, LW_CODE)
+        else
+            exit_err(ERR_INVAL|ERR_CODE)
+        fin
+    fin
+    //
+    // Output pre-operations
+    //
+    valseq = cat_seq(valseq, uopseq)
+    //
+    // Wrap up LVALUE store
+    //
+    if not r_val
+        if type & (BYTE_TYPE | BPTR_TYPE)
+            valseq = gen_op(valseq, SB_CODE)
+        elsif type & (WORD_TYPE | WPTR_TYPE)
+            valseq = gen_op(valseq, SW_CODE)
+        else
+            release_seq(valseq)
+            return codeseq, 0 // Function or const cannot be LVALUE, must be RVALUE
+        fin
+        stackdepth--
+    fin
+    return cat_seq(codeseq, valseq), stackdepth
+end
+def parse_expr(codeseq)#2
+    byte stackdepth, matchdepth, stkdepth1, prevmatch, matchop, i
+    word optos
+    word tag_else, tag_endtri
+
+    stackdepth = 0
+    matchop    = 0
+    optos      = opsp
+    repeat
+        prevmatch = matchop
+        matchop   = 0
+        codeseq, matchdepth = parse_value(codeseq, RVALUE)
+        if matchdepth
+            stackdepth = stackdepth + matchdepth
+            matchop = 1
+            for i = 0 to bops_tblsz
+                if token == bops_tbl[i]
+                    matchop = 2
+                    if bops_prec[i] >= tos_op_prec(optos)
+                        codeseq = gen_bop(codeseq, pop_op)
+                        stackdepth--
+                    fin
+                    push_op(token, bops_prec[i])
+                    break
+                fin
+            next
+        fin
+    until matchop <> 2
+    if matchop == 0 and prevmatch == 2; exit_err(ERR_SYNTAX); fin
+    while optos < opsp
+        codeseq = gen_bop(codeseq, pop_op)
+        stackdepth--
+    loop
+    //
+    // Look for ternary operator
+    //
+    if token == TERNARY_TKN
+        if stackdepth <> 1; exit_err(ERR_OVER|ERR_SYNTAX); fin
+        tag_else            = new_tag(RELATIVE_FIXUP)
+        tag_endtri          = new_tag(RELATIVE_FIXUP)
+        codeseq             = gen_oprel(codeseq, BRFALSE_CODE, tag_else)
+        codeseq, stkdepth1  = parse_expr(codeseq)
+        if token <> TRIELSE_TKN; exit_err(ERR_MISS|ERR_SYNTAX); fin
+        codeseq             = gen_oprel(codeseq, BRNCH_CODE, tag_endtri)
+        codeseq             = gen_ctag(codeseq, tag_else)
+        codeseq, stackdepth = parse_expr(codeseq)
+        if stkdepth1 <> stackdepth; exit_err(ERR_INVAL|ERR_CODE); fin
+        codeseq             = gen_ctag(codeseq, tag_endtri)
+    fin
+    return codeseq, stackdepth
+end
+def parse_set(codeseq)
+    word setptr, rseq, setseq[16]
+    byte lparms, rparms, i, lambda_set
+
+    lparms     = 0
+    rparms     = 0
+    lambda_set = lambda_cnt
+    setptr     = tknptr
+    repeat
+        setseq[lparms], drop = parse_value(NULL, LVALUE)
+        if not setseq[lparms]; break; fin
+        lparms++
+    until token <> COMMA_TKN
+    if not lparms or token <> SET_TKN
+        //
+        // Not a set list - free everything up
+        //
+        rewind(setptr)
+        while lparms
+            lparms--
+            release_seq(setseq[lparms])
+        loop
+        while lambda_cnt > lambda_set
+            lambda_cnt--
+            lambda_num--
+            release_seq(lambda_seq[lambda_cnt])
+        loop
+        return NULL
+    fin
+    rseq, rparms = parse_list
+    if lparms > rparms; exit_err(ERR_MISS|ERR_CODE|ERR_FRAME); fin
+    codeseq = cat_seq(codeseq, rseq)
+    if lparms < rparms
+        parse_warn("Silently dropping extra set values")
+        for i = rparms - lparms downto 1
+            codeseq = gen_op(codeseq, DROP_CODE)
+        next
+    fin
+    while lparms
+        lparms--
+        codeseq = cat_seq(codeseq, setseq[lparms])
+    loop
+    return codeseq
+end
+def parse_stmnt
+    byte type, elem_type, elem_size, i, cfnvals
+    word seq, tag_prevbrk, tag_prevcnt, tag_else, tag_endif, tag_while, tag_wend
+    word tag_repeat, tag_for, tag_choice, tag_of, idptr, addr, stepdir
+
+    if token <> END_TKN and token <> DONE_TKN and token <> OF_TKN and token <> DEFAULT_TKN
+        prevstmnt = token
+    fin
+    when token
+        is IF_TKN
+            seq, cfnvals = parse_expr(NULL)
+            if !seq; exit_err(ERR_INVAL|ERR_STATE); fin
+            if cfnvals > 1
+                parse_warn("Expression value overflow")
+                while cfnvals > 1; cfnvals--; seq = gen_op(seq, DROP_CODE); loop
+            fin
+            tag_else  = new_tag(RELATIVE_FIXUP)
+            tag_endif = new_tag(RELATIVE_FIXUP)
+            seq = gen_oprel(seq, BRFALSE_CODE, tag_else)
+            emit_seq(seq)
+            repeat
+                while parse_stmnt
+                    nextln
+                loop
+                if token <> ELSEIF_TKN
+                    break
+                fin
+                emit_branch(tag_endif)
+                emit_tag(tag_else)
+                seq, cfnvals = parse_expr(NULL)
+                if !seq; exit_err(ERR_INVAL|ERR_STATE); fin
+                if cfnvals > 1
+                    parse_warn("Expression value overflow")
+                    while cfnvals > 1; cfnvals--; seq = gen_op(seq, DROP_CODE); loop
+                fin
+                tag_else = new_tag(RELATIVE_FIXUP)
+                seq = gen_oprel(seq, BRFALSE_CODE, tag_else)
+                emit_seq(seq)
+            until FALSE
+            if token == ELSE_TKN
+                emit_branch(tag_endif)
+                emit_tag(tag_else)
+                scan
+                while parse_stmnt
+                    nextln
+                loop
+                emit_tag(tag_endif)
+            else
+                emit_tag(tag_else)
+                emit_tag(tag_endif)
+            fin
+            if token <> FIN_TKN; exit_err(ERR_MISS|ERR_CLOSE|ERR_STATE); fin
+            break
+        is WHILE_TKN
+            tag_while   = new_tag(RELATIVE_FIXUP)
+            tag_wend    = new_tag(RELATIVE_FIXUP)
+            tag_prevcnt = cont_tag
+            cont_tag    = tag_while
+            tag_prevbrk = break_tag
+            break_tag   = tag_wend
+            emit_tag(tag_while)
+            seq, cfnvals = parse_expr(NULL)
+            if !seq; exit_err(ERR_INVAL|ERR_STATE); fin
+            if cfnvals > 1
+                parse_warn("Expression value overflow")
+                while cfnvals > 1;cfnvals--; seq = gen_op(seq, DROP_CODE); loop
+            fin
+            seq = gen_oprel(seq, BRFALSE_CODE, tag_wend)
+            emit_seq(seq)
+            while parse_stmnt
+                nextln
+            loop
+            if token <> LOOP_TKN; exit_err(ERR_MISS|ERR_CLOSE|ERR_STATE); fin
+            emit_branch(tag_while)
+            emit_tag(tag_wend)
+            break_tag = tag_prevbrk
+            cont_tag  = tag_prevcnt
+            break
+        is REPEAT_TKN
+            tag_repeat  = new_tag(RELATIVE_FIXUP)
+            tag_prevbrk = break_tag
+            break_tag   = new_tag(RELATIVE_FIXUP)
+            tag_prevcnt = cont_tag
+            cont_tag    = new_tag(RELATIVE_FIXUP)
+            emit_tag(tag_repeat)
+            scan
+            while parse_stmnt
+                nextln
+            loop
+            if token <> UNTIL_TKN; exit_err(ERR_MISS|ERR_CLOSE|ERR_STATE); fin
+            emit_tag(cont_tag)
+            cont_tag = tag_prevcnt
+            seq, cfnvals = parse_expr(NULL)
+            if !seq; exit_err(ERR_INVAL|ERR_STATE); fin
+            if cfnvals > 1
+                parse_warn("Expression value overflow")
+                while cfnvals > 1; cfnvals--; seq = gen_op(seq, DROP_CODE); loop
+            fin
+            seq = gen_oprel(seq, BRFALSE_CODE, tag_repeat)
+            emit_seq(seq)
+            emit_tag(break_tag)
+            break_tag = tag_prevbrk
+            break
+        is FOR_TKN
+            stack_loop++
+            tag_for     = new_tag(RELATIVE_FIXUP)
+            tag_prevcnt = cont_tag
+            cont_tag    = tag_for
+            tag_prevbrk = break_tag
+            break_tag   = new_tag(RELATIVE_FIXUP)
+            if scan <> ID_TKN; exit_err(ERR_MISS|ERR_ID); fin
+            idptr = lookup_id(tknptr, tknlen)
+            if idptr
+                type  = idptr=>idtype
+                addr  = idptr=>idval
+            else
+                exit_err(ERR_INVAL|ERR_ID)
+            fin
+            if scan <> SET_TKN; exit_err(ERR_INVAL|ERR_STATE); fin
+            seq, cfnvals = parse_expr(NULL)
+            if !seq; exit_err(ERR_INVAL|ERR_STATE); fin
+            if cfnvals > 1
+                parse_warn("Expression value overflow")
+                while cfnvals > 1;cfnvals--; seq = gen_op(seq, DROP_CODE); loop
+            fin
+            emit_seq(seq)
+            emit_tag(tag_for)
+            if type & LOCAL_TYPE
+                if type & BYTE_TYPE; emit_dlb(addr); else; emit_dlw(addr); fin
+            else
+                if type & BYTE_TYPE; emit_dab(addr, 0); else; emit_daw(addr, 0); fin
+            fin
+            if token == TO_TKN
+                stepdir = 1
+            elsif token == DOWNTO_TKN
+                stepdir = -1
+            else
+                exit_err(ERR_INVAL|ERR_STATE)
+            fin
+            seq, cfnvals = parse_expr(NULL)
+            if !seq; exit_err(ERR_INVAL|ERR_STATE); fin
+            if cfnvals > 1
+                parse_warn("Expression value overflow")
+                while cfnvals > 1;cfnvals--; seq = gen_op(seq, DROP_CODE); loop
+            fin
+            emit_seq(seq)
+            if stepdir > 0; emit_brgt(break_tag); else; emit_brlt(break_tag); fin
+            if token == STEP_TKN
+                seq, cfnvals = parse_expr(NULL)
+                if !seq; exit_err(ERR_INVAL|ERR_STATE); fin
+                if cfnvals > 1
+                    parse_warn("Expression value overflow")
+                    while cfnvals > 1;cfnvals--; seq = gen_op(seq, DROP_CODE); loop
+                fin
+                emit_seq(seq)
+                emit_code(stepdir > 0 ?? ADD_CODE :: SUB_CODE)
+            else
+                emit_code(stepdir > 0 ?? INC_CODE :: DEC_CODE)
+            fin
+            while parse_stmnt
+                nextln
+            loop
+            if token <> NEXT_TKN; exit_err(ERR_MISS|ERR_CLOSE|ERR_STATE); fin
+            emit_branch(tag_for)
+            cont_tag = tag_prevcnt
+            emit_tag(break_tag)
+            emit_code(DROP_CODE)
+            break_tag = tag_prevbrk
+            stack_loop--
+            break
+        is CASE_TKN
+            stack_loop++
+            tag_prevbrk = break_tag
+            break_tag   = new_tag(RELATIVE_FIXUP)
+            tag_choice  = new_tag(RELATIVE_FIXUP)
+            tag_of      = new_tag(RELATIVE_FIXUP)
+            seq, cfnvals = parse_expr(NULL)
+            if !seq; exit_err(ERR_INVAL|ERR_STATE); fin
+            if cfnvals > 1
+                parse_warn("Expression value overflow")
+                while cfnvals > 1;cfnvals--; seq = gen_op(seq, DROP_CODE); loop
+            fin
+            emit_seq(seq)
+            nextln
+            while token <> ENDCASE_TKN
+                when token
+                    is OF_TKN
+                        seq, cfnvals = parse_expr(NULL)
+                        if !seq; exit_err(ERR_INVAL|ERR_STATE); fin
+                        if cfnvals > 1
+                            parse_warn("Expression value overflow")
+                            while cfnvals > 1;cfnvals--; seq = gen_op(seq, DROP_CODE); loop
+                        fin
+                        emit_seq(seq)
+                        emit_brne(tag_choice)
+                        emit_tag(tag_of)
+                        while parse_stmnt
+                            nextln
+                        loop
+                        tag_of = new_tag(RELATIVE_FIXUP)
+                        if prevstmnt <> BREAK_TKN // Fall through to next OF if no break
+                            emit_branch(tag_of)
+                        fin
+                        emit_tag(tag_choice)
+                        tag_choice = new_tag(RELATIVE_FIXUP)
+                        break
+                    is DEFAULT_TKN
+                        emit_tag(tag_of)
+                        tag_of = 0
+                        scan
+                        while parse_stmnt
+                            nextln
+                        loop
+                        if token <> ENDCASE_TKN; exit_err(ERR_INVAL|ERR_STATE); fin
+                        break
+                    is EOL_TKN
+                        nextln
+                        break
+                    otherwise
+                        exit_err(ERR_MISS|ERR_CLOSE|ERR_STATE)
+                wend
+            loop
+            if (tag_of)
+                emit_tag(tag_of)
+            fin
+            emit_tag(break_tag)
+            emit_code(DROP_CODE)
+            break_tag = tag_prevbrk
+            stack_loop--
+            break
+        is BREAK_TKN
+            if break_tag
+                emit_branch(break_tag)
+            else
+                exit_err(ERR_INVAL|ERR_STATE)
+            fin
+            break
+        is CONT_TKN
+            if cont_tag
+                emit_branch(cont_tag)
+            else
+                exit_err(ERR_INVAL|ERR_STATE)
+            fin
+            break
+        is RETURN_TKN
+            if infunc
+                for i = 1 to stack_loop
+                    emit_code(DROP_CODE)
+                next
+                seq, cfnvals = parse_list
+                emit_seq(seq)
+                if cfnvals > infuncvals
+                    exit_err(ERR_OVER|ERR_CLOSE|ERR_STATE)
+                elsif cfnvals < infuncvals
+                    parse_warn("Too few return values")
+                    while cfnvals < infuncvals
+                        cfnvals++
+                        emit_const(0)
+                    loop
+                fin
+                emit_leave
+            else
+                seq, cfnvals = parse_expr(NULL)
+                if not seq
+                    emit_const(0)
+                else
+                    if cfnvals > 1
+                        exit_err(ERR_OVER|ERR_CLOSE|ERR_STATE)
+                        while cfnvals > 1;cfnvals--; seq = gen_op(seq, DROP_CODE); loop
+                    fin
+                    emit_seq(seq)
+                fin
+                emit_code(RET_CODE)
+            fin
+            break
+        is EOL_TKN
+            return TRUE
+        is ELSE_TKN
+        is ELSEIF_TKN
+        is FIN_TKN
+        is LOOP_TKN
+        is UNTIL_TKN
+        is NEXT_TKN
+        is OF_TKN
+        is DEFAULT_TKN
+        is ENDCASE_TKN
+        is END_TKN
+        is DONE_TKN
+        is DEF_TKN
+        is EOF_TKN
+            return FALSE
+        otherwise
+            rewind(tknptr)
+            seq = parse_set(NULL)
+            if seq
+                emit_seq(seq)
+            else
+                idptr = tknptr
+                seq, cfnvals = parse_value(NULL, RVALUE)
+                if seq
+                    if token == INC_TKN or token == DEC_TKN
+                        emit_seq(seq)
+                        emit_code(token == INC_TKN ?? INC_CODE :: DEC_CODE)
+                        rewind(idptr)
+                        seq, drop = parse_value(NULL, LVALUE)
+                        emit_seq(seq)
+                    else
+                        while cfnvals
+                            seq = cat_seq(seq, gen_op(NULL, DROP_CODE))
+                            cfnvals--
+                        loop
+                        emit_seq(seq)
+                    fin
+                else
+                    exit_err(ERR_SYNTAX)
+                fin
+            fin
+    wend
+    return scan == EOL_TKN
+end
+def parse_var(type, basesize)#0
+    byte consttype, constsize, idlen
+    word idptr, constval, arraysize, size
+
+    idlen = 0
+    size  = 1
+    if scan == ID_TKN
+        idptr = tknptr
+        idlen = tknlen
+        if scan == OPEN_BRACKET_TKN
+            size, constsize, consttype = parse_constexpr
+            if token <> CLOSE_BRACKET_TKN; exit_err(ERR_MISS|ERR_CLOSE|ERR_SYNTAX); fin
+            scan
+        fin
+    fin
+    size = size * basesize
+    if token == SET_TKN
+        if type & (EXTERN_TYPE|LOCAL_TYPE); exit_err(ERR_INVAL|ERR_LOCAL|ERR_INIT); fin
+        if idlen
+            new_iddata(idptr, idlen, type, 0)
+        fin
+        constval, constsize, consttype = parse_constexpr
+        arraysize = emit_data(type, consttype, constval, constsize)
+        while token == COMMA_TKN
+            constval, constsize, consttype = parse_constexpr
+            arraysize = arraysize + emit_data(type, consttype, constval, constsize)
+        loop
+        size_iddata(PTR_TYPE, size, arraysize)
+    else
+        if idlen
+            if infunc
+                new_idlocal(idptr, idlen, type, size)
+            else
+                new_iddata(idptr, idlen, type, size)
+            fin
+        elsif not (type & (EXTERN_TYPE|LOCAL_TYPE))
+            emit_fill(size)
+        fin
+    fin
+end
+def parse_struc#0
+    byte strucid[16]
+    byte idlen, struclen, constsize, consttype
+    word type, basesize, size, offset, idstr
+
+    struclen = 0
+    if scan == ID_TKN
+        struclen = tknlen
+        if struclen > 16
+            struclen = 16
+        fin
+        for idlen = 0 to struclen
+            strucid[idlen] = ^(tknptr + idlen)
+        next
+        scan
+    fin
+    offset = 0
+    while nextln == BYTE_TKN or token == WORD_TKN or token == EOL_TKN
+        if token <> EOL_TKN
+            basesize = 1
+            type = token == BYTE_TKN ?? BYTE_TYPE :: WORD_TYPE
+            if scan == OPEN_BRACKET_TKN
+                basesize, constsize, consttype = parse_constexpr
+                if token <> CLOSE_BRACKET_TKN; exit_err(ERR_MISS|ERR_CLOSE|ERR_SYNTAX); fin
+                scan
+            fin
+            repeat
+                size  = 1
+                idlen = 0
+                if token == ID_TKN
+                    idstr = tknptr
+                    idlen = tknlen
+                    if scan == OPEN_BRACKET_TKN
+                        size, constsize, consttype = parse_constexpr
+                        if token <> CLOSE_BRACKET_TKN; exit_err(ERR_MISS|ERR_CLOSE|ERR_SYNTAX); fin
+                        scan
+                    fin
+                fin
+                size = size * basesize
+                if type & WORD_TYPE
+                    size = size * 2
+                fin
+                if idlen
+                    new_idconst(idstr, idlen, offset)
+                fin
+                offset = offset + size
+            until token <> COMMA_TKN
+        fin
+    loop
+    if struclen
+        new_idconst(@strucid, struclen, offset)
+    fin
+    if token <> END_TKN; exit_err(ERR_MISS|ERR_CLOSE|ERR_STATE); fin
+    scan
+end
+def parse_vars(type)
+    byte idlen, size, cfnparms, cfnvals
+    word value, idptr
+
+    when token
+        is SYSFLAGS_TKN
+            if type & (EXTERN_TYPE | LOCAL_TYPE); exit_err(ERR_INVAL|ERR_GLOBAL|ERR_INIT); fin
+            modsysflags, drop, drop = parse_constexpr
+            break
+        is CONST_TKN
+            if scan <> ID_TKN; exit_err(ERR_INVAL|ERR_CONST); fin
+            idptr = tknptr
+            idlen = tknlen
+            if scan <> SET_TKN; exit_err(ERR_INVAL|ERR_CONST); fin
+            value, size, type = parse_constexpr
+            new_idconst(idptr, idlen, value)
+            break
+        is STRUC_TKN
+            parse_struc
+            break
+        is EXPORT_TKN
+            if type & (EXTERN_TYPE|LOCAL_TYPE); exit_err(ERR_INVAL|ERR_LOCAL|ERR_SYNTAX); fin
+            type  = EXPORT_TYPE
+            if scan <> BYTE_TKN and token <> WORD_TKN // This could be an exported definition
+                rewind(tknptr)
+                scan
+                return FALSE
+            fin
+            // Fall through to BYTE or WORD declaration
+        is BYTE_TKN
+        is WORD_TKN
+            type = type | (token == BYTE_TKN ?? BYTE_TYPE :: WORD_TYPE)
+            size = 1
+            if scan == OPEN_BRACKET_TKN // Get basesize for data elements
+              size, drop, drop = parse_constexpr
+              if token <> CLOSE_BRACKET_TKN; exit_err(ERR_MISS|ERR_CLOSE|ERR_SYNTAX); fin
+            else
+                rewind(tknptr)
+            fin
+            if type & WORD_TYPE; size = size * 2; fin
+            repeat; parse_var(type, size); until token <> COMMA_TKN
+            break
+        is PREDEF_TKN
+            repeat
+                if scan == ID_TKN
+                    type     = type | PREDEF_TYPE
+                    idptr    = tknptr
+                    idlen    = tknlen
+                    cfnparms = 0
+                    cfnvals  = 1 // Default to one return value for compatibility
+                    if scan == OPEN_PAREN_TKN
+                        repeat
+                            if scan == ID_TKN
+                                cfnparms++
+                                scan
+                            fin
+                        until token <> COMMA_TKN
+                        if token <> CLOSE_PAREN_TKN; exit_err(ERR_MISS|ERR_CLOSE|ERR_SYNTAX); fin
+                        scan
+                    fin
+                    if token == POUND_TKN
+                        if not parse_const(@cfnvals); exit_err(ERR_INVAL|ERR_CONST); fin
+                        scan
+                    fin
+                    new_idfunc(idptr, idlen, type, new_tag(type & EXTERN_TYPE ?? EXTERN_FIXUP|WORD_FIXUP :: WORD_FIXUP), cfnparms, cfnvals)
+                else
+                    exit_err(ERR_MISS|ERR_ID)
+                fin
+            until token <> COMMA_TKN
+            break
+        is EOL_TKN
+            break
+        otherwise
+            return FALSE
+    wend
+    return TRUE
+end
+def parse_mods
+    if token == IMPORT_TKN
+        if scan <> ID_TKN; exit_err(ERR_MISS|ERR_ID); fin
+        new_moddep(tknptr, tknlen)
+        scan
+        while parse_vars(EXTERN_TYPE); nextln; loop
+        if token <> END_TKN; exit_err(ERR_MISS|ERR_CLOSE|ERR_STATE); fin
+        scan
+    fin
+    return token == EOL_TKN
+end
+def parse_lambda
+    word func_tag
+    byte cfnparms
+    byte lambda_id[4]
+
+    if not infunc; exit_err(ERR_INVAL|ERR_STATE); fin
+    if inlambda; puts("Nested lambdas!\n"); exit_err(0); fin
+    //
+    // Parse parameters and return value count
+    //
+    save_idlocal
+    init_idlocal
+    cfnparms = 0
+    inlambda = TRUE
+    if scan == OPEN_PAREN_TKN
+        repeat
+            if scan == ID_TKN
+                cfnparms++
+                new_idlocal(tknptr, tknlen, WORD_TYPE, 2)
+                scan
+            fin
+        until token <> COMMA_TKN
+        if token <> CLOSE_PAREN_TKN; exit_err(ERR_MISS|ERR_CLOSE|ERR_SYNTAX); fin
+    else
+        exit_err(ERR_MISS|ERR_ID)
+    fin
+    if lookahead == OPEN_PAREN_TKN
+        scan
+        lambda_seq[lambda_cnt], drop = parse_list
+        if token <> CLOSE_PAREN_TKN; exit_err(ERR_MISS|ERR_CLOSE|ERR_SYNTAX); fin
+    else
+        lambda_seq[lambda_cnt], drop = parse_expr(NULL)
+        rewind(tknptr)
+    fin
+    //
+    // Build an anonymous ID string for the Lambda function
+    //
+    lambda_id:0 = 3 | ('&' << 8)
+    lambda_id.2 = ((lambda_num >> 3) & $07) + '0'
+    lambda_id.3 =  (lambda_num       & $07) + '0'
+    lambda_num++
+    if lookup_idglobal(@lambda_id.1, 3)
+        //
+        // Lambda ID already exists (from failed scanning for '=')
+        //
+        func_tag = lambda_tag[lambda_cnt]
+        set_idfunc(@lambda_id.1, 3, func_tag, cfnparms, 1) // Override any predef type & tag
+    else
+        //
+        // Creat new Lambda ID
+        //
+        func_tag                  = new_tag(WORD_FIXUP)
+        lambda_tag[lambda_cnt]    = func_tag
+        lambda_cparms[lambda_cnt] = cfnparms
+        new_idfunc(@lambda_id.1, 3, FUNC_TYPE, func_tag, cfnparms, 1)
+    fin
+    lambda_cnt++
+    if lambda_cnt >= LAMBDANUM; parse_warn("Lambda function overflow"); fin
+    inlambda = FALSE
+    restore_idlocal
+    return func_tag
+end
+def parse_defs
+    byte idlen, cfnparms, cfnvals
+    word type, idstr, func_tag, idptr
+
+    type = FUNC_TYPE
+    if token == EXPORT_TKN
+        if scan <> DEF_TKN; exit_err(ERR_INVAL|ERR_STATE); fin
+        type = type | EXPORT_TYPE
+    fin
+    if token == DEF_TKN
+        if scan <> ID_TKN; exit_err(ERR_INVAL|ERR_ID); fin
+        lambda_cnt = 0
+        cfnparms   = 0
+        infuncvals = 1
+        infunc     = TRUE
+        idstr      = tknptr
+        idlen      = tknlen
+        init_idlocal
+        if scan == OPEN_PAREN_TKN
+            repeat
+                if scan == ID_TKN
+                    cfnparms++
+                    new_idlocal(tknptr, tknlen, WORD_TYPE, 2)
+                    scan
+                fin
+            until token <> COMMA_TKN
+            if token <> CLOSE_PAREN_TKN; exit_err(ERR_MISS|ERR_CLOSE|ERR_SYNTAX); fin
+            scan
+        fin
+        if token == POUND_TKN
+            if not parse_const(@infuncvals); exit_err(ERR_INVAL|ERR_CONST); fin
+            scan
+        fin
+        idptr = lookup_idglobal(idstr, idlen)
+        if idptr
+            if not idptr=>idtype & PREDEF_TYPE; exit_err(ERR_DUP|ERR_ID); fin
+            if idptr->funcparms <> cfnparms or idptr->funcvals <> infuncvals; exit_err(ERR_DUP|ERR_CODE|ERR_ID); fin
+            func_tag = idptr=>idval
+            idptr=>idtype = idptr=>idtype | type
+        else
+            func_tag = new_tag(WORD_FIXUP)
+            new_idfunc(idstr, idlen, type, func_tag, cfnparms, infuncvals)
+        fin
+        emit_tag(func_tag)
+        while parse_vars(LOCAL_TYPE); nextln; loop
+        emit_enter(cfnparms)
+        prevstmnt = 0
+        while parse_stmnt; nextln; loop
+        infunc = FALSE
+        if token <> END_TKN; exit_err(ERR_MISS|ERR_CLOSE|ERR_STATE); fin
+        scan
+        if prevstmnt <> RETURN_TKN
+            if infuncvals; parse_warn("No return values"); fin
+            for cfnvals = infuncvals - 1 downto 0
+                emit_const(0)
+            next
+            emit_leave
+        fin
+        while lambda_cnt
+            lambda_cnt--
+            emit_lambdafunc(lambda_tag[lambda_cnt], lambda_cparms[lambda_cnt], lambda_seq[lambda_cnt])
+        loop
+    fin
+    return token == EOL_TKN ?? TRUE :: FALSE
+end
+def parse_module#0
+    init_idglobal
+    init_idlocal
+    if nextln
+        //
+        // Compile module
+        //
+        while parse_mods;              nextln; loop
+        while parse_vars(GLOBAL_TYPE); nextln; loop
+        while parse_defs;              nextln; loop
+        entrypoint = codeptr
+        prevstmnt  = 0
+        init_idlocal
+        emit_enter(0)
+        if token <> DONE_TKN
+            while parse_stmnt; nextln; loop
+        fin
+        if prevstmnt <> RETURN_TKN
+            emit_const(0)
+            emit_leave
+        fin
+        if token <> DONE_TKN; parse_warn("Missing DONE\n"); fin
+        //dumpsym(idglobal_tbl, globals)
+    fin
+end

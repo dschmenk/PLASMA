@@ -20,6 +20,7 @@
 #define EXPORT_TYPE     (1 << 12)
 #define PREDEF_TYPE     (1 << 13)
 #define FUNC_TYPE       (ASM_TYPE | DEF_TYPE | PREDEF_TYPE)
+#define ACCESSED_TYPE   (1 << 15)
 #define FUNC_PARMS      (0x0F << 16)
 #define FUNC_VALS       (0x0F << 20)
 #define FUNC_PARMVALS   (FUNC_PARMS|FUNC_VALS)

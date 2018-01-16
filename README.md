@@ -7,7 +7,7 @@ PLASMA: **P**roto **L**anguage **A**s**S**e**M**bler for **A**pple
 
 PLASMA is a medium level programming language targeting the 8-bit 6502 processor. Historically, there were simple languages developed in the early years of computers that improved on the tedium of assembly language programming while still being low level enough for system coding. Languages like B, FORTH, and PLASMA fall into this category.
 
-PLASMA is a combination of virtual machine and assembler/compiler matched closely to the 6502 architecture.  It is an attempt to satisfy a few challenges surrounding code size, efficient execution, small runtime and flexible code location.  By architecting a unique bytecode that maps nearly one-to-one to the higher-level representation, the compiler can be very simple and execute quickly on the Apple II for a self-hosted environment.  A modular approach provides for incremental development and code reuse. The syntax of the language is heavily influenced by assembly, Pascal, and C. The design philosophy was to be as simple as feasible while retaining flexibility and symantic clarity. You won't find any unnecessary or redundant syntax in PLASMA.
+PLASMA is a combination of operating environment, virtual machine, and assembler/compiler matched closely to the 6502 architecture.  It is an attempt to satisfy a few challenges surrounding code size, efficient execution, small runtime and flexible code location.  By architecting a unique bytecode that maps nearly one-to-one to the higher-level representation, the compiler can be very simple and execute quickly on the Apple II for a self-hosted environment.  A modular approach provides for incremental development and code reuse. The syntax of the language is heavily influenced by assembly, Pascal, and C. The design philosophy was to be as simple as feasible while retaining flexibility and symantic clarity. You won't find any unnecessary or redundant syntax in PLASMA.
 
 Different projects have led to the architecture of PLASMA, most notably Apple Pascal, FORTH, and my own Java VM for the 6502: VM02. Each has tried to map a generic VM to the 6502 with varying levels of success.  Apple Pascal, based on the USCD Pascal using the p-code interpreter, was a very powerful system and ran fast enough on the Apple II to be interactive but didn't win any speed contests. FORTH was the poster child for efficiency and obtuse syntax. Commonly referred to as a write only language, it was difficult to come up to speed as a developer, especially when using others' code. My own project in creating a Java VM for the Apple II uncovered the folly of shoehorning a large, 32-bit virtual memory environment into 8-bit, 64K hardware.
 
@@ -101,6 +101,8 @@ Different projects have led to the architecture of PLASMA, most notably Apple Pa
 
 # Build Environment
 
+## PLASMA Cross-Compiler
+
 The first step in writing PLASMA code is to get a build environment working. If you have Unix-like environment, then this is a fairly easy exercise. Windows users may want to install the [Cygwin](https://www.cygwin.com/) environment to replicate a Unix-like environment under Windows. When installing Cygwin, make sure **gcc-core**, **make**, and **git** are installed under the **Devel** packages. Mac OS X users may have to install the **Xcode** from the App Store.
 
 Launch the command-line/terminal application for your environment to download and build PLASMA. Create a source code directory and change the working directory to it, something like:
@@ -110,7 +112,7 @@ mkdir Src
 cd Src
 ```
 
-## acme Cross-Assembler
+### acme Cross-Assembler
 
 There are two source projects you need to download: the first is a nice cross-platform 6502 assembler called [acme](http://sourceforge.net/p/acme-crossass/code-0/6/tree/trunk/docs/QuickRef.txt). Download, build, and install the acme assembler by typing:
 
@@ -124,7 +126,7 @@ cd ../..
 
 Under Unix that `cp` command may have to be preceded by `sudo` to elevate the privileges to copy into `/usr/local/bin`.
 
-## PLASMA Source
+### PLASMA Source
 
 Now, to download PLASMA and build it, type:
 
@@ -134,7 +136,7 @@ cd PLASMA/src
 make
 ```
 
-### Portable VM
+#### Portable VM
 
 To see if everything built correctly, type:
 
@@ -166,6 +168,22 @@ to run the module. You will be rewarded with `Hello, world.` printed to the scre
 
 and you should see the same screenful of gibberish you saw from the portable VM, but on the Apple II this time. Both VMs are running the exact same module binaries. To view the source of these modules refer to `PLASMA/src/samplesrc/hello.pla`, `PLASMA/src/samplesrc/test.pla`, and `PLASMA/src/samplesrc/testlib.pla`. To get even more insight into the compiled source, view the corresponding `.a` files.
 
+## PLASMA Target Hosted Compiler
+
+The PLASMA compiler is also self-hosted on the Apple II and III. The PLASMA system and development disks can be run on a real or emulated machine. It is recommended to copy the files to a hard disk, or similar mass storage device. Boot the PLASMA system and change the prefix to the development disk/directory. The 'HELLO.PLA' source file should be there. To compile the module, type:
+
+```
++PLASM HELLO.PLA
+```
+
+After the compiler loads (which can take some time on an un-accelerated machine), you will see the compiler banner message. The complilation process prints out a `.` once in awhile. When compilation is complete, the module will be written to disk, and the prompt will return. To execute the module, type:
+
+```
++HELLO
+```
+
+and just like with the cross-compiled module, you will get the `Hello, word.` message printed to the screen.
+
 # Tutorial
 
 During KansasFest 2015, I gave a PLASMA introduction using the Apple II PLASMA sandbox IDE. You can play along using your favorite Apple II emulator, or one that runs directly in your browser: [Apple II Emulator in Javascript](https://www.scullinsteel.com/apple/e). Download [SANDBOX.PO](https://github.com/dschmenk/PLASMA/blob/master/SANDBOX.PO?raw=true) and load it into Drive 1 of the emulator. Start the [KansasFest PLASMA Code-along video](https://www.youtube.com/watch?v=RrR79WVHwJo?t=11m24s) and follow along.
@@ -178,11 +196,11 @@ Although the low-level PLASMA VM operations could easily by coded by hand, they 
 
 ## PLASMA Modules
 
-PLASMA programs are built up around modules: small, self contained, dynamically loaded and linked software components that provide a well defined interface to other modules. The module format extends the .REL file type originally defined by the EDASM assembler from the DOS/ProDOS Toolkit from Apple Computer, Inc. PLASMA extends the file format through a backwards compatible extension that the PLASMA loader recognizes to locate the PLASMA bytecode and provide for advanced dynamic loading of module dependencies.
+PLASMA programs are built up around modules: small, self contained, dynamically loaded and linked software components that provide a well defined interface to other modules. The module format extends the .REL file type originally defined by the EDASM assembler from the DOS/ProDOS Toolkit from Apple Computer, Inc. PLASMA extends the file format through a backwards compatible extension that the PLASMA loader recognizes to locate the PLASMA bytecode and provide for advanced dynamic loading of module dependencies. Modules are first-class citizens in PLASMA: an imported module is assigned to a variable which can be accessed like any other.
 
 ## Data Types
 
-PLASMA only defines two data types: `byte` and `word`. All operations take place on word-sized quantities, with the exception of loads and stores to byte sized addresses. The interpretation of a value can be an integer, an address, or anything that fits in 16 bits. There are a number of address operators to identify how an address value is to be interpreted.
+PLASMA only defines two data types: `char`(or `byte`) and `var`(or `word`). All operations take place on word-sized quantities, with the exception of loads and stores to byte sized addresses. The interpretation of a value can be an integer, an address, or anything that fits in 16 bits. There are a number of address operators to identify how an address value is to be interpreted.
 
 ## Obligatory 'Hello World'
 
@@ -258,8 +276,8 @@ end
 
 import testlib
     predef puti
-    byte testdata, teststring
-    word testarray
+    char testdata, teststring
+    var testarray
 end
 ```
 
@@ -301,9 +319,9 @@ There is a shortcut for defining constant offsets into structures:
 
 ```
 struc t_entry
-  word id
-  byte[32] name
-  word next_entry
+  var id
+  char[32] name
+  var next_entry
 end
 ```
 
@@ -357,7 +375,7 @@ Strings are defined like Pascal strings, a length byte followed by the string ch
 //
 // An initialized string of 64 characters
 //
-byte[64] txtfile = "UNTITLED"
+char[64] txtfile = "UNTITLED"
 ```
 
 ### Function Definitions
@@ -446,7 +464,7 @@ Values can be treated as pointers by preceding them with a `^` for byte pointers
 
 ```
 char[] hellostr = "Hello"
-word srcstr, strlen
+var srcstr, strlen
 
 srcstr = @hellostr // srcstr points to address of hellostr
 strlen = ^srcstr // the first byte srcstr points to is the string length
@@ -456,8 +474,8 @@ Functions with parameters or expressions to be used as a function address to cal
 
 ```
 predef keyin2plus
-word keyin
-byte key
+var keyin
+char key
 
 keyin = @keyin2plus // address-of keyin2plus function
 key   = keyin()
@@ -589,14 +607,14 @@ Here is an example using the `import`s from the previous examples to export an i
 ```
 predef mydef(var)
 
-export word[10] myfuncs = @putc, @mydef, $0000
+export var[10] myfuncs = @putc, @mydef, $0000
 ```
 
 Exporting functions is simple:
 
 ```
 export def plot(x, y)
-    romcall(y, 0, x, 0, $F800)
+    call($F800, y, 0, x, 0)
 end
 ```
 
@@ -622,7 +640,7 @@ call(addr, aReg, xReg, yReg, statusReg) returns a pointer to a four-byte structu
 const xreg = 1
 const getlin = $FD6A
 
-numchars = call(getlin, 0, 0, 0, 0).xreg // return char count in X reg
+numchars = call(getlin, 0, 0, 0, 0)->xreg // return char count in X reg
 ```
 
 syscall(cmd, params) calls ProDOS, returning the status value.
@@ -644,14 +662,14 @@ putc(char), puts(string), home, gotoxy(x,y), getc() and gets() are other handy u
 
 ```
 putc('.')
-byte okstr[] = "OK"
+char okstr[] = "OK"
 puts(@okstr)
 ```
 
 memset(addr, val, len) will fill memory with a 16-bit value.  memcpy(dstaddr, srcaddr, len) will copy memory from one address to another, taking care to copy in the proper direction.
 
 ```
-byte nullstr[] = ""
+char nullstr[] = ""
 memset(strlinbuf, @nullstr, maxfill * 2) // fill line buff with pointer to null string
 memcpy(scrnptr, strptr + ofst + 1, numchars)
 ```
@@ -719,8 +737,8 @@ predef myfunc
 
 byte smallarray[4]
 byte initbarray[] = 1, 2, 3, 4, 5, 6, 7, 8, 9, 10
-byte string[64] = "Initialized string"
-word wlabel[]
+char string[64] = "Initialized string"
+var wlabel[]
 word = 1000, 2000, 3000, 4000 // Anonymous array
 word funclist = @myfunc, $0000
 ```
@@ -732,13 +750,32 @@ predef myfunc(var)#0
 
 byte[4] smallarray
 byte[] initbarray = 1, 2, 3, 4, 5, 6, 7, 8, 9, 10
-byte[64] string = "Initialized string"
-word[] wlabel
+char[64] string = "Initialized string"
+var[] wlabel
 word = 1000, 2000, 3000, 4000 // Anonymous array
 word funclist = @myfunc, $0000
 ```
 
 Arrays can be uninitialized and reserve a size, as in `smallarray` above.  Initialized arrays without a size specified in the definition will take up as much data as is present, as in `initbarray` above. Strings are special arrays that include a hidden length byte in the beginning (Pascal strings). When specified with a size, a minimum size is reserved for the string value. Labels can be defined as arrays without size or initializers; this can be useful when overlapping labels with other arrays or defining the actual array data as anonymous arrays in following lines as in `wlabel` and following lines. Addresses of other data (must be defined previously) or function definitions (pre-defined with predef), including imported references, can be initializers.
+
+The base array size can be used to initialize multiple variable of arbitrary size. Three, four byte values can be defined as such:
+
+```
+byte[4] a, b, c
+```
+
+All three variables will have 4 bytes reserved for them. If you combine a base size with an array size, you can define multiple large values. For instance,
+
+```
+byte[4] a[5]
+```
+
+will assign an array of five, four byte elements, for a total of 20 bytes. This may make more sense when we combine the alias for `byte`, `res` with structure definitions. An array of five structures would look like:
+
+```
+res[t_record] patient[20]
+```
+The result would be to reserve 20 patient records.
 
 #### Type Overrides
 
@@ -1017,6 +1054,12 @@ predef bivalfunc#2
 
 a, b = bivalfunc() // Two values returned from function
 stack[0], stack[1], stack[3] = 0, stack[0], stack[1] // Push 0 to bottom of three element stack
+```
+Should multiple values be returned, but only a subset is interesting, the special value `drop` can be used to ignore values.
+```
+predef trivalfunc#3
+
+drop, drop, c = trivalfunc() // Three values returned from function, but we're only interested in the last one
 ```
 #### Empty Assignments
 
@@ -1298,8 +1341,8 @@ The compact code representation comes through the use of opcodes closely matched
 | $2E    | CS     | constant string
 | $30    | DROP   | drop top stack value
 | $32    | DUP    | duplicate top stack value
-| $34    | PUSHEP | push eval stack pointer call stack
-| $36    | PULLEP | pull eval stack pointer from call stack
+| $34    | NOP    |
+| $36    | DIVMOD | divide next from to by top, leave result and remainder on stack
 | $38    | BRGT   | branch next from top greater than top
 | $3A    | BRLT   | branch next from top less than top
 | $3C    | BREQ   | branch next from top equal to top
