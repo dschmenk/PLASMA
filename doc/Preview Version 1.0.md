@@ -64,7 +64,7 @@ This is a Developers Preview, so sample source code is included from the project
 
 ## Issues
 
-- All the modules and runtime are written mostly in PLASMA; the compiler and editor as well. This means that there may be some startup delay as the PLASMA module loader reads in the module dependencies and performs dynamic linking. The goal is to spend considerable effort improving the load time before the final 1.0 release. But a 1 MHz, 8 bit CPU interpreting bytecodes is never going to match a modern computer. AS noted earlier, an accelerator and mass storage are your (and PLASMA's) friend.
+- All the modules and runtime are written mostly in PLASMA; the compiler and editor as well. This means that there may be some startup delay as the PLASMA module loader reads in the module dependencies and performs dynamic linking. The goal is to spend considerable effort improving the load time before the final 1.0 release. But a 1 MHz, 8 bit CPU interpreting bytecodes is never going to match a modern computer. As noted earlier, an accelerator and mass storage are your (and PLASMA's) friend.
 
 - Many modules in the project aren't included in the Developer Preview. Only those modules that have gotten a good workout are included. The rest of the modules will be tested and included for the final 1.0 release. Feel free to try them out, and give feedback. Chances are they will work out of the box, or just a small tweak.
 
