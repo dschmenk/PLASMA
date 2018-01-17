@@ -127,6 +127,8 @@ To generate compiler warning for this issue, and a few others, use the `-W` opti
 
 11. SANE (Standard Apple Numerics Environment) Floating Point Library. An extensive library (two, actually) of extended floating point (80 bit IEEE precision) functionality is suported. A wrapper library has been written to greatly simplify the interface to SANE. Look at the `RPNCALC.PLA` source code as an example.
 
+12. Library Documentation. Preliminary documentation is available on the Wiki: https://github.com/dschmenk/PLASMA/wiki
+
 # Thanks
 
 I wish to thank the people who have contributed the the PLASMA project. They have greatly improved the development of the language and documentation:
