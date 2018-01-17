@@ -60,7 +60,7 @@ There are some demo programs included for your perusal. Check out `ROGUE` for so
 
 ## Source Code
 
-This is a Developers Preview, so sample source code is included from the project. It all builds without alteration and shloud be a good starting point for further explorations. There was a PLASMA SANDBOX in previous versions that was a minimal editor+compiler playground. It wasn't the full language and has been superceded by the real PLASMA compiler. However, the examples that accompanied the SANDBOX are included here. They have been updated to use the `INCLUDE "INC/CMDSYS.PLH"` line so that they may compile arnd run, but no gaurentees. You will probably have to fix whatever differences you come accross. An exercise, as they say, left up to the student.
+This is a Developers Preview, so sample source code is included from the project. It all builds without alteration and should be a good starting point for further explorations. There was a PLASMA SANDBOX in previous versions that was a minimal editor+compiler playground. It wasn't the full language and has been superceded by the real PLASMA compiler. However, the examples that accompanied the SANDBOX are included here. They have been updated to use the `INCLUDE "INC/CMDSYS.PLH"` line so that they may compile arnd run, but no gaurentees. You will probably have to fix whatever differences you come accross. An exercise, as they say, left up to the student.
 
 ## Issues
 
