@@ -1534,6 +1534,8 @@ JMPTMP  JMP     (TMP)
 ;* ENTER FUNCTION WITH FRAME SIZE AND PARAM COUNT
 ;*
 ENTER   PEI     (IFP)           ; SAVE ON STACK FOR LEAVE
+        TSX                     ; REFLECT SP IN SAVED HWSP
+        STX     HWSP
         INY
         LDA     (IP),Y
         AND     #$00FF
