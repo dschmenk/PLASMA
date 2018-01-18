@@ -9,7 +9,7 @@ SELFMODIFY  =   1
 ;*
 ;* VM ZERO PAGE LOCATIONS
 ;*
-    !SOURCE "vmsrc/plvmzp.inc"
+        !SOURCE "vmsrc/plvmzp.inc"
 DVSIGN  =   TMP+2
 DROP    =   $EF
 NEXTOP  =   $F0
@@ -22,11 +22,11 @@ OPPAGE  =   OPIDX+1
 ;*
 ;* INTERPRETER INSTRUCTION POINTER INCREMENT MACRO
 ;*
-    !MACRO  INC_IP  {
-    INY
-    BNE *+4
-    INC IPH
-    }
+        !MACRO  INC_IP  {
+        INY
+        BNE *+4
+        INC IPH
+}
 ;*
 ;* INTERPRETER HEADER+INITIALIZATION
 ;*
@@ -36,14 +36,14 @@ SEGBEGIN JMP    VMINIT
 ;* SYSTEM INTERPRETER ENTRYPOINT
 ;*
 INTERP  PLA
-    CLC
-    ADC #$01
+        CLC
+        ADC     #$01
         STA     IPL
         PLA
-    ADC #$00
+        ADC     #$00
         STA     IPH
-    LDY #$00
-    JMP FETCHOP
+        LDY     #$00
+        JMP     FETCHOP
 ;*
 ;* ENTER INTO USER BYTECODE INTERPRETER
 ;*
@@ -51,14 +51,14 @@ IINTERP PLA
         STA     TMPL
         PLA
         STA     TMPH
-    LDY #$02
-    LDA     (TMP),Y
-        STA IPH
-    DEY
-    LDA     (TMP),Y
-    STA IPL
+        LDY     #$02
+        LDA     (TMP),Y
+        STA     IPH
         DEY
-    JMP FETCHOP
+        LDA     (TMP),Y
+        STA     IPL
+        DEY
+        JMP FETCHOP
 ;*
 ;* MUL TOS-1 BY TOS
 ;*
@@ -121,13 +121,13 @@ COMP    LDA #$FF
 ;*
     !ALIGN  255,0
 OPTBL   !WORD   ZERO,ADD,SUB,MUL,DIV,MOD,INCR,DECR      ; 00 02 04 06 08 0A 0C 0E
-    !WORD   NEG,COMP,BAND,IOR,XOR,SHL,SHR,IDXW      ; 10 12 14 16 18 1A 1C 1E
-    !WORD   LNOT,LOR,LAND,LA,LLA,CB,CW,CS           ; 20 22 24 26 28 2A 2C 2E
-    !WORD   DROP,DUP,NEXTOP,DIVMOD,BRGT,BRLT,BREQ,BRNE      ; 30 32 34 36 38 3A 3C 3E
-    !WORD   ISEQ,ISNE,ISGT,ISLT,ISGE,ISLE,BRFLS,BRTRU   ; 40 42 44 46 48 4A 4C 4E
-    !WORD   BRNCH,IBRNCH,CALL,ICAL,ENTER,LEAVE,RET,CFFB     ; 50 52 54 56 58 5A 5C 5E
-    !WORD   LB,LW,LLB,LLW,LAB,LAW,DLB,DLW           ; 60 62 64 66 68 6A 6C 6E
-    !WORD   SB,SW,SLB,SLW,SAB,SAW,DAB,DAW           ; 70 72 74 76 78 7A 7C 7E
+        !WORD   NEG,COMP,BAND,IOR,XOR,SHL,SHR,IDXW      ; 10 12 14 16 18 1A 1C 1E
+        !WORD   LNOT,LOR,LAND,LA,LLA,CB,CW,CS           ; 20 22 24 26 28 2A 2C 2E
+        !WORD   DROP,DUP,NEXTOP,DIVMOD,BRGT,BRLT,BREQ,BRNE      ; 30 32 34 36 38 3A 3C 3E
+        !WORD   ISEQ,ISNE,ISGT,ISLT,ISGE,ISLE,BRFLS,BRTRU   ; 40 42 44 46 48 4A 4C 4E
+        !WORD   BRNCH,IBRNCH,CALL,ICAL,ENTER,LEAVE,RET,CFFB     ; 50 52 54 56 58 5A 5C 5E
+        !WORD   LB,LW,LLB,LLW,LAB,LAW,DLB,DLW           ; 60 62 64 66 68 6A 6C 6E
+        !WORD   SB,SW,SLB,SLW,SAB,SAW,DAB,DAW           ; 70 72 74 76 78 7A 7C 7E
 ;*
 ;* DIV TOS-1 BY TOS
 ;*
@@ -921,90 +921,90 @@ CALLADR JSR $FFFF
 ;*
 ;* INDIRECT CALL TO ADDRESS (NATIVE CODE)
 ;*
-ICAL    LDA ESTKL,X
-    STA ICALADR+1
-    LDA ESTKH,X
-    STA ICALADR+2
-    INX
-    TYA
-    CLC
-    ADC IPL
-    PHA
-    LDA IPH
-    ADC #$00
-    PHA
-ICALADR JSR $FFFF
-    PLA
-    STA IPH
-    PLA
-    STA IPL
-    LDY #$01
-    JMP FETCHOP
+ICAL    LDA     ESTKL,X
+        STA     ICALADR+1
+        LDA     ESTKH,X
+        STA     ICALADR+2
+        INX
+        TYA
+        CLC
+        ADC     IPL
+        PHA
+        LDA     IPH
+        ADC     #$00
+        PHA
+ICALADR JSR     $FFFF
+        PLA
+        STA     IPH
+        PLA
+        STA     IPL
+        LDY     #$01
+        JMP     FETCHOP
 ;*
 ;* ENTER FUNCTION WITH FRAME SIZE AND PARAM COUNT
 ;*
 ENTER   INY
-    LDA (IP),Y
-    PHA         ; SAVE ON STACK FOR LEAVE
-    EOR #$FF
-    SEC
-    ADC IFPL
-    STA IFPL
-    BCS +
-    DEC IFPH
-+   INY
-    LDA (IP),Y
-    BEQ +
-    ASL
-    TAY
--   LDA ESTKH,X
-    DEY
-    STA (IFP),Y
-    LDA ESTKL,X
-    INX
-    DEY
-    STA (IFP),Y
-    BNE -
-+   LDY #$03
-    JMP FETCHOP
+        LDA     (IP),Y
+        EOR     #$FF
+        SEC
+        ADC     IFPL
+        STA     IFPL
+        BCS     +
+        DEC     IFPH
++       INY
+        LDA     (IP),Y
+        BEQ     +
+        ASL
+        TAY
+-       LDA     ESTKH,X
+        DEY
+        STA     (IFP),Y
+        LDA     ESTKL,X
+        INX
+        DEY
+        STA     (IFP),Y
+        BNE     -
++       LDY     #$03
+        JMP     FETCHOP
 ;*
 ;* LEAVE FUNCTION
 ;*
-LEAVE   PLA
-    CLC
-    ADC IFPL
-    STA IFPL
-    BCS LIFPH
-    RTS
-LIFPH   INC IFPH
+LEAVE   +INC_IP
+        LDA     (IP),Y
+        CLC
+        ADC     IFPL
+        STA     IFPL
+        BCS     LIFPH
+        RTS
+LIFPH   INC     IFPH
 RET     RTS
 A1CMD   !SOURCE "vmsrc/a1cmd.a"
-SEGEND  =   *
-VMINIT  LDY #$10        ; INSTALL PAGE 0 FETCHOP ROUTINE
--   LDA PAGE0-1,Y
-    STA DROP-1,Y
-    DEY
-    BNE -
-    STY IFPL        ; INIT FRAME POINTER
-    LDA #$80
-    STA IFPH
-    LDA #<SEGEND    ; SAVE HEAP START
-    STA SRCL
-    LDA #>SEGEND
-    STA SRCH
-        LDX #ESTKSZ/2   ; INIT EVAL STACK INDEX
+SEGEND  =       *
+VMINIT  LDY     #$10        ; INSTALL PAGE 0 FETCHOP ROUTINE
+-       LDA     PAGE0-1,Y
+        STA     DROP-1,Y
+        DEY
+        BNE     -
+        STY     IFPL        ; INIT FRAME POINTER
+        LDA     #$80
+        STA     IFPH
+        LDA     #<SEGEND    ; SAVE HEAP START
+        STA     SRCL
+        LDA     #>SEGEND
+        STA     SRCH
+        LDX     #ESTKSZ/2   ; INIT EVAL STACK INDEX
     JMP A1CMD
 PAGE0   =   *
         !PSEUDOPC   DROP {
 ;*
 ;* INTERP BYTECODE INNER LOOP
 ;*
-    INX         ; DROP
-    INY         ; NEXTOP
-    BEQ NEXTOPH
-    LDA $FFFF,Y     ; FETCHOP @ $F3, IP MAPS OVER $FFFF @ $F4
-    STA OPIDX
-    JMP (OPTBL)
-NEXTOPH INC IPH
-    BNE FETCHOP
+        INX                 ; DROP
+        INY                 ; NEXTOP
+        BEQ     NEXTOPH
+        LDA     $FFFF,Y     ; FETCHOP @ $F3, IP MAPS OVER $FFFF @ $F4
+        STA     OPIDX
+        JMP     (OPTBL)
+NEXTOPH INC     IPH
+        BNE     FETCHOP
 }

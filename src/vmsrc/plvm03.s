@@ -130,6 +130,7 @@ INTERP  PLA
         PLA
         ADC     #$00
         STA     IPH
+        
         LDA     IFPH
         PHA                     ; SAVE ON STACK FOR LEAVE/RET
         LDA     IFPL
@@ -138,6 +139,7 @@ INTERP  PLA
         STA     IFPL
         LDA     PPH
         STA     IFPH
+
         LDY     #$00
         STY     IPX
         JMP     FETCHOP
@@ -158,6 +160,7 @@ XINTERP PLA
         LDA     (TMP),Y
         STA     IPL
         DEY
+        
         LDA     IFPH
         PHA                     ; SAVE ON STACK FOR LEAVE/RET
         LDA     IFPL
@@ -166,6 +169,7 @@ XINTERP PLA
         STA     IFPL
         LDA     PPH
         STA     IFPH
+
         JMP     FETCHOP
 ;*
 ;* INTERNAL DIVIDE ALGORITHM
@@ -1108,7 +1112,11 @@ ICALADR JSR     $FFFF
 ;*
 ;* ENTER FUNCTION WITH FRAME SIZE AND PARAM COUNT
 ;*
-ENTER   INY
+ENTER   LDA     IFPH
+        PHA                     ; SAVE ON STACK FOR LEAVE
+        LDA     IFPL
+        PHA
+        INY
         LDA     (IP),Y
         PHA                     ; SAVE ON STACK FOR LEAVE
         EOR     #$FF
@@ -1138,7 +1146,8 @@ ENTER   INY
 ;*
 ;* LEAVE FUNCTION
 ;*
-LEAVE   PLA
+LEAVE   +INC_IP
+        LDA     (IP),Y
         CLC
         ADC     IFPL
         STA     PPL
@@ -1149,17 +1158,7 @@ LEAVE   PLA
         STA     IFPL
         PLA
         STA     IFPH
-        RTS
-;
-RET     LDA     IFPL            ; DEALLOCATE POOL
-        STA     PPL
-        LDA     IFPH
-        STA     PPH
-        PLA                     ; RESTORE PREVIOUS FRAME
-        STA     IFPL
-        PLA
-        STA     IFPH
-        RTS
+RET     RTS
 SOSCMD  =       *
         !SOURCE "vmsrc/soscmd.a"
 SEGEND  =       *

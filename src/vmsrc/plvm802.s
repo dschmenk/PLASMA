@@ -265,9 +265,6 @@ DINTRP  PHP
         PLA
         INC
         STA     IP
-        PEI     (IFP)           ; SAVE ON STACK FOR LEAVE/RET
-        LDA     PP              ; SET FP TO PP
-        STA     IFP
         STX     ESP
         TSX
         STX     HWSP
@@ -295,10 +292,7 @@ IINTRP  PHP
         LDA     (TOS,S),Y
         DEY
         STA     IP
-        LDA     IFP
-        STA     TOS,S           ; SAVE ON STACK FOR LEAVE/RET
-        LDA     PP              ; SET FP TO PP
-        STA     IFP
+        PLA
         STX     ESP
         TSX
         STX     HWSP
@@ -325,10 +319,7 @@ IINTRPX PHP
         LDA     (TOS,S),Y
         DEY
         STA     IP
-        LDA     IFP
-        STA     TOS,S           ; SAVE ON STACK FOR LEAVE/RET
-        LDA     PP             ; SET FP TO PP
-        STA     IFP
+        PLA
         STX     ESP
         TSX
         STX     HWSP
@@ -1542,7 +1533,8 @@ JMPTMP  JMP     (TMP)
 ;*
 ;* ENTER FUNCTION WITH FRAME SIZE AND PARAM COUNT
 ;*
-ENTER   INY
+ENTER   PEI     (IFP)           ; SAVE ON STACK FOR LEAVE
+        INY
         LDA     (IP),Y
         AND     #$00FF
 !IF     DEBUG {
@@ -1684,10 +1676,6 @@ RET     +ACCMEM8                ; 8 BIT A/M
 }
         TYX
         +ACCMEM16
-        LDA     IFP             ; DEALLOCATE POOL
-        STA     PP
-        PLA                     ; RESTORE PREVIOUS FRAME
-        STA     IFP
         SEC                     ; SWITCH TO EMULATED MODE
         XCE
         !AS

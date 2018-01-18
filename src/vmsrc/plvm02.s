@@ -197,14 +197,6 @@ DINTRP  PLA
         PLA
         ADC     #$00
         STA     IPH
-        LDA     IFPH
-        PHA                     ; SAVE ON STACK FOR LEAVE/RET
-        LDA     IFPL
-        PHA                     ; SAVE ON STACK FOR LEAVE/RET
-        LDA     PPL             ; SET FP TO PP
-        STA     IFPL
-        LDA     PPH
-        STA     IFPH
         LDY     #$00
 !IF SELFMODIFY {
     BEQ +
@@ -224,14 +216,6 @@ IINTRP  PLA
         LDA     (TMP),Y
         STA     IPL
         DEY
-        LDA     IFPH
-        PHA                     ; SAVE ON STACK FOR LEAVE/RET
-        LDA     IFPL
-        PHA                     ; SAVE ON STACK FOR LEAVE/RET
-        LDA     PPL             ; SET FP TO PP
-        STA     IFPL
-        LDA     PPH
-        STA     IFPH
 +       LDA     #>OPTBL
         STA     OPPAGE
 !IF SELFMODIFY {
@@ -254,14 +238,6 @@ IINTRPX PHP
         LDA     (TMP),Y
         STA     IPL
         DEY
-        LDA     IFPH
-        PHA                     ; SAVE ON STACK FOR LEAVE/RET
-        LDA     IFPL
-        PHA                     ; SAVE ON STACK FOR LEAVE/RET
-        LDA     PPL             ; SET FP TO PP
-        STA     IFPL
-        LDA     PPH
-        STA     IFPH
         LDA     #>OPXTBL
         STA     OPPAGE
         STA     ALTRDON
@@ -1540,7 +1516,11 @@ JMPTMP  JMP     (TMP)
 ;*
 ;* ENTER FUNCTION WITH FRAME SIZE AND PARAM COUNT
 ;*
-ENTER   INY
+ENTER   LDA     IFPH
+        PHA                     ; SAVE ON STACK FOR LEAVE
+        LDA     IFPL
+        PHA
+        INY
         LDA     (IP),Y
         EOR     #$FF            ; ALLOCATE FRAME
         SEC
@@ -1571,7 +1551,6 @@ ENTER   INY
 ;*
 LEAVEX  +INC_IP
         LDA     (IP),Y
-        STA     ALTRDOFF
         CLC
         ADC     IFPL
         STA     PPL
@@ -1582,6 +1561,7 @@ LEAVEX  +INC_IP
         STA     IFPL
         PLA
         STA     IFPH
+RETX    STA     ALTRDOFF
         LDA     PSR
         PHA
         PLP
@@ -1598,20 +1578,6 @@ LEAVE   +INC_IP
         STA     IFPL
         PLA
         STA     IFPH
-        RTS
-;
-RETX    STA     ALTRDOFF
-        LDA     PSR
-        PHA
-        PLP
-RET     LDA     IFPL            ; DEALLOCATE POOL
-        STA     PPL
-        LDA     IFPH
-        STA     PPH
-        PLA                     ; RESTORE PREVIOUS FRAME
-        STA     IFPL
-        PLA
-        STA     IFPH
-        RTS
+RET     RTS
 VMEND   =       *
 }
