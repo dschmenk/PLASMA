@@ -137,7 +137,7 @@ I wish to thank the people who have contributed the the PLASMA project. They hav
 - Steve F (ZornsLemma): Has taken the optimizer to new levels and his work on porting PLASMA to the Beeb are amazing: http://stardot.org.uk/forums/viewtopic.php?f=55&t=12306&sid=5a503c593f0698ebc31e590ac61b09fc
 - Peter Ferrie: Assembly optimizer extraordinaire. He has made significant improvements into the code footprint in PLASMA so all the functionality can exist in just a few bytes.
 - David Schmidt (DaveX): His help in documentation have made it much more accessible and professional. Of course any errors are all his. Just kidding, they're mine ;-)
-- HandyAndy (6502.org): Catching the grammatical errors that I ain't no good at.
+- Andy Werner (6502.org): Catching the grammatical errors that I ain't no good at.
 
 Dave Schmenk
 http://schmenk.is-a-geek.com
