@@ -44,7 +44,6 @@ PSR     =       TMP+2
 DVSIGN  =       PSR+1
 DROP    =       $EF
 NEXTOP  =       $F0
-;FETCHOP =       NEXTOP+3
 FETCHOP =       NEXTOP+1
 IP      =       FETCHOP+1
 IPL     =       IP
@@ -372,12 +371,9 @@ PAGE0    =      *
         !PSEUDOPC       DROP {
         INX                     ; DROP @ $EF
         INY                     ; NEXTOP @ $F0
-;        BEQ     NEXTOPH
         LDA     $FFFF,Y         ; FETCHOP @ $F3, IP MAPS OVER $FFFF @ $F4
         STA     OPIDX
         JMP     (OPTBL)         ; OPIDX AND OPPAGE MAP OVER OPTBL
-;NEXTOPH INC     IPH
-;        BNE     FETCHOP
 }
 PAGE3   =       *
 ;*
@@ -1333,13 +1329,13 @@ BRFLS   INX
         LDA     ESTKH-1,X
         ORA     ESTKL-1,X
         BNE     NOBRNCH
-BRNCH   TYA                 ; FLATTEN IP
+BRNCH   TYA                     ; FLATTEN IP
         CLC
         ADC     IPL
         STA     TMPL
         LDA     #$00
         ADC     IPH
-        STA     TMPH        ; ADD BRANCH OFFSET
+        STA     TMPH            ; ADD BRANCH OFFSET
         INY
         LDA     (IP),Y
         CLC
