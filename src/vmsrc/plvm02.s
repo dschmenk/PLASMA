@@ -44,7 +44,8 @@ PSR     =       TMP+2
 DVSIGN  =       PSR+1
 DROP    =       $EF
 NEXTOP  =       $F0
-FETCHOP =       NEXTOP+3
+;FETCHOP =       NEXTOP+3
+FETCHOP =       NEXTOP+1
 IP      =       FETCHOP+1
 IPL     =       IP
 IPH     =       IPL+1
@@ -57,8 +58,12 @@ INTERP  =       $03D0
 ;*
         !MACRO  INC_IP  {
         INY
-        BNE    * + 4
+        BPL     +
         INC    IPH
+        TYA
+        AND     #$7F
+        TAY
++
         }
 ;******************************
 ;*                            *
@@ -367,12 +372,12 @@ PAGE0    =      *
         !PSEUDOPC       DROP {
         INX                     ; DROP @ $EF
         INY                     ; NEXTOP @ $F0
-        BEQ     NEXTOPH
+;        BEQ     NEXTOPH
         LDA     $FFFF,Y         ; FETCHOP @ $F3, IP MAPS OVER $FFFF @ $F4
         STA     OPIDX
         JMP     (OPTBL)         ; OPIDX AND OPPAGE MAP OVER OPTBL
-NEXTOPH INC     IPH
-        BNE     FETCHOP
+;NEXTOPH INC     IPH
+;        BNE     FETCHOP
 }
 PAGE3   =       *
 ;*
@@ -738,7 +743,7 @@ CB      LDA     #$00
 ;*
 LA      =       *
 CW      DEX
-        +INC_IP
+        INY     ;+INC_IP
         LDA     (IP),Y
         STA     ESTKL,X
         +INC_IP
@@ -749,7 +754,7 @@ CW      DEX
 ;* CONSTANT STRING
 ;*
 CS      DEX
-        +INC_IP
+        INY     ;+INC_IP
         TYA                     ; NORMALIZE IP AND SAVE STRING ADDR ON ESTK
         CLC
         ADC     IPL
@@ -765,7 +770,7 @@ CS      DEX
         JMP     NEXTOP
 ;
 CSX DEX
-        +INC_IP
+        INY     ;+INC_IP
         TYA                     ; NORMALIZE IP
         CLC
         ADC     IPL
@@ -987,7 +992,7 @@ LLWX    +INC_IP
 ;* LOAD VALUE FROM ABSOLUTE ADDRESS
 ;*
 !IF SELFMODIFY {
-LAB     +INC_IP
+LAB     INY     ;+INC_IP
         LDA     (IP),Y
         STA     LABLDA+1
         +INC_IP
@@ -1000,7 +1005,7 @@ LABLDA  LDA     $FFFF
         STA     ESTKH,X
         JMP     NEXTOP
 } ELSE {
-LAB     +INC_IP
+LAB     INY     ;+INC_IP
         LDA     (IP),Y
         STA     TMPL
         +INC_IP
@@ -1015,7 +1020,7 @@ LAB     +INC_IP
         LDY     IPY
         JMP     NEXTOP
 }
-LAW     +INC_IP
+LAW     INY     ;+INC_IP
         LDA     (IP),Y
         STA     TMPL
         +INC_IP
@@ -1033,7 +1038,7 @@ LAW     +INC_IP
         JMP     NEXTOP
 ;
 !IF SELFMODIFY {
-LABX    +INC_IP
+LABX    INY     ;+INC_IP
         LDA     (IP),Y
         STA     LABXLDA+1
         +INC_IP
@@ -1048,7 +1053,7 @@ LABXLDA LDA     $FFFF
         STA     ALTRDON
         JMP     NEXTOP
 } ELSE {
-LABX    +INC_IP
+LABX    INY     ;+INC_IP
         LDA     (IP),Y
         STA     TMPL
         +INC_IP
@@ -1065,7 +1070,7 @@ LABX    +INC_IP
         LDY     IPY
         JMP     NEXTOP
 }
-LAWX    +INC_IP
+LAWX    INY     ;+INC_IP
         LDA     (IP),Y
         STA     TMPL
         +INC_IP
@@ -1157,7 +1162,7 @@ DLB     +INC_IP
         STA     (IFP),Y
         LDY     IPY
         JMP     NEXTOP
-DLW             +INC_IP
+DLW     +INC_IP
         LDA     (IP),Y
         STY     IPY
         TAY
@@ -1172,7 +1177,7 @@ DLW             +INC_IP
 ;* STORE VALUE TO ABSOLUTE ADDRESS
 ;*
 !IF SELFMODIFY {
-SAB     +INC_IP
+SAB     INY     ;+INC_IP
         LDA     (IP),Y
         STA     SABSTA+1
         +INC_IP
@@ -1184,7 +1189,7 @@ SABSTA  STA     $FFFF
 ;       JMP     NEXTOP
         JMP     DROP
 } ELSE {
-SAB     +INC_IP
+SAB     INY     ;+INC_IP
         LDA     (IP),Y
         STA     TMPL
         +INC_IP
@@ -1197,7 +1202,7 @@ SAB     +INC_IP
         LDY     IPY
         JMP     DROP
 }
-SAW     +INC_IP
+SAW     INY     ;+INC_IP
         LDA     (IP),Y
         STA     TMPL
         +INC_IP
@@ -1216,7 +1221,7 @@ SAW     +INC_IP
 ;* STORE VALUE TO ABSOLUTE ADDRESS WITHOUT POPPING STACK
 ;*
 !IF SELFMODIFY {
-DAB     +INC_IP
+DAB     INY     ;+INC_IP
         LDA     (IP),Y
         STA     DABSTA+1
         +INC_IP
@@ -1226,7 +1231,7 @@ DAB     +INC_IP
 DABSTA  STA     $FFFF
         JMP     NEXTOP
 } ELSE {
-DAB     +INC_IP
+DAB     INY     ;+INC_IP
         LDA     (IP),Y
         STA     TMPL
         +INC_IP
@@ -1239,7 +1244,7 @@ DAB     +INC_IP
         LDY     IPY
         JMP     NEXTOP
 }
-DAW     +INC_IP
+DAW     INY     ;+INC_IP
         LDA     (IP),Y
         STA     TMPL
         +INC_IP
@@ -1321,29 +1326,33 @@ BRTRU   INX
         LDA     ESTKH-1,X
         ORA     ESTKL-1,X
         BNE     BRNCH
-NOBRNCH +INC_IP
+NOBRNCH INY     ;+INC_IP
         +INC_IP
         JMP     NEXTOP
 BRFLS   INX
         LDA     ESTKH-1,X
         ORA     ESTKL-1,X
         BNE     NOBRNCH
-BRNCH   LDA     IPH
-        STA     TMPH
-        LDA     IPL
-        +INC_IP
+BRNCH   TYA                 ; FLATTEN IP
         CLC
-        ADC     (IP),Y
+        ADC     IPL
         STA     TMPL
-        LDA     TMPH
-        +INC_IP
-        ADC     (IP),Y
+        LDA     #$00
+        ADC     IPH
+        STA     TMPH        ; ADD BRANCH OFFSET
+        INY
+        LDA     (IP),Y
+        CLC
+        ADC     TMPL
+        STA     TMPL
+        INY
+        LDA     (IP),Y
+        ADC     TMPH
         STA     IPH
         LDA     TMPL
         STA     IPL
-        DEY
-        DEY
-        JMP     NEXTOP
+        LDY     #$01
+        JMP     FETCHOP
 BREQ    INX
         LDA     ESTKL-1,X
         CMP     ESTKL,X
@@ -1385,10 +1394,10 @@ IBRNCH  LDA     IPL
 ;*
 ;* CALL INTO ABSOLUTE ADDRESS (NATIVE CODE)
 ;*
-CALL    +INC_IP
+CALL    INY     ;+INC_IP
         LDA     (IP),Y
         STA     TMPL
-        +INC_IP
+        INY     ;+INC_IP
         LDA     (IP),Y
         STA     TMPH
         TYA
@@ -1412,10 +1421,10 @@ CALL    +INC_IP
         LDY     #$01
         JMP     FETCHOP
 ;
-CALLX   +INC_IP
+CALLX   INY     ;+INC_IP
         LDA     (IP),Y
         STA     TMPL
-        +INC_IP
+        INY     ;+INC_IP
         LDA     (IP),Y
         STA     TMPH
         TYA
@@ -1549,7 +1558,7 @@ ENTER   LDA     IFPH
 ;*
 ;* LEAVE FUNCTION
 ;*
-LEAVEX  +INC_IP
+LEAVEX  INY     ;+INC_IP
         LDA     (IP),Y
         CLC
         ADC     IFPL
@@ -1566,7 +1575,7 @@ RETX    STA     ALTRDOFF
         PHA
         PLP
         RTS
-LEAVE   +INC_IP
+LEAVE   INY     ;+INC_IP
         LDA     (IP),Y
         CLC
         ADC     IFPL
