@@ -97,7 +97,7 @@ NOS     =       $03             ; TOS-1
 !MACRO  FIXJMP_IP   .TARGET {
         BMI     +
         JMP     .TARGET
-        TYA
++       TYA
         CLC
         ADC     IP
         STA     IP
