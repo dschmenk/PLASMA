@@ -74,14 +74,41 @@ NOS     =       $03             ; TOS-1
 ;*
 ;* INTERPRETER INSTRUCTION POINTER INCREMENT MACRO
 ;*
-        !MACRO  INC_IP  {
-        INY
-        BPL     +
-        INC    IPH
+;!MACRO  INC_IP  {
+;        INY
+;        BPL     +
+;        SEP     #$20            ; 8 BIT A/M
+;        !AS
+;        INC    IPH
+;        TYA
+;        AND     #$7F
+;        TAY
+;        REP     #$20            ; 16 BIT A/M
+;        !AL
+;+
+;        }
+!MACRO  FIX_IP  {
+        SEP     #$20            ; 8 BIT A/M
+        !AS
+        INC     IPH
         TYA
         AND     #$7F
         TAY
-+
+        REP     #$20            ; 16 BIT A/M
+        !AL
+        }
+!MACRO  FIXJMP_IP   .TARGET {
+        BMI     +
+        JMP     .TARGET
++       SEP     #$20            ; 8 BIT A/M
+        !AS
+        INC     IPH
+        TYA
+        AND     #$7F
+        TAY
+        REP     #$20            ; 16 BIT A/M
+        !AL
+        JMP     .TARGET
         }
 ;*
 ;* ACCUM/MEM SIZE MACROS
@@ -764,12 +791,12 @@ DUP     LDA     TOS,S
 ;*
 ZERO    PEA     $0000
         JMP     NEXTOP
-CFFB    +INC_IP
+CFFB    INY                     ;+INC_IP
         LDA     (IP),Y
         ORA     #$FF00
         PHA
         JMP     NEXTOP
-CB      +INC_IP
+CB      INY                     ;+INC_IP
         LDA     (IP),Y
         AND     #$00FF
         PHA
@@ -777,16 +804,20 @@ CB      +INC_IP
 ;*
 ;* LOAD ADDRESS & LOAD CONSTANT WORD (SAME THING, WITH OR WITHOUT FIXUP)
 ;*
-LA      =       *
-CW      INY     ;+INC_IP
+LA      INY                     ;+INC_IP
         LDA     (IP),Y
         PHA
-        +INC_IP
+        INY                     ;+INC_IP
+        +FIXJMP_IP NEXTOP
+CW      INY                     ;+INC_IP
+        LDA     (IP),Y
+        PHA
+        INY                     ;+INC_IP
         JMP     NEXTOP
 ;*
 ;* CONSTANT STRING
 ;*
-CS      INY     ;+INC_IP
+CS      INY                     ;+INC_IP
         TYA                     ; NORMALIZE IP AND SAVE STRING ADDR ON ESTK
         CLC
         ADC     IP
@@ -796,7 +827,7 @@ CS      INY     ;+INC_IP
         TAY
         JMP     NEXTOP
 ;
-CSX     INY     ;+INC_IP
+CSX     INY                     ;+INC_IP
         TYA                     ; NORMALIZE IP
         CLC
         ADC     IP
@@ -911,17 +942,20 @@ LWX     TYX
 ;*
 ;* LOAD ADDRESS OF LOCAL FRAME OFFSET
 ;*
-LLA     +INC_IP
-        LDA     (IP),Y
+LLA     INY                     ;+INC_IP
+        BMI     +
+-       LDA     (IP),Y
         AND     #$00FF
         CLC
         ADC     IFP
         PHA
         JMP     NEXTOP
++       +FIX_IP
+        BPL     -
 ;*
 ;* LOAD VALUE FROM LOCAL FRAME OFFSET
 ;*
-LLB     +INC_IP
+LLB     INY                     ;+INC_IP
         TYX
         LDA     (IP),Y
         TAY
@@ -930,7 +964,7 @@ LLB     +INC_IP
         PHA
         TXY
         JMP     NEXTOP
-LLW     +INC_IP
+LLW     INY                     ;+INC_IP
         TYX
         LDA     (IP),Y
         TAY
@@ -939,7 +973,7 @@ LLW     +INC_IP
         TXY
         JMP     NEXTOP
 ;
-LLBX    +INC_IP
+LLBX    INY                     ;+INC_IP
         TYX
         LDA     (IP),Y
         TAY
@@ -950,7 +984,7 @@ LLBX    +INC_IP
         PHA
         TXY
         JMP     NEXTOP
-LLWX    +INC_IP
+LLWX    INY                     ;+INC_IP
         TYX
         LDA     (IP),Y
         TAY
@@ -964,16 +998,16 @@ LLWX    +INC_IP
 ;* LOAD VALUE FROM ABSOLUTE ADDRESS
 ;*
 !IF SELFMODIFY {
-LAB     INY     ;+INC_IP
+LAB     INY                     ;+INC_IP
         LDA     (IP),Y
         STA     LABLDX+1
 LABLDX  LDX     $FFFF
         TXA
         PHA
-        +INC_IP
+        INY                     ;+INC_IP
         JMP     NEXTOP
 } ELSE {
-LAB     INY     ;+INC_IP
+LAB     INY                     ;+INC_IP
         LDA     (IP),Y
         STA     TMP
         TYA                     ; QUICKY CLEAR OUT MSB
@@ -981,19 +1015,19 @@ LAB     INY     ;+INC_IP
         LDA     (TMP)
         +ACCMEM16               ; 16 BIT A/M
         PHA
-        +INC_IP
+        INY                     ;+INC_IP
         JMP     NEXTOP
 }
-LAW     INY     ;+INC_IP
+LAW     INY                     ;+INC_IP
         LDA     (IP),Y
         STA     TMP
         LDA     (TMP)
         PHA
-        +INC_IP
+        INY                     ;+INC_IP
         JMP     NEXTOP
 ;
 !IF SELFMODIFY {
-LABX    INY     ;+INC_IP
+LABX    INY                     ;+INC_IP
         LDA     (IP),Y
         STA     LABXLDX+1
         STX     ALTRDOFF
@@ -1001,10 +1035,10 @@ LABXLDX LDX     $FFFF
         STX     ALTRDON
         TXA
         PHA
-        +INC_IP
+        INY                     ;+INC_IP
         JMP     NEXTOP
 } ELSE {
-LABX    INY     ;+INC_IP
+LABX    INY                     ;+INC_IP
         LDA     (IP),Y
         STA     TMP
         TYA                     ; QUICKY CLEAR OUT MSB
@@ -1014,17 +1048,17 @@ LABX    INY     ;+INC_IP
         +ACCMEM16               ; 16 BIT A/M
         STX     ALTRDON
         PHA
-        +INC_IP
+        INY                     ;+INC_IP
         JMP     NEXTOP
 }
-LAWX    INY     ;+INC_IP
+LAWX    INY                     ;+INC_IP
         LDA     (IP),Y
         STA     TMP
         STX     ALTRDOFF
         LDA     (TMP)
         STX     ALTRDON
         PHA
-        +INC_IP
+        INY                     ;+INC_IP
         JMP     NEXTOP
 ;
 ;*
@@ -1060,8 +1094,9 @@ SW      TYX
 ;* STORE VALUE TO LOCAL FRAME OFFSET
 ;*
 !IF SELFMODIFY {
-SLB     +INC_IP
-        LDA     (IP),Y
+SLB     INY                     ;+INC_IP
+        BMI     +
+-       LDA     (IP),Y
         AND     #$00FF
         CLC
         ADC     IFP
@@ -1070,8 +1105,10 @@ SLB     +INC_IP
         TAX
 SLBSTX  STX     $FFFF
         JMP     NEXTOP
++       +FIX_IP
+        BPL     -
 } ELSE {
-SLB     +INC_IP
+SLB     INY                     ;+INC_IP
         TYX
         LDA     (IP),Y
         TAY
@@ -1080,21 +1117,21 @@ SLB     +INC_IP
         STA     (IFP),Y
         +ACCMEM16               ; 16 BIT A/M
         TXY
-        JMP     NEXTOP
+        +FIXJMP_IP NEXTOP
 }
-SLW     +INC_IP
+SLW     INY                     ;+INC_IP
         LDA     (IP),Y
         TYX
         TAY
         PLA
         STA     (IFP),Y
         TXY
-        JMP     NEXTOP
+        +FIXJMP_IP NEXTOP
 ;*
 ;* STORE VALUE TO LOCAL FRAME OFFSET WITHOUT POPPING STACK
 ;*
 !IF SELFMODIFY {
-DLB     +INC_IP
+DLB     INY                     ;+INC_IP
         LDA     (IP),Y
         AND     #$00FF
         CLC
@@ -1105,7 +1142,7 @@ DLB     +INC_IP
 DLBSTX  STX     $FFFF
         JMP     NEXTOP
 } ELSE {
-DLB     +INC_IP
+DLB     INY                     ;+INC_IP
         TYX
         +ACCMEM8                ; 8 BIT A/M
         LDA     (IP),Y
@@ -1116,7 +1153,7 @@ DLB     +INC_IP
         TXY
         JMP     NEXTOP
 }
-DLW     +INC_IP
+DLW     INY                     ;+INC_IP
         LDA     (IP),Y
         TYX
         TAY
@@ -1128,61 +1165,61 @@ DLW     +INC_IP
 ;* STORE VALUE TO ABSOLUTE ADDRESS
 ;*
 !IF SELFMODIFY {
-SAB     INY     ;+INC_IP
+SAB     INY                     ;+INC_IP
         LDA     (IP),Y
         STA     SABSTX+1
         PLA
         TAX
 SABSTX  STX     $FFFF
-        +INC_IP
-        JMP     NEXTOP
+        INY                     ;+INC_IP
+        +FIXJMP_IP NEXTOP
 } ELSE {
-SAB     INY     ;+INC_IP
+SAB     INY                     ;+INC_IP
         LDA     (IP),Y
         STA     TMP
         PLA
         +ACCMEM8                ; 8 BIT A/M
         STA     (TMP)
         +ACCMEM16               ; 16 BIT A/M
-        +INC_IP
-        JMP     NEXTOP
+        INY                     ;+INC_IP
+        +FIXJMP_IP NEXTOP
 }
-SAW     INY     ;+INC_IP
+SAW     INY                     ;+INC_IP
         LDA     (IP),Y
         STA     TMP
         PLA
         STA     (TMP)
-        +INC_IP
-        JMP     NEXTOP
+        INY                     ;+INC_IP
+        +FIXJMP_IP NEXTOP
 ;*
 ;* STORE VALUE TO ABSOLUTE ADDRESS WITHOUT POPPING STACK
 ;*
 !IF SELFMODIFY {
-DAB     INY     ;+INC_IP
+DAB     INY                     ;+INC_IP
         LDA     (IP),Y
         STA     DABSTX+1
         LDA     TOS,S
         TAX
 DABSTX  STX     $FFFF
-        +INC_IP
+        INY                     ;+INC_IP
         JMP     NEXTOP
 } ELSE {
-DAB     INY     ;+INC_IP
+DAB     INY                     ;+INC_IP
         LDA     (IP),Y
         STA     TMP
         +ACCMEM8                ; 8 BIT A/M
         LDA     TOS,S
         STA     (TMP)
         +ACCMEM16               ; 16 BIT A/M
-        +INC_IP
+        INY                     ;+INC_IP
         JMP     NEXTOP
 }
-DAW     INY     ;+INC_IP
+DAW     INY                     ;+INC_IP
         LDA     (IP),Y
         STA     TMP
         LDA     TOS,S
         STA     (TMP)
-        +INC_IP
+        INY                     ;+INC_IP
         JMP     NEXTOP
 ;*
 ;* COMPARES
@@ -1245,16 +1282,16 @@ ISLT    PLA
 ;*
 BRTRU   PLA
         BNE     BRNCH
-NOBRNCH INY     ;+INC_IP
-        +INC_IP
-        JMP     NEXTOP
+NOBRNCH INY                     ;+INC_IP
+        INY                     ;+INC_IP
+        +FIXJMP_IP NEXTOP
 BRFLS   PLA
         BNE     NOBRNCH
-BRNCH   TYA                 ; FLATTEN IP
+BRNCH   TYA                     ; FLATTEN IP
         CLC
         ADC     IP
-        INY     ;+INC_IP
-        CLC                 ; ADD BRANCH OFFSET
+        INY                     ;+INC_IP
+        CLC                     ; ADD BRANCH OFFSET
         ADC     (IP),Y
         STA     IP
         LDY     #$01
@@ -1293,7 +1330,7 @@ IBRNCH  PLA
 ;*
 ;* CALL INTO ABSOLUTE ADDRESS (NATIVE CODE)
 ;*
-CALL    INY     ;+INC_IP
+CALL    INY                     ;+INC_IP
         LDA     (IP),Y
         INY
         BNE     EMUSTK
@@ -1409,7 +1446,7 @@ EMUSTK  STA     TMP
 ;*
 ;* CALL INTO ABSOLUTE ADDRESS (NATIVE CODE)
 ;*
-CALLX   INY     ;+INC_IP
+CALLX   INY                     ;+INC_IP
         LDA     (IP),Y
         INY
         BNE     EMUSTKX
@@ -1573,12 +1610,12 @@ ENTER   PEI     (IFP)           ; SAVE ON STACK FOR LEAVE
 ;*
 ;* LEAVE FUNCTION
 ;*
-LEAVEX  INY     ;+INC_IP
+LEAVEX  INY                     ;+INC_IP
         +ACCMEM8                ; 8 BIT A/M
         LDA     (IP),Y          ; DEALLOCATE POOL + FRAME
         STA     ALTRDOFF
         BRA     +
-LEAVE   INY     ;+INC_IP
+LEAVE   INY                     ;+INC_IP
         +ACCMEM8                ; 8 BIT A/M
         LDA     (IP),Y          ; DEALLOCATE POOL + FRAME
 +       STA     TMPL
