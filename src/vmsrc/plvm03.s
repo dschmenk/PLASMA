@@ -131,7 +131,7 @@ INTERP  PLA
         PLA
         ADC     #$00
         STA     IPH
-        
+
         LDA     IFPH
         PHA                     ; SAVE ON STACK FOR LEAVE/RET
         LDA     IFPL
@@ -161,7 +161,7 @@ XINTERP PLA
         LDA     (TMP),Y
         STA     IPL
         DEY
-        
+
         LDA     IFPH
         PHA                     ; SAVE ON STACK FOR LEAVE/RET
         LDA     IFPL
@@ -273,13 +273,7 @@ MULLP   LSR     TMPH            ; MULTPLRH
 ;*
 ;* NEGATE TOS
 ;*
-NEG     LDA     #$00
-        SEC
-        SBC     ESTKL,X
-        STA     ESTKL,X
-        LDA     #$00
-        SBC     ESTKH,X
-        STA     ESTKH,X
+NEG     JSR     _NEG
         JMP     NEXTOP
 ;*
 ;* DIV TOS-1 BY TOS
@@ -432,13 +426,13 @@ SHL     STY     IPY
         SBC     #$08
 SHL1    TAY
         BEQ     SHL3
-SHL2    ASL     ESTKL+1,X
+        LDA     ESTKL+1,X
+SHL2    ASL
         ROL     ESTKH+1,X
         DEY
         BNE     SHL2
+        STA     ESTKL+1,X
 SHL3    LDY     IPY
-;       INX
-;       JMP     NEXTOP
         JMP     DROP
 ;*
 ;* SHIFT TOS-1 RIGHT BY TOS
@@ -466,8 +460,6 @@ SHR3    CMP     #$80
         BNE     SHR3
         STA     ESTKH+1,X
 SHR4    LDY     IPY
-;       INX
-;       JMP     NEXTOP
         JMP     DROP
 ;*
 ;* LOGICAL NOT
@@ -988,24 +980,22 @@ BRFLS   INX
         ORA     ESTKL-1,X
         BNE     NOBRNCH
 BRNCH   TYA                     ; FLATTEN IP
-        CLC
+        SEC
         ADC     IPL
         STA     TMPL
         LDA     #$00
+        TAY
         ADC     IPH
         STA     TMPH            ; ADD BRANCH OFFSET
-        INY
-        LDA     (IP),Y
-        CLC
+        LDA     (TMP),Y
+        ;CLC                    ; BETTER NOT CARRY OUT OF IP+Y
         ADC     TMPL
-        STA     TMPL
+        STA     IPL
         INY
-        LDA     (IP),Y
+        LDA     (TMP),Y
         ADC     TMPH
         STA     IPH
-        LDA     TMPL
-        STA     IPL
-        LDY     #$01
+        DEY
         JMP     FETCHOP
 BREQ    INX
         LDA     ESTKL-1,X
@@ -1044,19 +1034,26 @@ IBRNCH  LDA     IPL
         LDA     IPH
         ADC     ESTKH,X
         STA     IPH
-;       INX
-;       JMP     NEXTOP
         JMP     DROP
+;*
+;* INDIRECT CALL TO ADDRESS (NATIVE CODE)
+;*
+ICAL    LDA     ESTKL,X
+        STA     CALLADR+1
+        LDA     ESTKH,X
+        STA     CALLADR+2
+        INX
+        BNE     _CALL
 ;*
 ;* CALL INTO ABSOLUTE ADDRESS (NATIVE CODE)
 ;*
-CALL    INY     ;+INC_IP
+CALL    INY                     ;+INC_IP
         LDA     (IP),Y
         STA     CALLADR+1
-        INY     ;+INC_IP
+        INY                     ;+INC_IP
         LDA     (IP),Y
         STA     CALLADR+2
-        TYA
+_CALL   TYA
         CLC
         ADC     IPL
         PHA
@@ -1075,32 +1072,6 @@ CALLADR JSR     $FFFF
         LDY     #$01
         JMP     FETCHOP
 ;*
-;* INDIRECT CALL TO ADDRESS (NATIVE CODE)
-;*
-ICAL    LDA     ESTKL,X
-        STA     ICALADR+1
-        LDA     ESTKH,X
-        STA     ICALADR+2
-        INX
-        TYA
-        CLC
-        ADC     IPL
-        PHA
-        LDA     IPH
-        ADC     #$00
-        PHA
-        LDA     IPX
-        PHA
-ICALADR JSR     $FFFF
-        PLA
-        STA     IPX
-        PLA
-        STA     IPH
-        PLA
-        STA     IPL
-        LDY     #$01
-        JMP     FETCHOP
-;*
 ;* ENTER FUNCTION WITH FRAME SIZE AND PARAM COUNT
 ;*
 ENTER   LDA     IFPH
@@ -1109,7 +1080,6 @@ ENTER   LDA     IFPH
         PHA
         INY
         LDA     (IP),Y
-        PHA                     ; SAVE ON STACK FOR LEAVE
         EOR     #$FF
         SEC
         ADC     PPL

@@ -660,10 +660,12 @@ SHL     STY     IPY
         SBC     #$08
 SHL1    TAY
         BEQ     SHL3
-SHL2    ASL     ESTKL+1,X
+        LDA     ESTKL+1,X
+SHL2    ASL
         ROL     ESTKH+1,X
         DEY
         BNE     SHL2
+        STA     ESTKL+1,X
 SHL3    LDY     IPY
         JMP     DROP
 ;*

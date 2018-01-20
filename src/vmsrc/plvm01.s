@@ -88,7 +88,7 @@ MULLP   LSR     TMPH            ; MULTPLRH
         ADC     ESTKH+1,X       ; PRODH
 +       ASL     ESTKL,X         ; MULTPLNDL
         ROL     ESTKH,X         ; MULTPLNDH
-        DEY 
+        DEY
         BNE     MULLP
         STA     ESTKH+1,X       ; PRODH
         LDY     IPY
@@ -167,13 +167,7 @@ DIVMOD  JSR     _DIV
 ;*
 ;* NEGATE TOS
 ;*
-NEG     LDA     #$00
-        SEC
-        SBC     ESTKL,X
-        STA     ESTKL,X
-        LDA     #$00
-        SBC     ESTKH,X
-        STA     ESTKH,X
+NEG     JSR     _NEG
         JMP     NEXTOP
 ;*
 ;* INTERNAL DIVIDE ALGORITHM
@@ -191,7 +185,7 @@ _DIV    STY     IPY
         LDA     #$00
         STA     TMPL            ; REMNDRL
         STA     TMPH            ; REMNDRH
-        LDA     ESTKH,X 
+        LDA     ESTKH,X
         AND     #$80
         STA     DVSIGN
         BPL     +
@@ -309,10 +303,12 @@ SHL STY IPY
         SBC     #$08
 SHL1    TAY
         BEQ     SHL3
-SHL2    ASL     ESTKL+1,X
+        LDA     ESTKL+1,X
+SHL2    ASL
         ROL     ESTKH+1,X
         DEY
         BNE     SHL2
+        STA     ESTKL+1,X
 SHL3    LDY     IPY
         JMP     DROP
 ;*
@@ -802,24 +798,22 @@ BRFLS   INX
         ORA     ESTKL-1,X
         BNE     NOBRNCH
 BRNCH   TYA                     ; FLATTEN IP
-        CLC
+        SEC
         ADC     IPL
         STA     TMPL
         LDA     #$00
+        TAY
         ADC     IPH
         STA     TMPH            ; ADD BRANCH OFFSET
-        INY
-        LDA     (IP),Y
-        CLC
+        LDA     (TMP),Y
+        ;CLC                    ; BETTER NOT CARRY OUT OF IP+Y
         ADC     TMPL
-        STA     TMPL
+        STA     IPL
         INY
-        LDA     (IP),Y
+        LDA     (TMP),Y
         ADC     TMPH
         STA     IPH
-        LDA     TMPL
-        STA     IPL
-        LDY     #$01
+        DEY
         JMP     FETCHOP
 BREQ    INX
         LDA     ESTKL-1,X
@@ -860,6 +854,23 @@ IBRNCH  LDA     IPL
         STA     IPH
         JMP     DROP
 ;*
+;* INDIRECT CALL TO ADDRESS (NATIVE CODE)
+;*
+ICAL    LDA     ESTKL,X
+!IF     SELFMODIFY {
+        STA     CALLADR+1
+} ELSE {
+        STA     TMPL
+}
+        LDA     ESTKH,X
+!IF     SELFMODIFY {
+        STA     CALLADR+2
+} ELSE {
+        STA     TMPH
+}
+        INX
+        BNE     _CALL
+;*
 ;* CALL INTO ABSOLUTE ADDRESS (NATIVE CODE)
 ;*
 CALL    INY     ;+INC_IP
@@ -876,7 +887,7 @@ CALL    INY     ;+INC_IP
 } ELSE {
         STA     TMPH
 }
-        TYA
+_CALL   TYA
         CLC
         ADC     IPL
         PHA
@@ -885,40 +896,6 @@ CALL    INY     ;+INC_IP
         PHA
 !IF     SELFMODIFY {
 CALLADR JSR $FFFF
-} ELSE {
-        JSR     JMPTMP
-}
-        PLA
-        STA     IPH
-        PLA
-        STA     IPL
-        LDY     #$01
-        JMP     FETCHOP
-;*
-;* INDIRECT CALL TO ADDRESS (NATIVE CODE)
-;*
-ICAL    LDA     ESTKL,X
-!IF     SELFMODIFY {
-        STA     ICALADR+1
-} ELSE {
-        STA     TMPL
-}
-        LDA     ESTKH,X
-!IF     SELFMODIFY {
-        STA     ICALADR+2
-} ELSE {
-        STA     TMPH
-}
-        INX
-        TYA
-        CLC
-        ADC     IPL
-        PHA
-        LDA     IPH
-        ADC     #$00
-        PHA
-!IF     SELFMODIFY {
-ICALADR JSR     $FFFF
 } ELSE {
         JSR     JMPTMP
 }
