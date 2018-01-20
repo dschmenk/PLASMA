@@ -1285,7 +1285,7 @@ BRNCH   TYA                     ; FLATTEN IP
         CLC
         ADC     IP
         INY                     ;+INC_IP
-        CLC                     ; ADD BRANCH OFFSET
+        ;CLC                    ; ADD BRANCH OFFSET (BETTER NOT CARRY OUT OF IP+Y)
         ADC     (IP),Y
         STA     IP
         LDY     #$01

@@ -1363,24 +1363,22 @@ BRFLS   INX
         ORA     ESTKL-1,X
         BNE     NOBRNCH
 BRNCH   TYA                     ; FLATTEN IP
-        CLC
+        SEC
         ADC     IPL
         STA     TMPL
         LDA     #$00
+        TAY
         ADC     IPH
         STA     TMPH            ; ADD BRANCH OFFSET
-        INY
-        LDA     (IP),Y
+        LDA     (TMP),Y
         CLC
         ADC     TMPL
-        STA     TMPL
+        STA     IPL
         INY
-        LDA     (IP),Y
+        LDA     (TMP),Y
         ADC     TMPH
         STA     IPH
-        LDA     TMPL
-        STA     IPL
-        LDY     #$01
+        DEY
         JMP     FETCHOP
 BREQ    INX
         LDA     ESTKL-1,X
