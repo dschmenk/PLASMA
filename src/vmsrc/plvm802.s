@@ -88,26 +88,20 @@ NOS     =       $03             ; TOS-1
 ;+
 ;        }
 !MACRO  FIX_IP  {
-        SEP     #$20            ; 8 BIT A/M
-        !AS
-        INC     IPH
         TYA
-        AND     #$7F
-        TAY
-        REP     #$20            ; 16 BIT A/M
-        !AL
+        CLC
+        ADC     IP
+        STA     IP
+        LDY     #$00
         }
 !MACRO  FIXJMP_IP   .TARGET {
         BMI     +
         JMP     .TARGET
-+       SEP     #$20            ; 8 BIT A/M
-        !AS
-        INC     IPH
         TYA
-        AND     #$7F
-        TAY
-        REP     #$20            ; 16 BIT A/M
-        !AL
+        CLC
+        ADC     IP
+        STA     IP
+        LDY     #$00
         JMP     .TARGET
         }
 ;*

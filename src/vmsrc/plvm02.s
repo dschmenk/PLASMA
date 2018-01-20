@@ -65,18 +65,24 @@ INTERP  =       $03D0
 ;+
 ;        }
 !MACRO  FIX_IP  {
-        INC     IPH
         TYA
-        AND     #$7F
-        TAY
+        CLC
+        ADC     IPL
+        STA     IPL
+        BCC     +
+        INC     IPH
++       LDY     #$00
         }
 !MACRO  FIXJMP_IP   .TARGET {
         BMI     +
         JMP     .TARGET
-+       INC     IPH
-        TYA
-        AND     #$7F
-        TAY
++       TYA
+        CLC
+        ADC     IPL
+        STA     IPL
+        BCC     +
+        INC     IPH
++       LDY     #$00
         JMP     .TARGET
         }
 ;******************************

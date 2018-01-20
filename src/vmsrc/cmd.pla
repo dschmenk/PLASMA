@@ -686,6 +686,94 @@ asm lookuptbl(dci, tbl)#1
 +       INC     DSTH
         BNE     ---
 end
+// def lookupidx(esd, index)
+//    word sym
+//    while ^esd
+//        sym = esd
+//        esd = sym + dcitos(sym, @str)
+//        if esd->0 & $10 and esd->1 == index
+//            return sym
+//        fin
+//        esd = esd + 3
+//    loop
+//end
+asm lookupidx(esd, index)#1
+        LDA     ESTKL,X
+        STA     TMPL
+        INX
+---     LDA     ESTKH,X
+        STA     SRCH
+        LDA     ESTKL,X
+--      STA     SRCL
+        LDY     #$00
+-       LDA     (SRC),Y
+        BPL     +
+        INY
+        BNE     -
++       BEQ     ++              ; END OF ESD
+        INY
+        LDA     (SRC),Y
+        INY
+        AND     #$10            ; EXTERN FLAG?
+        BEQ     +
+        LDA     (SRC),Y
+        CMP     TMPL
+        BEQ     +++             ; MATCH
++       INY
+        TYA
+        SEC
+        ADC     SRCL
+        STA     ESTKL,X         ; SYM PTRL
+        BCC     --
+        INC     ESTKH,X         ; SYM PTRH
+        BNE     ---
+++      STA     ESTKL,X         ; END OF ESD
+        STA     ESTKH,X
++++     RTS
+end
+//def lookupdef(addr, deftbl)#1
+//    while deftbl->0 == $20
+//        if deftbl=>3 == addr
+//            return deftbl
+//        fin
+//        deftbl = deftbl + 5
+//    loop
+//    return 0
+//end
+asm lookupdef(addr, deftbl)#1
+        LDA     ESTKH,X
+        STA     SRCH
+        LDA     ESTKL,X
+        STA     SRCL
+        INX
+-       LDY     #$00
+        LDA     (SRC),Y
+        CMP     #$20            ; JSR OPCODE?
+        BNE     ++
+        LDY     #$03
+        LDA     (SRC),Y
+        CMP     ESTKL,X
+        BNE     +
+        INY
+        LDA     (SRC),Y
+        CMP     ESTKH,X
+        BNE     +
+        LDA     SRCL            ; MATCH
+        STA     ESTKL,X
+        LDA     SRCH
+        STA     ESTKH,X
+        RTS
++       LDA     #$05
+        CLC
+        ADC     SRCL
+        STA     SRCL
+        BCC     -
+        INC     SRCH
+        BNE     -
+++      STY     ESTKL,X
+        STY     ESTKH,X
+        RTS
+end
 //
 // Cheap and dirty print integer
 //
@@ -857,43 +945,27 @@ end
 def lookupextern(esd, index)#1
     word sym, addr
     byte str[16]
-    while ^esd
-        sym = esd
-        esd = sym + dcitos(sym, @str)
-        if esd->0 & $10 and esd->1 == index
-            addr = lookuptbl(sym, symtbl)
-            if !addr
-                perr = $81
-                cout('?'); prstr(@str); crout
-            fin
-            return addr
+    sym = lookupidx(esd, index)
+    if sym
+        addr = lookuptbl(sym, symtbl)
+        if !addr
+            perr = $81
+            dcitos(sym, @str)
+            cout('?'); prstr(@str); crout
         fin
-        esd = esd + 3
-    loop
+        return addr
+    fin
     return 0
 end
 def adddef(bank, addr, deflast)#1
     word defentry
     defentry = *deflast
     *deflast = defentry + 5
-    if bank
-        defentry=>1 = $03DC // JSR $03DC (AUX MEM INTERP)
-    else
-        defentry=>1 = $03D6 // JSR $03D6 (MAIN MEM INTERP)
-    fin
     defentry->0 = $20
+    defentry=>1 = bank ?? $03DC :: $03D6 // JSR $03DC (AUX MEM INTERP) or $03D6 (MAIN MEM INTERP)
     defentry=>3 = addr
     defentry->5 = 0 // NULL out next entry
     return defentry
-end
-def lookupdef(addr, deftbl)#1
-    while deftbl->0 == $20
-        if deftbl=>3 == addr
-            return deftbl
-        fin
-        deftbl = deftbl + 5
-    loop
-    return 0
 end
 def loadmod(mod)#1
     word rdlen, modsize, bytecode, codefix, defofst, defcnt, init, fixup
