@@ -1371,7 +1371,7 @@ BRNCH   TYA                     ; FLATTEN IP
         ADC     IPH
         STA     TMPH            ; ADD BRANCH OFFSET
         LDA     (TMP),Y
-        CLC
+        ;CLC                    ; BETTER NOT CARRY OUT OF IP+Y
         ADC     TMPL
         STA     IPL
         INY
