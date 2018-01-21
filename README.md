@@ -1,4 +1,4 @@
-# 1/17/2018 Developer Preview 1.0 Available
+# 1/20/2018 Developer Preview #2 1.0 Available
 Download and read the Release Notes:
 https://github.com/dschmenk/PLASMA/blob/master/doc/Preview%20Version%201.0.md
 
