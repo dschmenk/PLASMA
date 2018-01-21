@@ -1,16 +1,16 @@
-# Developer Preview Version 1.0
+# Developer Preview #2 Version 1.0
 
 PLASMA is approaching a 1.0 release after _only_ 12 years. Hopefully it was worth the wait. To work out the remaining kinks, this Developer Preview will allow programmers to kick the tires, so to speak, to provide feedback on the system.
 
 Download the two disk images:
 
-[PLASMA Preview 1.0 System](https://github.com/dschmenk/PLASMA/blob/master/PLASMA-PRE1.PO?raw=true)
+[PLASMA Preview #2 1.0 System](https://github.com/dschmenk/PLASMA/blob/master/PLASMA-PRE2.PO?raw=true)
 
 [PLASMA 1.0 Build System](https://github.com/dschmenk/PLASMA/blob/master/PLASMA-BLD1.PO?raw=true)
 
 PLASMA can be run from floppies, System in drive 1, and Build in drive 2. All Apple II computers are supported, from the earliest Rev 0 to the last Apple IIGS. However, an accelerator and hard disk/CFFA are highly recommended. The recommended mass storage installation looks like:
 
-System Files => /HARDISK/PLASMA.PRE1/
+System Files => /HARDISK/PLASMA.PRE2/
 
 Build Files => /HARDISK/BLD/
 
@@ -64,7 +64,7 @@ This is a Developers Preview, so sample source code is included from the project
 
 ## Issues
 
-- All the modules and runtime are written mostly in PLASMA; the compiler and editor as well. This means that there may be some startup delay as the PLASMA module loader reads in the module dependencies and performs dynamic linking. The goal is to spend considerable effort improving the load time before the final 1.0 release. But a 1 MHz, 8 bit CPU interpreting bytecodes is never going to match a modern computer. As noted earlier, an accelerator and mass storage are your (and PLASMA's) friend.
+- All the modules and runtime are written mostly in PLASMA; the compiler and editor as well. This means that there may be some startup delay as the PLASMA module loader reads in the module dependencies and performs dynamic linking. But a 1 MHz, 8 bit CPU interpreting bytecodes is never going to match a modern computer. As noted earlier, an accelerator and mass storage are your (and PLASMA's) friend.
 
 - Many modules in the project aren't included in the Developer Preview. Only those modules that have gotten a good workout are included. The rest of the modules will be tested and included for the final 1.0 release. Feel free to try them out, and give feedback. Chances are they will work out of the box, or just a small tweak.
 
@@ -129,6 +129,8 @@ To generate compiler warning for this issue, and a few others, use the `-W` opti
 
 12. Library Documentation. Preliminary documentation is available on the Wiki: https://github.com/dschmenk/PLASMA/wiki
 
+13. Significant effort has gone into VM tuning and speeding up module loading/dynamic linking.
+
 # Thanks
 
 I wish to thank the people who have contributed the the PLASMA project. They have greatly improved the development of the language and documentation:
@@ -138,6 +140,7 @@ I wish to thank the people who have contributed the the PLASMA project. They hav
 - Peter Ferrie: Assembly optimizer extraordinaire. He has made significant improvements into the code footprint in PLASMA so all the functionality can exist in just a few bytes.
 - David Schmidt (DaveX): His help in documentation have made it much more accessible and professional. Of course any errors are all his. Just kidding, they're mine ;-)
 - Andy Werner (6502.org): Catching the grammatical errors that I ain't no good at.
+- John Brooks: Apple II Guru par excellence. His insights got 10% performance increase out of the VM.
 
 Dave Schmenk
 http://schmenk.is-a-geek.com
