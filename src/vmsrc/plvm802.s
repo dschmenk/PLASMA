@@ -74,19 +74,6 @@ NOS     =       $03             ; TOS-1
 ;*
 ;* INTERPRETER INSTRUCTION POINTER INCREMENT MACRO
 ;*
-;!MACRO  INC_IP  {
-;        INY
-;        BPL     +
-;        SEP     #$20            ; 8 BIT A/M
-;        !AS
-;        INC    IPH
-;        TYA
-;        AND     #$7F
-;        TAY
-;        REP     #$20            ; 16 BIT A/M
-;        !AL
-;+
-;        }
 !MACRO  FIX_IP  {
         TYA
         CLC
@@ -95,6 +82,17 @@ NOS     =       $03             ; TOS-1
         LDY     #$00
         }
 !MACRO  FIXJMP_IP   .TARGET {
+        BMI     +
+        JMP     .TARGET
++       TYA
+        CLC
+        ADC     IP
+        STA     IP
+        LDY     #$00
+        JMP     .TARGET
+        }
+!MACRO  INCJMP_IP   .TARGET {
+        INY
         BMI     +
         JMP     .TARGET
 +       TYA
@@ -747,15 +745,6 @@ SHR     PLA
         STA     TOS,S
 SHREX   JMP     NEXTOP
 ;*
-;* LOGICAL NOT
-;*
-LNOT    LDA     TOS,S
-        BEQ     LNOT1
-        LDA     #$0001
-LNOT1   DEC
-        STA     TOS,S
-        JMP     NEXTOP
-;*
 ;* LOGICAL AND
 ;*
 LAND    PLA
@@ -781,6 +770,13 @@ DUP     LDA     TOS,S
         PHA
         JMP     NEXTOP
 ;*
+;* LOGICAL NOT
+;*
+LNOT    PLA
+        BNE     ZERO
+        PEA     $FFFF
+        JMP     NEXTOP
+;*
 ;* CONSTANT
 ;*
 ZERO    PEA     $0000
@@ -801,8 +797,7 @@ CB      INY                     ;+INC_IP
 LA      INY                     ;+INC_IP
         LDA     (IP),Y
         PHA
-        INY                     ;+INC_IP
-        +FIXJMP_IP NEXTOP
+        +INCJMP_IP NEXTOP
 CW      INY                     ;+INC_IP
         LDA     (IP),Y
         PHA
@@ -1165,8 +1160,7 @@ SAB     INY                     ;+INC_IP
         PLA
         TAX
 SABSTX  STX     $FFFF
-        INY                     ;+INC_IP
-        +FIXJMP_IP NEXTOP
+        +INCJMP_IP NEXTOP
 } ELSE {
 SAB     INY                     ;+INC_IP
         LDA     (IP),Y
@@ -1175,16 +1169,14 @@ SAB     INY                     ;+INC_IP
         +ACCMEM8                ; 8 BIT A/M
         STA     (TMP)
         +ACCMEM16               ; 16 BIT A/M
-        INY                     ;+INC_IP
-        +FIXJMP_IP NEXTOP
+        +INCJMP_IP NEXTOP
 }
 SAW     INY                     ;+INC_IP
         LDA     (IP),Y
         STA     TMP
         PLA
         STA     (TMP)
-        INY                     ;+INC_IP
-        +FIXJMP_IP NEXTOP
+        +INCJMP_IP NEXTOP
 ;*
 ;* STORE VALUE TO ABSOLUTE ADDRESS WITHOUT POPPING STACK
 ;*
@@ -1277,8 +1269,7 @@ ISLT    PLA
 BRTRU   PLA
         BNE     BRNCH
 NOBRNCH INY                     ;+INC_IP
-        INY                     ;+INC_IP
-        +FIXJMP_IP NEXTOP
+        +INCJMP_IP NEXTOP
 BRFLS   PLA
         BNE     NOBRNCH
 BRNCH   TYA                     ; FLATTEN IP
