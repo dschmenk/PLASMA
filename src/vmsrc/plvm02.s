@@ -52,48 +52,12 @@ OPIDX   =       FETCHOP+6
 OPPAGE  =       OPIDX+1
 STRBUF  =       $0280
 INTERP  =       $03D0
-;*
-;* INTERPRETER INSTRUCTION POINTER INCREMENT MACRO
-;*
-!MACRO  FIX_IP  {
-        TYA
-        CLC
-        ADC     IPL
-        STA     IPL
-        BCC     +
-        INC     IPH
-+       LDY     #$00
-        }
-!MACRO  FIXJMP_IP   .TARGET {
-        BMI     +
-        JMP     .TARGET
-+       TYA
-        CLC
-        ADC     IPL
-        STA     IPL
-        BCC     +
-        INC     IPH
-+       LDY     #$00
-        JMP     .TARGET
-        }
-!MACRO  INCJMP_IP   .TARGET {
-        INY
-        JMP     .TARGET
-+       TYA
-        CLC
-        ADC     IPL
-        STA     IPL
-        BCC     +
-        INC     IPH
-+       LDY     #$00
-        JMP     .TARGET
-        }
 ;******************************
 ;*                            *
 ;* INTERPRETER INITIALIZATION *
 ;*                            *
 ;******************************
-*        =      $2000
+*       =       $2000
         LDX     #$FE
         TXS
         LDX    #$00
@@ -753,17 +717,22 @@ CB      LDA     #$00
 ;*
 ;* LOAD ADDRESS & LOAD CONSTANT WORD (SAME THING, WITH OR WITHOUT FIXUP)
 ;*
-LA      DEX
-        INY                     ;+INC_IP
+-       TYA                     ; RENORMALIZE IP
+        CLC
+        ADC     IPL
+        STA     IPL
+        BCC     +
+        INC     IPH
++       LDY     #$FF
+LA      INY                     ;+INC_IP
+        BMI     -
+        DEX
         LDA     (IP),Y
         STA     ESTKL,X
         INY
-        BMI     +
--       LDA     (IP),Y
+        LDA     (IP),Y
         STA     ESTKH,X
         JMP     NEXTOP
-+       +FIX_IP
-        BPL     -
 CW      DEX
         INY                     ;+INC_IP
         LDA     (IP),Y
@@ -791,7 +760,7 @@ CS      DEX
         TAY
         JMP     NEXTOP
 ;
-CSX DEX
+CSX     DEX
         INY                     ;+INC_IP
         TYA                     ; NORMALIZE IP
         CLC
@@ -913,9 +882,16 @@ LWX     LDA     ESTKL,X
 ;*
 ;* LOAD ADDRESS OF LOCAL FRAME OFFSET
 ;*
+-       TYA                     ; RENORMALIZE IP
+        CLC
+        ADC     IPL
+        STA     IPL
+        BCC     +
+        INC     IPH
++       LDY     #$FF
 LLA     INY                     ;+INC_IP
-        BMI     +
--       LDA     (IP),Y
+        BMI     -
+        LDA     (IP),Y
         DEX
         CLC
         ADC     IFPL
@@ -924,8 +900,6 @@ LLA     INY                     ;+INC_IP
         ADC     IFPH
         STA     ESTKH,X
         JMP     NEXTOP
-+       +FIX_IP
-        BPL     -
 ;*
 ;* LOAD VALUE FROM LOCAL FRAME OFFSET
 ;*
@@ -1077,7 +1051,8 @@ SLB     INY                     ;+INC_IP
         LDA     ESTKL,X
         STA     (IFP),Y
         LDY     IPY
-        +FIXJMP_IP DROP
+        BMI     FIXDROP
+        JMP     DROP
 SLW     INY                     ;+INC_IP
         LDA     (IP),Y
         STY     IPY
@@ -1088,7 +1063,16 @@ SLW     INY                     ;+INC_IP
         LDA     ESTKH,X
         STA     (IFP),Y
         LDY     IPY
-        +FIXJMP_IP DROP
+        BMI     FIXDROP
+        JMP     DROP
+FIXDROP TYA
+        LDY     #$00
+        CLC
+        ADC     IPL
+        STA     IPL
+        BCC     +
+        INC     IPH
++       JMP     DROP
 ;*
 ;* STORE VALUE TO LOCAL FRAME OFFSET WITHOUT POPPING STACK
 ;*
@@ -1114,18 +1098,23 @@ DLW     INY                     ;+INC_IP
 ;*
 ;* STORE VALUE TO ABSOLUTE ADDRESS
 ;*
+-       TYA                     ; RENORMALIZE IP
+        CLC
+        ADC     IPL
+        STA     IPL
+        BCC     +
+        INC     IPH
++       LDY     #$FF
 SAB     INY                     ;+INC_IP
+        BMI     -
         LDA     (IP),Y
         STA     ESTKH-2,X
         INY                     ;+INC_IP
-        BMI     +
--       LDA     (IP),Y
+        LDA     (IP),Y
         STA     ESTKH-1,X
         LDA     ESTKL,X
         STA     (ESTKH-2,X)
         JMP     DROP
-+       +FIX_IP
-        BPL     -
 SAW     INY                     ;+INC_IP
         LDA     (IP),Y
         STA     TMPL
@@ -1140,7 +1129,8 @@ SAW     INY                     ;+INC_IP
         LDA     ESTKH,X
         STA     (TMP),Y
         LDY     IPY
-        +FIXJMP_IP DROP
+        BMI     FIXDROP
+        JMP     DROP
 ;*
 ;* STORE VALUE TO ABSOLUTE ADDRESS WITHOUT POPPING STACK
 ;*
@@ -1240,7 +1230,17 @@ BRTRU   INX
         ORA     ESTKL-1,X
         BNE     BRNCH
 NOBRNCH INY                     ;+INC_IP
-        +INCJMP_IP NEXTOP
+        INY
+        BMI     FIXNEXT
+        JMP     NEXTOP
+FIXNEXT TYA
+        LDY     #$00
+        CLC
+        ADC     IPL
+        STA     IPL
+        BCC     +
+        INC     IPH
++       JMP     NEXTOP
 BRFLS   INX
         LDA     ESTKH-1,X
         ORA     ESTKL-1,X

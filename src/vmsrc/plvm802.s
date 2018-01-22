@@ -72,37 +72,6 @@ INTERP  =       $03D0
 TOS     =       $01             ; TOS
 NOS     =       $03             ; TOS-1
 ;*
-;* INTERPRETER INSTRUCTION POINTER INCREMENT MACRO
-;*
-!MACRO  FIX_IP  {
-        TYA
-        CLC
-        ADC     IP
-        STA     IP
-        LDY     #$00
-        }
-!MACRO  FIXJMP_IP   .TARGET {
-        BMI     +
-        JMP     .TARGET
-+       TYA
-        CLC
-        ADC     IP
-        STA     IP
-        LDY     #$00
-        JMP     .TARGET
-        }
-!MACRO  INCJMP_IP   .TARGET {
-        INY
-        BMI     +
-        JMP     .TARGET
-+       TYA
-        CLC
-        ADC     IP
-        STA     IP
-        LDY     #$00
-        JMP     .TARGET
-        }
-;*
 ;* ACCUM/MEM SIZE MACROS
 ;*
         !MACRO  ACCMEM8 {
@@ -797,7 +766,10 @@ CB      INY                     ;+INC_IP
 LA      INY                     ;+INC_IP
         LDA     (IP),Y
         PHA
-        +INCJMP_IP NEXTOP
+        INY
+        BMI     +
+        JMP     NEXTOP
++       JMP     FIXNEXT
 CW      INY                     ;+INC_IP
         LDA     (IP),Y
         PHA
@@ -931,16 +903,19 @@ LWX     TYX
 ;*
 ;* LOAD ADDRESS OF LOCAL FRAME OFFSET
 ;*
+-       TYA
+        CLC
+        ADC     IP
+        STA     IP
+        LDY     #$FF
 LLA     INY                     ;+INC_IP
-        BMI     +
--       LDA     (IP),Y
+        BMI     -
+        LDA     (IP),Y
         AND     #$00FF
         CLC
         ADC     IFP
         PHA
         JMP     NEXTOP
-+       +FIX_IP
-        BPL     -
 ;*
 ;* LOAD VALUE FROM LOCAL FRAME OFFSET
 ;*
@@ -1083,9 +1058,14 @@ SW      TYX
 ;* STORE VALUE TO LOCAL FRAME OFFSET
 ;*
 !IF SELFMODIFY {
+-       TYA
+        CLC
+        ADC     IP
+        STA     IP
+        LDY     #$FF
 SLB     INY                     ;+INC_IP
-        BMI     +
--       LDA     (IP),Y
+        BMI     -
+        LDA     (IP),Y
         AND     #$00FF
         CLC
         ADC     IFP
@@ -1094,8 +1074,6 @@ SLB     INY                     ;+INC_IP
         TAX
 SLBSTX  STX     $FFFF
         JMP     NEXTOP
-+       +FIX_IP
-        BPL     -
 } ELSE {
 SLB     INY                     ;+INC_IP
         TYX
@@ -1106,7 +1084,9 @@ SLB     INY                     ;+INC_IP
         STA     (IFP),Y
         +ACCMEM16               ; 16 BIT A/M
         TXY
-        +FIXJMP_IP NEXTOP
+        BMI     +
+        JMP     NEXTOP
++       JMP     FIXNEXT
 }
 SLW     INY                     ;+INC_IP
         LDA     (IP),Y
@@ -1115,7 +1095,9 @@ SLW     INY                     ;+INC_IP
         PLA
         STA     (IFP),Y
         TXY
-        +FIXJMP_IP NEXTOP
+        BMI     +
+        JMP     NEXTOP
++       JMP     FIXNEXT
 ;*
 ;* STORE VALUE TO LOCAL FRAME OFFSET WITHOUT POPPING STACK
 ;*
@@ -1160,7 +1142,10 @@ SAB     INY                     ;+INC_IP
         PLA
         TAX
 SABSTX  STX     $FFFF
-        +INCJMP_IP NEXTOP
+        INY
+        BMI     +
+        JMP     NEXTOP
++       JMP     FIXNEXT
 } ELSE {
 SAB     INY                     ;+INC_IP
         LDA     (IP),Y
@@ -1169,14 +1154,20 @@ SAB     INY                     ;+INC_IP
         +ACCMEM8                ; 8 BIT A/M
         STA     (TMP)
         +ACCMEM16               ; 16 BIT A/M
-        +INCJMP_IP NEXTOP
+        INY
+        BMI     +
+        JMP     NEXTOP
++       JMP     FIXNEXT
 }
 SAW     INY                     ;+INC_IP
         LDA     (IP),Y
         STA     TMP
         PLA
         STA     (TMP)
-        +INCJMP_IP NEXTOP
+        INY
+        BMI     +
+        JMP     NEXTOP
++       JMP     FIXNEXT
 ;*
 ;* STORE VALUE TO ABSOLUTE ADDRESS WITHOUT POPPING STACK
 ;*
@@ -1269,7 +1260,15 @@ ISLT    PLA
 BRTRU   PLA
         BNE     BRNCH
 NOBRNCH INY                     ;+INC_IP
-        +INCJMP_IP NEXTOP
+        INY
+        BMI     FIXNEXT
+        JMP     NEXTOP
+FIXNEXT TYA
+        CLC
+        ADC     IP
+        STA     IP
+        LDY     #$00
+        JMP     NEXTOP
 BRFLS   PLA
         BNE     NOBRNCH
 BRNCH   TYA                     ; FLATTEN IP
