@@ -43,8 +43,6 @@ ROGUEMAP= ROGUEMAP\#FE1000
 ROGUECOMBAT= ROGUECOMBAT\#FE1000
 HELLO   = HELLO\#FE1000
 MON     = MON\#FE1000
-HGR1    = HGR1\#FE1000
-HGR1TEST= HGR1TEST\#FE1000
 DGRTEST = DGRTEST\#FE1000
 TEST    = TEST\#FE1000
 TESTLIB = TESTLIB\#FE1000
@@ -75,7 +73,7 @@ TXTTYPE	= .TXT
 #SYSTYPE	= \#FF2000
 #TXTTYPE	= \#040000
 
-all: $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVM802) $(PLVM03) $(CMD) $(PLASMAPLASM) $(CODEOPT) $(ARGS) $(MEMMGR) $(MEMTEST) $(FIBER) $(FIBERTEST) $(LONGJMP) $(ED) $(MON) $(ROD) $(SIEVE) $(UTHERNET2) $(UTHERNET) $(ETHERIP) $(INET) $(DHCP) $(HTTPD) $(ROGUE) $(ROGUEMAP) $(ROGUECOMBAT) $(ROGUEIO) $(HGR1) $(TONE) $(DGR) $(DGRTEST) $(FILEIO) $(CONIO) $(PORTIO) $(SPIPORT) $(SDFAT) $(FATCAT) $(FATGET) $(FATPUT) $(FATWDSK) $(FATRDSK) $(SANE) $(FPSTR) $(FPU) $(SANITY) $(RPNCALC) $(SNDSEQ) $(PLAYSEQ)
+all: $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVM802) $(PLVM03) $(CMD) $(PLASMAPLASM) $(CODEOPT) $(ARGS) $(MEMMGR) $(MEMTEST) $(FIBER) $(FIBERTEST) $(LONGJMP) $(ED) $(MON) $(ROD) $(SIEVE) $(UTHERNET2) $(UTHERNET) $(ETHERIP) $(INET) $(DHCP) $(HTTPD) $(ROGUE) $(ROGUEMAP) $(ROGUECOMBAT) $(ROGUEIO) $(TONE) $(DGR) $(DGRTEST) $(FILEIO) $(CONIO) $(PORTIO) $(SPIPORT) $(SDFAT) $(FATCAT) $(FATGET) $(FATPUT) $(FATWDSK) $(FATRDSK) $(SANE) $(FPSTR) $(FPU) $(SANITY) $(RPNCALC) $(SNDSEQ) $(PLAYSEQ)
 
 clean:
 	-rm *FE1000 *FF2000 $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVM03)
@@ -298,12 +296,6 @@ $(ROGUECOMBAT): samplesrc/rogue.combat.pla $(PLVM02) $(PLASM)
 $(ROGUEMAP): samplesrc/rogue.map.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AMOW < samplesrc/rogue.map.pla > samplesrc/rogue.map.a
 	acme --setpc 4094 -o $(ROGUEMAP) samplesrc/rogue.map.a
-
-$(HGR1):	samplesrc/hgr1.pla samplesrc/hgr1test.pla $(PLVM02) $(PLASM)
-	./$(PLASM) -AMOW < samplesrc/hgr1test.pla > samplesrc/hgr1test.a
-	acme --setpc 4094 -o $(HGR1TEST) samplesrc/hgr1test.a
-	./$(PLASM) -AMOW < samplesrc/hgr1.pla > samplesrc/hgr1.a
-	acme --setpc 4094 -o $(HGR1) samplesrc/hgr1.a
 
 hello:	samplesrc/hello.pla $(PLVM) $(PLASM)
 	./$(PLASM) -AMOW < samplesrc/hello.pla > samplesrc/hello.a
