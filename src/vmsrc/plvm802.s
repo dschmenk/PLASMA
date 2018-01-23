@@ -6,7 +6,6 @@
 ;*
 ;**********************************************************
         !CPU    65816
-SELFMODIFY  =   0
 DEBUG   =       0
 ;*
 ;* THE DEFAULT CPU MODE FOR EXECUTING OPCODES IS:
@@ -262,10 +261,6 @@ DINTRP  PHP
         BRA     SETDBG
 } ELSE {
         STX     OPPAGE
-!IF SELFMODIFY {
-        LDX     LCRWEN+LCBNK2
-        LDX     LCRWEN+LCBNK2
-}
         LDY     #$00
         JMP     FETCHOP
 }
@@ -290,10 +285,6 @@ IINTRP  PHP
         BRA     SETDBG
 } ELSE {
         STX     OPPAGE
-!IF SELFMODIFY {
-        LDX     LCRWEN+LCBNK2
-        LDX     LCRWEN+LCBNK2
-}
         JMP     FETCHOP
 }
         !AS
@@ -323,10 +314,6 @@ SETDBG  LDY     LCRWEN+LCBNK2
         LDY     #$00
 }
         STX     OPPAGE
-!IF SELFMODIFY {
-        LDX     LCRWEN+LCBNK2
-        LDX     LCRWEN+LCBNK2
-}
         JMP     FETCHOP
 ;************************************************************
 ;*                                                          *
@@ -845,14 +832,6 @@ _CEXSX  LDA     (IP)            ; SKIP TO NEXT OP ADDR AFTER STRING
 ;*
 ;* LOAD VALUE FROM ADDRESS TAG
 ;*
-!IF SELFMODIFY {
-LB      LDA     TOS,S
-        STA     LBLDX+1
-LBLDX   LDX     $FFFF
-        TXA
-        STA     TOS,S
-        JMP     NEXTOP
-} ELSE {
 LB      TYX
         LDY     #$00
         TYA                     ; QUICKY CLEAR OUT MSB
@@ -862,7 +841,6 @@ LB      TYX
         STA     TOS,S
         TXY
         JMP     NEXTOP
-}
 LW      TYX
         LDY     #$00
         LDA     (TOS,S),Y
@@ -870,16 +848,6 @@ LW      TYX
         TXY
         JMP     NEXTOP
 ;
-!IF SELFMODIFY {
-LBX     LDA     TOS,S
-        STA     LBXLDX+1
-        STX     ALTRDOFF
-LBXLDX  LDX     $FFFF
-        STX     ALTRDON
-        TXA
-        STA     TOS,S
-        JMP     NEXTOP
-} ELSE {
 LBX     TYX
         LDY     #$00
         TYA                     ; QUICKY CLEAR OUT MSB
@@ -891,7 +859,6 @@ LBX     TYX
         STA     TOS,S
         TXY
         JMP     NEXTOP
-}
 LWX     TYX
         LDY     #$00
         STX     ALTRDOFF
@@ -961,16 +928,6 @@ LLWX    INY                     ;+INC_IP
 ;*
 ;* LOAD VALUE FROM ABSOLUTE ADDRESS
 ;*
-!IF SELFMODIFY {
-LAB     INY                     ;+INC_IP
-        LDA     (IP),Y
-        STA     LABLDX+1
-LABLDX  LDX     $FFFF
-        TXA
-        PHA
-        INY                     ;+INC_IP
-        JMP     NEXTOP
-} ELSE {
 LAB     INY                     ;+INC_IP
         LDA     (IP),Y
         STA     TMP
@@ -981,7 +938,6 @@ LAB     INY                     ;+INC_IP
         PHA
         INY                     ;+INC_IP
         JMP     NEXTOP
-}
 LAW     INY                     ;+INC_IP
         LDA     (IP),Y
         STA     TMP
@@ -990,18 +946,6 @@ LAW     INY                     ;+INC_IP
         INY                     ;+INC_IP
         JMP     NEXTOP
 ;
-!IF SELFMODIFY {
-LABX    INY                     ;+INC_IP
-        LDA     (IP),Y
-        STA     LABXLDX+1
-        STX     ALTRDOFF
-LABXLDX LDX     $FFFF
-        STX     ALTRDON
-        TXA
-        PHA
-        INY                     ;+INC_IP
-        JMP     NEXTOP
-} ELSE {
 LABX    INY                     ;+INC_IP
         LDA     (IP),Y
         STA     TMP
@@ -1014,7 +958,6 @@ LABX    INY                     ;+INC_IP
         PHA
         INY                     ;+INC_IP
         JMP     NEXTOP
-}
 LAWX    INY                     ;+INC_IP
         LDA     (IP),Y
         STA     TMP
@@ -1028,15 +971,6 @@ LAWX    INY                     ;+INC_IP
 ;*
 ;* STORE VALUE TO ADDRESS
 ;*
-!IF SELFMODIFY {
-SB      LDA     TOS,S
-        STA     SBSTX+1
-        LDA     NOS,S
-        TAX
-SBSTX   STX     $FFFF
-        PLA
-        JMP     DROP
-} ELSE {
 SB      TYX
         LDY     #$00
         +ACCMEM8                ; 8 BIT A/M
@@ -1046,7 +980,6 @@ SB      TYX
         TXY
         PLA
         JMP     DROP
-}
 SW      TYX
         LDY     #$00
         LDA     NOS,S
@@ -1057,24 +990,6 @@ SW      TYX
 ;*
 ;* STORE VALUE TO LOCAL FRAME OFFSET
 ;*
-!IF SELFMODIFY {
--       TYA
-        CLC
-        ADC     IP
-        STA     IP
-        LDY     #$FF
-SLB     INY                     ;+INC_IP
-        BMI     -
-        LDA     (IP),Y
-        AND     #$00FF
-        CLC
-        ADC     IFP
-        STA     SLBSTX+1
-        PLA
-        TAX
-SLBSTX  STX     $FFFF
-        JMP     NEXTOP
-} ELSE {
 SLB     INY                     ;+INC_IP
         TYX
         LDA     (IP),Y
@@ -1087,7 +1002,6 @@ SLB     INY                     ;+INC_IP
         BMI     +
         JMP     NEXTOP
 +       JMP     FIXNEXT
-}
 SLW     INY                     ;+INC_IP
         LDA     (IP),Y
         TYX
@@ -1101,18 +1015,6 @@ SLW     INY                     ;+INC_IP
 ;*
 ;* STORE VALUE TO LOCAL FRAME OFFSET WITHOUT POPPING STACK
 ;*
-!IF SELFMODIFY {
-DLB     INY                     ;+INC_IP
-        LDA     (IP),Y
-        AND     #$00FF
-        CLC
-        ADC     IFP
-        STA     DLBSTX+1
-        LDA     TOS,S
-        TAX
-DLBSTX  STX     $FFFF
-        JMP     NEXTOP
-} ELSE {
 DLB     INY                     ;+INC_IP
         TYX
         +ACCMEM8                ; 8 BIT A/M
@@ -1123,7 +1025,6 @@ DLB     INY                     ;+INC_IP
         +ACCMEM16               ; 16 BIT A/M
         TXY
         JMP     NEXTOP
-}
 DLW     INY                     ;+INC_IP
         LDA     (IP),Y
         TYX
@@ -1135,18 +1036,6 @@ DLW     INY                     ;+INC_IP
 ;*
 ;* STORE VALUE TO ABSOLUTE ADDRESS
 ;*
-!IF SELFMODIFY {
-SAB     INY                     ;+INC_IP
-        LDA     (IP),Y
-        STA     SABSTX+1
-        PLA
-        TAX
-SABSTX  STX     $FFFF
-        INY
-        BMI     +
-        JMP     NEXTOP
-+       JMP     FIXNEXT
-} ELSE {
 SAB     INY                     ;+INC_IP
         LDA     (IP),Y
         STA     TMP
@@ -1158,7 +1047,6 @@ SAB     INY                     ;+INC_IP
         BMI     +
         JMP     NEXTOP
 +       JMP     FIXNEXT
-}
 SAW     INY                     ;+INC_IP
         LDA     (IP),Y
         STA     TMP
@@ -1171,16 +1059,6 @@ SAW     INY                     ;+INC_IP
 ;*
 ;* STORE VALUE TO ABSOLUTE ADDRESS WITHOUT POPPING STACK
 ;*
-!IF SELFMODIFY {
-DAB     INY                     ;+INC_IP
-        LDA     (IP),Y
-        STA     DABSTX+1
-        LDA     TOS,S
-        TAX
-DABSTX  STX     $FFFF
-        INY                     ;+INC_IP
-        JMP     NEXTOP
-} ELSE {
 DAB     INY                     ;+INC_IP
         LDA     (IP),Y
         STA     TMP
@@ -1190,7 +1068,6 @@ DAB     INY                     ;+INC_IP
         +ACCMEM16               ; 16 BIT A/M
         INY                     ;+INC_IP
         JMP     NEXTOP
-}
 DAW     INY                     ;+INC_IP
         LDA     (IP),Y
         STA     TMP
@@ -1306,22 +1183,22 @@ BRLT    PLA
 +       BMI     BRNCH
         BEQ     BRNCH
         BPL     NOBRNCH
-IBRNCH  PLA
+IBRNCH  TYA                     ; FLATTEN IP
         CLC
         ADC     IP
         STA     IP
-        JMP     NEXTOP
+        PLA
+        ;CLC                    ; ADD BRANCH OFFSET (BETTER NOT CARRY OUT OF IP+Y)
+        ADC     IP
+        STA     IP
+        LDY     #$01
+        JMP     FETCHOP
 ;*
 ;* CALL INTO ABSOLUTE ADDRESS (NATIVE CODE)
 ;*
 CALL    INY                     ;+INC_IP
         LDA     (IP),Y
         INY
-        BNE     EMUSTK
-        LDX     IPH
-        INX
-        STX     IPH
-        BRA     EMUSTK
 ;*
 ;* INDIRECT CALL TO ADDRESS (NATIVE CODE)
 ;*
@@ -1421,10 +1298,6 @@ EMUSTK  STA     TMP
         LDX     #>DBGTBL
 }
         STX     OPPAGE
-!IF SELFMODIFY {
-        LDX     LCRWEN+LCBNK2
-        LDX     LCRWEN+LCBNK2
-}
         LDY     #$01
         JMP     FETCHOP
 ;*
@@ -1433,10 +1306,6 @@ EMUSTK  STA     TMP
 CALLX   INY                     ;+INC_IP
         LDA     (IP),Y
         INY
-        BNE     EMUSTKX
-        LDX     IPH
-        INX
-        STX     IPH
         BRA     EMUSTKX
 ;*
 ;* INDIRECT CALL TO ADDRESS (NATIVE CODE)
@@ -1447,9 +1316,7 @@ EMUSTKX STA     TMP
         CLC
         ADC     IP
         STA     IP
-        SEC                     ; SWITCH TO EMULATED MODE
-        XCE
-        !AS
+        +ACCMEM8                ; 8 BIT A/M
         TSC                     ; MOVE HW EVAL STACK TO ZP EVAL STACK
         EOR     #$FF
         SEC
@@ -1539,10 +1406,6 @@ EMUSTKX STA     TMP
         LDX     #>DBGTBL
 }
         STX     OPPAGE
-!IF SELFMODIFY {
-        LDX     LCRWEN+LCBNK2
-        LDX     LCRWEN+LCBNK2
-}
         LDY     #$01
         JMP     FETCHOP
 ;*
@@ -1648,14 +1511,10 @@ LEAVE   INY                     ;+INC_IP
         STA     PP
         PLA                     ; RESTORE PREVIOUS FRAME
         STA     IFP
-        SEC                     ; SWITCH TO EMULATED MODE
-        XCE
-        !AS
-        LDA     PSR
-        PHA
+        LDY     PSR
+        PHY
         PLP
         RTS
-        +ACCMEM16               ; 16 BIT A/M
 ;
 RETX    STX     ALTRDOFF
 RET     +ACCMEM8                ; 8 BIT A/M
@@ -1696,12 +1555,8 @@ RET     +ACCMEM8                ; 8 BIT A/M
 +
 }
         TYX
-        +ACCMEM16
-        SEC                     ; SWITCH TO EMULATED MODE
-        XCE
-        !AS
-        LDA     PSR
-        PHA
+        LDY     PSR
+        PHY
         PLP
         RTS
 !IF     DEBUG {

@@ -5,7 +5,6 @@
 ;*              SYSTEM ROUTINES AND LOCATIONS
 ;*
 ;**********************************************************
-SELFMODIFY  =   0
 ;*
 ;* MONITOR SPECIAL LOCATIONS
 ;*
@@ -1299,11 +1298,19 @@ BRLT    INX
         BMI     BRNCH
 +       BPL     BRNCH
         BMI     NOBRNCH
-IBRNCH  LDA     IPL
+IBRNCH  TYA                     ; FLATTEN IP
         CLC
+        ADC     IPL
+        STA     TMPL
+        LDA     #$00
+        TAY
+        ADC     IPH
+        STA     TMPH            ; ADD BRANCH OFFSET
+        LDA     TMPL
+        ;CLC                    ; BETTER NOT CARRY OUT OF IP+Y
         ADC     ESTKL,X
         STA     IPL
-        LDA     IPH
+        LDA     TMPH
         ADC     ESTKH,X
         STA     IPH
         JMP     DROP
