@@ -1194,15 +1194,16 @@ IBRNCH  TYA                     ; FLATTEN IP
         LDY     #$01
         JMP     FETCHOP
 ;*
+;* INDIRECT CALL TO ADDRESS (NATIVE CODE)
+;*
+ICAL    PLA
+        BRA     EMUSTK
+;*
 ;* CALL INTO ABSOLUTE ADDRESS (NATIVE CODE)
 ;*
 CALL    INY                     ;+INC_IP
         LDA     (IP),Y
         INY
-;*
-;* INDIRECT CALL TO ADDRESS (NATIVE CODE)
-;*
-ICAL    PLA
 EMUSTK  STA     TMP
         TYA                     ; FLATTEN IP
         CLC
@@ -1228,14 +1229,16 @@ EMUSTK  STA     TMP
         ADC     ESP             ; ESP - STACK DEPTH
         TAY
         TAX
-        BRA     +
+        CPX     ESP
+        BEQ     +
 -       PLA
         STA     ESTKL,X
         PLA
         STA     ESTKH,X
         INX
-+       CPX     ESP
+        CPX     ESP
         BNE     -
++
 !IF     DEBUG {
         TXA
         TSX
@@ -1278,15 +1281,16 @@ EMUSTK  STA     TMP
         TSX                     ; RESTORE BASELINE HWSP
         STX     HWSP
         TYX
-        BRA     +
+        CPX     TMPL
+        BEQ     +
 -       DEX
         LDA     ESTKH,X
         PHA
         LDA     ESTKL,X
         PHA
-+       CPX     TMPL
+        CPX     TMPL
         BNE     -
-        CLC                     ; SWITCH BACK TO NATIVE MODE
++       CLC                     ; SWITCH BACK TO NATIVE MODE
         XCE
         +ACCMEM16               ; 16 BIT A/M
         LDX     #>OPTBL         ; MAKE SURE WE'RE INDEXING THE RIGHT TABLE
@@ -1301,16 +1305,16 @@ EMUSTK  STA     TMP
         LDY     #$01
         JMP     FETCHOP
 ;*
+;* INDIRECT CALL TO ADDRESS (NATIVE CODE)
+;*
+ICALX   PLA
+        BRA     EMUSTKX
+;*
 ;* CALL INTO ABSOLUTE ADDRESS (NATIVE CODE)
 ;*
 CALLX   INY                     ;+INC_IP
         LDA     (IP),Y
         INY
-        BRA     EMUSTKX
-;*
-;* INDIRECT CALL TO ADDRESS (NATIVE CODE)
-;*
-ICALX   PLA
 EMUSTKX STA     TMP
         TYA                     ; FLATTEN IP
         CLC
@@ -1334,14 +1338,16 @@ EMUSTKX STA     TMP
         ADC     ESP             ; ESP - STACK DEPTH
         TAY
         TAX
-        BRA     +
+        CPX     ESP
+        BEQ     +
 -       PLA
         STA     ESTKL,X
         PLA
         STA     ESTKH,X
         INX
-+       CPX     ESP
+        CPX     ESP
         BNE     -
++
 !IF     DEBUG {
         TXA
         TSX
@@ -1386,15 +1392,16 @@ EMUSTKX STA     TMP
         TSX                     ; RESTORE BASELINE HWSP
         STX     HWSP
         TYX
-        BRA     +
+        CPX     TMPL
+        BEQ     +
 -       DEX
         LDA     ESTKH,X
         PHA
         LDA     ESTKL,X
         PHA
-+       CPX     TMPL
+        CPX     TMPL
         BNE     -
-        CLC                     ; SWITCH BACK TO NATIVE MODE
++       CLC                     ; SWITCH BACK TO NATIVE MODE
         XCE
         +ACCMEM16               ; 16 BIT A/M
         LDX     #>OPXTBL        ; MAKE SURE WE'RE INDEXING THE RIGHT TABLE
@@ -1457,14 +1464,14 @@ ENTER   PEI     (IFP)           ; SAVE ON STACK FOR LEAVE
 ;*
 ;* LEAVE FUNCTION
 ;*
+LEAVE   INY                     ;+INC_IP
+        +ACCMEM8                ; 8 BIT A/M
+        LDA     (IP),Y          ; DEALLOCATE POOL + FRAME
+        BRA     +
 LEAVEX  INY                     ;+INC_IP
         +ACCMEM8                ; 8 BIT A/M
         LDA     (IP),Y          ; DEALLOCATE POOL + FRAME
         STA     ALTRDOFF
-        BRA     +
-LEAVE   INY                     ;+INC_IP
-        +ACCMEM8                ; 8 BIT A/M
-        LDA     (IP),Y          ; DEALLOCATE POOL + FRAME
 +       STA     TMPL
         TSC                     ; MOVE HW EVAL STACK TO ZP EVAL STACK
         EOR     #$FF
@@ -1483,13 +1490,14 @@ LEAVE   INY                     ;+INC_IP
         ADC     ESP             ; ESP - STACK DEPTH
         TAY
         TAX
-        BRA     +
+        CPX     ESP
+        BEQ     ++
 -       PLA
         STA     ESTKL,X
         PLA
         STA     ESTKH,X
         INX
-+       CPX     ESP
+        CPX     ESP
         BNE     -
 !IF     DEBUG {
         TSX
@@ -1503,7 +1511,7 @@ LEAVE   INY                     ;+INC_IP
 +
 }
         TYX                     ; RESTORE NEW ESP
-        LDA     TMPL            ; DEALLOCATE POOL + FRAME
+++      LDA     TMPL            ; DEALLOCATE POOL + FRAME
         +ACCMEM16               ; 16 BIT A/M
         AND     #$00FF
         CLC
@@ -1535,13 +1543,14 @@ RET     +ACCMEM8                ; 8 BIT A/M
         ADC     ESP             ; ESP - STACK DEPTH
         TAY
         TAX
-        BRA     +
+        CPX     ESP
+        BEQ     ++
 -       PLA
         STA     ESTKL,X
         PLA
         STA     ESTKH,X
         INX
-+       CPX     ESP
+        CPX     ESP
         BNE     -
 !IF     DEBUG {
         TSX
@@ -1555,7 +1564,7 @@ RET     +ACCMEM8                ; 8 BIT A/M
 +
 }
         TYX
-        LDY     PSR
+++      LDY     PSR
         PHY
         PLP
         RTS
