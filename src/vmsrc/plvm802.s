@@ -361,6 +361,11 @@ CMDENTRY =      *
         DEY
         BPL     -
 ;
+; SET JMPTMP OPCODE
+;
+        LDA     #$4C
+        STA     JMPTMP
+;
 ; INSTALL PAGE 3 VECTORS
 ;
         LDY     #$12
@@ -1420,7 +1425,7 @@ EMUSTKX STA     TMP
 ;*
 ;* JUMP INDIRECT THROUGH TMP
 ;*
-JMPTMP  JMP     (TMP)
+;JMPTMP  JMP     (TMP)
 ;*
 ;* ENTER FUNCTION WITH FRAME SIZE AND PARAM COUNT
 ;*
@@ -1513,9 +1518,9 @@ LEAVEX  INY                     ;+INC_IP
 +
 }
         TYX                     ; RESTORE NEW ESP
-++      LDA     TMPL            ; DEALLOCATE POOL + FRAME
-        +ACCMEM16               ; 16 BIT A/M
-        AND     #$00FF
+++      +ACCMEM16               ; 16 BIT A/M
+        LDY     TMPL            ; DEALLOCATE POOL + FRAME
+        TYA
         CLC
         ADC     IFP
         STA     PP
@@ -1528,6 +1533,7 @@ LEAVEX  INY                     ;+INC_IP
         PHA
         PLP
         RTS
+        !AL
 ;
 RETX    STX     ALTRDOFF
 RET     SEC                     ; SWITCH TO EMULATION MODE

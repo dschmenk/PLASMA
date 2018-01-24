@@ -263,6 +263,11 @@ CMDENTRY =      *
         DEY
         BPL     -
 ;
+; SET JMPTMP OPCODE
+;
+        LDA     #$4C
+        STA     JMPTMP
+;
 ; INSTALL PAGE 3 VECTORS
 ;
         LDY     #$12
@@ -1428,7 +1433,7 @@ ICALX   LDA     ESTKL,X
 ;*
 ;* JUMP INDIRECT TRHOUGH TMP
 ;*
-JMPTMP  JMP     (TMP)
+;JMPTMP  JMP     (TMP)
 ;*
 ;* ENTER FUNCTION WITH FRAME SIZE AND PARAM COUNT
 ;*
