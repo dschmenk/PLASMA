@@ -1141,11 +1141,11 @@ NOBRNCH INY                     ;+INC_IP
         BMI     FIXNEXT
         JMP     NEXTOP
 FIXNEXT TYA
-        CLC
+        SEC
         ADC     IP
         STA     IP
         LDY     #$00
-        JMP     NEXTOP
+        JMP     FETCHOP
 BRFLS   PLA
         BNE     NOBRNCH
 BRNCH   TYA                     ; FLATTEN IP
@@ -1268,7 +1268,6 @@ EMUSTK  STA     TMP
         STA     IPL
         PLA
         STA     IPH
-        STX     TMPL
 !IF     DEBUG {
         TXA
         EOR     #$FF
@@ -1278,11 +1277,12 @@ EMUSTK  STA     TMP
         ADC     #$80+'0'
         STA     $7D0+32
 }
+        STX     TMPL
         TSX                     ; RESTORE BASELINE HWSP
         STX     HWSP
-        TYX
-        CPX     TMPL
+        CPY     TMPL
         BEQ     +
+        TYX
 -       DEX
         LDA     ESTKH,X
         PHA
@@ -1320,7 +1320,9 @@ EMUSTKX STA     TMP
         CLC
         ADC     IP
         STA     IP
-        +ACCMEM8                ; 8 BIT A/M
+        SEC                     ; SWITCH TO EMULATION MODE
+        XCE
+        !AS
         TSC                     ; MOVE HW EVAL STACK TO ZP EVAL STACK
         EOR     #$FF
         SEC
@@ -1379,7 +1381,6 @@ EMUSTKX STA     TMP
         STA     IPL
         PLA
         STA     IPH
-        STX     TMPL
 !IF     DEBUG {
         TXA
         EOR     #$FF
@@ -1389,11 +1390,12 @@ EMUSTKX STA     TMP
         ADC     #$80+'0'
         STA     $7D0+32
 }
+        STX     TMPL
         TSX                     ; RESTORE BASELINE HWSP
         STX     HWSP
-        TYX
-        CPX     TMPL
+        CPY     TMPL
         BEQ     +
+        TYX
 -       DEX
         LDA     ESTKH,X
         PHA
@@ -1488,10 +1490,10 @@ LEAVEX  INY                     ;+INC_IP
         EOR     #$FF
         SEC
         ADC     ESP             ; ESP - STACK DEPTH
-        TAY
         TAX
         CPX     ESP
         BEQ     ++
+        TAY
 -       PLA
         STA     ESTKL,X
         PLA
@@ -1519,13 +1521,19 @@ LEAVEX  INY                     ;+INC_IP
         STA     PP
         PLA                     ; RESTORE PREVIOUS FRAME
         STA     IFP
-        LDY     PSR
-        PHY
+        SEC                     ; SWITCH TO EMULATION MODE
+        XCE
+        !AS
+        LDA     PSR
+        PHA
         PLP
         RTS
 ;
 RETX    STX     ALTRDOFF
-RET     +ACCMEM8                ; 8 BIT A/M
+RET     SEC                     ; SWITCH TO EMULATION MODE
+        XCE
+        !AS
+        ;+ACCMEM8                ; 8 BIT A/M
         TSC                     ; MOVE HW EVAL STACK TO ZP EVAL STACK
         EOR     #$FF
         SEC
@@ -1541,10 +1549,10 @@ RET     +ACCMEM8                ; 8 BIT A/M
         EOR     #$FF
         SEC
         ADC     ESP             ; ESP - STACK DEPTH
-        TAY
         TAX
         CPX     ESP
         BEQ     ++
+        TAY
 -       PLA
         STA     ESTKL,X
         PLA
@@ -1564,8 +1572,8 @@ RET     +ACCMEM8                ; 8 BIT A/M
 +
 }
         TYX
-++      LDY     PSR
-        PHY
+++      LDA     PSR
+        PHA
         PLP
         RTS
 !IF     DEBUG {
@@ -1741,9 +1749,9 @@ STEP    STX     TMPL
         TSX
         CMP     #$10
         BCC     DBGKEY
-;        LDX     TMPL
-;        CPX     #$54            ; FORCE PAUSE AT 'CALL'
-;        BEQ     DBGKEY
+        LDX     TMPL
+        CPX     #$00            ; FORCE PAUSE AT 'ZERO'
+        BEQ     DBGKEY
 -       LDX     $C000
         CPX     #$9B
         BNE     +
