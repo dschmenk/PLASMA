@@ -1,18 +1,22 @@
-# Developer Preview #2 Version 1.0
+# Developer Preview #3 Version 1.0
 
 PLASMA is approaching a 1.0 release after _only_ 12 years. Hopefully it was worth the wait. To work out the remaining kinks, this Developer Preview will allow programmers to kick the tires, so to speak, to provide feedback on the system.
 
-Download the two disk images:
+Download the three disk images:
 
-[PLASMA Preview #2 1.0 System](https://github.com/dschmenk/PLASMA/blob/master/PLASMA-PRE2.PO?raw=true)
+[PLASMA Preview #3 1.0 System](https://github.com/dschmenk/PLASMA/blob/master/PLASMA-PRE3.PO?raw=true)
 
 [PLASMA 1.0 Build System](https://github.com/dschmenk/PLASMA/blob/master/PLASMA-BLD1.PO?raw=true)
 
+[PLASMA 1.0 Demos](https://github.com/dschmenk/PLASMA/blob/master/PLASMA-DEM1.PO?raw=true)
+
 PLASMA can be run from floppies, System in drive 1, and Build in drive 2. All Apple II computers are supported, from the earliest Rev 0 to the last Apple IIGS. However, an accelerator and hard disk/CFFA are highly recommended. The recommended mass storage installation looks like:
 
-System Files => /HARDISK/PLASMA.PRE2/
+System Files => /HARDISK/PLASMA.PRE3/
 
 Build Files => /HARDISK/BLD/
+
+Demo Files => /HARDISK/DEMOS/
 
 Keeping the system files seperate from the build directory will make upgrading to the final 1.0 Release later a little easier. To boot directly into PLASMA, you will need to put the system files in the root prefix of the boot device and make sure PLASMA.SYSTEM is the first SYSTEM file in the directory. Otherwise, start PLASMA.SYSTEM from your program launcher of choice.
 
@@ -56,17 +60,17 @@ Compiler warnings are enabled with `-W`. The optional optimizer is enabled with 
 
 ### Demos
 
-There are some demo programs included for your perusal. Check out `ROGUE` for some diversion. You can find the documentation here: https://github.com/dschmenk/PLASMA/blob/master/doc/Rogue%20Instructions.md
+There are some demo programs included for your perusal. Check out `ROGUE` for some diversion. You can find the documentation here: https://github.com/dschmenk/PLASMA/blob/master/doc/Rogue%20Instructions.md. A music sequencer to play through a MockingBoard if it is detected, or the built-in speaker if not. There may be problems if there is a CP/M card present when detecting the MockingBoard. A minimal Web server if you have an Uthernet2 card (required). Bug reports appreciated.
 
 ## Source Code
 
-This is a Developers Preview, so sample source code is included from the project. It all builds without alteration and should be a good starting point for further explorations. There was a PLASMA SANDBOX in previous versions that was a minimal editor+compiler playground. It wasn't the full language and has been superceded by the real PLASMA compiler. However, the examples that accompanied the SANDBOX are included here. They have been updated to use the `INCLUDE "INC/CMDSYS.PLH"` line so that they may compile arnd run, but no gaurentees. You will probably have to fix whatever differences you come accross. An exercise, as they say, left up to the student.
+This is a Developers Preview, all sample source code is included from the project. It builds without alteration and should be a good starting point for further explorations. The header files for the included library modules are in the INC directory. Previously, examples from the sandbox were included but they have been removed to make room for all the project samples and include files.
 
 ## Issues
 
 - All the modules and runtime are written mostly in PLASMA; the compiler and editor as well. This means that there may be some startup delay as the PLASMA module loader reads in the module dependencies and performs dynamic linking. But a 1 MHz, 8 bit CPU interpreting bytecodes is never going to match a modern computer. As noted earlier, an accelerator and mass storage are your (and PLASMA's) friend.
 
-- Many modules in the project aren't included in the Developer Preview. Only those modules that have gotten a good workout are included. The rest of the modules will be tested and included for the final 1.0 release. Feel free to try them out, and give feedback. Chances are they will work out of the box, or just a small tweak.
+- All the project modules are included. They have been tested, with the exception of the Uthernet2 driver. I seem to have misplaced mine. If someone can try the Web Server demo in /PLASMA.DEMOS/NET and leave feedback would be very appreciated.
 
 - The documentation is sparse and incomplete. Yep, could use your help...
 
@@ -130,6 +134,8 @@ To generate compiler warning for this issue, and a few others, use the `-W` opti
 12. Library Documentation. Preliminary documentation is available on the Wiki: https://github.com/dschmenk/PLASMA/wiki
 
 13. Significant effort has gone into VM tuning and speeding up module loading/dynamic linking.
+
+14. The VM zero page usage has changed. If you write assembly language routines, you will need to rebuild.
 
 # Thanks
 
