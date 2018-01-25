@@ -17,6 +17,7 @@ static int  defs      = 0;
 static int  asmdefs   = 0;
 static int  codetags  = 1; // Fix check for break_tag and cont_tag
 static int  fixups    = 0;
+static int  lastglobalsize = 0;
 static char idconst_name[1024][ID_LEN+1];
 static int  idconst_value[1024];
 static char idglobal_name[1024][ID_LEN+1];
@@ -465,7 +466,11 @@ void emit_sysflags(int val)
 void emit_bytecode_seg(void)
 {
     if ((outflags & MODULE) && !(outflags & BYTECODE_SEG))
+    {
+        if (lastglobalsize == 0) // Pad a byte if last label is at end of data segment
+            printf("\t%s\t$00\t\t\t; PAD BYTE\n", DB);
         printf("_SUBSEG%c\t\t\t\t; BYTECODE STARTS\n", LBL);
+    }
     outflags |= BYTECODE_SEG;
 }
 void emit_comment(char *s)
@@ -482,6 +487,7 @@ void emit_idlocal(char *name, int value)
 }
 void emit_idglobal(int tag, int size, char *name)
 {
+    lastglobalsize = size;
     if (size == 0)
         printf("_D%03d%c\t\t\t\t\t; %s\n", tag, LBL, name);
     else
