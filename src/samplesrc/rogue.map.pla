@@ -2,13 +2,15 @@
 // Map module
 //
 include "inc/cmdsys.plh"
+include "inc/conio.plh"
+include "inc/fileio.plh"
 
 import rogueio
   const O_READ       = 1
   const O_WRITE      = 2
   const O_READ_WRITE = 3
 
-  word rnd, getkb, home, gotoxy, tone, open, read, close, newline
+  word rnd, getkb, tone
 end
 
 //
@@ -175,14 +177,14 @@ export def loadmap(level)
   // Set level map and read it
   //
   catacomb[catacomb] = '0' + level
-  mapref = open(@catacomb, O_READ)
+  mapref = fileio:open(@catacomb)
   if mapref
-    newline(mapref, $7F, $0D)
+    fileio:newline(mapref, $7F, $0D)
     for row = 1 to maprows - 2
-      l = read(mapref, map + (row << 6) + 1, mapcols)
+      l = fileio:read(mapref, map + (row << 6) + 1, mapcols)
       ^(map + (row << 6) + l) = WALL_TILE
     next
-    close(mapref)
+    fileio:close(mapref)
     return TRUE
   fin
   return FALSE
@@ -260,7 +262,7 @@ export def drawmap(xorg, yorg, viewfield, viewdir, lightdist, viewdist)
   //
   // Clear screen
   //
-  home()
+  conio:home()
   //
   // Draw background map if in light
   //
@@ -302,96 +304,96 @@ export def drawmap(xorg, yorg, viewfield, viewdir, lightdist, viewdist)
     occluded = 1
     when o & 7
       is 0
-    //
-    // Run through lit octant beam points
-    //
+        //
+        // Run through lit octant beam points
+        //
         for l = 1 to dbeam[lightdist]
-      //
-      // Check parent visiblity
-      //
+          //
+          // Check parent visiblity
+          //
           if vispix[vbeam[l]]
             imap = ((yorg - ybeam[l]) << rowshift) + xorg + xbeam[l]
             tile = ^(map + imap)
             if tile & OPAQUE_TILE
-          //
-          // The view stops here
-          //
+              //
+              // The view stops here
+              //
               vispix[l] = 0
             else
-          //
-          // This tile is transparent
-          //
+              //
+              // This tile is transparent
+              //
               vispix[l] = 1
-          //
-          // Check adjacent tile for opaqueness - improves wall display
-          //
+              //
+              // Check adjacent tile for opaqueness - improves wall display
+              //
               adjtile = ^(map + imap + 1) & INV_TILE
               if adjtile & OPAQUE_TILE
                 ^(viewmap + imap + 1) = adjtile | VIEWED_TILE
                 screen.[ycentr-ybeam[l], xcentr+xbeam[l]+1] = adjtile
-          fin
+              fin
             fin
-        //
-        // Update view
-        //
+            //
+            // Update view
+            //
             ^(viewmap + imap) =  tile | VIEWED_TILE
-        if tile <> PIT_TILE
+            if tile <> PIT_TILE
               screen.[ycentr-ybeam[l], xcentr+xbeam[l]] = tile & INV_TILE
-        fin
+            fin
           else
             vispix[l] = 0
           fin
         next
-    //
-    // Run through visible octant beam points
-    //
+        //
+        // Run through visible octant beam points
+        //
         for l = l to dbeam[viewdist]
-      //
-      // Check parent visiblity
-      //
+          //
+          // Check parent visiblity
+          //
           if vispix[vbeam[l]]
             imap = ((yorg - ybeam[l]) << rowshift) + xorg + xbeam[l]
             tile = ^(map + imap)
             if tile & OPAQUE_TILE
-          //
-          // The view stops here
-          //
+              //
+              // The view stops here
+              //
               vispix[l] = 0
             else
-          //
-          // This tile is transparent
-          //
+              //
+              // This tile is transparent
+              //
               vispix[l] = 1
-          occluded  = 0
+              occluded  = 0
             fin
-        //
-        // If the tile is in light, update view
-        //
-        if tile & LIT_TILE
+            //
+            // If the tile is in light, update view
+            //
+            if tile & LIT_TILE
               ^(viewmap + imap) =  tile | VIEWED_TILE
               screen.[ycentr-ybeam[l], xcentr+xbeam[l]] = tile & INV_TILE
               darkness = 0
-        fin
+            fin
           else
             vispix[l] = 0
           fin
-      //
-      // Advance beam distance
-      //
-      if l == dbeam[dist]
-        if occluded
           //
-          // Beam fully occluded
+          // Advance beam distance
           //
-          break
-        fin
-        //
-        // Update distance
-        //
+          if l == dbeam[dist]
+            if occluded
+              //
+              // Beam fully occluded
+              //
+              break
+            fin
+            //
+            // Update distance
+            //
             occluded = 1
             dist    = dist + 1
-      fin
-    next
+          fin
+        next
         break
       is 1
         for l = 1 to dbeam[lightdist]

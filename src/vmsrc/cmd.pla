@@ -22,6 +22,11 @@ const resxhgr2    = $0080
 const modkeep     = $2000
 const modinitkeep = $4000
 //
+// Prefix commands
+//
+const GET_PFX     = $C7
+const SET_PFX     = $C6
+//
 // Pedefined functions.
 //
 predef syscall(cmd,params)#1, call(addr,areg,xreg,yreg,status)#1
@@ -35,46 +40,48 @@ predef execmod(modfile)#1
 //
 word version    = $0100 // 01.00
 word syspath
-word            = getlnbuf
+word syscmdln
 word            = @execmod
-word            = getlnbuf
 //
 // Working input buffer overlayed with strings table
 //
 byte cmdln      = ""
 //
+// Name for auto-run file (must follow cmdln)
+//
+byte autorun    = "AUTORUN"
+//
 // Standard Library exported functions.
 //
 byte sysmodstr  = "CMDSYS"
-byte machidstr  = "MACHID"
-byte sysstr     = "SYSCALL"
-byte callstr    = "CALL"
+byte putsstr    = "PUTS"
+byte putistr    = "PUTI"
 byte putcstr    = "PUTC"
 byte putlnstr   = "PUTLN"
-byte putsstr    = "PUTS"
 byte putbstr    = "PUTB"
 byte putwstr    = "PUTH"
-byte putistr    = "PUTI"
 byte getcstr    = "GETC"
 byte getsstr    = "GETS"
 byte toupstr    = "TOUPPER"
+byte strcpystr  = "STRCPY"
+byte strcatstr  = "STRCAT"
 byte hpmarkstr  = "HEAPMARK"
 byte hpalignstr = "HEAPALLOCALIGN"
 byte hpallocstr = "HEAPALLOC"
 byte hprelstr   = "HEAPRELEASE"
 byte hpavlstr   = "HEAPAVAIL"
+byte sysmods[] // overlay with exported strings
 word memsetstr  = "MEMSET"
 byte memcpystr  = "MEMCPY"
 byte uisgtstr   = "ISUGT"
 byte uisgestr   = "ISUGE"
 byte uisltstr   = "ISULT"
 byte uislestr   = "ISULE"
-byte sysmods[] // overlay with exported strings
-byte strcpystr  = "STRCPY"
-byte strcatstr  = "STRCAT"
 byte sextstr    = "SEXT"
 byte divmodstr  = "DIVMOD"
-byte autorun    = "AUTORUN"
+byte machidstr  = "MACHID"
+byte sysstr     = "SYSCALL"
+byte callstr    = "CALL"
 byte prefix[] // overlay with exported symbols table
 word exports    = @sysmodstr, @version
 word            = @sysstr,    @syscall
@@ -121,7 +128,6 @@ word lastsym     = symtbl
 //
 asm saveX#0
         STX     XREG+1
-        RTS
 end
 asm restoreX#0
 XREG    LDX     #$00
@@ -141,9 +147,9 @@ asm syscall(cmd,params)#1
         JSR     $BF00
 CMD:    !BYTE   00
 PARAMS: !WORD   0000
-        LDY     #$00
+;        LDY     #$00
         STA     ESTKL,X
-        STY     ESTKH,X
+;        STY     ESTKH,X
         RTS
 end
 //
@@ -159,8 +165,7 @@ REGVALS =   SRC
         STA     TMPH
         LDA     ESTKL,X
         PHA
-        LDA     ESTKL+1,X
-        TAY
+        LDY     ESTKL+1,X
         LDA     ESTKL+3,X
         PHA
         LDA     ESTKL+2,X
@@ -188,19 +193,11 @@ REGVALS =   SRC
         STY     ESTKH,X
         PLP
         RTS
-JMPTMP  JMP (TMP)
 end
 //
 // CALL LOADED SYSTEM PROGRAM
 //
 asm exec()#0
-        LDX     #$00
-        STX     IFPL
-        LDA     #$BF
-        STA     IFPH
-        LDX     #$FE
-        TXS
-        LDX     #ESTKSZ/2
         BIT     ROMEN
         JMP     $2000
 end
@@ -647,11 +644,12 @@ asm lookuptbl(dci, tbl)#1
         STA     DSTL
         LDA     ESTKH,X
         STA     DSTH
-        LDA     ESTKL+1,X
+        INX
+        LDA     ESTKL,X
         STA     SRCL
-        LDA     ESTKH+1,X
+        LDA     ESTKH,X
         STA     SRCH
-        LDY     #$00
+--      LDY     #$00
 -       LDA     (DST),Y
         BEQ     +
         CMP     (SRC),Y
@@ -660,29 +658,197 @@ asm lookuptbl(dci, tbl)#1
         ASL
         BCS     -
         LDA     (DST),Y
-        PHA
+        STA     ESTKL,X             ; MATCH
         INY
         LDA     (DST),Y
-        TAY
-        PLA
-+       INX
-        STA     ESTKL,X
-        STY     ESTKH,X
+        STA     ESTKH,X
         RTS
-++      LDY     #$00
---      LDA     (DST),Y
-        INC     DSTL
-        BEQ     +
----     ASL
-        BCS     --
-        LDA     #$02
++       STA     ESTKL,X             ; NO MATCH
+        STA     ESTKH,X
+        RTS
+++
+-       LDA     (DST),Y             ; NEXT ENTRY
+        BPL     +
+        INY
+        BNE     -
++       TYA
+        CLC
+        ADC     #$03
         ADC     DSTL
         STA     DSTL
-        BCC     -
+        BCC     --
         INC     DSTH
-        BCS     -
-+       INC     DSTH
+        BNE     --
+end
+// def lookupidx(esd, index)
+//    word sym
+//    while ^esd
+//        sym = esd
+//        esd = sym + dcitos(sym, @str)
+//        if esd->0 & $10 and esd->1 == index
+//            return sym
+//        fin
+//        esd = esd + 3
+//    loop
+//end
+asm lookupidx(esd, index)#1
+        LDA     ESTKL,X
+        STA     TMPL
+        INX
+---     LDA     ESTKH,X
+        STA     SRCH
+        LDA     ESTKL,X
+--      STA     SRCL
+        LDY     #$00
+-       LDA     (SRC),Y
+        BPL     +
+        INY
+        BNE     -
++       BEQ     ++              ; END OF ESD
+        INY
+        LDA     (SRC),Y
+        INY
+        AND     #$10            ; EXTERN FLAG?
+        BEQ     +
+        LDA     (SRC),Y
+        CMP     TMPL
+        BEQ     +++             ; MATCH
++       INY
+        TYA
+        SEC
+        ADC     SRCL
+        STA     ESTKL,X         ; SYM PTRL
+        BCC     --
+        INC     ESTKH,X         ; SYM PTRH
         BNE     ---
+++      STA     ESTKL,X         ; END OF ESD
+        STA     ESTKH,X
++++     RTS
+end
+//def lookupdef(addr, deftbl)#1
+//    while deftbl->0 == $20
+//        if deftbl=>3 == addr
+//            return deftbl
+//        fin
+//        deftbl = deftbl + 5
+//    loop
+//    return 0
+//end
+asm lookupdef(addr, deftbl)#1
+        LDA     ESTKH,X
+        STA     SRCH
+        LDA     ESTKL,X
+        STA     SRCL
+        INX
+-       LDY     #$00
+        LDA     (SRC),Y
+        CMP     #$20            ; JSR OPCODE?
+        BNE     ++
+        LDY     #$03
+        LDA     (SRC),Y
+        CMP     ESTKL,X
+        BNE     +
+        INY
+        LDA     (SRC),Y
+        CMP     ESTKH,X
+        BNE     +
+        LDA     SRCL            ; MATCH
+        STA     ESTKL,X
+        LDA     SRCH
+        STA     ESTKH,X
+        RTS
++       LDA     #$05
+        CLC
+        ADC     SRCL
+        STA     SRCL
+        BCC     -
+        INC     SRCH
+        BNE     -
+++      STY     ESTKL,X
+        STY     ESTKH,X
+        RTS
+end
+//
+// Reloc internal data
+//
+//def reloc(modfix, modofst, bytecode, rld)#3
+//    word addr, fixup
+//    while ^rld
+//        if ^rld & $10 // EXTERN reference.
+//            return rld, addr, fixup
+//        fin
+//        addr = rld=>1 + modfix
+//        fixup = *addr + modofst
+//        if uword_isge(fixup, bytecode) // Bytecode address.
+//            return rld, addr, fixup
+//        fin
+//        *addr = fixup
+//        rld = rld + 4
+//    loop
+//    return rld, addr, fixup
+//end
+asm reloc(modfix, modofst, bytecode, rld)#3
+        LDA     ESTKL,X
+        STA     SRCL
+        LDA     ESTKH,X
+        STA     SRCH
+        LDY     #$00
+-       LDA     (SRC),Y
+        BEQ     RLDEX       ; END OF RLD
+        PHA
+        INY
+        LDA     (SRC),Y
+        INY
+        CLC
+        ADC     ESTKL+3,X   ; ADDR=ENTRY=>1+MODFIX
+        STA     DSTL
+        LDA     (SRC),Y
+        ADC     ESTKH+3,X
+        STA     DSTH
+        PLA
+        AND     #$10        ; EXTERN REF - EXIT
+        BNE     RLDEX
+        LDY     #$00        ; FIXUP=*ADDR+MODOFST
+        LDA     (DST),Y
+        INY
+        CLC
+        ADC     ESTKL+2,X
+        STA     TMPL
+        LDA     (DST),Y
+        ADC     ESTKH+2,X
+        CMP     ESTKH+1,X   ; FIXUP >= BYTECODE?
+        BCC     +
+        STA     TMPH
+        BNE     RLDEX       ; YEP, EXIT
+        LDA     TMPL
+        CMP     ESTKL+1,X
+        BCS     RLDEX       ; YEP, EXIT
+        LDA     TMPH
++       STA     (DST),Y     ; *ADDR=FIXUP
+        DEY
+        LDA     TMPL
+        STA     (DST),Y
+        LDA     SRCL        ; NEXT ENTRY
+;       CLC
+        ADC     #$04
+        STA     SRCL
+        BCC     -
+        INC     SRCH
+        BNE     -
+RLDEX   INX
+        LDA     TMPL
+        STA     ESTKL,X
+        LDA     TMPH
+        STA     ESTKH,X
+        LDA     DSTL
+        STA     ESTKL+1,X
+        LDA     DSTH
+        STA     ESTKH+1,X
+        LDA     SRCL
+        STA     ESTKL+2,X
+        LDA     SRCH
+        STA     ESTKH+2,X
+        RTS
 end
 //
 // Cheap and dirty print integer
@@ -695,21 +861,12 @@ end
 //
 // ProDOS routines
 //
-def getpfx(path)#1
-    byte params[3]
-
-    ^path    = 0
-    params.0 = 1
-    params:1 = path
-    perr     = syscall($C7, @params)
-    return path
-end
-def setpfx(path)#1
+def pfxop(path, op)#1
     byte params[3]
 
     params.0 = 1
     params:1 = path
-    perr     = syscall($C6, @params)
+    perr     = syscall(op, @params)
     return path
 end
 def open(path)#1
@@ -775,8 +932,8 @@ def allocalignheap(size, pow2, freeaddr)
         *freeaddr = heap
     fin
     align = (1 << pow2) - 1
-    addr = (heap | align) + 1
-    heap = addr + size
+    addr  = (heap | align) + 1
+    heap  = addr + size
     if uword_isge(heap, @addr)
         return 0
     fin
@@ -855,43 +1012,27 @@ end
 def lookupextern(esd, index)#1
     word sym, addr
     byte str[16]
-    while ^esd
-        sym = esd
-        esd = sym + dcitos(sym, @str)
-        if esd->0 & $10 and esd->1 == index
-            addr = lookuptbl(sym, symtbl)
-            if !addr
-                perr = $81
-                cout('?'); prstr(@str); crout
-            fin
-            return addr
+    sym = lookupidx(esd, index)
+    if sym
+        addr = lookuptbl(sym, symtbl)
+        if !addr
+            perr = $81
+            dcitos(sym, @str)
+            cout('?'); prstr(@str); crout
         fin
-        esd = esd + 3
-    loop
+        return addr
+    fin
     return 0
 end
 def adddef(bank, addr, deflast)#1
     word defentry
     defentry = *deflast
     *deflast = defentry + 5
-    if bank
-        defentry=>1 = $03DC // JSR $03DC (AUX MEM INTERP)
-    else
-        defentry=>1 = $03D6 // JSR $03D6 (MAIN MEM INTERP)
-    fin
     defentry->0 = $20
+    defentry=>1 = bank ?? $03DC :: $03D6 // JSR $03DC (AUX MEM INTERP) or $03D6 (MAIN MEM INTERP)
     defentry=>3 = addr
     defentry->5 = 0 // NULL out next entry
     return defentry
-end
-def lookupdef(addr, deftbl)#1
-    while deftbl->0 == $20
-        if deftbl=>3 == addr
-            return deftbl
-        fin
-        deftbl = deftbl + 5
-    loop
-    return 0
 end
 def loadmod(mod)#1
     word rdlen, modsize, bytecode, codefix, defofst, defcnt, init, fixup
@@ -1015,31 +1156,36 @@ def loadmod(mod)#1
         // Run through the Re-Location Dictionary.
         //
         while ^rld
-            addr = rld=>1 + modfix
+            rld, addr, fixup = reloc(modfix, modofst, bytecode, rld)
+            if ^rld
+                *addr = ^rld & $10 ?? *addr + lookupextern(esd, rld->3) :: lookupdef(fixup + codefix, deftbl)
+                rld   = rld + 4
+            fin
+            //addr = rld=>1 + modfix
             //if uword_isge(addr, modaddr) // Skip fixups to header
-                //if type & $80 // WORD sized fixup.
-                    fixup = *addr
-                //else          // BYTE sized fixup.
-                //    fixup = ^addr
-                //fin
-                if ^rld & $10 // EXTERN reference.
-                    fixup = fixup + lookupextern(esd, rld->3)
-                else          // INTERN fixup.
-                    fixup = fixup + modofst
-                    if uword_isge(fixup, bytecode)
-                        //
-                        // Bytecode address - replace with call def directory.
-                        //
-                        fixup = lookupdef(fixup + codefix, deftbl)
-                    fin
-                fin
-                //if type & $80 // WORD sized fixup.
-                    *addr = fixup
-                //else          // BYTE sized fixup.
-                //    ^addr = fixup
-                //fin
+            //    if type & $80 // WORD sized fixup.
+            //        fixup = *addr
+            //    else          // BYTE sized fixup.
+            //        fixup = ^addr
+            //    fin
+            //    if ^rld & $10 // EXTERN reference.
+            //        fixup = fixup + lookupextern(esd, rld->3)
+            //    else          // INTERN fixup.
+            //        fixup = fixup + modofst
+            //        if uword_isge(fixup, bytecode)
+            //            //
+            //            // Bytecode address - replace with call def directory.
+            //            //
+            //            fixup = lookupdef(fixup + codefix, deftbl)
+            //        fin
+            //    fin
+            //    if type & $80 // WORD sized fixup.
+            //        *addr = fixup
+            //    else          // BYTE sized fixup.
+            //        ^addr = fixup
+            //    fin
             //fin
-            rld = rld + 4
+            //rld = rld + 4
         loop
         //
         // Run through the External/Entry Symbol Directory.
@@ -1120,9 +1266,7 @@ def volumes()#0
     for i = 0 to 15
         ^strbuf = ^strbuf & $0F
         if ^strbuf
-            cout('/')
-            prstr(strbuf)
-            crout()
+            cout('/'); prstr(strbuf); crout()
         fin
         strbuf = strbuf + 16
     next
@@ -1136,9 +1280,9 @@ def catalog(optpath)#1
     word entry, filecnt
 
     if ^optpath
-        memcpy(@path, optpath, ^optpath + 1)
+        strcpy(@path, optpath)
     else
-        getpfx(@path)
+        pfxop(@path, GET_PFX)
         prstr(@path)
         crout()
     fin
@@ -1162,20 +1306,22 @@ def catalog(optpath)#1
                     len = type & $0F
                     ^entry = len
                     prstr(entry)
-                    if type & $F0 == $D0 // Is it a directory?
-                        cout('/')
-                        len = len + 1
-                    elsif entry->$10 == $FF
-                        cout('-')
-                        len = len + 1
-                    elsif entry->$10 == $FE
-                        cout('+')
-                        len = len + 1
-                    fin
-                    for len = 19 - len downto 0
+                    type = ' '
+                    when entry->$10
+                        is $0F // Is it a directory?
+                            type = '/'
+                            break
+                        is $FF // SYSTEM file
+                            type = '-'
+                            break
+                        is $FE // REL file
+                            type = '+'
+                    wend
+                    cout(type)
+                    for len = 18 - len downto 0
                         cout(' ')
                     next
-                    filecnt = filecnt - 1
+                    filecnt--
                 fin
                 entry = entry + entrylen
             next
@@ -1191,17 +1337,17 @@ end
 def stripchars(strptr)#1
     while ^strptr and ^(strptr + 1) > ' '
         memcpy(strptr + 1, strptr + 2, ^strptr)
-        ^strptr = ^strptr - 1
+        ^strptr--
     loop
     return ^strptr
 end
 def stripspaces(strptr)#0
     while ^strptr and ^(strptr + ^strptr) <= ' '
-        ^strptr = ^strptr - 1
+        ^strptr--
     loop
     while ^strptr and ^(strptr + 1) <= ' '
         memcpy(strptr + 1, strptr + 2, ^strptr)
-        ^strptr = ^strptr - 1
+        ^strptr--
     loop
 end
 def striptrail(strptr)#1
@@ -1223,7 +1369,7 @@ def parsecmd(strptr)#1
     if ^strptr
         cmd = ^(strptr + 1)
         memcpy(strptr + 1, strptr + 2, ^strptr)
-        ^strptr = ^strptr - 1
+        ^strptr--
     fin
     stripspaces(strptr)
     return cmd
@@ -1246,18 +1392,18 @@ def execsys(sysfile)#0
     word len
 
     if ^sysfile
-        memcpy($280, sysfile, ^sysfile + 1)
+        strcpy($280, sysfile)
         striptrail(sysfile)
         refnum = open(sysfile)
         if refnum
             len = read(refnum, databuff, $FFFF)
             resetmemfiles()
             if len
-                memcpy(sysfile, $280, ^$280 + 1)
+                strcpy(sysfile, $280)
                 if stripchars(sysfile) and ^$2000 == $4C and *$2003 == $EEEE
                     stripspaces(sysfile)
                     if ^$2005 >= ^sysfile + 1
-                        memcpy($2006, sysfile, ^sysfile + 1)
+                        strcpy($2006, sysfile)
                     fin
                 fin
                 striptrail($280)
@@ -1293,7 +1439,7 @@ heap = *freemem
 //
 // Print PLASMA version
 //
-prstr("PLASMA Pre "); prbyte(version.1); cout('.'); prbyte(version.0); crout
+prstr("PLASMA Pre3 "); prbyte(version.1); cout('.'); prbyte(version.0); crout
 //
 // Init symbol table.
 //
@@ -1306,14 +1452,15 @@ loop
 // Set system path
 //
 strcat(strcpy(@sysmods, $280), "SYS/")) // This is the path to CMD
-syspath = @sysmods // Update external interface table
+syspath  = @sysmods // Update external interface table
+syscmdln = @cmdln
 //
 // Try to load autorun.
 //
 autorun = open(@autorun)
 if autorun > 0
-    cmdln = read(autorun, @sysmodstr, 128)
-    close(autorun)
+    cmdln = read(autorun, @autorun, 128)
+    close(0)
 else
     //
     // Print some startup info.
@@ -1322,34 +1469,34 @@ else
 fin
 perr = 0
 while 1
-    if cmdln
-        when toupper(parsecmd(@cmdln))
+    if ^getlnbuf
+        when toupper(parsecmd(getlnbuf))
             is 'Q'
                 reboot()
                 break
             is 'C'
-                catalog(@cmdln)
+                catalog(getlnbuf)
                 break
             is 'P'
-                setpfx(@cmdln)
+                pfxop(getlnbuf, SET_PFX)
                 break
             is '/'
                 repeat
                     prefix--
                 until prefix[prefix] == '/'
                 if prefix > 1
-                    setpfx(@prefix)
+                    pfxop(@prefix, SET_PFX)
                 fin
                 break
             is 'V'
                 volumes()
                 break
             is '-'
-                execsys(@cmdln)
+                execsys(getlnbuf)
                 break
             is '+'
                 saveX
-                execmod(striptrail(@cmdln))
+                execmod(striptrail(getlnbuf))
                 //
                 // Clean up
                 //
@@ -1368,7 +1515,7 @@ while 1
         fin
         crout()
     fin
-    prstr(getpfx(@prefix))
+    prstr(pfxop(@prefix, GET_PFX))
     strcpy(@cmdln, rdstr($BA))
 loop
 done

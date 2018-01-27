@@ -1,0 +1,839 @@
+include "inc/cmdsys.plh"
+include "inc/fileio.plh"
+include "inc/args.plh"
+//
+// Usage is documented following the source in this file...
+//
+const rndseed        = $004E
+const LSB            = 0
+const MSB            = 1
+const MB_ARPEGGIO    = 4 // In 16ths of a second
+const MAX_MBCH_NOTES = 9
+const SPKR_ARPEGGIO  = 2 // In 16ths of a second
+const DUR16TH        = 8
+const MAX_SPKR_NOTES = 4
+const NOTEDIV        = 4
+//
+// 6522 VIA registers
+//
+struc t_VIA
+    byte IORB       // I/O Register B
+    byte IORA       // I/O Register A
+    byte DDRB       // Data Direction Register B
+    byte DDRA       // Data Direction Register A
+    word T1C        // Timer 1 Count
+    word T1L        // Timer 1 Latch
+    word T2C        // Timer 2 Count
+    byte SR         // Shift Register
+    byte ACR        // Aux Control Register
+    byte PCR        // Peripheral Control Register
+    byte IFR        // Interrupt Flag Register
+    byte IER        // Interrupt Enable Register
+    byte IOA_noHS   // I/O Register A - no HandShake
+end
+const T1CH = T1C+1
+//
+// AY-3-8910 PSG registers
+//
+struc t_PSG
+    word AFREQ      // A Frequency Period
+    word BFREQ      // B Frequency Period
+    word CFREQ      // C Frequency Period
+    byte NGFREQ     // Noise Generator Frequency Period
+    byte MIXER      // Enable=0/Disable=1 NG C(5) B(4) A(3) Tone C(2) B(1) A(0)
+    byte AENVAMP    // A Envelope/Amplitude
+    byte BENVAMP    // B Envelope/Amplitude
+    byte CENVAMP    // C Envelope/Amplitude
+    word ENVPERIOD  // Envelope Period
+    byte ENVSHAPE   // Envelope Shape
+end
+//
+// Sequence event
+//
+struc t_event
+    byte deltatime  // Event delta time in 4.4 seconds
+    byte percnote   // Percussion:7==0 ? Pitch:4-0 : Octave:6-4,Note:3-0
+    byte perchanvol // Percussion      ? EnvDur:7-0           : Channel:7,Volume:3-0
+end
+//
+// Predef routines
+//
+predef musicPlay(track, rept)#0
+predef musicStop#0
+//
+// Static sequencer values
+//
+export word musicSequence
+word seqTrack, seqEvent, seqTime, eventTime, updateTime
+byte numNotes, seqRepeat
+byte indexA[2], indexB[2], indexC[2]
+byte noteA[2], noteB[2], noteC[2]
+word notes1[MAX_MBCH_NOTES], notes2[MAX_MBCH_NOTES]
+word notes[2] = @notes1, @notes2
+word periods1[MAX_MBCH_NOTES], periods2[MAX_MBCH_NOTES]
+word periods[2] = @periods1, @periods2
+//
+// MockingBoard data.
+//
+word[] mbVIAs      // Treat this as an array of VIA ptrs
+word   mbVIA1 = -1 // Init to "discover MockingBoard flag" value
+word   mbVIA2 = 0
+//
+// Octave basis frequency periods (starting at MIDI note #12)
+// Notes will be encoded as basis note (LSNibble) and octave (MSNibble))
+//
+word[] spkrOctave0 // Overlay and scale mbOctave0 for speaker version
+word[12] mbOctave0 = 3900, 3681, 3474, 3279, 3095, 2922, 2758, 2603, 2457, 2319, 2189, 2066
+word[5] arpeggioDuration = DUR16TH, DUR16TH, DUR16TH/2, DUR16TH/3, DUR16TH/4
+//
+// Emulators are broken - they only activate the MockingBoard's 6522 Timer1
+// functionality when interrupts are enabled. This music sequencer is run
+// in polling mode without the use of MockingBoard interrupts. To work around
+// the emulators, MockingBoard interrupts are enabled, but the 6502 IRQs are
+// disabled. NO INTERRUPTS ARE HANDLED WHEN PLAYING MUSIC! The previous state
+// is restored between playing sequences.
+//
+asm vmincs
+        !SOURCE "vmsrc/plvmzp.inc"
+end
+asm getStatusReg#1
+        PHP
+        PLA
+        DEX
+        STA     ESTKL,X
+        LDA     #$00
+        STA     ESTKH,X
+        RTS
+end
+asm setStatusReg(stat)#0
+        LDA     ESTKL,X
+        INX
+        PHA
+        PLP
+        RTS
+end
+asm disableInts#0
+        SEI
+        RTS
+end
+asm enableInts#0
+        CLI
+        RTS
+end
+//
+// Write Programmable Sound Generator Registers
+//
+asm psgWriteTone(pVIA, reg, freq, vol)#0
+        LDA     ESTKL+3,X
+        STA     TMPL
+        LDA     ESTKH+3,X
+        STA     TMPH
+        LDY     #$01
+        LDA     ESTKL+2,X
+        LSR
+        ADC     #$08
+        STA     (TMP),Y
+        DEY
+        LDA     #$07
+        STA     (TMP),Y
+        LDA     #$04
+        STA     (TMP),Y
+        LDA     ESTKL,X
+        INY
+        STA     (TMP),Y
+        DEY
+        LDA     #$06
+        STA     (TMP),Y
+        LDA     #$04
+        STA     (TMP),Y
+        INX
+        BNE     +
+end
+asm psgWriteWord(pVIA, reg, val)#0
+        LDA     ESTKL+2,X
+        STA     TMPL
+        LDA     ESTKH+2,X
+        STA     TMPH
++       LDY     #$01
+        TYA
+        CLC
+        ADC     ESTKL+1,X
+        STA     (TMP),Y
+        DEY
+        LDA     #$07
+        STA     (TMP),Y
+        LDA     #$04
+        STA     (TMP),Y
+        LDA     ESTKH,X
+        INY
+        STA     (TMP),Y
+        DEY
+        LDA     #$06
+        STA     (TMP),Y
+        LDA     #$04
+        STA     (TMP),Y
+        BNE     +
+end
+asm psgWrite(pVIA, reg, val)#0
+        LDA     ESTKL+2,X
+        STA     TMPL
+        LDA     ESTKH+2,X
+        STA     TMPH
++       LDY     #$01
+        LDA     ESTKL+1,X
+        STA     (TMP),Y
+        DEY
+        LDA     #$07
+        STA     (TMP),Y
+        LDA     #$04
+        STA     (TMP),Y
+        LDA     ESTKL,X
+        INY
+        STA     (TMP),Y
+        DEY
+        LDA     #$06
+        STA     (TMP),Y
+        LDA     #$04
+        STA     (TMP),Y
+        INX
+        INX
+        INX
+        RTS
+end
+//
+// Apple II speaker tone generator routines
+//
+export asm spkrTone(pitch, duration)#0
+        STX     ESP
+        LDY     ESTKH,X
+        LDA     ESTKL,X
+        BEQ     +
+        INY
++       STA     DSTL
+        STY     DSTH
+        LDY     ESTKH+1,X
+        LDA     ESTKL+1,X
+        BEQ     +
+        INY
++       STA     TMPL
+        STY     TMPH
+        TAX
+        LDA     #$FF
+        PHP
+        SEI
+;
+; Total loop count is 32 cycles, regardless of path taken
+;
+-       NOP                 ; 2
+        NOP                 ; 2
+        BCS     +           ; 3
+                            ;---
+                            ;+7 = 12 (from BCS below)
++
+--      SEC                 ; 2
+        DEX                 ; 2
+        BNE     ++          ; 2/3
+                            ;----
+                            ; 6/7
+
+        DEY                 ; 2
+        BNE     +++         ; 2/3
+                            ;----
+                            ;+4/5 = 10/11
+
+        BIT     $C030       ; 4
+        LDX     TMPL        ; 3
+        LDY     TMPH        ; 3
+                            ;---
+                            ;+10 = 20
+
+TONELP  SBC     #$01        ; 2
+        BCS     -           ; 2/3
+                            ;----
+                            ; 4/5
+
+        DEC     DSTL        ; 5
+        BNE     --          ; 3
+                            ;----
+                            ;+8 = 12
+
+        DEC     DSTH        ; This sequence isn't accounted for
+        BNE     --          ; since it is taken only in extreme cases
+        BEQ     TONEXIT
+
+++      NOP                 ; 2
+        NOP                 ; 2
+                            ;---
+                            ;+4 = 11 (from BNE above)
+
++++     BIT     $C000       ; 4
+        BMI     TONEXIT     ; 2
+        BPL     TONELP      ; 3
+                            ;---
+                            ;+9 = 20
+TONEXIT PLP
+        LDX     ESP
+        INX
+        INX
+        RTS
+end
+export asm spkrPWM(sample, speed, len)#0
+        STX     ESP
+        LDY     ESTKH,X
+        LDA     ESTKL,X
+        BEQ     +
+        INY
++       STY     DSTH
+        STA     DSTL
+        LDA     ESTKL+2,X
+        STA     SRCL
+        LDA     ESTKH+2,X
+        STA     SRCH
+        LDY     ESTKL+1,X
+        INY
+        STY     TMPL
+        LDY     #$00
+        PHP
+        SEI
+-       LDA     (SRC),Y
+        SEC
+--      LDX     TMPL
+---     DEX
+        BNE     ---
+        SBC     #$01
+        BCS     --
+        BIT     $C030
+        INY
+        BNE     +
+        INC     SRCH
++       DEC     DSTL
+        BNE     -
+        DEC     DSTH
+        BNE     -
+        PLP
+        LDX     ESP
+        INX
+        INX
+        INX
+        RTS
+end
+//
+// Search slots for MockingBoard
+//
+def mbTicklePSG(pVIA)
+    pVIA->IER  = $7F  // Mask all interrupts
+    pVIA->ACR  = $00  // Stop T1 countdown
+    pVIA->DDRB = $FF  // Output enable port A and B
+    pVIA->DDRA = $FF
+    pVIA->IORA = $00 // Reset MockingBoard
+    if pVIA->IORA == $00
+        pVIA->IORA = $04 // Inactive MockingBoard control lines
+        if pVIA->IORA == $04
+            //
+            // At least we know we have some sort of R/W in the ROM
+            // address space. Most likely a MockingBoard or John Bell
+            // 6522 board. We will assume its a MockingBoard because
+            // emulators fail the following PSG read test.
+            //
+            //psgWriteWord(pVIA, 2, $DA7E)
+            //if mbReadP(pVIA, 2) == $7E and mbReadP(pVIA, 3) == $0A
+                return pVIA
+            //fin
+        fin
+    fin
+    return 0
+end
+def mbSearch(slot)
+    if slot
+        mbVIA1 = mbTicklePSG($C000 + (slot << 8))
+        if mbVIA1
+            mbVIA2 = mbTicklePSG(mbVIA1 + $80)
+            return slot
+        fin
+    else
+        for slot = 1 to 7
+            if slot == 3 or slot == 6
+                continue
+            fin
+            mbVIA1 = mbTicklePSG($C000 + (slot << 8))
+            if mbVIA1
+                mbVIA2 = mbTicklePSG(mbVIA1 + $80)
+                return slot
+            fin
+        next
+    fin
+    return 0
+end
+def psgSetup(pVIA)#0
+    psgWrite(pVIA,     MIXER,     $3F)   // Turn everything off
+    psgWrite(pVIA,     AENVAMP,   $00)
+    psgWrite(pVIA,     BENVAMP,   $00)
+    psgWrite(pVIA,     CENVAMP,   $10)
+    psgWrite(pVIA,     NGFREQ,    $01)
+    psgWriteWord(pVIA, ENVPERIOD, $0001)
+    psgWrite(pVIA,     ENVSHAPE,  $00)   // Single decay
+    psgWriteWord(pVIA, AFREQ,     $0000) // Fast response to update
+    psgWriteWord(pVIA, BFREQ,     $0000)
+    psgWriteWord(pVIA, CFREQ,     $0000)
+    psgWrite(pVIA,     MIXER,     $38)   // Tone on C, B, A
+end
+//
+// Sequence notes through MockingBoard
+//
+def mbSequence(yield, func)#0
+    word period, n, yieldTime
+    byte note, volume, channel, i, overflow, status, quit
+
+    //
+    // Reset oscillator table
+    //
+    indexA[0] = 0; indexA[1] = 0
+    indexB[0] = 1; indexB[1] = 1
+    indexC[0] = 2; indexC[1] = 2
+    noteA[0]  = 0; noteA[1]  = 0
+    noteB[0]  = 0; noteB[1]  = 0
+    noteC[0]  = 0; noteC[1]  = 0
+    //
+    // Get the PSGs ready
+    //
+    status = getStatusReg
+    disableInts
+    mbVIA1->ACR = $40       // Continuous T1 interrupts
+    mbVIA1=>T1L = $F9C2     // 16 Ints/sec
+    mbVIA1=>T1C = $F9C2     // 16 Ints/sec
+    mbVIA1->IFR = $40       // Clear interrupt
+    mbVIA1->IER = $C0       // Enable Timer1 interrupt
+    psgSetup(mbVIA1)
+    if mbVIA2; psgSetup(mbVIA2); fin
+    overflow    = 0
+    if yield and func
+        yieldTime = seqTime + yield
+    else
+        yieldTime = $7FFF
+    fin
+    updateTime = seqTime
+    quit = FALSE
+    repeat
+        while eventTime == seqTime
+            note = seqEvent->percnote
+            if note & $80
+                //
+                // Note event
+                //
+                volume  = seqEvent->perchanvol
+                channel = (volume & mbVIA2.LSB) >> 7 // Clever - mbVIA2.0 will be $80 if it exists
+                if volume & $0F
+                    //
+                    // Note on
+                    //
+                    for i = 0 to MAX_MBCH_NOTES-1
+                        //
+                        // Look for available slot in active note table
+                        //
+                        if !notes[channel, i].LSB //or notes[channel, i] == note
+                            break
+                        fin
+                    next
+                    //
+                    // Full note table, kick one out
+                    //
+                    if i == MAX_MBCH_NOTES
+                        i = overflow
+                        overflow = (overflow + 1) % MAX_MBCH_NOTES
+                    else
+                        numNotes++
+                    fin
+                    notes[channel, i] = note | (volume << 8)
+                    periods[channel, i] = mbOctave0[note & $0F] >> ((note >> 4) & $07)
+                else
+                    //
+                    // Note off
+                    //
+                    for i = 0 to MAX_MBCH_NOTES-1
+                        //
+                        // Remove from active note table
+                        //
+                        if notes[channel, i].LSB == note
+                            notes[channel, i] = 0
+                            numNotes--
+                            break
+                        fin
+                    next
+                fin
+                updateTime = seqTime
+            else
+                //
+                // Percussion event
+                //
+                period = seqEvent->perchanvol
+                if period
+                    if (period & $80)
+                        psgWrite(mbVIA1, MIXER,       $1C)   // NG on C, Tone on B, A
+                        psgWrite(mbVIA1, CENVAMP,     $10)
+                        psgWrite(mbVIA1, ENVSHAPE,   (note >> 4) & $04)
+                        psgWrite(mbVIA1, NGFREQ,     (note >> 1) & $1F)
+                        psgWrite(mbVIA1, ENVPERIOD+1, period & $7F)
+                    elsif mbVIA2
+                        psgWrite(mbVIA2, MIXER,       $1C)   // NG on C, Tone on B, A
+                        psgWrite(mbVIA2, CENVAMP,     $10)
+                        psgWrite(mbVIA2, ENVSHAPE,   (note >> 4) & $04)
+                        psgWrite(mbVIA2, NGFREQ,     (note >> 1) & $1F)
+                        psgWrite(mbVIA2, ENVPERIOD+1, period)
+                    fin
+                else
+                    if seqRepeat
+                        //
+                        // Reset sequence
+                        //
+                        musicPlay(seqTrack, TRUE)
+                        seqTime = -1 // Offset seqTime++ later
+                    else
+                        musicStop
+                    fin
+                    quit = TRUE // Exit out
+                    break
+                fin
+            fin
+            //
+            // Next event
+            //
+            seqEvent  = seqEvent + t_event
+            eventTime = seqEvent->deltatime + eventTime
+        loop
+        if updateTime <= seqTime
+            //
+            // Time slice active note tables (arpeggio)
+            //
+            for channel = 0 to 1
+                //
+                // Multiplex oscillator A
+                //
+                i = indexA[channel]
+                repeat
+                    i = (i + 3) % MAX_MBCH_NOTES
+                    n = notes[channel, i]
+                    if n // Non-zero volume
+                        break
+                    fin
+                until i == indexA[channel]
+                if n.LSB <> noteA[channel]
+                    psgWriteTone(mbVIAs[channel], AFREQ, periods[channel, i], n.MSB)
+                    noteA[channel]  = n.LSB
+                    indexA[channel] = i
+                fin
+                //
+                // Multiplex oscillator B
+                //
+                i = indexB[channel]
+                repeat
+                    i = (i + 3) % MAX_MBCH_NOTES
+                    n = notes[channel, i]
+                    if n // Non-zero volume
+                        break
+                    fin
+                until i == indexB[channel]
+                if n.LSB <> noteB[channel]
+                    psgWriteTone(mbVIAs[channel], BFREQ, periods[channel, i], n.MSB)
+                    noteB[channel]  = n.LSB
+                    indexB[channel] = i
+                fin
+                //
+                // Multiplex oscillator C
+                //
+                i = indexC[channel]
+                repeat
+                    i = (i + 3) % MAX_MBCH_NOTES
+                    n = notes[channel, i]
+                    if n // Non-zero volume
+                        break
+                    fin
+                until i == indexC[channel]
+                if n.LSB <> noteC[channel]
+                    psgWrite(mbVIAs[channel],     MIXER,   $38)   // Tone on C, B, A
+                    psgWriteTone(mbVIAs[channel], CFREQ,   periods[channel, i], n.MSB)
+                    noteC[channel]  = n.LSB
+                    indexC[channel] = i
+                fin
+            next
+            updateTime = seqTime + MB_ARPEGGIO - (numNotes >> 2)
+        fin
+        //
+        // Increment time tick
+        //
+        seqTime++
+        while !(mbVIA1->IFR & $40) // Wait for T1 interrupt
+            if ^$C000 > 127; quit = TRUE; break; fin
+            *rndseed++
+        loop
+        mbVIA1->IFR = $40 // Clear interrupt
+        if yieldTime <= seqTime; func()#0; yieldTime = seqTime + yield; fin
+    until quit
+    psgWrite(mbVIA1, MIXER,   $FF) // Turn everything off
+    psgWrite(mbVIA1, AENVAMP, $00)
+    psgWrite(mbVIA1, BENVAMP, $00)
+    psgWrite(mbVIA1, CENVAMP, $00)
+    if mbVIA2
+        psgWrite(mbVIA2, MIXER,   $FF)
+        psgWrite(mbVIA2, AENVAMP, $00)
+        psgWrite(mbVIA2, BENVAMP, $00)
+        psgWrite(mbVIA2, CENVAMP, $00)
+    fin
+    mbVIA1->ACR = $00 // Stop T1 countdown
+    mbVIA1->IER = $7F // Mask all interrupts
+    mbVIA1->IFR = $40 // Clear interrupt
+    setStatusReg(status)
+end
+//
+// Sequence notes through Apple II speaker
+//
+def spkrSequence(yield, func)#0
+    word period, duration, yieldTime
+    byte note, i, n, overflow
+
+    //
+    // Start sequencing
+    //
+    overflow = 0
+    if yield and func
+        yieldTime = seqTime + yield
+    else
+        yieldTime = $7FFF
+    fin
+    updateTime = seqTime
+    repeat
+        while eventTime == seqTime
+            note = seqEvent->percnote
+            if note & $80
+                //
+                // Note event
+                //
+                if seqEvent->perchanvol & $0F
+                    //
+                    // Note on
+                    //
+                    for i = 0 to MAX_SPKR_NOTES-1
+                        //
+                        // Look for available slot in active note table
+                        //
+                        if !notes1[i] or note == notes1[i]
+                            break
+                        fin
+                    next
+                    if i == MAX_SPKR_NOTES
+                        //
+                        // Full note table, kick one out
+                        //
+                        overflow = (overflow + 1) & (MAX_SPKR_NOTES-1)
+                        i = overflow
+                    elsif !notes1[i]
+                        //
+                        // Add new note
+                        //
+                        numNotes++
+                    fin
+                    notes1[i]   = note
+                    periods1[i] = spkrOctave0[note & $0F] >> ((note >> 4) & $07)
+                else
+                    //
+                    // Note off
+                    //
+                    for i = 0 to MAX_SPKR_NOTES-1
+                        //
+                        // Remove from active note table
+                        //
+                        if notes1[i] == note
+                            notes1[i] = 0
+                            numNotes--
+                            break
+                        fin
+                    next
+                fin
+            else
+                //
+                // Percussion event
+                //
+                if seqEvent->perchanvol
+                    //spkrPWM($D000, 0, 64) // Play some random sample as percussion
+                else
+                    if seqRepeat
+                        musicPlay(seqTrack, TRUE)
+                    else
+                        musicStop
+                    fin
+                    return
+                fin
+            fin
+            //
+            // Next event
+            //
+            seqEvent  = seqEvent  + t_event
+            eventTime = eventTime + seqEvent->deltatime
+        loop
+        if numNotes > 1
+            for i = 0 to MAX_SPKR_NOTES-1
+                if notes1[i]
+                    spkrTone(periods1[i], arpeggioDuration[numNotes])
+                fin
+                *rndseed++
+            next
+            seqTime++
+        else
+            period = 0
+            for i = 0 to MAX_SPKR_NOTES-1
+                if notes1[i]
+                    period = periods1[i]
+                    break;
+                fin
+                *rndseed++
+            next
+            duration = eventTime - seqTime
+            seqTime  = duration + seqTime
+            spkrTone(period, DUR16TH * duration)
+        fin
+        if ^$C000 > 127; return; fin
+        if yieldTime <= seqTime; func()#0; yieldTime = seqTime + yield; fin
+    until FALSE
+end
+//
+// No sequence, just waste time and yield
+//
+def noSequence(yield, func)#0
+    //
+    // Start wasting time
+    //
+    if !yield or !func
+        yield = 0
+    fin
+    seqTime = 0
+    repeat
+        seqTime++
+        if seqTime < 0; seqTime = 1; fin // Capture wrap-around
+        *rndseed++
+        spkrTone(0, DUR16TH) // Waste 16th of a second playing silence
+        if ^$C000 > 127; return; fin
+        if yield == seqTime; func()#0; seqTime = 0; fin
+    until FALSE
+end
+//
+// Start sequencing music track
+//
+export def musicPlay(track, rept)#0
+    byte i
+
+    //
+    // First time search for MockingBoard
+    //
+    if mbVIA1 == -1
+        if !mbSearch(0)
+            //
+            // No MockingBoard - scale octave0 for speaker
+            //
+            for i = 0 to 11
+                spkrOctave0[i] = mbOctave0[i]/NOTEDIV
+            next
+        fin
+    fin
+    //
+    // Zero out active notes
+    //
+    for i = 0 to MAX_MBCH_NOTES-1; notes1[i] = 0; notes2[i] = 0; next
+    for i = 0 to MAX_MBCH_NOTES-1; periods1[i] = 0; periods2[i] = 0; next
+    //
+    // Start sequencing
+    //
+    seqRepeat  = rept
+    seqTrack   = track
+    seqEvent   = seqTrack
+    seqTime    = 0
+    eventTime  = seqEvent->deltatime
+    numNotes   = 0
+    //
+    // Select proper sequencer based on hardware
+    //
+    if mbVIA1
+        musicSequence = @mbSequence
+    else
+        musicSequence = @spkrSequence
+    fin
+end
+//
+// Stop sequencing music track
+//
+export def musicStop#0
+    musicSequence = @noSequence
+end
+//
+// Get a keystroke and convert it to upper case
+//
+export def musicGetKey(backgroundProc)#1
+    byte key
+
+    while ^$C000 < 128
+        musicSequence($08, backgroundProc)#0 // Call background proc every half second
+    loop
+    key = ^$C000 & $7F
+    ^$C010
+    return key
+end
+done
+
+////////////////////////////////////////////////////////////////////////////////
+
+There are three main externally callable routines in this module:
+
+musicPlay(trackPtr, trackRepeat)
+    Start playing a track sequence in the getUpperKey routine
+    Params:
+        Pointer to a track sequence created from the cvtmidi.py tool
+        Repeat flag - TRUE or FALSE.
+    The first time its is called, it will try and search for a MockingBoard.
+    However, it is noted that this can cause problems if a Z-80 card is installed.
+    The scanning routine might cause a hang if it encounters a Z-80 card before
+    it finds a MockingBoard. In order to make this robust, it might be best to
+    prompt the user to search for the MockingBoard, enter the actual MockingBoard
+    slot, or skip the MockingBoard and use the internal speaker.
+
+musicStop()
+    Stop playing a track sequence in the getUpperKey routine
+        The getUpperKey routine will call a dummy sequence routine that will
+        keep the correct timing for any background processing
+
+getKey()
+    Wait for a keypress and return the character
+        While waiting for the keypress, the track sequence will be played though
+        either the MockingBoard (if present) or the internal speaker. Optionally,
+        a background function can be called periodically based on the sequencer
+        timing, so its pretty accurate.
+
+The low level internal speaker routines used to generate tones and waveforms
+can be called for warnings, sound effects, etc:
+
+spkrTone(period, duration)
+    Play a tone
+    Params:
+        (1020000 / 64 / period) Hz
+        (duration * 32 * 256 / 1020000) seconds
+
+spkrPWM(samples, speed, len)
+    Play a Pulse Width Modulated waveform
+    Params:
+        Pointer to 8 bit pulse width samples
+        Speed to play through samples
+        Length of sample
+
+The main routines for sequencing music are:
+
+mbSequence(yield, func)
+spkrSequence(yield, func)
+noSequence(yield, func)
+
+    All three try and provide more functionality than would be present in
+    previous music sequencers. The MockingBoard sequencer will attempt to play up
+    to 9 tones per sound generator (18 if a MockingBoard II is found). Up to
+    four notes will be played simultaneously on the internal speaker. In order
+    to play more notes than the hardware normally supports, a technique using
+    arpeggio (playing multiple notes in a quick sequence rather than concurrently)
+    pulls off this feat. The sequencers will immediately return if a keypress is
+    detected. Finally, during the sequencing, a background function can be periodically
+    called every 'yield' time which has a resolution of a 16th of a second. Pass
+    in zero for 'yield' and/or 'func' to disable any background calls.

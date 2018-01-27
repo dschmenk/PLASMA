@@ -1,17 +1,15 @@
 include "inc/cmdsys.plh"
-
-const modkeep     = $2000
-const modinitkeep = $4000
+include "inc/conio.plh"
 
 byte[] initstr
-byte = "   (        )\n"
-byte = "  )\\ )  ( /(  (\n"
-byte = " (()/(  )\\()) )\\ )       (   (\n"
+byte = " (        )\n"
+byte = " )\\ )  ( /(  (\n"
+byte = "(()/(  )\\()) )\\ )       (   (\n"
 byte = " /(_))((_)\\ (()/(       )\\  )\\\n"
 byte = "(_))    ((_) /(_))_  _ ((_)((_)\n"
-byte = "| _ \\ / _ \\(_)) __| | | | || __|\n"
-byte = "|   / | (_) |  || (_  | |_| || _|\n"
-byte = "|_|_\\\\___/   \\___| \\___/ |___|\n"
+byte = "| _ \\  / _ \\(_)) __|| | | || __|\n"
+byte = "|   / | (_) | | (_ || |_| || _|\n"
+byte = "|_|_\\  \\___/   \\___| \\___/ |___|\n"
 byte = "\n"
 byte = "       By Resman\n"
 byte = "       Artwork by Seth Sternberger\n"
@@ -22,10 +20,7 @@ word titlestr = @initstr
 // Machine specific routines
 //
 
-export word rnd, getkb, home, gotoxy, tone
-export word open, read, close, newline
-
-byte noapple1 = "APPLE 1 NOT SUPPORTED."
+export word rnd, getkb, tone
 
 const ENV_REG = $FFDF
 
@@ -34,8 +29,6 @@ const SPEAKER = $C030
 const a2rndnum = $4E // ZP location of RND
 const a2rndl   = $4E
 const a2rndh   = $4F
-
-word iobuff
 
 word a3rndnum = 12345
 
@@ -60,7 +53,7 @@ def a2tone(duration, delay)
     ^SPEAKER
     for i = 0 to delay
     next
-    duration = duration - 1
+    duration--
   loop
   return 0
 end
@@ -76,144 +69,14 @@ def a3tone(duration, pitch)
 end
 
 //
-// ProDOS file routines
-//
-
-def a2open(path, access)
-    byte params[6]
-
-    params.0 = 3
-    params:1 = path
-    params:3 = heapallocalign($0400, 8, @iobuff)
-    params.5 = 0
-    syscall($C8, @params)
-    return params.5
-end
-def a2close(refnum)
-    byte params[2]
-
-    if iobuff
-        heaprelease(iobuff)
-        iobuff = 0
-    fin
-    params.0 = 1
-    params.1 = refnum
-    return syscall($CC, @params)
-end
-def a2read(refnum, buff, len)
-    byte params[8]
-
-    params.0 = 4
-    params.1 = refnum
-    params:2 = buff
-    params:4 = len
-    params:6 = 0
-    syscall($CA, @params)
-    return params:6
-end
-def a2newline(refnum, emask, nlchar)
-    byte params[4]
-
-    params.0 = 3
-    params.1 = refnum
-    params.2 = emask
-    params.3 = nlchar
-    return syscall($C9, @params)
-end
-
-//
-// SOS file routines
-//
-
-def a3open(path, access)
-    byte params[7]
-
-    params.0 = 4
-    params:1 = path
-    params.3 = 0
-    params:4 = @access
-    params.6 = 1
-    syscall($C8, @params)
-    return params.3
-end
-def a3close(refnum)
-    byte params[2]
-
-    params.0 = 1
-    params.1 = refnum
-    return syscall($CC, @params)
-end
-def a3read(refnum, buff, len)
-    byte params[8]
-
-    params.0 = 4
-    params.1 = refnum
-    params:2 = buff
-    params:4 = len
-    params:6 = 0
-    syscall($CA, @params)
-    return params:6
-end
-def a3newline(refnum, emask, nlchar)
-    byte params[4]
-
-    params.0 = 3
-    params.1 = refnum
-    params.2 = $FF
-    params.3 = nlchar
-    return syscall($C9, @params)
-end
-
-//
 // Apple /// console routines
 //
 
-def dev_status(devnum, code, list)
-  byte params[5]
-
-  params.0 = 3
-  params.1 = devnum
-  params.2 = code
-  params:3 = list
-  return syscall($82, @params)
-end
-def a3keypressed
-  byte count
-  dev_status(cmdsys.devcons, 5, @count)
-  return count
-end
-
 def a3getkb
-  while not a3keypressed
+  while not conio:keypressed()
     a3rndnum = a3rndnum + 123
   loop
   return getc()
-end
-
-def a3home
-    putc(28)
-    return 0
-end
-
-def a3gotoxy(ch, cv)
-    putc(24)
-    putc(ch)
-    putc(25)
-    putc(cv)
-    return 0
-end
-
-//
-// Apple ][ console routines
-//
-
-def a2home
-    return call($FC58, 0, 0, 0, 0) // home()
-end
-
-def a2gotoxy(x, y)
-    ^$24 = x + ^$20
-    return call($FB5B, y + ^$22, 0, 0, 0)
 end
 
 //
@@ -222,36 +85,24 @@ end
 
 when MACHID & $C8
   is $08 // Apple 1
-    puts(@noapple1)
+    puts("APPLE 1 NOT SUPPORTED.")
     return -1
   is $C0 // Apple ///
     rnd     = @a3rnd
     getkb   = @a3getkb
-    home    = @a3home
-    gotoxy  = @a3gotoxy
     tone    = @a3tone
-    open    = @a3open
-    read    = @a3read
-    close   = @a3close
-    newline = @a3newline
     break
   otherwise // Apple ][
     rnd     = @a2rnd
     getkb   = @a2getkb
-    home    = @a2home
-    gotoxy  = @a2gotoxy
     tone    = @a2tone
-    open    = @a2open
-    read    = @a2read
-    close   = @a2close
-    newline = @a2newline
 wend
 
 //
 // Print title page
 //
 
-home()
+conio:home()
 while ^titlestr
   puts(titlestr)
   titlestr = titlestr + ^titlestr + 1

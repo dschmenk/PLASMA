@@ -1,3 +1,6 @@
+# 1/24/2018 Developer Preview #3 1.0 Available
+[Download and read the Release Notes](https://github.com/dschmenk/PLASMA/blob/master/doc/Preview%20Version%201.0.md)
+
 # The PLASMA Programming Language
 
 ![Luc Viatour](https://upload.wikimedia.org/wikipedia/commons/thumb/2/26/Plasma-lamp_2.jpg/1200px-Plasma-lamp_2.jpg)
@@ -7,7 +10,7 @@ PLASMA: **P**roto **L**anguage **A**s**S**e**M**bler for **A**pple
 
 PLASMA is a medium level programming language targeting the 8-bit 6502 processor. Historically, there were simple languages developed in the early years of computers that improved on the tedium of assembly language programming while still being low level enough for system coding. Languages like B, FORTH, and PLASMA fall into this category.
 
-PLASMA is a combination of operating environment, virtual machine, and assembler/compiler matched closely to the 6502 architecture.  It is an attempt to satisfy a few challenges surrounding code size, efficient execution, small runtime and flexible code location.  By architecting a unique bytecode that maps nearly one-to-one to the higher-level representation, the compiler can be very simple and execute quickly on the Apple II for a self-hosted environment.  A modular approach provides for incremental development and code reuse. The syntax of the language is heavily influenced by assembly, Pascal, and C. The design philosophy was to be as simple as feasible while retaining flexibility and symantic clarity. You won't find any unnecessary or redundant syntax in PLASMA.
+PLASMA is a combination of operating environment, virtual machine, and assembler/compiler matched closely to the 6502 architecture.  It is an attempt to satisfy a few challenges surrounding code size, efficient execution, small runtime and flexible code location.  By architecting a unique bytecode that maps nearly one-to-one to the higher-level representation, the compiler can be very simple and execute quickly on the Apple II for a self-hosted environment.  A modular approach provides for incremental development and code reuse. The syntax of the language is heavily influenced by assembly, Pascal, and C. The design philosophy was to be as simple as feasible while retaining flexibility and semantic clarity. You won't find any unnecessary or redundant syntax in PLASMA.
 
 Different projects have led to the architecture of PLASMA, most notably Apple Pascal, FORTH, and my own Java VM for the 6502: VM02. Each has tried to map a generic VM to the 6502 with varying levels of success.  Apple Pascal, based on the USCD Pascal using the p-code interpreter, was a very powerful system and ran fast enough on the Apple II to be interactive but didn't win any speed contests. FORTH was the poster child for efficiency and obtuse syntax. Commonly referred to as a write only language, it was difficult to come up to speed as a developer, especially when using others' code. My own project in creating a Java VM for the Apple II uncovered the folly of shoehorning a large, 32-bit virtual memory environment into 8-bit, 64K hardware.
 
@@ -380,7 +383,7 @@ char[64] txtfile = "UNTITLED"
 
 ### Function Definitions
 
-Functions are defined after all constants, variables and data. Function definitions can be `export`ed for inclusion in other modules and can be forward declared with a `predef` type in the constant and variable declarations. Functions can take parameters, passed on the evaluation stack, then copied to the local frame for easy access. They can have their own variable declarations, however, unlike the global declarations, no data can be predeclared - only storage space.  A local frame is built for every function invocation and there is also a limit of 254 bytes of local storage.  Each parameter takes two bytes of local storage, plus two bytes for the previous frame pointer.  If a function has no parameters or local variables, no local frame will be created, improving performance.  Functions always return a single value by default.
+Functions are defined after all constants, variables and data. Function definitions can be `export`ed for inclusion in other modules and can be forward declared with a `predef` type in the constant and variable declarations. Functions can take parameters passed on the evaluation stack, then copied to the local frame for easy access. They can have their own variable declarations, however, unlike the global declarations, no data can be predeclared - only storage space.  A local frame is built for every function invocation and there is also a limit of 254 bytes of local storage.  Each parameter takes two bytes of local storage, plus two bytes for the previous frame pointer.  If a function has no parameters or local variables, no local frame will be created, improving performance.  Functions return a single value by default.
 ```
 def myfunc(a, b) // Two parameters and defaults to one returned value
 ```
@@ -600,7 +603,7 @@ redraw
 
 ### Exported Declarations
 
-Data and function labels can be exported so other modules may access this modules data and code. By prepending `export` to the data or functions declaration, the label will become available to the loader for inter-module resolution. Exported labels are converted to uppercase with 16 significant characters.  Although the label will have to match the local version, external modules will match the case-insignificant, short version. Thus, "ThisIsAVeryLongLabelName" would be exported as: "THISISAVERYLONGL".
+Data and function labels can be exported so other modules may access this modules' data and code. By prepending `export` to the data or functions declaration, the label will become available to the loader for inter-module resolution. Exported labels are converted to uppercase with 16 significant characters.  Although the label will have to match the local version, external modules will match the case-insignificant, short version. Thus, "ThisIsAVeryLongLabelName" would be exported as: "THISISAVERYLONGL".
 
 Here is an example using the `import`s from the previous examples to export an initialized array of 10 elements (2 defined + null delimiter):
 
@@ -692,7 +695,7 @@ putc(']')
 putc('\n')
 ```
 
-Escaped characters, like the `\n` above are replaces with the Carriage Return character.  The list of escaped characters is:
+Escaped characters, like the `\n` above are replaced with the Carriage Return character.  The list of escaped characters is:
 
 | Escaped Char | ASCII Value
 |:------------:|------------
@@ -1256,7 +1259,7 @@ would silently return 100,0 because of the return value count in the definition.
 
 ## Native Assembly Functions
 
-Assembly code in PLASMA is implemented strictly as a pass-through to the assembler. No syntax checking, or checking at all, is made. All assembly routines *must* come after all data has been declared, and before any PLASMA function definitions. Native assembly functions can't see PLASMA labels and definitions, so they are pretty much relegated to leaf functions. Lastly, PLASMA modules are re-locatable, but labels inside assembly functions don't get flagged for fix-ups. The assembly code must use all relative branches and only accessing data/code at a fixed address. Data passed in on the PLASMA evaluation stack is readily accessed with the X register and the zero page address of the ESTK. The X register must be properly saved, incremented, and/or decremented to remain consistent with the rest of PLASMA. Parameters are **popped** off the evaluation stack with `INX`, and the return value is **pushed** with `DEX`. It is possible to relocate absolute addresses with a little trickery. Look to some of the library modules where native code is fixed up in the initialization block.
+Native assembly functions are only available on the cross-compiler. Assembly code in PLASMA is implemented strictly as a pass-through to the assembler. No syntax checking, or checking at all, is made. All assembly routines *must* come after all data has been declared, and before any PLASMA function definitions. Native assembly functions can't see PLASMA labels and definitions, so they are pretty much relegated to leaf functions. Lastly, PLASMA modules are re-locatable, but labels inside assembly functions don't get flagged for fix-ups. The assembly code must use all relative branches and only access data/code at a fixed address. Data passed in on the PLASMA evaluation stack is readily accessed with the X register and the zero page address of the ESTK. The X register must be properly saved, incremented, and/or decremented to remain consistent with the rest of PLASMA. Parameters are **popped** off the evaluation stack with `INX`, and the return value is **pushed** with `DEX`. It is possible to relocate absolute addresses with a little trickery. Look to some of the library modules where native code is fixed up in the initialization block.
 
 # Implementation
 

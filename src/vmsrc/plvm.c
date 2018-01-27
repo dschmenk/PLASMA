@@ -265,7 +265,7 @@ int load_mod(byte *mod)
         moddep  = header + 1;
         modsize = header[0] | (header[1] << 8);
         magic   = header[2] | (header[3] << 8);
-        if (magic == 0xDA7F)
+        if (magic == 0x6502)
         {
             /*
              * This is a relocatable bytecode module.

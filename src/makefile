@@ -5,7 +5,7 @@ PLVM01  = A1PLASMA\#060280
 PLVM02	= PLASMA.SYSTEM\#FF2000
 PLVM802	= PLASMA16.SYSTEM\#FF2000
 PLVM03	= SOS.INTERP\#050000
-CMD     = CMD\#FF2000
+CMD     = CMD\#061000
 ED      = ED\#FE1000
 SB      = SB\#FF2000
 ROD     = ROD\#FE1000
@@ -23,6 +23,8 @@ CONIO   = CONIO\#FE1000
 SANE    = SANE\#FE1000
 FPSTR   = FPSTR\#FE1000
 FPU     = FPU\#FE1000
+SNDSEQ  = SNDSEQ\#FE1000
+PLAYSEQ = PLAYSEQ\#FE1000
 SANITY  = SANITY\#FE1000
 RPNCALC = RPNCALC\#FE1000
 WIZNET  = WIZNET\#FE1000
@@ -41,14 +43,13 @@ ROGUEMAP= ROGUEMAP\#FE1000
 ROGUECOMBAT= ROGUECOMBAT\#FE1000
 HELLO   = HELLO\#FE1000
 MON     = MON\#FE1000
-HGR1    = HGR1\#FE1000
-HGR1TEST= HGR1TEST\#FE1000
 DGRTEST = DGRTEST\#FE1000
 TEST    = TEST\#FE1000
 TESTLIB = TESTLIB\#FE1000
 PROFILE = PROFILE\#FE1000
 MEMMGR  = MEMMGR\#FE1000
 MEMTEST = MEMTEST\#FE1000
+FIBERTEST = FIBERTEST\#FE1000
 FIBER   = FIBER\#FE1000
 LONGJMP = LONGJMP\#FE1000
 PLASM   = plasm
@@ -72,7 +73,7 @@ TXTTYPE	= .TXT
 #SYSTYPE	= \#FF2000
 #TXTTYPE	= \#040000
 
-all: $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVM802) $(PLVM03) $(CMD) $(PLASMAPLASM) $(CODEOPT) $(ARGS) $(MEMMGR) $(MEMTEST) $(FIBER) $(LONGJMP) $(ED) $(MON) $(ROD) $(SIEVE) $(UTHERNET2) $(UTHERNET) $(ETHERIP) $(INET) $(DHCP) $(HTTPD) $(ROGUE) $(ROGUEMAP) $(ROGUECOMBAT) $(ROGUEIO) $(HGR1) $(TONE) $(DGR) $(DGRTEST) $(FILEIO) $(CONIO) $(PORTIO) $(SPIPORT) $(SDFAT) $(FATCAT) $(FATGET) $(FATPUT) $(FATWDSK) $(FATRDSK) $(SANE) $(FPSTR) $(FPU) $(SANITY) $(RPNCALC)
+all: $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVM802) $(PLVM03) $(CMD) $(PLASMAPLASM) $(CODEOPT) $(ARGS) $(MEMMGR) $(MEMTEST) $(FIBER) $(FIBERTEST) $(LONGJMP) $(ED) $(MON) $(ROD) $(SIEVE) $(UTHERNET2) $(UTHERNET) $(ETHERIP) $(INET) $(DHCP) $(HTTPD) $(ROGUE) $(ROGUEMAP) $(ROGUECOMBAT) $(ROGUEIO) $(TONE) $(DGR) $(DGRTEST) $(FILEIO) $(CONIO) $(PORTIO) $(SPIPORT) $(SDFAT) $(FATCAT) $(FATGET) $(FATPUT) $(FATWDSK) $(FATRDSK) $(SANE) $(FPSTR) $(FPU) $(SANITY) $(RPNCALC) $(SNDSEQ) $(PLAYSEQ)
 
 clean:
 	-rm *FE1000 *FF2000 $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVM03)
@@ -155,6 +156,18 @@ $(MEMTEST): samplesrc/memtest.pla $(PLVM02) $(PLASM)
 $(FIBER): libsrc/fiber.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AMOW < libsrc/fiber.pla > libsrc/fiber.a
 	acme --setpc 4094 -o $(FIBER) libsrc/fiber.a
+
+$(FIBERTEST): samplesrc/fibertest.pla $(PLVM02) $(PLASM)
+	./$(PLASM) -AMOW < samplesrc/fibertest.pla > samplesrc/fibertest.a
+	acme --setpc 4094 -o $(FIBERTEST) samplesrc/fibertest.a
+
+$(SNDSEQ): libsrc/sndseq.pla $(PLVM02) $(PLASM)
+	./$(PLASM) -AMOW < libsrc/sndseq.pla > libsrc/sndseq.a
+	acme --setpc 4094 -o $(SNDSEQ) libsrc/sndseq.a
+
+$(PLAYSEQ): samplesrc/playseq.pla $(PLVM02) $(PLASM)
+	./$(PLASM) -AMOW < samplesrc/playseq.pla > samplesrc/playseq.a
+	acme --setpc 4094 -o $(PLAYSEQ) samplesrc/playseq.a
 
 $(LONGJMP): libsrc/longjmp.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AMOW < libsrc/longjmp.pla > libsrc/longjmp.a
@@ -283,12 +296,6 @@ $(ROGUECOMBAT): samplesrc/rogue.combat.pla $(PLVM02) $(PLASM)
 $(ROGUEMAP): samplesrc/rogue.map.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AMOW < samplesrc/rogue.map.pla > samplesrc/rogue.map.a
 	acme --setpc 4094 -o $(ROGUEMAP) samplesrc/rogue.map.a
-
-$(HGR1):	samplesrc/hgr1.pla samplesrc/hgr1test.pla $(PLVM02) $(PLASM)
-	./$(PLASM) -AMOW < samplesrc/hgr1test.pla > samplesrc/hgr1test.a
-	acme --setpc 4094 -o $(HGR1TEST) samplesrc/hgr1test.a
-	./$(PLASM) -AMOW < samplesrc/hgr1.pla > samplesrc/hgr1.a
-	acme --setpc 4094 -o $(HGR1) samplesrc/hgr1.a
 
 hello:	samplesrc/hello.pla $(PLVM) $(PLASM)
 	./$(PLASM) -AMOW < samplesrc/hello.pla > samplesrc/hello.a
