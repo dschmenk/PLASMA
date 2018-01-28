@@ -512,7 +512,7 @@ void emit_lambdafunc(int tag, char *name, int cparams, t_opseq *lambda_seq)
     emit_seq(lambda_seq);
     emit_pending_seq();
     if (cparams)
-        printf("\t%s\t$5A\t\t\t; LEAVE\n", DB);
+        printf("\t%s\t$5A,$%02X\t\t\t; LEAVE\t%d\n", DB, cparams*2, cparams*2);
     else
         printf("\t%s\t$5C\t\t\t; RET\n", DB);
 }
