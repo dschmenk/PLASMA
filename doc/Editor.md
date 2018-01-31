@@ -1,5 +1,5 @@
-          WELCOME TO PLASMA!
-          ==================
+      WELCOME TO THE PLASMA EDITOR!
+      =============================
 
 FIRST THINGS FIRST:
 TO NAVIGATE, USE THE ARROW KEYS.  ON THE
