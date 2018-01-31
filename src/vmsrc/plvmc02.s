@@ -1,6 +1,6 @@
 ;**********************************************************
 ;*
-;*          APPLE ][ 64K/128K PLASMA INTERPRETER
+;*          APPLE ][ enhanced 64K/128K PLASMA INTERPRETER
 ;*
 ;*              SYSTEM ROUTINES AND LOCATIONS
 ;*
@@ -181,12 +181,12 @@ OPTBL   !WORD   ZERO,ADD,SUB,MUL,DIV,MOD,INCR,DECR              ; 00 02 04 06 08
 ;*
 ;* ENTER INTO BYTECODE INTERPRETER
 ;*
-DINTRP  PLA
-        CLC
-        ADC     #$01
-        STA     IPL
+DINTRP  PLY
         PLA
-        ADC     #$00
+        INY
+        BNE     +
+        INC
++       STY     IPL
         STA     IPH
         LDY     #$00
         LDA     #>OPTBL
@@ -463,9 +463,8 @@ _NEG    LDA     #$00
         RTS
 _DIV    STY     IPY
         LDY     #$11            ; #BITS+1
-        LDA     #$00
-        STA     TMPL            ; REMNDRL
-        STA     TMPH            ; REMNDRH
+        STZ     TMPL            ; REMNDRL
+        STZ     TMPH            ; REMNDRH
         LDA     ESTKH,X
         AND     #$80
         STA     DVSIGN
@@ -617,8 +616,7 @@ SHL     STY     IPY
         BCC     SHL1
         LDY     ESTKL+1,X
         STY     ESTKH+1,X
-        LDY     #$00
-        STY     ESTKL+1,X
+        STZ     ESTKL+1,X
         SBC     #$08
 SHL1    TAY
         BEQ     SHL3
@@ -754,11 +752,10 @@ CS      DEX
         STA     IPL
         STA     ESTKL,X
         LDA     #$00
-        TAY
         ADC     IPH
         STA     IPH
         STA     ESTKH,X
-        LDA     (IP),Y
+        LDA     (IP)
         TAY
         JMP     NEXTOP
 ;
@@ -768,11 +765,9 @@ CSX     DEX
         CLC
         ADC     IPL
         STA     IPL
-        LDA     #$00
-        TAY
-        ADC     IPH
-        STA     IPH
-        LDA     PPL             ; SCAN POOL FOR STRING ALREADY THERE
+        BCC     +
+        INC     IPH
++       LDA     PPL             ; SCAN POOL FOR STRING ALREADY THERE
         STA     TMPL
         LDA     PPH
         STA     TMPH
@@ -784,9 +779,9 @@ _CMPPSX ;LDA    TMPH            ; CHECK FOR END OF POOL
         CMP     IFPL
         BCS     _CPYSX          ; AT OR BEYOND END OF POOL, COPY STRING OVER
 _CMPSX  STA     ALTRDOFF
-        LDA     (TMP),Y         ; COMPARE STRINGS FROM AUX MEM TO STRINGS IN MAIN MEM
+        LDA     (TMP)           ; COMPARE STRINGS FROM AUX MEM TO STRINGS IN MAIN MEM
         STA     ALTRDON
-        CMP     (IP),Y          ; COMPARE STRING LENGTHS
+        CMP     (IP)            ; COMPARE STRING LENGTHS
         BNE     _CNXTSX1
         TAY
 _CMPCSX STA     ALTRDOFF
@@ -801,18 +796,16 @@ _CMPCSX STA     ALTRDOFF
         LDA     TMPH
         STA     ESTKH,X
         BNE     _CEXSX
-_CNXTSX LDY     #$00
-        STA     ALTRDOFF
-        LDA     (TMP),Y
+_CNXTSX STA     ALTRDOFF
+        LDA     (TMP)
         STA     ALTRDON
 _CNXTSX1 SEC
         ADC     TMPL
         STA     TMPL
-        LDA     #$00
-        ADC     TMPH
-        STA     TMPH
+        BCC     _CMPPSX
+        INC     TMPH
         BNE     _CMPPSX
-_CPYSX  LDA     (IP),Y          ; COPY STRING FROM AUX TO MAIN MEM POOL
+_CPYSX  LDA     (IP)            ; COPY STRING FROM AUX TO MAIN MEM POOL
         TAY                     ; MAKE ROOM IN POOL AND SAVE ADDR ON ESTK
         EOR     #$FF
         CLC
@@ -828,8 +821,7 @@ _CPYSX1 LDA     (IP),Y          ; ALTRD IS ON,  NO NEED TO CHANGE IT HERE
         DEY
         CPY     #$FF
         BNE     _CPYSX1
-        INY
-_CEXSX  LDA     (IP),Y          ; SKIP TO NEXT OP ADDR AFTER STRING
+_CEXSX  LDA     (IP)            ; SKIP TO NEXT OP ADDR AFTER STRING
         TAY
         JMP     NEXTOP
 ;*
@@ -839,8 +831,7 @@ LB      LDA     ESTKL,X
         STA     ESTKH-1,X
         LDA     (ESTKH-1,X)
         STA     ESTKL,X
-        LDA     #$00
-        STA     ESTKH,X
+        STZ     ESTKH,X
         JMP     NEXTOP
 LW      LDA     ESTKL,X
         STA     ESTKH-1,X
@@ -861,8 +852,7 @@ LBX     LDA     ESTKL,X
         STA     ALTRDOFF
         LDA     (ESTKH-1,X)
         STA     ESTKL,X
-        LDA     #$00
-        STA     ESTKH,X
+        STZ     ESTKH,X
         STA     ALTRDON
         JMP     NEXTOP
 LWX     LDA     ESTKL,X
@@ -912,8 +902,7 @@ LLB     INY                     ;+INC_IP
         DEX
         LDA     (IFP),Y
         STA     ESTKL,X
-        LDA     #$00
-        STA     ESTKH,X
+        STZ     ESTKH,X
         LDY     IPY
         JMP     NEXTOP
 LLW     INY                     ;+INC_IP
@@ -937,8 +926,7 @@ LLBX    INY                     ;+INC_IP
         STA     ALTRDOFF
         LDA     (IFP),Y
         STA     ESTKL,X
-        LDA     #$00
-        STA     ESTKH,X
+        STZ     ESTKH,X
         STA     ALTRDON
         LDY     IPY
         JMP     NEXTOP
@@ -968,8 +956,7 @@ LAB     INY                     ;+INC_IP
         LDA     (ESTKH-2,X)
         DEX
         STA     ESTKL,X
-        LDA     #$00
-        STA     ESTKH,X
+        STZ     ESTKH,X
         JMP     NEXTOP
 LAW     INY                     ;+INC_IP
         LDA     (IP),Y
@@ -978,11 +965,10 @@ LAW     INY                     ;+INC_IP
         LDA     (IP),Y
         STA     TMPH
         STY     IPY
-        LDY     #$00
-        LDA     (TMP),Y
+        LDA     (TMP)
         DEX
         STA     ESTKL,X
-        INY
+        LDY     #$01
         LDA     (TMP),Y
         STA     ESTKH,X
         LDY     IPY
@@ -998,8 +984,7 @@ LABX    INY                     ;+INC_IP
         LDA     (ESTKH-2,X)
         DEX
         STA     ESTKL,X
-        LDA     #$00
-        STA     ESTKH,X
+        STZ     ESTKH,X
         STA     ALTRDON
         JMP     NEXTOP
 LAWX    INY                     ;+INC_IP
@@ -1010,11 +995,10 @@ LAWX    INY                     ;+INC_IP
         STA     TMPH
         STY     IPY
         STA     ALTRDOFF
-        LDY     #$00
-        LDA     (TMP),Y
+        LDA     (TMP)
         DEX
         STA     ESTKL,X
-        INY
+        LDY     #$01
         LDA     (TMP),Y
         STA     ESTKH,X
         STA     ALTRDON
@@ -1124,10 +1108,9 @@ SAW     INY                     ;+INC_IP
         LDA     (IP),Y
         STA     TMPH
         STY     IPY
-        LDY     #$00
         LDA     ESTKL,X
-        STA     (TMP),Y
-        INY
+        STA     (TMP)
+        LDY     #$01
         LDA     ESTKH,X
         STA     (TMP),Y
         LDY     IPY
@@ -1152,10 +1135,9 @@ DAW     INY                     ;+INC_IP
         LDA     (IP),Y
         STA     TMPH
         STY     IPY
-        LDY     #$00
         LDA     ESTKL,X
-        STA     (TMP),Y
-        INY
+        STA     (TMP)
+        LDY     #$01
         LDA     ESTKH,X
         STA     (TMP),Y
         LDY     IPY
@@ -1180,9 +1162,8 @@ ISNE    LDA     ESTKL,X
         LDA     ESTKH,X
         CMP     ESTKH+1,X
         BNE     ISTRU
-ISFLS   LDA     #$00
-        STA     ESTKL+1,X
-        STA     ESTKH+1,X
+ISFLS   STZ     ESTKL+1,X
+        STZ     ESTKH+1,X
         JMP     DROP
 ;
 ISGE    LDA     ESTKL+1,X
@@ -1252,14 +1233,13 @@ BRNCH   TYA                     ; FLATTEN IP
         ADC     IPL
         STA     TMPL
         LDA     #$00
-        TAY
         ADC     IPH
         STA     TMPH            ; ADD BRANCH OFFSET
-        LDA     (TMP),Y
+        LDA     (TMP)
         ;CLC                    ; BETTER NOT CARRY OUT OF IP+Y
         ADC     TMPL
         STA     IPL
-        INY
+        LDY     #$01
         LDA     (TMP),Y
         ADC     TMPH
         STA     IPH
