@@ -685,26 +685,26 @@ XOR     PLA
 ;*
 SHL     PLA
         TAX
-        BEQ     SHLEX
+        BEQ     +
         LDA     TOS,S
 -       ASL
         DEX
         BNE     -
         STA     TOS,S
-SHLEX   JMP     NEXTOP
++       JMP     NEXTOP
 ;*
 ;* SHIFT TOS-1 RIGHT BY TOS
 ;*
 SHR     PLA
         TAX
-        BEQ     SHREX
+        BEQ     +
         LDA     TOS,S
 -       CMP     #$8000
         ROR
         DEX
         BNE     -
         STA     TOS,S
-SHREX   JMP     NEXTOP
++       JMP     NEXTOP
 ;*
 ;* LOGICAL AND
 ;*

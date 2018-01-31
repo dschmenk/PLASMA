@@ -5,6 +5,7 @@
 ;*              SYSTEM ROUTINES AND LOCATIONS
 ;*
 ;**********************************************************
+                !CPU    65C02
 ;*
 ;* MONITOR SPECIAL LOCATIONS
 ;*
@@ -127,9 +128,16 @@ RAMDONE ;CLI UNTIL I KNOW WHAT TO DO WITH THE UNENHANCED IIE
         INY
         BNE     -
 ;*
+;* INSERT 65C02 OPS IF APPLICABLE
+;*
+        LDA     #$00
+        INC
+        BEQ     +
+        JSR     C02OPS
+;*
 ;* SAVE DEFAULT COMMAND INTERPRETER PATH IN LC
 ;*
-        JSR     PRODOS          ; GET PREFIX
++       JSR     PRODOS          ; GET PREFIX
         !BYTE   $C7
         !WORD   GETPFXPARMS
         LDY     STRBUF          ; APPEND "CMD"
@@ -614,21 +622,21 @@ XOR     LDA     ESTKL+1,X
 SHL     STY     IPY
         LDA     ESTKL,X
         CMP     #$08
-        BCC     SHL1
+        BCC     +
         LDY     ESTKL+1,X
         STY     ESTKH+1,X
         LDY     #$00
         STY     ESTKL+1,X
         SBC     #$08
-SHL1    TAY
-        BEQ     SHL3
++       TAY
+        BEQ     +
         LDA     ESTKL+1,X
-SHL2    ASL
+-       ASL
         ROL     ESTKH+1,X
         DEY
-        BNE     SHL2
+        BNE     -
         STA     ESTKL+1,X
-SHL3    LDY     IPY
++       LDY     IPY
         JMP     DROP
 ;*
 ;* SHIFT TOS-1 RIGHT BY TOS
@@ -636,26 +644,26 @@ SHL3    LDY     IPY
 SHR     STY     IPY
         LDA     ESTKL,X
         CMP     #$08
-        BCC     SHR2
+        BCC     ++
         LDY     ESTKH+1,X
         STY     ESTKL+1,X
         CPY     #$80
         LDY     #$00
-        BCC     SHR1
+        BCC     +
         DEY
-SHR1    STY     ESTKH+1,X
++       STY     ESTKH+1,X
         SEC
         SBC     #$08
-SHR2    TAY
-        BEQ     SHR4
+++      TAY
+        BEQ     +
         LDA     ESTKH+1,X
-SHR3    CMP     #$80
+-       CMP     #$80
         ROR
         ROR     ESTKL+1,X
         DEY
-        BNE     SHR3
+        BNE     -
         STA     ESTKH+1,X
-SHR4    LDY     IPY
++       LDY     IPY
         JMP     DROP
 ;*
 ;* LOGICAL AND
@@ -698,19 +706,26 @@ LNOT    LDA     ESTKL,X
         ORA     ESTKH,X
         BNE     +
         LDA     #$FF
-        BNE     ++
+        STA     ESTKL,X
+        STA     ESTKH,X
+        JMP     NEXTOP
 ;*
 ;* CONSTANT
 ;*
 ZERO    DEX
 +       LDA     #$00
-++      STA     ESTKL,X
+        STA     ESTKL,X
         STA     ESTKH,X
         JMP     NEXTOP
-CFFB    LDA     #$FF
-        !BYTE $2C   ; BIT $00A9 - effectively skips LDA #$00, no harm in reading this address
-CB      LDA     #$00
-        DEX
+CFFB    DEX
+        LDA     #$FF
+        STA     ESTKH,X
+        INY
+        LDA     (IP),Y
+        STA     ESTKL,X
+        JMP     NEXTOP
+CB      DEX
+        LDA     #$00
         STA     ESTKH,X
         INY
         LDA     (IP),Y
@@ -1131,8 +1146,9 @@ SAW     INY                     ;+INC_IP
         LDA     ESTKH,X
         STA     (TMP),Y
         LDY     IPY
-        BMI     FIXDROP
+        BMI     +
         JMP     DROP
+        JMP     FIXDROP
 ;*
 ;* STORE VALUE TO ABSOLUTE ADDRESS WITHOUT POPPING STACK
 ;*
@@ -1500,3 +1516,332 @@ LEAVE   INY                     ;+INC_IP
 RET     RTS
 VMEND   =       *
 }
+;***************************************
+;*                                     *
+;* 65C02 OPS TO OVERWRITE STANDARD OPS *
+;*                                     *
+;***************************************
+C02OPS  LDA     #<DINTRP
+        LDX     #>DINTRP
+        LDY     #(CDINTRPEND-CDINTRP)
+        JSR     OPCPY
+CDINTRP PLY
+        PLA
+        INY
+        BNE     +
+        INC
++       STY     IPL
+        STA     IPH
+        LDY     #$00
+        LDA     #>OPTBL
+        STA     OPPAGE
+        JMP     FETCHOP
+CDINTRPEND
+;
+        LDA     #<ZERO
+        LDX     #>ZERO
+        LDY     #(CZEROEND-CZERO)
+        JSR     OPCPY
+CZERO   DEX
+        STZ     ESTKL,X
+        STZ     ESTKH,X
+        JMP     NEXTOP
+CZEROEND
+;
+        LDA     #<CB
+        LDX     #>CB
+        LDY     #(CCBEND-CCB)
+        JSR     OPCPY
+CCB     DEX
+        STZ     ESTKH,X
+        INY
+        LDA     (IP),Y
+        STA     ESTKL,X
+        JMP     NEXTOP
+CCBEND
+;
+        LDA     #<CS
+        LDX     #>CS
+        LDY     #(CCSEND-CCS)
+        JSR     OPCPY
+CCS     DEX
+        INY                     ;+INC_IP
+        TYA                     ; NORMALIZE IP AND SAVE STRING ADDR ON ESTK
+        CLC
+        ADC     IPL
+        STA     IPL
+        STA     ESTKL,X
+        LDA     #$00
+        ADC     IPH
+        STA     IPH
+        STA     ESTKH,X
+        LDA     (IP)
+        TAY
+        JMP     NEXTOP
+CCSEND
+;
+        LDA     #<SHL
+        LDX     #>SHL
+        LDY     #(CSHLEND-CSHL)
+        JSR     OPCPY
+CSHL    STY     IPY
+        LDA     ESTKL,X
+        CMP     #$08
+        BCC     +
+        LDY     ESTKL+1,X
+        STY     ESTKH+1,X
+        STZ     ESTKL+1,X
+        SBC     #$08
++       TAY
+        BEQ     +
+        LDA     ESTKL+1,X
+-       ASL
+        ROL     ESTKH+1,X
+        DEY
+        BNE     -
+        STA     ESTKL+1,X
++       LDY     IPY
+        JMP     DROP
+CSHLEND
+;
+        LDA     #<LB
+        LDX     #>LB
+        LDY     #(CLBEND-CLB)
+        JSR     OPCPY
+CLB     LDA     ESTKL,X
+        STA     ESTKH-1,X
+        LDA     (ESTKH-1,X)
+        STA     ESTKL,X
+        STZ     ESTKH,X
+        JMP     NEXTOP
+CLBEND
+;
+        LDA     #<LBX
+        LDX     #>LBX
+        LDY     #(CLBXEND-CLBX)
+        JSR     OPCPY
+CLBX    LDA     ESTKL,X
+        STA     ESTKH-1,X
+        STA     ALTRDOFF
+        LDA     (ESTKH-1,X)
+        STA     ESTKL,X
+        STZ     ESTKH,X
+        STA     ALTRDON
+        JMP     NEXTOP
+CLBXEND
+;
+        LDA     #<LLB
+        LDX     #>LLB
+        LDY     #(CLLBEND-CLLB)
+        JSR     OPCPY
+CLLB    INY                     ;+INC_IP
+        LDA     (IP),Y
+        STY     IPY
+        TAY
+        DEX
+        LDA     (IFP),Y
+        STA     ESTKL,X
+        STZ     ESTKH,X
+        LDY     IPY
+        JMP     NEXTOP
+CLLBEND
+;
+        LDA     #<LLBX
+        LDX     #>LLBX
+        LDY     #(CLLBXEND-CLLBX)
+        JSR     OPCPY
+CLLBX   INY                     ;+INC_IP
+        LDA     (IP),Y
+        STY     IPY
+        TAY
+        DEX
+        STA     ALTRDOFF
+        LDA     (IFP),Y
+        STA     ESTKL,X
+        STZ     ESTKH,X
+        STA     ALTRDON
+        LDY     IPY
+        JMP     NEXTOP
+CLLBXEND
+;
+        LDA     #<LAB
+        LDX     #>LAB
+        LDY     #(CLABEND-CLAB)
+        JSR     OPCPY
+CLAB    INY                     ;+INC_IP
+        LDA     (IP),Y
+        STA     ESTKH-2,X
+        INY                     ;+INC_IP
+        LDA     (IP),Y
+        STA     ESTKH-1,X
+        LDA     (ESTKH-2,X)
+        DEX
+        STA     ESTKL,X
+        STZ     ESTKH,X
+        JMP     NEXTOP
+CLABEND
+;
+        LDA     #<LAW
+        LDX     #>LAW
+        LDY     #(CLAWEND-CLAW)
+        JSR     OPCPY
+CLAW    INY                     ;+INC_IP
+        LDA     (IP),Y
+        STA     TMPL
+        INY                     ;+INC_IP
+        LDA     (IP),Y
+        STA     TMPH
+        STY     IPY
+        LDA     (TMP)
+        DEX
+        STA     ESTKL,X
+        LDY     #$01
+        LDA     (TMP),Y
+        STA     ESTKH,X
+        LDY     IPY
+        JMP     NEXTOP
+CLAWEND
+;
+        LDA     #<LABX
+        LDX     #>LABX
+        LDY     #(CLABXEND-CLABX)
+        JSR     OPCPY
+CLABX   INY                     ;+INC_IP
+        LDA     (IP),Y
+        STA     ESTKH-2,X
+        INY                     ;+INC_IP
+        LDA     (IP),Y
+        STA     ESTKH-1,X
+        STA     ALTRDOFF
+        LDA     (ESTKH-2,X)
+        DEX
+        STA     ESTKL,X
+        STZ     ESTKH,X
+        STA     ALTRDON
+        JMP     NEXTOP
+CLABXEND
+;
+        LDA     #<LAWX
+        LDX     #>LAWX
+        LDY     #(CLAWXEND-CLAWX)
+        JSR     OPCPY
+CLAWX   INY                     ;+INC_IP
+        LDA     (IP),Y
+        STA     TMPL
+        INY                     ;+INC_IP
+        LDA     (IP),Y
+        STA     TMPH
+        STY     IPY
+        STA     ALTRDOFF
+        LDA     (TMP)
+        DEX
+        STA     ESTKL,X
+        LDY     #$01
+        LDA     (TMP),Y
+        STA     ESTKH,X
+        STA     ALTRDON
+        LDY     IPY
+        JMP     NEXTOP
+CLAWXEND
+;
+        LDA     #<SAW
+        LDX     #>SAW
+        LDY     #(CSAWEND-CSAW)
+        JSR     OPCPY
+CSAW    INY                     ;+INC_IP
+        LDA     (IP),Y
+        STA     TMPL
+        INY                     ;+INC_IP
+        LDA     (IP),Y
+        STA     TMPH
+        STY     IPY
+        LDA     ESTKL,X
+        STA     (TMP)
+        LDY     #$01
+        LDA     ESTKH,X
+        STA     (TMP),Y
+        LDY     IPY
+        BMI     +
+        JMP     DROP
++       JMP     FIXDROP
+CSAWEND
+;
+        LDA     #<DAW
+        LDX     #>DAW
+        LDY     #(CDAWEND-CDAW)
+        JSR     OPCPY
+CDAW    INY                     ;+INC_IP
+        LDA     (IP),Y
+        STA     TMPL
+        INY                     ;+INC_IP
+        LDA     (IP),Y
+        STA     TMPH
+        STY     IPY
+        LDA     ESTKL,X
+        STA     (TMP)
+        LDY     #$01
+        LDA     ESTKH,X
+        STA     (TMP),Y
+        LDY     IPY
+        JMP     NEXTOP
+CDAWEND
+;
+        LDA     #<ISFLS
+        LDX     #>ISFLS
+        LDY     #(CISFLSEND-CISFLS)
+        JSR     OPCPY
+CISFLS  STZ     ESTKL+1,X
+        STZ     ESTKH+1,X
+        JMP     DROP
+CISFLSEND
+;
+        LDA     #<BRNCH
+        LDX     #>BRNCH
+        LDY     #(CBRNCHEND-CBRNCH)
+        JSR     OPCPY
+CBRNCH  TYA                     ; FLATTEN IP
+        SEC
+        ADC     IPL
+        STA     TMPL
+        LDA     #$00
+        ADC     IPH
+        STA     TMPH            ; ADD BRANCH OFFSET
+        LDA     (TMP)
+        ;CLC                    ; BETTER NOT CARRY OUT OF IP+Y
+        ADC     TMPL
+        STA     IPL
+        LDY     #$01
+        LDA     (TMP),Y
+        ADC     TMPH
+        STA     IPH
+        DEY
+        JMP     FETCHOP
+CBRNCHEND
+;
+        RTS
+;*
+;* COPY OP TO VM
+;*
+OPCPY   STA     DST
+        STX     DST+1
+        PLA
+        STA     SRC
+        PLA
+        STA     SRC+1
+        TYA
+        CLC
+        ADC     SRC
+        TAX
+        LDA     #$00
+        ADC     SRC+1
+        PHA
+        PHX
+        INC     SRC
+        BNE     +
+        INC     SRC+1
++
+-       LDA     (SRC),Y
+        STA     (DST),Y
+        DEY
+        BPL     -
+        RTS
