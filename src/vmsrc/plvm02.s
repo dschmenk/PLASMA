@@ -509,7 +509,8 @@ _DIVLP  ROL     TMPL            ; REMNDRL
         ROL     ESTKH+1,X       ; DVDNDH
         DEY
         BNE     _DIVLP
-_DIVEX  LDY     IPY
+_DIVEX  INX
+        LDY     IPY
         RTS
 ;*
 ;* NEGATE TOS
@@ -526,7 +527,6 @@ NEG     LDA     #$00
 ;* DIV TOS-1 BY TOS
 ;*
 DIV     JSR     _DIV
-        INX
         LSR     DVSIGN          ; SIGN(RESULT) = (SIGN(DIVIDEND) + SIGN(DIVISOR)) & 1
         BCS     NEG
         JMP     NEXTOP
@@ -534,7 +534,6 @@ DIV     JSR     _DIV
 ;* MOD TOS-1 BY TOS
 ;*
 MOD     JSR     _DIV
-        INX
         LDA     TMPL            ; REMNDRL
         STA     ESTKL,X
         LDA     TMPH            ; REMNDRH
@@ -548,10 +547,9 @@ MOD     JSR     _DIV
 DIVMOD  JSR     _DIV
         LSR     DVSIGN          ; SIGN(RESULT) = (SIGN(DIVIDEND) + SIGN(DIVISOR)) & 1
         BCC     +
-        INX
         JSR     _NEG
-        DEX
-+       LDA     TMPL            ; REMNDRL
++       DEX
+        LDA     TMPL            ; REMNDRL
         STA     ESTKL,X
         LDA     TMPH            ; REMNDRH
         STA     ESTKH,X
@@ -562,18 +560,18 @@ DIVMOD  JSR     _DIV
 ;* INCREMENT TOS
 ;*
 INCR    INC     ESTKL,X
-        BEQ     INCR1
+        BEQ     +
         JMP     NEXTOP
-INCR1   INC     ESTKH,X
++       INC     ESTKH,X
         JMP     NEXTOP
 ;*
 ;* DECREMENT TOS
 ;*
 DECR    LDA     ESTKL,X
-        BEQ     DECR1
+        BEQ     +
         DEC     ESTKL,X
         JMP     NEXTOP
-DECR1   DEC     ESTKL,X
++       DEC     ESTKL,X
         DEC     ESTKH,X
         JMP     NEXTOP
 ;*
@@ -670,14 +668,14 @@ SHR     STY     IPY
 ;*
 LAND    LDA     ESTKL+1,X
         ORA     ESTKH+1,X
-        BEQ     LAND2
+        BEQ     ++
         LDA     ESTKL,X
         ORA     ESTKH,X
-        BEQ     LAND1
+        BEQ     +
         LDA     #$FF
-LAND1   STA     ESTKL+1,X
++       STA     ESTKL+1,X
         STA     ESTKH+1,X
-LAND2   JMP     DROP
+++      JMP     DROP
 ;*
 ;* LOGICAL OR
 ;*
@@ -685,11 +683,11 @@ LOR     LDA     ESTKL,X
         ORA     ESTKH,X
         ORA     ESTKL+1,X
         ORA     ESTKH+1,X
-        BEQ     LOR1
+        BEQ     +
         LDA     #$FF
         STA     ESTKL+1,X
         STA     ESTKH+1,X
-LOR1    JMP     DROP
++       JMP     DROP
 ;*
 ;* DUPLICATE TOS
 ;*
@@ -720,14 +718,14 @@ ZERO    DEX
 CFFB    DEX
         LDA     #$FF
         STA     ESTKH,X
-        INY
+        INY                     ;+INC_IP
         LDA     (IP),Y
         STA     ESTKL,X
         JMP     NEXTOP
 CB      DEX
         LDA     #$00
         STA     ESTKH,X
-        INY
+        INY                     ;+INC_IP
         LDA     (IP),Y
         STA     ESTKL,X
         JMP     NEXTOP
@@ -762,9 +760,9 @@ CW      DEX
 ;* CONSTANT STRING
 ;*
 CS      DEX
-        INY                     ;+INC_IP
+        ;INY                     ;+INC_IP
         TYA                     ; NORMALIZE IP AND SAVE STRING ADDR ON ESTK
-        CLC
+        SEC
         ADC     IPL
         STA     IPL
         STA     ESTKL,X
@@ -778,9 +776,9 @@ CS      DEX
         JMP     NEXTOP
 ;
 CSX     DEX
-        INY                     ;+INC_IP
+        ;INY                     ;+INC_IP
         TYA                     ; NORMALIZE IP
-        CLC
+        SEC
         ADC     IPL
         STA     IPL
         LDA     #$00
@@ -1565,9 +1563,9 @@ CCBEND
         LDY     #(CCSEND-CCS)
         JSR     OPCPY
 CCS     DEX
-        INY                     ;+INC_IP
+        ;INY                     ;+INC_IP
         TYA                     ; NORMALIZE IP AND SAVE STRING ADDR ON ESTK
-        CLC
+        SEC
         ADC     IPL
         STA     IPL
         STA     ESTKL,X
