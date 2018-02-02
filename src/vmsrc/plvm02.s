@@ -135,6 +135,21 @@ RAMDONE ;CLI UNTIL I KNOW WHAT TO DO WITH THE UNENHANCED IIE
         BEQ     +
         JSR     C02OPS
 ;*
+;* SET 64K ENTER/LEAVE (NO NEED FOR STRING POOL)
+;*
++       LDA     MACHID
+        AND     #$30
+        CMP     #$30
+        BEQ     +
+        LDA     #<ENTER64
+        STA     OPTBL+$58
+        LDA     #>ENTER64
+        STA     OPTBL+$59
+        LDA     #<LEAVE64
+        STA     OPTBL+$5A
+        LDA     #>LEAVE64
+        STA     OPTBL+$5B
+;*
 ;* SAVE DEFAULT COMMAND INTERPRETER PATH IN LC
 ;*
 +       JSR     PRODOS          ; GET PREFIX
@@ -183,7 +198,7 @@ OPTBL   !WORD   ZERO,ADD,SUB,MUL,DIV,MOD,INCR,DECR              ; 00 02 04 06 08
         !WORD   LNOT,LOR,LAND,LA,LLA,CB,CW,CS                   ; 20 22 24 26 28 2A 2C 2E
         !WORD   DROP,DUP,NEXTOP,DIVMOD,BRGT,BRLT,BREQ,BRNE      ; 30 32 34 36 38 3A 3C 3E
         !WORD   ISEQ,ISNE,ISGT,ISLT,ISGE,ISLE,BRFLS,BRTRU       ; 40 42 44 46 48 4A 4C 4E
-        !WORD   BRNCH,IBRNCH,CALL,ICAL,ENTER,LEAVE,RET,CFFB     ; 50 52 54 56 58 5A 5C 5E
+        !WORD   BRNCH,IBRNCH,CALL,ICAL,ENTER,LEAVE,RET,CFFB   ; 50 52 54 56 58 5A 5C 5E
         !WORD   LB,LW,LLB,LLW,LAB,LAW,DLB,DLW                   ; 60 62 64 66 68 6A 6C 6E
         !WORD   SB,SW,SLB,SLW,SAB,SAW,DAB,DAW                   ; 70 72 74 76 78 7A 7C 7E
 ;*
@@ -390,7 +405,7 @@ OPXTBL  !WORD   ZERO,ADD,SUB,MUL,DIV,MOD,INCR,DECR              ; 00 02 04 06 08
         !WORD   LNOT,LOR,LAND,LA,LLA,CB,CW,CSX                  ; 20 22 24 26 28 2A 2C 2E
         !WORD   DROP,DUP,NEXTOP,DIVMOD,BRGT,BRLT,BREQ,BRNE      ; 30 32 34 36 38 3A 3C 3E
         !WORD   ISEQ,ISNE,ISGT,ISLT,ISGE,ISLE,BRFLS,BRTRU       ; 40 42 44 46 48 4A 4C 4E
-        !WORD   BRNCH,IBRNCH,CALLX,ICALX,ENTER,LEAVEX,RETX,CFFB ; 50 52 54 56 58 5A 5C 5E
+        !WORD   BRNCH,IBRNCH,CALLX,ICALX,ENTER,LEAVEX,RETX,CFFB; 50 52 54 56 58 5A 5C 5E
         !WORD   LBX,LWX,LLBX,LLWX,LABX,LAWX,DLB,DLW             ; 60 62 64 66 68 6A 6C 6E
         !WORD   SB,SW,SLB,SLW,SAB,SAW,DAB,DAW                   ; 70 72 74 76 78 7A 7C 7E
 ;*
@@ -1449,6 +1464,29 @@ ICALX   LDA     ESTKL,X
 ;*
 ;* ENTER FUNCTION WITH FRAME SIZE AND PARAM COUNT
 ;*
+ENTER64 INY
+        LDA     (IP),Y
+        EOR     #$FF
+        SEC
+        ADC     IFPL
+        STA     IFPL
+        BCS     +
+        DEC     IFPH
++       INY
+        LDA     (IP),Y
+        BEQ     +
+        ASL
+        TAY
+-       LDA     ESTKH,X
+        DEY
+        STA     (IFP),Y
+        LDA     ESTKL,X
+        INX
+        DEY
+        STA     (IFP),Y
+        BNE     -
++       LDY     #$03
+        JMP     FETCHOP
 ENTER   LDA     IFPH
         PHA                     ; SAVE ON STACK FOR LEAVE
         LDA     IFPL
@@ -1498,6 +1536,15 @@ RETX    STA     ALTRDOFF
         LDA     PSR
         PHA
         PLP
+        RTS
+LEAVE64 INY                     ;+INC_IP
+        LDA     (IP),Y
+        CLC
+        ADC     IFPL
+        STA     IFPL
+        BCS     +
+        RTS
++       INC     IFPH
         RTS
 LEAVE   INY                     ;+INC_IP
         LDA     (IP),Y
