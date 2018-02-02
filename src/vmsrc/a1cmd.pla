@@ -1,3 +1,6 @@
+const FALSE        = 0
+const TRUE         = not FALSE
+
 const RELADDR      = $1000
 const inbuff       = $200
 const freemem      = $0006
@@ -31,15 +34,19 @@ const CFFAEntryPtr = $0B
 // Pedefined functions.
 //
 predef syscall(cmd,null)#1, call(addr,areg,xreg,yreg,status)#1
-predef crout()#0, cout(c)#0, prstr(s)#0, print(i)#0, cin()#1, rdstr(p)#1, toupper(c)#1
+predef crout()#0, cout(c)#0, prstr(s)#0, print(i)#0, prbyte(b)#0, prword(w)#0
+predef cin()#1, rdstr(p)#1, toupper(c)#1, strcpy(dst,src)#1, strcat(dst,src)#1
 predef markheap()#1, allocheap(size)#1, allocalignheap(size, pow2, freeaddr), releaseheap(newheap)#1, availheap()#1
 predef memset(addr,value,size)#0, memcpy(dst,src,size)#0
-predef uword_isgt(a,b)#1, uword_isge(a,b)#1, uword_islt(a,b)#1, uword_isle(a,b)#1, sext(a)#1, divmod(a,b)#2
-predef loadmod(mod)#1, execmod(modfile)#1, lookupstrmod(str)#1
+predef uword_isgt(a,b)#1, uword_isge(a,b)#1, uword_islt(a,b)#1, uword_isle(a,b)#1
+predef sext(a)#1, divmod(a,b)#2, execmod(modfile)#1
 //
-// System variables.
+// Exported CMDSYS table
 //
-word version     = $0100 // 01.00
+word version    = $0100 // 01.00
+word syspath
+word syscmdln
+word            = @execmod
 word systemflags = 0
 word heap
 word symtbl, lastsym
@@ -68,14 +75,17 @@ word cmdptr       = @hexchar // make it point to a zero
 //
 byte syslibstr[]  = "CMDSYS"
 byte machidstr[]  = "MACHID"
-byte syspathstr[] = "SYSPATH"
 byte putcstr[]    = "PUTC"
 byte putlnstr[]   = "PUTLN"
 byte putsstr[]    = "PUTS"
 byte putistr[]    = "PUTI"
+byte putbstr[]    = "PUTB"
+byte putwstr[]    = "PUTH"
 byte getcstr[]    = "GETC"
 byte getsstr[]    = "GETS"
 byte toupstr[]    = "TOUPPER"
+byte strcpystr[]  = "STRCPY"
+byte strcatstr[]  = "STRCAT"
 byte sysstr[]     = "SYSCALL"
 byte callstr[]    = "CALL"
 byte hpmarkstr[]  = "HEAPMARK"
@@ -91,8 +101,6 @@ byte uisltstr[]   = "ISULT"
 byte uislestr[]   = "ISULE"
 byte sextstr[]    = "SEXT"
 byte divmodstr[]  = "DIVMOD"
-byte argstr[]     = "ARGS"
-byte syspath[]    = "" // Set to NULL
 word exports[]    = @syslibstr, @version
 word              = @sysstr,    @syscall
 word              = @callstr,   @call
@@ -100,6 +108,8 @@ word              = @putcstr,   @cout
 word              = @putlnstr,  @crout
 word              = @putsstr,   @prstr
 word              = @putistr,   @print
+word              = @putbstr,   @prbyte
+word              = @putwstr,   @prword
 word              = @getcstr,   @cin
 word              = @getsstr,   @rdstr
 word              = @toupstr,   @toupper
@@ -110,6 +120,8 @@ word              = @hprelstr,  @releaseheap
 word              = @hpavlstr,  @availheap
 word              = @memsetstr, @memset
 word              = @memcpystr, @memcpy
+word              = @strcpystr, @strcpy
+word              = @strcatstr, @strcat
 word              = @uisgtstr,  @uword_isgt
 word              = @uisgestr,  @uword_isge
 word              = @uisltstr,  @uword_islt
@@ -117,10 +129,18 @@ word              = @uislestr,  @uword_isle
 word              = @sextstr,   @sext
 word              = @divmodstr, @divmod
 word              = @machidstr, @machid
-word              = @syspathstr,@syspath
-word              = @argstr,    @cmdptr
 word              = 0
 word syslibsym    = @exports
+//
+// Utility functions
+//
+asm saveX#0
+        STX     XREG+1
+end
+asm restoreX#0
+XREG    LDX     #$00
+        RTS
+end
 //
 // CALL CFFA1 API ENTRYPOINT
 // SYSCALL(CMD, 0)
@@ -189,189 +209,189 @@ end
 //   With optimizations from Peter Ferrie
 //
 asm memset(addr,value,size)#0
-    LDA     ESTKL+2,X
-    STA     DSTL
-    LDA     ESTKH+2,X
-    STA     DSTH
-    LDY     ESTKL,X
-    BEQ     +
-    INC     ESTKH,X
-    LDY     #$00
-+   LDA     ESTKH,X
-    BEQ     SETMEX
+        LDA     ESTKL+2,X
+        STA     DSTL
+        LDA     ESTKH+2,X
+        STA     DSTH
+        LDY     ESTKL,X
+        BEQ     +
+        INC     ESTKH,X
+        LDY     #$00
++       LDA     ESTKH,X
+        BEQ     SETMEX
 SETMLPL CLC
-    LDA     ESTKL+1,X
+        LDA     ESTKL+1,X
 SETMLPH STA     (DST),Y
-    DEC     ESTKL,X
-    BEQ     ++
--   INY
-    BEQ     +
---  BCS     SETMLPL
-    SEC
-    LDA     ESTKH+1,X
-    BCS     SETMLPH
-+   INC     DSTH
-    BNE     --
-++  DEC     ESTKH,X
-    BNE     -
+        DEC     ESTKL,X
+        BEQ     ++
+-       INY
+        BEQ     +
+--      BCS     SETMLPL
+        SEC
+        LDA     ESTKH+1,X
+        BCS     SETMLPH
++       INC     DSTH
+        BNE     --
+++      DEC     ESTKH,X
+        BNE     -
 SETMEX  INX
-    INX
-    INX
-    RTS
+        INX
+        INX
+        RTS
 end
 //
 // COPY MEMORY
 // MEMCPY(DSTADDR, SRCADDR, SIZE)
 //
 asm memcpy(dst,src,size)#0
-    INX
-    INX
-    INX
-    LDA ESTKL-3,X
-    ORA ESTKH-3,X
-    BEQ CPYMEX
-    LDA ESTKL-2,X
-    CMP ESTKL-1,X
-    LDA ESTKH-2,X
-    SBC ESTKH-1,X
-    BCC REVCPY
+        INX
+        INX
+        INX
+        LDA     ESTKL-3,X
+        ORA     ESTKH-3,X
+        BEQ     CPYMEX
+        LDA     ESTKL-2,X
+        CMP     ESTKL-1,X
+        LDA     ESTKH-2,X
+        SBC     ESTKH-1,X
+        BCC     REVCPY
 ;
 ; FORWARD COPY
 ;
-    LDA ESTKL-1,X
-    STA     DSTL
-    LDA ESTKH-1,X
-    STA     DSTH
-    LDA ESTKL-2,X
-    STA     SRCL
-    LDA ESTKH-2,X
-    STA     SRCH
-    LDY ESTKL-3,X
-    BEQ FORCPYLP
-    INC     ESTKH-3,X
-    LDY #$00
+        LDA     ESTKL-1,X
+        STA     DSTL
+        LDA     ESTKH-1,X
+        STA     DSTH
+        LDA     ESTKL-2,X
+        STA     SRCL
+        LDA     ESTKH-2,X
+        STA     SRCH
+        LDY     ESTKL-3,X
+        BEQ     FORCPYLP
+        INC     ESTKH-3,X
+        LDY     #$00
 FORCPYLP LDA    (SRC),Y
-    STA (DST),Y
-    INY
-    BNE +
-    INC DSTH
-    INC SRCH
-+   DEC     ESTKL-3,X
-    BNE FORCPYLP
-    DEC ESTKH-3,X
-    BNE FORCPYLP
-    RTS
+        STA     (DST),Y
+        INY
+        BNE     +
+        INC     DSTH
+        INC     SRCH
++       DEC     ESTKL-3,X
+        BNE     FORCPYLP
+        DEC     ESTKH-3,X
+        BNE     FORCPYLP
+        RTS
 ;
 ; REVERSE COPY
 ;
 REVCPY  ;CLC
-    LDA     ESTKL-3,X
-    ADC ESTKL,X
-    STA DSTL
-    LDA ESTKH-3,X
-    ADC ESTKH,X
-    STA DSTH
-    CLC
-    LDA     ESTKL-3,X
-    ADC ESTKL-2,X
-    STA SRCL
-    LDA ESTKH-3,X
-    ADC ESTKH-2,X
-    STA SRCH
-    DEC DSTH
-    DEC SRCH
-    LDY #$FF
-    LDA     ESTKL-3,X
-    BEQ REVCPYLP
-    INC     ESTKH-3,X
+        LDA     ESTKL-3,X
+        ADC     ESTKL-1,X
+        STA     DSTL
+        LDA     ESTKH-3,X
+        ADC     ESTKH-1,X
+        STA     DSTH
+        CLC
+        LDA     ESTKL-3,X
+        ADC     ESTKL-2,X
+        STA     SRCL
+        LDA     ESTKH-3,X
+        ADC     ESTKH-2,X
+        STA     SRCH
+        DEC     DSTH
+        DEC     SRCH
+        LDY     #$FF
+        LDA     ESTKL-3,X
+        BEQ     REVCPYLP
+        INC     ESTKH-3,X
 REVCPYLP LDA    (SRC),Y
-    STA (DST),Y
-    DEY
-    CPY #$FF
-    BNE +
-    DEC DSTH
-    DEC SRCH
-+   DEC     ESTKL-3,X
-    BNE REVCPYLP
-    DEC ESTKH-3,X
-    BNE REVCPYLP
+        STA     (DST),Y
+        DEY
+        CPY     #$FF
+        BNE     +
+        DEC     DSTH
+        DEC     SRCH
++       DEC     ESTKL-3,X
+        BNE     REVCPYLP
+        DEC     ESTKH-3,X
+        BNE     REVCPYLP
 CPYMEX  RTS
 end
 //
 // Unsigned word comparisons.
 //
 asm uword_isge(a,b)#1
-    LDA ESTKL+1,X
-    CMP ESTKL,X
-    LDA ESTKH+1,X
-    SBC ESTKH,X
-    LDA #$FF
-    ADC #$00
-    EOR #$FF
-    STA ESTKL+1,X
-    STA ESTKH+1,X
-    INX
-    RTS
+        LDA     ESTKL+1,X
+        CMP     ESTKL,X
+        LDA     ESTKH+1,X
+        SBC     ESTKH,X
+        LDA     #$FF
+        ADC     #$00
+        EOR     #$FF
+        STA     ESTKL+1,X
+        STA     ESTKH+1,X
+        INX
+        RTS
 end
 asm uword_isle(a,b)#1
-    LDA ESTKL,X
-    CMP ESTKL+1,X
-    LDA ESTKH,X
-    SBC ESTKH+1,X
-    LDA #$FF
-    ADC #$00
-    EOR #$FF
-    STA ESTKL+1,X
-    STA ESTKH+1,X
-    INX
-    RTS
+        LDA     ESTKL,X
+        CMP     ESTKL+1,X
+        LDA     ESTKH,X
+        SBC     ESTKH+1,X
+        LDA     #$FF
+        ADC     #$00
+        EOR     #$FF
+        STA     ESTKL+1,X
+        STA     ESTKH+1,X
+        INX
+        RTS
 end
 asm uword_isgt(a,b)#1
-    LDA ESTKL,X
-    CMP ESTKL+1,X
-    LDA ESTKH,X
-    SBC ESTKH+1,X
-    LDA #$FF
-    ADC #$00
-    STA ESTKL+1,X
-    STA ESTKH+1,X
-    INX
-    RTS
+        LDA     ESTKL,X
+        CMP     ESTKL+1,X
+        LDA     ESTKH,X
+        SBC     ESTKH+1,X
+        LDA     #$FF
+        ADC     #$00
+        STA     ESTKL+1,X
+        STA     ESTKH+1,X
+        INX
+        RTS
 end
 asm uword_islt(a,b)#1
-    LDA ESTKL+1,X
-    CMP ESTKL,X
-    LDA ESTKH+1,X
-    SBC ESTKH,X
-    LDA #$FF
-    ADC #$00
-    STA ESTKL+1,X
-    STA ESTKH+1,X
-    INX
-    RTS
+        LDA     ESTKL+1,X
+        CMP     ESTKL,X
+        LDA     ESTKH+1,X
+        SBC     ESTKH,X
+        LDA     #$FF
+        ADC     #$00
+        STA     ESTKL+1,X
+        STA     ESTKH+1,X
+        INX
+        RTS
 end
 asm divmod(a,b)#2
         JSR     INTERP          ; CALL DINTERP
         !BYTE   $36, $5C        ; DIVMOD, RET
 end
 asm sext(a)#1
-    LDY #$00
-    LDA ESTKL,X
-    BPL +
-    DEY
-+   STY ESTKH,X
-    RTS
+        LDY     #$00
+        LDA     ESTKL,X
+        BPL     +
+        DEY
++       STY     ESTKH,X
+        RTS
 end
 //
 // Addresses of internal routines.
 //
 asm interp()#1
-    DEX
-    LDA #<IINTERP
-    STA ESTKL,X
-    LDA #>IINTERP
-    STA ESTKH,X
-    RTS
+        DEX
+        LDA     #<IINTERP
+        STA     ESTKL,X
+        LDA     #>IINTERP
+        STA     ESTKH,X
+        RTS
 end
 //
 // A DCI string is one that has the high bit set for every character except the last.
@@ -389,28 +409,28 @@ end
 //    return len
 //end
 asm dcitos(dci, str)#1
-    LDA ESTKL,X
-    STA DSTL
-    LDA ESTKH,X
-    STA DSTH
-    LDA ESTKL+1,X
-    STA SRCL
-    LDA ESTKH+1,X
-    STA SRCH
-    LDY #$00
--   LDA (SRC),Y
-    CMP #$80
-    AND #$7F
-    INY
-    STA (DST),Y
-    BCS -
-    TYA
-    LDY #$00
-    STA (DST),Y
-    INX
-    STA ESTKL,X
-    STY ESTKH,X
-    RTS
+        LDA     ESTKL,X
+        STA     DSTL
+        LDA     ESTKH,X
+        STA     DSTH
+        LDA     ESTKL+1,X
+        STA     SRCL
+        LDA     ESTKH+1,X
+        STA     SRCH
+        LDY     #$00
+-       LDA     (SRC),Y
+        CMP     #$80
+        AND     #$7F
+        INY
+        STA     (DST),Y
+        BCS     -
+        TYA
+        LDY     #$00
+        STA     (DST),Y
+        INX
+        STA     ESTKL,X
+        STY     ESTKH,X
+        RTS
 end
 //def stodci(str, dci)
 //    byte len, c
@@ -429,43 +449,43 @@ end
 //    return ^str
 //end
 asm stodci(str, dci)#1
-    LDA ESTKL,X
-    STA DSTL
-    LDA ESTKH,X
-    STA DSTH
-    LDA ESTKL+1,X
-    STA SRCL
-    LDA ESTKH+1,X
-    STA SRCH
-    INX
-    LDY #$00
-    LDA (SRC),Y
-    BEQ ++
-    TAY
-    LDA (SRC),Y
-    JSR TOUPR
-    BNE +
--   LDA (SRC),Y
-    JSR TOUPR
-    ORA #$80
-+   DEY
-    STA (DST),Y
-    BNE -
-    LDA (SRC),Y
-++  STA ESTKL,X
-    STY ESTKH,X
-    RTS
+        LDA     ESTKL,X
+        STA     DSTL
+        LDA     ESTKH,X
+        STA     DSTH
+        LDA     ESTKL+1,X
+        STA     SRCL
+        LDA     ESTKH+1,X
+        STA     SRCH
+        INX
+        LDY     #$00
+        LDA     (SRC),Y
+        BEQ     ++
+        TAY
+        LDA     (SRC),Y
+        JSR     TOUPR
+        BNE     +
+-       LDA     (SRC),Y
+        JSR     TOUPR
+        ORA     #$80
++       DEY
+        STA     (DST),Y
+        BNE     -
+        LDA     (SRC),Y
+++      STA     ESTKL,X
+        STY     ESTKH,X
+        RTS
 end
 asm toupper(c)#1
-    LDA     ESTKL,X
+        LDA     ESTKL,X
 TOUPR   AND     #$7F
-    CMP     #'a'
-    BCC     +
-    CMP     #'z'+1
-    BCS     +
-    SBC     #$1F
-+   STA     ESTKL,X
-    RTS
+        CMP     #'a'
+        BCC     +
+        CMP     #'z'+1
+        BCS     +
+        SBC     #$1F
++       STA     ESTKL,X
+        RTS
 end
 //
 // Module symbols are entered into the symbol table
@@ -493,77 +513,74 @@ end
 //    loop
 //    return 0
 asm lookuptbl(dci, tbl)#1
-    LDA ESTKL,X
-    STA DSTL
-    LDA ESTKH,X
-    STA DSTH
-    LDA ESTKL+1,X
-    STA SRCL
-    LDA ESTKH+1,X
-    STA SRCH
-    LDY #$00
--   LDA (DST),Y
-    BEQ +
-    CMP (SRC),Y
-    BNE ++
-    INY
-    ASL
-    BCS -
-    LDA (DST),Y
-    PHA
-    INY
-    LDA (DST),Y
-    TAY
-    PLA
-+   INX
-    STA ESTKL,X
-    STY ESTKH,X
-    RTS
-++  LDY #$00
---  LDA (DST),Y
-    INC DSTL
-    BEQ +
---- ASL
-    BCS --
-    LDA #$02
-    ADC DSTL
-    STA DSTL
-    BCC -
-    INC DSTH
-    BCS -
-+   INC DSTH
-    BNE ---
+        LDA     ESTKL,X
+        STA     DSTL
+        LDA     ESTKH,X
+        STA     DSTH
+        INX
+        LDA     ESTKL,X
+        STA     SRCL
+        LDA     ESTKH,X
+        STA     SRCH
+--      LDY     #$00
+-       LDA     (DST),Y
+        BEQ     +
+        CMP     (SRC),Y
+        BNE     ++
+        INY
+        ASL
+        BCS     -
+        LDA     (DST),Y
+        STA     ESTKL,X             ; MATCH
+        INY
+        LDA     (DST),Y
+        STA     ESTKH,X
+        RTS
++       STA     ESTKL,X             ; NO MATCH
+        STA     ESTKH,X
+        RTS
+++
+-       LDA     (DST),Y             ; NEXT ENTRY
+        BPL     +
+        INY
+        BNE     -
++       TYA
+        CLC
+        ADC     #$03
+        ADC     DSTL
+        STA     DSTL
+        BCC     --
+        INC     DSTH
+        BNE     --
 end
 //
 // CONSOLE I/O
 //
 asm cout(c)#0
-    LDA ESTKL,X
-    JSR TOUPR
-    ORA #$80
-    JMP $FFEF
+        LDA     ESTKL,X
+        JSR     TOUPR
+        ORA     #$80
+        JMP     $FFEF
 end
 asm cin()#1
-    DEX
--   LDA $D011
-    BPL -
-    LDA $D010
-    AND #$7F
-    STA ESTKL,X
-    LDA #$00
-    STA ESTKH,X
-    RTS
+        DEX
+-       LDA     $D011
+        BPL     -
+        LDA     $D010
+        AND     #$7F
+        STA     ESTKL,X
+        LDA     #$00
+        STA     ESTKH,X
+        RTS
 end
 def crout()#0
     cout($0D)
 end
 def prstr(str)#0
     byte i
-    i = 1
-    while i <= ^str
-        cout((str)[i])
-    i = i + 1
-    loop
+    for i = 1 to ^str
+        cout(^(str + i))
+    next
 end
 def print(i)#0
     if i < 0; cout('-'); i = -i; fin
@@ -580,7 +597,7 @@ def rdstr(prompt)#1
         when ch
             is $15 // right arrow
                 if ^inbuff < maxlen //inbuff.0 < maxlen
-                    inbuff.0 = inbuff.0 + 1
+                    inbuff.0++
                     ch = inbuff[inbuff.0]
                     cout(ch)
                 fin
@@ -589,7 +606,7 @@ def rdstr(prompt)#1
                 if inbuff.0
                     cout('\\')
                     cout(inbuff[inbuff.0])
-                    inbuff.0 = inbuff.0 - 1
+                    inbuff.0--
                 fin
                 break
             is $04 // ctrl-d
@@ -597,8 +614,8 @@ def rdstr(prompt)#1
                     cout('#')
                     cout(inbuff[inbuff.0])
                     memcpy(inbuff + inbuff.0, inbuff + inbuff.0 + 1, maxlen - inbuff.0)
-                    maxlen   = maxlen   - 1
-                    inbuff.0 = inbuff.0 - 1
+                    maxlen--
+                    inbuff.0--
                 fin
                 break
             is $0C // ctrl-l
@@ -617,7 +634,7 @@ def rdstr(prompt)#1
             otherwise
                 if ch >= ' '
                     cout(ch)
-                    inbuff.0 = inbuff.0 + 1
+                    inbuff.0++
                     inbuff[inbuff.0] = ch
                     if inbuff.0 > maxlen
                         maxlen = inbuff.0
@@ -635,6 +652,19 @@ end
 def prword(v)#0
     prbyte(v >> 8)
     prbyte(v)
+end
+//
+// String routines.
+//
+def strcpy(dst, src)#1
+    memcpy(dst+1, src+1, ^src)
+    ^dst = ^src
+    return dst
+end
+def strcat(dst, src)#1
+    memcpy(dst + ^dst + 1, src + 1, ^src)
+    ^dst = ^dst + ^src
+    return dst
 end
 //
 // CFFA1 routines
@@ -847,9 +877,9 @@ def loadmod(mod)#1
             addr = rld=>1 + modfix
             //if uword_isge(addr, modaddr) // Skip fixups to header
                 //if type & $80 // WORD sized fixup.
-                //    fixup = *addr
+                    fixup = *addr
                 //else      // BYTE sized fixup.
-                    fixup = ^addr
+                //    fixup = ^addr
                 //fin
                 if ^rld & $10 // EXTERN reference.
                     fixup = fixup + lookupextern(esd, rld->3)
@@ -921,17 +951,17 @@ end
 def stripchars(strptr)#1
     while ^strptr and ^(strptr + 1) <> ' '
         memcpy(strptr + 1, strptr + 2, ^strptr)
-        ^strptr = ^strptr - 1
+        ^strptr--
     loop
     return ^strptr
 end
 def stripspaces(strptr)#0
     while ^strptr and ^(strptr + ^strptr) <= ' '
-        ^strptr = ^strptr - 1
+        ^strptr--
     loop
     while ^strptr and ^(strptr + 1) <= ' '
         memcpy(strptr + 1, strptr + 2, ^strptr)
-        ^strptr = ^strptr - 1
+        ^strptr--
     loop
 end
 def striptrail(strptr)#0
@@ -952,7 +982,7 @@ def parsecmd(strptr)#1
     if ^strptr
         cmd = ^(strptr + 1)
         memcpy(strptr + 1, strptr + 2, ^strptr)
-        ^strptr = ^strptr - 1
+        ^strptr--
     fin
     stripspaces(strptr)
     return cmd
@@ -964,14 +994,14 @@ def execmod(modfile)#1
     perr = 1
     if stodci(modfile, @moddci)
         saveheap  = heap
-    savesym   = lastsym
-    saveflags = systemflags
-    if loadmod(@moddci) < modkeep
-        lastsym = savesym
-        heap    = saveheap
-    fin
-    ^lastsym    = 0
-    systemflags = saveflags
+        savesym   = lastsym
+        saveflags = systemflags
+        if loadmod(@moddci) < modkeep
+            lastsym = savesym
+            heap    = saveheap
+        fin
+        ^lastsym    = 0
+        systemflags = saveflags
     fin
     return -perr
 end
@@ -1001,7 +1031,7 @@ cmdptr = heap
 memset(cmdptr, 0, 128)
 readfile(@autorun, cmdptr + 1)
 while ^(cmdptr + ^cmdptr + 1) >= ' '
-    ^cmdptr = ^cmdptr + 1
+    ^cmdptr++
 loop
 perr = 0
 //
@@ -1015,24 +1045,24 @@ fin
 //
 // Handle commands.
 //
-while 1
+while TRUE
     if ^cmdptr
         when toupper(parsecmd(cmdptr))
             is 'Q'
-            quit
-        is 'M'
-            syscall($02, 0)
-        break
-        is '+'
-            execmod(cmdptr)
-        break
-        otherwise
-            prstr(@huhstr)
+                quit
+            is 'M'
+                syscall($02, 0)
+                break
+            is '+'
+                execmod(cmdptr)
+                break
+            otherwise
+                prstr(@huhstr)
         wend
         if perr
             prstr(@errorstr)
-        prbyte(perr)
-        perr = 0
+            prbyte(perr)
+            perr = 0
         else
             prstr(@okstr)
         fin

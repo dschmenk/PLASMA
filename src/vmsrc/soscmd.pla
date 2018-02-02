@@ -26,13 +26,14 @@ const O_READ_WRITE = 3
 // Pedefined functions.
 //
 predef syscall(cmd,params)#1, call(addr,areg,xreg,yreg,status)#1
-predef crout()#0, cout(c)#0, prstr(s)#0, print(i)#0, cin()#1, rdstr(p)#1, toupper(c)#1
+predef crout()#0, cout(c)#0, prstr(s)#0, print(i)#0, prbyte(b)#0, prword(w)#0
+predef cin()#1, rdstr(p)#1, toupper(c)#1, strcpy(dst,src)#1, strcat(dst,src)#1
 predef markheap()#1, allocheap(size)#1, allocalignheap(size, pow2, freeaddr), releaseheap(newheap)#1, availheap()#1
 predef memset(addr,value,size)#0, memcpy(dst,src,size)#0
 predef uword_isgt(a,b)#1, uword_isge(a,b)#1, uword_islt(a,b)#1, uword_isle(a,b)#1, sext(a)#1, divmod(a,b)#2
 predef execmod(modfile)#1
 //
-// System variables.
+// Exported CMDSYS table
 //
 word version     = $0100 // 01.00
 word syspath
@@ -62,9 +63,13 @@ byte putcstr[]    = "PUTC"
 byte putlnstr[]   = "PUTLN"
 byte putsstr[]    = "PUTS"
 byte putistr[]    = "PUTI"
+byte putbstr[]    = "PUTB"
+byte putwstr[]    = "PUTH"
 byte getcstr[]    = "GETC"
 byte getsstr[]    = "GETS"
 byte toupstr[]    = "TOUPPER"
+byte strcpystr[]  = "STRCPY"
+byte strcatstr[]  = "STRCAT"
 byte hpmarkstr[]  = "HEAPMARK"
 byte hpalignstr[] = "HEAPALLOCALIGN"
 byte hpallocstr[] = "HEAPALLOC"
@@ -79,9 +84,6 @@ byte uislestr[]   = "ISULE"
 byte sysmods[] // overlay with exported strings
 byte sextstr[]    = "SEXT"
 byte divmodstr[]  = "DIVMOD"
-byte loadstr[]    = "MODLOAD"
-byte execstr[]    = "MODEXEC"
-byte modadrstr[]  = "RELADDR"
 byte prefix[] // Overlay with exported symbols table
 word exports[]    = @sysmodstr, @version
 word              = @sysstr,    @syscall
@@ -90,6 +92,8 @@ word              = @putcstr,   @cout
 word              = @putlnstr,  @crout
 word              = @putsstr,   @prstr
 word              = @putistr,   @print
+word              = @putbstr,   @prbyte
+word              = @putwstr,   @prword
 word              = @getcstr,   @cin
 word              = @getsstr,   @rdstr
 word              = @toupstr,   @toupper
@@ -118,6 +122,16 @@ byte modid       = 0
 byte modseg[15]
 word symtbl, lastsym
 byte perr, terr, lerr
+//
+// Utility functions
+//
+asm saveX#0
+        STX     XREG+1
+end
+asm restoreX#0
+XREG    LDX     #$00
+        RTS
+end
 //
 // CALL SOS
 // SYSCALL(CMD, PARAMS)
@@ -634,6 +648,176 @@ asm lookuptbl(dci, tbl)#1
 +       INC     DSTH
         BNE     ---
 end
+// def lookupidx(esd, index)
+//    word sym
+//    while ^esd
+//        sym = esd
+//        esd = sym + dcitos(sym, @str)
+//        if esd->0 & $10 and esd->1 == index
+//            return sym
+//        fin
+//        esd = esd + 3
+//    loop
+//end
+asm lookupidx(esd, index)#1
+        LDA     ESTKL,X
+        STA     TMPL
+        INX
+---     LDA     ESTKH,X
+        STA     SRCH
+        LDA     ESTKL,X
+--      STA     SRCL
+        LDY     #$00
+-       LDA     (SRC),Y
+        BPL     +
+        INY
+        BNE     -
++       BEQ     ++              ; END OF ESD
+        INY
+        LDA     (SRC),Y
+        INY
+        AND     #$10            ; EXTERN FLAG?
+        BEQ     +
+        LDA     (SRC),Y
+        CMP     TMPL
+        BEQ     +++             ; MATCH
++       INY
+        TYA
+        SEC
+        ADC     SRCL
+        STA     ESTKL,X         ; SYM PTRL
+        BCC     --
+        INC     ESTKH,X         ; SYM PTRH
+        BNE     ---
+++      STA     ESTKL,X         ; END OF ESD
+        STA     ESTKH,X
++++     RTS
+end
+//def lookupdef(addr, deftbl)#1
+//    while deftbl->0 == $20
+//        if deftbl=>3 == addr
+//            return deftbl
+//        fin
+//        deftbl = deftbl + 5
+//    loop
+//    return 0
+//end
+asm lookupdef(addr, deftbl)#1
+        LDA     ESTKH,X
+        STA     SRCH
+        LDA     ESTKL,X
+        STA     SRCL
+        INX
+-       LDY     #$00
+        LDA     (SRC),Y
+        CMP     #$20            ; JSR OPCODE?
+        BNE     ++
+        LDY     #$03
+        LDA     (SRC),Y
+        CMP     ESTKL,X
+        BNE     +
+        INY
+        LDA     (SRC),Y
+        CMP     ESTKH,X
+        BNE     +
+        LDA     SRCL            ; MATCH
+        STA     ESTKL,X
+        LDA     SRCH
+        STA     ESTKH,X
+        RTS
++       LDA     #$05
+        CLC
+        ADC     SRCL
+        STA     SRCL
+        BCC     -
+        INC     SRCH
+        BNE     -
+++      STY     ESTKL,X
+        STY     ESTKH,X
+        RTS
+end
+//
+// Reloc internal data
+//
+//def reloc(modfix, modofst, bytecode, rld)#3
+//    word addr, fixup
+//    while ^rld
+//        if ^rld & $10 // EXTERN reference.
+//            return rld, addr, fixup
+//        fin
+//        addr = rld=>1 + modfix
+//        fixup = *addr + modofst
+//        if uword_isge(fixup, bytecode) // Bytecode address.
+//            return rld, addr, fixup
+//        fin
+//        *addr = fixup
+//        rld = rld + 4
+//    loop
+//    return rld, addr, fixup
+//end
+asm reloc(modfix, modofst, bytecode, rld)#3
+        LDA     ESTKL,X
+        STA     SRCL
+        LDA     ESTKH,X
+        STA     SRCH
+        LDY     #$00
+-       LDA     (SRC),Y
+        BEQ     RLDEX       ; END OF RLD
+        PHA
+        INY
+        LDA     (SRC),Y
+        INY
+        CLC
+        ADC     ESTKL+3,X   ; ADDR=ENTRY=>1+MODFIX
+        STA     DSTL
+        LDA     (SRC),Y
+        ADC     ESTKH+3,X
+        STA     DSTH
+        PLA
+        AND     #$10        ; EXTERN REF - EXIT
+        BNE     RLDEX
+        TAY                 ; FIXUP=*ADDR+MODOFST
+        LDA     (DST),Y
+        INY
+        CLC
+        ADC     ESTKL+2,X
+        STA     TMPL
+        LDA     (DST),Y
+        ADC     ESTKH+2,X
+        CMP     ESTKH+1,X   ; FIXUP >= BYTECODE?
+        BCC     +
+        STA     TMPH
+        BNE     RLDEX       ; YEP, EXIT
+        LDA     TMPL
+        CMP     ESTKL+1,X
+        BCS     RLDEX       ; YEP, EXIT
+        LDA     TMPH
++       STA     (DST),Y     ; *ADDR=FIXUP
+        DEY
+        LDA     TMPL
+        STA     (DST),Y
+        LDA     SRCL        ; NEXT ENTRY
+;       CLC
+        ADC     #$04
+        STA     SRCL
+        BCC     -
+        INC     SRCH
+        BNE     -
+RLDEX   INX
+        LDA     TMPL
+        STA     ESTKL,X
+        LDA     TMPH
+        STA     ESTKH,X
+        LDA     DSTL
+        STA     ESTKL+1,X
+        LDA     DSTH
+        STA     ESTKH+1,X
+        LDA     SRCL
+        STA     ESTKL+2,X
+        LDA     SRCH
+        STA     ESTKH+2,X
+        RTS
+end
 //
 // SOS routines
 // FILE I/O
@@ -926,21 +1110,16 @@ end
 def lookupextern(esd, index)#1
     word sym, addr
     byte str[16]
-    while ^esd
-        sym = esd
-        esd = sym + dcitos(sym, @str)
-        if esd->0 & $10 and esd->1 == index
-            addr = lookuptbl(sym, symtbl)
-            if !addr
-                lerr = $81
-                cout('?')
-                prstr(@str)
-                crout
-            fin
-            return addr
+    sym = lookupidx(esd, index)
+    if sym
+        addr = lookuptbl(sym, symtbl)
+        if !addr
+            perr = $81
+            dcitos(sym, @str)
+            cout('?'); prstr(@str); crout
         fin
-        esd = esd + 3
-    loop
+        return addr
+    fin
     return 0
 end
 def adddef(ext, addr, deflast)#1
@@ -952,15 +1131,6 @@ def adddef(ext, addr, deflast)#1
     defentry=>3 = addr
     defentry=>5 = ext // ext is byte, so this nulls out next entry
     return defentry
-end
-def lookupdef(addr, deftbl)#1
-    while deftbl->0 == $20
-        if deftbl=>3 == addr
-            return deftbl
-        fin
-        deftbl = deftbl + 6
-    loop
-    return 0
 end
 def loadmod(mod)#1
     word refnum, rdlen, modsize, bytecode, codefix, defofst, defcnt, init, fixup
@@ -987,7 +1157,7 @@ def loadmod(mod)#1
         moddep  = @header.1
         defofst = modsize + RELADDR
         init    = 0
-        if rdlen > 4 and header:2 == $DA7F // DAVE+1 = magic number :-)
+        if rdlen > 4 and header:2 == $6502 // DAVE+1 = magic number :-)
             //
             // This is an EXTended RELocatable (data+bytecode) module.
             //
@@ -1086,31 +1256,36 @@ def loadmod(mod)#1
         // Run through the Re-Location Dictionary.
         //
         while ^rld
-            addr = rld=>1 + modfix
-            if uword_isge(addr, modaddr) // Skip fixups to header
-                //if ^rld & $80 // WORD sized fixup.
-                    fixup = *addr
-                //else          // BYTE sized fixup.
-                //    fixup = ^addr
-                //fin
-                if ^rld & $10 // EXTERN reference.
-                    fixup = fixup + lookupextern(esd, rld->3)
-                else          // INTERN fixup.
-                    fixup = fixup + modofst
-                    if uword_isge(fixup, bytecode)
-                        //
-                        // Bytecode address - replace with call def directory.
-                        //
-                        fixup = lookupdef(fixup + codefix, deftbl)
-                    fin
-                fin
-                //if ^rld & $80 // WORD sized fixup.
-                    *addr = fixup
-                //else          // BYTE sized fixup.
-                //    ^addr = fixup
-                //fin
+            rld, addr, fixup = reloc(modfix, modofst, bytecode, rld)
+            if ^rld
+                *addr = ^rld & $10 ?? *addr + lookupextern(esd, rld->3) :: lookupdef(fixup + codefix, deftbl)
+                rld   = rld + 4
             fin
-            rld = rld + 4
+            //addr = rld=>1 + modfix
+            //if uword_isge(addr, modaddr) // Skip fixups to header
+            //    if type & $80 // WORD sized fixup.
+            //        fixup = *addr
+            //    else          // BYTE sized fixup.
+            //        fixup = ^addr
+            //    fin
+            //    if ^rld & $10 // EXTERN reference.
+            //        fixup = fixup + lookupextern(esd, rld->3)
+            //    else          // INTERN fixup.
+            //        fixup = fixup + modofst
+            //        if uword_isge(fixup, bytecode)
+            //            //
+            //            // Bytecode address - replace with call def directory.
+            //            //
+            //            fixup = lookupdef(fixup + codefix, deftbl)
+            //        fin
+            //    fin
+            //    if type & $80 // WORD sized fixup.
+            //        *addr = fixup
+            //    else          // BYTE sized fixup.
+            //        ^addr = fixup
+            //    fin
+            //fin
+            //rld = rld + 4
         loop
         //
         // Run through the External/Entry Symbol Directory.
@@ -1139,16 +1314,16 @@ def loadmod(mod)#1
             //
             memxcpy(codeseg, bytecode, modsize - (bytecode - modaddr))
         fin
-        //
-        // Free up end-of-module main memory.
-        //
-        releaseheap(bytecode)
-    else
-        return -perr
+    //else
+    //    return -perr
     fin
     if lerr
         return -lerr
     fin
+    //
+    // Free up end-of-module main memory.
+    //
+    releaseheap(bytecode)
     //
     // Call init routine if it exists.
     //
@@ -1215,24 +1390,26 @@ def catalog(optpath)#1
             fin
             for i = firstblk to entriesblk
                 type = ^entry
-                if type <> 0
+                if type
                     len = type & $0F
                     ^entry = len
                     prstr(entry)
-                    if type & $F0 == $D0 // Is it a directory?
-                        cout('/')
-                        len = len + 1
-                    elsif entry->$10 == $FF
-                        cout('-')
-                        len = len + 1
-                    elsif entry->$10 == $FE
-                        cout('+')
-                        len = len + 1
-                    fin
-                    for len = 19 - len downto 0
+                    type = ' '
+                    when entry->$10
+                        is $0F // Is it a directory?
+                            type = '/'
+                            break
+                        is $FF // SYSTEM file
+                            type = '-'
+                            break
+                        is $FE // REL file
+                            type = '+'
+                    wend
+                    cout(type)
+                    for len = 18 - len downto 0
                         cout(' ')
                     next
-                    filecnt = filecnt - 1
+                    filecnt--
                 fin
                 entry = entry + entrylen
             next
@@ -1246,26 +1423,26 @@ def catalog(optpath)#1
     return 0
 end
 def stripchars(strptr)#1
-    while ^strptr and ^(strptr + 1) <> ' '
+    while ^strptr and ^(strptr + 1) > ' '
         memcpy(strptr + 1, strptr + 2, ^strptr)
-        ^strptr = ^strptr - 1
+        ^strptr--
     loop
     return ^strptr
 end
 def stripspaces(strptr)#0
     while ^strptr and ^(strptr + ^strptr) <= ' '
-        ^strptr = ^strptr - 1
+        ^strptr--
     loop
     while ^strptr and ^(strptr + 1) <= ' '
         memcpy(strptr + 1, strptr + 2, ^strptr)
-        ^strptr = ^strptr - 1
+        ^strptr--
     loop
 end
 def striptrail(strptr)#1
     byte i
 
     for i = 1 to ^strptr
-        if (strptr)[i] <= ' '
+        if ^(strptr + i) <= ' '
             ^strptr = i - 1
             break
         fin
@@ -1280,7 +1457,7 @@ def parsecmd(strptr)#1
     if ^strptr
         cmd = ^(strptr + 1)
         memcpy(strptr + 1, strptr + 2, ^strptr)
-        ^strptr = ^strptr - 1
+        ^strptr--
     fin
     stripspaces(strptr)
     return cmd
@@ -1316,7 +1493,7 @@ init_cons
 //
 // Print PLASMA version
 //
-prstr("PLASMA "); prbyte(version.1); cout('.'); prbyte(version.0); crout
+prstr("PLASMA Pre3 "); prbyte(version.1); cout('.'); prbyte(version.0); crout
 //
 // Init 2K symbol table.
 //
@@ -1365,6 +1542,14 @@ while 1
             is 'P'
                 setpfx(cmdptr)
                 break
+            is '/'
+                repeat
+                    prefix--
+                until prefix[prefix] == '/'
+                if prefix > 1
+                    setpfx(@prefix)
+                fin
+                break
             is 'S'
                 setpfx(cmdptr)
                 strcat(getpfx(@sysmods), "SYS/"))
@@ -1373,7 +1558,9 @@ while 1
                 volumes
                 break
             is '+'
+                saveX
                 execmod(striptrail(cmdptr))
+                restoreX
                 write(refcons, @textmode, 3)
                 break
             otherwise
