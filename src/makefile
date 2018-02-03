@@ -38,7 +38,6 @@ DGR     = DGR\#FE1000
 TONE    = TONE\#FE1000
 PORTIO  = PORTIO\#FE1000
 ROGUE   = ROGUE\#FE1000
-ROGUEIO = ROGUEIO\#FE1000
 ROGUEMAP= ROGUEMAP\#FE1000
 ROGUECOMBAT= ROGUECOMBAT\#FE1000
 HELLO   = HELLO\#FE1000
@@ -73,7 +72,7 @@ TXTTYPE	= .TXT
 #SYSTYPE	= \#FF2000
 #TXTTYPE	= \#040000
 
-all: $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVM802) $(PLVM03) $(CMD) $(PLASMAPLASM) $(CODEOPT) $(ARGS) $(MEMMGR) $(MEMTEST) $(FIBER) $(FIBERTEST) $(LONGJMP) $(ED) $(MON) $(ROD) $(SIEVE) $(UTHERNET2) $(UTHERNET) $(ETHERIP) $(INET) $(DHCP) $(HTTPD) $(ROGUE) $(ROGUEMAP) $(ROGUECOMBAT) $(ROGUEIO) $(TONE) $(DGR) $(DGRTEST) $(FILEIO) $(CONIO) $(PORTIO) $(SPIPORT) $(SDFAT) $(FATCAT) $(FATGET) $(FATPUT) $(FATWDSK) $(FATRDSK) $(SANE) $(FPSTR) $(FPU) $(SANITY) $(RPNCALC) $(SNDSEQ) $(PLAYSEQ)
+all: $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVM802) $(PLVM03) $(CMD) $(PLASMAPLASM) $(CODEOPT) $(ARGS) $(MEMMGR) $(MEMTEST) $(FIBER) $(FIBERTEST) $(LONGJMP) $(ED) $(MON) $(ROD) $(SIEVE) $(UTHERNET2) $(UTHERNET) $(ETHERIP) $(INET) $(DHCP) $(HTTPD) $(ROGUE) $(ROGUEMAP) $(ROGUECOMBAT) $(TONE) $(DGR) $(DGRTEST) $(FILEIO) $(CONIO) $(PORTIO) $(SPIPORT) $(SDFAT) $(FATCAT) $(FATGET) $(FATPUT) $(FATWDSK) $(FATRDSK) $(SANE) $(FPSTR) $(FPU) $(SANITY) $(RPNCALC) $(SNDSEQ) $(PLAYSEQ)
 
 clean:
 	-rm *FE1000 *FF2000 $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVM03)
@@ -284,10 +283,6 @@ $(DGRTEST): samplesrc/dgrtest.pla $(PLVM02) $(PLASM)
 $(ROGUE): samplesrc/rogue.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AMOW < samplesrc/rogue.pla > samplesrc/rogue.a
 	acme --setpc 4094 -o $(ROGUE) samplesrc/rogue.a
-
-$(ROGUEIO): samplesrc/rogue.io.pla $(PLVM02) $(PLASM)
-	./$(PLASM) -AMOW < samplesrc/rogue.io.pla > samplesrc/rogue.io.a
-	acme --setpc 4094 -o $(ROGUEIO) samplesrc/rogue.io.a
 
 $(ROGUECOMBAT): samplesrc/rogue.combat.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AMOW < samplesrc/rogue.combat.pla > samplesrc/rogue.combat.a
