@@ -40,14 +40,14 @@ struc t_fileio
 end
 predef a2getpfx(path), a23setpfx(path), a2getfileinfo(path, fileinfo), a23geteof(refnum), a2openbuf(path, iobuf), a2open(path), a23close(refnum)
 predef a23read(refnum, buf, len), a2write(refnum, buf, len), a2create(path, type, aux), a23destroy(path)
-predef a23newline(refnum, emask, nlchar), a2readblock(unit, buf, block), a2writeblock(unit, buf, block)
+predef a2newline(refnum, emask, nlchar), a2readblock(unit, buf, block), a2writeblock(unit, buf, block)
 //
 // Exported function table.
 //
 word fileio[]
 word = @a2getpfx, @a23setpfx, @a2getfileinfo, @a23geteof, @a2openbuf, @a2open, @a23close
 word = @a23read, @a2write, @a2create, @a23destroy
-word = @a23newline, @a2readblock, @a2writeblock
+word = @a2newline, @a2readblock, @a2writeblock
 //
 // SOS/ProDOS error code
 //
@@ -263,12 +263,22 @@ end
 def a1newline(refnum, emask, nlchar)
     return perr
 end
-def a23newline(refnum, emask, nlchar)
+def a2newline(refnum, emask, nlchar)
     byte params[4]
 
     params.0 = 3
     params.1 = refnum
     params.2 = emask
+    params.3 = nlchar
+    perr     = syscall($C9, @params)
+    return perr
+end
+def a3newline(refnum, emask, nlchar)
+    byte params[4]
+
+    params.0 = 3
+    params.1 = refnum
+    params.2 = emask ?? $FF :: $00
     params.3 = nlchar
     perr     = syscall($C9, @params)
     return perr
@@ -304,8 +314,18 @@ end
 //
 // Machine specific initialization.
 //
-when MACHID & $C8
-    is $08 // Apple 1
+when MACHID & MACHID_MODEL
+    is MACHID_III
+        fileio:getpfx      = @a3getpfx
+        fileio:getfileinfo = @a3getfileinfo
+        fileio:open        = @a3open
+        fileio:write       = @a3write
+        fileio:create      = @a3create
+        fileio:newline     = @a3newline
+        fileio:readblock   = @a13readblock
+        fileio:writeblock  = @a13writeblock
+        break
+    is MACHID_I
         fileio:getpfx      = @a1getpfx
         fileio:setpfx      = @a1setpfx
         fileio:getfileinfo = @a1getfileinfo
@@ -317,15 +337,6 @@ when MACHID & $C8
         fileio:create      = @a1create
         fileio:destroy     = @a1destroy
         fileio:newline     = @a1newline
-        fileio:readblock   = @a13readblock
-        fileio:writeblock  = @a13writeblock
-        break
-    is $C0 // Apple ///
-        fileio:getpfx      = @a3getpfx
-        fileio:getfileinfo = @a3getfileinfo
-        fileio:open        = @a3open
-        fileio:write       = @a3write
-        fileio:create      = @a3create
         fileio:readblock   = @a13readblock
         fileio:writeblock  = @a13writeblock
         break

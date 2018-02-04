@@ -27,6 +27,7 @@ DROPX   =       XPAGE+DROP
 IFPX    =       XPAGE+IFPH
 PPX     =       XPAGE+PPH
 IPX     =       XPAGE+IPH
+JMPTMPX =       XPAGE+JMPTMP
 TMPX    =       XPAGE+TMPH
 SRCX    =       XPAGE+SRCH
 DSTX    =       XPAGE+DSTH
@@ -59,6 +60,10 @@ SEGSTART        =       $A000
         STA     DROPX,Y
         DEY
         BPL     -
+        LDX     #$4C            ; SET JMPTMP OPCODE
+        STX     JMPTMP
+;        STA     JMPTMPX
+;        STA     JMPTMPX+1
         STA     TMPX            ; CLEAR ALL EXTENDED POINTERS
         STA     SRCX
         STA     DSTX
@@ -70,6 +75,8 @@ SEGSTART        =       $A000
         LDA     #>SEGSTART
         STA     PPH
         STA     IFPH
+        LDX     #$FF            ; INIT STACK POINTER
+        TXS
         LDX     #ESTKSZ/2       ; INIT EVAL STACK INDEX
         JMP     SOSCMD
 ;PRHEX   PHA
@@ -874,6 +881,17 @@ ISLT    LDA     ESTKL+1,X
 +       BMI     ISFLS
         BPL     ISTRU
 ;*
+;* NORMALIZE IP+Y BEFORE CALLING NEXTOP
+;*
+FIXNEXT TYA
+        LDY     #$00
+        CLC
+        ADC     IPL
+        STA     IPL
+        BCC     +
+        INC     IPH
++       JMP     NEXTOP
+;*
 ;* BRANCHES
 ;*
 BRTRU   INX
@@ -884,14 +902,6 @@ NOBRNCH INY                     ;+INC_IP
         INY                     ;+INC_IP
         BMI     FIXNEXT
         JMP     NEXTOP
-FIXNEXT TYA
-        LDY     #$00
-        CLC
-        ADC     IPL
-        STA     IPL
-        BCC     +
-        INC     IPH
-+       JMP     NEXTOP
 BRFLS   INX
         LDA     ESTKH-1,X
         ORA     ESTKL-1,X
@@ -904,6 +914,8 @@ BRNCH   TYA                     ; FLATTEN IP
         TAY
         ADC     IPH
         STA     TMPH            ; ADD BRANCH OFFSET
+        LDA     IPX             ; COPY XBYTE FROM IP
+        STA     TMPX
         LDA     (TMP),Y
         ;CLC                    ; BETTER NOT CARRY OUT OF IP+Y
         ADC     TMPL
@@ -913,6 +925,7 @@ BRNCH   TYA                     ; FLATTEN IP
         ADC     TMPH
         STA     IPH
         DEY
+        STY     TMPX            ; CLEAR TMPX
         JMP     FETCHOP
 BREQ    INX
         LDA     ESTKL-1,X
