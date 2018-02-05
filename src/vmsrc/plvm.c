@@ -499,12 +499,14 @@ void call(uword pc)
             PUSH(getchar());
             break;
         case 8: // LIBRARY STDLIB::GETS
+            c = POP;
+            putchar(c);
             gets(sz);
             for (i = 0; sz[i]; i++)
                 mem_data[0x200 + i] = sz[i];
             mem_data[0x200 + i] = 0;
             mem_data[0x1FF] = i;
-            PUSH(i);
+            PUSH(0x1FF);
             break;
         default:
             printf("\nUnimplemented call code:$%02X\n", mem_data[pc - 1]);
