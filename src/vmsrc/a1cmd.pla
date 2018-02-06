@@ -550,6 +550,176 @@ asm lookuptbl(dci, tbl)#1
         INC     DSTH
         BNE     --
 end
+// def lookupidx(esd, index)
+//    word sym
+//    while ^esd
+//        sym = esd
+//        esd = sym + dcitos(sym, @str)
+//        if esd->0 & $10 and esd->1 == index
+//            return sym
+//        fin
+//        esd = esd + 3
+//    loop
+//end
+asm lookupidx(esd, index)#1
+        LDA     ESTKL,X
+        STA     TMPL
+        INX
+---     LDA     ESTKH,X
+        STA     SRCH
+        LDA     ESTKL,X
+--      STA     SRCL
+        LDY     #$00
+-       LDA     (SRC),Y
+        BPL     +
+        INY
+        BNE     -
++       BEQ     ++              ; END OF ESD
+        INY
+        LDA     (SRC),Y
+        INY
+        AND     #$10            ; EXTERN FLAG?
+        BEQ     +
+        LDA     (SRC),Y
+        CMP     TMPL
+        BEQ     +++             ; MATCH
++       INY
+        TYA
+        SEC
+        ADC     SRCL
+        STA     ESTKL,X         ; SYM PTRL
+        BCC     --
+        INC     ESTKH,X         ; SYM PTRH
+        BNE     ---
+++      STA     ESTKL,X         ; END OF ESD
+        STA     ESTKH,X
++++     RTS
+end
+//def lookupdef(addr, deftbl)#1
+//    while deftbl->0 == $20
+//        if deftbl=>3 == addr
+//            return deftbl
+//        fin
+//        deftbl = deftbl + 5
+//    loop
+//    return 0
+//end
+asm lookupdef(addr, deftbl)#1
+        LDA     ESTKH,X
+        STA     SRCH
+        LDA     ESTKL,X
+        STA     SRCL
+        INX
+-       LDY     #$00
+        LDA     (SRC),Y
+        CMP     #$20            ; JSR OPCODE?
+        BNE     ++
+        LDY     #$03
+        LDA     (SRC),Y
+        CMP     ESTKL,X
+        BNE     +
+        INY
+        LDA     (SRC),Y
+        CMP     ESTKH,X
+        BNE     +
+        LDA     SRCL            ; MATCH
+        STA     ESTKL,X
+        LDA     SRCH
+        STA     ESTKH,X
+        RTS
++       LDA     #$05
+        CLC
+        ADC     SRCL
+        STA     SRCL
+        BCC     -
+        INC     SRCH
+        BNE     -
+++      STY     ESTKL,X
+        STY     ESTKH,X
+        RTS
+end
+//
+// Reloc internal data
+//
+//def reloc(modfix, modofst, bytecode, rld)#3
+//    word addr, fixup
+//    while ^rld
+//        if ^rld & $10 // EXTERN reference.
+//            return rld, addr, fixup
+//        fin
+//        addr = rld=>1 + modfix
+//        fixup = *addr + modofst
+//        if uword_isge(fixup, bytecode) // Bytecode address.
+//            return rld, addr, fixup
+//        fin
+//        *addr = fixup
+//        rld = rld + 4
+//    loop
+//    return rld, addr, fixup
+//end
+asm reloc(modfix, modofst, bytecode, rld)#3
+        LDA     ESTKL,X
+        STA     SRCL
+        LDA     ESTKH,X
+        STA     SRCH
+        LDY     #$00
+-       LDA     (SRC),Y
+        BEQ     RLDEX       ; END OF RLD
+        PHA
+        INY
+        LDA     (SRC),Y
+        INY
+        CLC
+        ADC     ESTKL+3,X   ; ADDR=ENTRY=>1+MODFIX
+        STA     DSTL
+        LDA     (SRC),Y
+        ADC     ESTKH+3,X
+        STA     DSTH
+        PLA
+        AND     #$10        ; EXTERN REF - EXIT
+        BNE     RLDEX
+        TAY                 ; FIXUP=*ADDR+MODOFST
+        LDA     (DST),Y
+        INY
+        CLC
+        ADC     ESTKL+2,X
+        STA     TMPL
+        LDA     (DST),Y
+        ADC     ESTKH+2,X
+        CMP     ESTKH+1,X   ; FIXUP >= BYTECODE?
+        BCC     +
+        STA     TMPH
+        BNE     RLDEX       ; YEP, EXIT
+        LDA     TMPL
+        CMP     ESTKL+1,X
+        BCS     RLDEX       ; YEP, EXIT
+        LDA     TMPH
++       STA     (DST),Y     ; *ADDR=FIXUP
+        DEY
+        LDA     TMPL
+        STA     (DST),Y
+        LDA     SRCL        ; NEXT ENTRY
+;       CLC
+        ADC     #$04
+        STA     SRCL
+        BCC     -
+        INC     SRCH
+        BNE     -
+RLDEX   INX
+        LDA     TMPL
+        STA     ESTKL,X
+        LDA     TMPH
+        STA     ESTKH,X
+        LDA     DSTL
+        STA     ESTKL+1,X
+        LDA     DSTH
+        STA     ESTKH+1,X
+        LDA     SRCL
+        STA     ESTKL+2,X
+        LDA     SRCH
+        STA     ESTKH+2,X
+        RTS
+end
 //
 // CONSOLE I/O
 //
@@ -769,15 +939,6 @@ def adddef(addr, deflast)#1
     defentry->5 = 0 // null out next entry
     return defentry
 end
-def lookupdef(addr, deftbl)#1
-    while deftbl->0 == $20
-        if deftbl=>3 == addr
-            return deftbl
-        fin
-        deftbl = deftbl + 5
-    loop
-    return 0
-end
 def loadmod(mod)#1
     word rdlen, modsize, bytecode, defofst, defcnt, init, fixup
     word addr, modaddr, modfix, modofst, modend
@@ -871,31 +1032,36 @@ def loadmod(mod)#1
         // Run through the Re-Location Dictionary.
         //
         while ^rld
-            addr = rld=>1 + modfix
+            rld, addr, fixup = reloc(modfix, modofst, bytecode, rld)
+            if ^rld
+                *addr = ^rld & $10 ?? *addr + lookupextern(esd, rld->3) :: lookupdef(fixup + defofst, deftbl)
+                rld   = rld + 4
+            fin
+            //addr = rld=>1 + modfix
             //if uword_isge(addr, modaddr) // Skip fixups to header
-                //if type & $80 // WORD sized fixup.
-                    fixup = *addr
-                //else      // BYTE sized fixup.
-                //    fixup = ^addr
-                //fin
-                if ^rld & $10 // EXTERN reference.
-                    fixup = fixup + lookupextern(esd, rld->3)
-                else      // INTERN fixup.
-                    fixup = fixup + modofst
-                    if uword_isge(fixup, bytecode)
-                        //
-                        // Bytecode address - replace with call def directory.
-                        //
-                        fixup = lookupdef(fixup + defofst, deftbl)
-                    fin
-                fin
-                //if type & $80 // WORD sized fixup.
-                    *addr = fixup
-                //else      // BYTE sized fixup.
-                //    ^addr = fixup
-                //fin
+            //    if type & $80 // WORD sized fixup.
+            //        fixup = *addr
+            //    else      // BYTE sized fixup.
+            //        fixup = ^addr
+            //    fin
+            //    if ^rld & $10 // EXTERN reference.
+            //        fixup = fixup + lookupextern(esd, rld->3)
+            //    else      // INTERN fixup.
+            //        fixup = fixup + modofst
+            //        if uword_isge(fixup, bytecode)
+            //            //
+            //            // Bytecode address - replace with call def directory.
+            //            //
+            //            fixup = lookupdef(fixup + defofst, deftbl)
+            //        fin
+            //    fin
+            //    if type & $80 // WORD sized fixup.
+            //        *addr = fixup
+            //    else      // BYTE sized fixup.
+            //        ^addr = fixup
+            //    fin
             //fin
-            rld = rld + 4
+            //rld = rld + 4
         loop
         //
         // Run through the External/Entry Symbol Directory.
