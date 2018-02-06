@@ -109,7 +109,7 @@ lib: tools $(LIBS)
 plat: lib $(PLVMSYS) $(CMD)
 	$(ECHO) Built for $(PLASM_PLAT) $(PLASM_MODEL).
 
-sample: $(SAMPLES)
+sample: plat $(SAMPLES)
 
 all: plat sample $(ED) # $(SB) Sandbox source broken
 
@@ -172,7 +172,7 @@ $(PLVM03): $(VMSRC)/plvm03.s $(VMSRC)/soscmd.a
 #
 # Sample code
 #
-$(ED): toolsrc/ed.pla plat
+$(ED): toolsrc/ed.pla
 	./$(PLASM) -AMOW < toolsrc/ed.pla > toolsrc/ed.a
 	acme --setpc 4094 -o $(ED) toolsrc/ed.a
 
@@ -180,155 +180,155 @@ $(SB): toolsrc/sb.pla plat
 	./$(PLASM) -AOW < toolsrc/sb.pla > toolsrc/sb.a
 	acme --setpc 8192 -o $(SB) toolsrc/sb.a
 
-$(ARGS): $(LIBSRC)/args.pla tools
+$(ARGS): $(LIBSRC)/args.pla
 	./$(PLASM) -AMOW < $(LIBSRC)/args.pla > $(LIBSRC)/args.a
 	acme --setpc 4094 -o $(ARGS) $(LIBSRC)/args.a
 
-$(MEMMGR): $(LIBSRC)/memmgr.pla tools
+$(MEMMGR): $(LIBSRC)/memmgr.pla
 	./$(PLASM) -AMOW < $(LIBSRC)/memmgr.pla > $(LIBSRC)/memmgr.a
 	acme --setpc 4094 -o $(MEMMGR) $(LIBSRC)/memmgr.a
 
-$(MEMTEST): $(SAMPLESRC)/memtest.pla plat
+$(MEMTEST): $(SAMPLESRC)/memtest.pla
 	./$(PLASM) -AMOW < $(SAMPLESRC)/memtest.pla > $(SAMPLESRC)/memtest.a
 	acme --setpc 4094 -o $(MEMTEST) $(SAMPLESRC)/memtest.a
 
-$(FIBER): $(LIBSRC)/fiber.pla tools
+$(FIBER): $(LIBSRC)/fiber.pla
 	./$(PLASM) -AMOW < $(LIBSRC)/fiber.pla > $(LIBSRC)/fiber.a
 	acme --setpc 4094 -o $(FIBER) $(LIBSRC)/fiber.a
 
-$(FIBERTEST): $(SAMPLESRC)/fibertest.pla plat
+$(FIBERTEST): $(SAMPLESRC)/fibertest.pla
 	./$(PLASM) -AMOW < $(SAMPLESRC)/fibertest.pla > $(SAMPLESRC)/fibertest.a
 	acme --setpc 4094 -o $(FIBERTEST) $(SAMPLESRC)/fibertest.a
 
-$(SNDSEQ): $(LIBSRC)/sndseq.pla tools
+$(SNDSEQ): $(LIBSRC)/sndseq.pla
 	./$(PLASM) -AMOW < $(LIBSRC)/sndseq.pla > $(LIBSRC)/sndseq.a
 	acme --setpc 4094 -o $(SNDSEQ) $(LIBSRC)/sndseq.a
 
-$(PLAYSEQ): $(SAMPLESRC)/playseq.pla plat
+$(PLAYSEQ): $(SAMPLESRC)/playseq.pla
 	./$(PLASM) -AMOW < $(SAMPLESRC)/playseq.pla > $(SAMPLESRC)/playseq.a
 	acme --setpc 4094 -o $(PLAYSEQ) $(SAMPLESRC)/playseq.a
 
-$(LONGJMP): $(LIBSRC)/longjmp.pla tools
+$(LONGJMP): $(LIBSRC)/longjmp.pla
 	./$(PLASM) -AMOW < $(LIBSRC)/longjmp.pla > $(LIBSRC)/longjmp.a
 	acme --setpc 4094 -o $(LONGJMP) $(LIBSRC)/longjmp.a
 
-$(MON): $(SAMPLESRC)/mon.pla plat
+$(MON): $(SAMPLESRC)/mon.pla
 	./$(PLASM) -AMOW < $(SAMPLESRC)/mon.pla > $(SAMPLESRC)/mon.a
 	acme --setpc 4094 -o $(MON) $(SAMPLESRC)/mon.a
 
-$(ROD): $(SAMPLESRC)/rod.pla plat
+$(ROD): $(SAMPLESRC)/rod.pla
 	./$(PLASM) -AMO < $(SAMPLESRC)/rod.pla > $(SAMPLESRC)/rod.a
 	acme --setpc 4094 -o $(ROD) $(SAMPLESRC)/rod.a
 
-$(SIEVE): $(SAMPLESRC)/sieve.pla plat
+$(SIEVE): $(SAMPLESRC)/sieve.pla
 	./$(PLASM) -AMW < $(SAMPLESRC)/sieve.pla > $(SAMPLESRC)/sieve.a
 	acme --setpc 4094 -o $(SIEVE) $(SAMPLESRC)/sieve.a
 
-$(UTHERNET): $(LIBSRC)/uthernet.pla tools
+$(UTHERNET): $(LIBSRC)/uthernet.pla
 	./$(PLASM) -AMOW < $(LIBSRC)/uthernet.pla > $(LIBSRC)/uthernet.a
 	acme --setpc 4094 -o $(UTHERNET) $(LIBSRC)/uthernet.a
 
-$(UTHERNET2): $(LIBSRC)/uthernet2.pla tools
+$(UTHERNET2): $(LIBSRC)/uthernet2.pla
 	./$(PLASM) -AMOW < $(LIBSRC)/uthernet2.pla > $(LIBSRC)/uthernet2.a
 	acme --setpc 4094 -o $(UTHERNET2) $(LIBSRC)/uthernet2.a
 
-$(ETHERIP): $(LIBSRC)/etherip.pla tools
+$(ETHERIP): $(LIBSRC)/etherip.pla
 	./$(PLASM) -AMOW < $(LIBSRC)/etherip.pla > $(LIBSRC)/etherip.a
 	acme --setpc 4094 -o $(ETHERIP) $(LIBSRC)/etherip.a
 
-$(INET): $(LIBSRC)/inet.pla tools
+$(INET): $(LIBSRC)/inet.pla
 	./$(PLASM) -AMOW < $(LIBSRC)/inet.pla > $(LIBSRC)/inet.a
 	acme --setpc 4094 -o $(INET) $(LIBSRC)/inet.a
 
-$(DHCP): $(LIBSRC)/dhcp.pla tools
+$(DHCP): $(LIBSRC)/dhcp.pla
 	./$(PLASM) -AMOW < $(LIBSRC)/dhcp.pla > $(LIBSRC)/dhcp.a
 	acme --setpc 4094 -o $(DHCP) $(LIBSRC)/dhcp.a
 
-$(HTTPD): $(SAMPLESRC)/httpd.pla plat
+$(HTTPD): $(SAMPLESRC)/httpd.pla
 	./$(PLASM) -AMOW < $(SAMPLESRC)/httpd.pla > $(SAMPLESRC)/httpd.a
 	acme --setpc 4094 -o $(HTTPD) $(SAMPLESRC)/httpd.a
 
-$(FILEIO): $(LIBSRC)/fileio.pla tools
+$(FILEIO): $(LIBSRC)/fileio.pla
 	./$(PLASM) -AMOW < $(LIBSRC)/fileio.pla > $(LIBSRC)/fileio.a
 	acme --setpc 4094 -o $(FILEIO) $(LIBSRC)/fileio.a
 
-$(CONIO): $(LIBSRC)/conio.pla tools
+$(CONIO): $(LIBSRC)/conio.pla
 	./$(PLASM) -AMOW < $(LIBSRC)/conio.pla > $(LIBSRC)/conio.a
 	acme --setpc 4094 -o $(CONIO) $(LIBSRC)/conio.a
 
-$(SANE): $(LIBSRC)/sane.pla tools
+$(SANE): $(LIBSRC)/sane.pla
 	./$(PLASM) -AMOW < $(LIBSRC)/sane.pla > $(LIBSRC)/sane.a
 	acme --setpc 4094 -o $(SANE) $(LIBSRC)/sane.a
 
-$(FPSTR): $(LIBSRC)/fpstr.pla tools
+$(FPSTR): $(LIBSRC)/fpstr.pla
 	./$(PLASM) -AMOW < $(LIBSRC)/fpstr.pla > $(LIBSRC)/fpstr.a
 	acme --setpc 4094 -o $(FPSTR) $(LIBSRC)/fpstr.a
 
-$(FPU): $(LIBSRC)/fpu.pla tools
+$(FPU): $(LIBSRC)/fpu.pla
 	./$(PLASM) -AMOW < $(LIBSRC)/fpu.pla > $(LIBSRC)/fpu.a
 	acme --setpc 4094 -o $(FPU) $(LIBSRC)/fpu.a
 
-$(SANITY): $(SAMPLESRC)/sanity.pla plat
+$(SANITY): $(SAMPLESRC)/sanity.pla
 	./$(PLASM) -AMOW < $(SAMPLESRC)/sanity.pla > $(SAMPLESRC)/sanity.a
 	acme --setpc 4094 -o $(SANITY) $(SAMPLESRC)/sanity.a
 
-$(RPNCALC): $(SAMPLESRC)/rpncalc.pla plat
+$(RPNCALC): $(SAMPLESRC)/rpncalc.pla
 	./$(PLASM) -AMOW < $(SAMPLESRC)/rpncalc.pla > $(SAMPLESRC)/rpncalc.a
 	acme --setpc 4094 -o $(RPNCALC) $(SAMPLESRC)/rpncalc.a
 
-$(TONE): $(LIBSRC)/tone.pla tools
+$(TONE): $(LIBSRC)/tone.pla
 	./$(PLASM) -AMOW < $(LIBSRC)/tone.pla > $(LIBSRC)/tone.a
 	acme --setpc 4094 -o $(TONE) $(LIBSRC)/tone.a
 
-$(FATCAT): $(SAMPLESRC)/fatcat.pla plat
+$(FATCAT): $(SAMPLESRC)/fatcat.pla
 	./$(PLASM) -AMOW < $(SAMPLESRC)/fatcat.pla > $(SAMPLESRC)/fatcat.a
 	acme --setpc 4094 -o $(FATCAT) $(SAMPLESRC)/fatcat.a
 
-$(FATGET): $(SAMPLESRC)/fatget.pla plat
+$(FATGET): $(SAMPLESRC)/fatget.pla
 	./$(PLASM) -AMOW < $(SAMPLESRC)/fatget.pla > $(SAMPLESRC)/fatget.a
 	acme --setpc 4094 -o $(FATGET) $(SAMPLESRC)/fatget.a
 
-$(FATPUT): $(SAMPLESRC)/fatput.pla plat
+$(FATPUT): $(SAMPLESRC)/fatput.pla
 	./$(PLASM) -AMOW < $(SAMPLESRC)/fatput.pla > $(SAMPLESRC)/fatput.a
 	acme --setpc 4094 -o $(FATPUT) $(SAMPLESRC)/fatput.a
 
-$(FATWDSK): $(SAMPLESRC)/fatwritedsk.pla plat
+$(FATWDSK): $(SAMPLESRC)/fatwritedsk.pla
 	./$(PLASM) -AMOW < $(SAMPLESRC)/fatwritedsk.pla > $(SAMPLESRC)/fatwritedsk.a
 	acme --setpc 4094 -o $(FATWDSK) $(SAMPLESRC)/fatwritedsk.a
 
-$(FATRDSK): $(SAMPLESRC)/fatreaddsk.pla plat
+$(FATRDSK): $(SAMPLESRC)/fatreaddsk.pla
 	./$(PLASM) -AMOW < $(SAMPLESRC)/fatreaddsk.pla > $(SAMPLESRC)/fatreaddsk.a
 	acme --setpc 4094 -o $(FATRDSK) $(SAMPLESRC)/fatreaddsk.a
 
-$(SDFAT): $(LIBSRC)/sdfat.pla tools
+$(SDFAT): $(LIBSRC)/sdfat.pla
 	./$(PLASM) -AMOW < $(LIBSRC)/sdfat.pla > $(LIBSRC)/sdfat.a
 	acme --setpc 4094 -o $(SDFAT) $(LIBSRC)/sdfat.a
 
-$(SPIPORT): $(LIBSRC)/spiport.pla tools
+$(SPIPORT): $(LIBSRC)/spiport.pla
 	./$(PLASM) -AMOW < $(LIBSRC)/spiport.pla > $(LIBSRC)/spiport.a
 	acme --setpc 4094 -o $(SPIPORT) $(LIBSRC)/spiport.a
 
-$(PORTIO): $(LIBSRC)/portio.pla tools
+$(PORTIO): $(LIBSRC)/portio.pla
 	./$(PLASM) -AMOW < $(LIBSRC)/portio.pla > $(LIBSRC)/portio.a
 	acme --setpc 4094 -o $(PORTIO) $(LIBSRC)/portio.a
 
-$(DGR): $(LIBSRC)/dgr.pla tools
+$(DGR): $(LIBSRC)/dgr.pla
 	./$(PLASM) -AMOW < $(LIBSRC)/dgr.pla > $(LIBSRC)/dgr.a
 	acme --setpc 4094 -o $(DGR) $(LIBSRC)/dgr.a
 
-$(DGRTEST): $(SAMPLESRC)/dgrtest.pla plat
+$(DGRTEST): $(SAMPLESRC)/dgrtest.pla
 	./$(PLASM) -AMOW < $(SAMPLESRC)/dgrtest.pla > $(SAMPLESRC)/dgrtest.a
 	acme --setpc 4094 -o $(DGRTEST) $(SAMPLESRC)/dgrtest.a
 
-$(ROGUE): $(SAMPLESRC)/rogue.pla plat
+$(ROGUE): $(SAMPLESRC)/rogue.pla
 	./$(PLASM) -AMOW < $(SAMPLESRC)/rogue.pla > $(SAMPLESRC)/rogue.a
 	acme --setpc 4094 -o $(ROGUE) $(SAMPLESRC)/rogue.a
 
-$(ROGUECOMBAT): $(SAMPLESRC)/rogue.combat.pla plat
+$(ROGUECOMBAT): $(SAMPLESRC)/rogue.combat.pla
 	./$(PLASM) -AMOW < $(SAMPLESRC)/rogue.combat.pla > $(SAMPLESRC)/rogue.combat.a
 	acme --setpc 4094 -o $(ROGUECOMBAT) $(SAMPLESRC)/rogue.combat.a
 
-$(ROGUEMAP): $(SAMPLESRC)/rogue.map.pla plat
+$(ROGUEMAP): $(SAMPLESRC)/rogue.map.pla
 	./$(PLASM) -AMOW < $(SAMPLESRC)/rogue.map.pla > $(SAMPLESRC)/rogue.map.a
 	acme --setpc 4094 -o $(ROGUEMAP) $(SAMPLESRC)/rogue.map.a
 

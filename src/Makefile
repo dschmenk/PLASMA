@@ -40,7 +40,7 @@ help:
 	$(ECHO)
 	$(ECHO) Possible options:
 	$(ECHO) make tools ... Build cross-compiler and Unix VM
-	$(ECHO) make plat .... Build platfrom compiler and VM
+	$(ECHO) make plat .... Build compiler, libraries, and VM
 	$(ECHO) make sample .. Build sample code
 	$(ECHO) make all ..... All the above
 	$(ECHO)
