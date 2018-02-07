@@ -1170,8 +1170,13 @@ int parse_var(int type, long basesize)
     {
         if (idlen)
             id_add(idstr, idlen, type, size);
-        else
-            emit_data(0, 0, 0, size);
+        else if (!(type & EXTERN_TYPE))
+        {
+            if (type & LOCAL_TYPE)
+                idlocal_size(size);
+            else
+                emit_data(0, 0, 0, size);
+        }
     }
     return (1);
 }
