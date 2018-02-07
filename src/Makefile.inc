@@ -12,6 +12,7 @@ PLVM01  = A1PLASMA\#060280
 PLVM02	= PLASMA.SYSTEM\#FF2000
 PLVM802	= PLASMA16.SYSTEM\#FF2000
 PLVM03	= SOS.INTERP\#050000
+PLVMBBC	= BBPLASMA
 CMD     = CMD\#061000
 # Lib
 ARGS    = ARGS\#FE1000
@@ -35,9 +36,6 @@ TONE    = TONE\#FE1000
 UTHERNET= UTHERNET\#FE1000
 UTHERNET2= UTHERNET2\#FE1000
 #WIZNET  = WIZNET\#FE1000
-LIBS 	:= $(ARGS) $(CONIO) $(DGR) $(DHCP) $(ETHERIP) $(FIBER) $(FILEIO) $(FPSTR)\
-$(FPU) $(INET) $(LONGJMP) $(MEMMGR) $(PORTIO) $(SANE) $(SDFAT) $(SNDSEQ) $(SPIPORT)\
-$(TONE) $(UTHERNET) $(UTHERNET2) $(WIZNET)
 # Samples
 DGRTEST = DGRTEST\#FE1000
 FATCAT  = FATCAT\#FE1000
@@ -98,6 +96,13 @@ ifeq (apple, $(PLASM_PLAT))
 	else ifeq (IIGS, $(PLASM_MODEL))
 		PLVMSYS := $(PLVM802)
 	endif
+	LIBS := $(ARGS) $(CONIO) $(DGR) $(DHCP) $(ETHERIP) $(FIBER) $(FILEIO) $(FPSTR)\
+		$(FPU) $(INET) $(LONGJMP) $(MEMMGR) $(PORTIO) $(SANE) $(SDFAT) $(SNDSEQ) $(SPIPORT)\
+		$(TONE) $(UTHERNET) $(UTHERNET2) $(WIZNET)
+else ifeq (bbc, $(PLASM_PLAT))
+	PLASM_MODEL := B 	# Only support Model B so far
+	PLVMSYS := $(PLVMBBC)
+	# LIBS := $(CONIO)
 endif
 #
 # Main targets list
@@ -106,7 +111,7 @@ tools: $(PLASM) $(PLVM) $(PLASMAPLASM) $(CODEOPT)
 
 lib: tools $(LIBS)
 
-plat: lib $(PLVMSYS) $(CMD)
+plat: lib $(PLVMSYS)
 	$(ECHO) Built for $(PLASM_PLAT) $(PLASM_MODEL).
 
 sample: plat $(SAMPLES)
@@ -121,7 +126,7 @@ test: $(SAMPLESRC)/test.pla $(SAMPLESRC)/testlib.pla tools
 	./$(PLVM) TEST
 
 clean:
-	-rm -f *FE1000 *FF2000 $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVM03) $(CMD)
+	-rm -f *FE1000 *FF2000 $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVM03) $(PLVMBBC) $(CMD)
 	-rm -f toolsrc/*.o toolsrc/*~ toolsrc/*.a
 	-rm -f vmsrc/*.o vmsrc/*~ $(VMSRC)/*.a $(VMSRC)/*.sym
 	-rm -f $(SAMPLESRC)/*.o $(SAMPLESRC)/*~ $(SAMPLESRC)/*.a
@@ -147,27 +152,27 @@ $(CODEOPT): toolsrc/codeopt.pla toolsrc/codeseq.plh
 $(PLVM): vmsrc/plvm.c
 	cc vmsrc/plvm.c -o $(PLVM)
 
-$(VMSRC)/a1cmd.a: $(VMSRC)/a1cmd.pla $(PLASM)
+$(PLVM01): $(VMSRC)/plvm01.s $(VMSRC)/a1cmd.pla
 	./$(PLASM) -AOW < $(VMSRC)/a1cmd.pla > $(VMSRC)/a1cmd.a
-
-$(PLVM01): $(VMSRC)/plvm01.s $(VMSRC)/a1cmd.a
 	acme -o $(PLVM01) -l $(VMSRC)/plvm01.sym $(VMSRC)/plvm01.s
 
-$(CMD): $(VMSRC)/cmd.pla $(VMSRC)/cmdstub.s $(PLVMSYS) $(PLASM)
+$(PLVM02): $(VMSRC)/plvm02.s $(VMSRC)/cmd.pla $(VMSRC)/cmdstub.s
 	./$(PLASM) -AOW < $(VMSRC)/cmd.pla > $(VMSRC)/cmd.a
 	acme --setpc 8192 -o $(CMD) $(VMSRC)/cmdstub.s
-
-$(PLVM02): $(VMSRC)/plvm02.s
 	acme -o $(PLVM02) -l $(VMSRC)/plvm02.sym $(VMSRC)/plvm02.s
 
-$(PLVM802): $(VMSRC)/plvm802.s
+$(PLVM802): $(VMSRC)/plvm802.s $(VMSRC)/cmd.pla $(VMSRC)/cmdstub.s
+	./$(PLASM) -AOW < $(VMSRC)/cmd.pla > $(VMSRC)/cmd.a
+	acme --setpc 8192 -o $(CMD) $(VMSRC)/cmdstub.s
 	acme -o $(PLVM802) -l $(VMSRC)/plvm802.sym $(VMSRC)/plvm802.s
 
-$(VMSRC)/soscmd.a: $(VMSRC)/soscmd.pla $(PLASM)
+$(PLVM03): $(VMSRC)/plvm03.s $(VMSRC)/soscmd.pla
 	./$(PLASM) -AOW < $(VMSRC)/soscmd.pla > $(VMSRC)/soscmd.a
-
-$(PLVM03): $(VMSRC)/plvm03.s $(VMSRC)/soscmd.a
 	acme -o $(PLVM03) -l $(VMSRC)/plvm03.sym $(VMSRC)/plvm03.s
+
+$(PLVMBBC): $(VMSRC)/plvm.s $(VMSRC)/sys.s $(VMSRC)/vminit.s $(VMSRC)/cmd.pla
+	./$(PLASM) -AOW < $(VMSRC)/cmd.pla > $(VMSRC)/cmd.a
+	acme -o $(PLVMBBC) -l $(VMSRC)/plvm.sym $(VMSRC)/plvm.s
 
 #
 # Sample code
