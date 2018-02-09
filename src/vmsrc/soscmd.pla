@@ -323,9 +323,9 @@ asm memxcpy(dst,src,size)#0
         ADC     #$60
         STA     DSTH
         LDA     ESTKL+2,X
-        ORA     #$80
+        CLC
+        ADC     #$7F
         STA     DSTX
-        DEC     DSTX
         LDA     ESTKL+1,X
         STA     SRCL
         LDA     ESTKH+1,X
@@ -361,9 +361,9 @@ asm xpokeb(seg, dst, byteval)#0
         ADC     #$60
         STA     DSTH
         LDA     ESTKL+2,X
-        ORA     #$80
+        CLC
+        ADC     #$7F
         STA     DSTX
-        DEC     DSTX
         LDY     #$00
         LDA     ESTKL,X
         STA     (DST),Y
@@ -571,9 +571,9 @@ asm lookuptbl(dci, tbl)#1
         ADC     #$60
         STA     DSTH
         LDA     ESTKL,X
-        ORA     #$80
+        CLC
+        ADC     #$7F
         STA     DSTX
-        DEC     DSTX
         LDA     ESTKL+1,X
         STA     SRCL
         LDA     ESTKH+1,X
@@ -797,11 +797,21 @@ def getpfx(path)#1
     return path
 end
 def setpfx(path)#1
-    byte params[3]
+    byte params[6]
+    byte fileinfo[2]
 
-    params.0 = 1
+    params.0 = 3
     params:1 = path
-    perr     = syscall($C6, @params)
+    params:3 = @fileinfo
+    params.5 = 2
+    perr     = syscall($C4, @params) // Get file info
+    if not perr and (fileinfo.1 == $00 or fileinfo.1 == $0F) // Make sure it's a directory
+        params.0 = 1
+        params:1 = path
+        perr     = syscall($C6, @params)
+    else
+        perr = $44
+    fin
     return path
 end
 def volume(devname, volname)#1
@@ -982,18 +992,6 @@ def allocheap(size)#1
     word addr
     addr = heap
     heap = heap + size
-    if systemflags & reshgr1
-        if uword_islt(addr, $4000) and uword_isgt(heap, $2000)
-            addr = $4000
-            heap = addr + size
-        fin
-    fin
-    if systemflags & reshgr2
-        if uword_islt(addr, $6000) and uword_isgt(heap, $4000)
-            addr = $6000
-            heap = addr + size
-        fin
-    fin
     if uword_isge(heap, @addr)
         return 0
     fin
@@ -1183,7 +1181,7 @@ def loadmod(mod)#1
                 return -perr
             fin
             modid++
-            defext  = (codeseg.0 | $80) - 1
+            defext  =  codeseg.0 + $7F // (codeseg.0 | $80) - 1
             defaddr = (codeseg & $FF00) + $6000
             codefix = defaddr - bytecode
             defofst = defaddr - defofst
@@ -1430,7 +1428,7 @@ init_cons
 //
 // Print PLASMA version
 //
-prstr("PLASMA 01.01\n")//; prbyte(version.1); cout('.'); prbyte(version.0); crout
+prstr("PLASMA "); prbyte(version.1); cout('.'); prbyte(version.0); crout
 //
 // Init 2K symbol table.
 //
