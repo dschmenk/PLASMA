@@ -62,8 +62,6 @@ SEGSTART        =       $A000
         BPL     -
         LDX     #$4C            ; SET JMPTMP OPCODE
         STX     JMPTMP
-;        STA     JMPTMPX
-;        STA     JMPTMPX+1
         STA     TMPX            ; CLEAR ALL EXTENDED POINTERS
         STA     SRCX
         STA     DSTX
@@ -201,6 +199,21 @@ _DIVEX  INX
         LDY     IPY
         RTS
 ;*
+;* INCREMENT TOS
+;*
+INCR    INC     ESTKL,X
+        BNE     +
+        INC     ESTKH,X
++       JMP     NEXTOP
+;*
+;* DECREMENT TOS
+;*
+DECR    LDA     ESTKL,X
+        BNE     +
+        DEC     ESTKH,X
++       DEC     ESTKL,X
+        JMP     NEXTOP
+;*
 ;* OPCODE TABLE
 ;*
         !ALIGN  255,0
@@ -316,21 +329,6 @@ IDXW    LDA     ESTKL,X
         ADC     ESTKH+1,X
         STA     ESTKH+1,X
         JMP     DROP
-;*
-;* INCREMENT TOS
-;*
-INCR    INC     ESTKL,X
-        BNE     +
-        INC     ESTKH,X
-+       JMP     NEXTOP
-;*
-;* DECREMENT TOS
-;*
-DECR    LDA     ESTKL,X
-        BNE     +
-        DEC     ESTKH,X
-+       DEC     ESTKL,X
-        JMP     NEXTOP
 ;*
 ;* BITWISE COMPLIMENT TOS
 ;*

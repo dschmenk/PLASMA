@@ -17,12 +17,6 @@ const resxhgr2    = $0080
 const modkeep     = $2000
 const modinitkeep = $4000
 //
-// SOS flags
-//
-const O_READ      = 1
-const O_WRITE     = 2
-const O_READ_WRITE = 3
-//
 // Pedefined functions.
 //
 predef syscall(cmd,params)#1, call(addr,areg,xreg,yreg,status)#1
@@ -35,7 +29,7 @@ predef execmod(modfile)#1
 //
 // Exported CMDSYS table
 //
-word version     = $0100 // 01.00
+word version     = $0101 // 01.01
 word syspath
 word cmdlnptr
 word             = @execmod
@@ -810,7 +804,7 @@ def setpfx(path)#1
     perr     = syscall($C6, @params)
     return path
 end
-def volume(devname, volname, ttlblks, freblks)#1
+def volume(devname, volname)#1
     byte params[9]
 
     params.0 = 4
@@ -819,8 +813,6 @@ def volume(devname, volname, ttlblks, freblks)#1
     params:5 = 0
     params:7 = 0
     perr     = syscall($C5, @params)
-    *ttlblks = params:5
-    *freblks = params:7
     return perr
 end
 def open(path)#1
@@ -899,18 +891,7 @@ end
 //
 // MEMORY CALLS
 //
-def seg_request(base, limit, id)#1
-    byte params[7]
-
-    params.0 = 4
-    params:1 = base
-    params:3 = limit
-    params.5 = id
-    params.6 = 0
-    perr     = syscall($40, @params)
-    return params.6
-end
-def seg_find(search, base, limit, pages, id)#1
+def seg_find(search, pages, id)#3
     byte params[10]
 
     params.0 = 6
@@ -921,9 +902,7 @@ def seg_find(search, base, limit, pages, id)#1
     params:7 = 0
     params.9 = 0
     perr     = syscall($41, @params)
-    *base    = params:5
-    *limit   = params:7
-    return params.9
+    return params.9, params:5, params:7
 end
 def seg_release(segnum)#1
     byte params[2]
@@ -943,8 +922,9 @@ def init_cons()#0
     fin
     write(refcons, @textmode, 3)
     devcons  = dev_getnum(@console)
-    nlmode.0 = $80
-    nlmode.1 = $0D
+    nlmode:0 = $0D80
+    //nlmode.0 = $80
+    //nlmode.1 = $0D
     dev_control(devcons, $02, @nlmode)
 end
 def cout(ch)#0
@@ -954,6 +934,9 @@ def cout(ch)#0
     else
         write(refcons, @ch, 1)
     fin
+end
+def crout()#0
+    cout($0D)
 end
 def cin()#1
     byte ch
@@ -975,13 +958,10 @@ def rdstr(prompt)#1
     cout(prompt)
     ^heap = read(refcons, heap + 1, 128)
     if heap->[^heap] == $0D
-        ^heap = ^heap - 1
+        ^heap--
     fin
-    cout($0D)
+    crout
     return heap
-end
-def crout()#0
-    cout($0D)
 end
 def prbyte(v)#0
     cout(hexchar[(v >> 4) & $0F])
@@ -1002,6 +982,18 @@ def allocheap(size)#1
     word addr
     addr = heap
     heap = heap + size
+    if systemflags & reshgr1
+        if uword_islt(addr, $4000) and uword_isgt(heap, $2000)
+            addr = $4000
+            heap = addr + size
+        fin
+    fin
+    if systemflags & reshgr2
+        if uword_islt(addr, $6000) and uword_isgt(heap, $4000)
+            addr = $6000
+            heap = addr + size
+        fin
+    fin
     if uword_isge(heap, @addr)
         return 0
     fin
@@ -1150,7 +1142,7 @@ def loadmod(mod)#1
         //
         // Alloc heap space for relocated module (data + bytecode).
         //
-        moddep  = moddep  + 1
+        moddep++
         modfix  = moddep  - @header.2 // Adjust to skip header
         modsize = modsize - modfix
         rdlen   = rdlen   - modfix - 2
@@ -1181,16 +1173,16 @@ def loadmod(mod)#1
         while ^esd         // Scan to end of ESD
             esd = esd + 4
         loop
-        esd = esd + 1
+        esd++
         if defcnt
             //
             // Locate bytecode defs in allocated segment.
             //
-            modseg[modid] = seg_find($00, @codeseg, @defaddr, (rld - bytecode + 255) >> 8, modid + $12)
+            modseg[modid], codeseg, drop = seg_find($00, (rld - bytecode + 255) >> 8, modid + $12)
             if perr
                 return -perr
             fin
-            modid = modid + 1
+            modid++
             defext  = (codeseg.0 | $80) - 1
             defaddr = (codeseg & $FF00) + $6000
             codefix = defaddr - bytecode
@@ -1268,8 +1260,6 @@ def loadmod(mod)#1
             //
             memxcpy(codeseg, bytecode, modsize - (bytecode - modaddr))
         fin
-    //else
-    //    return -perr
     fin
     if lerr
         return -lerr
@@ -1298,12 +1288,11 @@ def volumes()#0
     byte devname[17]
     byte volname[17]
     byte i
-    word ttlblks, freblks
 
     for i = $01 to $18
         if dev_info(i, @devname, @info, 11) == 0
             prstr(@devname)
-            if volume(@devname, @volname, @ttlblks, @freblks) == 0
+            if volume(@devname, @volname) == 0
                 prstr(" => /")
                 prstr(@volname)
                 cout('/')
@@ -1423,7 +1412,7 @@ def execmod(modfile)#1
             lastsym = savesym
             heap    = saveheap
             while modid
-                modid = modid - 1
+                modid--
                 seg_release(modseg[modid])
             loop
         else
@@ -1441,11 +1430,11 @@ init_cons
 //
 // Print PLASMA version
 //
-prstr("PLASMA "); prbyte(version.1); cout('.'); prbyte(version.0); crout
+prstr("PLASMA 01.01\n")//; prbyte(version.1); cout('.'); prbyte(version.0); crout
 //
 // Init 2K symbol table.
 //
-seg_find($00, @symtbl, @lastsym, $08, $11)
+drop, symtbl, drop = seg_find($00, $08, $11)
 lastsym = symtbl & $FF00
 xpokeb(symtbl.0, lastsym, 0)
 while *sysmodsym
@@ -1524,7 +1513,7 @@ while 1
             prbyte(terr)
             perr = 0
         else
-            prstr("OK\n")
+            prstr("OK")
         fin
         crout()
     fin
