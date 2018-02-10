@@ -12,7 +12,7 @@ PLVM01  = A1PLASMA\#060280
 PLVM02	= PLASMA.SYSTEM\#FF2000
 PLVM802	= PLASMA16.SYSTEM\#FF2000
 PLVM03	= SOS.INTERP\#050000
-PLVMBBC	= BBPLASMA
+PLVMBBC	= BBPLASMA\#FF2000
 CMD     = CMD\#061000
 # Lib
 ARGS    = ARGS\#FE1000
@@ -118,6 +118,9 @@ sample: plat $(SAMPLES)
 
 all: plat sample $(ED) # $(SB) Sandbox source broken
 
+release: all mkrel-$(PLASM_PLAT)
+	-bash mkrel-$(PLASM_PLAT)
+
 test: $(SAMPLESRC)/test.pla $(SAMPLESRC)/testlib.pla tools
 	./$(PLASM) -AMOW  < $(SAMPLESRC)/test.pla > $(SAMPLESRC)/test.a
 	acme --setpc 4094 -o $(TEST) $(SAMPLESRC)/test.a
@@ -170,9 +173,10 @@ $(PLVM03): $(VMSRC)/plvm03.s $(VMSRC)/soscmd.pla
 	./$(PLASM) -AOW < $(VMSRC)/soscmd.pla > $(VMSRC)/soscmd.a
 	acme -o $(PLVM03) -l $(VMSRC)/plvm03.sym $(VMSRC)/plvm03.s
 
-$(PLVMBBC): $(VMSRC)/plvm.s $(VMSRC)/sys.s $(VMSRC)/vminit.s $(VMSRC)/cmd.pla
+$(PLVMBBC): $(VMSRC)/plvm.s $(VMSRC)/vminit.s $(VMSRC)/cmd.pla
 	./$(PLASM) -AOW < $(VMSRC)/cmd.pla > $(VMSRC)/cmd.a
-	acme -o $(PLVMBBC) -l $(VMSRC)/plvm.sym $(VMSRC)/plvm.s
+	acme -o $(PLVMBBC) $(VMSRC)/plvm.s
+	beebasm -i skel.beebasm -do plasma.ssd
 
 #
 # Sample code

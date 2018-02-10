@@ -47,6 +47,8 @@ help:
 	$(ECHO) make hello ... Hello World test
 	$(ECHO) make test .... Build and run simple tests
 	$(ECHO) make clean ... Clean code
+	$(ECHO) make release . Build platform distribution
+	$(ECHO)
 	$(ECHO) make help .... Display this message
 	$(ECHO)
 	$(ECHO) Possible platforms: $(PLASM_PLAT_LIST)

@@ -11,7 +11,11 @@ DSTL    =   DST
 DSTH    =   DST+1
 ESGUARD =   $BE
 ESTKSZ  =   $20
+!ifdef IsBBC {
+ESTK    =	$50
+} else {
 ESTK    =   $C0
+}
 ESTKH   =   ESTK
 ESTKL   =   ESTK+ESTKSZ/2
 VMZP    =   ESTK+ESTKSZ

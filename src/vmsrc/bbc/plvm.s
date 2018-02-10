@@ -8,10 +8,11 @@
 ;*
 ;* VM ZERO PAGE LOCATIONS
 ;*
+        !SET IsBBC = 1
         !SOURCE "vmsrc/plvmzp.inc"
 DVSIGN  =   TMP+2
-DROP    =   $EF
-NEXTOP  =   $F0
+DROP    =   $1F
+NEXTOP  =   $20
 FETCHOP =   NEXTOP+1
 IP      =   FETCHOP+1
 IPL     =   IP
@@ -21,7 +22,8 @@ OPPAGE  =   OPIDX+1
 ;*
 ;* Platform-specific constants, inluding zero page mods
 ;*
-        !SOURCE "vmsrc/bbc/sys.s"
+ERRNUM  =   $700
+ERRSTR  =   $701
 ;*
 ;* INTERPRETER HEADER+INITIALIZATION
 ;* BBC B locates at $2000 to give space to DFS/ADFS
