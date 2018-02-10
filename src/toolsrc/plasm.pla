@@ -278,7 +278,6 @@ byte outflags
 byte refnum, srcref, incref
 byte[32] srcfile, incfile, relfile
 word parsefile            // Pointer to current file
-word sysincbuf, sysincfre // System I/O buffer for include files
 word srcline              // Saved source line number
 //
 // Scanner variables
@@ -387,7 +386,10 @@ def exit_err(err)#0
     if err & ERR_TABLE;  puts("table");       fin
     if err & ERR_SYNTAX; puts("syntax");      fin
     putcurln
-    fileio:close(0) // Close all open files
+    if incref
+        fileio:close(incref) // Close include file if open
+    fin
+    fileio:close(srcref) // Close source file
     throw(exit, TRUE)
 end
 //
@@ -409,7 +411,7 @@ include "toolsrc/parse.pla"
 //
 // Look at command line arguments and compile module
 //
-puts("PLASMA Compiler, Version 1.0\n")
+puts("PLASMA Compiler, Version 1.02\n")
 arg = argNext(argFirst)
 if ^arg and ^(arg + 1) == '-'
     opt = arg + 2
@@ -464,6 +466,7 @@ if ^arg
     fin
 fin
 if srcfile and relfile
+    fileio:iobufalloc(2) // Reserve two I/O buffers
     srcref = fileio:open(@srcfile)
     if srcref
         fileio:newline(srcref, $7F, $0D)
