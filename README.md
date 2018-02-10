@@ -1,5 +1,5 @@
-# 1/24/2018 Developer Preview #3 1.0 Available
-[Download and read the Release Notes](https://github.com/dschmenk/PLASMA/blob/master/doc/Preview%20Version%201.0.md)
+# 2/6/2018 PLASMA 1.0 Available!
+[Download and read the Release Notes](https://github.com/dschmenk/PLASMA/blob/master/doc/Version%201.0.md)
 
 # The PLASMA Programming Language
 
@@ -188,6 +188,8 @@ After the compiler loads (which can take some time on an un-accelerated machine)
 and just like with the cross-compiled module, you will get the `Hello, word.` message printed to the screen.
 
 # Tutorial
+
+I've created a YouTube playlist of PLASMA tutorial videos. Best viewed when you follow along on a live Apple II or emulator. They are brief segments to highlight one feature of PLASMA at a time: [Modern Retrogramming with PLASMA](https://www.youtube.com/playlist?list=PLlPKgUMQbJ79VJvZRfv1CJQf4SP2Gw3yU)
 
 During KansasFest 2015, I gave a PLASMA introduction using the Apple II PLASMA sandbox IDE. You can play along using your favorite Apple II emulator, or one that runs directly in your browser: [Apple II Emulator in Javascript](https://www.scullinsteel.com/apple/e). Download [SANDBOX.PO](https://github.com/dschmenk/PLASMA/blob/master/SANDBOX.PO?raw=true) and load it into Drive 1 of the emulator. Start the [KansasFest PLASMA Code-along video](https://www.youtube.com/watch?v=RrR79WVHwJo?t=11m24s) and follow along.
 

@@ -27,7 +27,7 @@ struc t_fileio
     word setpfx
     word getfileinfo
     word geteof
-    word openbuf
+    word iobufalloc
     word open
     word close
     word read
@@ -38,20 +38,26 @@ struc t_fileio
     word readblock
     word writeblock
 end
-predef a2getpfx(path), a23setpfx(path), a2getfileinfo(path, fileinfo), a23geteof(refnum), a2openbuf(path, iobuf), a2open(path), a23close(refnum)
+predef a2getpfx(path), a23setpfx(path), a2getfileinfo(path, fileinfo), a23geteof(refnum), a2iobufs(iobufs), a2open(path), a2close(refnum)
 predef a23read(refnum, buf, len), a2write(refnum, buf, len), a2create(path, type, aux), a23destroy(path)
-predef a23newline(refnum, emask, nlchar), a2readblock(unit, buf, block), a2writeblock(unit, buf, block)
+predef a2newline(refnum, emask, nlchar), a2readblock(unit, buf, block), a2writeblock(unit, buf, block)
 //
 // Exported function table.
 //
 word fileio[]
-word = @a2getpfx, @a23setpfx, @a2getfileinfo, @a23geteof, @a2openbuf, @a2open, @a23close
+word = @a2getpfx, @a23setpfx, @a2getfileinfo, @a23geteof, @a2iobufs, @a2open, @a2close
 word = @a23read, @a2write, @a2create, @a23destroy
-word = @a23newline, @a2readblock, @a2writeblock
+word = @a2newline, @a2readblock, @a2writeblock
 //
 // SOS/ProDOS error code
 //
 export byte perr
+//
+// I/O buffers
+//
+const MAX_IOBUFS = 4
+byte iobuf_ref[MAX_IOBUFS]
+word iobuf_addr[MAX_IOBUFS] = sysbuf
 //
 // ProDOS/SOS routines
 //
@@ -128,34 +134,54 @@ def a1open(path)
     *CFFA1FileName = path
     return 0
 end
-def a2openbuf(path, iobuf)
-    byte params[6]
-    params.0 = 3
-    params:1 = path
-    params:3 = iobuf
-    params.5 = 0
-    perr     = syscall($C8, @params)
-    return params.5
+def a2iobufs(iobufs)
+    byte i
+    word freebuf, bufaddr
+
+    if iobufs > MAX_IOBUFS
+        iobufs = MAX_IOBUFS
+    fin
+    if iobufs
+        iobufs-- // Subtract off system I/O buffer
+        if iobufs
+            bufaddr = heapallocalign(1024 * iobufs, 8, @freebuf)
+            for i = 1 to MAX_IOBUFS-1
+                if not iobuf_addr[i]
+                    iobuf_addr[i] = bufaddr
+                    bufaddr = bufaddr + 1024
+                    iobufs--
+                    if not iobufs
+                        return freebuf
+                    fin
+                fin
+            next
+            return freebuf
+        fin
+    else
+        for i = 1 to MAX_IOBUFS-1
+            iobuf_addr[i] = 0 // Free I/O buffers if 0 passed in
+        next
+    fin
+    return 0
+end
+def a13iobufs(iobufs)
+    return 0
 end
 def a2open(path)
-    byte params[6]
-    params.0 = 3
-    params:1 = path
-    params:3 = sysbuf
-    params.5 = 0
-    perr     = syscall($C8, @params)
-    return params.5
-end
-def a3openbuf(path, iobuf)
-    byte params[7]
-
-    params.0 = 4
-    params:1 = path
-    params.3 = 0
-    params:4 = iobuf
-    params.6 = 0
-    perr = syscall($C8, @params)
-    return params.3
+    byte i, params[6]
+    
+    for i = 0 to MAX_IOBUFS-1
+        if iobuf_addr[i] and not iobuf_ref[i]            
+            params.0     = 3
+            params:1     = path
+            params:3     = iobuf_addr[i]
+            params.5     = 0
+            perr         = syscall($C8, @params)
+            iobuf_ref[i] = params.5
+            return params.5
+        fin
+    next
+    return 0
 end
 def a3open(path)
     byte params[7]
@@ -171,7 +197,22 @@ end
 def a1close(refnum)
     return perr
 end
-def a23close(refnum)
+def a2close(refnum)
+    byte i, params[2]
+
+    for i = 0 to MAX_IOBUFS-1
+        if refnum == iobuf_ref[i]
+            iobuf_ref[i] = 0
+            params.0     = 1
+            params.1     = refnum
+            perr         = syscall($CC, @params)
+            return perr
+        fin
+    next
+    perr = $45
+    return perr
+end
+def a3close(refnum)
     byte params[2]
 
     params.0 = 1
@@ -263,12 +304,22 @@ end
 def a1newline(refnum, emask, nlchar)
     return perr
 end
-def a23newline(refnum, emask, nlchar)
+def a2newline(refnum, emask, nlchar)
     byte params[4]
 
     params.0 = 3
     params.1 = refnum
     params.2 = emask
+    params.3 = nlchar
+    perr     = syscall($C9, @params)
+    return perr
+end
+def a3newline(refnum, emask, nlchar)
+    byte params[4]
+
+    params.0 = 3
+    params.1 = refnum
+    params.2 = emask ?? $FF :: $00
     params.3 = nlchar
     perr     = syscall($C9, @params)
     return perr
@@ -304,12 +355,25 @@ end
 //
 // Machine specific initialization.
 //
-when MACHID & $C8
-    is $08 // Apple 1
+when MACHID & MACHID_MODEL
+    is MACHID_III
+        fileio:getpfx      = @a3getpfx
+        fileio:getfileinfo = @a3getfileinfo
+        fileio:iobufalloc  = @a13iobufs
+        fileio:open        = @a3open
+        fileio:close       = @a3close
+        fileio:write       = @a3write
+        fileio:create      = @a3create
+        fileio:newline     = @a3newline
+        fileio:readblock   = @a13readblock
+        fileio:writeblock  = @a13writeblock
+        break
+    is MACHID_I
         fileio:getpfx      = @a1getpfx
         fileio:setpfx      = @a1setpfx
         fileio:getfileinfo = @a1getfileinfo
         fileio:geteof      = @a1geteof
+        fileio:iobufalloc  = @a13iobufs
         fileio:open        = @a1open
         fileio:close       = @a1close
         fileio:read        = @a1read
@@ -317,15 +381,6 @@ when MACHID & $C8
         fileio:create      = @a1create
         fileio:destroy     = @a1destroy
         fileio:newline     = @a1newline
-        fileio:readblock   = @a13readblock
-        fileio:writeblock  = @a13writeblock
-        break
-    is $C0 // Apple ///
-        fileio:getpfx      = @a3getpfx
-        fileio:getfileinfo = @a3getfileinfo
-        fileio:open        = @a3open
-        fileio:write       = @a3write
-        fileio:create      = @a3create
         fileio:readblock   = @a13readblock
         fileio:writeblock  = @a13writeblock
         break

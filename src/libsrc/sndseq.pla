@@ -48,6 +48,10 @@ struc t_PSG
     byte ENVSHAPE   // Envelope Shape
 end
 //
+// Apple III hardware constants.
+//
+const ENV_REG      = $FFDF
+//
 // Sequence event
 //
 struc t_event
@@ -60,10 +64,17 @@ end
 //
 predef musicPlay(track, rept)#0
 predef musicStop#0
+predef spkrSequence(yield, func)#0
+predef a2spkrTone(pitch, duration)#0
+predef a2spkrPWM(sample, speed, len)#0
 //
 // Static sequencer values
 //
-export word musicSequence
+export word musicSequence = @spkrSequence
+export word spkrTone      = @a2spkrTone
+export word spkrPWM       = @a2spkrPWM
+
+word instr[] // Overlay with other variables
 word seqTrack, seqEvent, seqTime, eventTime, updateTime
 byte numNotes, seqRepeat
 byte indexA[2], indexB[2], indexC[2]
@@ -76,8 +87,8 @@ word periods[2] = @periods1, @periods2
 // MockingBoard data.
 //
 word[] mbVIAs      // Treat this as an array of VIA ptrs
-word   mbVIA1 = -1 // Init to "discover MockingBoard flag" value
-word   mbVIA2 = 0
+word   mbVIA1, mbVIA2
+word   mbSlot = -1
 //
 // Octave basis frequency periods (starting at MIDI note #12)
 // Notes will be encoded as basis note (LSNibble) and octave (MSNibble))
@@ -203,7 +214,7 @@ end
 //
 // Apple II speaker tone generator routines
 //
-export asm spkrTone(pitch, duration)#0
+asm a2spkrTone(pitch, duration)#0
         STX     ESP
         LDY     ESTKH,X
         LDA     ESTKL,X
@@ -277,7 +288,7 @@ TONEXIT PLP
         INX
         RTS
 end
-export asm spkrPWM(sample, speed, len)#0
+asm a2spkrPWM(sample, speed, len)#0
         STX     ESP
         LDY     ESTKH,X
         LDA     ESTKL,X
@@ -317,6 +328,22 @@ export asm spkrPWM(sample, speed, len)#0
         INX
         RTS
 end
+def a3spkrTone(pitch, duration)#0
+    byte env
+
+    env = ^ENV_REG
+    ^ENV_REG = env | $C0
+    a2spkrTone(pitch, duration)
+    ^ENV_REG = env
+end
+def a3spkrPWM(sample, speed, len)#0
+    byte env
+
+    env = ^ENV_REG
+    ^ENV_REG = env | $C0
+    a2spkrPWM(sample, speed, len)
+    ^ENV_REG = env
+end
 //
 // Search slots for MockingBoard
 //
@@ -344,25 +371,27 @@ def mbTicklePSG(pVIA)
     return 0
 end
 def mbSearch(slot)
-    if slot
-        mbVIA1 = mbTicklePSG($C000 + (slot << 8))
-        if mbVIA1
-            mbVIA2 = mbTicklePSG(mbVIA1 + $80)
-            return slot
-        fin
-    else
-        for slot = 1 to 7
-            if slot == 3 or slot == 6
-                continue
-            fin
+    if slot >= 0 and slot <= 7
+        if slot
             mbVIA1 = mbTicklePSG($C000 + (slot << 8))
             if mbVIA1
                 mbVIA2 = mbTicklePSG(mbVIA1 + $80)
                 return slot
             fin
-        next
+        else
+            for slot = 1 to 7
+                if slot == 3 or slot == 6
+                    continue
+                fin
+                mbVIA1 = mbTicklePSG($C000 + (slot << 8))
+                if mbVIA1
+                    mbVIA2 = mbTicklePSG(mbVIA1 + $80)
+                    return slot
+                fin
+            next
+        fin
     fin
-    return 0
+    return -1
 end
 def psgSetup(pVIA)#0
     psgWrite(pVIA,     MIXER,     $3F)   // Turn everything off
@@ -672,7 +701,7 @@ def spkrSequence(yield, func)#0
         if numNotes > 1
             for i = 0 to MAX_SPKR_NOTES-1
                 if notes1[i]
-                    spkrTone(periods1[i], arpeggioDuration[numNotes])
+                    spkrTone(periods1[i], arpeggioDuration[numNotes])#0
                 fin
                 *rndseed++
             next
@@ -688,7 +717,7 @@ def spkrSequence(yield, func)#0
             next
             duration = eventTime - seqTime
             seqTime  = duration + seqTime
-            spkrTone(period, DUR16TH * duration)
+            spkrTone(period, DUR16TH * duration)#0
         fin
         if ^$C000 > 127; return; fin
         if yieldTime <= seqTime; func()#0; yieldTime = seqTime + yield; fin
@@ -709,7 +738,7 @@ def noSequence(yield, func)#0
         seqTime++
         if seqTime < 0; seqTime = 1; fin // Capture wrap-around
         *rndseed++
-        spkrTone(0, DUR16TH) // Waste 16th of a second playing silence
+        a2spkrTone(0, DUR16TH) // Waste 16th of a second playing silence
         if ^$C000 > 127; return; fin
         if yield == seqTime; func()#0; seqTime = 0; fin
     until FALSE
@@ -721,22 +750,17 @@ export def musicPlay(track, rept)#0
     byte i
 
     //
-    // First time search for MockingBoard
+    // Select proper sequencer based on hardware
     //
-    if mbVIA1 == -1
-        if !mbSearch(0)
-            //
-            // No MockingBoard - scale octave0 for speaker
-            //
-            for i = 0 to 11
-                spkrOctave0[i] = mbOctave0[i]/NOTEDIV
-            next
-        fin
+    if mbSlot > 0
+        musicSequence = @mbSequence
+    else
+        musicSequence = @spkrSequence
     fin
     //
     // Zero out active notes
     //
-    for i = 0 to MAX_MBCH_NOTES-1; notes1[i] = 0; notes2[i] = 0; next
+    for i = 0 to MAX_MBCH_NOTES-1; notes1[i] = 0;   notes2[i] = 0;   next
     for i = 0 to MAX_MBCH_NOTES-1; periods1[i] = 0; periods2[i] = 0; next
     //
     // Start sequencing
@@ -747,14 +771,6 @@ export def musicPlay(track, rept)#0
     seqTime    = 0
     eventTime  = seqEvent->deltatime
     numNotes   = 0
-    //
-    // Select proper sequencer based on hardware
-    //
-    if mbVIA1
-        musicSequence = @mbSequence
-    else
-        musicSequence = @spkrSequence
-    fin
 end
 //
 // Stop sequencing music track
@@ -763,18 +779,45 @@ export def musicStop#0
     musicSequence = @noSequence
 end
 //
-// Get a keystroke and convert it to upper case
+// Play until keystroke
 //
-export def musicGetKey(backgroundProc)#1
-    byte key
-
+export def musicGetKey(yield, backgroundProc)#1
     while ^$C000 < 128
-        musicSequence($08, backgroundProc)#0 // Call background proc every half second
+        musicSequence(yield, backgroundProc)#0 // Call background proc every half second
     loop
-    key = ^$C000 & $7F
     ^$C010
-    return key
+    return ^$C000
 end
+
+when MACHID & MACHID_MODEL
+    is MACHID_III
+        spkrTone = @a3spkrTone
+        spkrPWM  = @a3spkrPWM
+        break
+    is MACHID_I
+        puts("Sound unsupported.\n")
+        return -1
+        break
+    otherwise
+        puts("MockingBoard Slot:\n")
+        puts("ENTER = None\n")
+        puts("0     = Scan\n")
+        puts("1-7   = Slot #\n")
+        instr = gets('>'|$80)
+        if ^instr
+            mbSlot = mbSearch(^(instr + 1) - '0')
+        fin
+        break
+wend
+if mbSlot < 0
+    //
+    // No MockingBoard - scale octave0 for speaker
+    //
+    for instr = 0 to 11
+        spkrOctave0[instr] = mbOctave0[instr]/NOTEDIV
+    next
+fin
+
 done
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -798,7 +841,7 @@ musicStop()
         The getUpperKey routine will call a dummy sequence routine that will
         keep the correct timing for any background processing
 
-getKey()
+musicGetKey(yieldtime, yieldproc)
     Wait for a keypress and return the character
         While waiting for the keypress, the track sequence will be played though
         either the MockingBoard (if present) or the internal speaker. Optionally,
@@ -808,13 +851,13 @@ getKey()
 The low level internal speaker routines used to generate tones and waveforms
 can be called for warnings, sound effects, etc:
 
-spkrTone(period, duration)
+spkrTone(period, duration)#0
     Play a tone
     Params:
         (1020000 / 64 / period) Hz
         (duration * 32 * 256 / 1020000) seconds
 
-spkrPWM(samples, speed, len)
+spkrPWM(samples, speed, len)#0
     Play a Pulse Width Modulated waveform
     Params:
         Pointer to 8 bit pulse width samples

@@ -5,6 +5,12 @@ include "inc/cmdsys.plh"
 const FULLMODE     = 0
 const MIXMODE      = 1
 //
+// Apple II ZP locations.
+//
+const a2rndnum = $4E // ZP location of RND
+const a2rndl   = $4E
+const a2rndh   = $4F
+//
 // Apple II hardware constants.
 //
 const speaker      = $C030
@@ -23,10 +29,16 @@ const hgr2         = $4000
 const page1        = 0
 const page2        = 1
 //
-// External interface
+// Apple III hardware constants.
+//
+const ENV_REG      = $FFDF
+//
+// External interface.
 //
 struc t_conio
     word keypressed
+    word getkey
+    word echo
     word home
     word gotoxy
     word viewport
@@ -35,12 +47,14 @@ struc t_conio
     word grmode
     word grcolor
     word grplot
+    word tone
+    word rnd
 end
 //
 // Predefined functions.
 //
-predef a2keypressed,a2home,a2gotoxy(x,y),a2viewport(left, top, width, height),a2texttype(type)
-predef a2textmode(cols),a2grmode(mix),a2grcolor(color),a2grplot(x,y)
+predef a2keypressed,a2home,a12echo(state),a2gotoxy(x,y),a2viewport(left, top, width, height),a2texttype(type)
+predef a2textmode(cols),a2grmode(mix),a2grcolor(color),a2grplot(x,y),a2tone(duration, delay),a2rnd
 //
 // Exported function table.
 //
@@ -49,6 +63,8 @@ word conio[]
 // Function pointers.
 //
 word = @a2keypressed
+word = @getc
+word = @a12echo
 word = @a2home
 word = @a2gotoxy
 word = @a2viewport
@@ -57,6 +73,8 @@ word = @a2textmode
 word = @a2grmode
 word = @a2grcolor
 word = @a2grplot
+word = @a2tone
+word = @a2rnd
 //
 // Screen row address arrays.
 //
@@ -78,6 +96,10 @@ word                = $0850,$08D0,$0950,$09D0,$0A50,$0AD0,$0B50,$0BD0
 byte textbwmode[]   = 2, 16, 0
 byte textclrmode[]  = 2, 16, 1
 byte grcharset[]    = 1, 0, $7F, $7F, $7F, $7F, $00, $00, $00, $00
+//
+// Random number for Apple 1 and III.
+//
+word randnum = 12345
 //
 // Native  routines.
 //
@@ -147,6 +169,9 @@ end
 def a1keypressed
     return ^$D011 >= 128
 end
+def a12echo(state)
+    return 0
+end
 def a1home
     byte l
     for l = 0 to 23
@@ -175,6 +200,15 @@ def a1textmode(columns)
 end
 def a1grmode(mix)
     return 0 // not supported
+end
+def a1tone(duration, delay)
+    byte i
+
+    while duration
+        for i = delay downto 0; next
+        duration--
+    loop
+    return 0
 end
 //
 // Apple II routines.
@@ -223,6 +257,20 @@ def a2grmode(mix)
     a2home
     return a2grscrn(@txt1scrn) // point to lo-res screen
 end
+def a2tone(duration, delay)
+    byte i
+
+    while duration
+        ^speaker // toggle speaker
+        for i = delay downto 0; next
+        duration--
+    loop
+    return 0
+end
+def a2rnd
+    *a2rndnum = (*a2rndnum << 1) + *a2rndnum + 123
+    return *a2rndnum & $7FFF
+end
 //
 // Apple III routines.
 //
@@ -248,6 +296,9 @@ def a3keypressed
     byte count
     dev_status(cmdsys.devcons, 5, @count)
     return count
+end
+def a3echo(state)
+    return dev_control(cmdsys.devcons, 11, @state)
 end
 def a3home
     //curshpos = 0
@@ -308,34 +359,64 @@ def a3grmode(mix)
     puts(@textclrmode)
     dev_control(cmdsys.devcons, 17, @grcharset)
     a3viewport(0, 20, 40, 4)
+    putc(28)
     for i = 0 to mix
-        memset(txt1scrn[i], 40, $0000) // text  screen
-        memset(txt2scrn[i], 40, $0000) // color screen
+        memset(txt1scrn[i], $0000, 40) // text  screen
+        memset(txt2scrn[i], $0000, 40) // color screen
     next
     return a2grscrn(@txt2scrn) // point to color screen
+end
+def a3tone(duration, pitch)
+    byte env
+
+    env = ^ENV_REG
+    ^ENV_REG = env | $C0
+    a2tone(duration, pitch)
+    ^ENV_REG = env
+    return 0
+end
+//
+// Apple 1 and III combined routines.
+//
+def a13getkey
+    while not conio:keypressed()
+        randnum = randnum + 123
+    loop
+    return getc()
+end
+def a13rnd
+    randnum = (randnum << 1) + randnum + 123
+    return randnum & $7FFF
 end
 //
 // Machine specific initialization.
 //
 when MACHID & MACHID_MODEL
-    is MACHID_I
-        conio:keypressed = @a1keypressed
-        conio:home       = @a1home
-        conio:gotoxy     = @a1gotoxy
-        conio:viewport   = @a1viewport
-        conio:texttype   = @a1texttype
-        conio:textmode   = @a1textmode
-        conio:grmode     = @a1grmode
-        break
     is MACHID_III
         conio:keypressed = @a3keypressed
+        conio:getkey     = @a13getkey
+        conio:echo       = @a3echo
         conio:home       = @a3home
         conio:gotoxy     = @a3gotoxy
         conio:viewport   = @a3viewport
         conio:texttype   = @a3texttype
         conio:textmode   = @a3textmode
         conio:grmode     = @a3grmode
+        conio:tone       = @a3tone
+        conio:rnd        = @a13rnd
         break
-    //otherwise // MACHID_II
+    is MACHID_I
+        conio:keypressed = @a1keypressed
+        conio:getkey     = @a13getkey
+        conio:home       = @a1home
+        conio:gotoxy     = @a1gotoxy
+        conio:viewport   = @a1viewport
+        conio:texttype   = @a1texttype
+        conio:textmode   = @a1textmode
+        conio:grmode     = @a1grmode
+        conio:tone       = @a1tone
+        conio:rnd        = @a13rnd
+        break
+    otherwise // MACHID_II        puts("Found MACHID_MODEL = $"); putb(MACHID & MACHID_MODEL); putln
 wend
 done

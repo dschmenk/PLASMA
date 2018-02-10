@@ -33,6 +33,7 @@ const keyctrlc      = $83
 const keyctrld      = $84
 const keyctrle      = $85
 const keyctrlf      = $86
+const keyctrlg      = $87
 const keyctrli      = $89
 const keyctrlk      = $8B
 const keyctrll      = $8C
@@ -84,6 +85,8 @@ word strplsize     = MAXSTRPLSIZE
 word strpool, strplmapsize, strlinbuf, strpoolmap
 byte cursx, cursy, scrnleft, curscol, underchr, curschr
 word keyin, cursrow, scrntop, cursptr
+byte a3echo         = $80
+byte a3noecho       = $00
 //
 // Predeclared functions
 //
@@ -313,12 +316,13 @@ end
 //
 // File routines
 //
-def readtxt(filename)#0
+def readtxt(filename, startline)#0
     byte txtbuf[81], refnum, i, j
 
-    if refnum
     refnum = fileio:open(filename)
+    if refnum
         fileio:newline(refnum, $7F, $0D)
+        numlines = startline
         repeat
             txtbuf = fileio:read(refnum, @txtbuf + 1, MAXLNLEN)
             if txtbuf
@@ -370,7 +374,11 @@ end
 // Screen routines
 //
 def clrscrn#0
-    call($FC58, 0, 0, 0, 0)
+    if MACHID == $F2 // Apple 3
+        putc(28)
+    else
+        call($FC58, 0, 0, 0, 0)
+    fin
 end
 def drawrow(row, ofst, strptr)#0
     byte numchars
@@ -562,6 +570,92 @@ end
 //
 // Keyboard routines
 //
+def dev_control(devnum, code, list)#1
+    byte params[5]
+
+    params.0 = 3
+    params.1 = devnum
+    params.2 = code
+    params:3 = list
+    perr     = syscall($83, @params)
+    return perr
+end
+def cons_keyavail
+    byte params[5]
+    byte count
+
+    params.0 = 3
+    params.1 = cmdsys.devcons
+    params.2 = 5
+    params:3 = @count
+    return syscall($82, @params) ?? 0 :: count
+end
+def cons_keyread
+    byte params[8]
+    byte key
+
+    params.0 = 4
+    params.1 = cmdsys.refcons
+    params:2 = @key
+    params:4 = 1
+    params:6 = 0
+    syscall($CA, @params)
+    return params:6 ?? key :: 0
+end
+def keyin3
+    byte key
+
+    repeat
+        cursflash
+    until cons_keyavail
+    key = cons_keyread
+    if key & $80 // Open Apple modifier
+        when key
+            is keyarrowleft
+                key = keyctrla; break
+            is keyarrowright
+                key = keyctrls; break
+            is keyarrowup
+                key = keyctrlw; break
+            is keyarrowdown
+                key = keyctrlz; break
+            is keyenter
+                key = keyctrlf; break
+            is $80 | '\\'
+                key = keydelete; break // Delete
+            is keyenter
+                key = keyctrlf; break
+            //
+            // Map OA+keypad
+            //
+            is $80 | '4'
+                key = keyarrowleft; break
+            is $80 | '6'
+                key = keyarrowright; break
+            is $80 | '8'
+                key = keyarrowup; break
+            is $80 | '2'
+                key = keyarrowdown; break
+            is $80 | '7'
+                key = keyctrlq; break // Top
+            is $80 | '1'
+                key = keyctrle; break // Bottom
+            is $80 | '9'
+                key = keyctrlw; break // Pg Up
+            is $80 | '3'
+                key = keyctrlz; break // Pg Dn
+            is $80 | '5'
+                key = keyctrld; break // Del
+            is $80 | '.'
+                key = keyctrlb; break // Ins
+            is $80 | '0'
+                key = keyctrlv; break // Copy
+            is $80 | '-'
+                key = keyctrlx; break // Cut
+        wend
+    fin
+    return key | $80
+end
 def keyin2e
     byte key
     repeat
@@ -599,14 +693,18 @@ def keyin2
     until key >= 128
     ^keystrobe
     if key == keyctrln
-        key = $DB // [
+        key = $DB // '['
+    elsif key == $9E // SHIFT+CTRL+N
+        key = $FE // '~'
     elsif key == keyctrlp
-        key = $DF // _
-    elsif key == keyctrlb
-        key = $DC // \ 
+        key = $DC // '\'
+    elsif key == $80 // SHIFT+CTRL+P -> CTRL+@
+        key = $FC // '|'
+    elsif key == keyctrlg
+        key = $DF // '_'
     elsif key == keyarrowleft
         if ^pushbttn3 < 128
-            key = $FF
+            key = keydelete
         fin
     elsif key >= $C0 and flags < shiftlock
         if ^pushbttn3 < 128
@@ -622,6 +720,19 @@ def keyin2
         fin
     fin
     return key
+end
+def setkeyin#0
+    when MACHID & MACHID_MODEL
+        is MACHID_IIE
+        is MACHID_IIC
+            keyin = @keyin2e
+            break
+        is MACHID_III
+            keyin = @keyin3
+            break
+        otherwise // ][ or ][+
+            keyin = @keyin2
+    wend
 end
 def tabkeyin
     return curscol < MAXLNLEN and curscol & $01 ?? keyspace :: 0
@@ -827,6 +938,9 @@ def editline(key)
     return key
 end
 def editmode#0
+    if MACHID == $F2 // Apple 3
+        dev_control(cmdsys.devcons, 11, @a3noecho)
+    fin
     repeat
         when editline(keyin())
             is keyarrowup
@@ -877,7 +991,7 @@ def editmode#0
             is keyctrli
                 keyin = @tabkeyin
                 editline(keyspace)
-                keyin = !(MACHID & $80) ?? @keyin2 :: @keyin2e
+                setkeyin
                 break
             is keyctrlb
                 if flags & insmode
@@ -897,9 +1011,15 @@ def editmode#0
                 redraw
                 break
             is keyescape
+                if MACHID == $F2 // Apple 3
+                    dev_control(cmdsys.devcons, 11, @a3echo)
+                fin
                 cursoff
                 cmdmode
                 if not exit
+                    if MACHID == $F2 // Apple 3
+                        dev_control(cmdsys.devcons, 11, @a3noecho)
+                    fin
                     redraw
                 fin
                 break
@@ -1003,22 +1123,20 @@ def cmdmode#0
     word cmdptr
 
     clrscrn
-    puts("PLASMA Editor, Version 1.0\n")
+    puts("PLASMA Editor, Version 1.01\n")
     while not exit
         puts(@filename)
         cmdptr = gets($BA)
         when toupper(parsecmd(cmdptr))
             is 'A'
-                readtxt(cmdptr)
+                readtxt(cmdptr, numlines)
                 flags = flags | changed
                 break
             is 'R'
                 if chkchng
                     inittxtbuf
-                    numlines = 0
                     strstripcpy(@filename, cmdptr)
-                    readtxt(@filename)
-                    if numlines == 0; numlines = 1; fin
+                    readtxt(@filename, 0)
                     flags = flags & ~changed
                 fin
                 break
@@ -1060,7 +1178,7 @@ def cmdmode#0
         wend
         if perr
             puts("ERROR: $")
-            call($FDDA, perr, 0, 0, 0)
+            putb(perr)
         else
             puts("OK")
         fin
@@ -1070,19 +1188,16 @@ end
 //
 // Init editor
 //
-if !(MACHID & $80)
+setkeyin
+if not (MACHID & $80) // ][ or ][+
     flags = uppercase | shiftlock
-    keyin = @keyin2
-else
-    keyin = @keyin2e
 fin
 inittxtbuf
 arg = argNext(argFirst)
 if ^arg
     strcpy(@filename, arg)
     puts(@filename)
-    numlines = 0
-    readtxt(@filename)
+    readtxt(@filename, 0)
 fin
 curschr  = '+'
 flags    = flags | insmode

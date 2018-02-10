@@ -685,26 +685,26 @@ XOR     PLA
 ;*
 SHL     PLA
         TAX
-        BEQ     SHLEX
+        BEQ     +
         LDA     TOS,S
 -       ASL
         DEX
         BNE     -
         STA     TOS,S
-SHLEX   JMP     NEXTOP
++       JMP     NEXTOP
 ;*
 ;* SHIFT TOS-1 RIGHT BY TOS
 ;*
 SHR     PLA
         TAX
-        BEQ     SHREX
+        BEQ     +
         LDA     TOS,S
 -       CMP     #$8000
         ROR
         DEX
         BNE     -
         STA     TOS,S
-SHREX   JMP     NEXTOP
++       JMP     NEXTOP
 ;*
 ;* LOGICAL AND
 ;*
@@ -770,9 +770,9 @@ CW      INY                     ;+INC_IP
 ;*
 ;* CONSTANT STRING
 ;*
-CS      INY                     ;+INC_IP
+CS      ;INY                     ;+INC_IP
         TYA                     ; NORMALIZE IP AND SAVE STRING ADDR ON ESTK
-        CLC
+        SEC
         ADC     IP
         STA     IP
         PHA
@@ -780,9 +780,9 @@ CS      INY                     ;+INC_IP
         TAY
         JMP     NEXTOP
 ;
-CSX     INY                     ;+INC_IP
+CSX     ;INY                     ;+INC_IP
         TYA                     ; NORMALIZE IP
-        CLC
+        SEC
         ADC     IP
         STA     IP
         LDA     PP              ; SCAN POOL FOR STRING ALREADY THERE

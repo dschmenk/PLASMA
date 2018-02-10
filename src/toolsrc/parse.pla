@@ -402,7 +402,7 @@ def parse_value(codeseq, r_val)#2
                 else
                     deref++
                 fin
-                type = (type & PTR_TYPE) | token == PTRB_TKN ?? BYTE_TYPE :: WORD_TYPE
+                type = token == PTRB_TKN ?? BYTE_TYPE :: WORD_TYPE
                 if not parse_const(@const_offset)
                     rewind(tknptr) // Setting type override for following operations
                 elsif const_offset <> 0
@@ -421,7 +421,7 @@ def parse_value(codeseq, r_val)#2
                 elsif not (type & VAR_TYPE)
                     deref++
                 fin
-                type = (type & VAR_TYPE) | (token == DOT_TKN ?? BYTE_TYPE :: WORD_TYPE)
+                type = token == DOT_TKN ?? BYTE_TYPE :: WORD_TYPE
                 if not parse_const(@const_offset)
                     rewind(tknptr) // Setting type override for following operations
                 elsif const_offset <> 0
@@ -941,8 +941,12 @@ def parse_var(type, basesize)#0
             else
                 new_iddata(idptr, idlen, type, size)
             fin
-        elsif not (type & (EXTERN_TYPE|LOCAL_TYPE))
-            emit_fill(size)
+        elsif not type & EXTERN_TYPE
+            if type & LOCAL_TYPE
+                framesize = framesize + size
+            else
+                size_iddata(type, size, 0)
+            fin
         fin
     fin
 end
@@ -1024,8 +1028,9 @@ def parse_vars(type)
         is EXPORT_TKN
             if type & (EXTERN_TYPE|LOCAL_TYPE); exit_err(ERR_INVAL|ERR_LOCAL|ERR_SYNTAX); fin
             type  = EXPORT_TYPE
+            idptr = tknptr
             if scan <> BYTE_TKN and token <> WORD_TKN // This could be an exported definition
-                rewind(tknptr)
+                rewind(idptr)
                 scan
                 return FALSE
             fin
