@@ -8,7 +8,7 @@
 # Add extra valid platforms to this list as they are supported.
 
 PLASM_PLAT_LIST	:=		apple
-PLASM_PLAT_LIST	+=		bbc
+#PLASM_PLAT_LIST	+=		bbc
 #PLASM_PLAT_LIST	+=		commodore
 #PLASM_PLAT_LIST	+=		atari
 
@@ -19,8 +19,8 @@ PLASM_APPLE_MODELS	+=	][
 PLASM_APPLE_MODELS	+=	///
 PLASM_APPLE_MODELS	+=	IIGS
 
-PLASM_BBC_MODELS	:=	B
-PLASM_BBC_MODELS	+=	128
+#PLASM_BBC_MODELS	:=	B
+#PLASM_BBC_MODELS	+=	128
 
 ECHO				:=	@@echo
 

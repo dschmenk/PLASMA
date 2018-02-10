@@ -12,7 +12,6 @@ PLVM01  = A1PLASMA\#060280
 PLVM02	= PLASMA.SYSTEM\#FF2000
 PLVM802	= PLASMA16.SYSTEM\#FF2000
 PLVM03	= SOS.INTERP\#050000
-PLVMBBC	= BBPLASMA\#FF2000
 CMD     = CMD\#061000
 SOS     = SOS\#FE1000
 # Lib
@@ -99,11 +98,8 @@ ifeq (apple, $(PLASM_PLAT))
 	endif
 	LIBS := $(ARGS) $(CONIO) $(DGR) $(DHCP) $(ETHERIP) $(FIBER) $(FILEIO) $(FPSTR)\
 		$(FPU) $(INET) $(LONGJMP) $(MEMMGR) $(PORTIO) $(SANE) $(SDFAT) $(SNDSEQ) $(SPIPORT)\
-		$(TONE) $(UTHERNET) $(UTHERNET2) $(WIZNET)
-else ifeq (bbc, $(PLASM_PLAT))
-	PLASM_MODEL := B 	# Only support Model B so far
-	PLVMSYS := $(PLVMBBC)
-	# LIBS := $(CONIO)
+		$(TONE) $(UTHERNET) $(UTHERNET2) $(WIZNET) $(SOS)
+#else ifeq (bbc, $(PLASM_PLAT))
 endif
 #
 # Main targets list
@@ -130,7 +126,7 @@ test: $(SAMPLESRC)/test.pla $(SAMPLESRC)/testlib.pla tools
 	./$(PLVM) TEST
 
 clean:
-	-rm -f *FE1000 *FF2000 $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVM03) $(PLVMBBC) $(CMD)
+	-rm -f *FE1000 *FF2000 $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVM03) $(CMD)
 	-rm -f toolsrc/*.o toolsrc/*~ toolsrc/*.a
 	-rm -f vmsrc/*.o vmsrc/*~ $(VMSRC)/*.a $(VMSRC)/*.sym
 	-rm -f $(SAMPLESRC)/*.o $(SAMPLESRC)/*~ $(SAMPLESRC)/*.a
@@ -170,14 +166,9 @@ $(PLVM802): $(VMSRC)/plvm802.s $(VMSRC)/cmd.pla $(VMSRC)/cmdstub.s
 	acme --setpc 8192 -o $(CMD) $(VMSRC)/cmdstub.s
 	acme -o $(PLVM802) -l $(VMSRC)/plvm802.sym $(VMSRC)/plvm802.s
 
-$(PLVM03): $(VMSRC)/plvm03.s $(VMSRC)/soscmd.pla
+$(PLVM03): $(VMSRC)/plvm03.s $(VMSRC)/soscmd.pla $(SOS)
 	./$(PLASM) -AOW < $(VMSRC)/soscmd.pla > $(VMSRC)/soscmd.a
 	acme -o $(PLVM03) -l $(VMSRC)/plvm03.sym $(VMSRC)/plvm03.s
-
-$(PLVMBBC): $(VMSRC)/plvm.s $(VMSRC)/vminit.s $(VMSRC)/cmd.pla
-	./$(PLASM) -AOW < $(VMSRC)/cmd.pla > $(VMSRC)/cmd.a
-	acme -o $(PLVMBBC) $(VMSRC)/plvm.s
-	beebasm -i skel.beebasm -do plasma.ssd
 
 #
 # Sample code

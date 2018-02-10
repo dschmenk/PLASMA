@@ -1085,4 +1085,5 @@ LEAVE   INY                     ;+INC_IP
 RET     RTS
 SOSCMD  =       *
         !SOURCE "vmsrc/apple/soscmd.a"
+}
 SEGEND  =       *
