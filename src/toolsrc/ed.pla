@@ -33,6 +33,7 @@ const keyctrlc      = $83
 const keyctrld      = $84
 const keyctrle      = $85
 const keyctrlf      = $86
+const keyctrlg      = $87
 const keyctrli      = $89
 const keyctrlk      = $8B
 const keyctrll      = $8C
@@ -569,15 +570,6 @@ end
 //
 // Keyboard routines
 //
-def dev_status(devnum, code, list)
-    byte params[5]
-
-    params.0 = 3
-    params.1 = devnum
-    params.2 = code
-    params:3 = list
-    return syscall($82, @params)
-end
 def dev_control(devnum, code, list)#1
     byte params[5]
 
@@ -588,13 +580,80 @@ def dev_control(devnum, code, list)#1
     perr     = syscall($83, @params)
     return perr
 end
+def cons_keyavail
+    byte params[5]
+    byte count
+
+    params.0 = 3
+    params.1 = cmdsys.devcons
+    params.2 = 5
+    params:3 = @count
+    return syscall($82, @params) ?? 0 :: count
+end
+def cons_keyread
+    byte params[8]
+    byte key
+
+    params.0 = 4
+    params.1 = cmdsys.refcons
+    params:2 = @key
+    params:4 = 1
+    params:6 = 0
+    syscall($CA, @params)
+    return params:6 ?? key :: 0
+end
 def keyin3
-    byte count, key
+    byte key
+
     repeat
         cursflash
-        dev_status(cmdsys.devcons, 5, @count)
-    until count
-    key = getc
+    until cons_keyavail
+    key = cons_keyread
+    if key & $80 // Open Apple modifier
+        when key
+            is keyarrowleft
+                key = keyctrla; break
+            is keyarrowright
+                key = keyctrls; break
+            is keyarrowup
+                key = keyctrlw; break
+            is keyarrowdown
+                key = keyctrlz; break
+            is keyenter
+                key = keyctrlf; break
+            is $80 | '\\'
+                key = keydelete; break // Delete
+            is keyenter
+                key = keyctrlf; break
+            //
+            // Map OA+keypad
+            //
+            is $80 | '4'
+                key = keyarrowleft; break
+            is $80 | '6'
+                key = keyarrowright; break
+            is $80 | '8'
+                key = keyarrowup; break
+            is $80 | '2'
+                key = keyarrowdown; break
+            is $80 | '7'
+                key = keyctrlq; break // Top
+            is $80 | '1'
+                key = keyctrle; break // Bottom
+            is $80 | '9'
+                key = keyctrlw; break // Pg Up
+            is $80 | '3'
+                key = keyctrlz; break // Pg Dn
+            is $80 | '5'
+                key = keyctrld; break // Del
+            is $80 | '.'
+                key = keyctrlb; break // Ins
+            is $80 | '0'
+                key = keyctrlv; break // Copy
+            is $80 | '-'
+                key = keyctrlx; break // Cut
+        wend
+    fin
     return key | $80
 end
 def keyin2e
@@ -634,14 +693,18 @@ def keyin2
     until key >= 128
     ^keystrobe
     if key == keyctrln
-        key = $DB // [
+        key = $DB // '['
+    elsif key == $9E // SHIFT+CTRL+N
+        key = $FE // '~'
     elsif key == keyctrlp
-        key = $DF // _
-    elsif key == keyctrlb
-        key = $DC // \
+        key = $DC // '\'
+    elsif key == $80 // SHIFT+CTRL+P -> CTRL+@
+        key = $FC // '|'
+    elsif key == keyctrlg
+        key = $DF // '_'
     elsif key == keyarrowleft
         if ^pushbttn3 < 128
-            key = $FF
+            key = keydelete
         fin
     elsif key >= $C0 and flags < shiftlock
         if ^pushbttn3 < 128
@@ -1060,7 +1123,7 @@ def cmdmode#0
     word cmdptr
 
     clrscrn
-    puts("PLASMA Editor, Version 1.0\n")
+    puts("PLASMA Editor, Version 1.01\n")
     while not exit
         puts(@filename)
         cmdptr = gets($BA)
