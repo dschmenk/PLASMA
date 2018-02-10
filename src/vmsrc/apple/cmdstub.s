@@ -43,6 +43,6 @@ LCBNK1  =   $08
     JMP $1000
 _CMDBEGIN = *
     !PSEUDOPC   $1000 {
-    !SOURCE "vmsrc/cmd.a"
+    !SOURCE "vmsrc/apple/cmd.a"
 _CMDEND =   *
 }

@@ -1084,6 +1084,6 @@ LEAVE   INY                     ;+INC_IP
         STA     IFPH
 RET     RTS
 SOSCMD  =       *
-        !SOURCE "vmsrc/soscmd.a"
+        !SOURCE "vmsrc/apple/soscmd.a"
 }
 SEGEND  =       *

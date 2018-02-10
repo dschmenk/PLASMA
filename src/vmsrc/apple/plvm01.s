@@ -902,7 +902,7 @@ LEAVE   INY                     ;+INC_IP
         RTS
 +       INC     IFPH
 RET     RTS
-A1CMD   !SOURCE "vmsrc/a1cmd.a"
+A1CMD   !SOURCE "vmsrc/apple/a1cmd.a"
 SEGEND  =       *
 VMINIT  LDY     #$10        ; INSTALL PAGE 0 FETCHOP ROUTINE
 -       LDA     PAGE0-1,Y
