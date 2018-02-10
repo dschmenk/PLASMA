@@ -42,17 +42,17 @@ DSTX    =       XPAGE+DSTH
 ;*
 ;* INTERPRETER HEADER+INITIALIZATION
 ;*
-SEGSTART        =       $A000
+SEGSTART        =       $2000
         *=      SEGSTART-$0E
         !TEXT   "SOS NTRP"
         !WORD   $0000
         !WORD   SEGSTART
         !WORD   SEGEND-SEGSTART
 
-        +SOS    $40, SEGREQ     ; ALLOCATE SEG 1 AND MAP IT
-        BNE     FAIL            ; PRHEX
-        LDA     #$01
-        STA     MEMBANK
+;        +SOS    $40, SEGREQ     ; ALLOCATE SEG 1 AND MAP IT
+;        BNE     FAIL            ; PRHEX
+;        LDA     #$00
+;        STA     MEMBANK
         LDY     #$0F            ; INSTALL PAGE 0 FETCHOP ROUTINE
         LDA     #$00
 -       LDX     PAGE0,Y
@@ -62,19 +62,36 @@ SEGSTART        =       $A000
         BPL     -
         LDX     #$4C            ; SET JMPTMP OPCODE
         STX     JMPTMP
-;        STA     JMPTMPX
-;        STA     JMPTMPX+1
         STA     TMPX            ; CLEAR ALL EXTENDED POINTERS
         STA     SRCX
         STA     DSTX
         STA     PPX             ; INIT FRAME & POOL POINTERS
         STA     IFPX
-        LDA     #<SEGSTART
+        LDA     #$00
         STA     PPL
         STA     IFPL
-        LDA     #>SEGSTART
+        LDA     #$A0
         STA     PPH
         STA     IFPH
+        !IF     1 {
+        LDA     #<VMCORE        ; COPY VM+CMD INTO SBANK
+        STA     SRCL
+        LDA     #>VMCORE
+        STA     SRCH
+        LDY     #$00
+        STY     DSTL
+        LDA     #$A0
+        STA     DSTH
+-       LDA     (SRC),Y
+        STA     (DST),Y
+        INY
+        BNE     -
+        INC     SRCH
+        INC     DSTH
+        LDA     DSTH
+        CMP     #$B8
+        BNE     -
+}
         LDX     #$FF            ; INIT STACK POINTER
         TXS
         LDX     #ESTKSZ/2       ; INIT EVAL STACK INDEX
@@ -97,13 +114,13 @@ SEGSTART        =       $A000
 ;        BCC     +
 ;        ADC     #6
 ;+       STA     $481    ;$880
-FAIL    STA     $0480
-        RTS
-SEGREQ  !BYTE   4
-        !WORD   $2001
-        !WORD   $9F01
-        !BYTE   $10
-        !BYTE   $00
+;FAIL    STA     $0480
+;        RTS
+;SEGREQ  !BYTE   4
+;        !WORD   $2000
+;        !WORD   $9F00
+;        !BYTE   $10
+;        !BYTE   $00
 PAGE0   =       *
         !PSEUDOPC       DROP {
 ;*
@@ -115,6 +132,8 @@ PAGE0   =       *
         STA     OPIDX
         JMP     (OPTBL)
 }
+VMCORE  =       *
+        !PSEUDOPC       $A000 {
 ;*
 ;* SYSTEM INTERPRETER ENTRYPOINT
 ;*
@@ -200,6 +219,21 @@ _DIVLP  ROL     TMPL            ; REMNDRL
 _DIVEX  INX
         LDY     IPY
         RTS
+;*
+;* INCREMENT TOS
+;*
+INCR    INC     ESTKL,X
+        BNE     +
+        INC     ESTKH,X
++       JMP     NEXTOP
+;*
+;* DECREMENT TOS
+;*
+DECR    LDA     ESTKL,X
+        BNE     +
+        DEC     ESTKH,X
++       DEC     ESTKL,X
+        JMP     NEXTOP
 ;*
 ;* OPCODE TABLE
 ;*
@@ -316,21 +350,6 @@ IDXW    LDA     ESTKL,X
         ADC     ESTKH+1,X
         STA     ESTKH+1,X
         JMP     DROP
-;*
-;* INCREMENT TOS
-;*
-INCR    INC     ESTKL,X
-        BNE     +
-        INC     ESTKH,X
-+       JMP     NEXTOP
-;*
-;* DECREMENT TOS
-;*
-DECR    LDA     ESTKL,X
-        BNE     +
-        DEC     ESTKH,X
-+       DEC     ESTKL,X
-        JMP     NEXTOP
 ;*
 ;* BITWISE COMPLIMENT TOS
 ;*
@@ -1066,4 +1085,5 @@ LEAVE   INY                     ;+INC_IP
 RET     RTS
 SOSCMD  =       *
         !SOURCE "vmsrc/soscmd.a"
+}
 SEGEND  =       *

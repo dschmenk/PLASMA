@@ -232,6 +232,14 @@ void idglobal_size(int type, int size, int constsize)
     else if (size)
         emit_data(0, 0, 0, size);
 }
+void idlocal_size(int size)
+{
+    localsize += size;
+    if (localsize > 255)
+    {
+        parse_error("Local variable size overflow\n");
+    }
+}
 int id_tag(char *name, int len)
 {
     int i;

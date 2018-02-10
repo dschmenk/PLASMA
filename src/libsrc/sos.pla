@@ -1,0 +1,155 @@
+include "inc/cmdsys.plh"
+include "inc/args.plh"
+include "inc/fileio.plh"
+
+word arg, ref, interp
+
+asm equates
+    !SOURCE "vmsrc/plvmzp.inc"
+end
+//
+// Exec SOS.INTERP image
+//
+asm sosexec(addr)#0
+        LDA     ESTKL,X     ; PULL ADDRESSES FROM INTERP HEADER
+        STA     SRCL
+        LDA     ESTKH,X
+        STA     SRCH
+        LDY     #$0A
+        LDA     (SRC),Y
+        INY
+        STA     DSTL
+        PHA
+        LDA     (SRC),Y
+        INY
+        STA     DSTH
+        PHA
+        LDA     (SRC),Y
+        INY
+        STA     TMPL
+        LDA     (SRC),Y
+        STA     TMPH
+        TYA                 ; SKIP INTERP HEADER FOR SRC
+        SEC
+        ADC     SRCL
+        STA     SRCL
+        BCC     +
+        INC     SRCH
++       LDA     DSTL
+        CMP     SRCL
+        LDA     DSTH
+        SBC     SRCH
+        BCC     REVCPY
+;
+; FORWARD COPY
+;
+        LDY     TMPL
+        BEQ     FORCPYLP
+        INC     TMPH
+        LDY     #$00
+FORCPYLP LDA    (SRC),Y
+        STA     (DST),Y
+        INY
+        BNE     +
+        INC     DSTH
+        INC     SRCH
++       DEC     TMPL
+        BNE     FORCPYLP
+        DEC     TMPH
+        BNE     FORCPYLP
+        BEQ     CPYMEX
+;
+; REVERSE COPY
+;
+REVCPY  ;CLC
+        LDA     TMPL
+        ADC     DSTL
+        STA     DSTL
+        LDA     TMPH
+        ADC     DSTH
+        STA     DSTH
+        CLC
+        LDA     TMPL
+        ADC     SRCL
+        STA     SRCL
+        LDA     TMPH
+        ADC     SRCH
+        STA     SRCH
+        DEC     DSTH
+        DEC     SRCH
+        LDY     #$FF
+        LDA     TMPL
+        BEQ     REVCPYLP
+        INC     TMPH
+REVCPYLP LDA    (SRC),Y
+        STA     (DST),Y
+        DEY
+        CPY     #$FF
+        BNE     +
+        DEC     DSTH
+        DEC     SRCH
++       DEC     TMPL
+        BNE     REVCPYLP
+        DEC     TMPH
+        BNE     REVCPYLP
+CPYMEX  PLA
+        STA     DSTH
+        PLA
+        STA     DSTL
+        JMP     (DST)       ; JUMP TO INTERP
+
+end
+def seg_release(segnum)#1
+    byte params[2]
+
+    params.0 = 1
+    params.1 = segnum
+    perr     = syscall($45, @params)
+    return perr
+end
+def strcmp(str1, str2)
+    byte i
+    if (^str1 == ^str2)
+        for i = ^str1 downto 1
+            if ^(str1 + i) <> ^(str2 + i)
+                return FALSE
+            fin
+        next
+        return TRUE
+    fin
+    return FALSE
+end
+if MACHID <> $F2
+    puts("Apple /// SOS required.\n")
+    return -1
+fin
+arg = argNext(argFirst)
+if ^arg
+    ref = fileio:open(arg)
+    if ref
+        arg = argNext(arg)
+        if ^arg
+            fileio:setpfx(arg)
+            puts(arg); puts("/:\n")
+        fin
+        interp = heapmark()+1
+        fileio:read(ref, interp, heapavail())
+        fileio:close(ref)
+        ^(interp - 1) = 8
+        if strcmp(interp - 1, "SOS NTRP")
+            //puts("INTERP opt hdr: $"); puth(interp=>$08); putln
+            //puts("INTERP address: $"); puth(interp=>$0A); putln
+            //puts("INTERP    size: $"); puth(interp=>$0C); putln
+            fileio:close(0) // Close all files
+            seg_release(0)  // Free all segments
+            sosexec(interp)
+        else
+            puts("Not a SOS.INTERP file.\n")
+        fin
+    else
+        puts("File not found.\n")
+    fin
+else
+    puts("Usage: +SOS <SOS.INTERP> [PREFIX]\n")
+fin
+done
