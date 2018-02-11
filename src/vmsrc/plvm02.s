@@ -1161,7 +1161,7 @@ SAW     INY                     ;+INC_IP
         LDY     IPY
         BMI     +
         JMP     DROP
-        JMP     FIXDROP
++       JMP		FIXDROP
 ;*
 ;* STORE VALUE TO ABSOLUTE ADDRESS WITHOUT POPPING STACK
 ;*
