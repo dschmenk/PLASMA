@@ -529,12 +529,12 @@ MUL     LDX     #$10
         EOR     #$FFFF
         STA     TMP
         LDA     #$0000
-MULLP   ASL
+_MULLP  ASL
         ASL     TMP             ; MULTPLR
         BCS     +
         ADC     TOS,S           ; MULTPLD
 +       DEX
-        BNE     MULLP
+        BNE     _MULLP
         STA     NOS,S           ; PROD
         JMP     DROP
 ;*
@@ -1006,7 +1006,6 @@ SLB     INY                     ;+INC_IP
         TXY
         BMI     +
         JMP     NEXTOP
-+       JMP     FIXNEXT
 SLW     INY                     ;+INC_IP
         LDA     (IP),Y
         TYX
@@ -1051,7 +1050,6 @@ SAB     INY                     ;+INC_IP
         INY
         BMI     +
         JMP     NEXTOP
-+       JMP     FIXNEXT
 SAW     INY                     ;+INC_IP
         LDA     (IP),Y
         STA     TMP
