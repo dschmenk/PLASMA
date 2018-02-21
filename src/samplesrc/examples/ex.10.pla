@@ -1,0 +1,292 @@
+//              RADAR SCOPE
+//
+// HERE IS ANOTHER LO-RES DEMO WITH
+// A LITTLE MORE ON THE ALGORITHMIC
+// SIDE OF THINGS. ON A IIGS, YOU WILL
+// NEED TO ENABLE THE ALTERNATE DISPLAY
+// OPTION IN THE CONTROL PANEL (ROM 01
+// ONLY). THIS PROGRAM COPIES THE PAGE1
+// LORES GRAPHICS TO THE PAGE2 FOR A
+// FLICKER-FREE DISPLAY.
+//
+// NOTICE HOW SOME OF THE FUNCTIONS
+// RETURN A VALUE THAT ISN'T USED. THIS
+// IS CALLED "CASCADING THE RETURN".
+// IN PLASMA, ALL FUNCTION DEFINITIONS
+// RETURN A VALUE, EVEN IF IT ISN'T
+// EXPLICITY SHOWN. A VALUE OF ZERO
+// WILL BE SILENTLY ADDED IF NONE IS
+// SPECIFIED. BY RETURNING A VALUE OF
+// A FUNCTION OR SOFTSWITCH REFERENCE AT
+// THE END OF THE DEFINTION IS A SLIGHT
+// OPTIMIZATION IN THAT PLASMA WILL
+// JUST PASS THE LAST VALUE BACK TO THE
+// CALLER, WITHOUT DROPPING THE VALUE
+// ON THE STACK AND PUSHING A ZERO BACK
+// ON.
+//
+
+CONST SHOWGR    = $C050
+CONST SHOWFULL  = $C052
+CONST SHOWPG1   = $C054
+CONST SHOWPG2   = $C055
+CONST SHOWLORES = $C056
+CONST RADIUS    = 19
+CONST XORG      = 19
+CONST YORG      = 23
+
+BYTE[RADIUS] OCTANT
+BYTE         NUMPOINTS
+
+DEF TEXTMODE
+  ^SHOWPG1
+  RETURN CALL($FB39, 0, 0, 0, 0)
+END
+
+DEF CPYBUF
+  RETURN MEMCPY($0800, $0400, 1024)
+END
+
+DEF GRMODE
+  CALL($F832, 0, 0, 0, 0)
+  ^SHOWGR
+  ^SHOWFULL
+  CPYBUF
+  ^SHOWPG2
+  RETURN ^SHOWLORES
+END
+
+DEF COLOR(CLR)
+  RETURN CALL($F864, CLR, 0, 0, 0)
+END
+
+DEF HLIN(LEFT, RIGHT, VERT)
+  ^$2C = RIGHT
+  RETURN CALL($F819, VERT, 0, LEFT, 0)
+END
+
+DEF VLIN(TOP, BOTTOM, HORZ)
+  ^$2D = BOTTOM
+  RETURN CALL($F828, TOP, 0, HORZ, 0)
+END
+
+//
+// MODIFIED BRESENHAM TO DRAW SYMETRICAL
+// SPANS FROM BOTH ENDS (DOUBLE SPEED)
+//
+DEF LINE(X1, Y1, X2, Y2)
+  BYTE DX, DY, DX2, DY2, PP, S
+  WORD SX, SY, ERR, DD2
+
+  IF X1 < X2
+    SX = 1
+    DX = X2 - X1
+  ELSE
+    SX = -1
+    DX = X1 - X2
+  FIN
+  IF Y1 < Y2
+    SY = 1
+    DY = Y2 - Y1
+  ELSE
+    SY = -1
+    DY = Y1 - Y2
+  FIN
+  DX2   = DX << 1
+  DY2   = DY << 1
+  IF DX >= DY
+    //
+    // HORIZONTAL LINE
+    //
+    IF SX < 0
+      PP = X1
+      X1 = X2
+      X2 = PP
+      PP = Y1
+      Y1 = Y2
+      Y2 = PP
+      SY = -SY
+    FIN
+    DD2 = DX2 - DY2
+    ERR = DX  - DY2
+    DY  = (DY + 1) >> 1
+    SX  = 1
+    WHILE DY
+      IF ERR < 0
+        //
+        // DRAW TOP AND BOTTOM SPANS AT
+        // SAME TIME
+        //
+        IF Y2 - Y1 == SY
+          //
+          // THIS FIXES ANY OFF-BY-ONE
+          // PIXELS ON LAST REMAINING
+          // ADJACENT SPANS
+          //
+          HLIN(X1, X1 + SX - 1, Y1)
+          HLIN(X1 + SX, X2, Y2)
+        ELSE
+          HLIN(X1, X1 + SX - 1, Y1)
+          HLIN(X2 - SX + 1, X2, Y2)
+        FIN
+        X1  = X1 + SX
+        X2  = X2 - SX
+        Y1  = Y1 + SY
+        Y2  = Y2 - SY
+        DY  = DY - 1
+        SX  = 1
+        ERR = ERR + DD2
+      ELSE
+        SX  = SX + 1
+        ERR = ERR - DY2
+      FIN
+    LOOP
+    IF Y2 == Y1
+      HLIN(X1, X2, Y2)
+    FIN
+  ELSE
+    //
+    // VERTICAL LINE
+    //
+    IF SY < 0
+      PP = X1
+      X1 = X2
+      X2 = PP
+      PP = Y1
+      Y1 = Y2
+      Y2 = PP
+      SX = -SX
+    FIN
+    DD2 = DY2 - DX2
+    ERR = DY  - DX2
+    DX  = (DX + 1) >> 1
+    SY  = 1
+    WHILE DX
+      IF ERR < 0
+        //
+        // DRAW RIGHT AND LEFT SPANS
+        // AT THE SAME TIME
+        //
+        IF X2 - X1 == SX
+          //
+          // THIS FIXES ANY OFF-BY-ONE
+          // PIXELS ON LAST REMAINING
+          // ADJACENT SPANS
+          //
+          VLIN(Y1, Y1 + SY - 1, X1)
+          VLIN(Y1 + SY, Y2, X2)
+        ELSE
+          VLIN(Y1, Y1 + SY - 1, X1)
+          VLIN(Y2 - SY + 1, Y2, X2)
+        FIN
+        X1  = X1 + SX
+        X2  = X2 - SX
+        Y1  = Y1 + SY
+        Y2  = Y2 - SY
+        DX  = DX - 1
+        SY  = 1
+        ERR = ERR + DD2
+      ELSE
+        SY  = SY + 1
+        ERR = ERR - DX2
+      FIN
+    LOOP
+    IF X2 == X1
+      VLIN(Y1, Y2, X2)
+    FIN
+  FIN
+END
+
+DEF RADAR(C)
+  BYTE I
+
+  FOR I = 1 TO NUMPOINTS
+    COLOR(C)
+    LINE(XORG, YORG, XORG + I, YORG - OCTANT[I])
+    CPYBUF
+    COLOR(0)
+    LINE(XORG, YORG, XORG + I, YORG - OCTANT[I])
+  NEXT
+  FOR I = NUMPOINTS - 1 DOWNTO 0
+    COLOR(C)
+    LINE(XORG, YORG, XORG + OCTANT[I], YORG - I)
+    CPYBUF
+    COLOR(0)
+    LINE(XORG, YORG, XORG + OCTANT[I], YORG - I)
+  NEXT
+  FOR I = 1 TO NUMPOINTS
+    COLOR(C)
+    LINE(XORG, YORG, XORG + OCTANT[I], YORG + I)
+    CPYBUF
+    COLOR(0)
+    LINE(XORG, YORG, XORG + OCTANT[I], YORG + I)
+  NEXT
+  FOR I = NUMPOINTS - 1 DOWNTO 0
+    COLOR(C)
+    LINE(XORG, YORG, XORG + I, YORG + OCTANT[I])
+    CPYBUF
+    COLOR(0)
+    LINE(XORG, YORG, XORG + I, YORG + OCTANT[I])
+  NEXT
+  FOR I = 1 TO NUMPOINTS
+    COLOR(C)
+    LINE(XORG, YORG, XORG - I, YORG + OCTANT[I])
+    CPYBUF
+    COLOR(0)
+    LINE(XORG, YORG, XORG - I, YORG + OCTANT[I])
+  NEXT
+  FOR I = NUMPOINTS - 1 DOWNTO 0
+    COLOR(C)
+    LINE(XORG, YORG, XORG - OCTANT[I], YORG + I)
+    CPYBUF
+    COLOR(0)
+    LINE(XORG, YORG, XORG - OCTANT[I], YORG + I)
+  NEXT
+  FOR I = 1 TO NUMPOINTS
+    COLOR(C)
+    LINE(XORG, YORG, XORG - OCTANT[I], YORG - I)
+    CPYBUF
+    COLOR(0)
+    LINE(XORG, YORG, XORG - OCTANT[I], YORG - I)
+  NEXT
+  FOR I = NUMPOINTS - 1 DOWNTO 0
+    COLOR(C)
+    LINE(XORG, YORG, XORG - I, YORG - OCTANT[I])
+    CPYBUF
+    COLOR(0)
+    LINE(XORG, YORG, XORG - I, YORG - OCTANT[I])
+  NEXT
+END
+
+//
+// USE BRESENHAM CIRCLE ALG TO CALC
+// FIRST OCTANT
+//
+DEF CIRCALC
+  BYTE X, Y
+  WORD ERR
+
+  X   = 0
+  Y   = RADIUS
+  ERR = 3 - (RADIUS << 1)
+  WHILE X <= Y
+    IF ERR <= 0
+      ERR = ERR + (X << 2) + 6
+    ELSE
+      ERR = ERR + ((X - Y) << 2) + 10
+      Y   = Y - 1
+    FIN
+    OCTANT[X] = Y
+    X = X + 1
+  LOOP
+  NUMPOINTS = X - 1
+END
+
+CIRCALC
+GRMODE
+REPEAT
+  RADAR(15)
+UNTIL ^$C000 > 127
+^$C010
+TEXTMODE
+DONE
