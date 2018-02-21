@@ -87,6 +87,7 @@ clean:
 	-rm rel/*
 	-rm rel/apple/*
 	-rm rel/c64/*
+	-rm samplesrc/*.o samplesrc/*~ samplesrc/*.a
 	-rm toolsrc/*.o toolsrc/*~ toolsrc/*.a
 	-rm toolsrc/apple/*.o toolsrc/apple/*~ toolsrc/apple/*.a
 	-rm toolsrc/c64/*.o toolsrc/c64/*~ toolsrc/c64/*.a
