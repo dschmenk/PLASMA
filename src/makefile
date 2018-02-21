@@ -1,13 +1,13 @@
 .SUFFIXES	=
 AFLAGS	   = -o $@
 PLVM       = plvm
-PLVMZP_APL = vmsrc/plvmzp.inc
+PLVMZP_APL = vmsrc/apple/plvmzp.inc
 PLVM01     = rel/apple/A1PLASMA\#060280
 PLVM02	   = rel/apple/PLASMA.SYSTEM\#FF2000
 PLVM802	   = rel/apple/PLASMA16.SYSTEM\#FF2000
 PLVM03	   = rel/apple/SOS.INTERP\#050000
 CMD        = rel/apple/CMD\#061000
-PLVMZP_C64 = vmsrc/plvmzp.inc
+PLVMZP_C64 = vmsrc/c64/plvmzp.inc
 PLVMC64    = rel/c64/PLASMA
 ED         = rel/ED\#FE1000
 SOS        = rel/apple/SOS\#FE1000
@@ -118,13 +118,15 @@ $(CODEOPT): toolsrc/codeopt.pla toolsrc/codeseq.plh
 $(PLVM): vmsrc/plvm.c
 	cc vmsrc/plvm.c -o $(PLVM)
 
-$(PLVMZP_APL):
-	-rm $(PLVMZP_APL)
-	-ln -s apple/plvmzp.inc $(PLVMZP_APL)
+$(PLVMZP_APL): FORCE
+	-rm vmsrc/plvmzp.inc
+	-ln -s apple/plvmzp.inc vmsrc/plvmzp.inc
 
-$(PLVMZP_C64):
-	-rm $(PLVMZP_C64)
-	-ln -s c64/plvmzp.inc $(PLVMZP_C64)
+$(PLVMZP_C64): FORCE
+	-rm vmsrc/plvmzp.inc
+	-ln -s c64/plvmzp.inc vmsrc/plvmzp.inc
+
+FORCE:
 
 vmsrc/c64/cmd.a: vmsrc/c64/cmd.pla $(PLASM)
 	./$(PLASM) -AOW < vmsrc/c64/cmd.pla > vmsrc/c64/cmd.a
