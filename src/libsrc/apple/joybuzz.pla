@@ -1,53 +1,60 @@
 asm asmdefs
         !SOURCE    "vmsrc/plvmzp.inc"
-SPEAKER	=       $C030
+SPEAKER =       $C030
 GCSTRB  =       $C070
 GC0     =       $C064
 GC1     =       $C065
-GCPB1	=       $C061
-GCPB2	=       $C062
-GCMAX   =       64          ; MAX VALUE FOR GAME CONTROLLER
+GCPB1   =       $C061
+GCPB2   =       $C062
+GCMAX   =       79          ; MAX VALUE FOR GAME CONTROLLER
 end
 //
 // Read both game controllers in parallel
-// 
-export asm joypos(buzz)#3
+//
+export asm joypos(buzz)#4
+        LDY     ESTKL,X     ; BUZZ TONE
+        STY     TMPH
+        DEX
         DEX
         DEX
         LDA     #$00
-        STA     ESTKH,X
-        STA     ESTKH+1,X
-        STA     ESTKH+2,X
-        LDA     #GCMAX
-        STA     TMPL
-        STA     ESTKL,X
-        STA     ESTKL+1,X
-        LDY     ESTKL+2,X   ; BUZZ TONE        
-        BIT     GCSTRB
-JOYZZLP DEY
-        BEQ     +
-        NOP                 ; TIMING
-        NOP
-        NOP
-        NOP
-        BNE     ++
-+       BIT     SPEAKER
-        LDY     ESTKL+2,X   ; BUZZ TONE        
-++      LDA     #$FF
-        ASL     GC0
-        ADC     ESTKL,X
-        ASL     GC1
-        STA     ESTKL,X
-        LDA     #$FF
-        ADC     ESTKL+1,X
-        STA     ESTKL+1,X
-        DEC     TMPL
-        BNE     JOYZZLP
-        ASL     GCPB1       ; READ GC BUTTONS
-        LDA     GCPB2
-        ROR
-        AND     #$C0
         STA     ESTKL+2,X
+        STA     ESTKH+2,X
+        STA     ESTKL+3,X
+        STA     ESTKH+3,X
+        LDA     #GCMAX
+        SEC
+        BIT     GCSTRB
+BUZZ    DEY
+        BNE     BUZZDLY
+        BIT     SPEAKER
+        LDY     TMPH        ; BUZZ TONE
+GC0READ BIT     GC0
+        BPL     GC0DLY
+        INC     ESTKL+3,X
+GC1READ BIT     GC1
+        BPL     GC1DLY
+        INC     ESTKL+2,X
+JOYLP   SBC     #$01
+        BNE     BUZZ
+        TAY                 ; LDY     #$00
+        BIT     GCPB1       ; READ GC BUTTONS
+        BPL     +
+        DEY
++       STY     ESTKL+1,X
+        STY     ESTKH+1,X
+        TAY                 ; LDY     #$00
+        BIT     GCPB2
+        BPL     +
+        DEY
++       STY     ESTKL,X
+        STY     ESTKH,X
         RTS
+GC0DLY  NOP                 ; TIMING
+        BPL     GC1READ
+GC1DLY  NOP                 ; TIMING
+        BPL     JOYLP
+BUZZDLY BNE     +           ; TIMING
++       BNE     GC0READ
 end
 done
