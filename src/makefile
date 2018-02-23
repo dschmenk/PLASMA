@@ -39,6 +39,7 @@ HTTPD      = rel/HTTPD\#FE1000
 DGR        = rel/apple/DGR\#FE1000
 GRAFIX     = rel/apple/GRAFIX\#FE1000
 GFXDEMO    = rel/apple/GFXDEMO\#FE1000
+JOYBUZZ    = rel/apple/JOYBUZZ\#FE1000
 PORTIO     = rel/apple/PORTIO\#FE1000
 ROGUE      = rel/ROGUE\#FE1000
 ROGUEMAP   = rel/ROGUEMAP\#FE1000
@@ -74,7 +75,7 @@ TXTTYPE	= .TXT
 #SYSTYPE	= \#FF2000
 #TXTTYPE	= \#040000
 
-apple: $(PLVMZP_APL) $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVM802) $(PLVM03) $(CMD) $(PLASMAPLASM) $(CODEOPT) $(ARGS) $(MEMMGR) $(MEMTEST) $(FIBER) $(FIBERTEST) $(LONGJMP) $(ED) $(MON) $(SOS) $(ROD) $(SIEVE) $(UTHERNET2) $(UTHERNET) $(ETHERIP) $(INET) $(DHCP) $(HTTPD) $(ROGUE) $(ROGUEMAP) $(ROGUECOMBAT) $(GRAFIX) $(GFXDEMO) $(DGR) $(DGRTEST) $(FILEIO_APL) $(CONIO_APL) $(PORTIO) $(SPIPORT) $(SDFAT) $(FATCAT) $(FATGET) $(FATPUT) $(FATWDSK) $(FATRDSK) $(SANE) $(FPSTR) $(FPU) $(SANITY) $(RPNCALC) $(SNDSEQ) $(PLAYSEQ)
+apple: $(PLVMZP_APL) $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVM802) $(PLVM03) $(CMD) $(PLASMAPLASM) $(CODEOPT) $(ARGS) $(MEMMGR) $(MEMTEST) $(FIBER) $(FIBERTEST) $(LONGJMP) $(ED) $(MON) $(SOS) $(ROD) $(SIEVE) $(UTHERNET2) $(UTHERNET) $(ETHERIP) $(INET) $(DHCP) $(HTTPD) $(ROGUE) $(ROGUEMAP) $(ROGUECOMBAT) $(GRAFIX) $(GFXDEMO) $(DGR) $(DGRTEST) $(FILEIO_APL) $(CONIO_APL) $(JOYBUZZ) $(PORTIO) $(SPIPORT) $(SDFAT) $(FATCAT) $(FATGET) $(FATPUT) $(FATWDSK) $(FATRDSK) $(SANE) $(FPSTR) $(FPU) $(SANITY) $(RPNCALC) $(SNDSEQ) $(PLAYSEQ)
 	-rm vmsrc/plvmzp.inc
 
 c64: $(PLVMZP_C64) $(PLASM) $(PLVM) $(PLVMC64) 
@@ -326,6 +327,10 @@ $(SDFAT): libsrc/apple/sdfat.pla $(PLVM02) $(PLASM)
 $(SPIPORT): libsrc/apple/spiport.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AMOW < libsrc/apple/spiport.pla > libsrc/apple/spiport.a
 	acme --setpc 4094 -o $(SPIPORT) libsrc/apple/spiport.a
+
+$(JOYBUZZ): libsrc/apple/joybuzz.pla $(PLVM02) $(PLASM)
+	./$(PLASM) -AMOW < libsrc/apple/joybuzz.pla > libsrc/apple/joybuzz.a
+	acme --setpc 4094 -o $(JOYBUZZ) libsrc/apple/joybuzz.a
 
 $(PORTIO): libsrc/apple/portio.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AMOW < libsrc/apple/portio.pla > libsrc/apple/portio.a
