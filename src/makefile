@@ -138,7 +138,7 @@ vmsrc/c64/cmd.a: vmsrc/c64/cmd.pla $(PLASM)
 	./$(PLASM) -AOW < vmsrc/c64/cmd.pla > vmsrc/c64/cmd.a
 
 $(PLVMC64): vmsrc/c64/plvmc64.s vmsrc/c64/cmd.a
-	acme -o $(PLVMC64) -l vmsrc/c64/plvmc64.sym vmsrc/c64/plvmc64.s
+	acme -f cbm -o $(PLVMC64) -l vmsrc/c64/plvmc64.sym vmsrc/c64/plvmc64.s
 
 vmsrc/apple/a1cmd.a: vmsrc/apple/a1cmd.pla $(PLASM)
 	./$(PLASM) -AOW < vmsrc/apple/a1cmd.pla > vmsrc/apple/a1cmd.a

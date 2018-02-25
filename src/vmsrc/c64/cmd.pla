@@ -1,6 +1,6 @@
 const RELADDR      = $1000
-const inbuff       = $200
-const freemem      = $0006
+const freemem      = $0100
+//const inbuff       = $0200
 //
 // System flags: memory allocator screen holes.
 //
@@ -17,16 +17,6 @@ const resxhgr2    = $0080
 //
 const modkeep     = $1000
 const modinitkeep = $2000
-//
-// CFFA1 addresses.
-//
-const CFFADest     = $00
-const CFFAFileName = $02
-const CFFAOldName  = $04
-const CFFAFileType = $06
-const CFFAAuxType  = $07
-const CFFAFileSize = $09
-const CFFAEntryPtr = $0B
 //
 // Pedefined functions.
 //
@@ -51,13 +41,9 @@ byte perr, refauto
 //
 // String pool.
 //
+byte inbuff[128]
 byte autorun[]    = "AUTORUN"
 byte verstr[]     = "\nPLASMA "
-byte freestr[]    = "MEM FREE:$"
-byte errorstr[]   = "ERR:$"
-byte prompt[]     = "PLASMA"
-byte okstr[]      = "OK"
-byte huhstr[]     = "?\n"
 byte hexchar[]    = '0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F'
 //
 // Exported Machine ID.
@@ -193,12 +179,6 @@ CALL6502 JSR    $FFFF
         PLP
         RTS
 REGVALS !FILL   4
-end
-//
-// QUIT TO MONITOR
-//
-asm quit()#0
-    JMP $9000
 end
 //
 // SET MEMORY TO VALUE
@@ -725,16 +705,15 @@ end
 //
 asm cout(c)#0
         LDA     ESTKL,X
-        JSR     TOUPR
-        ORA     #$80
-        JMP     $FFEF
+        INX
+        JMP     $FFD2        
 end
 asm cin()#1
         DEX
--       LDA     $D011
-        BPL     -
-        LDA     $D010
+        STX     ESP
+        JSR     $FFCF
         AND     #$7F
+        LDX     ESP
         STA     ESTKL,X
         LDA     #$00
         STA     ESTKH,X
@@ -755,62 +734,19 @@ def print(i)#0
     cout(i % 10 + '0')
 end
 def rdstr(prompt)#1
-    byte ch, maxlen
-    maxlen = 0
+    byte ch
     inbuff.0 = 0
     cout(prompt)
-    repeat
+    for inbuff = 0 to 127
         ch = cin
-        when ch
-            is $15 // right arrow
-                if ^inbuff < maxlen //inbuff.0 < maxlen
-                    inbuff.0++
-                    ch = inbuff[inbuff.0]
-                    cout(ch)
-                fin
-                break
-            is $08 // left arrow
-                if inbuff.0
-                    cout('\\')
-                    cout(inbuff[inbuff.0])
-                    inbuff.0--
-                fin
-                break
-            is $04 // ctrl-d
-                if inbuff.0
-                    cout('#')
-                    cout(inbuff[inbuff.0])
-                    memcpy(inbuff + inbuff.0, inbuff + inbuff.0 + 1, maxlen - inbuff.0)
-                    maxlen--
-                    inbuff.0--
-                fin
-                break
-            is $0C // ctrl-l
-                crout
-                prstr(inbuff)
-                break
-            is $0D // return
-            is $18 // ctrl-x
-                crout
-                inbuff.0 = 0
-                break
-            is $9B // escape
-                inbuff.0 = 0
-                ch = $0D
-                break
-            otherwise
-                if ch >= ' '
-                    cout(ch)
-                    inbuff.0++
-                    inbuff[inbuff.0] = ch
-                    if inbuff.0 > maxlen
-                        maxlen = inbuff.0
-                    fin
-                fin
-        wend
-    until ch == $0D or inbuff.0 == $7F
-    cout($0D)
-    return inbuff
+        if ch == $0D
+            break
+        fin
+        inbuff.0++
+        inbuff[inbuff.0] = ch
+    next
+    crout
+    return @inbuff
 end
 def prbyte(v)#0
     cout(hexchar[(v >> 4) & $0F])
@@ -834,27 +770,13 @@ def strcat(dst, src)#1
     return dst
 end
 //
-// CFFA1 routines
-// FILE I/O
+// C64 FILE I/O
 //
-//def opendir
-//    perr = syscall($10, 0)
-//    return perr
-//end
-//def readdir
-//    perr = syscall($12, 0)
-//    return *CFFAEntryPtr
-//end
 def finddirentry(filename)#1
-    *CFFAFileName = filename
-    perr = syscall($14, 0)
-    return *CFFAEntryPtr
+    return 0
 end
 def readfile(filename, buffer)#1
-    *CFFADest     = buffer
-    *CFFAFileName = filename
-    perr = syscall($22, 0)
-    return perr
+    return 0
 end
 //
 // Heap routines.
@@ -1150,7 +1072,7 @@ heap = *freemem
 //
 // Print PLASMA version
 //
-prstr(@verstr); prbyte(version.1); cout('.'); prbyte(version.0); crout
+prstr("\nPRELIM PLASMA "); prbyte(version.1); cout('.'); prbyte(version.0); crout
 //
 // Init symbol table.
 //
@@ -1176,7 +1098,7 @@ perr = 0
 // Print some startup info.
 //
 if not ^cmdptr
-    prstr(@freestr)
+    prstr("MEM FREE:$")
     prword(availheap)
     crout
 fin
@@ -1186,24 +1108,24 @@ fin
 while 1
     if ^cmdptr
         when toupper(parsecmd(cmdptr))
-            is 'Q'
-                quit
+            is 'C'
+                break
             is '+'
                 execmod(cmdptr)
                 break
             otherwise
-                prstr(@huhstr)
+                cout('?')
         wend
         if perr
-            prstr(@errorstr)
+            prstr("ERR:$")
             prbyte(perr)
             perr = 0
         else
-            prstr(@okstr)
+            prstr("OK")
         fin
-    crout()
+        crout
     fin
-    prstr(@prompt)
-    cmdptr = rdstr($BA)
+    prstr("C64 PLASMA")
+    cmdptr = rdstr(':')
 loop
 done

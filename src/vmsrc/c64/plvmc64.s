@@ -10,8 +10,8 @@
 ;*
         !SOURCE "vmsrc/plvmzp.inc"
 DVSIGN  =   TMP+2
-DROP    =   $EF
-NEXTOP  =   $F0
+DROP    =   $7F
+NEXTOP  =   $80
 FETCHOP =   NEXTOP+1
 IP      =   FETCHOP+1
 IPL     =   IP
@@ -21,7 +21,7 @@ OPPAGE  =   OPIDX+1
 ;*
 ;* INTERPRETER HEADER+INITIALIZATION
 ;*
-        *=      $0800
+        *=      $1000
 SEGBEGIN JMP    VMINIT
 ;*
 ;* SYSTEM INTERPRETER ENTRYPOINT
@@ -900,21 +900,27 @@ LEAVE   INY                     ;+INC_IP
 RET     RTS
 CMD     !SOURCE "vmsrc/c64/cmd.a"
 SEGEND  =       *
-VMINIT  LDY     #$10        ; INSTALL PAGE 0 FETCHOP ROUTINE
+VMINIT  JSR     $FFE7       ; CLOSE ALL CHANNELS
+        LDY     #$10        ; INSTALL PAGE 0 FETCHOP ROUTINE
 -       LDA     PAGE0-1,Y
         STA     DROP-1,Y
         DEY
         BNE     -
         LDA     #$4C        ; SET JMPTMP OPCODE
         STA     JMPTMP
-        STY     IFPL        ; INIT FRAME POINTER
-        LDA     #$80
+        STY     IFPL        ; INIT FRAME POINTER TO $D000
+        LDA     #$D0
         STA     IFPH
         LDA     #<SEGEND    ; SAVE HEAP START
-        STA     SRCL
+        STA     $0100
         LDA     #>SEGEND
-        STA     SRCH
+        STA     $0101
+        LDX     #$FF        ; INIT STACK POINTER
+        TXS
         LDX     #ESTKSZ/2   ; INIT EVAL STACK INDEX
+        LDA     $01
+        AND     #$FE        ; SWAP OUT BASIC ROM
+        STA     $01
         JMP     CMD
 PAGE0   =       *
         !PSEUDOPC   DROP {
