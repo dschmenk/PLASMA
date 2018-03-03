@@ -1884,7 +1884,7 @@ OPCPY   STA     DST
         INC     SRC
         BNE     +
         INC     SRC+1
-+
++       DEY
 -       LDA     (SRC),Y
         STA     (DST),Y
         DEY
