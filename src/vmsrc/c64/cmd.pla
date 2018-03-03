@@ -1,0 +1,1131 @@
+const RELADDR      = $1000
+const freemem      = $0100
+//const inbuff       = $0200
+//
+// System flags: memory allocator screen holes.
+//
+const restxt1     = $0001
+const restxt2     = $0002
+const resxtxt1    = $0004
+const resxtxt2    = $0008
+const reshgr1     = $0010
+const reshgr2     = $0020
+const resxhgr1    = $0040
+const resxhgr2    = $0080
+//
+// Module don't free memory
+//
+const modkeep     = $1000
+const modinitkeep = $2000
+//
+// Pedefined functions.
+//
+predef syscall(cmd,null)#1, call(addr,areg,xreg,yreg,status)#1
+predef crout()#0, cout(c)#0, prstr(s)#0, print(i)#0, prbyte(b)#0, prword(w)#0
+predef cin()#1, rdstr(p)#1, toupper(c)#1, strcpy(dst,src)#1, strcat(dst,src)#1
+predef markheap()#1, allocheap(size)#1, allocalignheap(size, pow2, freeaddr), releaseheap(newheap)#1, availheap()#1
+predef memset(addr,value,size)#0, memcpy(dst,src,size)#0
+predef uword_isgt(a,b)#1, uword_isge(a,b)#1, uword_islt(a,b)#1, uword_isle(a,b)#1
+predef sext(a)#1, divmod(a,b)#2, execmod(modfile)#1
+//
+// Exported CMDSYS table
+//
+word version    = $0100 // 01.00
+word syspath
+word syscmdln
+word            = @execmod
+word systemflags = 0
+word heap
+word symtbl, lastsym
+byte perr, refauto
+//
+// String pool.
+//
+byte inbuff[128]
+byte autorun[]    = "AUTORUN"
+byte verstr[]     = "\nPLASMA "
+byte hexchar[]    = '0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F'
+//
+// Exported Machine ID.
+//
+byte machid       = $08 // Apple 1 (NA in ProDOS Tech Ref)
+//
+// Command line pointer
+//
+word cmdptr       = @hexchar // make it point to a zero
+//
+// Standard Library exported functions.
+//
+byte syslibstr[]  = "CMDSYS"
+byte machidstr[]  = "MACHID"
+byte putcstr[]    = "PUTC"
+byte putlnstr[]   = "PUTLN"
+byte putsstr[]    = "PUTS"
+byte putistr[]    = "PUTI"
+byte putbstr[]    = "PUTB"
+byte putwstr[]    = "PUTH"
+byte getcstr[]    = "GETC"
+byte getsstr[]    = "GETS"
+byte toupstr[]    = "TOUPPER"
+byte strcpystr[]  = "STRCPY"
+byte strcatstr[]  = "STRCAT"
+byte sysstr[]     = "SYSCALL"
+byte callstr[]    = "CALL"
+byte hpmarkstr[]  = "HEAPMARK"
+byte hpalignstr[] = "HEAPALLOCALIGN"
+byte hpallocstr[] = "HEAPALLOC"
+byte hprelstr[]   = "HEAPRELEASE"
+byte hpavlstr[]   = "HEAPAVAIL"
+byte memsetstr[]  = "MEMSET"
+byte memcpystr[]  = "MEMCPY"
+byte uisgtstr[]   = "ISUGT"
+byte uisgestr[]   = "ISUGE"
+byte uisltstr[]   = "ISULT"
+byte uislestr[]   = "ISULE"
+byte sextstr[]    = "SEXT"
+byte divmodstr[]  = "DIVMOD"
+word exports[]    = @syslibstr, @version
+word              = @sysstr,    @syscall
+word              = @callstr,   @call
+word              = @putcstr,   @cout
+word              = @putlnstr,  @crout
+word              = @putsstr,   @prstr
+word              = @putistr,   @print
+word              = @putbstr,   @prbyte
+word              = @putwstr,   @prword
+word              = @getcstr,   @cin
+word              = @getsstr,   @rdstr
+word              = @toupstr,   @toupper
+word              = @hpmarkstr, @markheap
+word              = @hpallocstr,@allocheap
+word              = @hpalignstr,@allocalignheap
+word              = @hprelstr,  @releaseheap
+word              = @hpavlstr,  @availheap
+word              = @memsetstr, @memset
+word              = @memcpystr, @memcpy
+word              = @strcpystr, @strcpy
+word              = @strcatstr, @strcat
+word              = @uisgtstr,  @uword_isgt
+word              = @uisgestr,  @uword_isge
+word              = @uisltstr,  @uword_islt
+word              = @uislestr,  @uword_isle
+word              = @sextstr,   @sext
+word              = @divmodstr, @divmod
+word              = @machidstr, @machid
+word              = 0
+word syslibsym    = @exports
+//
+// Utility functions
+//
+asm saveX#0
+        STX     XREG+1
+end
+asm restoreX#0
+XREG    LDX     #$00
+        RTS
+end
+//
+// CALL API ENTRYPOINT
+// SYSCALL(CMD, 0)
+//
+asm syscall(cmd, null)#1
+        LDA     ESTKL,X
+        STX     ESP
+        TAX
+        JSR     $900C
+        LDX     ESP
+        INX
+        LDY     #$00
+        STA     ESTKL,X
+        STY     ESTKH,X
+        RTS
+end
+//
+// CALL 6502 ROUTINE
+// CALL(ADDR, AREG, XREG, YREG, STATUS)
+//
+asm call(addr,areg,xreg,yreg,sstatus)#1
+        PHP
+        LDA     ESTKL+4,X
+        STA     CALL6502+1
+        LDA     ESTKH+4,X
+        STA     CALL6502+2
+        LDA     ESTKL,X
+        PHA
+        LDY     ESTKL+1,X
+        LDA     ESTKL+3,X
+        PHA
+        LDA     ESTKL+2,X
+        INX
+        INX
+        INX
+        INX
+        STX     ESP
+        TAX
+        PLA
+        PLP
+CALL6502 JSR    $FFFF
+        PHP
+        STA     REGVALS+0
+        STX     REGVALS+1
+        STY     REGVALS+2
+        PLA
+        STA     REGVALS+3
+        LDX     ESP
+        LDA     #<REGVALS
+        LDY     #>REGVALS
+        STA     ESTKL,X
+        STY     ESTKH,X
+        PLP
+        RTS
+REGVALS !FILL   4
+end
+//
+// SET MEMORY TO VALUE
+// MEMSET(ADDR, VALUE, SIZE)
+//   With optimizations from Peter Ferrie
+//
+asm memset(addr,value,size)#0
+        LDA     ESTKL+2,X
+        STA     DSTL
+        LDA     ESTKH+2,X
+        STA     DSTH
+        LDY     ESTKL,X
+        BEQ     +
+        INC     ESTKH,X
+        LDY     #$00
++       LDA     ESTKH,X
+        BEQ     SETMEX
+SETMLPL CLC
+        LDA     ESTKL+1,X
+SETMLPH STA     (DST),Y
+        DEC     ESTKL,X
+        BEQ     ++
+-       INY
+        BEQ     +
+--      BCS     SETMLPL
+        SEC
+        LDA     ESTKH+1,X
+        BCS     SETMLPH
++       INC     DSTH
+        BNE     --
+++      DEC     ESTKH,X
+        BNE     -
+SETMEX  INX
+        INX
+        INX
+        RTS
+end
+//
+// COPY MEMORY
+// MEMCPY(DSTADDR, SRCADDR, SIZE)
+//
+asm memcpy(dst,src,size)#0
+        INX
+        INX
+        INX
+        LDA     ESTKL-3,X
+        ORA     ESTKH-3,X
+        BEQ     CPYMEX
+        LDA     ESTKL-2,X
+        CMP     ESTKL-1,X
+        LDA     ESTKH-2,X
+        SBC     ESTKH-1,X
+        BCC     REVCPY
+;
+; FORWARD COPY
+;
+        LDA     ESTKL-1,X
+        STA     DSTL
+        LDA     ESTKH-1,X
+        STA     DSTH
+        LDA     ESTKL-2,X
+        STA     SRCL
+        LDA     ESTKH-2,X
+        STA     SRCH
+        LDY     ESTKL-3,X
+        BEQ     FORCPYLP
+        INC     ESTKH-3,X
+        LDY     #$00
+FORCPYLP LDA    (SRC),Y
+        STA     (DST),Y
+        INY
+        BNE     +
+        INC     DSTH
+        INC     SRCH
++       DEC     ESTKL-3,X
+        BNE     FORCPYLP
+        DEC     ESTKH-3,X
+        BNE     FORCPYLP
+        RTS
+;
+; REVERSE COPY
+;
+REVCPY  ;CLC
+        LDA     ESTKL-3,X
+        ADC     ESTKL-1,X
+        STA     DSTL
+        LDA     ESTKH-3,X
+        ADC     ESTKH-1,X
+        STA     DSTH
+        CLC
+        LDA     ESTKL-3,X
+        ADC     ESTKL-2,X
+        STA     SRCL
+        LDA     ESTKH-3,X
+        ADC     ESTKH-2,X
+        STA     SRCH
+        DEC     DSTH
+        DEC     SRCH
+        LDY     #$FF
+        LDA     ESTKL-3,X
+        BEQ     REVCPYLP
+        INC     ESTKH-3,X
+REVCPYLP LDA    (SRC),Y
+        STA     (DST),Y
+        DEY
+        CPY     #$FF
+        BNE     +
+        DEC     DSTH
+        DEC     SRCH
++       DEC     ESTKL-3,X
+        BNE     REVCPYLP
+        DEC     ESTKH-3,X
+        BNE     REVCPYLP
+CPYMEX  RTS
+end
+//
+// Unsigned word comparisons.
+//
+asm uword_isge(a,b)#1
+        LDA     ESTKL+1,X
+        CMP     ESTKL,X
+        LDA     ESTKH+1,X
+        SBC     ESTKH,X
+        LDA     #$FF
+        ADC     #$00
+        EOR     #$FF
+        STA     ESTKL+1,X
+        STA     ESTKH+1,X
+        INX
+        RTS
+end
+asm uword_isle(a,b)#1
+        LDA     ESTKL,X
+        CMP     ESTKL+1,X
+        LDA     ESTKH,X
+        SBC     ESTKH+1,X
+        LDA     #$FF
+        ADC     #$00
+        EOR     #$FF
+        STA     ESTKL+1,X
+        STA     ESTKH+1,X
+        INX
+        RTS
+end
+asm uword_isgt(a,b)#1
+        LDA     ESTKL,X
+        CMP     ESTKL+1,X
+        LDA     ESTKH,X
+        SBC     ESTKH+1,X
+        LDA     #$FF
+        ADC     #$00
+        STA     ESTKL+1,X
+        STA     ESTKH+1,X
+        INX
+        RTS
+end
+asm uword_islt(a,b)#1
+        LDA     ESTKL+1,X
+        CMP     ESTKL,X
+        LDA     ESTKH+1,X
+        SBC     ESTKH,X
+        LDA     #$FF
+        ADC     #$00
+        STA     ESTKL+1,X
+        STA     ESTKH+1,X
+        INX
+        RTS
+end
+asm divmod(a,b)#2
+        JSR     INTERP          ; CALL DINTERP
+        !BYTE   $36, $5C        ; DIVMOD, RET
+end
+asm sext(a)#1
+        LDY     #$00
+        LDA     ESTKL,X
+        BPL     +
+        DEY
++       STY     ESTKH,X
+        RTS
+end
+//
+// Addresses of internal routines.
+//
+asm interp()#1
+        DEX
+        LDA     #<IINTERP
+        STA     ESTKL,X
+        LDA     #>IINTERP
+        STA     ESTKH,X
+        RTS
+end
+//
+// A DCI string is one that has the high bit set for every character except the last.
+// More efficient than C or Pascal strings.
+//
+//def dcitos(dci, str)
+//    byte len, c
+//    len = 0
+//    repeat
+//        c = (dci).[len]
+//        len = len + 1
+//        (str).[len] = c & $7F
+//    until !(c & $80)
+//    ^str = len
+//    return len
+//end
+asm dcitos(dci, str)#1
+        LDA     ESTKL,X
+        STA     DSTL
+        LDA     ESTKH,X
+        STA     DSTH
+        LDA     ESTKL+1,X
+        STA     SRCL
+        LDA     ESTKH+1,X
+        STA     SRCH
+        LDY     #$00
+-       LDA     (SRC),Y
+        CMP     #$80
+        AND     #$7F
+        INY
+        STA     (DST),Y
+        BCS     -
+        TYA
+        LDY     #$00
+        STA     (DST),Y
+        INX
+        STA     ESTKL,X
+        STY     ESTKH,X
+        RTS
+end
+//def stodci(str, dci)
+//    byte len, c
+//    len = ^str
+//    if len == 0
+//        return
+//    fin
+//    c = toupper((str).[len]) & $7F
+//    len = len - 1
+//    (dci).[len] = c
+//    while len
+//      c = toupper((str).[len]) | $80
+//      len = len - 1
+//      (dci).[len] = c
+//    loop
+//    return ^str
+//end
+asm stodci(str, dci)#1
+        LDA     ESTKL,X
+        STA     DSTL
+        LDA     ESTKH,X
+        STA     DSTH
+        LDA     ESTKL+1,X
+        STA     SRCL
+        LDA     ESTKH+1,X
+        STA     SRCH
+        INX
+        LDY     #$00
+        LDA     (SRC),Y
+        BEQ     ++
+        TAY
+        LDA     (SRC),Y
+        JSR     TOUPR
+        BNE     +
+-       LDA     (SRC),Y
+        JSR     TOUPR
+        ORA     #$80
++       DEY
+        STA     (DST),Y
+        BNE     -
+        LDA     (SRC),Y
+++      STA     ESTKL,X
+        STY     ESTKH,X
+        RTS
+end
+asm toupper(c)#1
+        LDA     ESTKL,X
+TOUPR   AND     #$7F
+        CMP     #'a'
+        BCC     +
+        CMP     #'z'+1
+        BCS     +
+        SBC     #$1F
++       STA     ESTKL,X
+        RTS
+end
+//
+// Module symbols are entered into the symbol table
+// pre-pended with a '#' to differentiate them
+// from normal symbols.
+//
+//
+// Lookup routines.
+//
+//def lookuptbl(dci, tbl)
+//    word match
+//    while ^tbl
+//        match = dci
+//        while ^tbl == ^match
+//            if !(^tbl & $80)
+//                return (tbl):1
+//            fin
+//            tbl   = tbl   + 1
+//            match = match + 1
+//        loop
+//        while (^tbl & $80)
+//            tbl = tbl + 1
+//        loop
+//        tbl = tbl + 3
+//    loop
+//    return 0
+asm lookuptbl(dci, tbl)#1
+        LDA     ESTKL,X
+        STA     DSTL
+        LDA     ESTKH,X
+        STA     DSTH
+        INX
+        LDA     ESTKL,X
+        STA     SRCL
+        LDA     ESTKH,X
+        STA     SRCH
+--      LDY     #$00
+-       LDA     (DST),Y
+        BEQ     +
+        CMP     (SRC),Y
+        BNE     ++
+        INY
+        ASL
+        BCS     -
+        LDA     (DST),Y
+        STA     ESTKL,X             ; MATCH
+        INY
+        LDA     (DST),Y
+        STA     ESTKH,X
+        RTS
++       STA     ESTKL,X             ; NO MATCH
+        STA     ESTKH,X
+        RTS
+++
+-       LDA     (DST),Y             ; NEXT ENTRY
+        BPL     +
+        INY
+        BNE     -
++       TYA
+        CLC
+        ADC     #$03
+        ADC     DSTL
+        STA     DSTL
+        BCC     --
+        INC     DSTH
+        BNE     --
+end
+// def lookupidx(esd, index)
+//    word sym
+//    while ^esd
+//        sym = esd
+//        esd = sym + dcitos(sym, @str)
+//        if esd->0 & $10 and esd->1 == index
+//            return sym
+//        fin
+//        esd = esd + 3
+//    loop
+//end
+asm lookupidx(esd, index)#1
+        LDA     ESTKL,X
+        STA     TMPL
+        INX
+---     LDA     ESTKH,X
+        STA     SRCH
+        LDA     ESTKL,X
+--      STA     SRCL
+        LDY     #$00
+-       LDA     (SRC),Y
+        BPL     +
+        INY
+        BNE     -
++       BEQ     ++              ; END OF ESD
+        INY
+        LDA     (SRC),Y
+        INY
+        AND     #$10            ; EXTERN FLAG?
+        BEQ     +
+        LDA     (SRC),Y
+        CMP     TMPL
+        BEQ     +++             ; MATCH
++       INY
+        TYA
+        SEC
+        ADC     SRCL
+        STA     ESTKL,X         ; SYM PTRL
+        BCC     --
+        INC     ESTKH,X         ; SYM PTRH
+        BNE     ---
+++      STA     ESTKL,X         ; END OF ESD
+        STA     ESTKH,X
++++     RTS
+end
+//def lookupdef(addr, deftbl)#1
+//    while deftbl->0 == $20
+//        if deftbl=>3 == addr
+//            return deftbl
+//        fin
+//        deftbl = deftbl + 5
+//    loop
+//    return 0
+//end
+asm lookupdef(addr, deftbl)#1
+        LDA     ESTKH,X
+        STA     SRCH
+        LDA     ESTKL,X
+        STA     SRCL
+        INX
+-       LDY     #$00
+        LDA     (SRC),Y
+        CMP     #$20            ; JSR OPCODE?
+        BNE     ++
+        LDY     #$03
+        LDA     (SRC),Y
+        CMP     ESTKL,X
+        BNE     +
+        INY
+        LDA     (SRC),Y
+        CMP     ESTKH,X
+        BNE     +
+        LDA     SRCL            ; MATCH
+        STA     ESTKL,X
+        LDA     SRCH
+        STA     ESTKH,X
+        RTS
++       LDA     #$05
+        CLC
+        ADC     SRCL
+        STA     SRCL
+        BCC     -
+        INC     SRCH
+        BNE     -
+++      STY     ESTKL,X
+        STY     ESTKH,X
+        RTS
+end
+//
+// Reloc internal data
+//
+//def reloc(modfix, modofst, bytecode, rld)#3
+//    word addr, fixup
+//    while ^rld
+//        if ^rld & $10 // EXTERN reference.
+//            return rld, addr, fixup
+//        fin
+//        addr = rld=>1 + modfix
+//        fixup = *addr + modofst
+//        if uword_isge(fixup, bytecode) // Bytecode address.
+//            return rld, addr, fixup
+//        fin
+//        *addr = fixup
+//        rld = rld + 4
+//    loop
+//    return rld, addr, fixup
+//end
+asm reloc(modfix, modofst, bytecode, rld)#3
+        LDA     ESTKL,X
+        STA     SRCL
+        LDA     ESTKH,X
+        STA     SRCH
+        LDY     #$00
+-       LDA     (SRC),Y
+        BEQ     RLDEX       ; END OF RLD
+        PHA
+        INY
+        LDA     (SRC),Y
+        INY
+        CLC
+        ADC     ESTKL+3,X   ; ADDR=ENTRY=>1+MODFIX
+        STA     DSTL
+        LDA     (SRC),Y
+        ADC     ESTKH+3,X
+        STA     DSTH
+        PLA
+        AND     #$10        ; EXTERN REF - EXIT
+        BNE     RLDEX
+        TAY                 ; FIXUP=*ADDR+MODOFST
+        LDA     (DST),Y
+        INY
+        CLC
+        ADC     ESTKL+2,X
+        STA     TMPL
+        LDA     (DST),Y
+        ADC     ESTKH+2,X
+        CMP     ESTKH+1,X   ; FIXUP >= BYTECODE?
+        BCC     +
+        STA     TMPH
+        BNE     RLDEX       ; YEP, EXIT
+        LDA     TMPL
+        CMP     ESTKL+1,X
+        BCS     RLDEX       ; YEP, EXIT
+        LDA     TMPH
++       STA     (DST),Y     ; *ADDR=FIXUP
+        DEY
+        LDA     TMPL
+        STA     (DST),Y
+        LDA     SRCL        ; NEXT ENTRY
+;       CLC
+        ADC     #$04
+        STA     SRCL
+        BCC     -
+        INC     SRCH
+        BNE     -
+RLDEX   INX
+        LDA     TMPL
+        STA     ESTKL,X
+        LDA     TMPH
+        STA     ESTKH,X
+        LDA     DSTL
+        STA     ESTKL+1,X
+        LDA     DSTH
+        STA     ESTKH+1,X
+        LDA     SRCL
+        STA     ESTKL+2,X
+        LDA     SRCH
+        STA     ESTKH+2,X
+        RTS
+end
+//
+// CONSOLE I/O
+//
+asm cout(c)#0
+        LDA     ESTKL,X
+        INX
+        JMP     $FFD2        
+end
+asm cin()#1
+        DEX
+        STX     ESP
+        JSR     $FFCF
+        AND     #$7F
+        LDX     ESP
+        STA     ESTKL,X
+        LDA     #$00
+        STA     ESTKH,X
+        RTS
+end
+def crout()#0
+    cout($0D)
+end
+def prstr(str)#0
+    byte i
+    for i = 1 to ^str
+        cout(^(str + i))
+    next
+end
+def print(i)#0
+    if i < 0; cout('-'); i = -i; fin
+    if i >= 10; print(i / 10); fin
+    cout(i % 10 + '0')
+end
+def rdstr(prompt)#1
+    byte ch
+    inbuff.0 = 0
+    cout(prompt)
+    for inbuff = 0 to 127
+        ch = cin
+        if ch == $0D
+            break
+        fin
+        inbuff.0++
+        inbuff[inbuff.0] = ch
+    next
+    crout
+    return @inbuff
+end
+def prbyte(v)#0
+    cout(hexchar[(v >> 4) & $0F])
+    cout(hexchar[v & $0F])
+end
+def prword(v)#0
+    prbyte(v >> 8)
+    prbyte(v)
+end
+//
+// String routines.
+//
+def strcpy(dst, src)#1
+    memcpy(dst+1, src+1, ^src)
+    ^dst = ^src
+    return dst
+end
+def strcat(dst, src)#1
+    memcpy(dst + ^dst + 1, src + 1, ^src)
+    ^dst = ^dst + ^src
+    return dst
+end
+//
+// C64 FILE I/O
+//
+def finddirentry(filename)#1
+    return 0
+end
+def readfile(filename, buffer)#1
+    return 0
+end
+//
+// Heap routines.
+//
+def availheap()#1
+    byte fp
+    return @fp - heap
+end
+def allocheap(size)#1
+    word addr
+    addr = heap
+    heap = heap + size
+    if uword_isge(heap, @addr)
+        return 0
+    fin
+    return addr
+end
+def allocalignheap(size, pow2, freeaddr)#1
+    word align, addr
+    if freeaddr
+        *freeaddr = heap
+    fin
+    align = (1 << pow2) - 1
+    addr = (heap | align) + 1
+    heap = addr + size
+    if uword_isge(heap, @addr)
+        return 0
+    fin
+    return addr
+end
+def markheap()#1
+    return heap
+end
+def releaseheap(newheap)#1
+    heap = newheap
+    return @newheap - heap
+end
+//
+// Symbol table routines.
+//
+def addsym(sym, addr)#0
+    while ^sym & $80
+        ^lastsym = ^sym
+        lastsym  = lastsym + 1
+        sym      = sym     + 1
+    loop
+    lastsym->0 = ^sym
+    lastsym=>1 = addr
+    lastsym    = lastsym + 3
+    ^lastsym   = 0
+end
+//
+// Module routines.
+//
+def lookupextern(esd, index)#1
+    word sym, addr
+    byte str[16]
+    while ^esd
+        sym = esd
+        esd = sym + dcitos(sym, @str)
+        if esd->0 & $10 and esd->1 == index
+            addr = lookuptbl(sym, symtbl)
+            if !addr
+                perr = $81
+                cout('?')
+                prstr(@str)
+                crout
+            fin
+            return addr
+        fin
+        esd = esd + 3
+    loop
+    return 0
+end
+def adddef(addr, deflast)#1
+    word defentry
+    defentry = *deflast
+    *deflast = defentry + 5
+    defentry->0 = $20
+    defentry=>1 = interp
+    defentry=>3 = addr
+    defentry->5 = 0 // null out next entry
+    return defentry
+end
+def loadmod(mod)#1
+    word rdlen, modsize, bytecode, defofst, defcnt, init, fixup
+    word addr, modaddr, modfix, modofst, modend
+    word deftbl, deflast
+    word moddep, rld, esd, sym
+    byte type, str[17], filename[17]
+    byte header[128]
+    //
+    // Read the RELocatable module header (first 128 bytes)
+    //
+    dcitos(mod, @filename)
+    rdlen = finddirentry(@filename)=>$15
+    if perr
+        return -perr
+    fin
+    if rdlen > 0
+        readfile(@filename, heap)
+        memcpy(@header, heap, 128)
+        modsize = header:0
+        moddep  = @header.1
+        defofst = modsize + RELADDR
+        init    = 0
+        if rdlen > 4 and heap=>2 == $6502 // magic number
+            //
+            // This is an EXTended RELocatable (data+bytecode) module.
+            //
+            defofst  = header:6
+            defcnt   = header:8
+            init     = header:10
+            moddep   = @header.12
+            //
+            // Load module dependencies.
+            //
+            while ^moddep
+                if !lookuptbl(moddep, symtbl)
+                    if loadmod(moddep) < 0
+                        return -perr
+                    fin
+                fin
+                moddep = moddep + dcitos(moddep, @str)
+            loop
+            //
+            // Init def table.
+            //
+            deftbl   = allocheap(defcnt * 5 + 1)
+            deflast  = deftbl
+            ^deflast = 0
+            //
+            // Re-read file
+            //
+            readfile(@filename, heap)
+        fin
+        //
+        // Alloc heap space for relocated module (data + bytecode).
+        //
+        moddep  = moddep  + 1 - @header + heap
+        modfix  = moddep  - (heap + 2) // Adjust to skip header
+        modsize = modsize - modfix
+        rdlen   = rdlen   - modfix - 2
+        modaddr = allocheap(modsize)
+        memcpy(modaddr, moddep, rdlen)
+        //
+        // Add module to symbol table.
+        //
+        addsym(mod, modaddr)
+        //
+        // Apply all fixups and symbol import/export.
+        //
+        modfix   = modaddr - modfix
+        modofst  = modfix  - RELADDR
+        modend   = modaddr + modsize
+        bytecode = defofst + modofst
+        defofst  = bytecode - defofst
+        rld      = modend  // Re-Locatable Directory
+        esd      = rld     // Extern+Entry Symbol Directory
+        while ^esd         // Scan to end of ESD
+            esd = esd + 4
+        loop
+        esd = esd + 1
+        //
+        // Run through the DeFinition Dictionary.
+        //
+        while ^rld == $02
+            //
+            // This is a bytcode def entry - add it to the def directory.
+            //
+            adddef(rld=>1 + defofst, @deflast)
+            rld = rld + 4
+        loop
+        //
+        // Run through the Re-Location Dictionary.
+        //
+        while ^rld
+            rld, addr, fixup = reloc(modfix, modofst, bytecode, rld)
+            if ^rld
+                *addr = ^rld & $10 ?? *addr + lookupextern(esd, rld->3) :: lookupdef(fixup + defofst, deftbl)
+                rld   = rld + 4
+            fin
+        loop
+        //
+        // Run through the External/Entry Symbol Directory.
+        //
+        while ^esd
+            sym = esd
+            esd = esd + dcitos(esd, @str)
+            if ^esd & $08
+                //
+                // EXPORT symbol - add it to the global symbol table.
+                //
+                addr = esd=>1 + modofst
+                if uword_isge(addr, bytecode)
+                    //
+                    // Use the def directory address for bytecode.
+                    //
+                    addr = lookupdef(addr + defofst, deftbl)
+                fin
+                addsym(sym, addr)
+            fin
+            esd = esd + 3
+        loop
+    fin
+    if perr
+        return -perr
+    fin
+    //
+    // Free up the end-of-module in main memory.
+    //
+    releaseheap(modend)
+    //
+    // Call init routine if it exists.
+    //
+    fixup = 0
+    if init
+        init = init - defofst + bytecode
+        fixup = adddef(init, @deflast)()
+        if fixup < 0
+            perr = -fixup
+        fin
+        if !(systemflags & modinitkeep)
+            releaseheap(init)
+        fin
+    fin
+    return fixup | (systemflags & modkeep)
+end
+//
+// Command mode
+//
+def stripchars(strptr)#1
+    while ^strptr and ^(strptr + 1) <> ' '
+        memcpy(strptr + 1, strptr + 2, ^strptr)
+        ^strptr--
+    loop
+    return ^strptr
+end
+def stripspaces(strptr)#0
+    while ^strptr and ^(strptr + ^strptr) <= ' '
+        ^strptr--
+    loop
+    while ^strptr and ^(strptr + 1) <= ' '
+        memcpy(strptr + 1, strptr + 2, ^strptr)
+        ^strptr--
+    loop
+end
+def striptrail(strptr)#0
+    byte i
+
+    for i = 1 to ^strptr
+        if (strptr)[i] == ' '
+        ^strptr = i - 1
+        return
+    fin
+    next
+end
+def parsecmd(strptr)#1
+    byte cmd
+
+    cmd = 0
+    stripspaces(strptr)
+    if ^strptr
+        cmd = ^(strptr + 1)
+        memcpy(strptr + 1, strptr + 2, ^strptr)
+        ^strptr--
+    fin
+    stripspaces(strptr)
+    return cmd
+end
+def execmod(modfile)#1
+    byte moddci[17]
+    word saveheap, savesym, saveflags
+
+    perr = 1
+    if stodci(modfile, @moddci)
+        saveheap  = heap
+        savesym   = lastsym
+        saveflags = systemflags
+        if loadmod(@moddci) < modkeep
+            lastsym = savesym
+            heap    = saveheap
+        fin
+        ^lastsym    = 0
+        systemflags = saveflags
+    fin
+    return -perr
+end
+//
+// Get heap start.
+//
+heap = *freemem
+//
+// Print PLASMA version
+//
+prstr("\nPRELIM PLASMA "); prbyte(version.1); cout('.'); prbyte(version.0); crout
+//
+// Init symbol table.
+//
+symtbl   = allocheap($200)
+lastsym  = symtbl
+^lastsym = 0
+while *syslibsym
+    stodci(syslibsym=>0, heap)
+    addsym(heap, syslibsym=>2)
+    syslibsym = syslibsym + 4
+loop
+//
+// Try to load autorun.
+//
+cmdptr = heap
+memset(cmdptr, 0, 128)
+readfile(@autorun, cmdptr + 1)
+while ^(cmdptr + ^cmdptr + 1) >= ' '
+    ^cmdptr++
+loop
+perr = 0
+//
+// Print some startup info.
+//
+if not ^cmdptr
+    prstr("MEM FREE:$")
+    prword(availheap)
+    crout
+fin
+//
+// Handle commands.
+//
+while 1
+    if ^cmdptr
+        when toupper(parsecmd(cmdptr))
+            is 'C'
+                break
+            is '+'
+                execmod(cmdptr)
+                break
+            otherwise
+                cout('?')
+        wend
+        if perr
+            prstr("ERR:$")
+            prbyte(perr)
+            perr = 0
+        else
+            prstr("OK")
+        fin
+        crout
+    fin
+    prstr("C64 PLASMA")
+    cmdptr = rdstr(':')
+loop
+done

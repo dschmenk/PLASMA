@@ -457,7 +457,7 @@ MUL     STY     IPY
         LDA     #$00
         STA     ESTKL+1,X       ; PRODL
 ;       STA     ESTKH+1,X       ; PRODH
-MULLP   LSR     TMPH            ; MULTPLRH
+_MULLP  LSR     TMPH            ; MULTPLRH
         ROR     TMPL            ; MULTPLRL
         BCS     +
         STA     ESTKH+1,X       ; PRODH
@@ -469,7 +469,7 @@ MULLP   LSR     TMPH            ; MULTPLRH
 +       ASL     ESTKL,X         ; MULTPLNDL
         ROL     ESTKH,X         ; MULTPLNDH
         DEY
-        BNE     MULLP
+        BNE     _MULLP
         STA     ESTKH+1,X       ; PRODH
         LDY     IPY
         JMP     DROP
@@ -1161,7 +1161,7 @@ SAW     INY                     ;+INC_IP
         LDY     IPY
         BMI     +
         JMP     DROP
-        JMP     FIXDROP
++       JMP     FIXDROP
 ;*
 ;* STORE VALUE TO ABSOLUTE ADDRESS WITHOUT POPPING STACK
 ;*
@@ -1884,7 +1884,7 @@ OPCPY   STA     DST
         INC     SRC
         BNE     +
         INC     SRC+1
-+
++       DEY
 -       LDA     (SRC),Y
         STA     (DST),Y
         DEY

@@ -1,0 +1,195 @@
+include "inc/cmdsys.plh"
+//
+// Handy constants.
+//
+const FULLMODE     = 0
+const MIXMODE      = 1
+//
+// External interface.
+//
+struc t_conio
+    word keypressed
+    word getkey
+    word echo
+    word home
+    word gotoxy
+    word viewport
+    word texttype
+    word textmode
+    word grmode
+    word grcolor
+    word grplot
+    word tone
+    word rnd
+end
+//
+// Predefined functions.
+//
+predef a2keypressed,a2home,a12echo(state),a2gotoxy(x,y),a2viewport(left, top, width, height),a2texttype(type)
+predef a2textmode(cols),a2grmode(mix),a2grcolor(color),a2grplot(x,y),a2tone(duration, delay),a2rnd
+//
+// Exported function table.
+//
+word conio[]
+//
+// Function pointers.
+//
+word = @a2keypressed
+word = @getc
+word = @a12echo
+word = @a2home
+word = @a2gotoxy
+word = @a2viewport
+word = @a2texttype
+word = @a2textmode
+word = @a2grmode
+word = @a2grcolor
+word = @a2grplot
+word = @a2tone
+word = @a2rnd
+//
+// Screen row address arrays.
+//
+word txt1scrn[]     = $0400,$0480,$0500,$0580,$0600,$0680,$0700,$0780
+word                = $0428,$04A8,$0528,$05A8,$0628,$06A8,$0728,$07A8
+word                = $0450,$04D0,$0550,$05D0,$0650,$06D0,$0750,$07D0
+word txt2scrn[]     = $0800,$0880,$0900,$0980,$0A00,$0A80,$0B00,$0B80
+word                = $0828,$08A8,$0928,$09A8,$0A28,$0AA8,$0B28,$0BA8
+word                = $0850,$08D0,$0950,$09D0,$0A50,$0AD0,$0B50,$0BD0
+//
+// Text screen parameters.
+//
+//byte textcols = 40
+//byte curshpos = 0
+//byte cursvpos = 0
+//
+// Apple 3 console codes.
+//
+byte textbwmode[]   = 2, 16, 0
+byte textclrmode[]  = 2, 16, 1
+byte grcharset[]    = 1, 0, $7F, $7F, $7F, $7F, $00, $00, $00, $00
+//
+// Random number for Apple 1 and III.
+//
+word randnum = 12345
+//
+// Native  routines.
+//
+asm equates
+    !SOURCE "vmsrc/plvmzp.inc"
+end
+//
+// def grscrn(rowaddrs)
+//
+asm a2grscrn(rowaddrs)
+GRSCRN  =   $26
+GRSCRNL =   GRSCRN
+GRSCRNH =   GRSCRNL+1
+    LDA ESTKL,X
+    STA GRSCRNL
+    LDA ESTKH,X
+    STA GRSCRNH
+    RTS
+end
+//
+// def grcolor(color)
+//
+asm a2grcolor(color)
+GRCLR   =   $30
+    LDA #$0F
+    AND ESTKL,X
+    STA GRCLR
+    ASL
+    ASL
+    ASL
+    ASL
+    ORA GRCLR
+    STA GRCLR
+    RTS
+end
+//
+// def grplot(x, y)
+//
+asm a2grplot(x, y)
+    STY IPY
+    LDA ESTKL,X
+    AND #$FE
+    CMP ESTKL,X
+    TAY
+    LDA (GRSCRN),Y
+    STA DSTL
+    INY
+    LDA (GRSCRN),Y
+    STA DSTH
+    LDY ESTKL+1,X
+    LDA (DST),Y
+    EOR GRCLR
+    STA TMPL
+    LDA #$FF
+    ADC #$00
+    EOR #$F0
+    AND TMPL
+    EOR GRCLR
+    STA (DST),Y
+    LDY IPY
+    INX
+    RTS
+end
+//
+// Commodore 64 routines.
+//
+def a2keypressed
+    return ^keyboard >= 128
+end
+def a2home
+    return call($FC58, 0, 0, 0, 0) // home()
+end
+def a2gotoxy(x, y)
+    ^$24 = x + ^$20
+    return call($FB5B, y + ^$22, 0, 0, 0)
+end
+def a2viewport(left, top, width, height)
+    if !width or !height
+        left   = 0
+        top    = 0
+        width  = 40
+        height = 24
+    fin
+    ^$20 = left
+    ^$21 = width
+    ^$22 = top
+    ^$23 = height + top - 1
+    return a2gotoxy(0, 0)
+end
+def a2texttype(type)
+    ^$32 = type
+    return 0
+end
+def a2textmode(columns)
+    call($FB39, 0, 0, 0, 0) // textmode()
+    return a2home
+end
+def a2grmode(mix)
+    call($FB2F, 0, 0, 0, 0) // initmode()
+    call($FB40, 0, 0, 0, 0) // grmode()
+    if !mix
+        ^showfull
+    fin
+    a2home
+    return a2grscrn(@txt1scrn) // point to lo-res screen
+end
+def a2tone(duration, delay)
+    byte i
+
+    while duration
+        ^speaker // toggle speaker
+        for i = delay downto 0; next
+        duration--
+    loop
+    return 0
+end
+def a2rnd
+    *a2rndnum = (*a2rndnum << 1) + *a2rndnum + 123
+    return *a2rndnum & $7FFF
+end
+done

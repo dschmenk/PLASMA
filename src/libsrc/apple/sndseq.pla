@@ -67,12 +67,14 @@ predef musicStop#0
 predef spkrSequence(yield, func)#0
 predef a2spkrTone(pitch, duration)#0
 predef a2spkrPWM(sample, speed, len)#0
+predef a2keypressed
 //
 // Static sequencer values
 //
 export word musicSequence = @spkrSequence
 export word spkrTone      = @a2spkrTone
 export word spkrPWM       = @a2spkrPWM
+word        keypressed    = @a2keypressed
 
 word instr[] // Overlay with other variables
 word seqTrack, seqEvent, seqTime, eventTime, updateTime
@@ -211,6 +213,31 @@ asm psgWrite(pVIA, reg, val)#0
         INX
         RTS
 end
+asm viaCheck(pVIA)#1
+        PHP
+        SEI
+        LDA     ESTKL,X
+        STA     TMPL
+        LDA     ESTKH,X
+        STA     TMPH
+        STX     ESP
+        LDX     #$80
+        LDY     #$04
+        SEC
+-       LDA     (TMP),Y
+        BMI     +
+        DEX
+        BNE     -
+        TXA                 ; TIMEOUT
+        BEQ     ++
++       SBC     (TMP),Y
+++      LDX     ESP
+        STA     ESTKL,X
+        LDA     #$00
+        STA     ESTKH,X
+        PLP
+        RTS
+end
 //
 // Apple II speaker tone generator routines
 //
@@ -328,6 +355,30 @@ asm a2spkrPWM(sample, speed, len)#0
         INX
         RTS
 end
+asm a2keypressed
+        INC     $004E       ; rndseed
+        BNE     +
+        INC     $004F
++       DEX
+        LDY     #$00
+        BIT     $C000
+        BPL     +
+        DEY
++       STY     ESTKL,X
+        STY     ESTKH,X
+        RTS
+end
+def a3keypressed
+    byte count
+    byte params[5]
+
+    params.0 = 3
+    params.1 = cmdsys.devcons
+    params.2 = 5
+    params:3 = @count
+    syscall($82, @params)
+    return count
+end
 def a3spkrTone(pitch, duration)#0
     byte env
 
@@ -348,14 +399,16 @@ end
 // Search slots for MockingBoard
 //
 def mbTicklePSG(pVIA)
-    pVIA->IER  = $7F  // Mask all interrupts
-    pVIA->ACR  = $00  // Stop T1 countdown
-    pVIA->DDRB = $FF  // Output enable port A and B
-    pVIA->DDRA = $FF
-    pVIA->IORA = $00 // Reset MockingBoard
-    if pVIA->IORA == $00
+    //puts("VIA address: $"); puth(pVIA); puts(" Timer Diff = "); puti(viaCheck(pVIA)); putln
+    if viaCheck(pVIA) == 8 and viaCheck(pVIA) == 8 // Check twice
+        pVIA->IER  = $7F  // Mask all interrupts
+        //pVIA->ACR  = $00  // Stop T1 countdown
+        pVIA->DDRB = $FF  // Output enable port A and B
+        pVIA->DDRA = $FF
+        pVIA->IORA = $00 // Reset MockingBoard
+        //if pVIA->IORA == $00
         pVIA->IORA = $04 // Inactive MockingBoard control lines
-        if pVIA->IORA == $04
+        //if pVIA->IORA == $04
             //
             // At least we know we have some sort of R/W in the ROM
             // address space. Most likely a MockingBoard or John Bell
@@ -366,7 +419,7 @@ def mbTicklePSG(pVIA)
             //if mbReadP(pVIA, 2) == $7E and mbReadP(pVIA, 3) == $0A
                 return pVIA
             //fin
-        fin
+        //fin
     fin
     return 0
 end
@@ -591,8 +644,7 @@ def mbSequence(yield, func)#0
         //
         seqTime++
         while !(mbVIA1->IFR & $40) // Wait for T1 interrupt
-            if ^$C000 > 127; quit = TRUE; break; fin
-            *rndseed++
+            if a2keypressed(); quit = TRUE; break; fin
         loop
         mbVIA1->IFR = $40 // Clear interrupt
         if yieldTime <= seqTime; func()#0; yieldTime = seqTime + yield; fin
@@ -607,7 +659,7 @@ def mbSequence(yield, func)#0
         psgWrite(mbVIA2, BENVAMP, $00)
         psgWrite(mbVIA2, CENVAMP, $00)
     fin
-    mbVIA1->ACR = $00 // Stop T1 countdown
+    //mbVIA1->ACR = $00 // Stop T1 countdown
     mbVIA1->IER = $7F // Mask all interrupts
     mbVIA1->IFR = $40 // Clear interrupt
     setStatusReg(status)
@@ -703,7 +755,6 @@ def spkrSequence(yield, func)#0
                 if notes1[i]
                     spkrTone(periods1[i], arpeggioDuration[numNotes])#0
                 fin
-                *rndseed++
             next
             seqTime++
         else
@@ -713,13 +764,12 @@ def spkrSequence(yield, func)#0
                     period = periods1[i]
                     break;
                 fin
-                *rndseed++
             next
             duration = eventTime - seqTime
             seqTime  = duration + seqTime
             spkrTone(period, DUR16TH * duration)#0
         fin
-        if ^$C000 > 127; return; fin
+        if keypressed(); return; fin
         if yieldTime <= seqTime; func()#0; yieldTime = seqTime + yield; fin
     until FALSE
 end
@@ -737,9 +787,8 @@ def noSequence(yield, func)#0
     repeat
         seqTime++
         if seqTime < 0; seqTime = 1; fin // Capture wrap-around
-        *rndseed++
-        a2spkrTone(0, DUR16TH) // Waste 16th of a second playing silence
-        if ^$C000 > 127; return; fin
+        spkrTone(0, DUR16TH) // Waste 16th of a second playing silence
+        if keypressed(); return; fin
         if yield == seqTime; func()#0; seqTime = 0; fin
     until FALSE
 end
@@ -782,31 +831,32 @@ end
 // Play until keystroke
 //
 export def musicGetKey(yield, backgroundProc)#1
-    while ^$C000 < 128
+    while not keypressed()
         musicSequence(yield, backgroundProc)#0 // Call background proc every half second
     loop
-    ^$C010
-    return ^$C000
+    return getc
 end
 
 when MACHID & MACHID_MODEL
     is MACHID_III
-        spkrTone = @a3spkrTone
-        spkrPWM  = @a3spkrPWM
+        spkrTone   = @a3spkrTone
+        spkrPWM    = @a3spkrPWM
+        keypressed = @a3keypressed
         break
     is MACHID_I
         puts("Sound unsupported.\n")
         return -1
         break
     otherwise
-        puts("MockingBoard Slot:\n")
-        puts("ENTER = None\n")
-        puts("0     = Scan\n")
-        puts("1-7   = Slot #\n")
-        instr = gets('>'|$80)
-        if ^instr
-            mbSlot = mbSearch(^(instr + 1) - '0')
-        fin
+        //puts("MockingBoard Slot:\n")
+        //puts("ENTER = None\n")
+        //puts("0     = Scan\n")
+        //puts("1-7   = Slot #\n")
+        //instr = gets('>'|$80)
+        //if ^instr
+        //    mbSlot = mbSearch(^(instr + 1) - '0')
+        //fin
+        mbSlot = mbSearch(0)
         break
 wend
 if mbSlot < 0

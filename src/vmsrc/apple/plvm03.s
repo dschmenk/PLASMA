@@ -1,28 +1,151 @@
 ;**********************************************************
 ;*
-;*            APPLE1+CFFA1 PLASMA INTERPETER
+;*              APPLE /// PLASMA INTERPETER
 ;*
 ;*             SYSTEM ROUTINES AND LOCATIONS
 ;*
 ;**********************************************************
-;*
-;* VM ZERO PAGE LOCATIONS
-;*
+;
+; HARDWARE REGISTERS
+;
+MEMBANK =       $FFEF
         !SOURCE "vmsrc/plvmzp.inc"
-DVSIGN  =   TMP+2
-DROP    =   $EF
-NEXTOP  =   $F0
-FETCHOP =   NEXTOP+1
-IP      =   FETCHOP+1
-IPL     =   IP
-IPH     =   IPL+1
-OPIDX   =   FETCHOP+6
-OPPAGE  =   OPIDX+1
+DVSIGN  =       TMP+2
+DROP    =       $EF
+NEXTOP  =       $F0
+FETCHOP =       NEXTOP+1
+IP      =       FETCHOP+1
+IPL     =       IP
+IPH     =       IPL+1
+OPIDX   =       FETCHOP+6
+OPPAGE  =       OPIDX+1
+;
+; XPAGE ADDRESSES
+;
+XPAGE   =       $1600
+DROPX   =       XPAGE+DROP
+IFPX    =       XPAGE+IFPH
+PPX     =       XPAGE+PPH
+IPX     =       XPAGE+IPH
+JMPTMPX =       XPAGE+JMPTMP
+TMPX    =       XPAGE+TMPH
+SRCX    =       XPAGE+SRCH
+DSTX    =       XPAGE+DSTH
+;*
+;* SOS
+;*
+        !MACRO  SOS .CMD, .LIST {
+        BRK
+        !BYTE   .CMD
+        !WORD   .LIST
+        }
 ;*
 ;* INTERPRETER HEADER+INITIALIZATION
 ;*
-        *=      $0280
-SEGBEGIN JMP    VMINIT
+SEGSTART        =       $2000
+        *=      SEGSTART-$0E
+        !TEXT   "SOS NTRP"
+        !WORD   $0000
+        !WORD   SEGSTART
+        !WORD   SEGEND-SEGSTART
+
+;        +SOS    $40, SEGREQ     ; ALLOCATE SEG 1 AND MAP IT
+;        BNE     FAIL            ; PRHEX
+;        LDA     #$00
+;        STA     MEMBANK
+        LDY     #$0F            ; INSTALL PAGE 0 FETCHOP ROUTINE
+        LDA     #$00
+-       LDX     PAGE0,Y
+        STX     DROP,Y
+        STA     DROPX,Y
+        DEY
+        BPL     -
+        LDX     #$4C            ; SET JMPTMP OPCODE
+        STX     JMPTMP
+        STA     TMPX            ; CLEAR ALL EXTENDED POINTERS
+        STA     SRCX
+        STA     DSTX
+        STA     PPX             ; INIT FRAME & POOL POINTERS
+        STA     IFPX
+        LDA     #$00
+        STA     PPL
+        STA     IFPL
+        LDA     #$A0
+        STA     PPH
+        STA     IFPH
+        !IF     1 {
+        LDA     #<VMCORE        ; COPY VM+CMD INTO SBANK
+        STA     SRCL
+        LDA     #>VMCORE
+        STA     SRCH
+        LDY     #$00
+        STY     DSTL
+        LDA     #$A0
+        STA     DSTH
+-       LDA     (SRC),Y
+        STA     (DST),Y
+        INY
+        BNE     -
+        INC     SRCH
+        INC     DSTH
+        LDA     DSTH
+        CMP     #$B8
+        BNE     -
+}
+        LDX     #$FF            ; INIT STACK POINTER
+        TXS
+        LDX     #ESTKSZ/2       ; INIT EVAL STACK INDEX
+        JMP     SOSCMD
+;PRHEX   PHA
+;        LSR
+;        LSR
+;        LSR
+;        LSR
+;        CLC
+;        ADC     #'0'
+;        CMP     #':'
+;        BCC     +
+;        ADC     #6
+;+       STA     $480
+;        PLA
+;        AND     #$0F
+;        ADC     #'0'
+;        CMP     #':'
+;        BCC     +
+;        ADC     #6
+;+       STA     $481    ;$880
+;FAIL    STA     $0480
+;        RTS
+;SEGREQ  !BYTE   4
+;        !WORD   $2000
+;        !WORD   $9F00
+;        !BYTE   $10
+;        !BYTE   $00
+PAGE0   =       *
+        !PSEUDOPC       DROP {
+;*
+;* INTERP BYTECODE INNER LOOP
+;*
+        INX                     ; DROP
+        INY                     ; NEXTOP
+        LDA     $FFFF,Y         ; FETCHOP @ $F3, IP MAPS OVER $FFFF @ $F4
+        STA     OPIDX
+        JMP     (OPTBL)
+}
+VMCORE  =       *
+        !PSEUDOPC       $A000 {
+;*
+;* OPCODE TABLE
+;*
+        !ALIGN  255,0
+OPTBL   !WORD   ZERO,ADD,SUB,MUL,DIV,MOD,INCR,DECR              ; 00 02 04 06 08 0A 0C 0E
+        !WORD   NEG,COMP,BAND,IOR,XOR,SHL,SHR,IDXW              ; 10 12 14 16 18 1A 1C 1E
+        !WORD   LNOT,LOR,LAND,LA,LLA,CB,CW,CS                   ; 20 22 24 26 28 2A 2C 2E
+        !WORD   DROP,DUP,NEXTOP,DIVMOD,BRGT,BRLT,BREQ,BRNE      ; 30 32 34 36 38 3A 3C 3E
+        !WORD   ISEQ,ISNE,ISGT,ISLT,ISGE,ISLE,BRFLS,BRTRU       ; 40 42 44 46 48 4A 4C 4E
+        !WORD   BRNCH,IBRNCH,CALL,ICAL,ENTER,LEAVE,RET,CFFB     ; 50 52 54 56 58 5A 5C 5E
+        !WORD   LB,LW,LLB,LLW,LAB,LAW,DLB,DLW                   ; 60 62 64 66 68 6A 6C 6E
+        !WORD   SB,SW,SLB,SLW,SAB,SAW,DAB,DAW                   ; 70 72 74 76 78 7A 7C 7E
 ;*
 ;* SYSTEM INTERPRETER ENTRYPOINT
 ;*
@@ -34,15 +157,19 @@ INTERP  PLA
         ADC     #$00
         STA     IPH
         LDY     #$00
+        STY     IPX
         JMP     FETCHOP
 ;*
 ;* ENTER INTO USER BYTECODE INTERPRETER
 ;*
-IINTERP PLA
+XINTERP PLA
         STA     TMPL
         PLA
         STA     TMPH
-        LDY     #$02
+        LDY     #$03
+        LDA     (TMP),Y
+        STA     IPX
+        DEY
         LDA     (TMP),Y
         STA     IPH
         DEY
@@ -50,111 +177,6 @@ IINTERP PLA
         STA     IPL
         DEY
         JMP     FETCHOP
-;*
-;* MUL TOS-1 BY TOS
-;*
-MUL     STY     IPY
-        LDY     #$10
-        LDA     ESTKL+1,X
-        EOR     #$FF
-        STA     TMPL
-        LDA     ESTKH+1,X
-        EOR     #$FF
-        STA     TMPH
-        LDA     #$00
-        STA     ESTKL+1,X       ; PRODL
-;       STA     ESTKH+1,X       ; PRODH
-MULLP   LSR     TMPH            ; MULTPLRH
-        ROR     TMPL            ; MULTPLRL
-        BCS     +
-        STA     ESTKH+1,X       ; PRODH
-        LDA     ESTKL,X         ; MULTPLNDL
-        ADC     ESTKL+1,X       ; PRODL
-        STA     ESTKL+1,X
-        LDA     ESTKH,X         ; MULTPLNDH
-        ADC     ESTKH+1,X       ; PRODH
-+       ASL     ESTKL,X         ; MULTPLNDL
-        ROL     ESTKH,X         ; MULTPLNDH
-        DEY
-        BNE     MULLP
-        STA     ESTKH+1,X       ; PRODH
-        LDY     IPY
-        JMP     DROP
-;*
-;* INCREMENT TOS
-;*
-INCR    INC     ESTKL,X
-        BNE     +
-        INC     ESTKH,X
-+       JMP     NEXTOP
-;*
-;* DECREMENT TOS
-;*
-DECR    LDA     ESTKL,X
-        BNE     +
-        DEC     ESTKH,X
-+       DEC     ESTKL,X
-        JMP     NEXTOP
-;*
-;* BITWISE COMPLIMENT TOS
-;*
-COMP    LDA     #$FF
-        EOR     ESTKL,X
-        STA     ESTKL,X
-        LDA     #$FF
-        EOR     ESTKH,X
-        STA     ESTKH,X
-        JMP     NEXTOP
-;*
-;* OPCODE TABLE
-;*
-        !ALIGN  255,0
-OPTBL   !WORD   ZERO,ADD,SUB,MUL,DIV,MOD,INCR,DECR          ; 00 02 04 06 08 0A 0C 0E
-        !WORD   NEG,COMP,BAND,IOR,XOR,SHL,SHR,IDXW          ; 10 12 14 16 18 1A 1C 1E
-        !WORD   LNOT,LOR,LAND,LA,LLA,CB,CW,CS               ; 20 22 24 26 28 2A 2C 2E
-        !WORD   DROP,DUP,NEXTOP,DIVMOD,BRGT,BRLT,BREQ,BRNE  ; 30 32 34 36 38 3A 3C 3E
-        !WORD   ISEQ,ISNE,ISGT,ISLT,ISGE,ISLE,BRFLS,BRTRU   ; 40 42 44 46 48 4A 4C 4E
-        !WORD   BRNCH,IBRNCH,CALL,ICAL,ENTER,LEAVE,RET,CFFB ; 50 52 54 56 58 5A 5C 5E
-        !WORD   LB,LW,LLB,LLW,LAB,LAW,DLB,DLW               ; 60 62 64 66 68 6A 6C 6E
-        !WORD   SB,SW,SLB,SLW,SAB,SAW,DAB,DAW               ; 70 72 74 76 78 7A 7C 7E
-;*
-;* DIV TOS-1 BY TOS
-;*
-DIV     JSR     _DIV
-        LSR     DVSIGN          ; SIGN(RESULT) = (SIGN(DIVIDEND) + SIGN(DIVISOR)) & 1
-        BCS     NEG
-        JMP     NEXTOP
-;*
-;* MOD TOS-1 BY TOS
-;*
-MOD     JSR     _DIV
-        LDA     TMPL            ; REMNDRL
-        STA     ESTKL,X
-        LDA     TMPH            ; REMNDRH
-        STA     ESTKH,X
-        LDA     DVSIGN          ; REMAINDER IS SIGN OF DIVIDEND
-        BMI     NEG
-        JMP     NEXTOP
-;*
-;* DIVMOD TOS-1 BY TOS
-;*
-DIVMOD  JSR     _DIV
-        LSR     DVSIGN           ; SIGN(RESULT) = (SIGN(DIVIDEND) + SIGN(DIVISOR)) & 1
-        BCC     +
-        JSR     _NEG
-+       DEX
-        LDA     TMPL            ; REMNDRL
-        STA     ESTKL,X
-        LDA     TMPH            ; REMNDRH
-        STA     ESTKH,X
-        LDA     DVSIGN          ; REMAINDER IS SIGN OF DIVIDEND
-        BMI     NEG
-        JMP     NEXTOP
-;*
-;* NEGATE TOS
-;*
-NEG     JSR     _NEG
-        JMP     NEXTOP
 ;*
 ;* INTERNAL DIVIDE ALGORITHM
 ;*
@@ -210,6 +232,89 @@ _DIVEX  INX
         LDY     IPY
         RTS
 ;*
+;* MUL TOS-1 BY TOS
+;*
+MUL     STY     IPY
+        LDY     #$10
+        LDA     ESTKL+1,X
+        EOR     #$FF
+        STA     TMPL
+        LDA     ESTKH+1,X
+        EOR     #$FF
+        STA     TMPH
+        LDA     #$00
+        STA     ESTKL+1,X       ; PRODL
+;       STA     ESTKH+1,X       ; PRODH
+_MULLP  LSR     TMPH            ; MULTPLRH
+        ROR     TMPL            ; MULTPLRL
+        BCS     +
+        STA     ESTKH+1,X       ; PRODH
+        LDA     ESTKL,X         ; MULTPLNDL
+        ADC     ESTKL+1,X       ; PRODL
+        STA     ESTKL+1,X
+        LDA     ESTKH,X         ; MULTPLNDH
+        ADC     ESTKH+1,X       ; PRODH
++       ASL     ESTKL,X         ; MULTPLNDL
+        ROL     ESTKH,X         ; MULTPLNDH
+        DEY
+        BNE     _MULLP
+        STA     ESTKH+1,X       ; PRODH
+        LDY     IPY
+        JMP     DROP
+;*
+;* NEGATE TOS
+;*
+NEG     JSR     _NEG
+        JMP     NEXTOP
+;*
+;* DIV TOS-1 BY TOS
+;*
+DIV     JSR     _DIV
+        LSR     DVSIGN          ; SIGN(RESULT) = (SIGN(DIVIDEND) + SIGN(DIVISOR)) & 1
+        BCS     NEG
+        JMP     NEXTOP
+;*
+;* MOD TOS-1 BY TOS
+;*
+MOD     JSR     _DIV
+        LDA     TMPL            ; REMNDRL
+        STA     ESTKL,X
+        LDA     TMPH            ; REMNDRH
+        STA     ESTKH,X
+        LDA     DVSIGN          ; REMAINDER IS SIGN OF DIVIDEND
+        BMI     NEG
+        JMP     NEXTOP
+;*
+;* DIVMOD TOS-1 BY TOS
+;*
+DIVMOD  JSR     _DIV
+        LSR     DVSIGN          ; SIGN(RESULT) = (SIGN(DIVIDEND) + SIGN(DIVISOR)) & 1
+        BCC     +
+        JSR     _NEG
++       DEX
+        LDA     TMPL            ; REMNDRL
+        STA     ESTKL,X
+        LDA     TMPH            ; REMNDRH
+        STA     ESTKH,X
+        LDA     DVSIGN          ; REMAINDER IS SIGN OF DIVIDEND
+        BMI     NEG
+        JMP     NEXTOP
+;*
+;* INCREMENT TOS
+;*
+INCR    INC     ESTKL,X
+        BNE     +
+        INC     ESTKH,X
++       JMP     NEXTOP
+;*
+;* DECREMENT TOS
+;*
+DECR    LDA     ESTKL,X
+        BNE     +
+        DEC     ESTKH,X
++       DEC     ESTKL,X
+        JMP     NEXTOP
+;*
 ;* ADD TOS TO TOS-1
 ;*
 ADD     LDA     ESTKL,X
@@ -245,6 +350,16 @@ IDXW    LDA     ESTKL,X
         ADC     ESTKH+1,X
         STA     ESTKH+1,X
         JMP     DROP
+;*
+;* BITWISE COMPLIMENT TOS
+;*
+COMP    LDA     #$FF
+        EOR     ESTKL,X
+        STA     ESTKL,X
+        LDA     #$FF
+        EOR     ESTKH,X
+        STA     ESTKH,X
+        JMP     NEXTOP
 ;*
 ;* BITWISE AND TOS TO TOS-1
 ;*
@@ -377,11 +492,11 @@ ZERO    DEX
         STA     ESTKH,X
         JMP     NEXTOP
 CFFB    LDA     #$FF
-        !BYTE   $2C         ; BIT $00A9 - effectively skips LDA #$00, no harm in reading this address
+        !BYTE   $2C             ; BIT $00A9 - effectively skips LDA #$00, no harm in reading this address
 CB      LDA     #$00
         DEX
         STA     ESTKH,X
-        INY                 ;+INC_IP
+        INY                     ;+INC_IP
         LDA     (IP),Y
         STA     ESTKL,X
         JMP     NEXTOP
@@ -416,18 +531,67 @@ CW      DEX
 ;* CONSTANT STRING
 ;*
 CS      DEX
-        ;INY                    ;+INC_IP
-        TYA                     ; NORMALIZE IP AND SAVE STRING ADDR ON ESTK
+        ;INY                     ;+INC_IP
+        TYA                     ; NORMALIZE IP
         SEC
         ADC     IPL
         STA     IPL
-        STA     ESTKL,X
         LDA     #$00
         TAY
         ADC     IPH
         STA     IPH
+        LDA     PPL             ; SCAN POOL FOR STRING ALREADY THERE
+        STA     TMPL
+        LDA     PPH
+        STA     TMPH
+_CMPPS  ;LDA    TMPH            ; CHECK FOR END OF POOL
+        CMP     IFPH
+        BCC     _CMPS           ; CHECK FOR MATCHING STRING
+        BNE     _CPYS           ; BEYOND END OF POOL, COPY STRING OVER
+        LDA     TMPL
+        CMP     IFPL
+        BCS     _CPYS           ; AT OR BEYOND END OF POOL, COPY STRING OVER
+_CMPS   LDA     (TMP),Y         ; COMPARE STRINGS FROM AUX MEM TO STRINGS IN MAIN MEM
+        CMP     (IP),Y          ; COMPARE STRING LENGTHS
+        BNE     _CNXTS1
+        TAY
+_CMPCS  LDA     (TMP),Y         ; COMPARE STRING CHARS FROM END
+        CMP     (IP),Y
+        BNE     _CNXTS
+        DEY
+        BNE     _CMPCS
+        LDA     TMPL            ; MATCH - SAVE EXISTING ADDR ON ESTK AND MOVE ON
+        STA     ESTKL,X
+        LDA     TMPH
         STA     ESTKH,X
-        LDA     (IP),Y
+        BNE     _CEXS
+_CNXTS  LDY     #$00
+        LDA     (TMP),Y
+_CNXTS1 SEC
+        ADC     TMPL
+        STA     TMPL
+        LDA     #$00
+        ADC     TMPH
+        STA     TMPH
+        BNE     _CMPPS
+_CPYS   LDA     (IP),Y          ; COPY STRING FROM AUX TO MAIN MEM POOL
+        TAY                     ; MAKE ROOM IN POOL AND SAVE ADDR ON ESTK
+        EOR     #$FF
+        CLC
+        ADC     PPL
+        STA     PPL
+        STA     ESTKL,X
+        LDA     #$FF
+        ADC     PPH
+        STA     PPH
+        STA     ESTKH,X         ; COPY STRING FROM AUX MEM BYTECODE TO MAIN MEM POOL
+_CPYS1  LDA     (IP),Y          ; ALTRD IS ON,  NO NEED TO CHANGE IT HERE
+        STA     (PP),Y          ; ALTWR IS OFF, NO NEED TO CHANGE IT HERE
+        DEY
+        CPY     #$FF
+        BNE     _CPYS1
+        INY
+_CEXS   LDA     (IP),Y          ; SKIP TO NEXT OP ADDR AFTER STRING
         TAY
         JMP     NEXTOP
 ;*
@@ -736,6 +900,17 @@ ISLT    LDA     ESTKL+1,X
 +       BMI     ISFLS
         BPL     ISTRU
 ;*
+;* NORMALIZE IP+Y BEFORE CALLING NEXTOP
+;*
+FIXNEXT TYA
+        LDY     #$00
+        CLC
+        ADC     IPL
+        STA     IPL
+        BCC     +
+        INC     IPH
++       JMP     NEXTOP
+;*
 ;* BRANCHES
 ;*
 BRTRU   INX
@@ -746,14 +921,6 @@ NOBRNCH INY                     ;+INC_IP
         INY                     ;+INC_IP
         BMI     FIXNEXT
         JMP     NEXTOP
-FIXNEXT TYA
-        LDY     #$00
-        CLC
-        ADC     IPL
-        STA     IPL
-        BCC     +
-        INC     IPH
-+       JMP     NEXTOP
 BRFLS   INX
         LDA     ESTKH-1,X
         ORA     ESTKL-1,X
@@ -766,6 +933,8 @@ BRNCH   TYA                     ; FLATTEN IP
         TAY
         ADC     IPH
         STA     TMPH            ; ADD BRANCH OFFSET
+        LDA     IPX             ; COPY XBYTE FROM IP
+        STA     TMPX
         LDA     (TMP),Y
         ;CLC                    ; BETTER NOT CARRY OUT OF IP+Y
         ADC     TMPL
@@ -775,6 +944,7 @@ BRNCH   TYA                     ; FLATTEN IP
         ADC     TMPH
         STA     IPH
         DEY
+        STY     TMPX            ; CLEAR TMPX
         JMP     FETCHOP
 BREQ    INX
         LDA     ESTKL-1,X
@@ -832,9 +1002,9 @@ IBRNCH  TYA                     ; FLATTEN IP
 ;* INDIRECT CALL TO ADDRESS (NATIVE CODE)
 ;*
 ICAL    LDA     ESTKL,X
-        STA     TMPL
+        STA     CALLADR+1
         LDA     ESTKH,X
-        STA     TMPH
+        STA     CALLADR+2
         INX
         BNE     _CALL
 ;*
@@ -842,10 +1012,10 @@ ICAL    LDA     ESTKL,X
 ;*
 CALL    INY                     ;+INC_IP
         LDA     (IP),Y
-        STA     TMPL
+        STA     CALLADR+1
         INY                     ;+INC_IP
         LDA     (IP),Y
-        STA     TMPH
+        STA     CALLADR+2
 _CALL   TYA
         CLC
         ADC     IPL
@@ -853,7 +1023,11 @@ _CALL   TYA
         LDA     IPH
         ADC     #$00
         PHA
-        JSR     JMPTMP
+        LDA     IPX
+        PHA
+CALLADR JSR     $FFFF
+        PLA
+        STA     IPX
         PLA
         STA     IPH
         PLA
@@ -861,21 +1035,24 @@ _CALL   TYA
         LDY     #$01
         JMP     FETCHOP
 ;*
-;* JUMP INDIRECT TRHOUGH TMP
-;*
-;JMPTMP  JMP     (TMP)
-;*
 ;* ENTER FUNCTION WITH FRAME SIZE AND PARAM COUNT
 ;*
-ENTER   INY
+ENTER   LDA     IFPH
+        PHA                     ; SAVE ON STACK FOR LEAVE
+        LDA     IFPL
+        PHA
+        INY
         LDA     (IP),Y
         EOR     #$FF
         SEC
-        ADC     IFPL
+        ADC     PPL
+        STA     PPL
         STA     IFPL
-        BCS     +
-        DEC     IFPH
-+       INY
+        LDA     #$FF
+        ADC     PPH
+        STA     PPH
+        STA     IFPH
+        INY
         LDA     (IP),Y
         BEQ     +
         ASL
@@ -897,37 +1074,16 @@ LEAVE   INY                     ;+INC_IP
         LDA     (IP),Y
         CLC
         ADC     IFPL
+        STA     PPL
+        LDA     #$00
+        ADC     IFPH
+        STA     PPH
+        PLA                     ; RESTORE PREVIOUS FRAME
         STA     IFPL
-        BCS     +
-        RTS
-+       INC     IFPH
-RET     RTS
-A1CMD   !SOURCE "vmsrc/a1cmd.a"
-SEGEND  =       *
-VMINIT  LDY     #$10        ; INSTALL PAGE 0 FETCHOP ROUTINE
--       LDA     PAGE0-1,Y
-        STA     DROP-1,Y
-        DEY
-        BNE     -
-        LDA     #$4C        ; SET JMPTMP OPCODE
-        STA     JMPTMP
-        STY     IFPL        ; INIT FRAME POINTER
-        LDA     #$80
+        PLA
         STA     IFPH
-        LDA     #<SEGEND    ; SAVE HEAP START
-        STA     SRCL
-        LDA     #>SEGEND
-        STA     SRCH
-        LDX     #ESTKSZ/2   ; INIT EVAL STACK INDEX
-        JMP     A1CMD
-PAGE0   =       *
-        !PSEUDOPC   DROP {
-;*
-;* INTERP BYTECODE INNER LOOP
-;*
-        INX                 ; DROP
-        INY                 ; NEXTOP
-        LDA     $FFFF,Y     ; FETCHOP @ $F3, IP MAPS OVER $FFFF @ $F4
-        STA     OPIDX
-        JMP     (OPTBL)
+RET     RTS
+SOSCMD  =       *
+        !SOURCE "vmsrc/apple/soscmd.a"
 }
+SEGEND  =       *

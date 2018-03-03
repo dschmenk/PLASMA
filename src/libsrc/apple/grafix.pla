@@ -1,0 +1,174 @@
+include "inc/cmdsys.plh"
+
+byte gfxref, gfxseg
+byte params[8], cmd[16]
+
+export def pencolor(clr)#0
+    params:4 = 2
+    cmd.0    = 19 // Pen color
+    cmd.1    = clr
+    syscall($CB, @params)
+end
+
+export def fillcolor(clr)#0
+    params:4 = 2
+    cmd.0    = 20 // Fill color
+    cmd.1    = clr
+    syscall($CB, @params)
+end
+
+export def fillscreen()#0
+    params:4 = 1
+    cmd.9    = 28 // Clear viewport
+    syscall($CB, @params)
+end
+
+export def penmove(x, y)#0
+    params:4 = 5
+    cmd.0    = 26 // Move pen
+    cmd:1    = x
+    cmd:3    = y
+    syscall($CB, @params)
+end
+
+export def plot(x, y)#0
+    params:4 = 5
+    cmd.0    = 25 // Plot
+    cmd:1    = x
+    cmd:3    = y
+    syscall($CB, @params)
+end
+
+export def line(x1, y1, x2, y2)#0
+    params:4 = 10
+    cmd.0    = 26 // Move pen
+    cmd:1    = x1
+    cmd:3    = y1
+    cmd.5    = 24 // Line
+    cmd:6    = x2
+    cmd:8    = y2
+    syscall($CB, @params)
+end
+
+export def lineto(x, y)#0
+    params:4 = 5
+    cmd.0    = 24 // Line
+    cmd:1    = x
+    cmd:3    = y
+    syscall($CB, @params)
+end
+
+export def rect(x1, y1, x2, y2)#0
+    params:4 = 10
+    cmd.0    = 26 // Move pen
+    cmd:1    = x1
+    cmd:3    = y1
+    cmd.5    = 24 // Line
+    cmd:6    = x2
+    cmd:8    = y1
+    syscall($CB, @params)
+    params:4 = 15
+    cmd.0    = 24 // Line
+    cmd:1    = x2
+    cmd:3    = y2
+    cmd.5    = 24 // Line
+    cmd:6    = x1
+    cmd:8    = y2
+    cmd.10   = 24 // Line
+    cmd:11   = x1
+    cmd:13   = y1
+    syscall($CB, @params)
+end
+
+export def fillrect(x1, y1, x2, y2)#0
+    params:4 = 11
+    cmd.0    = 2  // Set viewport
+    cmd:1    = x1
+    cmd:3    = x2
+    cmd:5    = y1
+    cmd:7    = y2
+    cmd.9    = 28 // Clear viewport
+    cmd.10   = 1  // Reset viewport
+    syscall($CB, @params)
+end
+
+export def bitblt(bits, pitch, x, y, width, height)#0
+    params:4 = 14
+    cmd.0    = 4  // Draw block
+    cmd:1    = bits
+    cmd.3    = ^$FFED & $8F
+    cmd:4    = pitch
+    cmd:6    = x
+    cmd:8    = y
+    cmd:10   = width
+    cmd:12   = height
+    syscall($CB, @params)
+end
+
+export def drawmode(mode)#0
+    params:4 = 2
+    cmd.0    = 21 // Transfer mode
+    cmd.1    = mode
+    syscall($CB, @params)
+end
+
+export def setmode(mode)#0
+    if mode < 0
+        //
+        // Free driver
+        //
+        params.0 = 1
+        params.1 = gfxref
+        syscall($CC, @params)
+        gfxref   = 0
+        //
+        // Deaalocate bank 0
+        //
+        params.0 = 1
+        params.1 = gfxseg
+        syscall($45, @params)
+        ^$1907   = $00 // Unset graphics pages allocated
+    fin
+    if not gfxref
+        return
+    fin
+    params.0 = 3
+    params.1 = gfxref
+    params:2 = @cmd
+    params:4 = 8
+    cmd.0    = 16 // Set mode
+    cmd.1    = mode
+    cmd.2    = 19 // Pen color
+    cmd.3    = 0
+    cmd.4    = 1  // Reset viewport
+    cmd.5    = 28 // Clear viewport
+    cmd.7    = 15 // Turn on screen
+    syscall($CB, @params)
+end
+
+if MACHID <> $F2
+    puts("Apple /// only.\n")
+    return -1
+fin
+//
+// Allocate bank 0
+//
+params.0 = 4
+params:1 = $2000
+params:3 = $9F00
+params.5 = $10
+params.6 = $00
+syscall($40, @params)
+gfxseg   = params.6
+^$1907   = $80 // Set graphics pages allocated
+//
+// Open graphics driver
+//
+params.0 = 4
+params:1 = ".GRAFIX"
+params.3 = 0
+params:4 = 0
+params.6 = 0
+syscall($C8, @params)
+gfxref   = params.3
+done

@@ -11,13 +11,13 @@
 include "inc/cmdsys.plh"
 include "inc/inet.plh"
 include "inc/fileio.plh"
+include "inc/conio.plh"
 
 word socketHTTP
-byte[65] prefix
-word     filebuff, iobuff
-byte fileInfo[12] = 0 // used for get_file_info()
-byte hello = "Apple II Web Server - 12 Nov 15\n"
-byte defhtml = "INDEX.HTML"
+byte[65]  prefix
+word      filebuff
+byte[15]  fileInfo = 0 // used for get_file_info()
+byte      defhtml = "INDEX.HTML"
 byte[200] okhdr // combined response header
 //
 // HTTP response codes
@@ -78,7 +78,7 @@ def strcat2(dst, src1, src2)
     return dst
 end
 def itos(dst, i)
-    if i < 0; ^dst = '-'; i = -i; dst = dst + 1; fin
+    if i < 0; ^dst = '-'; i = -i; dst++; fin
     if i < 10
         ^dst = i + '0'
     else
@@ -141,7 +141,6 @@ def servHTTP(remip, remport, lclport, data, len, param)
                     // Get file info
                     //
                     //puts("getting file info "); // debug
-                    fileio:getfileinfo(@filename)
                     refnum = fileio:open(@filename) // try to open this file with ProDOS
                     if refnum // file was opened OK
                         filelen = fileio:geteof(refnum) // get length of file for Content-Length
@@ -152,7 +151,8 @@ def servHTTP(remip, remport, lclport, data, len, param)
                         //
                         // Content type header
                         //
-                        if fileInfo.4 == $03 OR fileInfo.4 == $04
+                        fileio:getfileinfo(@filename, @fileInfo)
+                        if fileInfo.1 == $03 OR fileInfo.1 == $04
                             //
                             // this a text file
                             //
@@ -181,8 +181,8 @@ def servHTTP(remip, remport, lclport, data, len, param)
                     else // file couldn't be opened, so return 404 on this
                         puts("404 Not Found");putln // debug
                         iNet:sendTCP(socketHTTP, @httpNOTFOUND + 1, httpNOTFOUND)
-                    fin // if refnum
-                    break // return
+                    fin // refnum
+                    break
                 fin
             next
         else
@@ -196,7 +196,7 @@ end
 if !iNet:initIP()
     return -1
 fin
-puts(@hello)
+puts("PLASMA Web Server, Version 1.0\n")
 fileio:getpfx(@prefix)
 //
 // Alloc aligned file/io buffers
@@ -213,7 +213,6 @@ repeat
         socketHTTP = iNet:listenTCP(80, @servHTTP, 0)
     fin
     iNet:serviceIP()
-until ^$C000 > 127
-^$C010
+until conio:keypressed()
 
 done

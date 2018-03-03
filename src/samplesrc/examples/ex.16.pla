@@ -1,0 +1,159 @@
+//
+// Check github for fully commented code
+//
+const MAX_FIBERS  = 3
+const MAX_FIBER   = MAX_FIBERS-1
+const FIBER_UNAVAIL = 0
+const FIBER_FREE  = 1
+const FIBER_HALT  = 2
+const FIBER_RUN   = 3
+byte fbrState[MAX_FIBERS]
+word fbrVMState[MAX_FIBERS]
+byte fbrNext[MAX_FIBERS] = 0
+byte fbrRunning = 0
+struc t_vm
+  byte estklo[$10]
+  byte estkhi[$10]
+  byte esp
+  word ifp
+  word pp
+  byte hwsp
+  byte fill[9]
+  byte drop
+  byte nextop[$10]
+  byte frame[$40]
+  byte hwstk[$80]
+end
+word fbrPool[t_vm*MAX_FIBERS]
+
+byte fbrSwap = $B5
+byte = $C0,$85,$06,$B5,$D0,$85,$07,$E8
+byte = $B5,$C0,$85,$08,$B5,$D0,$85,$09
+byte = $86,$E0,$BA,$86,$E5,$A0,$26,$B9
+byte = $C0,$00,$91,$08,$B1,$06,$99,$C0
+byte = $00,$88,$10,$F3,$8A,$A8,$B9,$00
+byte = $01,$91,$08,$C8,$D0,$F8,$A4,$E5
+byte = $B1,$06,$99,$00,$01,$C8,$D0,$F8
+byte = $A6,$E5,$9A,$A6,$E0,$60
+
+byte fbrLoad = $B5,$C0
+byte = $85,$06,$B5,$D0,$85,$07,$A0,$26
+byte = $B1,$06,$99,$C0,$00,$88,$10,$F8
+byte = $A4,$E5,$B1,$06,$99,$00,$01,$C8
+byte = $D0,$F8,$A6,$E5,$9A,$A6,$E0,$60
+
+def fbrInit
+  byte i
+  word pool
+
+  pool = @fbrPool + t_vm
+  for i = MAX_FIBER downto 1
+    fbrState[i]   = FIBER_FREE
+    fbrVMState[i] = pool
+    pool          = pool + t_vm
+  next
+  fbrState   = FIBER_RUN
+  fbrVMState = @fbrPool
+end
+def fbrStop(fid)
+  byte i
+
+  if fid
+    fbrState[fid] = FIBER_FREE
+    i = 0
+    while fbrNext[i] <> fid
+      i = fbrNext[i]
+    loop
+    fbrNext[i] = fbrNext[fid]
+    if fid == fbrRunning
+      fbrRunning = fbrNext[fbrRunning]
+      return (@fbrLoad)(fbrVMState[fbrRunning])
+    fin
+  fin
+end
+def fbrExit
+  fbrStop(fbrRunning)
+end
+def fbrStart(defaddr, param)
+  byte i
+  word vmstate
+
+  for i = MAX_FIBER downto 1
+    if fbrState[i] == FIBER_FREE
+      fbrState[i]         = FIBER_RUN
+      vmstate             = fbrVMState[i]
+      vmstate=>ifp        = vmstate + hwstk
+      vmstate=>pp         = vmstate + hwstk
+      vmstate->esp        = $0E
+      vmstate->estklo.$0F = i
+      vmstate->estkhi.$0F = 0
+      vmstate->estklo.$0E = param.0 // param lo byte
+      vmstate->estkhi.$0E = param.1 // param hi byte
+      vmstate->hwsp       = $FB
+      vmstate=>$FE        = @fbrExit - 1
+      vmstate=>$FC        = defaddr  - 1
+      fbrNext[i]          = fbrNext[fbrRunning]
+      fbrNext[fbrRunning] = i
+      return i
+    fin
+   next
+end
+def fbrYield
+  byte prev
+
+  if fbrNext[fbrRunning] <> fbrRunning
+    prev       = fbrRunning
+    fbrRunning = fbrNext[fbrRunning]
+    return (@fbrSwap)(fbrVMState[prev], fbrVMState[fbrRunning])
+  fin
+end
+def fbrHalt
+  byte i
+
+  if fbrRunning
+    i = 0
+    while fbrNext[i] <> fbrRunning
+      i = fbrNext[i]
+    loop
+    fbrState[fbrRunning] = FIBER_HALT
+    fbrNext[i] = fbrNext[fbrRunning]
+    i          = fbrRunning
+    fbrRunning = fbrNext[fbrRunning]
+    return (@fbrSwap)(fbrVMState[i], fbrVMState[fbrRunning])
+  fin
+end
+def fbrResume(fid)
+  if fbrState[fid] == FIBER_HALT
+    fbrState[fid]       = FIBER_RUN
+    fbrNext[fid]        = fbrNext[fbrRunning]
+    fbrNext[fbrRunning] = fid
+  fin
+end
+//
+// Test Fibers
+//
+def fbrTest(fid, param)
+  byte x
+  word i
+
+  i = 1
+  x = fid * 8
+  while 1
+    gotoxy(x, fid)
+    puts(param)
+    x = x + i
+    if x < 1 or x > 32
+      i = -i
+    fin
+    fbrYield
+  loop
+end
+
+fbrInit
+fbrStart(@fbrTest, " World ")
+fbrStart(@fbrTest, " Hello ")
+while ^$C000 < 128
+  fbrYield
+loop
+^$C010
+done
