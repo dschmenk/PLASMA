@@ -769,12 +769,12 @@ void emit_brnch(int tag)
     printf("\t%s\t$50\t\t\t; BRNCH\t_B%03d\n", DB, tag);
     printf("\t%s\t_B%03d-*\n", DW, tag);
 }
-void emit_breq(int tag)
-{
-    emit_pending_seq();
-    printf("\t%s\t$3C\t\t\t; BREQ\t_B%03d\n", DB, tag);
-    printf("\t%s\t_B%03d-*\n", DW, tag);
-}
+//void emit_breq(int tag)
+//{
+//    emit_pending_seq();
+//    printf("\t%s\t$3C\t\t\t; BREQ\t_B%03d\n", DB, tag);
+//    printf("\t%s\t_B%03d-*\n", DW, tag);
+//}
 void emit_brne(int tag)
 {
     emit_pending_seq();
@@ -791,6 +791,30 @@ void emit_brlt(int tag)
 {
     emit_pending_seq();
     printf("\t%s\t$3A\t\t\t; BRLT\t_B%03d\n", DB, tag);
+    printf("\t%s\t_B%03d-*\n", DW, tag);
+}
+void emit_nxtup(int tag)
+{
+    emit_pending_seq();
+    printf("\t%s\t$32\t\t\t; NXTUP\t_B%03d\n", DB, tag);
+    printf("\t%s\t_B%03d-*\n", DW, tag);
+}
+void emit_inxtup(int tag)
+{
+    emit_pending_seq();
+    printf("\t%s\t$34\t\t\t; INXTUP\t_B%03d\n", DB, tag);
+    printf("\t%s\t_B%03d-*\n", DW, tag);
+}
+void emit_nxtdn(int tag)
+{
+    emit_pending_seq();
+    printf("\t%s\t$3C\t\t\t; NXTDN\t_B%03d\n", DB, tag);
+    printf("\t%s\t_B%03d-*\n", DW, tag);
+}
+void emit_dnxtdn(int tag)
+{
+    emit_pending_seq();
+    printf("\t%s\t$52\t\t\t; DNXTDN\t_B%03d\n", DB, tag);
     printf("\t%s\t_B%03d-*\n", DW, tag);
 }
 void emit_call(int tag, int type)
@@ -840,10 +864,6 @@ void emit_drop(void)
 {
     emit_pending_seq();
     printf("\t%s\t$30\t\t\t; DROP\n", DB);
-}
-void emit_dup(void)
-{
-    printf("\t%s\t$32\t\t\t; DUP\n", DB);
 }
 int emit_unaryop(t_token op)
 {
@@ -1655,9 +1675,6 @@ int emit_pending_seq()
                 break;
             case DROP_CODE:
                 emit_drop();
-                break;
-            case DUP_CODE:
-                emit_dup();
                 break;
             case BRNCH_CODE:
                 emit_brnch(op->tag);

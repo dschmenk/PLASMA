@@ -587,8 +587,8 @@ def parse_set(codeseq)
     return codeseq
 end
 def parse_stmnt
-    byte type, elem_type, elem_size, i, cfnvals
-    word seq, tag_prevbrk, tag_prevcnt, tag_else, tag_endif, tag_while, tag_wend
+    byte type, elem_type, elem_size, i, cfnvals, prev_forlp
+    word seq, fromseq, toseq, tag_prevbrk, tag_prevcnt, tag_else, tag_endif, tag_while, tag_wend
     word tag_repeat, tag_for, tag_choice, tag_of, idptr, addr, stepdir
 
     if token <> END_TKN and token <> DONE_TKN and token <> OF_TKN and token <> DEFAULT_TKN
@@ -640,6 +640,8 @@ def parse_stmnt
             if token <> FIN_TKN; exit_err(ERR_MISS|ERR_CLOSE|ERR_STATE); fin
             break
         is WHILE_TKN
+            prev_forlp  = for_loop
+            for_loop    = FALSE
             tag_while   = new_tag(RELATIVE_FIXUP)
             tag_wend    = new_tag(RELATIVE_FIXUP)
             tag_prevcnt = cont_tag
@@ -663,8 +665,11 @@ def parse_stmnt
             emit_tag(tag_wend)
             break_tag = tag_prevbrk
             cont_tag  = tag_prevcnt
+            for_loop  = prev_forlp
             break
         is REPEAT_TKN
+            prev_forlp  = for_loop
+            for_loop    = FALSE
             tag_repeat  = new_tag(RELATIVE_FIXUP)
             tag_prevbrk = break_tag
             break_tag   = new_tag(RELATIVE_FIXUP)
@@ -688,12 +693,15 @@ def parse_stmnt
             emit_seq(seq)
             emit_tag(break_tag)
             break_tag = tag_prevbrk
+            for_loop  = prev_forlp
             break
         is FOR_TKN
-            stack_loop++
+            prev_forlp  = for_loop
+            for_loop    = TRUE
+            stack_loop  = stack_loop + 2
             tag_for     = new_tag(RELATIVE_FIXUP)
             tag_prevcnt = cont_tag
-            cont_tag    = tag_for
+            cont_tag    = new_tag(RELATIVE_FIXUP)
             tag_prevbrk = break_tag
             break_tag   = new_tag(RELATIVE_FIXUP)
             if scan <> ID_TKN; exit_err(ERR_MISS|ERR_ID); fin
@@ -705,18 +713,11 @@ def parse_stmnt
                 exit_err(ERR_INVAL|ERR_ID)
             fin
             if scan <> SET_TKN; exit_err(ERR_INVAL|ERR_STATE); fin
-            seq, cfnvals = parse_expr(NULL)
-            if !seq; exit_err(ERR_INVAL|ERR_STATE); fin
+            fromseq, cfnvals = parse_expr(NULL)
+            if !fromseq; exit_err(ERR_INVAL|ERR_STATE); fin
             if cfnvals > 1
                 parse_warn("Expression value overflow")
                 while cfnvals > 1;cfnvals--; seq = gen_op(seq, DROP_CODE); loop
-            fin
-            emit_seq(seq)
-            emit_tag(tag_for)
-            if type & LOCAL_TYPE
-                if type & BYTE_TYPE; emit_dlb(addr); else; emit_dlw(addr); fin
-            else
-                if type & BYTE_TYPE; emit_dab(addr, 0); else; emit_daw(addr, 0); fin
             fin
             if token == TO_TKN
                 stepdir = 1
@@ -725,14 +726,12 @@ def parse_stmnt
             else
                 exit_err(ERR_INVAL|ERR_STATE)
             fin
-            seq, cfnvals = parse_expr(NULL)
-            if !seq; exit_err(ERR_INVAL|ERR_STATE); fin
+            toseq, cfnvals = parse_expr(NULL)
+            if !toseq; exit_err(ERR_INVAL|ERR_STATE); fin
             if cfnvals > 1
                 parse_warn("Expression value overflow")
                 while cfnvals > 1;cfnvals--; seq = gen_op(seq, DROP_CODE); loop
             fin
-            emit_seq(seq)
-            if stepdir > 0; emit_brgt(break_tag); else; emit_brlt(break_tag); fin
             if token == STEP_TKN
                 seq, cfnvals = parse_expr(NULL)
                 if !seq; exit_err(ERR_INVAL|ERR_STATE); fin
@@ -740,23 +739,51 @@ def parse_stmnt
                     parse_warn("Expression value overflow")
                     while cfnvals > 1;cfnvals--; seq = gen_op(seq, DROP_CODE); loop
                 fin
-                emit_seq(seq)
-                emit_code(stepdir > 0 ?? ADD_CODE :: SUB_CODE)
             else
-                emit_code(stepdir > 0 ?? INC_CODE :: DEC_CODE)
+                seq = NULL
+            fin
+            emit_seq(toseq)
+            emit_seq(fromseq)
+            if stepdir > 0; emit_brgt(break_tag); else; emit_brlt(break_tag); fin
+            
+            emit_tag(tag_for)
+            if type & LOCAL_TYPE
+                if type & BYTE_TYPE; emit_dlb(addr); else; emit_dlw(addr); fin
+            else
+                if type & BYTE_TYPE; emit_dab(addr, 0); else; emit_daw(addr, 0); fin
             fin
             while parse_stmnt
                 nextln
             loop
             if token <> NEXT_TKN; exit_err(ERR_MISS|ERR_CLOSE|ERR_STATE); fin
-            emit_branch(tag_for)
+            emit_tag(cont_tag)
             cont_tag = tag_prevcnt
+            if stepdir > 0
+                if seq
+                    emit_seq(seq)
+                    emit_code(ADD_CODE)
+                    emit_nxtup(tag_for)
+                else
+                    emit_inxtup(tag_for)
+                fin
+            else
+                if seq
+                    emit_seq(seq)
+                    emit_code(SUB_CODE)
+                    emit_nxtdn(tag_for)
+                else
+                    emit_dnxtdn(tag_for)
+                fin
+            fin
+
             emit_tag(break_tag)
-            emit_code(DROP_CODE)
-            break_tag = tag_prevbrk
-            stack_loop--
+            break_tag   = tag_prevbrk
+            stack_loop  = stack_loop - 2
+            for_loop    = prev_forlp
             break
         is CASE_TKN
+            prev_forlp  = for_loop
+            for_loop    = FALSE
             stack_loop++
             tag_prevbrk = break_tag
             break_tag   = new_tag(RELATIVE_FIXUP)
@@ -815,9 +842,14 @@ def parse_stmnt
             emit_code(DROP_CODE)
             break_tag = tag_prevbrk
             stack_loop--
+            for_loop = prev_forlp
             break
         is BREAK_TKN
             if break_tag
+                if for_loop
+                    emit_code(DROP_CODE)
+                    emit_code(DROP_CODE)
+                fin
                 emit_branch(break_tag)
             else
                 exit_err(ERR_INVAL|ERR_STATE)

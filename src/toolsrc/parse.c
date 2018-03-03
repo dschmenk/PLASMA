@@ -5,7 +5,7 @@
 #define RVALUE      1
 #define MAX_LAMBDA  64
 
-int infunc = 0, break_tag = 0, cont_tag = 0, stack_loop = 0;
+int infunc = 0, break_tag = 0, cont_tag = 0, stack_loop = 0, for_loop = 0;
 long infuncvals = 0;
 t_token prevstmnt;
 static int      lambda_num = 0;
@@ -798,9 +798,9 @@ t_opseq *parse_set(t_opseq *codeseq)
 int parse_stmnt(void)
 {
     int tag_prevbrk, tag_prevcnt, tag_else, tag_endif, tag_while, tag_wend, tag_repeat, tag_for, tag_choice, tag_of;
-    int type, addr, step, cfnvals;
+    int type, addr, step, cfnvals, prev_forlp;
     char *idptr;
-    t_opseq *seq;
+    t_opseq *seq, *fromseq, *toseq;
 
     /*
      * Optimization for last function LEAVE and OF clause.
@@ -856,6 +856,8 @@ int parse_stmnt(void)
                 parse_error("Missing IF/FIN");
             break;
         case WHILE_TOKEN:
+            prev_forlp  = for_loop;
+            for_loop    = 0;
             tag_while   = tag_new(BRANCH_TYPE);
             tag_wend    = tag_new(BRANCH_TYPE);
             tag_prevcnt = cont_tag;
@@ -879,8 +881,11 @@ int parse_stmnt(void)
             emit_codetag(tag_wend);
             break_tag = tag_prevbrk;
             cont_tag  = tag_prevcnt;
+            for_loop = prev_forlp;
             break;
         case REPEAT_TOKEN:
+            prev_forlp  = for_loop;
+            for_loop    = 0;
             tag_prevbrk = break_tag;
             break_tag   = tag_new(BRANCH_TYPE);
             tag_repeat  = tag_new(BRANCH_TYPE);
@@ -904,48 +909,43 @@ int parse_stmnt(void)
             emit_seq(seq);
             emit_codetag(break_tag);
             break_tag = tag_prevbrk;
+            for_loop = prev_forlp;
             break;
         case FOR_TOKEN:
-            stack_loop++;
+            prev_forlp  = for_loop;
+            for_loop    = 1;
+            stack_loop += 2;
             tag_prevbrk = break_tag;
             break_tag   = tag_new(BRANCH_TYPE);
             tag_for     = tag_new(BRANCH_TYPE);
             tag_prevcnt = cont_tag;
-            cont_tag    = tag_for;
+            cont_tag    = tag_new(BRANCH_TYPE);
             if (scan() != ID_TOKEN)
                 parse_error("Missing FOR variable");
             type = id_type(tokenstr, tokenlen);
             addr = id_tag(tokenstr, tokenlen);
             if (scan() != SET_TOKEN)
                 parse_error("Missing FOR =");
-            if (!(seq = parse_expr(NULL, &cfnvals)))
+            if (!(fromseq = parse_expr(NULL, &cfnvals)))
                 parse_error("Bad FOR expression");
             if (cfnvals > 1)
             {
                 parse_warn("Expression value overflow");
                 while (cfnvals-- > 1) seq = gen_drop(seq);
             }
-            emit_seq(seq);
-            emit_codetag(tag_for);
-            if (type & LOCAL_TYPE)
-                type & BYTE_TYPE ? emit_dlb(addr) : emit_dlw(addr);
-            else
-                type & BYTE_TYPE ? emit_dab(addr, 0, type) : emit_daw(addr, 0, type);
             if (scantoken == TO_TOKEN)
                 step = 1;
             else if (scantoken == DOWNTO_TOKEN)
                 step = -1;
             else
                 parse_error("Missing FOR TO");
-            if (!(seq = parse_expr(NULL, &cfnvals)))
+            if (!(toseq = parse_expr(NULL, &cfnvals)))
                 parse_error("Bad FOR TO expression");
             if (cfnvals > 1)
             {
                 parse_warn("Expression value overflow");
                 while (cfnvals-- > 1) seq = gen_drop(seq);
             }
-            emit_seq(seq);
-            step > 0 ? emit_brgt(break_tag) : emit_brlt(break_tag);
             if (scantoken == STEP_TOKEN)
             {
                 if (!(seq = parse_expr(NULL, &cfnvals)))
@@ -955,22 +955,54 @@ int parse_stmnt(void)
                     parse_warn("Expression value overflow");
                     while (cfnvals-- > 1) seq = gen_drop(seq);
                 }
-                emit_seq(seq);
-                emit_op(step > 0 ? ADD_TOKEN : SUB_TOKEN);
             }
             else
-                emit_unaryop(step > 0 ? INC_TOKEN : DEC_TOKEN);
+            {
+                seq = NULL;
+            }
+            emit_seq(toseq);
+            emit_seq(fromseq);
+            step > 0 ? emit_brgt(break_tag) : emit_brlt(break_tag);
+            emit_codetag(tag_for);
+            if (type & LOCAL_TYPE)
+                type & BYTE_TYPE ? emit_dlb(addr) : emit_dlw(addr);
+            else
+                type & BYTE_TYPE ? emit_dab(addr, 0, type) : emit_daw(addr, 0, type);
             while (parse_stmnt()) next_line();
             if (scantoken != NEXT_TOKEN)
                 parse_error("Missing FOR/NEXT");
-            emit_brnch(tag_for);
+            emit_codetag(cont_tag);
             cont_tag = tag_prevcnt;
+            if (step > 0)
+            {
+                if (seq)
+                {
+                    emit_seq(seq);
+                    emit_op(ADD_TOKEN);
+                    emit_nxtup(tag_for);
+                }
+                else
+                    emit_inxtup(tag_for);
+            }
+            else
+            {
+                if (seq)
+                {
+                    emit_seq(seq);
+                    emit_op(SUB_TOKEN);
+                    emit_nxtdn(tag_for);
+                }
+                else
+                    emit_dnxtdn(tag_for);
+            }
             emit_codetag(break_tag);
-            emit_drop();
-            break_tag = tag_prevbrk;
-            stack_loop--;
+            break_tag   = tag_prevbrk;
+            stack_loop -= 2;
+            for_loop    = prev_forlp;
             break;
         case CASE_TOKEN:
+            prev_forlp  = for_loop;
+            for_loop    = 0;
             stack_loop++;
             tag_prevbrk = break_tag;
             break_tag   = tag_new(BRANCH_TYPE);
@@ -1026,10 +1058,18 @@ int parse_stmnt(void)
             emit_drop();
             break_tag = tag_prevbrk;
             stack_loop--;
+            for_loop = prev_forlp;
             break;
         case BREAK_TOKEN:
             if (break_tag)
+            {
+                if (for_loop)
+                {
+                    emit_drop();
+                    emit_drop();
+                }
                 emit_brnch(break_tag);
+            }
             else
                 parse_error("BREAK without loop");
             break;

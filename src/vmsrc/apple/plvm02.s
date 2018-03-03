@@ -193,12 +193,14 @@ VMCORE  =        *
 ;*              *
 ;****************
         !ALIGN  255,0
+;OPTBL   !WORD   CONST,CONST,CONST,CONST,CONST,CONST,CONST,CONST ; 00 02 04 06 08 0A 0C 0E
+;        !WORD   CONST,CONST,CONST,CONST,CONST,CONST,CONST,CONST ; 10 12 14 16 18 1A 1C 1E
 OPTBL   !WORD   ZERO,ADD,SUB,MUL,DIV,MOD,INCR,DECR              ; 00 02 04 06 08 0A 0C 0E
         !WORD   NEG,COMP,BAND,IOR,XOR,SHL,SHR,IDXW              ; 10 12 14 16 18 1A 1C 1E
         !WORD   LNOT,LOR,LAND,LA,LLA,CB,CW,CS                   ; 20 22 24 26 28 2A 2C 2E
-        !WORD   DROP,DUP,NEXTOP,DIVMOD,BRGT,BRLT,BREQ,BRNE      ; 30 32 34 36 38 3A 3C 3E
+        !WORD   DROP,NXTUP,INXTUP,DIVMOD,BRGT,BRLT,NXTDN,BRNE   ; 30 32 34 36 38 3A 3C 3E
         !WORD   ISEQ,ISNE,ISGT,ISLT,ISGE,ISLE,BRFLS,BRTRU       ; 40 42 44 46 48 4A 4C 4E
-        !WORD   BRNCH,IBRNCH,CALL,ICAL,ENTER,LEAVE,RET,CFFB   ; 50 52 54 56 58 5A 5C 5E
+        !WORD   BRNCH,DNXTDN,CALL,ICAL,ENTER,LEAVE,RET,CFFB     ; 50 52 54 56 58 5A 5C 5E
         !WORD   LB,LW,LLB,LLW,LAB,LAW,DLB,DLW                   ; 60 62 64 66 68 6A 6C 6E
         !WORD   SB,SW,SLB,SLW,SAB,SAW,DAB,DAW                   ; 70 72 74 76 78 7A 7C 7E
 ;*
@@ -400,12 +402,14 @@ LCDEFCMD =      *-28            ; DEFCMD IN LC MEMORY
 ;*               *
 ;*****************
         !ALIGN  255,0
+;OPXTBL  !WORD   CONST,CONST,CONST,CONST,CONST,CONST,CONST,CONST ; 00 02 04 06 08 0A 0C 0E
+;        !WORD   CONST,CONST,CONST,CONST,CONST,CONST,CONST,CONST ; 10 12 14 16 18 1A 1C 1E
 OPXTBL  !WORD   ZERO,ADD,SUB,MUL,DIV,MOD,INCR,DECR              ; 00 02 04 06 08 0A 0C 0E
         !WORD   NEG,COMP,BAND,IOR,XOR,SHL,SHR,IDXW              ; 10 12 14 16 18 1A 1C 1E
         !WORD   LNOT,LOR,LAND,LA,LLA,CB,CW,CSX                  ; 20 22 24 26 28 2A 2C 2E
-        !WORD   DROP,DUP,NEXTOP,DIVMOD,BRGT,BRLT,BREQ,BRNE      ; 30 32 34 36 38 3A 3C 3E
+        !WORD   DROP,NXTUP,INXTUP,DIVMOD,BRGT,BRLT,NXTDN,BRNE   ; 30 32 34 36 38 3A 3C 3E
         !WORD   ISEQ,ISNE,ISGT,ISLT,ISGE,ISLE,BRFLS,BRTRU       ; 40 42 44 46 48 4A 4C 4E
-        !WORD   BRNCH,IBRNCH,CALLX,ICALX,ENTER,LEAVEX,RETX,CFFB; 50 52 54 56 58 5A 5C 5E
+        !WORD   BRNCH,DNXTDN,CALLX,ICALX,ENTER,LEAVEX,RETX,CFFB ; 50 52 54 56 58 5A 5C 5E
         !WORD   LBX,LWX,LLBX,LLWX,LABX,LAWX,DLB,DLW             ; 60 62 64 66 68 6A 6C 6E
         !WORD   SB,SW,SLB,SLW,SAB,SAW,DAB,DAW                   ; 70 72 74 76 78 7A 7C 7E
 ;*
@@ -706,28 +710,31 @@ LOR     LDA     ESTKL,X
 ;*
 ;* DUPLICATE TOS
 ;*
-DUP     DEX
-        LDA     ESTKL+1,X
-        STA     ESTKL,X
-        LDA     ESTKH+1,X
-        STA     ESTKH,X
-        JMP     NEXTOP
+;DUP     DEX
+;        LDA     ESTKL+1,X
+;        STA     ESTKL,X
+;        LDA     ESTKH+1,X
+;        STA     ESTKH,X
+;        JMP     NEXTOP
 ;*
 ;* LOGICAL NOT
 ;*
 LNOT    LDA     ESTKL,X
         ORA     ESTKH,X
-        BNE     +
-        LDA     #$FF
+        BEQ     +
+        LDA     #$00
++       EOR     #$FF
         STA     ESTKL,X
         STA     ESTKH,X
         JMP     NEXTOP
 ;*
 ;* CONSTANT
 ;*
-ZERO    DEX
-+       LDA     #$00
+ZERO
+CONST   DEX
+        LSR                     ;LDA     #$00
         STA     ESTKL,X
+        LDA     #$00
         STA     ESTKH,X
         JMP     NEXTOP
 CFFB    DEX
@@ -1256,14 +1263,6 @@ ISLT    LDA     ESTKL+1,X
 ;*
 ;* BRANCHES
 ;*
-BRTRU   INX
-        LDA     ESTKH-1,X
-        ORA     ESTKL-1,X
-        BNE     BRNCH
-NOBRNCH INY                     ;+INC_IP
-        INY
-        BMI     FIXNEXT
-        JMP     NEXTOP
 FIXNEXT TYA
         LDY     #$00
         CLC
@@ -1272,6 +1271,30 @@ FIXNEXT TYA
         BCC     +
         INC     IPH
 +       JMP     NEXTOP
+;BREQ    INX
+;        LDA     ESTKL-1,X
+;        CMP     ESTKL,X
+;        BNE     NOBRNCH
+;        LDA     ESTKH-1,X
+;        CMP     ESTKH,X
+;        BEQ     BRNCH
+;        BNE     NOBRNCH
+BRNE    INX
+        LDA     ESTKL-1,X
+        CMP     ESTKL,X
+        BNE     BRNCH
+        LDA     ESTKH-1,X
+        CMP     ESTKH,X
+        BEQ     NOBRNCH
+        BNE     BRNCH
+BRTRU   INX
+        LDA     ESTKH-1,X
+        ORA     ESTKL-1,X
+        BNE     BRNCH
+NOBRNCH INY                     ;+INC_IP
+        INY
+        BMI     FIXNEXT
+        JMP     NEXTOP
 BRFLS   INX
         LDA     ESTKH-1,X
         ORA     ESTKL-1,X
@@ -1294,58 +1317,72 @@ BRNCH   TYA                     ; FLATTEN IP
         STA     IPH
         DEY
         JMP     FETCHOP
-BREQ    INX
-        LDA     ESTKL-1,X
+;*
+;* FOR LOOPS PUT TERMINAL VALUE AT ESTK+1 AND CURRENT COUNT ON ESTK
+;*
+BRGT    LDA     ESTKL+1,X       ; $D95D
         CMP     ESTKL,X
-        BNE     NOBRNCH
-        LDA     ESTKH-1,X
-        CMP     ESTKH,X
-        BEQ     BRNCH
-        BNE     NOBRNCH
-BRNE    INX
-        LDA     ESTKL-1,X
-        CMP     ESTKL,X
-        BNE     BRNCH
-        LDA     ESTKH-1,X
-        CMP     ESTKH,X
-        BEQ     NOBRNCH
-        BNE     BRNCH
-BRGT    INX
-        LDA     ESTKL-1,X
-        CMP     ESTKL,X
-        LDA     ESTKH-1,X
+        LDA     ESTKH+1,X
         SBC     ESTKH,X
         BVS     +
         BPL     NOBRNCH
-        BMI     BRNCH
-+       BPL     BRNCH
-        BMI     NOBRNCH
-BRLT    INX
-        LDA     ESTKL,X
-        CMP     ESTKL-1,X
+-       INX                     ; DROP FOR VALUES
+        INX
+        BNE     BRNCH           ; BMI     BRNCH
+BRLT    LDA     ESTKL,X
+        CMP     ESTKL+1,X
         LDA     ESTKH,X
-        SBC     ESTKH-1,X
+        SBC     ESTKH+1,X
         BVS     +
         BPL     NOBRNCH
-        BMI     BRNCH
-+       BPL     BRNCH
-        BMI     NOBRNCH
-IBRNCH  TYA                     ; FLATTEN IP
-        CLC
-        ADC     IPL
-        STA     TMPL
-        LDA     #$00
-        TAY
-        ADC     IPH
-        STA     TMPH            ; ADD BRANCH OFFSET
-        LDA     TMPL
-        ;CLC                    ; BETTER NOT CARRY OUT OF IP+Y
-        ADC     ESTKL,X
-        STA     IPL
-        LDA     TMPH
-        ADC     ESTKH,X
-        STA     IPH
-        JMP     DROP
+        INX                     ; DROP FOR VALUES
+        INX
+        BNE     BRNCH           ; BMI     BRNCH
++       BMI     NOBRNCH
+        BPL     -
+DNXTDN  LDA     ESTKL,X
+        BNE     +
+        DEC     ESTKH,X
++       DEC     ESTKL,X
+NXTDN   LDA     ESTKL,X         ; BRGE
+        CMP     ESTKL+1,X
+        LDA     ESTKH,X
+        SBC     ESTKH+1,X
+        BVS     +
+        BPL     BRNCH
+-       INX                     ; DROP FOR VALUES
+        INX
+        BNE     NOBRNCH         ; BMI     NOBRNCH
+INXTUP  INC     ESTKL,X
+        BNE     NXTUP
+        INC     ESTKH,X
+NXTUP   LDA     ESTKL+1,X       ; BRLE
+        CMP     ESTKL,X
+        LDA     ESTKH+1,X
+        SBC     ESTKH,X
+        BVS     +
+        BPL     BRNCH
+        INX                     ; DROP FOR VALUES
+        INX                              
+        BNE     NOBRNCH         ; BMI     NOBRNCH
++       BMI     BRNCH
+        BPL     -
+;IBRNCH  TYA                     ; FLATTEN IP
+;        CLC
+;        ADC     IPL
+;        STA     TMPL
+;        LDA     #$00
+;        TAY
+;        ADC     IPH
+;        STA     TMPH            ; ADD BRANCH OFFSET
+;        LDA     TMPL
+;        ;CLC                    ; BETTER NOT CARRY OUT OF IP+Y
+;        ADC     ESTKL,X
+;        STA     IPL
+;        LDA     TMPH
+;        ADC     ESTKH,X
+;        STA     IPH
+;        JMP     DROP
 ;*
 ;* CALL INTO ABSOLUTE ADDRESS (NATIVE CODE)
 ;*
@@ -1583,15 +1620,15 @@ CDINTRP PLY
         JMP     FETCHOP
 CDINTRPEND
 ;
-        LDA     #<ZERO
-        LDX     #>ZERO
-        LDY     #(CZEROEND-CZERO)
-        JSR     OPCPY
-CZERO   DEX
-        STZ     ESTKL,X
-        STZ     ESTKH,X
-        JMP     NEXTOP
-CZEROEND
+;        LDA     #<ZERO
+;        LDX     #>ZERO
+;        LDY     #(CZEROEND-CZERO)
+;        JSR     OPCPY
+;CZERO   DEX
+;        STZ     ESTKL,X
+;        STZ     ESTKH,X
+;        JMP     NEXTOP
+;CZEROEND
 ;
         LDA     #<CB
         LDX     #>CB
@@ -1884,7 +1921,7 @@ OPCPY   STA     DST
         INC     SRC
         BNE     +
         INC     SRC+1
-+
++       DEY
 -       LDA     (SRC),Y
         STA     (DST),Y
         DEY
