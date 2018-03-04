@@ -861,9 +861,10 @@ int parse_stmnt(void)
             tag_while   = tag_new(BRANCH_TYPE);
             tag_wend    = tag_new(BRANCH_TYPE);
             tag_prevcnt = cont_tag;
-            cont_tag    = tag_while;
+            cont_tag    = tag_new(BRANCH_TYPE);
             tag_prevbrk = break_tag;
             break_tag   = tag_wend;
+            emit_brnch(cont_tag);
             emit_codetag(tag_while);
             if (!(seq = parse_expr(NULL, &cfnvals)))
                 parse_error("Bad expression");
@@ -872,12 +873,12 @@ int parse_stmnt(void)
                 parse_warn("Expression value overflow");
                 while (cfnvals-- > 1) seq = gen_drop(seq);
             }
-            seq = gen_brfls(seq, tag_wend);
-            emit_seq(seq);
+            seq = gen_brtru(seq, tag_while);
             while (parse_stmnt()) next_line();
             if (scantoken != LOOP_TOKEN)
                 parse_error("Missing WHILE/END");
-            emit_brnch(tag_while);
+            emit_codetag(cont_tag);
+            emit_seq(seq);
             emit_codetag(tag_wend);
             break_tag = tag_prevbrk;
             cont_tag  = tag_prevcnt;
