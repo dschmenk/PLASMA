@@ -526,6 +526,7 @@ OPTBL:  DW  ZERO,ADD,SUB,MUL,DIV,MOD,INCR,DECR          ; 00 02 04 06 08 0A 0C 0
         DW  LB,LW,LLB,LLW,LAB,LAW,DLB,DLW               ; 60 62 64 66 68 6A 6C 6E
         DW  SB,SW,SLB,SLW,SAB,SAW,DAB,DAW               ; 70 72 74 76 78 7A 7C 7E
         DW  ADDBRLE,INCBRLE,SUBBRGE,DECBRGE,BRGT,BRLT   ; 80 82 84 86 88 8A 8C 8E
+        DW  BRGT,BRLT,INCBRLE,ADDBRLE,DECBRGE,SUBBRGE   ; 80 82 84 86 88 8A 8C 8E
 */
 void interp(code *ip)
 {
@@ -884,7 +885,47 @@ void interp(code *ip)
                 /*
                  * 0x80-0x8F
                  */
-            case 0x80: // ADDBRLE : TOS = TOS + TOS-1
+            case 0x80: // BRGT : TOS-1 > TOS ? IP += (IP)
+                val = POP;
+                if (TOS < val)
+                {
+                    POP;
+                    ip += WORD_PTR(ip);
+                }
+                else
+                {
+                    PUSH(val);
+                    ip += 2;
+                }
+                break;
+            case 0x82: // BRLT : TOS-1 < TOS ? IP += (IP)
+                val = POP;
+                if (TOS > val)
+                {
+                    POP;
+                    ip += WORD_PTR(ip);
+                }
+                else
+                {
+                    PUSH(val);
+                    ip += 2;
+                }
+                break;
+            case 0x84: // INCBRLE : TOS = TOS + 1
+                val = POP;
+                val++;
+                if (TOS >= val)
+                {
+                    PUSH(val);
+                    ip += WORD_PTR(ip);
+                }
+                else
+                {
+                    POP;
+                    ip += 2;
+                }
+                break;
+            case 0x86: // ADDBRLE : TOS = TOS + TOS-1
                 val = POP;
                 ea  = POP;
                 val = ea + val;
@@ -899,36 +940,7 @@ void interp(code *ip)
                     ip += 2;
                 }
                 break;
-            case 0x82: // INCBRLE : TOS = TOS + 1
-                val = POP;
-                val++;
-                if (TOS >= val)
-                {
-                    PUSH(val);
-                    ip += WORD_PTR(ip);
-                }
-                else
-                {
-                    POP;
-                    ip += 2;
-                }
-                break;
-            case 0x84: // SUBBRGE : TOS = TOS-1 - TOS
-                val = POP;
-                ea  = POP;
-                val = ea - val;
-                if (TOS <= val)
-                {
-                    PUSH(val);
-                    ip += WORD_PTR(ip);
-                }
-                else
-                {
-                    POP;
-                    ip += 2;
-                }
-                break;
-            case 0x86: // DECBRGE : TOS = TOS - 1
+            case 0x88: // DECBRGE : TOS = TOS - 1
                 val = POP;
                 val--;
                 if (TOS <= val)
@@ -942,29 +954,18 @@ void interp(code *ip)
                     ip += 2;
                 }
                 break;
-            case 0x88: // BRGT : TOS-1 > TOS ? IP += (IP)
+            case 0x8A: // SUBBRGE : TOS = TOS-1 - TOS
                 val = POP;
-                if (TOS < val)
+                ea  = POP;
+                val = ea - val;
+                if (TOS <= val)
                 {
-                    POP;
+                    PUSH(val);
                     ip += WORD_PTR(ip);
                 }
                 else
                 {
-                    PUSH(val);
-                    ip += 2;
-                }
-                break;
-            case 0x8A: // BRLT : TOS-1 < TOS ? IP += (IP)
-                val = POP;
-                if (TOS > val)
-                {
                     POP;
-                    ip += WORD_PTR(ip);
-                }
-                else
-                {
-                    PUSH(val);
                     ip += 2;
                 }
                 break;

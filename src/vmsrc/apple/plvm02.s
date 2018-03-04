@@ -203,7 +203,8 @@ OPTBL   !WORD   ZERO,ADD,SUB,MUL,DIV,MOD,INCR,DECR              ; 00 02 04 06 08
         !WORD   BRNCH,BRNE,CALL,ICAL,ENTER,LEAVE,RET,CFFB       ; 50 52 54 56 58 5A 5C 5E
         !WORD   LB,LW,LLB,LLW,LAB,LAW,DLB,DLW                   ; 60 62 64 66 68 6A 6C 6E
         !WORD   SB,SW,SLB,SLW,SAB,SAW,DAB,DAW                   ; 70 72 74 76 78 7A 7C 7E
-        !WORD   ADDBRLE,INCBRLE,SUBBRGE,DECBRGE,BRGT,BRLT       ; 80 82 84 86 88 8A 8C 8E
+        !WORD   BRGT,BRLT,INCBRLE,ADDBRLE,DECBRGE,SUBBRGE       ; 80 82 84 86 88 8A 8C 8E
+;*
 ;*
 ;* ENTER INTO BYTECODE INTERPRETER
 ;*
@@ -413,7 +414,7 @@ OPXTBL  !WORD   ZERO,ADD,SUB,MUL,DIV,MOD,INCR,DECR              ; 00 02 04 06 08
         !WORD   BRNCH,BRNE,CALLX,ICALX,ENTER,LEAVEX,RETX,CFFB   ; 50 52 54 56 58 5A 5C 5E
         !WORD   LBX,LWX,LLBX,LLWX,LABX,LAWX,DLB,DLW             ; 60 62 64 66 68 6A 6C 6E
         !WORD   SB,SW,SLB,SLW,SAB,SAW,DAB,DAW                   ; 70 72 74 76 78 7A 7C 7E
-        !WORD   ADDBRLE,INCBRLE,SUBBRGE,DECBRGE,BRGT,BRLT       ; 80 82 84 86 88 8A 8C 8E
+        !WORD   BRGT,BRLT,INCBRLE,ADDBRLE,DECBRGE,SUBBRGE       ; 80 82 84 86 88 8A 8C 8E
 ;*
 ;* ADD TOS TO TOS-1
 ;*
@@ -710,23 +711,23 @@ LOR     LDA     ESTKL,X
         STA     ESTKH+1,X
 +       JMP     DROP
 ;*
+;* LOGICAL NOT
+;*
+LNOT    LDA     ESTKL,X
+        ORA     ESTKH,X
+        BEQ     +
+        LDA     #$FF
++       EOR     #$FF
+        STA     ESTKL,X
+        STA     ESTKH,X
+        JMP     NEXTOP
+;*
 ;* DUPLICATE TOS
 ;*
 DUP     DEX
         LDA     ESTKL+1,X
         STA     ESTKL,X
         LDA     ESTKH+1,X
-        STA     ESTKH,X
-        JMP     NEXTOP
-;*
-;* LOGICAL NOT
-;*
-LNOT    LDA     ESTKL,X
-        ORA     ESTKH,X
-        BEQ     +
-        LDA     #$00
-+       EOR     #$FF
-        STA     ESTKL,X
         STA     ESTKH,X
         JMP     NEXTOP
 ;*
@@ -1385,13 +1386,12 @@ BRLT    LDA     ESTKL,X
         BNE     BRNCH           ; BMI     BRNCH
 +       BMI     NOBRNCH
         BPL     -
-DECBRGE LDA     ESTKL,X
-        SEC
-        SBC     #$01
-        STA     ESTKL,X
-        BCS     +
+DECBRGE DEC     ESTKL,X
+        LDA     ESTKL,X
+        CMP     #$FF
+        BNE     +
         DEC     ESTKH,X
-_BRGE   LDA     ESTKL,X         ; BRGE
+_BRGE   LDA     ESTKL,X
 +       CMP     ESTKL+1,X
         LDA     ESTKH,X
         SBC     ESTKH+1,X
@@ -1403,7 +1403,7 @@ _BRGE   LDA     ESTKL,X         ; BRGE
 INCBRLE INC     ESTKL,X
         BNE     _BRLE
         INC     ESTKH,X
-_BRLE   LDA     ESTKL+1,X       ; BRLE
+_BRLE   LDA     ESTKL+1,X
         CMP     ESTKL,X
         LDA     ESTKH+1,X
         SBC     ESTKH,X
