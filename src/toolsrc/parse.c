@@ -979,10 +979,10 @@ int parse_stmnt(void)
                 {
                     emit_seq(seq);
                     emit_op(ADD_TOKEN);
-                    emit_nxtup(tag_for);
+                    emit_brle(tag_for);
                 }
                 else
-                    emit_inxtup(tag_for);
+                    emit_incbrle(tag_for);
             }
             else
             {
@@ -990,10 +990,10 @@ int parse_stmnt(void)
                 {
                     emit_seq(seq);
                     emit_op(SUB_TOKEN);
-                    emit_nxtdn(tag_for);
+                    emit_brge(tag_for);
                 }
                 else
-                    emit_dnxtdn(tag_for);
+                    emit_decbrge(tag_for);
             }
             emit_codetag(break_tag);
             break_tag   = tag_prevbrk;

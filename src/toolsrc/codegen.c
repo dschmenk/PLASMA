@@ -614,6 +614,21 @@ void emit_conststr(long conststr)
     printf("\t%s\t$2E\t\t\t; CS\n", DB);
     emit_data(0, STRING_TYPE, conststr, 0);
 }
+void emit_addi(int cval)
+{
+    emit_pending_seq();
+    printf("\t%s\t$34,$%02X\t\t\t; ADDI\t%d\n", DB, cval, cval);
+}
+void emit_andi(int cval)
+{
+    emit_pending_seq();
+    printf("\t%s\t$3C,$%02X\t\t\t; ANDI\t%d\n", DB, cval, cval);
+}
+void emit_ori(int cval)
+{
+    emit_pending_seq();
+    printf("\t%s\t$52,$%02X\t\t\t; IORI\t%d\n", DB, cval, cval);
+}
 void emit_lb(void)
 {
     printf("\t%s\t$60\t\t\t; LB\n", DB);
@@ -793,28 +808,28 @@ void emit_brlt(int tag)
     printf("\t%s\t$3A\t\t\t; BRLT\t_B%03d\n", DB, tag);
     printf("\t%s\t_B%03d-*\n", DW, tag);
 }
-void emit_nxtup(int tag)
+void emit_brle(int tag)
 {
     emit_pending_seq();
-    printf("\t%s\t$32\t\t\t; NXTUP\t_B%03d\n", DB, tag);
+    printf("\t%s\t$80\t\t\t; NXTUP\t_B%03d\n", DB, tag);
     printf("\t%s\t_B%03d-*\n", DW, tag);
 }
-void emit_inxtup(int tag)
+void emit_incbrle(int tag)
 {
     emit_pending_seq();
-    printf("\t%s\t$34\t\t\t; INXTUP\t_B%03d\n", DB, tag);
+    printf("\t%s\t$82\t\t\t; INXTUP\t_B%03d\n", DB, tag);
     printf("\t%s\t_B%03d-*\n", DW, tag);
 }
-void emit_nxtdn(int tag)
+void emit_brge(int tag)
 {
     emit_pending_seq();
-    printf("\t%s\t$3C\t\t\t; NXTDN\t_B%03d\n", DB, tag);
+    printf("\t%s\t$84\t\t\t; NXTDN\t_B%03d\n", DB, tag);
     printf("\t%s\t_B%03d-*\n", DW, tag);
 }
-void emit_dnxtdn(int tag)
+void emit_decbrge(int tag)
 {
     emit_pending_seq();
-    printf("\t%s\t$52\t\t\t; DNXTDN\t_B%03d\n", DB, tag);
+    printf("\t%s\t$84\t\t\t; DNXTDN\t_B%03d\n", DB, tag);
     printf("\t%s\t_B%03d-*\n", DW, tag);
 }
 void emit_call(int tag, int type)
@@ -864,6 +879,11 @@ void emit_drop(void)
 {
     emit_pending_seq();
     printf("\t%s\t$30\t\t\t; DROP\n", DB);
+}
+void emit_dup(void)
+{
+    emit_pending_seq();
+    printf("\t%s\t$32\t\t\t; DUP\n", DB);
 }
 int emit_unaryop(t_token op)
 {
@@ -1240,6 +1260,27 @@ int crunch_seq(t_opseq **seq, int pass)
                         if ((pass > 0) && (freeops == 0) && (op->val != 0))
                             crunched = try_dupify(op);
                         break; // CONST_CODE
+                    case BINARY_CODE(ADD_TOKEN):
+                        if (op->val >= 0 && op->val <= 255)
+                        {
+                            op->code = ADDI_CODE;
+                            freeops  = 1;
+                        }
+                        break;
+                    case BINARY_CODE(AND_TOKEN):
+                        if (op->val >= 0 && op->val <= 255)
+                        {
+                            op->code = ANDI_CODE;
+                            freeops  = 1;
+                        }
+                        break;
+                    case BINARY_CODE(OR_TOKEN):
+                        if (op->val >= 0 && op->val <= 255)
+                        {
+                            op->code = ORI_CODE;
+                            freeops  = 1;
+                        }
+                        break;
                     case BINARY_CODE(MUL_TOKEN):
                         for (shiftcnt = 0; shiftcnt < 16; shiftcnt++)
                         {
@@ -1607,6 +1648,15 @@ int emit_pending_seq()
             case STR_CODE:
                 emit_conststr(op->val);
                 break;
+            case ADDI_CODE:
+                emit_addi(op->val);
+                break;
+            case ANDI_CODE:
+                emit_andi(op->val);
+                break;
+            case ORI_CODE:
+                emit_ori(op->val);
+                break;
             case LB_CODE:
                 emit_lb();
                 break;
@@ -1675,6 +1725,9 @@ int emit_pending_seq()
                 break;
             case DROP_CODE:
                 emit_drop();
+                break;
+            case DUP_CODE:
+                emit_dup();
                 break;
             case BRNCH_CODE:
                 emit_brnch(op->tag);
