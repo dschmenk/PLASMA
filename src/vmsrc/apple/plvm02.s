@@ -198,12 +198,12 @@ VMCORE  =        *
 OPTBL   !WORD   ZERO,ADD,SUB,MUL,DIV,MOD,INCR,DECR              ; 00 02 04 06 08 0A 0C 0E
         !WORD   NEG,COMP,BAND,IOR,XOR,SHL,SHR,IDXW              ; 10 12 14 16 18 1A 1C 1E
         !WORD   LNOT,LOR,LAND,LA,LLA,CB,CW,CS                   ; 20 22 24 26 28 2A 2C 2E
-        !WORD   DROP,DUP,ADDI,DIVMOD,BRGT,BRLT,ANDI,BRNE        ; 30 32 34 36 38 3A 3C 3E
+        !WORD   DROP,DROP2,DUP,DIVMOD,ADDI,SUBI,ANDI,ORI        ; 30 32 34 36 38 3A 3C 3E
         !WORD   ISEQ,ISNE,ISGT,ISLT,ISGE,ISLE,BRFLS,BRTRU       ; 40 42 44 46 48 4A 4C 4E
-        !WORD   BRNCH,ORI,CALL,ICAL,ENTER,LEAVE,RET,CFFB        ; 50 52 54 56 58 5A 5C 5E
+        !WORD   BRNCH,BRNE,CALL,ICAL,ENTER,LEAVE,RET,CFFB       ; 50 52 54 56 58 5A 5C 5E
         !WORD   LB,LW,LLB,LLW,LAB,LAW,DLB,DLW                   ; 60 62 64 66 68 6A 6C 6E
         !WORD   SB,SW,SLB,SLW,SAB,SAW,DAB,DAW                   ; 70 72 74 76 78 7A 7C 7E
-        !WORD   BRLE,INCBRLE,BRGE,DECBRGE                       ; 80 82 84 86 88 8A 8C 8E
+        !WORD   ADDBRLE,INCBRLE,SUBBRGE,DECBRGE,BRGT,BRLT       ; 80 82 84 86 88 8A 8C 8E
 ;*
 ;* ENTER INTO BYTECODE INTERPRETER
 ;*
@@ -408,12 +408,12 @@ LCDEFCMD =      *-28            ; DEFCMD IN LC MEMORY
 OPXTBL  !WORD   ZERO,ADD,SUB,MUL,DIV,MOD,INCR,DECR              ; 00 02 04 06 08 0A 0C 0E
         !WORD   NEG,COMP,BAND,IOR,XOR,SHL,SHR,IDXW              ; 10 12 14 16 18 1A 1C 1E
         !WORD   LNOT,LOR,LAND,LA,LLA,CB,CW,CSX                  ; 20 22 24 26 28 2A 2C 2E
-        !WORD   DROP,DUP,ADDI,DIVMOD,BRGT,BRLT,ANDI,BRNE        ; 30 32 34 36 38 3A 3C 3E
+        !WORD   DROP,DROP2,DUP,DIVMOD,ADDI,SUBI,ANDI,ORI        ; 30 32 34 36 38 3A 3C 3E
         !WORD   ISEQ,ISNE,ISGT,ISLT,ISGE,ISLE,BRFLS,BRTRU       ; 40 42 44 46 48 4A 4C 4E
-        !WORD   BRNCH,ORI,CALLX,ICALX,ENTER,LEAVEX,RETX,CFFB    ; 50 52 54 56 58 5A 5C 5E
+        !WORD   BRNCH,BRNE,CALLX,ICALX,ENTER,LEAVEX,RETX,CFFB   ; 50 52 54 56 58 5A 5C 5E
         !WORD   LBX,LWX,LLBX,LLWX,LABX,LAWX,DLB,DLW             ; 60 62 64 66 68 6A 6C 6E
         !WORD   SB,SW,SLB,SLW,SAB,SAW,DAB,DAW                   ; 70 72 74 76 78 7A 7C 7E
-        !WORD   BRLE,INCBRLE,BRGE,DECBRGE                       ; 80 82 84 86 88 8A 8C 8E
+        !WORD   ADDBRLE,INCBRLE,SUBBRGE,DECBRGE,BRGT,BRLT       ; 80 82 84 86 88 8A 8C 8E
 ;*
 ;* ADD TOS TO TOS-1
 ;*
@@ -765,12 +765,25 @@ ADDI    INY                     ;+INC_IP
         INC     ESTKH,X
 +       JMP     NEXTOP
 ;*
+;* SUB IMMEDIATE FROM TOS
+;*
+SUBI    INY                     ;+INC_IP
+        LDA     ESTKL,X
+        SEC
+        SBC     (IP),Y
+        STA     ESTKL,X
+        BCS     +
+        DEC     ESTKH,X
++       JMP     NEXTOP
+;*
 ;* AND IMMEDIATE TO TOS
 ;*
 ANDI    INY                     ;+INC_IP
         LDA     (IP),Y
         AND     ESTKL,X
         STA     ESTKL,X
+        LDA     #$00
+        STA     ESTKH,X
         JMP     NEXTOP
 ;*
 ;* IOR IMMEDIATE TO TOS
@@ -1105,7 +1118,10 @@ SW      LDA     ESTKL,X
         JMP     DROP
 +       INC     ESTKH,X
         STA     (ESTKH-1,X)
-        INX
+;*
+;* DROP TOS, TOS-1
+;*
+DROP2   INX
         JMP     DROP
 ;*
 ;* STORE VALUE TO LOCAL FRAME OFFSET
@@ -1349,7 +1365,7 @@ BRNCH   TYA                     ; FLATTEN IP
 ;*
 ;* FOR LOOPS PUT TERMINAL VALUE AT ESTK+1 AND CURRENT COUNT ON ESTK
 ;*
-BRGT    LDA     ESTKL+1,X       ; $D95D
+BRGT    LDA     ESTKL+1,X
         CMP     ESTKL,X
         LDA     ESTKH+1,X
         SBC     ESTKH,X
@@ -1370,11 +1386,13 @@ BRLT    LDA     ESTKL,X
 +       BMI     NOBRNCH
         BPL     -
 DECBRGE LDA     ESTKL,X
-        BNE     +
+        SEC
+        SBC     #$01
+        STA     ESTKL,X
+        BCS     +
         DEC     ESTKH,X
-+       DEC     ESTKL,X
-BRGE    LDA     ESTKL,X         ; BRGE
-        CMP     ESTKL+1,X
+_BRGE   LDA     ESTKL,X         ; BRGE
++       CMP     ESTKL+1,X
         LDA     ESTKH,X
         SBC     ESTKH+1,X
         BVS     +
@@ -1383,9 +1401,9 @@ BRGE    LDA     ESTKL,X         ; BRGE
         INX
         BNE     NOBRNCH         ; BMI     NOBRNCH
 INCBRLE INC     ESTKL,X
-        BNE     BRLE
+        BNE     _BRLE
         INC     ESTKH,X
-BRLE    LDA     ESTKL+1,X       ; BRLE
+_BRLE   LDA     ESTKL+1,X       ; BRLE
         CMP     ESTKL,X
         LDA     ESTKH+1,X
         SBC     ESTKH,X
@@ -1396,6 +1414,24 @@ BRLE    LDA     ESTKL+1,X       ; BRLE
         BNE     NOBRNCH         ; BMI     NOBRNCH
 +       BMI     BRNCH
         BPL     -
+SUBBRGE LDA     ESTKL+1,X
+        SEC
+        SBC     ESTKL,X
+        STA     ESTKL+1,X
+        LDA     ESTKH+1,X
+        SBC     ESTKH,X
+        STA     ESTKH+1,X
+        INX
+        BNE     _BRGE
+ADDBRLE LDA     ESTKL,X
+        CLC
+        ADC     ESTKL+1,X
+        STA     ESTKL+1,X
+        LDA     ESTKH,X
+        ADC     ESTKH+1,X
+        STA     ESTKH+1,X
+        INX
+        BNE     _BRLE
 ;IBRNCH  TYA                     ; FLATTEN IP
 ;        CLC
 ;        ADC     IPL

@@ -617,7 +617,12 @@ void emit_conststr(long conststr)
 void emit_addi(int cval)
 {
     emit_pending_seq();
-    printf("\t%s\t$34,$%02X\t\t\t; ADDI\t%d\n", DB, cval, cval);
+    printf("\t%s\t$38,$%02X\t\t\t; ADDI\t%d\n", DB, cval, cval);
+}
+void emit_subi(int cval)
+{
+    emit_pending_seq();
+    printf("\t%s\t$3A,$%02X\t\t\t; SUBI\t%d\n", DB, cval, cval);
 }
 void emit_andi(int cval)
 {
@@ -627,7 +632,7 @@ void emit_andi(int cval)
 void emit_ori(int cval)
 {
     emit_pending_seq();
-    printf("\t%s\t$52,$%02X\t\t\t; IORI\t%d\n", DB, cval, cval);
+    printf("\t%s\t$3E,$%02X\t\t\t; ORI\t%d\n", DB, cval, cval);
 }
 void emit_lb(void)
 {
@@ -784,52 +789,46 @@ void emit_brnch(int tag)
     printf("\t%s\t$50\t\t\t; BRNCH\t_B%03d\n", DB, tag);
     printf("\t%s\t_B%03d-*\n", DW, tag);
 }
-//void emit_breq(int tag)
-//{
-//    emit_pending_seq();
-//    printf("\t%s\t$3C\t\t\t; BREQ\t_B%03d\n", DB, tag);
-//    printf("\t%s\t_B%03d-*\n", DW, tag);
-//}
 void emit_brne(int tag)
 {
     emit_pending_seq();
-    printf("\t%s\t$3E\t\t\t; BRNE\t_B%03d\n", DB, tag);
+    printf("\t%s\t$52\t\t\t; BRNE\t_B%03d\n", DB, tag);
     printf("\t%s\t_B%03d-*\n", DW, tag);
 }
 void emit_brgt(int tag)
 {
     emit_pending_seq();
-    printf("\t%s\t$38\t\t\t; BRGT\t_B%03d\n", DB, tag);
+    printf("\t%s\t$88\t\t\t; BRGT\t_B%03d\n", DB, tag);
     printf("\t%s\t_B%03d-*\n", DW, tag);
 }
 void emit_brlt(int tag)
 {
     emit_pending_seq();
-    printf("\t%s\t$3A\t\t\t; BRLT\t_B%03d\n", DB, tag);
+    printf("\t%s\t$8A\t\t\t; BRLT\t_B%03d\n", DB, tag);
     printf("\t%s\t_B%03d-*\n", DW, tag);
 }
-void emit_brle(int tag)
+void emit_addbrle(int tag)
 {
     emit_pending_seq();
-    printf("\t%s\t$80\t\t\t; NXTUP\t_B%03d\n", DB, tag);
+    printf("\t%s\t$80\t\t\t; BRLE\t_B%03d\n", DB, tag);
     printf("\t%s\t_B%03d-*\n", DW, tag);
 }
 void emit_incbrle(int tag)
 {
     emit_pending_seq();
-    printf("\t%s\t$82\t\t\t; INXTUP\t_B%03d\n", DB, tag);
+    printf("\t%s\t$82\t\t\t; INCBRLE\t_B%03d\n", DB, tag);
     printf("\t%s\t_B%03d-*\n", DW, tag);
 }
-void emit_brge(int tag)
+void emit_subbrge(int tag)
 {
     emit_pending_seq();
-    printf("\t%s\t$84\t\t\t; NXTDN\t_B%03d\n", DB, tag);
+    printf("\t%s\t$84\t\t\t; BRGE\t_B%03d\n", DB, tag);
     printf("\t%s\t_B%03d-*\n", DW, tag);
 }
 void emit_decbrge(int tag)
 {
     emit_pending_seq();
-    printf("\t%s\t$84\t\t\t; DNXTDN\t_B%03d\n", DB, tag);
+    printf("\t%s\t$86\t\t\t; DECBRGE\t_B%03d\n", DB, tag);
     printf("\t%s\t_B%03d-*\n", DW, tag);
 }
 void emit_call(int tag, int type)
@@ -880,10 +879,15 @@ void emit_drop(void)
     emit_pending_seq();
     printf("\t%s\t$30\t\t\t; DROP\n", DB);
 }
-void emit_dup(void)
+void emit_drop2(void)
 {
     emit_pending_seq();
     printf("\t%s\t$32\t\t\t; DUP\n", DB);
+}
+void emit_dup(void)
+{
+    emit_pending_seq();
+    printf("\t%s\t$34\t\t\t; DUP\n", DB);
 }
 int emit_unaryop(t_token op)
 {
@@ -1267,6 +1271,12 @@ int crunch_seq(t_opseq **seq, int pass)
                             freeops  = 1;
                         }
                         break;
+                    case BINARY_CODE(SUB_TOKEN):
+                        if (op->val >= 0 && op->val <= 255)
+                        {
+                            op->code = SUBI_CODE;
+                            freeops  = 1;
+                        }
                     case BINARY_CODE(AND_TOKEN):
                         if (op->val >= 0 && op->val <= 255)
                         {
@@ -1650,6 +1660,9 @@ int emit_pending_seq()
                 break;
             case ADDI_CODE:
                 emit_addi(op->val);
+                break;
+            case SUBI_CODE:
+                emit_subi(op->val);
                 break;
             case ANDI_CODE:
                 emit_andi(op->val);

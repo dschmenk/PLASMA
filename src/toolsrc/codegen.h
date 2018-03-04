@@ -60,13 +60,14 @@ typedef struct _opseq {
 #define DROP_CODE   0x0318
 #define DUP_CODE    0x0319
 #define ADDI_CODE   0x031A
-#define ANDI_CODE   0x031B
-#define ORI_CODE    0x31C
-#define BRNCH_CODE  0x031D
-#define BRFALSE_CODE 0x031E
-#define BRTRUE_CODE 0x031F
-#define CODETAG_CODE 0x0320
-#define NOP_CODE    0x0321
+#define SUBI_CODE   0x031B
+#define ANDI_CODE   0x031C
+#define ORI_CODE    0x31D
+#define BRNCH_CODE  0x0320
+#define BRFALSE_CODE 0x0321
+#define BRTRUE_CODE 0x0322
+#define CODETAG_CODE 0x0323
+#define NOP_CODE    0x0324
 
 #define gen_uop(seq,op)     gen_seq(seq,UNARY_CODE(op),0,0,0,0)
 #define gen_op(seq,op)      gen_seq(seq,BINARY_CODE(op),0,0,0,0)
@@ -106,6 +107,7 @@ void emit_codetag(int tag);
 void emit_const(int cval);
 void emit_conststr(long conststr);
 void emit_addi(int cval);
+void emit_subi(int cval);
 void emit_andi(int cval);
 void emit_ori(int cval);
 void emit_lb(void);
@@ -138,12 +140,13 @@ void emit_brne(int tag);
 void emit_brnch(int tag);
 void emit_brgt(int tag);
 void emit_brlt(int tag);
-void emit_brle(int tag);
+void emit_addbrle(int tag);
 void emit_incbrle(int tag);
-void emit_brge(int tag);
+void emit_subbrge(int tag);
 void emit_decbrge(int tag);
 void emit_empty(void);
 void emit_drop(void);
+void emit_drop2(void);
 void emit_dup(void);
 void emit_leave(void);
 void emit_ret(void);

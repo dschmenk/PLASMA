@@ -36,7 +36,7 @@ uword sp = 0x01FE, fp = 0xFFFF, heap = 0x0200, deftbl = DEF_CALL, lastdef = DEF_
 #define UPOP        ((uword)(*(esp++)))
 #define TOS     (esp[0])
 word eval_stack[EVAL_STACKSZ];
-word *esp = eval_stack + EVAL_STACKSZ;
+word *esp = &eval_stack[EVAL_STACKSZ];
 
 #define SYMTBLSZ    1024
 #define SYMSZ       16
@@ -517,21 +517,28 @@ void call(uword pc)
 /*
  * OPCODE TABLE
  *
-OPTBL:  DW  ZERO,ADD,SUB,MUL,DIV,MOD,INCR,DECR      ; 00 02 04 06 08 0A 0C 0E
-        DW  NEG,COMP,AND,IOR,XOR,SHL,SHR,IDXW       ; 10 12 14 16 18 1A 1C 1E
-        DW  NOT,LOR,LAND,LA,LLA,CB,CW,CS            ; 20 22 24 26 28 2A 2C 2E
-        DW  DROP,DUP,PUSH,PULL,BRGT,BRLT,BREQ,BRNE      ; 30 32 34 36 38 3A 3C 3E
+OPTBL:  DW  ZERO,ADD,SUB,MUL,DIV,MOD,INCR,DECR          ; 00 02 04 06 08 0A 0C 0E
+        DW  NEG,COMP,AND,IOR,XOR,SHL,SHR,IDXW           ; 10 12 14 16 18 1A 1C 1E
+        DW  NOT,LOR,LAND,LA,LLA,CB,CW,CS                ; 20 22 24 26 28 2A 2C 2E
+        DW  DROP,DROP2,DUP,DIVMOD,ADDI,SUBI,ANDI,ORI    ; 30 32 34 36 38 3A 3C 3E
         DW  ISEQ,ISNE,ISGT,ISLT,ISGE,ISLE,BRFLS,BRTRU   ; 40 42 44 46 48 4A 4C 4E
-        DW  BRNCH,IBRNCH,CALL,ICAL,ENTER,LEAVE,RET,CFFB  ; 50 52 54 56 58 5A 5C 5E
-        DW  LB,LW,LLB,LLW,LAB,LAW,DLB,DLW           ; 60 62 64 66 68 6A 6C 6E
-        DW  SB,SW,SLB,SLW,SAB,SAW,DAB,DAW           ; 70 72 74 76 78 7A 7C 7E
+        DW  BRNCH,BRNE,CALL,ICAL,ENTER,LEAVE,RET,CFFB   ; 50 52 54 56 58 5A 5C 5E
+        DW  LB,LW,LLB,LLW,LAB,LAW,DLB,DLW               ; 60 62 64 66 68 6A 6C 6E
+        DW  SB,SW,SLB,SLW,SAB,SAW,DAB,DAW               ; 70 72 74 76 78 7A 7C 7E
+        DW  ADDBRLE,INCBRLE,SUBBRGE,DECBRGE,BRGT,BRLT   ; 80 82 84 86 88 8A 8C 8E
 */
 void interp(code *ip)
 {
     int val, ea, frmsz, parmcnt;
+    code *previp = ip;
 
     while (1)
     {
+        if ((esp - eval_stack) < 0 || (esp - eval_stack) > EVAL_STACKSZ)
+        {
+            printf("Eval stack over/underflow! - $%04X: $%02X [%d]\n", previp - mem_data, *previp, EVAL_STACKSZ - (esp - eval_stack));
+            show_state = 1;
+        }
         if (show_state)
         {
             char cmdline[16];
@@ -542,11 +549,12 @@ void interp(code *ip)
             printf("]\n");
             gets(cmdline);
         }
+        previp = ip;
         switch (*ip++)
         {
-        /*
-         * 0x00-0x0F
-         */
+            /*
+             * 0x00-0x0F
+             */
             case 0x00: // ZERO : TOS = 0
                 PUSH(0);
                 break;
@@ -662,41 +670,31 @@ void interp(code *ip)
             case 0x30: // DROP : TOS =
                 POP;
                 break;
-            case 0x32: // DUP : TOS = TOS
+            case 0x32: // DROP2 : TOS ==
+                POP;
+                POP;
+                break;
+            case 0x34: // DUP : TOS = TOS
                 val = TOS;
                 PUSH(val);
                 break;
-            case 0x34: // NOP
+            case 0x36: // DIVMOD
                 break;
-            case 0x36: // NOP
+            case 0x38: // ADDI
+                PUSH(POP + BYTE_PTR(ip));
+                ip++;
                 break;
-            case 0x38: // BRGT : TOS-1 > TOS ? IP += (IP)
-                val = POP;
-                if (TOS > val)
-                    ip += WORD_PTR(ip);
-                else
-                    ip += 2;
+            case 0x3A: // SUBI
+                PUSH(POP - BYTE_PTR(ip));
+                ip++;
                 break;
-            case 0x3A: // BRLT : TOS-1 < TOS ? IP += (IP)
-                val = POP;
-                if (TOS < val)
-                    ip += WORD_PTR(ip);
-                else
-                    ip += 2;
+            case 0x3C: // ANDI
+                PUSH(POP & BYTE_PTR(ip));
+                ip++;
                 break;
-            case 0x3C: // BREQ : TOS == TOS-1 ? IP += (IP)
-                val = POP;
-                if (TOS == val)
-                    ip += WORD_PTR(ip);
-                else
-                    ip += 2;
-                break;
-            case 0x3E: // BRNE : TOS != TOS-1 ? IP += (IP)
-                val = POP;
-                if (TOS != val)
-                    ip += WORD_PTR(ip);
-                else
-                    ip += 2;
+            case 0x3E: // ORI
+                PUSH(POP | BYTE_PTR(ip));
+                ip++;
                 break;
                 /*
                  * 0x40-0x4F
@@ -749,8 +747,18 @@ void interp(code *ip)
             case 0x50: // BRNCH : IP += (IP)
                 ip += WORD_PTR(ip);
                 break;
-            case 0x52: // IBRNCH : IP += TOS
-                ip += POP;
+            case 0x52: // BRNE : TOS != TOS-1 ? IP += (IP)
+                val = POP;
+                if (TOS != val)
+                {
+                    PUSH(val);
+                    ip += WORD_PTR(ip);
+                }
+                else
+                {
+                    PUSH(val);
+                    ip += 2;
+                }
                 break;
             case 0x54: // CALL : TOFP = IP, IP = (IP) ; call
                 call(UWORD_PTR(ip));
@@ -872,6 +880,93 @@ void interp(code *ip)
                 mem_data[ea]     = TOS;
                 mem_data[ea + 1] = TOS >> 8;
                 ip += 2;
+                break;
+                /*
+                 * 0x80-0x8F
+                 */
+            case 0x80: // ADDBRLE : TOS = TOS + TOS-1
+                val = POP;
+                ea  = POP;
+                val = ea + val;
+                if (TOS >= val)
+                {
+                    PUSH(val);
+                    ip += WORD_PTR(ip);
+                }
+                else
+                {
+                    POP;
+                    ip += 2;
+                }
+                break;
+            case 0x82: // INCBRLE : TOS = TOS + 1
+                val = POP;
+                val++;
+                if (TOS >= val)
+                {
+                    PUSH(val);
+                    ip += WORD_PTR(ip);
+                }
+                else
+                {
+                    POP;
+                    ip += 2;
+                }
+                break;
+            case 0x84: // SUBBRGE : TOS = TOS-1 - TOS
+                val = POP;
+                ea  = POP;
+                val = ea - val;
+                if (TOS <= val)
+                {
+                    PUSH(val);
+                    ip += WORD_PTR(ip);
+                }
+                else
+                {
+                    POP;
+                    ip += 2;
+                }
+                break;
+            case 0x86: // DECBRGE : TOS = TOS - 1
+                val = POP;
+                val--;
+                if (TOS <= val)
+                {
+                    PUSH(val);
+                    ip += WORD_PTR(ip);
+                }
+                else
+                {
+                    POP;
+                    ip += 2;
+                }
+                break;
+            case 0x88: // BRGT : TOS-1 > TOS ? IP += (IP)
+                val = POP;
+                if (TOS < val)
+                {
+                    POP;
+                    ip += WORD_PTR(ip);
+                }
+                else
+                {
+                    PUSH(val);
+                    ip += 2;
+                }
+                break;
+            case 0x8A: // BRLT : TOS-1 < TOS ? IP += (IP)
+                val = POP;
+                if (TOS > val)
+                {
+                    POP;
+                    ip += WORD_PTR(ip);
+                }
+                else
+                {
+                    PUSH(val);
+                    ip += 2;
+                }
                 break;
                 /*
                  * Odd codes and everything else are errors.

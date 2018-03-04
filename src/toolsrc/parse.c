@@ -5,7 +5,7 @@
 #define RVALUE      1
 #define MAX_LAMBDA  64
 
-int infunc = 0, break_tag = 0, cont_tag = 0, stack_loop = 0, for_loop = 0;
+int infunc = 0, break_tag = 0, cont_tag = 0, stack_loop = 0, infor = 0;
 long infuncvals = 0;
 t_token prevstmnt;
 static int      lambda_num = 0;
@@ -798,7 +798,7 @@ t_opseq *parse_set(t_opseq *codeseq)
 int parse_stmnt(void)
 {
     int tag_prevbrk, tag_prevcnt, tag_else, tag_endif, tag_while, tag_wend, tag_repeat, tag_for, tag_choice, tag_of;
-    int type, addr, step, cfnvals, prev_forlp;
+    int type, addr, step, cfnvals, prev_for;
     char *idptr;
     t_opseq *seq, *fromseq, *toseq;
 
@@ -856,8 +856,8 @@ int parse_stmnt(void)
                 parse_error("Missing IF/FIN");
             break;
         case WHILE_TOKEN:
-            prev_forlp  = for_loop;
-            for_loop    = 0;
+            prev_for    = infor;
+            infor       = 0;
             tag_while   = tag_new(BRANCH_TYPE);
             tag_wend    = tag_new(BRANCH_TYPE);
             tag_prevcnt = cont_tag;
@@ -881,11 +881,11 @@ int parse_stmnt(void)
             emit_codetag(tag_wend);
             break_tag = tag_prevbrk;
             cont_tag  = tag_prevcnt;
-            for_loop = prev_forlp;
+            infor     = prev_for;
             break;
         case REPEAT_TOKEN:
-            prev_forlp  = for_loop;
-            for_loop    = 0;
+            prev_for    = infor;
+            infor       = 0;
             tag_prevbrk = break_tag;
             break_tag   = tag_new(BRANCH_TYPE);
             tag_repeat  = tag_new(BRANCH_TYPE);
@@ -909,11 +909,11 @@ int parse_stmnt(void)
             emit_seq(seq);
             emit_codetag(break_tag);
             break_tag = tag_prevbrk;
-            for_loop = prev_forlp;
+            infor     = prev_for;
             break;
         case FOR_TOKEN:
-            prev_forlp  = for_loop;
-            for_loop    = 1;
+            prev_for    = infor;
+            infor       = 1;
             stack_loop += 2;
             tag_prevbrk = break_tag;
             break_tag   = tag_new(BRANCH_TYPE);
@@ -978,8 +978,7 @@ int parse_stmnt(void)
                 if (seq)
                 {
                     emit_seq(seq);
-                    emit_op(ADD_TOKEN);
-                    emit_brle(tag_for);
+                    emit_addbrle(tag_for);
                 }
                 else
                     emit_incbrle(tag_for);
@@ -989,8 +988,7 @@ int parse_stmnt(void)
                 if (seq)
                 {
                     emit_seq(seq);
-                    emit_op(SUB_TOKEN);
-                    emit_brge(tag_for);
+                    emit_subbrge(tag_for);
                 }
                 else
                     emit_decbrge(tag_for);
@@ -998,11 +996,11 @@ int parse_stmnt(void)
             emit_codetag(break_tag);
             break_tag   = tag_prevbrk;
             stack_loop -= 2;
-            for_loop    = prev_forlp;
+            infor       = prev_for;
             break;
         case CASE_TOKEN:
-            prev_forlp  = for_loop;
-            for_loop    = 0;
+            prev_for    = infor;
+            infor       = 0;
             stack_loop++;
             tag_prevbrk = break_tag;
             break_tag   = tag_new(BRANCH_TYPE);
@@ -1058,16 +1056,13 @@ int parse_stmnt(void)
             emit_drop();
             break_tag = tag_prevbrk;
             stack_loop--;
-            for_loop = prev_forlp;
+            infor = prev_for;
             break;
         case BREAK_TOKEN:
             if (break_tag)
             {
-                if (for_loop)
-                {
-                    emit_drop();
-                    emit_drop();
-                }
+                if (infor)
+                    emit_drop2();
                 emit_brnch(break_tag);
             }
             else
