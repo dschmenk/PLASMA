@@ -522,7 +522,7 @@ OPTBL:  DW  ZERO,ADD,SUB,MUL,DIV,MOD,INCR,DECR          ; 00 02 04 06 08 0A 0C 0
         DW  NOT,LOR,LAND,LA,LLA,CB,CW,CS                ; 20 22 24 26 28 2A 2C 2E
         DW  DROP,DROP2,DUP,DIVMOD,ADDI,SUBI,ANDI,ORI    ; 30 32 34 36 38 3A 3C 3E
         DW  ISEQ,ISNE,ISGT,ISLT,ISGE,ISLE,BRFLS,BRTRU   ; 40 42 44 46 48 4A 4C 4E
-        DW  BRNCH,BRNE,CALL,ICAL,ENTER,LEAVE,RET,CFFB   ; 50 52 54 56 58 5A 5C 5E
+        DW  BRNCH,SEL,CALL,ICAL,ENTER,LEAVE,RET,CFFB    ; 50 52 54 56 58 5A 5C 5E
         DW  LB,LW,LLB,LLW,LAB,LAW,DLB,DLW               ; 60 62 64 66 68 6A 6C 6E
         DW  SB,SW,SLB,SLW,SAB,SAW,DAB,DAW               ; 70 72 74 76 78 7A 7C 7E
         DW  ADDBRLE,INCBRLE,SUBBRGE,DECBRGE,BRGT,BRLT   ; 80 82 84 86 88 8A 8C 8E
@@ -748,17 +748,21 @@ void interp(code *ip)
             case 0x50: // BRNCH : IP += (IP)
                 ip += WORD_PTR(ip);
                 break;
-            case 0x52: // BRNE : TOS != TOS-1 ? IP += (IP)
+            case 0x52: // SELECT
                 val = POP;
-                if (TOS != val)
+                ip += WORD_PTR(ip);
+                parmcnt = BYTE_PTR(ip);
+                ip++;
+                while (parmcnt--)
                 {
-                    PUSH(val);
-                    ip += WORD_PTR(ip);
-                }
-                else
-                {
-                    PUSH(val);
-                    ip += 2;
+                    if (WORD_PTR(ip) == val)
+                    {
+                        ip += 2;
+                        ip += WORD_PTR(ip);
+                        parmcnt = 0;
+                    }
+                    else
+                        ip += 4;                        
                 }
                 break;
             case 0x54: // CALL : TOFP = IP, IP = (IP) ; call

@@ -200,7 +200,7 @@ OPTBL   !WORD   ZERO,ADD,SUB,MUL,DIV,MOD,INCR,DECR              ; 00 02 04 06 08
         !WORD   LNOT,LOR,LAND,LA,LLA,CB,CW,CS                   ; 20 22 24 26 28 2A 2C 2E
         !WORD   DROP,DROP2,DUP,DIVMOD,ADDI,SUBI,ANDI,ORI        ; 30 32 34 36 38 3A 3C 3E
         !WORD   ISEQ,ISNE,ISGT,ISLT,ISGE,ISLE,BRFLS,BRTRU       ; 40 42 44 46 48 4A 4C 4E
-        !WORD   BRNCH,BRNE,CALL,ICAL,ENTER,LEAVE,RET,CFFB       ; 50 52 54 56 58 5A 5C 5E
+        !WORD   BRNCH,SEL,CALL,ICAL,ENTER,LEAVE,RET,CFFB        ; 50 52 54 56 58 5A 5C 5E
         !WORD   LB,LW,LLB,LLW,LAB,LAW,DLB,DLW                   ; 60 62 64 66 68 6A 6C 6E
         !WORD   SB,SW,SLB,SLW,SAB,SAW,DAB,DAW                   ; 70 72 74 76 78 7A 7C 7E
         !WORD   BRGT,BRLT,INCBRLE,ADDBRLE,DECBRGE,SUBBRGE       ; 80 82 84 86 88 8A 8C 8E
@@ -411,7 +411,7 @@ OPXTBL  !WORD   ZERO,ADD,SUB,MUL,DIV,MOD,INCR,DECR              ; 00 02 04 06 08
         !WORD   LNOT,LOR,LAND,LA,LLA,CB,CW,CSX                  ; 20 22 24 26 28 2A 2C 2E
         !WORD   DROP,DROP2,DUP,DIVMOD,ADDI,SUBI,ANDI,ORI        ; 30 32 34 36 38 3A 3C 3E
         !WORD   ISEQ,ISNE,ISGT,ISLT,ISGE,ISLE,BRFLS,BRTRU       ; 40 42 44 46 48 4A 4C 4E
-        !WORD   BRNCH,BRNE,CALLX,ICALX,ENTER,LEAVEX,RETX,CFFB   ; 50 52 54 56 58 5A 5C 5E
+        !WORD   BRNCH,SEL,CALLX,ICALX,ENTER,LEAVEX,RETX,CFFB    ; 50 52 54 56 58 5A 5C 5E
         !WORD   LBX,LWX,LLBX,LLWX,LABX,LAWX,DLB,DLW             ; 60 62 64 66 68 6A 6C 6E
         !WORD   SB,SW,SLB,SLW,SAB,SAW,DAB,DAW                   ; 70 72 74 76 78 7A 7C 7E
         !WORD   BRGT,BRLT,INCBRLE,ADDBRLE,DECBRGE,SUBBRGE       ; 80 82 84 86 88 8A 8C 8E
@@ -1309,6 +1309,50 @@ ISLT    LDA     ESTKL+1,X
 ;*
 ;* BRANCHES
 ;*
+SEL     INX
+        TYA                     ; FLATTEN IP
+        SEC
+        ADC     IPL
+        STA     TMPL
+        LDA     #$00
+        TAY
+        ADC     IPH
+        STA     TMPH            ; ADD BRANCH OFFSET
+        LDA     (TMP),Y
+        ;CLC                    ; BETTER NOT CARRY OUT OF IP+Y
+        ADC     TMPL
+        STA     IPL
+        INY
+        LDA     (TMP),Y
+        ADC     TMPH
+        STA     IPH
+        DEY
+        LDA     (IP),Y
+        STA     TMPL            ; CASE COUNT
+        INC     IPL
+        BNE     +
+        INC     IPH
++       LDA     ESTKL-1,X
+CASELP  CMP     (IP),Y
+        BNE     +
+        LDA     ESTKH-1,X
+        INY
+        CMP     (IP),Y
+        BEQ     BRNCH
+        LDA     ESTKL-1,X
+        DEY
++       DEC     TMPL
+        BEQ     +
+        INY
+        INY
+        INY
+        INY
+        BNE     CASELP
+        INC     IPH
+        BNE     CASELP
++       INY
+        INY
+        INY
 FIXNEXT TYA
         LDY     #$00
         CLC
@@ -1325,14 +1369,14 @@ FIXNEXT TYA
 ;        CMP     ESTKH,X
 ;        BEQ     BRNCH
 ;        BNE     NOBRNCH
-BRNE    INX
-        LDA     ESTKL-1,X
-        CMP     ESTKL,X
-        BNE     BRNCH
-        LDA     ESTKH-1,X
-        CMP     ESTKH,X
-        BEQ     NOBRNCH
-        BNE     BRNCH
+;BRNE    INX
+;        LDA     ESTKL-1,X
+;        CMP     ESTKL,X
+;        BNE     BRNCH
+;        LDA     ESTKH-1,X
+;        CMP     ESTKH,X
+;        BEQ     NOBRNCH
+;        BNE     BRNCH
 BRTRU   INX
         LDA     ESTKH-1,X
         ORA     ESTKL-1,X

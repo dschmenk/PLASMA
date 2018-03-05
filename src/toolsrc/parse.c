@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 #include "plasm.h"
 #define LVALUE      0
 #define RVALUE      1
@@ -798,7 +799,9 @@ t_opseq *parse_set(t_opseq *codeseq)
 int parse_stmnt(void)
 {
     int tag_prevbrk, tag_prevcnt, tag_else, tag_endif, tag_while, tag_wend, tag_repeat, tag_for, tag_choice, tag_of;
-    int type, addr, step, cfnvals, prev_for;
+    int type, addr, step, cfnvals, prev_for, constsize, casecnt;
+    int *caseval, *casetag;
+    long constval;
     char *idptr;
     t_opseq *seq, *fromseq, *toseq;
 
@@ -913,9 +916,9 @@ int parse_stmnt(void)
             infor     = prev_for;
             break;
         case FOR_TOKEN:
+            stack_loop += 2;
             prev_for    = infor;
             infor       = 1;
-            stack_loop += 2;
             tag_prevbrk = break_tag;
             break_tag   = tag_new(BRANCH_TYPE);
             tag_for     = tag_new(BRANCH_TYPE);
@@ -996,17 +999,19 @@ int parse_stmnt(void)
             }
             emit_codetag(break_tag);
             break_tag   = tag_prevbrk;
-            stack_loop -= 2;
             infor       = prev_for;
+            stack_loop -= 2;
             break;
         case CASE_TOKEN:
             prev_for    = infor;
             infor       = 0;
-            stack_loop++;
             tag_prevbrk = break_tag;
             break_tag   = tag_new(BRANCH_TYPE);
             tag_choice  = tag_new(BRANCH_TYPE);
-            tag_of      = tag_new(BRANCH_TYPE);
+            caseval     = malloc(sizeof(int)*256);
+            casetag     = malloc(sizeof(int)*256);
+            casecnt     = 0;
+            //stack_loop++;
             if (!(seq = parse_expr(NULL, &cfnvals)))
                 parse_error("Bad CASE expression");
             if (cfnvals > 1)
@@ -1015,33 +1020,53 @@ int parse_stmnt(void)
                 while (cfnvals-- > 1) seq = gen_drop(seq);
             }
             emit_seq(seq);
+            emit_select(tag_choice);
             next_line();
             while (scantoken != ENDCASE_TOKEN)
             {
                 if (scantoken == OF_TOKEN)
                 {
-                    if (!(seq = parse_expr(NULL, &cfnvals)))
-                        parse_error("Bad CASE OF expression");
-                    if (cfnvals > 1)
-                    {
-                        parse_warn("Expression value overflow");
-                        while (cfnvals-- > 1) seq = gen_drop(seq);
-                    }
-                    emit_seq(seq);
-                    emit_brne(tag_choice);
+                    constval = 0;
+                    parse_constexpr(&constval, &constsize);
+                    //if (!(seq = parse_expr(NULL, &cfnvals)))
+                    //    parse_error("Bad CASE OF expression");
+                    //if (cfnvals > 1)
+                    //{
+                    //    parse_warn("Expression value overflow");
+                    //    while (cfnvals-- > 1) seq = gen_drop(seq);
+                    //}
+                    //emit_seq(seq);
+                    //emit_brne(tag_choice);
+                    //tag_choice  = tag_new(BRANCH_TYPE);
+                    tag_of           = tag_new(BRANCH_TYPE);
+                    caseval[casecnt] = constval;
+                    casetag[casecnt] = tag_of;
+                    casecnt++;
+                    if (casecnt > 255)
+                        parse_error("CASE clause overflow");
                     emit_codetag(tag_of);
                     while (parse_stmnt()) next_line();
-                    tag_of = tag_new(BRANCH_TYPE);
-                    if (prevstmnt != BREAK_TOKEN) // Fall through to next OF if no break
-                        emit_brnch(tag_of);
-                    emit_codetag(tag_choice);
-                    tag_choice = tag_new(BRANCH_TYPE);
+                    //tag_of = tag_new(BRANCH_TYPE);
+                    //if (prevstmnt != BREAK_TOKEN) // Fall through to next OF if no break
+                    //    emit_brnch(tag_of);
+                    //emit_codetag(tag_choice);
+                    //tag_choice = tag_new(BRANCH_TYPE);
                 }
                 else if (scantoken == DEFAULT_TOKEN)
                 {
-                    emit_codetag(tag_of);
-                    tag_of = 0;
+                    if (prevstmnt != BREAK_TOKEN) // Fall through to next OF if no break
+                    {
+                        tag_of = tag_new(BRANCH_TYPE);
+                        emit_brnch(tag_of);
+                    }
+                    else
+                        tag_of = 0;
+                    emit_codetag(tag_choice);
+                    emit_caseblock(casecnt, caseval, casetag);
+                    tag_choice = 0;
                     scan();
+                    if (tag_of)
+                        emit_codetag(tag_of);
                     while (parse_stmnt()) next_line();
                     if (scantoken != ENDCASE_TOKEN)
                         parse_error("Bad CASE DEFAULT clause");
@@ -1051,13 +1076,21 @@ int parse_stmnt(void)
                 else
                     parse_error("Bad CASE clause");
             }
-            if (tag_of)
-                emit_codetag(tag_of);
+            if (tag_choice)
+            {
+                emit_brnch(break_tag);
+                emit_codetag(tag_choice);
+                emit_caseblock(casecnt, caseval, casetag);
+            }
+            free(caseval);
+            free(casetag);
+            //if (tag_of)
+            //    emit_codetag(tag_of);
             emit_codetag(break_tag);
-            emit_drop();
+            //emit_drop();
+            //stack_loop--;
             break_tag = tag_prevbrk;
-            stack_loop--;
-            infor = prev_for;
+            infor     = prev_for;
             break;
         case BREAK_TOKEN:
             if (break_tag)
@@ -1079,7 +1112,14 @@ int parse_stmnt(void)
             if (infunc)
             {
                 int i;
-                for (i = 0; i < stack_loop; i++)
+                
+                i = stack_loop;
+                while (i >= 2)
+                {
+                    emit_drop2();
+                    i -= 2;
+                }
+                if (i)
                     emit_drop();
                 cfnvals = 0;
                 emit_seq(parse_list(NULL, &cfnvals));

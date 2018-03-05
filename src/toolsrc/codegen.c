@@ -773,6 +773,23 @@ void emit_indexword(void)
 {
     printf("\t%s\t$1E\t\t\t; IDXW\n", DB);
 }
+void emit_select(int tag)
+{
+    emit_pending_seq();
+    printf("\t%s\t$52\t\t\t; SEL\n", DB);
+    printf("\t%s\t_B%03d-*\n", DW, tag);
+}
+void emit_caseblock(int casecnt, int *caseof, int *casetag)
+{
+    int i;
+    
+    printf("\t%s\t$%02lX\t\t\t; CASEBLOCK\n", DB, casecnt & 0xFF);
+    for (i = 0; i < casecnt; i++)
+    {
+        printf("\t%s\t$%04lX\n", DW, caseof[i] & 0xFFFF);
+        printf("\t%s\t_B%03d-*\n", DW, casetag[i]);
+    }
+}
 void emit_brfls(int tag)
 {
     printf("\t%s\t$4C\t\t\t; BRFLS\t_B%03d\n", DB, tag);

@@ -134,6 +134,8 @@ void emit_indexbyte(void);
 void emit_indexword(void);
 int emit_unaryop(t_token op);
 int emit_op(t_token op);
+void emit_select(int tag);
+void emit_caseblock(int casecnt, int *caseof, int *casetag);
 void emit_brtru(int tag);
 void emit_brfls(int tag);
 void emit_brne(int tag);
