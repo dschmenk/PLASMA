@@ -600,8 +600,10 @@ void emit_codetag(int tag)
 void emit_const(int cval)
 {
     emit_pending_seq();
-    if (cval == 0x0000)
-        printf("\t%s\t$00\t\t\t; ZERO\n", DB);
+    if ((cval & 0xFFFF) == 0xFFFF)
+        printf("\t%s\t$80\t\t\t; MINUS ONE\n", DB);
+    else if ((cval & 0xFFF0) == 0x0000)
+        printf("\t%s\t$%02X\t\t\t; CN\t%d\n", DB, cval*2, cval);
     else if ((cval & 0xFF00) == 0x0000)
         printf("\t%s\t$2A,$%02X\t\t\t; CB\t%d\n", DB, cval, cval);
     else if ((cval & 0xFF00) == 0xFF00)
@@ -767,11 +769,11 @@ void emit_globaladdr(int tag, int offset, int type)
 }
 void emit_indexbyte(void)
 {
-    printf("\t%s\t$02\t\t\t; IDXB\n", DB);
+    printf("\t%s\t$82\t\t\t; IDXB\n", DB);
 }
 void emit_indexword(void)
 {
-    printf("\t%s\t$1E\t\t\t; IDXW\n", DB);
+    printf("\t%s\t$9E\t\t\t; IDXW\n", DB);
 }
 void emit_select(int tag)
 {
@@ -809,49 +811,49 @@ void emit_brnch(int tag)
 void emit_brand(int tag)
 {
     emit_pending_seq();
-    printf("\t%s\t$8C\t\t\t; BRAND\t_B%03d\n", DB, tag);
+    printf("\t%s\t$AC\t\t\t; BRAND\t_B%03d\n", DB, tag);
     printf("\t%s\t_B%03d-*\n", DW, tag);
 }
 void emit_bror(int tag)
 {
     emit_pending_seq();
-    printf("\t%s\t$8E\t\t\t; BROR\t_B%03d\n", DB, tag);
+    printf("\t%s\t$AE\t\t\t; BROR\t_B%03d\n", DB, tag);
     printf("\t%s\t_B%03d-*\n", DW, tag);
 }
 void emit_brgt(int tag)
 {
     emit_pending_seq();
-    printf("\t%s\t$80\t\t\t; BRGT\t_B%03d\n", DB, tag);
+    printf("\t%s\t$A0\t\t\t; BRGT\t_B%03d\n", DB, tag);
     printf("\t%s\t_B%03d-*\n", DW, tag);
 }
 void emit_brlt(int tag)
 {
     emit_pending_seq();
-    printf("\t%s\t$82\t\t\t; BRLT\t_B%03d\n", DB, tag);
+    printf("\t%s\t$A2\t\t\t; BRLT\t_B%03d\n", DB, tag);
     printf("\t%s\t_B%03d-*\n", DW, tag);
 }
 void emit_incbrle(int tag)
 {
     emit_pending_seq();
-    printf("\t%s\t$84\t\t\t; INCBRLE\t_B%03d\n", DB, tag);
+    printf("\t%s\t$A4\t\t\t; INCBRLE\t_B%03d\n", DB, tag);
     printf("\t%s\t_B%03d-*\n", DW, tag);
 }
 void emit_addbrle(int tag)
 {
     emit_pending_seq();
-    printf("\t%s\t$86\t\t\t; BRLE\t_B%03d\n", DB, tag);
+    printf("\t%s\t$A6\t\t\t; BRLE\t_B%03d\n", DB, tag);
     printf("\t%s\t_B%03d-*\n", DW, tag);
 }
 void emit_decbrge(int tag)
 {
     emit_pending_seq();
-    printf("\t%s\t$88\t\t\t; DECBRGE\t_B%03d\n", DB, tag);
+    printf("\t%s\t$A8\t\t\t; DECBRGE\t_B%03d\n", DB, tag);
     printf("\t%s\t_B%03d-*\n", DW, tag);
 }
 void emit_subbrge(int tag)
 {
     emit_pending_seq();
-    printf("\t%s\t$8A\t\t\t; BRGE\t_B%03d\n", DB, tag);
+    printf("\t%s\t$AA\t\t\t; BRGE\t_B%03d\n", DB, tag);
     printf("\t%s\t_B%03d-*\n", DW, tag);
 }
 void emit_call(int tag, int type)
@@ -918,19 +920,19 @@ int emit_unaryop(t_token op)
     switch (op)
     {
         case NEG_TOKEN:
-            printf("\t%s\t$10\t\t\t; NEG\n", DB);
+            printf("\t%s\t$90\t\t\t; NEG\n", DB);
             break;
         case COMP_TOKEN:
-            printf("\t%s\t$12\t\t\t; COMP\n", DB);
+            printf("\t%s\t$92\t\t\t; COMP\n", DB);
             break;
         case LOGIC_NOT_TOKEN:
             printf("\t%s\t$20\t\t\t; NOT\n", DB);
             break;
         case INC_TOKEN:
-            printf("\t%s\t$0C\t\t\t; INCR\n", DB);
+            printf("\t%s\t$8C\t\t\t; INCR\n", DB);
             break;
         case DEC_TOKEN:
-            printf("\t%s\t$0E\t\t\t; DECR\n", DB);
+            printf("\t%s\t$8E\t\t\t; DECR\n", DB);
             break;
         case BPTR_TOKEN:
             emit_lb();
@@ -950,34 +952,34 @@ int emit_op(t_token op)
     switch (op)
     {
         case MUL_TOKEN:
-            printf("\t%s\t$06\t\t\t; MUL\n", DB);
+            printf("\t%s\t$86\t\t\t; MUL\n", DB);
             break;
         case DIV_TOKEN:
-            printf("\t%s\t$08\t\t\t; DIV\n", DB);
+            printf("\t%s\t$88\t\t\t; DIV\n", DB);
             break;
         case MOD_TOKEN:
-            printf("\t%s\t$0A\t\t\t; MOD\n", DB);
+            printf("\t%s\t$8A\t\t\t; MOD\n", DB);
             break;
         case ADD_TOKEN:
-            printf("\t%s\t$02\t\t\t; ADD\n", DB);
+            printf("\t%s\t$82\t\t\t; ADD\n", DB);
             break;
         case SUB_TOKEN:
-            printf("\t%s\t$04\t\t\t; SUB\n", DB);
+            printf("\t%s\t$84\t\t\t; SUB\n", DB);
             break;
         case SHL_TOKEN:
-            printf("\t%s\t$1A\t\t\t; SHL\n", DB);
+            printf("\t%s\t$9A\t\t\t; SHL\n", DB);
             break;
         case SHR_TOKEN:
-            printf("\t%s\t$1C\t\t\t; SHR\n", DB);
+            printf("\t%s\t$9C\t\t\t; SHR\n", DB);
             break;
         case AND_TOKEN:
-            printf("\t%s\t$14\t\t\t; AND\n", DB);
+            printf("\t%s\t$94\t\t\t; AND\n", DB);
             break;
         case OR_TOKEN:
-            printf("\t%s\t$16\t\t\t; IOR\n", DB);
+            printf("\t%s\t$96\t\t\t; IOR\n", DB);
             break;
         case EOR_TOKEN:
-            printf("\t%s\t$18\t\t\t; XOR\n", DB);
+            printf("\t%s\t$98\t\t\t; XOR\n", DB);
             break;
         case EQ_TOKEN:
             printf("\t%s\t$40\t\t\t; ISEQ\n", DB);
