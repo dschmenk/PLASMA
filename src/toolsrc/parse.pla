@@ -494,7 +494,7 @@ end
 def parse_expr(codeseq)#2
     byte stackdepth, matchdepth, stkdepth1, prevmatch, matchop, i
     word optos
-    word tag_else, tag_endtri
+    word tag_else, tag_endop
 
     stackdepth = 0
     matchop    = 0
@@ -524,21 +524,32 @@ def parse_expr(codeseq)#2
         codeseq = gen_bop(codeseq, pop_op)
         stackdepth--
     loop
-    //
-    // Look for ternary operator
-    //
-    if token == TERNARY_TKN
+    if token == LOGIC_AND_TKN
+        if stackdepth <> 1; exit_err(ERR_OVER|ERR_SYNTAX); fin
+        tag_endop          = new_tag(RELATIVE_FIXUP)
+        codeseq            = gen_oprel(codeseq, BRAND_CODE, tag_endop)
+        codeseq, stkdepth1 = parse_expr(codeseq)
+        if stkdepth1 <> stackdepth; exit_err(ERR_INVAL|ERR_CODE); fin
+        codeseq            = gen_ctag(codeseq, tag_endop)
+    elsif token == LOGIC_OR_TKN
+        if stackdepth <> 1; exit_err(ERR_OVER|ERR_SYNTAX); fin
+        tag_endop          = new_tag(RELATIVE_FIXUP)
+        codeseq            = gen_oprel(codeseq, BROR_CODE, tag_endop)
+        codeseq, stkdepth1 = parse_expr(codeseq)
+        if stkdepth1 <> stackdepth; exit_err(ERR_INVAL|ERR_CODE); fin
+        codeseq            = gen_ctag(codeseq, tag_endop)
+    elsif token == TERNARY_TKN
         if stackdepth <> 1; exit_err(ERR_OVER|ERR_SYNTAX); fin
         tag_else            = new_tag(RELATIVE_FIXUP)
-        tag_endtri          = new_tag(RELATIVE_FIXUP)
+        tag_endop           = new_tag(RELATIVE_FIXUP)
         codeseq             = gen_oprel(codeseq, BRFALSE_CODE, tag_else)
         codeseq, stkdepth1  = parse_expr(codeseq)
         if token <> TRIELSE_TKN; exit_err(ERR_MISS|ERR_SYNTAX); fin
-        codeseq             = gen_oprel(codeseq, BRNCH_CODE, tag_endtri)
+        codeseq             = gen_oprel(codeseq, BRNCH_CODE, tag_endop)
         codeseq             = gen_ctag(codeseq, tag_else)
         codeseq, stackdepth = parse_expr(codeseq)
         if stkdepth1 <> stackdepth; exit_err(ERR_INVAL|ERR_CODE); fin
-        codeseq             = gen_ctag(codeseq, tag_endtri)
+        codeseq             = gen_ctag(codeseq, tag_endop)
     fin
     return codeseq, stackdepth
 end

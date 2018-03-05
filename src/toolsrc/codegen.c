@@ -806,10 +806,16 @@ void emit_brnch(int tag)
     printf("\t%s\t$50\t\t\t; BRNCH\t_B%03d\n", DB, tag);
     printf("\t%s\t_B%03d-*\n", DW, tag);
 }
-void emit_brne(int tag)
+void emit_brand(int tag)
 {
     emit_pending_seq();
-    printf("\t%s\t$52\t\t\t; BRNE\t_B%03d\n", DB, tag);
+    printf("\t%s\t$8C\t\t\t; BRAND\t_B%03d\n", DB, tag);
+    printf("\t%s\t_B%03d-*\n", DW, tag);
+}
+void emit_bror(int tag)
+{
+    emit_pending_seq();
+    printf("\t%s\t$8E\t\t\t; BROR\t_B%03d\n", DB, tag);
     printf("\t%s\t_B%03d-*\n", DW, tag);
 }
 void emit_brgt(int tag)
@@ -991,12 +997,12 @@ int emit_op(t_token op)
         case LE_TOKEN:
             printf("\t%s\t$4A\t\t\t; ISLE\n", DB);
             break;
-        case LOGIC_OR_TOKEN:
-            printf("\t%s\t$22\t\t\t; LOR\n", DB);
-            break;
-        case LOGIC_AND_TOKEN:
-            printf("\t%s\t$24\t\t\t; LAND\n", DB);
-            break;
+//        case LOGIC_OR_TOKEN:
+//            printf("\t%s\t$22\t\t\t; LOR\n", DB);
+//            break;
+//        case LOGIC_AND_TOKEN:
+//            printf("\t%s\t$24\t\t\t; LAND\n", DB);
+//            break;
         case COMMA_TOKEN:
             break;
         default:
@@ -1268,14 +1274,14 @@ int crunch_seq(t_opseq **seq, int pass)
                                     op->val = op->val <= opnext->val ? 1 : 0;
                                     freeops  = 2;
                                     break;
-                                case BINARY_CODE(LOGIC_OR_TOKEN):
-                                    op->val = op->val || opnext->val ? 1 : 0;
-                                    freeops  = 2;
-                                    break;
-                                case BINARY_CODE(LOGIC_AND_TOKEN):
-                                    op->val = op->val && opnext->val ? 1 : 0;
-                                    freeops  = 2;
-                                    break;
+//                                case BINARY_CODE(LOGIC_OR_TOKEN):
+//                                    op->val = op->val || opnext->val ? 1 : 0;
+//                                    freeops  = 2;
+//                                    break;
+//                                case BINARY_CODE(LOGIC_AND_TOKEN):
+//                                    op->val = op->val && opnext->val ? 1 : 0;
+//                                    freeops  = 2;
+//                                    break;
                             }
                         // End of collapse constant operation
                         if ((pass > 0) && (freeops == 0) && (op->val != 0))
@@ -1666,8 +1672,8 @@ int emit_pending_seq()
             case LT_CODE:
             case GT_CODE:
             case LE_CODE:
-            case LOGIC_OR_CODE:
-            case LOGIC_AND_CODE:
+//            case LOGIC_OR_CODE:
+//            case LOGIC_AND_CODE:
                 emit_op(op->code);
                 break;
             case CONST_CODE:
@@ -1762,6 +1768,12 @@ int emit_pending_seq()
                 break;
             case BRNCH_CODE:
                 emit_brnch(op->tag);
+                break;
+            case BRAND_CODE:
+                emit_brand(op->tag);
+                break;
+            case BROR_CODE:
+                emit_bror(op->tag);
                 break;
             case BRFALSE_CODE:
                 emit_brfls(op->tag);

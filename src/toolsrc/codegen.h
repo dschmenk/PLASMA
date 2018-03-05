@@ -31,8 +31,8 @@ typedef struct _opseq {
 #define LT_CODE     (0x0200|LT_TOKEN)
 #define GT_CODE     (0x0200|GT_TOKEN)
 #define LE_CODE     (0x0200|LE_TOKEN)
-#define LOGIC_OR_CODE (0x0200|LOGIC_OR_TOKEN)
-#define LOGIC_AND_CODE (0x0200|LOGIC_AND_TOKEN)
+//#define LOGIC_OR_CODE (0x0200|LOGIC_OR_TOKEN)
+//#define LOGIC_AND_CODE (0x0200|LOGIC_AND_TOKEN)
 #define CONST_CODE  0x0300
 #define STR_CODE    0x0301
 #define LB_CODE     0x0302
@@ -66,8 +66,10 @@ typedef struct _opseq {
 #define BRNCH_CODE  0x0320
 #define BRFALSE_CODE 0x0321
 #define BRTRUE_CODE 0x0322
-#define CODETAG_CODE 0x0323
-#define NOP_CODE    0x0324
+#define BRAND_CODE  0x323
+#define BROR_CODE   0x324
+#define CODETAG_CODE 0x0325
+#define NOP_CODE    0x0326
 
 #define gen_uop(seq,op)     gen_seq(seq,UNARY_CODE(op),0,0,0,0)
 #define gen_op(seq,op)      gen_seq(seq,BINARY_CODE(op),0,0,0,0)
@@ -83,6 +85,8 @@ typedef struct _opseq {
 #define gen_sw(seq)         gen_seq(seq,SW_CODE,0,0,0,0)
 #define gen_icall(seq)      gen_seq(seq,ICAL_CODE,0,0,0,0)
 #define gen_drop(seq)       gen_seq(seq,DROP_CODE,0,0,0,0)
+#define gen_brand(seq,tag)  gen_seq(seq,BRAND_CODE,0,tag,0,0)
+#define gen_bror(seq,tag)   gen_seq(seq,BROR_CODE,0,tag,0,0)
 #define gen_brfls(seq,tag)  gen_seq(seq,BRFALSE_CODE,0,tag,0,0)
 #define gen_brtru(seq,tag)  gen_seq(seq,BRTRUE_CODE,0,tag,0,0)
 #define gen_brnch(seq,tag)  gen_seq(seq,BRNCH_CODE,0,tag,0,0)
@@ -136,6 +140,8 @@ int emit_unaryop(t_token op);
 int emit_op(t_token op);
 void emit_select(int tag);
 void emit_caseblock(int casecnt, int *caseof, int *casetag);
+void emit_brand(int tag);
+void emit_bror(int tag);
 void emit_brtru(int tag);
 void emit_brfls(int tag);
 void emit_brne(int tag);

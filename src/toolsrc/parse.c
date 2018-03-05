@@ -25,8 +25,8 @@ t_token binary_ops_table[] = {
     OR_TOKEN,
     GT_TOKEN, GE_TOKEN, LT_TOKEN, LE_TOKEN,
     EQ_TOKEN, NE_TOKEN,
-    LOGIC_AND_TOKEN,
-    LOGIC_OR_TOKEN
+//    LOGIC_AND_TOKEN,
+//    LOGIC_OR_TOKEN
     /* Lowest precedence  */
 };
 t_token binary_ops_precedence[] = {
@@ -39,8 +39,8 @@ t_token binary_ops_precedence[] = {
     6,
     7, 7, 7, 7,
     8, 8,
-    9,
-    10
+//    9,
+//    10
     /* Lowest precedence  */
 };
 
@@ -730,14 +730,48 @@ t_opseq *parse_expr(t_opseq *codeseq, int *stackdepth)
         if (stackdepth)
             (*stackdepth)--;
     }
-    /*
-     * Look for ternary operator
-     */
-    if (scantoken == TERNARY_TOKEN)
+    if (scantoken == LOGIC_AND_TOKEN)
+    {
+        int tag_and;
+        int stackdepth1;
+
+        /*
+         * Short-circuit AND
+         */
+        if (*stackdepth != 1)
+            parse_error("AND must evaluate to single value");
+        tag_and = tag_new(BRANCH_TYPE);
+        codeseq = gen_brand(codeseq, tag_and);
+        codeseq = parse_expr(codeseq, &stackdepth1);
+        if (stackdepth1 != *stackdepth)
+            parse_error("Inconsistent AND value counts");
+        codeseq = gen_codetag(codeseq, tag_and);
+    }
+    else if (scantoken == LOGIC_OR_TOKEN)
+    {
+        int tag_or;
+        int stackdepth1;
+
+        /*
+         * Short-circuit OR
+         */
+        if (*stackdepth != 1)
+            parse_error("OR must evaluate to single value");
+        tag_or  = tag_new(BRANCH_TYPE);
+        codeseq = gen_bror(codeseq, tag_or);
+        codeseq = parse_expr(codeseq, &stackdepth1);
+        if (stackdepth1 != *stackdepth)
+            parse_error("Inconsistent AND value counts");
+        codeseq = gen_codetag(codeseq, tag_or);
+    } 
+    else if (scantoken == TERNARY_TOKEN)
     {
         int tag_else, tag_endtri;
         int stackdepth1;
 
+        /*
+         * Look for ternary operator
+         */
         if (*stackdepth != 1)
             parse_error("Ternary op must evaluate to single value");
         tag_else   = tag_new(BRANCH_TYPE);

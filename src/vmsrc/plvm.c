@@ -517,15 +517,15 @@ void call(uword pc)
 /*
  * OPCODE TABLE
  *
-OPTBL:  DW  ZERO,ADD,SUB,MUL,DIV,MOD,INCR,DECR          ; 00 02 04 06 08 0A 0C 0E
-        DW  NEG,COMP,AND,IOR,XOR,SHL,SHR,IDXW           ; 10 12 14 16 18 1A 1C 1E
-        DW  NOT,LOR,LAND,LA,LLA,CB,CW,CS                ; 20 22 24 26 28 2A 2C 2E
-        DW  DROP,DROP2,DUP,DIVMOD,ADDI,SUBI,ANDI,ORI    ; 30 32 34 36 38 3A 3C 3E
-        DW  ISEQ,ISNE,ISGT,ISLT,ISGE,ISLE,BRFLS,BRTRU   ; 40 42 44 46 48 4A 4C 4E
-        DW  BRNCH,SEL,CALL,ICAL,ENTER,LEAVE,RET,CFFB    ; 50 52 54 56 58 5A 5C 5E
-        DW  LB,LW,LLB,LLW,LAB,LAW,DLB,DLW               ; 60 62 64 66 68 6A 6C 6E
-        DW  SB,SW,SLB,SLW,SAB,SAW,DAB,DAW               ; 70 72 74 76 78 7A 7C 7E
-        DW  ADDBRLE,INCBRLE,SUBBRGE,DECBRGE,BRGT,BRLT   ; 80 82 84 86 88 8A 8C 8E
+OPTBL:  DW  ZERO,ADD,SUB,MUL,DIV,MOD,INCR,DECR                      ; 00 02 04 06 08 0A 0C 0E
+        DW  NEG,COMP,AND,IOR,XOR,SHL,SHR,IDXW                       ; 10 12 14 16 18 1A 1C 1E
+        DW  NOT,LOR,LAND,LA,LLA,CB,CW,CS                            ; 20 22 24 26 28 2A 2C 2E
+        DW  DROP,DROP2,DUP,DIVMOD,ADDI,SUBI,ANDI,ORI                ; 30 32 34 36 38 3A 3C 3E
+        DW  ISEQ,ISNE,ISGT,ISLT,ISGE,ISLE,BRFLS,BRTRU               ; 40 42 44 46 48 4A 4C 4E
+        DW  BRNCH,SEL,CALL,ICAL,ENTER,LEAVE,RET,CFFB                ; 50 52 54 56 58 5A 5C 5E
+        DW  LB,LW,LLB,LLW,LAB,LAW,DLB,DLW                           ; 60 62 64 66 68 6A 6C 6E
+        DW  SB,SW,SLB,SLW,SAB,SAW,DAB,DAW                           ; 70 72 74 76 78 7A 7C 7E
+        DW  ADDBRLE,INCBRLE,SUBBRGE,DECBRGE,BRGT,BRLT               ; 80 82 84 86 88 8A 8C 8E
         DW  BRGT,BRLT,INCBRLE,ADDBRLE,DECBRGE,SUBBRGE   ; 80 82 84 86 88 8A 8C 8E
 */
 void interp(code *ip)
@@ -971,6 +971,28 @@ void interp(code *ip)
                 {
                     POP;
                     ip += 2;
+                }
+                break;
+            case 0x8C: // BRAND : SHORT CIRCUIT AND
+                if (TOS) // EVALUATE RIGHT HAND OF AND
+                {
+                    POP;
+                    ip += 2;
+                }
+                else // MUST BE FALSE, SKIP RIGHT HAND
+                {
+                    ip += WORD_PTR(ip);
+                }
+                break;
+            case 0x8E: // BROR : SHORT CIRCUIT OR
+                if (!TOS) // EVALUATE RIGHT HAND OF OR
+                {
+                    POP;
+                    ip += 2;
+                }
+                else // MUST BE TRUE, SKIP RIGHT HAND
+                {
+                    ip += WORD_PTR(ip);
                 }
                 break;
                 /*
