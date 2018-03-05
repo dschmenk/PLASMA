@@ -195,13 +195,13 @@ VMCORE  =        *
         !ALIGN  255,0
 OPTBL   !WORD   CN,CN,CN,CN,CN,CN,CN,CN                                 ; 00 02 04 06 08 0A 0C 0E
         !WORD   CN,CN,CN,CN,CN,CN,CN,CN                                 ; 10 12 14 16 18 1A 1C 1E
-        !WORD   LNOT,LOR,LAND,LA,LLA,CB,CW,CS                           ; 20 22 24 26 28 2A 2C 2E
+        !WORD   MINUS1,NEXTOP,NEXTOP,LA,LLA,CB,CW,CS                    ; 20 22 24 26 28 2A 2C 2E
         !WORD   DROP,DROP2,DUP,DIVMOD,ADDI,SUBI,ANDI,ORI                ; 30 32 34 36 38 3A 3C 3E
         !WORD   ISEQ,ISNE,ISGT,ISLT,ISGE,ISLE,BRFLS,BRTRU               ; 40 42 44 46 48 4A 4C 4E
         !WORD   BRNCH,SEL,CALL,ICAL,ENTER,LEAVE,RET,CFFB                ; 50 52 54 56 58 5A 5C 5E
         !WORD   LB,LW,LLB,LLW,LAB,LAW,DLB,DLW                           ; 60 62 64 66 68 6A 6C 6E
         !WORD   SB,SW,SLB,SLW,SAB,SAW,DAB,DAW                           ; 70 72 74 76 78 7A 7C 7E
-        !WORD   MINUS1,ADD,SUB,MUL,DIV,MOD,INCR,DECR                    ; 80 82 84 86 88 8A 8C 8E
+        !WORD   LNOT,ADD,SUB,MUL,DIV,MOD,INCR,DECR                      ; 80 82 84 86 88 8A 8C 8E
         !WORD   NEG,COMP,BAND,IOR,XOR,SHL,SHR,IDXW                      ; 90 92 94 96 98 9A 9C 9E
         !WORD   BRGT,BRLT,INCBRLE,ADDBRLE,DECBRGE,SUBBRGE,BRAND,BROR    ; A0 A2 A4 A6 A8 AA AC AE
 ;*
@@ -406,13 +406,13 @@ LCDEFCMD =      *-28            ; DEFCMD IN LC MEMORY
         !ALIGN  255,0
 OPXTBL  !WORD   CN,CN,CN,CN,CN,CN,CN,CN                                 ; 00 02 04 06 08 0A 0C 0E
         !WORD   CN,CN,CN,CN,CN,CN,CN,CN                                 ; 10 12 14 16 18 1A 1C 1E
-        !WORD   LNOT,LOR,LAND,LA,LLA,CB,CW,CSX                          ; 20 22 24 26 28 2A 2C 2E
+        !WORD   MINUS1,NEXTOP,NEXTOP,LA,LLA,CB,CW,CSX                   ; 20 22 24 26 28 2A 2C 2E
         !WORD   DROP,DROP2,DUP,DIVMOD,ADDI,SUBI,ANDI,ORI                ; 30 32 34 36 38 3A 3C 3E
         !WORD   ISEQ,ISNE,ISGT,ISLT,ISGE,ISLE,BRFLS,BRTRU               ; 40 42 44 46 48 4A 4C 4E
         !WORD   BRNCH,SEL,CALLX,ICALX,ENTER,LEAVEX,RETX,CFFB            ; 50 52 54 56 58 5A 5C 5E
         !WORD   LBX,LWX,LLBX,LLWX,LABX,LAWX,DLB,DLW                     ; 60 62 64 66 68 6A 6C 6E
         !WORD   SB,SW,SLB,SLW,SAB,SAW,DAB,DAW                           ; 70 72 74 76 78 7A 7C 7E
-        !WORD   MINUS1,ADD,SUB,MUL,DIV,MOD,INCR,DECR                    ; 80 82 84 86 88 8A 8C 8E
+        !WORD   LNOT,ADD,SUB,MUL,DIV,MOD,INCR,DECR                      ; 80 82 84 86 88 8A 8C 8E
         !WORD   NEG,COMP,BAND,IOR,XOR,SHL,SHR,IDXW                      ; 90 92 94 96 98 9A 9C 9E
         !WORD   BRGT,BRLT,INCBRLE,ADDBRLE,DECBRGE,SUBBRGE,BRAND,BROR    ; A0 A2 A4 A6 A8 AA AC AE
 ;*
@@ -685,31 +685,6 @@ SHR     STY     IPY
         STA     ESTKH+1,X
 +       LDY     IPY
         JMP     DROP
-;*
-;* LOGICAL AND
-;*
-LAND    LDA     ESTKL+1,X
-        ORA     ESTKH+1,X
-        BEQ     ++
-        LDA     ESTKL,X
-        ORA     ESTKH,X
-        BEQ     +
-        LDA     #$FF
-+       STA     ESTKL+1,X
-        STA     ESTKH+1,X
-++      JMP     DROP
-;*
-;* LOGICAL OR
-;*
-LOR     LDA     ESTKL,X
-        ORA     ESTKH,X
-        ORA     ESTKL+1,X
-        ORA     ESTKH+1,X
-        BEQ     +
-        LDA     #$FF
-        STA     ESTKL+1,X
-        STA     ESTKH+1,X
-+       JMP     DROP
 ;*
 ;* LOGICAL NOT
 ;*

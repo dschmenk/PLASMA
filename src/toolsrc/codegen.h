@@ -31,8 +31,6 @@ typedef struct _opseq {
 #define LT_CODE     (0x0200|LT_TOKEN)
 #define GT_CODE     (0x0200|GT_TOKEN)
 #define LE_CODE     (0x0200|LE_TOKEN)
-//#define LOGIC_OR_CODE (0x0200|LOGIC_OR_TOKEN)
-//#define LOGIC_AND_CODE (0x0200|LOGIC_AND_TOKEN)
 #define CONST_CODE  0x0300
 #define STR_CODE    0x0301
 #define LB_CODE     0x0302

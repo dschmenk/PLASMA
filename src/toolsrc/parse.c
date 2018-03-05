@@ -24,9 +24,7 @@ t_token binary_ops_table[] = {
     EOR_TOKEN,
     OR_TOKEN,
     GT_TOKEN, GE_TOKEN, LT_TOKEN, LE_TOKEN,
-    EQ_TOKEN, NE_TOKEN,
-//    LOGIC_AND_TOKEN,
-//    LOGIC_OR_TOKEN
+    EQ_TOKEN, NE_TOKEN
     /* Lowest precedence  */
 };
 t_token binary_ops_precedence[] = {
@@ -38,9 +36,7 @@ t_token binary_ops_precedence[] = {
     5,
     6,
     7, 7, 7, 7,
-    8, 8,
-//    9,
-//    10
+    8, 8
     /* Lowest precedence  */
 };
 

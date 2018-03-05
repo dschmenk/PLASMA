@@ -601,7 +601,7 @@ void emit_const(int cval)
 {
     emit_pending_seq();
     if ((cval & 0xFFFF) == 0xFFFF)
-        printf("\t%s\t$80\t\t\t; MINUS ONE\n", DB);
+        printf("\t%s\t$20\t\t\t; MINUS ONE\n", DB);
     else if ((cval & 0xFFF0) == 0x0000)
         printf("\t%s\t$%02X\t\t\t; CN\t%d\n", DB, cval*2, cval);
     else if ((cval & 0xFF00) == 0x0000)
@@ -926,7 +926,7 @@ int emit_unaryop(t_token op)
             printf("\t%s\t$92\t\t\t; COMP\n", DB);
             break;
         case LOGIC_NOT_TOKEN:
-            printf("\t%s\t$20\t\t\t; NOT\n", DB);
+            printf("\t%s\t$80\t\t\t; NOT\n", DB);
             break;
         case INC_TOKEN:
             printf("\t%s\t$8C\t\t\t; INCR\n", DB);
@@ -999,12 +999,6 @@ int emit_op(t_token op)
         case LE_TOKEN:
             printf("\t%s\t$4A\t\t\t; ISLE\n", DB);
             break;
-//        case LOGIC_OR_TOKEN:
-//            printf("\t%s\t$22\t\t\t; LOR\n", DB);
-//            break;
-//        case LOGIC_AND_TOKEN:
-//            printf("\t%s\t$24\t\t\t; LAND\n", DB);
-//            break;
         case COMMA_TOKEN:
             break;
         default:
@@ -1276,14 +1270,6 @@ int crunch_seq(t_opseq **seq, int pass)
                                     op->val = op->val <= opnext->val ? 1 : 0;
                                     freeops  = 2;
                                     break;
-//                                case BINARY_CODE(LOGIC_OR_TOKEN):
-//                                    op->val = op->val || opnext->val ? 1 : 0;
-//                                    freeops  = 2;
-//                                    break;
-//                                case BINARY_CODE(LOGIC_AND_TOKEN):
-//                                    op->val = op->val && opnext->val ? 1 : 0;
-//                                    freeops  = 2;
-//                                    break;
                             }
                         // End of collapse constant operation
                         if ((pass > 0) && (freeops == 0) && (op->val != 0))
@@ -1674,8 +1660,6 @@ int emit_pending_seq()
             case LT_CODE:
             case GT_CODE:
             case LE_CODE:
-//            case LOGIC_OR_CODE:
-//            case LOGIC_AND_CODE:
                 emit_op(op->code);
                 break;
             case CONST_CODE:
