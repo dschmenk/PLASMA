@@ -1328,6 +1328,7 @@ SEL     INX
         STA     IPH
         DEY
         LDA     (IP),Y
+        BEQ     ++
         STA     TMPL            ; CASE COUNT
         INC     IPL
         BNE     +
@@ -1358,9 +1359,9 @@ FIXNEXT TYA
         CLC
         ADC     IPL
         STA     IPL
-        BCC     +
+        BCC     ++
         INC     IPH
-+       JMP     NEXTOP
+++      JMP     NEXTOP
 ;BREQ    INX
 ;        LDA     ESTKL-1,X
 ;        CMP     ESTKL,X

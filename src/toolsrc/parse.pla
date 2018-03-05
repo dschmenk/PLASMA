@@ -590,6 +590,7 @@ def parse_stmnt
     byte type, elem_type, elem_size, i, cfnvals, prev_for
     word seq, fromseq, toseq, tag_prevbrk, tag_prevcnt, tag_else, tag_endif, tag_while, tag_wend
     word tag_repeat, tag_for, tag_choice, tag_of, idptr, addr, stepdir
+    word caseconst, casecnt, caseval, casetag
 
     if token <> END_TKN and token <> DONE_TKN and token <> OF_TKN and token <> DEFAULT_TKN
         prevstmnt = token
@@ -781,11 +782,12 @@ def parse_stmnt
         is CASE_TKN
             prev_for    = infor
             infor       = FALSE
-            stack_loop++
             tag_prevbrk = break_tag
             break_tag   = new_tag(RELATIVE_FIXUP)
             tag_choice  = new_tag(RELATIVE_FIXUP)
-            tag_of      = new_tag(RELATIVE_FIXUP)
+            caseval     = heapalloc(512)
+            casetag     = heapalloc(512)
+            casecnt     = 0
             seq, cfnvals = parse_expr(NULL)
             if !seq; exit_err(ERR_INVAL|ERR_STATE); fin
             if cfnvals > 1
@@ -793,32 +795,34 @@ def parse_stmnt
                 while cfnvals > 1;cfnvals--; seq = gen_op(seq, DROP_CODE); loop
             fin
             emit_seq(seq)
+            emit_select(tag_choice)
             nextln
             while token <> ENDCASE_TKN
                 when token
                     is OF_TKN
-                        seq, cfnvals = parse_expr(NULL)
-                        if !seq; exit_err(ERR_INVAL|ERR_STATE); fin
-                        if cfnvals > 1
-                            parse_warn("Expression value overflow")
-                            while cfnvals > 1;cfnvals--; seq = gen_op(seq, DROP_CODE); loop
-                        fin
-                        emit_seq(seq)
-                        emit_brne(tag_choice)
+                        caseconst, drop, drop = parse_constexpr
+                        tag_of                = new_tag(RELATIVE_FIXUP)
+                        caseval=>[casecnt]    = caseconst
+                        casetag=>[casecnt]    = tag_of
+                        casecnt++
+                        if casecnt > 256; exit_err(ERR_OVER|ERR_STATE); fin
                         emit_tag(tag_of)
                         while parse_stmnt
                             nextln
                         loop
-                        tag_of = new_tag(RELATIVE_FIXUP)
-                        if prevstmnt <> BREAK_TKN // Fall through to next OF if no break
+                        break
+                    is DEFAULT_TKN
+                        tag_of = 0
+                        if prevstmnt <> BREAK_TKN // Branch around caseblock if falling through
+                            tag_of = new_tag(RELATIVE_FIXUP)
                             emit_branch(tag_of)
                         fin
                         emit_tag(tag_choice)
-                        tag_choice = new_tag(RELATIVE_FIXUP)
-                        break
-                    is DEFAULT_TKN
-                        emit_tag(tag_of)
-                        tag_of = 0
+                        emit_caseblock(casecnt, caseval, casetag)
+                        tag_choice = 0
+                        if tag_of
+                            emit_tag(tag_of)
+                        fin
                         scan
                         while parse_stmnt
                             nextln
@@ -832,14 +836,15 @@ def parse_stmnt
                         exit_err(ERR_MISS|ERR_CLOSE|ERR_STATE)
                 wend
             loop
-            if (tag_of)
-                emit_tag(tag_of)
+            if tag_choice
+                emit_branch(break_tag)
+                emit_tag(tag_choice)
+                emit_caseblock(casecnt, caseval, casetag)
             fin
+            heaprelease(caseval)
             emit_tag(break_tag)
-            emit_code(DROP_CODE)
             break_tag = tag_prevbrk
-            stack_loop--
-            infor = prev_for
+            infor     = prev_for
             break
         is BREAK_TKN
             if break_tag

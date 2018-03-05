@@ -1011,7 +1011,6 @@ int parse_stmnt(void)
             caseval     = malloc(sizeof(int)*256);
             casetag     = malloc(sizeof(int)*256);
             casecnt     = 0;
-            //stack_loop++;
             if (!(seq = parse_expr(NULL, &cfnvals)))
                 parse_error("Bad CASE expression");
             if (cfnvals > 1)
@@ -1028,33 +1027,18 @@ int parse_stmnt(void)
                 {
                     constval = 0;
                     parse_constexpr(&constval, &constsize);
-                    //if (!(seq = parse_expr(NULL, &cfnvals)))
-                    //    parse_error("Bad CASE OF expression");
-                    //if (cfnvals > 1)
-                    //{
-                    //    parse_warn("Expression value overflow");
-                    //    while (cfnvals-- > 1) seq = gen_drop(seq);
-                    //}
-                    //emit_seq(seq);
-                    //emit_brne(tag_choice);
-                    //tag_choice  = tag_new(BRANCH_TYPE);
                     tag_of           = tag_new(BRANCH_TYPE);
                     caseval[casecnt] = constval;
                     casetag[casecnt] = tag_of;
                     casecnt++;
-                    if (casecnt > 255)
+                    if (casecnt > 256)
                         parse_error("CASE clause overflow");
                     emit_codetag(tag_of);
                     while (parse_stmnt()) next_line();
-                    //tag_of = tag_new(BRANCH_TYPE);
-                    //if (prevstmnt != BREAK_TOKEN) // Fall through to next OF if no break
-                    //    emit_brnch(tag_of);
-                    //emit_codetag(tag_choice);
-                    //tag_choice = tag_new(BRANCH_TYPE);
                 }
                 else if (scantoken == DEFAULT_TOKEN)
                 {
-                    if (prevstmnt != BREAK_TOKEN) // Fall through to next OF if no break
+                    if (prevstmnt != BREAK_TOKEN) // Branch around caseblock if falling through
                     {
                         tag_of = tag_new(BRANCH_TYPE);
                         emit_brnch(tag_of);
@@ -1084,11 +1068,7 @@ int parse_stmnt(void)
             }
             free(caseval);
             free(casetag);
-            //if (tag_of)
-            //    emit_codetag(tag_of);
             emit_codetag(break_tag);
-            //emit_drop();
-            //stack_loop--;
             break_tag = tag_prevbrk;
             infor     = prev_for;
             break;
