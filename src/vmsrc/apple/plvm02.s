@@ -1728,15 +1728,16 @@ CDINTRP PLY
         JMP     FETCHOP
 CDINTRPEND
 ;
-;        LDA     #<ZERO
-;        LDX     #>ZERO
-;        LDY     #(CZEROEND-CZERO)
-;        JSR     OPCPY
-;CZERO   DEX
-;        STZ     ESTKL,X
-;        STZ     ESTKH,X
-;        JMP     NEXTOP
-;CZEROEND
+        LDA     #<CN
+        LDX     #>CN
+        LDY     #(CCNEND-CCN)
+        JSR     OPCPY
+CCN     DEX
+        LSR
+        STA     ESTKL,X
+        STZ     ESTKH,X
+        JMP     NEXTOP
+CCNEND
 ;
         LDA     #<CB
         LDX     #>CB
