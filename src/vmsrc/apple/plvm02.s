@@ -706,34 +706,6 @@ DUP     DEX
         STA     ESTKH,X
         JMP     NEXTOP
 ;*
-;* CONSTANT -1, NYBBLE, BYTE, $FF BYTE, WORD (BELOW)
-;*
-MINUS1  DEX
-        LDA     #$FF
-        STA     ESTKL,X
-        STA     ESTKH,X
-        JMP     NEXTOP
-CN      DEX
-        LSR                     ; A = CONST * 2
-        STA     ESTKL,X
-        LDA     #$00
-        STA     ESTKH,X
-        JMP     NEXTOP
-CB      DEX
-        LDA     #$00
-        STA     ESTKH,X
-        INY                     ;+INC_IP
-        LDA     (IP),Y
-        STA     ESTKL,X
-        JMP     NEXTOP
-CFFB    DEX
-        LDA     #$FF
-        STA     ESTKH,X
-        INY                     ;+INC_IP
-        LDA     (IP),Y
-        STA     ESTKL,X
-        JMP     NEXTOP
-;*
 ;* ADD IMMEDIATE TO TOS
 ;*
 ADDI    INY                     ;+INC_IP
@@ -771,6 +743,34 @@ ANDI    INY                     ;+INC_IP
 ORI     INY                     ;+INC_IP
         LDA     (IP),Y
         ORA     ESTKL,X
+        STA     ESTKL,X
+        JMP     NEXTOP
+;*
+;* CONSTANT -1, NYBBLE, BYTE, $FF BYTE, WORD (BELOW)
+;*
+MINUS1  DEX
+        LDA     #$FF
+        STA     ESTKL,X
+        STA     ESTKH,X
+        JMP     NEXTOP
+CN      DEX
+        LSR                     ; A = CONST * 2
+        STA     ESTKL,X
+        LDA     #$00
+        STA     ESTKH,X
+        JMP     NEXTOP
+CB      DEX
+        LDA     #$00
+        STA     ESTKH,X
+        INY                     ;+INC_IP
+        LDA     (IP),Y
+        STA     ESTKL,X
+        JMP     NEXTOP
+CFFB    DEX
+        LDA     #$FF
+        STA     ESTKH,X
+        INY                     ;+INC_IP
+        LDA     (IP),Y
         STA     ESTKL,X
         JMP     NEXTOP
 ;*
@@ -1450,22 +1450,6 @@ ADDBRLE LDA     ESTKL,X
         STA     ESTKH+1,X
         INX
         BNE     _BRLE
-;IBRNCH  TYA                     ; FLATTEN IP
-;        CLC
-;        ADC     IPL
-;        STA     TMPL
-;        LDA     #$00
-;        TAY
-;        ADC     IPH
-;        STA     TMPH            ; ADD BRANCH OFFSET
-;        LDA     TMPL
-;        ;CLC                    ; BETTER NOT CARRY OUT OF IP+Y
-;        ADC     ESTKL,X
-;        STA     IPL
-;        LDA     TMPH
-;        ADC     ESTKH,X
-;        STA     IPH
-;        JMP     DROP
 ;*
 ;* CALL INTO ABSOLUTE ADDRESS (NATIVE CODE)
 ;*
