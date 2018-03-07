@@ -938,7 +938,7 @@ SEL     INX
         LDA     #$00
         TAY
         ADC     IPH
-        STA     TMPH            ; ADD BRANCH OFFSET
+        STA     TMPH            ; ADD CASEBLOCK OFFSET
         LDA     (TMP),Y
         ;CLC                    ; BETTER NOT CARRY OUT OF IP+Y
         ADC     TMPL
