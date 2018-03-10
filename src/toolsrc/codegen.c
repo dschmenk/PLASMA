@@ -1129,13 +1129,6 @@ int crunch_seq(t_opseq **seq, int pass)
                         freeops = 1;
                         break;
                     }
-                    if (opnext->code == BINARY_CODE(SHL_TOKEN))
-                    {
-                        op->code = DUP_CODE;
-                        opnext->code = BINARY_CODE(ADD_TOKEN);
-                        crunched = 1;
-                        break;
-                    }
                 }
                 switch (opnext->code)
                 {
@@ -1192,6 +1185,14 @@ int crunch_seq(t_opseq **seq, int pass)
                             op->tag  = opnext->tag;
                             freeops  = 1;
                         }
+                        break;
+                    case BROR_CODE:
+                        if (!op->val)
+                            freeops = -2; // Remove zero constant
+                        break;
+                    case BRAND_CODE:
+                        if (op->val)
+                            freeops = -2; // Remove non-zero constant
                         break;
                     case NE_CODE:
                         if (!op->val)
@@ -1279,16 +1280,36 @@ int crunch_seq(t_opseq **seq, int pass)
                             crunched = try_dupify(op);
                         break; // CONST_CODE
                     case BINARY_CODE(ADD_TOKEN):
-                        if (op->val >= 0 && op->val <= 255)
+                        if (op->val == 0)
+                        {
+                            freeops = -2;
+                        }
+                        else if (op->val > 0 && op->val <= 255)
                         {
                             op->code = ADDI_CODE;
                             freeops  = 1;
                         }
-                        break;
-                    case BINARY_CODE(SUB_TOKEN):
-                        if (op->val >= 0 && op->val <= 255)
+                        else if (op->val >= -255 && op->val < 0)
                         {
                             op->code = SUBI_CODE;
+                            op->val  = -op->val;
+                            freeops  = 1;
+                        }
+                        break;
+                    case BINARY_CODE(SUB_TOKEN):
+                        if (op->val == 0)
+                        {
+                            freeops = -2;
+                        }
+                        else if (op->val > 0 && op->val <= 255)
+                        {
+                            op->code = SUBI_CODE;
+                            freeops  = 1;
+                        }
+                        else if (op->val >= -255 && op->val < 0)
+                        {
+                            op->code = ADDI_CODE;
+                            op->val  = -op->val;
                             freeops  = 1;
                         }
                         break;
@@ -1300,7 +1321,11 @@ int crunch_seq(t_opseq **seq, int pass)
                         }
                         break;
                     case BINARY_CODE(OR_TOKEN):
-                        if (op->val >= 0 && op->val <= 255)
+                        if (op->val == 0)
+                        {
+                            freeops = -2;
+                        }
+                        else if (op->val > 0 && op->val <= 255)
                         {
                             op->code = ORI_CODE;
                             freeops  = 1;

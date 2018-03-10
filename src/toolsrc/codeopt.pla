@@ -79,13 +79,6 @@ def crunch_seq(seq, pass)
                         freeops     = 1
                         break
                     fin
-                    if nextop->opcode == SHL_CODE
-                        op->opcode     = DUP_CODE
-                        op->opgroup    = STACK_GROUP
-                        nextop->opcode = ADD_CODE
-                        crunched       = 1
-                        break
-                    fin
                 fin
                 when nextop->opcode
                     is NEG_CODE
@@ -120,6 +113,16 @@ def crunch_seq(seq, pass)
                             freeops     = 1
                         fin
                         break
+                    is BROR_CODE
+                        if not op=>opval
+                            freeops = -2 // Remove zero constant
+                        fin
+                        break
+                    is BRAND_CODE
+                        if op=>opval
+                            freeops = -2 // Remove non-zero constant
+                        fin
+                        break
                     is NE_CODE
                         if not op=>opval
                             freeops = -2 // Remove ZERO:ISNE
@@ -133,7 +136,7 @@ def crunch_seq(seq, pass)
                         fin
                         break
                     is CONST_CODE // Collapse constant operation
-                        nextopnext = nextop->nextop
+                        nextopnext = nextop=>opnext
                         if nextopnext
                             when nextopnext->opcode
                                 is MUL_CODE
@@ -200,14 +203,6 @@ def crunch_seq(seq, pass)
                                     op=>opval = op=>opval <= nextop=>opval
                                     freeops   = 2
                                     break
-//                                is LOGIC_OR_CODE
-//                                    op=>opval = op=>opval or nextop=>opval
-//                                    freeops   = 2
-//                                    break
-//                                is LOGIC_AND_CODE
-//                                    op=>opval = op=>opval and nextop=>opval
-//                                    freeops   = 2
-//                                    break
                             wend // End of collapse constant operation
                         fin
                         if pass and not freeops and op=>opval
@@ -215,14 +210,26 @@ def crunch_seq(seq, pass)
                         fin
                         break // CONST_CODE
                     is ADD_CODE
-                        if op=>opval >= 0 and op=>opval <= 255
+                        if op=>opval == 0
+                            freeops = -2
+                        elsif op=>opval > 0 and op=>opval <= 255
                             op->opcode = ADDI_CODE
+                            freeops    = 1
+                        elsif op=>opval >= -255 and op=>opval < 0
+                            op->opcode = SUBI_CODE
+                            op=>opval  = -op=>opval
                             freeops    = 1
                         fin
                         break
                     is SUB_CODE
-                        if op=>opval >= 0 and op=>opval <= 255
+                        if op=>opval == 0
+                            freeops = -2
+                        elsif op=>opval > 0 and op=>opval <= 255
                             op->opcode = SUBI_CODE
+                            freeops    = 1
+                        elsif op=>opval >= -255 and op=>opval < 0
+                            op->opcode = ADDI_CODE
+                            op=>opval  = -op=>opval
                             freeops    = 1
                         fin
                         break
@@ -233,7 +240,9 @@ def crunch_seq(seq, pass)
                         fin
                         break
                     is OR_CODE
-                        if op=>opval >= 0 and op=>opval <= 255
+                        if op=>opval == 0
+                            freeops = -2
+                        elsif op=>opval > 0 and op=>opval <= 255
                             op->opcode = ORI_CODE
                             freeops    = 1
                         fin
