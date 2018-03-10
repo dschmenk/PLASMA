@@ -939,6 +939,8 @@ SEL     INX
         TAY
         ADC     IPH
         STA     TMPH            ; ADD CASEBLOCK OFFSET
+        LDA     IPX             ; COPY XBYTE FROM IP
+        STA     TMPX
         LDA     (TMP),Y
         ;CLC                    ; BETTER NOT CARRY OUT OF IP+Y
         ADC     TMPL
@@ -948,6 +950,7 @@ SEL     INX
         ADC     TMPH
         STA     IPH
         DEY
+        STY     TMPX            ; CLEAR TMPX
         LDA     (IP),Y
         STA     TMPL            ; CASE COUNT
         LDA     ESTKL-1,X
