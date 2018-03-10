@@ -785,6 +785,9 @@ void emit_caseblock(int casecnt, int *caseof, int *casetag)
 {
     int i;
     
+    if (casecnt < 1 || casecnt > 256)
+        parse_error("Switch count under/overflow\n");
+    emit_pending_seq();
     printf("\t%s\t$%02lX\t\t\t; CASEBLOCK\n", DB, casecnt & 0xFF);
     for (i = 0; i < casecnt; i++)
     {

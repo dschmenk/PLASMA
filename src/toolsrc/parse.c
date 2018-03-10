@@ -1061,8 +1061,6 @@ int parse_stmnt(void)
                     caseval[casecnt] = constval;
                     casetag[casecnt] = tag_of;
                     casecnt++;
-                    if (casecnt > 256)
-                        parse_error("CASE clause overflow");
                     emit_codetag(tag_of);
                     while (parse_stmnt()) next_line();
                 }

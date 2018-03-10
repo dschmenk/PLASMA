@@ -1307,12 +1307,11 @@ SEL     INX
         STA     IPH
         DEY
         LDA     (IP),Y
-        BEQ     ++
         STA     TMPL            ; CASE COUNT
+        LDA     ESTKL-1,X
         INC     IPL
-        BNE     +
+        BNE     CASELP
         INC     IPH
-+       LDA     ESTKL-1,X
 CASELP  CMP     (IP),Y
         BNE     +
         LDA     ESTKH-1,X
@@ -1321,26 +1320,23 @@ CASELP  CMP     (IP),Y
         BEQ     BRNCH
         LDA     ESTKL-1,X
         DEY
-+       DEC     TMPL
-        BEQ     +
++       INY
         INY
         INY
-        INY
+        DEC     TMPL
+        BEQ     FIXNEXT
         INY
         BNE     CASELP
         INC     IPH
         BNE     CASELP
-+       INY
-        INY
-        INY
 FIXNEXT TYA
         LDY     #$00
         SEC
         ADC     IPL
         STA     IPL
-        BCC     ++
+        BCC     +
         INC     IPH
-++      JMP     FETCHOP
++       JMP     FETCHOP
 BRAND   LDA     ESTKL,X
         ORA     ESTKH,X
         BEQ     BRNCH

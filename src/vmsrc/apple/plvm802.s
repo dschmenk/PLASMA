@@ -1183,32 +1183,27 @@ SEL     TYA                     ; FLATTEN IP
         LDA     (IP),Y
         TAX                     ; CASE COUNT
         PLA
-        CPX     #$00
-        BEQ     ++
         INC     IP
 CASELP  CMP     (IP),Y
-        BEQ     +++
+        BEQ     ++
+        INY
+        INY
+        INY
         DEX
-        BEQ     +
-        INY
-        INY
-        INY
+        BEQ     FIXNEXT
         INY
         BNE     CASELP
         +ACCMEM8                ; 8 BIT A/M
         INC     IPH
         +ACCMEM16               ; 16 BIT A/M
         BRA     CASELP
-+       INY
-        INY
-        INY
 FIXNEXT TYA
         LDY     #$00
         SEC
         ADC     IP
         STA     IP
-++      JMP     FETCHOP
-+++     INY
+        JMP     FETCHOP
+++      INY
         BRA     BRNCH
 BRAND   LDA     TOS,S
         BEQ     BRNCH
@@ -1227,13 +1222,13 @@ NOBRNCH INY                     ;+INC_IP
 BRFLS   PLA
         BNE     NOBRNCH
 BRNCH   TYA                     ; FLATTEN IP
-        CLC
+        SEC
         ADC     IP
         INY                     ;+INC_IP
         ;CLC                    ; ADD BRANCH OFFSET (BETTER NOT CARRY OUT OF IP+Y)
         ADC     (IP),Y
         STA     IP
-        LDY     #$01
+        LDY     #$00
         JMP     FETCHOP
 ;*
 ;* FOR LOOPS PUT TERMINAL VALUE AT ESTK+1 AND CURRENT COUNT ON ESTK
