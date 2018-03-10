@@ -977,12 +977,12 @@ CASELP  CMP     (IP),Y
         INY
 FIXNEXT TYA
         LDY     #$00
-        CLC
+        SEC
         ADC     IPL
         STA     IPL
         BCC     ++
         INC     IPH
-++      JMP     NEXTOP
+++      JMP     FETCHOP
 BRAND   LDA     ESTKL,X
         ORA     ESTKH,X
         BEQ     BRNCH
@@ -1060,7 +1060,7 @@ _BRLE   LDA     ESTKL+1,X
         BVS     +
         BPL     BRNCH
 -       INX                     ; DROP FOR VALUES
-        INX                              
+        INX
         BNE     NOBRNCH         ; BMI     NOBRNCH
 DECBRGE DEC     ESTKL,X
         LDA     ESTKL,X

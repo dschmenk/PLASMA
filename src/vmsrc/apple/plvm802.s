@@ -246,28 +246,6 @@ OPTBL   !WORD   CN,CN,CN,CN,CN,CN,CN,CN                                 ; 00 02 
 ;* ENTER INTO BYTECODE INTERPRETER - IMMEDIATELY SWITCH TO NATIVE
 ;*
         !AS
-DINTRP  PHP
-        PLA
-        STA     PSR
-        SEI
-        CLC                     ; SWITCH TO NATIVE MODE
-        XCE
-        +ACCMEM16               ; 16 BIT A/M
-        PLA
-        INC
-        STA     IP
-        STX     ESP
-        TSX
-        STX     HWSP
-        LDX     #>OPTBL
-!IF DEBUG {
-        BRA     SETDBG
-} ELSE {
-        STX     OPPAGE
-        LDY     #$00
-        JMP     FETCHOP
-}
-        !AS
 IINTRP  PHP
         PLA
         STA     PSR
@@ -422,7 +400,7 @@ CMDENTRY =      *
 ; PRINT FAIL MESSAGE, WAIT FOR KEYPRESS, AND REBOOT
 ;
 FAIL    INC     $3F4            ; INVALIDATE POWER-UP BYTE
-        LDY     #33
+        LDY     #31
 -       LDA     FAILMSG,Y
         ORA     #$80
         JSR     $FDED
@@ -496,6 +474,28 @@ OPXTBL  !WORD   CN,CN,CN,CN,CN,CN,CN,CN                                 ; 00 02 
         !WORD   LNOT,ADD,SUB,MUL,DIV,MOD,INCR,DECR                      ; 80 82 84 86 88 8A 8C 8E
         !WORD   NEG,COMP,BAND,IOR,XOR,SHL,SHR,IDXW                      ; 90 92 94 96 98 9A 9C 9E
         !WORD   BRGT,BRLT,INCBRLE,ADDBRLE,DECBRGE,SUBBRGE,BRAND,BROR    ; A0 A2 A4 A6 A8 AA AC AE
+        !AS
+DINTRP  PHP
+        PLA
+        STA     PSR
+        SEI
+        CLC                     ; SWITCH TO NATIVE MODE
+        XCE
+        +ACCMEM16               ; 16 BIT A/M
+        PLA
+        INC
+        STA     IP
+        STX     ESP
+        TSX
+        STX     HWSP
+        LDX     #>OPTBL
+!IF DEBUG {
+        JMP     SETDBG
+} ELSE {
+        STX     OPPAGE
+        LDY     #$00
+        JMP     FETCHOP
+}
 ;*********************************************************************
 ;*
 ;*      CODE BELOW HERE DEFAULTS TO NATIVE 16 BIT A/M, 8 BIT X,Y
@@ -1173,7 +1173,7 @@ ISLT    PLA
 ;* BRANCHES
 ;*
 SEL     TYA                     ; FLATTEN IP
-        CLC
+        SEC
         ADC     IP
         INY                     ;+INC_IP
         ;CLC                    ; ADD BRANCH OFFSET (BETTER NOT CARRY OUT OF IP+Y)
@@ -1182,37 +1182,42 @@ SEL     TYA                     ; FLATTEN IP
         LDY     #$00
         LDA     (IP),Y
         TAX                     ; CASE COUNT
+        PLA
+        CPX     #$00
         BEQ     ++
         INC     IP
-        PLA
 CASELP  CMP     (IP),Y
         BEQ     +++
+        DEX
+        BEQ     +
         INY
         INY
         INY
         INY
-        BNE     +
+        BNE     CASELP
         +ACCMEM8                ; 8 BIT A/M
         INC     IPH
         +ACCMEM16               ; 16 BIT A/M
-+       DEX
-        BEQ     CASELP
+        BRA     CASELP
++       INY
+        INY
+        INY
 FIXNEXT TYA
         LDY     #$00
         SEC
         ADC     IP
         STA     IP
-++      JMP     NEXTOP
+++      JMP     FETCHOP
 +++     INY
         BRA     BRNCH
 BRAND   LDA     TOS,S
         BEQ     BRNCH
         PLA                     ; DROP LEFT HALF OF AND
-        BNE     NOBRNCH
+        BRA     NOBRNCH
 BROR    LDA     TOS,S
         BNE     BRNCH
         PLA                     ; DROP LEFT HALF OF OR
-        BNE     NOBRNCH
+        BRA     NOBRNCH
 BRTRU   PLA
         BNE     BRNCH
 NOBRNCH INY                     ;+INC_IP
@@ -1273,7 +1278,7 @@ _BRLE   LDA     NOS,S
         BVS     +
         BPL     BRNCH
         PLA                     ; DROP FOR VALUES
-        PLA                              
+        PLA
         BNE     NOBRNCH         ; BMI     NOBRNCH
 +       BMI     BRNCH
         PLA                     ; DROP FOR VALUES
@@ -1689,6 +1694,9 @@ DBGTBL  !WORD   STEP,STEP,STEP,STEP,STEP,STEP,STEP,STEP         ; 00 02 04 06 08
         !WORD   STEP,STEP,STEP,STEP,STEP,STEP,STEP,STEP         ; 50 52 54 56 58 5A 5C 5E
         !WORD   STEP,STEP,STEP,STEP,STEP,STEP,STEP,STEP         ; 60 62 64 66 68 6A 6C 6E
         !WORD   STEP,STEP,STEP,STEP,STEP,STEP,STEP,STEP         ; 70 72 74 76 78 7A 7C 7E
+        !WORD   STEP,STEP,STEP,STEP,STEP,STEP,STEP,STEP         ; 80 82 84 86 88 8A 8C 8E
+        !WORD   STEP,STEP,STEP,STEP,STEP,STEP,STEP,STEP         ; 90 92 94 96 98 9A 9C 9E
+        !WORD   STEP,STEP,STEP,STEP,STEP,STEP,STEP,STEP         ; A0 A2 A4 A6 A8 AA AC AE
 ;*
 ;* DEBUG PRINT ROUTINES
 ;*
@@ -1848,8 +1856,8 @@ STEP    STX     TMPL
         CMP     #$10
         BCC     DBGKEY
         LDX     TMPL
-        CPX     #$00            ; FORCE PAUSE AT 'ZERO'
-        BEQ     DBGKEY
+;        CPX     #$00            ; FORCE PAUSE AT 'ZERO'
+;        BEQ     DBGKEY
 -       LDX     $C000
         CPX     #$9B
         BNE     +
