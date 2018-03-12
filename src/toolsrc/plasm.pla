@@ -343,6 +343,106 @@ const ERR_SYNTAX        = $8000
 //=====================================
 
 //
+// Lexical scanner helper for keyword/IDs
+//
+asm scanid(scanptr, keywrds)#3
+        !SOURCE    "vmsrc/plvmzp.inc"
+        LDA     ESTKL,X
+        STA     DSTL
+        LDA     ESTKH,X
+        STA     DSTH
+        LDA     ESTKL+1,X
+        STA     ESTKL,X         ; COPY OUTPUT SCANPTR
+        STA     SRCL
+        LDA     ESTKH+1,X
+        STA     ESTKH,X
+        STA     SRCH
+        DEX
+        LDA     #$00
+        STA     ESTKL,X         ; CLEAR OUTPUT TOKEN
+        STA     ESTKH,X
+        STA     ESTKH+2,X       ; CLEAR MSB OF SCANCHR
+        TAY
+        LDA     (SRC),Y
+        AND     #$7F
+        CMP     #'a'
+        BCC     +
+        CMP     #'z'+1
+        BCS     +
+        SBC     #$1F
+        STA     (SRC),Y
++       STA     ESTKL+2,X       ; SET SCANCHR
+        CMP     #'_'
+        BEQ     +
+        CMP     #'A'
+        BCC     SCANEX
+        CMP     #'Z'+1
+        BCS     SCANEX
++       LDA     #$D6            ; ID_TKN
+        STA     ESTKL,X         ; SET OUTPUT TOKEN = ID_TKN
+SCANID  INY
+        LDA     (SRC),Y
+        AND     #$7F
+        BEQ     ++
+        CMP     #'a'
+        BCC     +
+        CMP     #'z'+1
+        BCS     ++
+        SBC     #$1F
+        STA     (SRC),Y         ; COPY UPPERCASE CHAR BACK TO ^SCANPTR
+        BNE     SCANID
++       CMP     #'_'
+        BEQ     SCANID
+        CMP     #'0'
+        BCC     ++
+        CMP     #'9'+1
+        BCC     SCANID
+        CMP     #'A'
+        BCC     ++
+        CMP     #'Z'+1
+        BCC     SCANID
+++      STY     TMPL
+        TYA
+        LDY     #$00
+        CLC
+        ADC     SRCL
+        STA     ESTKL+1,X       ; UPDATE SCANPTR
+        BCC     MATCHLEN
+        INC     ESTKH+1,X
+MATCHLEN LDA    (DST),Y
+        CMP     TMPL
+        BCS     +
+        ADC     #$02
+        ADC     DSTL
+        STA     DSTL
+        BCC     MATCHLEN
+        INC     DSTH
+        BNE     MATCHLEN
++       BNE     SCANEX          ; NO KEY MATCH
+        TAY
+        DEY
+        INC     DSTL
+        BNE     MATCHKEY
+        INC     DSTH
+MATCHKEY LDA     (SRC),Y
+        CMP     (DST),Y
+        BNE     NEXTKEY
+        DEY
+        BPL     MATCHKEY
+        LDY     TMPL
+        LDA     (DST),Y
+        STA     ESTKL,X         ; SET OUTPUT TOKEN
+SCANEX  RTS
+NEXTKEY LDY     #$00
+        LDA     TMPL
+        SEC
+        ADC     DSTL
+        STA     DSTL
+        BCC     MATCHLEN
+        INC     DSTH
+        BNE     MATCHLEN
+end
+//
 // Handy functions
 //
 def puth(hex)#0
