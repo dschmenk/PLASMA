@@ -76,18 +76,16 @@ TXTTYPE	= .TXT
 #TXTTYPE	= \#040000
 
 apple: $(PLVMZP_APL) $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVM802) $(PLVM03) $(CMD) $(PLASMAPLASM) $(CODEOPT) $(ARGS) $(MEMMGR) $(MEMTEST) $(FIBER) $(FIBERTEST) $(LONGJMP) $(ED) $(MON) $(SOS) $(ROD) $(SIEVE) $(UTHERNET2) $(UTHERNET) $(ETHERIP) $(INET) $(DHCP) $(HTTPD) $(ROGUE) $(ROGUEMAP) $(ROGUECOMBAT) $(GRAFIX) $(GFXDEMO) $(DGR) $(DGRTEST) $(FILEIO_APL) $(CONIO_APL) $(JOYBUZZ) $(PORTIO) $(SPIPORT) $(SDFAT) $(FATCAT) $(FATGET) $(FATPUT) $(FATWDSK) $(FATRDSK) $(SANE) $(FPSTR) $(FPU) $(SANITY) $(RPNCALC) $(SNDSEQ) $(PLAYSEQ)
-	@rm vmsrc/plvmzp.inc
+	-rm vmsrc/plvmzp.inc
 
 c64: $(PLVMZP_C64) $(PLASM) $(PLVM) $(PLVMC64) 
-	@rm vmsrc/plvmzp.inc
+	-rm vmsrc/plvmzp.inc
 
 all: apple c64
 
 clean:
 	-rm *FE1000 *FF2000 $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVM03)
-	-rm rel/*
-	-rm rel/apple/*
-	-rm rel/c64/*
+	-rm -rf rel
 	-rm samplesrc/*.o samplesrc/*~ samplesrc/*.a
 	-rm toolsrc/*.o toolsrc/*~ toolsrc/*.a
 	-rm toolsrc/apple/*.o toolsrc/apple/*~ toolsrc/apple/*.a
@@ -121,16 +119,16 @@ $(PLVM): vmsrc/plvm.c
 	cc vmsrc/plvm.c -o $(PLVM)
 
 $(PLVMZP_APL): FORCE
-	@mkdir rel
-	@mkdir rel/apple
-	@rm vmsrc/plvmzp.inc
-	@ln -s apple/plvmzp.inc vmsrc/plvmzp.inc
+	-mkdir rel
+	-mkdir rel/apple
+	-rm vmsrc/plvmzp.inc
+	-ln -s apple/plvmzp.inc vmsrc/plvmzp.inc
 
 $(PLVMZP_C64): FORCE
-	@mkdir rel
-	@mkdir rel/c64
-	@rm vmsrc/plvmzp.inc
-	@ln -s c64/plvmzp.inc vmsrc/plvmzp.inc
+	-mkdir rel
+	-mkdir rel/c64
+	-rm vmsrc/plvmzp.inc
+	-ln -s c64/plvmzp.inc vmsrc/plvmzp.inc
 
 FORCE:
 
