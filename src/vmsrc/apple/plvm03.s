@@ -886,7 +886,6 @@ ISFLS   LDA     #$00
         STA     ESTKL+1,X
         STA     ESTKH+1,X
         JMP     DROP
-;
 ISGE    LDA     ESTKL+1,X
         CMP     ESTKL,X
         LDA     ESTKH+1,X
@@ -894,9 +893,16 @@ ISGE    LDA     ESTKL+1,X
         BVS     +
         BPL     ISTRU
         BMI     ISFLS
-+       BPL     ISFLS
++
+-       BPL     ISFLS
         BMI     ISTRU
-;
+ISLE    LDA     ESTKL,X
+        CMP     ESTKL+1,X
+        LDA     ESTKH,X
+        SBC     ESTKH+1,X
+        BVS     -
+        BPL     ISTRU
+        BMI     ISFLS
 ISGT    LDA     ESTKL,X
         CMP     ESTKL+1,X
         LDA     ESTKH,X
@@ -904,28 +910,16 @@ ISGT    LDA     ESTKL,X
         BVS     +
         BMI     ISTRU
         BPL     ISFLS
-+       BMI     ISFLS
++
+-       BMI     ISFLS
         BPL     ISTRU
-;
-ISLE    LDA     ESTKL,X
-        CMP     ESTKL+1,X
-        LDA     ESTKH,X
-        SBC     ESTKH+1,X
-        BVS     +
-        BPL     ISTRU
-        BMI     ISFLS
-+       BPL     ISFLS
-        BMI     ISTRU
-;
 ISLT    LDA     ESTKL+1,X
         CMP     ESTKL,X
         LDA     ESTKH+1,X
         SBC     ESTKH,X
-        BVS     +
+        BVS     -
         BMI     ISTRU
         BPL     ISFLS
-+       BMI     ISFLS
-        BPL     ISTRU
 ;*
 ;* BRANCHES
 ;*

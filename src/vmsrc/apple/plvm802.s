@@ -812,7 +812,6 @@ CS      ;INY                     ;+INC_IP
         LDA     (IP)
         TAY
         JMP     NEXTOP
-;
 CSX     ;INY                     ;+INC_IP
         TYA                     ; NORMALIZE IP
         SEC
@@ -885,7 +884,6 @@ LW      TYX
         STA     TOS,S
         TXY
         JMP     NEXTOP
-;
 LBX     TYX
         LDY     #$00
         TYA                     ; QUICKY CLEAR OUT MSB
@@ -941,7 +939,6 @@ LLW     INY                     ;+INC_IP
         PHA
         TXY
         JMP     NEXTOP
-;
 LLBX    INY                     ;+INC_IP
         TYX
         LDA     (IP),Y
@@ -983,7 +980,6 @@ LAW     INY                     ;+INC_IP
         PHA
         INY                     ;+INC_IP
         JMP     NEXTOP
-;
 LABX    INY                     ;+INC_IP
         LDA     (IP),Y
         STA     TMP
@@ -1123,14 +1119,12 @@ ISEQ    PLA
 ISTRU   LDA     #$FFFF
         STA     TOS,S
         JMP     NEXTOP
-;
 ISNE    PLA
         CMP     TOS,S
         BNE     ISTRU
 ISFLS   LDA     #$0000
         STA     TOS,S
         JMP     NEXTOP
-;
 ISGE    PLA
         SEC
         SBC     TOS,S
@@ -1141,7 +1135,6 @@ ISGE    PLA
 +       BMI     ISFLS
         BEQ     ISFLS
         BPL     ISTRU
-;
 ISGT    PLA
         SEC
         SBC     TOS,S
@@ -1150,7 +1143,6 @@ ISGT    PLA
         BPL     ISFLS
 +       BMI     ISFLS
         BPL     ISTRU
-;
 ISLE    PLA
         SEC
         SBC     TOS,S
@@ -1159,7 +1151,6 @@ ISLE    PLA
         BMI     ISFLS
 +       BPL     ISFLS
         BMI     ISTRU
-;
 ISLT    PLA
         SEC
         SBC     TOS,S
@@ -1627,7 +1618,6 @@ LEAVEX  INY                     ;+INC_IP
         PLP
         RTS
         !AL
-;
 RETX    STX     ALTRDOFF
 RET     SEC                     ; SWITCH TO EMULATION MODE
         XCE

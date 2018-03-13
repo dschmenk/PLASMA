@@ -817,7 +817,6 @@ CS      DEX
         LDA     (IP),Y
         TAY
         JMP     NEXTOP
-;
 CSX     DEX
         ;INY                     ;+INC_IP
         TYA                     ; NORMALIZE IP
@@ -911,7 +910,6 @@ LW      LDA     ESTKL,X
         LDA     (ESTKH-1,X)
         STA     ESTKH,X
         JMP     NEXTOP
-;
 LBX     LDA     ESTKL,X
         STA     ESTKH-1,X
         STA     ALTRDOFF
@@ -984,7 +982,6 @@ LLW     INY                     ;+INC_IP
         STA     ESTKH,X
         LDY     IPY
         JMP     NEXTOP
-;
 LLBX    INY                     ;+INC_IP
         LDA     (IP),Y
         STY     IPY
@@ -1043,7 +1040,6 @@ LAW     INY                     ;+INC_IP
         STA     ESTKH,X
         LDY     IPY
         JMP     NEXTOP
-;
 LABX    INY                     ;+INC_IP
         LDA     (IP),Y
         STA     ESTKH-2,X
@@ -1233,7 +1229,6 @@ ISTRU   LDA     #$FF
         STA     ESTKL+1,X
         STA     ESTKH+1,X
         JMP     DROP
-;
 ISNE    LDA     ESTKL,X
         CMP     ESTKL+1,X
         BNE     ISTRU
@@ -1244,7 +1239,6 @@ ISFLS   LDA     #$00
         STA     ESTKL+1,X
         STA     ESTKH+1,X
         JMP     DROP
-;
 ISGE    LDA     ESTKL+1,X
         CMP     ESTKL,X
         LDA     ESTKH+1,X
@@ -1252,9 +1246,16 @@ ISGE    LDA     ESTKL+1,X
         BVS     +
         BPL     ISTRU
         BMI     ISFLS
-+       BPL     ISFLS
++
+-       BPL     ISFLS
         BMI     ISTRU
-;
+ISLE    LDA     ESTKL,X
+        CMP     ESTKL+1,X
+        LDA     ESTKH,X
+        SBC     ESTKH+1,X
+        BVS     -
+        BPL     ISTRU
+        BMI     ISFLS
 ISGT    LDA     ESTKL,X
         CMP     ESTKL+1,X
         LDA     ESTKH,X
@@ -1262,28 +1263,16 @@ ISGT    LDA     ESTKL,X
         BVS     +
         BMI     ISTRU
         BPL     ISFLS
-+       BMI     ISFLS
++
+-       BMI     ISFLS
         BPL     ISTRU
-;
-ISLE    LDA     ESTKL,X
-        CMP     ESTKL+1,X
-        LDA     ESTKH,X
-        SBC     ESTKH+1,X
-        BVS     +
-        BPL     ISTRU
-        BMI     ISFLS
-+       BPL     ISFLS
-        BMI     ISTRU
-;
 ISLT    LDA     ESTKL+1,X
         CMP     ESTKL,X
         LDA     ESTKH+1,X
         SBC     ESTKH,X
-        BVS     +
+        BVS     -
         BMI     ISTRU
         BPL     ISFLS
-+       BMI     ISFLS
-        BPL     ISTRU
 ;*
 ;* BRANCHES
 ;*
@@ -1470,7 +1459,6 @@ CALL    INY                     ;+INC_IP
         STA     OPPAGE
         LDY     #$01
         JMP     FETCHOP
-;
 CALLX   INY                     ;+INC_IP
         LDA     (IP),Y
         STA     TMPL
@@ -1526,7 +1514,6 @@ ICAL    LDA     ESTKL,X
         STA     OPPAGE
         LDY     #$01
         JMP     FETCHOP
-;
 ICALX   LDA     ESTKL,X
         STA     TMPL
         LDA     ESTKH,X
