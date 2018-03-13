@@ -455,6 +455,7 @@ void interp(code *ip);
 void call(uword pc)
 {
     unsigned int i, s;
+    int a, b;
     char c, sz[64];
 
     if (show_state)
@@ -508,6 +509,12 @@ void call(uword pc)
             mem_data[0x1FF] = i;
             PUSH(0x1FF);
             break;
+        case 24: // LIBRARY CMDSYS::DIVMOD
+            a = POP;
+            b = POP;
+            PUSH(b / a);
+            PUSH(b % a);
+            break;
         default:
             printf("\nUnimplemented call code:$%02X\n", mem_data[pc - 1]);
             exit(1);
@@ -517,20 +524,21 @@ void call(uword pc)
 /*
  * OPCODE TABLE
  *
-OPTBL:  DW  ZERO,ADD,SUB,MUL,DIV,MOD,INCR,DECR                      ; 00 02 04 06 08 0A 0C 0E
-        DW  NEG,COMP,AND,IOR,XOR,SHL,SHR,IDXW                       ; 10 12 14 16 18 1A 1C 1E
-        DW  NOT,LOR,LAND,LA,LLA,CB,CW,CS                            ; 20 22 24 26 28 2A 2C 2E
-        DW  DROP,DROP2,DUP,DIVMOD,ADDI,SUBI,ANDI,ORI                ; 30 32 34 36 38 3A 3C 3E
-        DW  ISEQ,ISNE,ISGT,ISLT,ISGE,ISLE,BRFLS,BRTRU               ; 40 42 44 46 48 4A 4C 4E
-        DW  BRNCH,SEL,CALL,ICAL,ENTER,LEAVE,RET,CFFB                ; 50 52 54 56 58 5A 5C 5E
-        DW  LB,LW,LLB,LLW,LAB,LAW,DLB,DLW                           ; 60 62 64 66 68 6A 6C 6E
-        DW  SB,SW,SLB,SLW,SAB,SAW,DAB,DAW                           ; 70 72 74 76 78 7A 7C 7E
-        DW  ADDBRLE,INCBRLE,SUBBRGE,DECBRGE,BRGT,BRLT               ; 80 82 84 86 88 8A 8C 8E
-        DW  BRGT,BRLT,INCBRLE,ADDBRLE,DECBRGE,SUBBRGE   ; 80 82 84 86 88 8A 8C 8E
+OPTBL   DW CN,CN,CN,CN,CN,CN,CN,CN                                 ; 00 02 04 06 08 0A 0C 0E
+        DW CN,CN,CN,CN,CN,CN,CN,CN                                 ; 10 12 14 16 18 1A 1C 1E
+        DW MINUS1,NEXTOP,NEXTOP,LA,LLA,CB,CW,CS                    ; 20 22 24 26 28 2A 2C 2E
+        DW DROP,DROP2,DUP,DIVMOD,ADDI,SUBI,ANDI,ORI                ; 30 32 34 36 38 3A 3C 3E
+        DW ISEQ,ISNE,ISGT,ISLT,ISGE,ISLE,BRFLS,BRTRU               ; 40 42 44 46 48 4A 4C 4E
+        DW BRNCH,SEL,CALL,ICAL,ENTER,LEAVE,RET,CFFB                ; 50 52 54 56 58 5A 5C 5E
+        DW LB,LW,LLB,LLW,LAB,LAW,DLB,DLW                           ; 60 62 64 66 68 6A 6C 6E
+        DW SB,SW,SLB,SLW,SAB,SAW,DAB,DAW                           ; 70 72 74 76 78 7A 7C 7E
+        DW LNOT,ADD,SUB,MUL,DIV,MOD,INCR,DECR                      ; 80 82 84 86 88 8A 8C 8E
+        DW NEG,COMP,BAND,IOR,XOR,SHL,SHR,IDXW                      ; 90 92 94 96 98 9A 9C 9E
+        DW BRGT,BRLT,INCBRLE,ADDBRLE,DECBRGE,SUBBRGE,BRAND,BROR    ; A0 A2 A4 A6 A8 AA AC AE
 */
 void interp(code *ip)
 {
-    int val, ea, frmsz, parmcnt;
+    int val, ea, frmsz, parmcnt, nybble;
     code *previp = ip;
 
     while (1)
@@ -550,9 +558,46 @@ void interp(code *ip)
             printf("]\n");
             gets(cmdline);
         }
+        nybble = 15;
         previp = ip;
         switch (*ip++)
         {
+            /*
+             * 0x00-0x1F
+             */
+            case 0x00:
+                nybble--;
+            case 0x02:
+                nybble--;
+            case 0x04:
+                nybble--;
+            case 0x06:
+                nybble--;
+            case 0x08:
+                nybble--;
+            case 0x0A:
+                nybble--;
+            case 0x0C:
+                nybble--;
+            case 0x0E:
+                nybble--;
+            case 0x10:
+                nybble--;
+            case 0x12:
+                nybble--;
+            case 0x14:
+                nybble--;
+            case 0x16:
+                nybble--;
+            case 0x18:
+                nybble--;
+            case 0x1A:
+                nybble--;
+            case 0x1C:
+                nybble--;
+            case 0x1E:
+                PUSH)nybble);
+                break;
             /*
              * 0x00-0x0F
              */
