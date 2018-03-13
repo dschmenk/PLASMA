@@ -455,6 +455,7 @@ void interp(code *ip);
 void call(uword pc)
 {
     unsigned int i, s;
+    int a, b;
     char c, sz[64];
 
     if (show_state)
@@ -507,6 +508,12 @@ void call(uword pc)
             mem_data[0x200 + i] = 0;
             mem_data[0x1FF] = i;
             PUSH(0x1FF);
+            break;
+        case 24: // LIBRARY CMDSYS::DIVMOD
+            a = POP;
+            b = POP;
+            PUSH(b / a);
+            PUSH(b % a);
             break;
         default:
             printf("\nUnimplemented call code:$%02X\n", mem_data[pc - 1]);
