@@ -295,7 +295,7 @@ DIVMOD  JSR     _DIV
         STA     ESTKL,X
         LDA     TMPH            ; REMNDRH
         STA     ESTKH,X
-        LDA     DVSIGN          ; REMAINDER IS SIGN OF DIVIDEND
+        ASL     DVSIGN          ; REMAINDER IS SIGN OF DIVIDEND
         BMI     NEG
         JMP     NEXTOP
 ;*
