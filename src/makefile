@@ -76,10 +76,10 @@ TXTTYPE	= .TXT
 #TXTTYPE	= \#040000
 
 apple: $(PLVMZP_APL) $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVM802) $(PLVM03) $(CMD) $(PLASMAPLASM) $(CODEOPT) $(ARGS) $(MEMMGR) $(MEMTEST) $(FIBER) $(FIBERTEST) $(LONGJMP) $(ED) $(MON) $(SOS) $(ROD) $(SIEVE) $(UTHERNET2) $(UTHERNET) $(ETHERIP) $(INET) $(DHCP) $(HTTPD) $(ROGUE) $(ROGUEMAP) $(ROGUECOMBAT) $(GRAFIX) $(GFXDEMO) $(DGR) $(DGRTEST) $(FILEIO_APL) $(CONIO_APL) $(JOYBUZZ) $(PORTIO) $(SPIPORT) $(SDFAT) $(FATCAT) $(FATGET) $(FATPUT) $(FATWDSK) $(FATRDSK) $(SANE) $(FPSTR) $(FPU) $(SANITY) $(RPNCALC) $(SNDSEQ) $(PLAYSEQ)
-	@rm vmsrc/plvmzp.inc
+	-rm vmsrc/plvmzp.inc
 
 c64: $(PLVMZP_C64) $(PLASM) $(PLVM) $(PLVMC64) 
-	@rm vmsrc/plvmzp.inc
+	-rm vmsrc/plvmzp.inc
 
 all: apple c64
 
@@ -121,16 +121,16 @@ $(PLVM): vmsrc/plvm.c
 	cc vmsrc/plvm.c -o $(PLVM)
 
 $(PLVMZP_APL): FORCE
-	@mkdir -p rel
-	@mkdir -p rel/apple
-	@rm -f vmsrc/plvmzp.inc
-	@ln -s apple/plvmzp.inc vmsrc/plvmzp.inc
+	-mkdir -p rel
+	-mkdir -p rel/apple
+	-rm -f vmsrc/plvmzp.inc
+	-ln -s apple/plvmzp.inc vmsrc/plvmzp.inc
 
 $(PLVMZP_C64): FORCE
-	@mkdir -p rel
-	@mkdir -p rel/c64
-	@rm -f vmsrc/plvmzp.inc
-	@ln -s c64/plvmzp.inc vmsrc/plvmzp.inc
+	-mkdir -p rel
+	-mkdir -p rel/c64
+	-rm -f vmsrc/plvmzp.inc
+	-ln -s c64/plvmzp.inc vmsrc/plvmzp.inc
 
 FORCE:
 
