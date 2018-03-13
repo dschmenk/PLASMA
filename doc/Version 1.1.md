@@ -1,16 +1,16 @@
-# PLASMA Version 1.0
+# PLASMA Version 1.1
 
 Welcome to PLASMA: the Grand Unifying Platform for the Apple 1, ][, and ///.
 
 Download the four disk images (three if you don't plan to boot an Apple ///):
 
-[PLASMA 1.0 System and ProDOS Boot](https://github.com/dschmenk/PLASMA/blob/master/PLASMA-SYS1.PO?raw=true)
+[PLASMA 1.1 System and ProDOS Boot](https://github.com/dschmenk/PLASMA/blob/master/PLASMA-SYS1.PO?raw=true)
 
-[PLASMA 1.0 Build Tools](https://github.com/dschmenk/PLASMA/blob/master/PLASMA-BLD1.PO?raw=true)
+[PLASMA 1.1 Build Tools](https://github.com/dschmenk/PLASMA/blob/master/PLASMA-BLD1.PO?raw=true)
 
-[PLASMA 1.0 Demos](https://github.com/dschmenk/PLASMA/blob/master/PLASMA-DEM1.PO?raw=true)
+[PLASMA 1.1 Demos](https://github.com/dschmenk/PLASMA/blob/master/PLASMA-DEM1.PO?raw=true)
 
-[PLASMA 1.0 Apple /// SOS Boot ](https://github.com/dschmenk/PLASMA/blob/master/PLASMA-SOS1.PO?raw=true)
+[PLASMA 1.1 Apple /// SOS Boot ](https://github.com/dschmenk/PLASMA/blob/master/PLASMA-SOS1.PO?raw=true)
 
 PLASMA can be run from floppies, System in Drive 1, and Build or Demos in Drive 2. Mass storage is the recommended installation that looks like (replacing HARDISK with your volume name of choice):
 
@@ -97,6 +97,12 @@ There is a [YouTube playlist](https://www.youtube.com/playlist?list=PLlPKgUMQbJ7
 - The Apple /// may not always report errors properly or at all.
 
 - The documentation is sparse and incomplete. Yep, could use your help...
+
+# Changes in PLASMA for 1.1
+
+1. All known bugs are fixed
+
+2. PLASM compiler received a little performance boost with an assembly language helper for ID/keyword lexical scanner
 
 # Changes in PLASMA for 1.0
 
