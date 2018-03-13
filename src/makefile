@@ -119,15 +119,15 @@ $(PLVM): vmsrc/plvm.c
 	cc vmsrc/plvm.c -o $(PLVM)
 
 $(PLVMZP_APL): FORCE
-	-mkdir rel
-	-mkdir rel/apple
-	-rm vmsrc/plvmzp.inc
+	-mkdir -p rel
+	-mkdir -p rel/apple
+	-rm -f vmsrc/plvmzp.inc
 	-ln -s apple/plvmzp.inc vmsrc/plvmzp.inc
 
 $(PLVMZP_C64): FORCE
-	-mkdir rel
-	-mkdir rel/c64
-	-rm vmsrc/plvmzp.inc
+	-mkdir -p rel
+	-mkdir -p rel/c64
+	-rm -f vmsrc/plvmzp.inc
 	-ln -s c64/plvmzp.inc vmsrc/plvmzp.inc
 
 FORCE:
