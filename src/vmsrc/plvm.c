@@ -596,83 +596,7 @@ void interp(code *ip)
             case 0x1C:
                 nybble--;
             case 0x1E:
-                PUSH)nybble);
-                break;
-            /*
-             * 0x00-0x0F
-             */
-            case 0x00: // ZERO : TOS = 0
-                PUSH(0);
-                break;
-            case 0x02: // ADD : TOS = TOS + TOS-1
-                val = POP;
-                ea  = POP;
-                PUSH(ea + val);
-                break;
-            case 0x04: // SUB : TOS = TOS-1 - TOS
-                val = POP;
-                ea  = POP;
-                PUSH(ea - val);
-                break;
-            case 0x06: // MUL : TOS = TOS * TOS-1
-                val = POP;
-                ea  = POP;
-                PUSH(ea * val);
-                break;
-            case 0x08: // DIV : TOS = TOS-1 / TOS
-                val = POP;
-                ea  = POP;
-                PUSH(ea / val);
-                break;
-            case 0x0A: // MOD : TOS = TOS-1 % TOS
-                val = POP;
-                ea  = POP;
-                PUSH(ea % val);
-                break;
-            case 0x0C: // INCR : TOS = TOS + 1
-                TOS++;;
-                break;
-            case 0x0E: // DECR : TOS = TOS - 1
-                TOS--;
-                break;
-                /*
-                 * 0x10-0x1F
-                 */
-            case 0x10: // NEG : TOS = -TOS
-                TOS = -TOS;
-                break;
-            case 0x12: // COMP : TOS = ~TOS
-                TOS = ~TOS;
-                break;
-            case 0x14: // AND : TOS = TOS & TOS-1
-                val = POP;
-                ea  = POP;
-                PUSH(ea & val);
-                break;
-            case 0x16: // IOR : TOS = TOS ! TOS-1
-                val = POP;
-                ea  = POP;
-                PUSH(ea | val);
-                break;
-            case 0x18: // XOR : TOS = TOS ^ TOS-1
-                val = POP;
-                ea  = POP;
-                PUSH(ea ^ val);
-                break;
-            case 0x1A: // SHL : TOS = TOS-1 << TOS
-                val = POP;
-                ea  = POP;
-                PUSH(ea << val);
-                break;
-            case 0x1C: // SHR : TOS = TOS-1 >> TOS
-                val = POP;
-                ea  = POP;
-                PUSH(ea >> val);
-                break;
-            case 0x1E: // IDXW : TOS = TOS * 2 + TOS-1
-                val = POP;
-                ea  = POP;
-                PUSH(ea + val * 2);
+                PUSH(nybble);
                 break;
                 /*
                  * 0x20-0x2F
@@ -931,10 +855,86 @@ void interp(code *ip)
                 mem_data[ea + 1] = TOS >> 8;
                 ip += 2;
                 break;
+             /*
+             * 0x080-0x08F
+             */
+            case 0x80: // ZERO : TOS = 0
+                PUSH(0);
+                break;
+            case 0x82: // ADD : TOS = TOS + TOS-1
+                val = POP;
+                ea  = POP;
+                PUSH(ea + val);
+                break;
+            case 0x84: // SUB : TOS = TOS-1 - TOS
+                val = POP;
+                ea  = POP;
+                PUSH(ea - val);
+                break;
+            case 0x86: // MUL : TOS = TOS * TOS-1
+                val = POP;
+                ea  = POP;
+                PUSH(ea * val);
+                break;
+            case 0x88: // DIV : TOS = TOS-1 / TOS
+                val = POP;
+                ea  = POP;
+                PUSH(ea / val);
+                break;
+            case 0x8A: // MOD : TOS = TOS-1 % TOS
+                val = POP;
+                ea  = POP;
+                PUSH(ea % val);
+                break;
+            case 0x8C: // INCR : TOS = TOS + 1
+                TOS++;;
+                break;
+            case 0x8E: // DECR : TOS = TOS - 1
+                TOS--;
+                break;
                 /*
-                 * 0x80-0x8F
+                 * 0x90-0x9F
                  */
-            case 0x80: // BRGT : TOS-1 > TOS ? IP += (IP)
+            case 0x90: // NEG : TOS = -TOS
+                TOS = -TOS;
+                break;
+            case 0x92: // COMP : TOS = ~TOS
+                TOS = ~TOS;
+                break;
+            case 0x94: // AND : TOS = TOS & TOS-1
+                val = POP;
+                ea  = POP;
+                PUSH(ea & val);
+                break;
+            case 0x96: // IOR : TOS = TOS ! TOS-1
+                val = POP;
+                ea  = POP;
+                PUSH(ea | val);
+                break;
+            case 0x98: // XOR : TOS = TOS ^ TOS-1
+                val = POP;
+                ea  = POP;
+                PUSH(ea ^ val);
+                break;
+            case 0x9A: // SHL : TOS = TOS-1 << TOS
+                val = POP;
+                ea  = POP;
+                PUSH(ea << val);
+                break;
+            case 0x9C: // SHR : TOS = TOS-1 >> TOS
+                val = POP;
+                ea  = POP;
+                PUSH(ea >> val);
+                break;
+            case 0x9E: // IDXW : TOS = TOS * 2 + TOS-1
+                val = POP;
+                ea  = POP;
+                PUSH(ea + val * 2);
+                break;
+               /*
+                 * 0xA0-0xAF
+                 */
+            case 0xA0: // BRGT : TOS-1 > TOS ? IP += (IP)
                 val = POP;
                 if (TOS < val)
                 {
@@ -947,7 +947,7 @@ void interp(code *ip)
                     ip += 2;
                 }
                 break;
-            case 0x82: // BRLT : TOS-1 < TOS ? IP += (IP)
+            case 0xA2: // BRLT : TOS-1 < TOS ? IP += (IP)
                 val = POP;
                 if (TOS > val)
                 {
@@ -960,7 +960,7 @@ void interp(code *ip)
                     ip += 2;
                 }
                 break;
-            case 0x84: // INCBRLE : TOS = TOS + 1
+            case 0xA4: // INCBRLE : TOS = TOS + 1
                 val = POP;
                 val++;
                 if (TOS >= val)
@@ -974,7 +974,7 @@ void interp(code *ip)
                     ip += 2;
                 }
                 break;
-            case 0x86: // ADDBRLE : TOS = TOS + TOS-1
+            case 0xA6: // ADDBRLE : TOS = TOS + TOS-1
                 val = POP;
                 ea  = POP;
                 val = ea + val;
@@ -989,7 +989,7 @@ void interp(code *ip)
                     ip += 2;
                 }
                 break;
-            case 0x88: // DECBRGE : TOS = TOS - 1
+            case 0xA8: // DECBRGE : TOS = TOS - 1
                 val = POP;
                 val--;
                 if (TOS <= val)
@@ -1003,7 +1003,7 @@ void interp(code *ip)
                     ip += 2;
                 }
                 break;
-            case 0x8A: // SUBBRGE : TOS = TOS-1 - TOS
+            case 0xAA: // SUBBRGE : TOS = TOS-1 - TOS
                 val = POP;
                 ea  = POP;
                 val = ea - val;
@@ -1018,7 +1018,7 @@ void interp(code *ip)
                     ip += 2;
                 }
                 break;
-            case 0x8C: // BRAND : SHORT CIRCUIT AND
+            case 0xAC: // BRAND : SHORT CIRCUIT AND
                 if (TOS) // EVALUATE RIGHT HAND OF AND
                 {
                     POP;
@@ -1029,7 +1029,7 @@ void interp(code *ip)
                     ip += WORD_PTR(ip);
                 }
                 break;
-            case 0x8E: // BROR : SHORT CIRCUIT OR
+            case 0xAE: // BROR : SHORT CIRCUIT OR
                 if (!TOS) // EVALUATE RIGHT HAND OF OR
                 {
                     POP;
