@@ -1518,7 +1518,7 @@ int crunch_seq(t_opseq **seq, int pass)
                     op->code = IDXLB_CODE;
                     freeops  = 1;
                 }
-                if ((pass > 0) && (freeops == 0))
+                else if (pass > 0)
                     crunched = try_dupify(op);
                 break; // LLB_CODE
             case LLW_CODE:
@@ -1546,7 +1546,7 @@ int crunch_seq(t_opseq **seq, int pass)
                     op->code = IDXLW_CODE;
                     freeops  = 1;
                 }
-                if ((pass > 0) && (freeops == 0))
+                else if (pass > 0)
                     crunched = try_dupify(op);
                 break; // LLW_CODE
             case LAB_CODE:
@@ -1560,8 +1560,7 @@ int crunch_seq(t_opseq **seq, int pass)
                     op->code = IDXAB_CODE;
                     freeops  = 1;
                 }
-                if ((pass > 0) && (freeops == 0) && 
-                    (op->type || !is_hardware_address(op->offsz)))
+                else if ((pass > 0) && (op->type || !is_hardware_address(op->offsz)))
                     crunched = try_dupify(op);
                 break; // LAB_CODE
             case LAW_CODE:
@@ -1589,8 +1588,7 @@ int crunch_seq(t_opseq **seq, int pass)
                     op->code = IDXAW_CODE;
                     freeops  = 1;
                 }
-                if ((pass > 0) && (freeops == 0) &&
-                    (op->type || !is_hardware_address(op->offsz)))
+                else if ((pass > 0) && (op->type || !is_hardware_address(op->offsz)))
                     crunched = try_dupify(op);
                 break; // LAW_CODE
             case LOGIC_NOT_CODE:
