@@ -242,6 +242,7 @@ OPTBL   !WORD   CN,CN,CN,CN,CN,CN,CN,CN                                 ; 00 02 
         !WORD   LNOT,ADD,SUB,MUL,DIV,MOD,INCR,DECR                      ; 80 82 84 86 88 8A 8C 8E
         !WORD   NEG,COMP,BAND,IOR,XOR,SHL,SHR,IDXW                      ; 90 92 94 96 98 9A 9C 9E
         !WORD   BRGT,BRLT,INCBRLE,ADDBRLE,DECBRGE,SUBBRGE,BRAND,BROR    ; A0 A2 A4 A6 A8 AA AC AE
+        !WORD   ADDLB,ADDLW,ADDAB,ADDAW,IDXLB,IDXLW,IDXAB,IDXAW         ; B0 B2 B4 B6 B8 BA BC BE
 ;*
 ;* ENTER INTO BYTECODE INTERPRETER - IMMEDIATELY SWITCH TO NATIVE
 ;*
@@ -474,6 +475,7 @@ OPXTBL  !WORD   CN,CN,CN,CN,CN,CN,CN,CN                                 ; 00 02 
         !WORD   LNOT,ADD,SUB,MUL,DIV,MOD,INCR,DECR                      ; 80 82 84 86 88 8A 8C 8E
         !WORD   NEG,COMP,BAND,IOR,XOR,SHL,SHR,IDXW                      ; 90 92 94 96 98 9A 9C 9E
         !WORD   BRGT,BRLT,INCBRLE,ADDBRLE,DECBRGE,SUBBRGE,BRAND,BROR    ; A0 A2 A4 A6 A8 AA AC AE
+        !WORD   ADDLBX,ADDLWX,ADDABX,ADDAWX,IDXLBX,IDXLWX,IDXABX,IDXAWX ; B0 B2 B4 B6 B8 BA BC BE
         !AS
 DINTRP  PHP
         PLA
@@ -719,15 +721,6 @@ DUP     LDA     TOS,S
         PHA
         JMP     NEXTOP
 ;*
-;* LOGICAL NOT
-;*
-LNOT    PLA
-        BNE     +
-        PEA     $FFFF
-        JMP     NEXTOP
-+       PEA     $0000
-        JMP     NEXTOP
-;*
 ;* ADD IMMEDIATE TO TOS
 ;*
 ADDI    INY                     ;+INC_IP
@@ -765,6 +758,13 @@ ORI     INY                     ;+INC_IP
         AND     #$00FF
         ORA     TOS,S
         STA     TOS,S
+        JMP     NEXTOP
+;*
+;* LOGICAL NOT
+;*
+LNOT    PLA
+        BEQ     MINUS1
+        PEA     $0000
         JMP     NEXTOP
 ;*
 ;* CONSTANT -1, NYBBLE, BYTE, $FF BYTE, WORD (BELOW)
@@ -961,6 +961,60 @@ LLWX    INY                     ;+INC_IP
         TXY
         JMP     NEXTOP
 ;*
+;* ADD VALUE FROM LOCAL FRAME OFFSET
+;*
+ADDLB   LDX     #$60            ; RTS
+        STX     NEXTOP
+        JSR     LLB
+        LDX     #$C8            ; INY
+        STX     NEXTOP
+        JMP     ADD
+ADDLBX  LDX     #$60            ; RTS
+        STX     NEXTOP
+        JSR     LLBX
+        LDX     #$C8            ; INY
+        STX     NEXTOP
+        JMP     ADD
+ADDLW   LDX     #$60            ; RTS
+        STX     NEXTOP
+        JSR     LLW
+        LDX     #$C8            ; INY
+        STX     NEXTOP
+        JMP     ADD
+ADDLWX  LDX     #$60            ; RTS
+        STX     NEXTOP
+        JSR     LLWX
+        LDX     #$C8            ; INY
+        STX     NEXTOP
+        JMP     ADD
+;*
+;* INDEX VALUE FROM LOCAL FRAME OFFSET
+;*
+IDXLB   LDX     #$60            ; RTS
+        STX     NEXTOP
+        JSR     LLB
+        LDX     #$C8            ; INY
+        STX     NEXTOP
+        JMP     IDXW
+IDXLBX  LDX     #$60            ; RTS
+        STX     NEXTOP
+        JSR     LLBX
+        LDX     #$C8            ; INY
+        STX     NEXTOP
+        JMP     IDXW
+IDXLW   LDX     #$60            ; RTS
+        STX     NEXTOP
+        JSR     LLW
+        LDX     #$C8            ; INY
+        STX     NEXTOP
+        JMP     IDXW
+IDXLWX  LDX     #$60            ; RTS
+        STX     NEXTOP
+        JSR     LLWX
+        LDX     #$C8            ; INY
+        STX     NEXTOP
+        JMP     IDXW
+;*
 ;* LOAD VALUE FROM ABSOLUTE ADDRESS
 ;*
 LAB     INY                     ;+INC_IP
@@ -1001,7 +1055,60 @@ LAWX    INY                     ;+INC_IP
         PHA
         INY                     ;+INC_IP
         JMP     NEXTOP
-;
+;*
+;* ADD VALUE FROM ABSOLUTE ADDRESS
+;*
+ADDAB   LDX     #$60            ; RTS
+        STX     NEXTOP
+        JSR     LAB
+        LDX     #$C8            ; INY
+        STX     NEXTOP
+        JMP     ADD
+ADDABX  LDX     #$60            ; RTS
+        STX     NEXTOP
+        JSR     LABX
+        LDX     #$C8            ; INY
+        STX     NEXTOP
+        JMP     ADD
+ADDAW   LDX     #$60            ; RTS
+        STX     NEXTOP
+        JSR     LAW
+        LDX     #$C8            ; INY
+        STX     NEXTOP
+        JMP     ADD
+ADDAWX  LDX     #$60            ; RTS
+        STX     NEXTOP
+        JSR     LAWX
+        LDX     #$C8            ; INY
+        STX     NEXTOP
+        JMP     ADD
+;*
+;* INDEX VALUE FROM ABSOLUTE ADDRESS
+;*
+IDXAB   LDX     #$60            ; RTS
+        STX     NEXTOP
+        JSR     LAB
+        LDX     #$C8            ; INY
+        STX     NEXTOP
+        JMP     IDXW
+IDXABX  LDX     #$60            ; RTS
+        STX     NEXTOP
+        JSR     LABX
+        LDX     #$C8            ; INY
+        STX     NEXTOP
+        JMP     IDXW
+IDXAW   LDX     #$60            ; RTS
+        STX     NEXTOP
+        JSR     LAW
+        LDX     #$C8            ; INY
+        STX     NEXTOP
+        JMP     IDXW
+IDXAWX  LDX     #$60            ; RTS
+        STX     NEXTOP
+        JSR     LAWX
+        LDX     #$C8            ; INY
+        STX     NEXTOP
+        JMP     IDXW
 ;*
 ;* STORE VALUE TO ADDRESS
 ;*
@@ -1683,6 +1790,7 @@ DBGTBL  !WORD   STEP,STEP,STEP,STEP,STEP,STEP,STEP,STEP         ; 00 02 04 06 08
         !WORD   STEP,STEP,STEP,STEP,STEP,STEP,STEP,STEP         ; 80 82 84 86 88 8A 8C 8E
         !WORD   STEP,STEP,STEP,STEP,STEP,STEP,STEP,STEP         ; 90 92 94 96 98 9A 9C 9E
         !WORD   STEP,STEP,STEP,STEP,STEP,STEP,STEP,STEP         ; A0 A2 A4 A6 A8 AA AC AE
+        !WORD   STEP,STEP,STEP,STEP,STEP,STEP,STEP,STEP         ; B0 B2 B4 B6 B8 BA BC BE
 ;*
 ;* DEBUG PRINT ROUTINES
 ;*

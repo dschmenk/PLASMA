@@ -652,6 +652,22 @@ void emit_llw(int index)
 {
     printf("\t%s\t$66,$%02X\t\t\t; LLW\t[%d]\n", DB, index, index);
 }
+void emit_addlb(int index)
+{
+    printf("\t%s\t$B0,$%02X\t\t\t; ADDLB\t[%d]\n", DB, index, index);
+}
+void emit_addlw(int index)
+{
+    printf("\t%s\t$B2,$%02X\t\t\t; ADDLW\t[%d]\n", DB, index, index);
+}
+void emit_idxlb(int index)
+{
+    printf("\t%s\t$B8,$%02X\t\t\t; IDXLB\t[%d]\n", DB, index, index);
+}
+void emit_idxlw(int index)
+{
+    printf("\t%s\t$BA,$%02X\t\t\t; IDXLW\t[%d]\n", DB, index, index);
+}
 void emit_lab(int tag, int offset, int type)
 {
     if (type)
@@ -678,6 +694,62 @@ void emit_law(int tag, int offset, int type)
     else
     {
         printf("\t%s\t$6A,$%02X,$%02X\t\t; LAW\t%d\n", DB, offset&0xFF,(offset>>8)&0xFF, offset);
+    }
+}
+void emit_addab(int tag, int offset, int type)
+{
+    if (type)
+    {
+        int fixup = fixup_new(tag, type, FIXUP_WORD);
+        char *taglbl = tag_string(tag, type);
+        printf("\t%s\t$B4\t\t\t; ADDAB\t%s+%d\n", DB, taglbl, offset);
+        printf("_F%03d%c\t%s\t%s+%d\t\t\n", fixup, LBL, DW, type & EXTERN_TYPE ? "0" : taglbl, offset);
+    }
+    else
+    {
+        printf("\t%s\t$B4,$%02X,$%02X\t\t; ADDAB\t%d\n", DB, offset&0xFF,(offset>>8)&0xFF, offset);
+    }
+}
+void emit_addaw(int tag, int offset, int type)
+{
+    if (type)
+    {
+        int fixup = fixup_new(tag, type, FIXUP_WORD);
+        char *taglbl = tag_string(tag, type);
+        printf("\t%s\t$B6\t\t\t; ADDAW\t%s+%d\n", DB, taglbl, offset);
+        printf("_F%03d%c\t%s\t%s+%d\t\t\n", fixup, LBL, DW, type & EXTERN_TYPE ? "0" : taglbl, offset);
+    }
+    else
+    {
+        printf("\t%s\t$B6,$%02X,$%02X\t\t; ADDAW\t%d\n", DB, offset&0xFF,(offset>>8)&0xFF, offset);
+    }
+}
+void emit_idxab(int tag, int offset, int type)
+{
+    if (type)
+    {
+        int fixup = fixup_new(tag, type, FIXUP_WORD);
+        char *taglbl = tag_string(tag, type);
+        printf("\t%s\t$BC\t\t\t; IDXAB\t%s+%d\n", DB, taglbl, offset);
+        printf("_F%03d%c\t%s\t%s+%d\t\t\n", fixup, LBL, DW, type & EXTERN_TYPE ? "0" : taglbl, offset);
+    }
+    else
+    {
+        printf("\t%s\t$BC,$%02X,$%02X\t\t; IDXAB\t%d\n", DB, offset&0xFF,(offset>>8)&0xFF, offset);
+    }
+}
+void emit_idxaw(int tag, int offset, int type)
+{
+    if (type)
+    {
+        int fixup = fixup_new(tag, type, FIXUP_WORD);
+        char *taglbl = tag_string(tag, type);
+        printf("\t%s\t$BE\t\t\t; IDXAW\t%s+%d\n", DB, taglbl, offset);
+        printf("_F%03d%c\t%s\t%s+%d\t\t\n", fixup, LBL, DW, type & EXTERN_TYPE ? "0" : taglbl, offset);
+    }
+    else
+    {
+        printf("\t%s\t$BE,$%02X,$%02X\t\t; IDXAW\t%d\n", DB, offset&0xFF,(offset>>8)&0xFF, offset);
     }
 }
 void emit_sb(void)
@@ -1436,7 +1508,17 @@ int crunch_seq(t_opseq **seq, int pass)
                     crunched = try_dupify(op);
                 break; // GADDR_CODE
             case LLB_CODE:
-                if (pass > 0)
+                if ((opnext->code == ADD_CODE) || (opnext->code == INDEXB_CODE))
+                {
+                    op->code = ADDLB_CODE;
+                    freeops  = 1;
+                }
+                else if (opnext->code == INDEXW_CODE)
+                {
+                    op->code = IDXLB_CODE;
+                    freeops  = 1;
+                }
+                if ((pass > 0) && (freeops == 0))
                     crunched = try_dupify(op);
                 break; // LLB_CODE
             case LLW_CODE:
@@ -1454,11 +1536,32 @@ int crunch_seq(t_opseq **seq, int pass)
                         }
                     }
                 }
+                else if ((opnext->code == ADD_CODE) || (opnext->code == INDEXB_CODE))
+                {
+                    op->code = ADDLW_CODE;
+                    freeops  = 1;
+                }
+                else if (opnext->code == INDEXW_CODE)
+                {
+                    op->code = IDXLW_CODE;
+                    freeops  = 1;
+                }
                 if ((pass > 0) && (freeops == 0))
                     crunched = try_dupify(op);
                 break; // LLW_CODE
             case LAB_CODE:
-                if ((pass > 0) && (op->type || !is_hardware_address(op->offsz)))
+                if ((opnext->code == ADD_CODE) || (opnext->code == INDEXB_CODE))
+                {
+                    op->code = ADDAB_CODE;
+                    freeops  = 1;
+                }
+                else if (opnext->code == INDEXW_CODE)
+                {
+                    op->code = IDXAB_CODE;
+                    freeops  = 1;
+                }
+                if ((pass > 0) && (freeops == 0) && 
+                    (op->type || !is_hardware_address(op->offsz)))
                     crunched = try_dupify(op);
                 break; // LAB_CODE
             case LAW_CODE:
@@ -1475,6 +1578,16 @@ int crunch_seq(t_opseq **seq, int pass)
                             break;
                         }
                     }
+                }
+                else if ((opnext->code == ADD_CODE) || (opnext->code == INDEXB_CODE))
+                {
+                    op->code = ADDAW_CODE;
+                    freeops  = 1;
+                }
+                else if (opnext->code == INDEXW_CODE)
+                {
+                    op->code = IDXAW_CODE;
+                    freeops  = 1;
                 }
                 if ((pass > 0) && (freeops == 0) &&
                     (op->type || !is_hardware_address(op->offsz)))
@@ -1720,11 +1833,35 @@ int emit_pending_seq()
             case LLW_CODE:
                 emit_llw(op->offsz);
                 break;
+            case ADDLB_CODE:
+                emit_addlb(op->offsz);
+                break;
+            case ADDLW_CODE:
+                emit_addlw(op->offsz);
+                break;
+            case IDXLB_CODE:
+                emit_idxlb(op->offsz);
+                break;
+            case IDXLW_CODE:
+                emit_idxlw(op->offsz);
+                break;
             case LAB_CODE:
                 emit_lab(op->tag, op->offsz, op->type);
                 break;
             case LAW_CODE:
                 emit_law(op->tag, op->offsz, op->type);
+                break;
+            case ADDAB_CODE:
+                emit_addab(op->tag, op->offsz, op->type);
+                break;
+            case ADDAW_CODE:
+                emit_addaw(op->tag, op->offsz, op->type);
+                break;
+            case IDXAB_CODE:
+                emit_idxab(op->tag, op->offsz, op->type);
+                break;
+            case IDXAW_CODE:
+                emit_idxaw(op->tag, op->offsz, op->type);
                 break;
             case SB_CODE:
                 emit_sb();

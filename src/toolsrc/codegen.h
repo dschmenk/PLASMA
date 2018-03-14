@@ -68,6 +68,14 @@ typedef struct _opseq {
 #define BROR_CODE   0x324
 #define CODETAG_CODE 0x0325
 #define NOP_CODE    0x0326
+#define ADDLB_CODE  0x0330
+#define ADDLW_CODE  0x0331
+#define ADDAB_CODE  0x0332
+#define ADDAW_CODE  0x0333
+#define IDXLB_CODE  0x0334
+#define IDXLW_CODE  0x0335
+#define IDXAB_CODE  0x0336
+#define IDXAW_CODE  0x0337
 
 #define gen_uop(seq,op)     gen_seq(seq,UNARY_CODE(op),0,0,0,0)
 #define gen_op(seq,op)      gen_seq(seq,BINARY_CODE(op),0,0,0,0)

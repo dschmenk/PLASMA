@@ -149,6 +149,7 @@ OPTBL   !WORD   CN,CN,CN,CN,CN,CN,CN,CN                                 ; 00 02 
         !WORD   LNOT,ADD,SUB,MUL,DIV,MOD,INCR,DECR                      ; 80 82 84 86 88 8A 8C 8E
         !WORD   NEG,COMP,BAND,IOR,XOR,SHL,SHR,IDXW                      ; 90 92 94 96 98 9A 9C 9E
         !WORD   BRGT,BRLT,INCBRLE,ADDBRLE,DECBRGE,SUBBRGE,BRAND,BROR    ; A0 A2 A4 A6 A8 AA AC AE
+        !WORD   ADDLB,ADDLW,ADDAB,ADDAW,IDXLB,IDXLW,IDXAB,IDXAW         ; B0 B2 B4 B6 B8 BA BC BE
 ;*
 ;* SYSTEM INTERPRETER ENTRYPOINT
 ;*
@@ -451,17 +452,6 @@ DUP     DEX
         STA     ESTKH,X
         JMP     NEXTOP
 ;*
-;* LOGICAL NOT
-;*
-LNOT    LDA     ESTKL,X
-        ORA     ESTKH,X
-        BEQ     +
-        LDA     #$FF
-+       EOR     #$FF
-        STA     ESTKL,X
-        STA     ESTKH,X
-        JMP     NEXTOP
-;*
 ;* ADD IMMEDIATE TO TOS
 ;*
 ADDI    INY                     ;+INC_IP
@@ -502,10 +492,20 @@ ORI     INY                     ;+INC_IP
         STA     ESTKL,X
         JMP     NEXTOP
 ;*
+;* LOGICAL NOT
+;*
+LNOT    LDA     ESTKL,X
+        ORA     ESTKH,X
+        BEQ     +
+        LDA     #$00
+        STA     ESTKL,X
+        STA     ESTKH,X
+        JMP     NEXTOP
+;*
 ;* CONSTANT -1, NYBBLE, BYTE, $FF BYTE, WORD (BELOW)
 ;*
 MINUS1  DEX
-        LDA     #$FF
++       LDA     #$FF
         STA     ESTKL,X
         STA     ESTKH,X
         JMP     NEXTOP
@@ -534,6 +534,7 @@ CB      LDA     #$00
         BCC     +
         INC     IPH
 +       LDY     #$FF
+CW
 LA      INY                     ;+INC_IP
         BMI     -
         DEX
@@ -543,14 +544,14 @@ LA      INY                     ;+INC_IP
         LDA     (IP),Y
         STA     ESTKH,X
         JMP     NEXTOP
-CW      DEX
-        INY                     ;+INC_IP
-        LDA     (IP),Y
-        STA     ESTKL,X
-        INY
-        LDA     (IP),Y
-        STA     ESTKH,X
-        JMP     NEXTOP
+;CW      DEX
+;        INY                     ;+INC_IP
+;        LDA     (IP),Y
+;        STA     ESTKL,X
+;        INY
+;        LDA     (IP),Y
+;        STA     ESTKH,X
+;        JMP     NEXTOP
 ;*
 ;* CONSTANT STRING
 ;*
@@ -665,7 +666,7 @@ LLA     INY                     ;+INC_IP
 ;*
 ;* LOAD VALUE FROM LOCAL FRAME OFFSET
 ;*
-LLB     INY                     ;+INC_IP
+_LLB    INY                     ;+INC_IP
         LDA     (IP),Y
         STY     IPY
         TAY
@@ -675,8 +676,8 @@ LLB     INY                     ;+INC_IP
         LDA     #$00
         STA     ESTKH,X
         LDY     IPY
-        JMP     NEXTOP
-LLW     INY                     ;+INC_IP
+        RTS
+_LLW    INY                     ;+INC_IP
         LDA     (IP),Y
         STY     IPY
         TAY
@@ -687,11 +688,29 @@ LLW     INY                     ;+INC_IP
         LDA     (IFP),Y
         STA     ESTKH,X
         LDY     IPY
+        RTS
+LLB     JSR     _LLB
         JMP     NEXTOP
+LLW     JSR     _LLW
+        JMP     NEXTOP
+;*
+;* ADD VALUE FROM LOCAL FRAME OFFSET
+;*
+ADDLB   JSR     _LLB
+        JMP     ADD
+ADDLW   JSR     _LLW
+        JMP     ADD
+;*
+;* INDEX VALUE FROM LOCAL FRAME OFFSET
+;*
+IDXLB   JSR     _LLB
+        JMP     IDXW
+IDXLW   JSR     _LLW
+        JMP     IDXW
 ;*
 ;* LOAD VALUE FROM ABSOLUTE ADDRESS
 ;*
-LAB     INY                     ;+INC_IP
+_LAB    INY                     ;+INC_IP
         LDA     (IP),Y
         STA     ESTKH-2,X
         INY                     ;+INC_IP
@@ -702,8 +721,8 @@ LAB     INY                     ;+INC_IP
         STA     ESTKL,X
         LDA     #$00
         STA     ESTKH,X
-        JMP     NEXTOP
-LAW     INY                     ;+INC_IP
+        RTS
+_LAW    INY                     ;+INC_IP
         LDA     (IP),Y
         STA     TMPL
         INY                     ;+INC_IP
@@ -718,7 +737,25 @@ LAW     INY                     ;+INC_IP
         LDA     (TMP),Y
         STA     ESTKH,X
         LDY     IPY
+        RTS
+LAB     JSR     _LAB
         JMP     NEXTOP
+LAW     JSR     _LAW
+        JMP     NEXTOP
+;*
+;* ADD VALUE FROM ABSOLUTE ADDRESS
+;*
+ADDAB   JSR     _LAB
+        JMP     ADD
+ADDAW   JSR     _LAW
+        JMP     ADD
+;*
+;* INDEX VALUE FROM ABSOLUTE ADDRESS
+;*
+IDXAB   JSR     _LAB
+        JMP     IDXW
+IDXAW   JSR     _LAW
+        JMP     IDXW
 ;*
 ;* STORE VALUE TO ADDRESS
 ;*
@@ -875,7 +912,6 @@ ISTRU   LDA     #$FF
         STA     ESTKL+1,X
         STA     ESTKH+1,X
         JMP     DROP
-;
 ISNE    LDA     ESTKL,X
         CMP     ESTKL+1,X
         BNE     ISTRU
