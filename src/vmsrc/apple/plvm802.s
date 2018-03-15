@@ -963,57 +963,105 @@ LLWX    INY                     ;+INC_IP
 ;*
 ;* ADD VALUE FROM LOCAL FRAME OFFSET
 ;*
-ADDLB   LDX     #$60            ; RTS
-        STX     NEXTOP
-        JSR     LLB
-        LDX     #$C8            ; INY
-        STX     NEXTOP
-        JMP     ADD
-ADDLBX  LDX     #$60            ; RTS
-        STX     NEXTOP
-        JSR     LLBX
-        LDX     #$C8            ; INY
-        STX     NEXTOP
-        JMP     ADD
-ADDLW   LDX     #$60            ; RTS
-        STX     NEXTOP
-        JSR     LLW
-        LDX     #$C8            ; INY
-        STX     NEXTOP
-        JMP     ADD
-ADDLWX  LDX     #$60            ; RTS
-        STX     NEXTOP
-        JSR     LLWX
-        LDX     #$C8            ; INY
-        STX     NEXTOP
-        JMP     ADD
+ADDLB   INY                     ;+INC_IP
+        TYX
+        LDA     (IP),Y
+        TAY
+        LDA     (IFP),Y
+        AND     #$00FF
+        TXY
+        CLC
+        ADC     TOS,S
+        STA     TOS,S
+        JMP     NEXTOP
+ADDLBX  INY                     ;+INC_IP
+        TYX
+        LDA     (IP),Y
+        TAY
+        STX     ALTRDOFF
+        LDA     (IFP),Y
+        STX     ALTRDON
+        AND     #$00FF
+        TXY
+        CLC
+        ADC     TOS,S
+        STA     TOS,S
+        JMP     NEXTOP
+ADDLW   INY                     ;+INC_IP
+        TYX
+        LDA     (IP),Y
+        TAY
+        LDA     (IFP),Y
+        TXY
+        CLC
+        ADC     TOS,S
+        STA     TOS,S
+        JMP     NEXTOP
+ADDLWX  INY                     ;+INC_IP
+        TYX
+        LDA     (IP),Y
+        TAY
+        STX     ALTRDOFF
+        LDA     (IFP),Y
+        STX     ALTRDON
+        TXY
+        CLC
+        ADC     TOS,S
+        STA     TOS,S
+        JMP     NEXTOP
 ;*
 ;* INDEX VALUE FROM LOCAL FRAME OFFSET
 ;*
-IDXLB   LDX     #$60            ; RTS
-        STX     NEXTOP
-        JSR     LLB
-        LDX     #$C8            ; INY
-        STX     NEXTOP
-        JMP     IDXW
-IDXLBX  LDX     #$60            ; RTS
-        STX     NEXTOP
-        JSR     LLBX
-        LDX     #$C8            ; INY
-        STX     NEXTOP
-        JMP     IDXW
-IDXLW   LDX     #$60            ; RTS
-        STX     NEXTOP
-        JSR     LLW
-        LDX     #$C8            ; INY
-        STX     NEXTOP
-        JMP     IDXW
-IDXLWX  LDX     #$60            ; RTS
-        STX     NEXTOP
-        JSR     LLWX
-        LDX     #$C8            ; INY
-        STX     NEXTOP
-        JMP     IDXW
+IDXLB   INY                     ;+INC_IP
+        TYX
+        LDA     (IP),Y
+        TAY
+        LDA     (IFP),Y
+        AND     #$00FF
+        TXY
+        ASL
+        CLC
+        ADC     TOS,S
+        STA     TOS,S
+        JMP     NEXTOP
+IDXLBX  INY                     ;+INC_IP
+        TYX
+        LDA     (IP),Y
+        TAY
+        STX     ALTRDOFF
+        LDA     (IFP),Y
+        STX     ALTRDON
+        AND     #$00FF
+        TXY
+        ASL
+        CLC
+        ADC     TOS,S
+        STA     TOS,S
+        JMP     NEXTOP
+IDXLW   INY                     ;+INC_IP
+        TYX
+        LDA     (IP),Y
+        TAY
+        LDA     (IFP),Y
+        TXY
+        ASL
+        CLC
+        ADC     TOS,S
+        STA     TOS,S
+        JMP     NEXTOP
+IDXLWX  INY                     ;+INC_IP
+        TYX
+        LDA     (IP),Y
+        TAY
+        STX     ALTRDOFF
+        LDA     (IFP),Y
+        STX     ALTRDON
+        TXY
+        ASL
+        CLC
+        ADC     TOS,S
+        STA     TOS,S
+        JMP     NEXTOP
 ;*
 ;* LOAD VALUE FROM ABSOLUTE ADDRESS
 ;*
@@ -1058,57 +1106,105 @@ LAWX    INY                     ;+INC_IP
 ;*
 ;* ADD VALUE FROM ABSOLUTE ADDRESS
 ;*
-ADDAB   LDX     #$60            ; RTS
-        STX     NEXTOP
-        JSR     LAB
-        LDX     #$C8            ; INY
-        STX     NEXTOP
-        JMP     ADD
-ADDABX  LDX     #$60            ; RTS
-        STX     NEXTOP
-        JSR     LABX
-        LDX     #$C8            ; INY
-        STX     NEXTOP
-        JMP     ADD
-ADDAW   LDX     #$60            ; RTS
-        STX     NEXTOP
-        JSR     LAW
-        LDX     #$C8            ; INY
-        STX     NEXTOP
-        JMP     ADD
-ADDAWX  LDX     #$60            ; RTS
-        STX     NEXTOP
-        JSR     LAWX
-        LDX     #$C8            ; INY
-        STX     NEXTOP
-        JMP     ADD
+ADDAB   INY                     ;+INC_IP
+        LDA     (IP),Y
+        STA     TMP
+        TYA                     ; QUICKY CLEAR OUT MSB
+        +ACCMEM8                ; 8 BIT A/M
+        LDA     (TMP)
+        +ACCMEM16               ; 16 BIT A/M
+        INY                     ;+INC_IP
+        CLC
+        ADC     TOS,S
+        STA     TOS,S
+        JMP     NEXTOP
+ADDABX  INY                     ;+INC_IP
+        LDA     (IP),Y
+        STA     TMP
+        TYA                     ; QUICKY CLEAR OUT MSB
+        STX     ALTRDOFF
+        +ACCMEM8                ; 8 BIT A/M
+        LDA     (TMP)
+        +ACCMEM16               ; 16 BIT A/M
+        STX     ALTRDON
+        INY                     ;+INC_IP
+        CLC
+        ADC     TOS,S
+        STA     TOS,S
+        JMP     NEXTOP
+ADDAW   INY                     ;+INC_IP
+        LDA     (IP),Y
+        STA     TMP
+        LDA     (TMP)
+        INY                     ;+INC_IP
+        CLC
+        ADC     TOS,S
+        STA     TOS,S
+        JMP     NEXTOP
+ADDAWX  INY                     ;+INC_IP
+        LDA     (IP),Y
+        STA     TMP
+        STX     ALTRDOFF
+        LDA     (TMP)
+        STX     ALTRDON
+        INY                     ;+INC_IP
+        CLC
+        ADC     TOS,S
+        STA     TOS,S
+        JMP     NEXTOP
 ;*
 ;* INDEX VALUE FROM ABSOLUTE ADDRESS
 ;*
-IDXAB   LDX     #$60            ; RTS
-        STX     NEXTOP
-        JSR     LAB
-        LDX     #$C8            ; INY
-        STX     NEXTOP
-        JMP     IDXW
-IDXABX  LDX     #$60            ; RTS
-        STX     NEXTOP
-        JSR     LABX
-        LDX     #$C8            ; INY
-        STX     NEXTOP
-        JMP     IDXW
-IDXAW   LDX     #$60            ; RTS
-        STX     NEXTOP
-        JSR     LAW
-        LDX     #$C8            ; INY
-        STX     NEXTOP
-        JMP     IDXW
-IDXAWX  LDX     #$60            ; RTS
-        STX     NEXTOP
-        JSR     LAWX
-        LDX     #$C8            ; INY
-        STX     NEXTOP
-        JMP     IDXW
+IDXAB   INY                     ;+INC_IP
+        LDA     (IP),Y
+        STA     TMP
+        TYA                     ; QUICKY CLEAR OUT MSB
+        +ACCMEM8                ; 8 BIT A/M
+        LDA     (TMP)
+        +ACCMEM16               ; 16 BIT A/M
+        INY                     ;+INC_IP
+        ASL
+        CLC
+        ADC     TOS,S
+        STA     TOS,S
+        JMP     NEXTOP
+IDXABX  INY                     ;+INC_IP
+        LDA     (IP),Y
+        STA     TMP
+        TYA                     ; QUICKY CLEAR OUT MSB
+        STX     ALTRDOFF
+        +ACCMEM8                ; 8 BIT A/M
+        LDA     (TMP)
+        +ACCMEM16               ; 16 BIT A/M
+        STX     ALTRDON
+        INY                     ;+INC_IP
+        ASL
+        CLC
+        ADC     TOS,S
+        STA     TOS,S
+        JMP     NEXTOP
+IDXAW   INY                     ;+INC_IP
+        LDA     (IP),Y
+        STA     TMP
+        LDA     (TMP)
+        INY                     ;+INC_IP
+        ASL
+        CLC
+        ADC     TOS,S
+        STA     TOS,S
+        JMP     NEXTOP
+IDXAWX  INY                     ;+INC_IP
+        LDA     (IP),Y
+        STA     TMP
+        STX     ALTRDOFF
+        LDA     (TMP)
+        STX     ALTRDON
+        INY                     ;+INC_IP
+        ASL
+        CLC
+        ADC     TOS,S
+        STA     TOS,S
+        JMP     NEXTOP
 ;*
 ;* STORE VALUE TO ADDRESS
 ;*

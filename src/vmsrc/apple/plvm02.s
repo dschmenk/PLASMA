@@ -1017,57 +1017,143 @@ LLWX    INY                     ;+INC_IP
 ;*
 ;* ADD VALUE FROM LOCAL FRAME OFFSET
 ;*
-ADDLB   LDA     #$60            ; RTS
-        STA     NEXTOP
-        JSR     LLB
-        LDA     #$C8            ; INY
-        STA     NEXTOP
-        JMP     ADD
-ADDLBX  LDA     #$60            ; RTS
-        STA     NEXTOP
-        JSR     LLBX
-        LDA     #$C8            ; INY
-        STA     NEXTOP
-        JMP     ADD
-ADDLW   LDA     #$60            ; RTS
-        STA     NEXTOP
-        JSR     LLW
-        LDA     #$C8            ; INY
-        STA     NEXTOP
-        JMP     ADD
-ADDLWX  LDA     #$60            ; RTS
-        STA     NEXTOP
-        JSR     LLWX
-        LDA     #$C8            ; INY
-        STA     NEXTOP
-        JMP     ADD
+ADDLB   INY                     ;+INC_IP
+        LDA     (IP),Y
+        STY     IPY
+        TAY
+        LDA     (IFP),Y
+        CLC
+        ADC     ESTKL,X
+        STA     ESTKL,X
+        BCC     +
+        INC     ESTKH,X
++       LDY     IPY
+        JMP     NEXTOP
+ADDLBX  INY                     ;+INC_IP
+        LDA     (IP),Y
+        STY     IPY
+        TAY
+        STA     ALTRDOFF
+        LDA     (IFP),Y
+        CLC
+        ADC     ESTKL,X
+        STA     ESTKL,X
+        BCC     +
+        INC     ESTKH,X
++       STA     ALTRDON
+        LDY     IPY
+        JMP     NEXTOP
+ADDLW   INY                     ;+INC_IP
+        LDA     (IP),Y
+        STY     IPY
+        TAY
+        LDA     (IFP),Y
+        CLC
+        ADC     ESTKL,X
+        STA     ESTKL,X
+        INY
+        LDA     (IFP),Y
+        ADC     ESTKH,X
+        STA     ESTKH,X
+        LDY     IPY
+        JMP     NEXTOP
+ADDLWX  INY                     ;+INC_IP
+        LDA     (IP),Y
+        STY     IPY
+        TAY
+        STA     ALTRDOFF
+        LDA     (IFP),Y
+        CLC
+        ADC     ESTKL,X
+        STA     ESTKL,X
+        INY
+        LDA     (IFP),Y
+        ADC     ESTKH,X
+        STA     ESTKH,X
+        STA     ALTRDON
+        LDY     IPY
+        JMP     NEXTOP
 ;*
 ;* INDEX VALUE FROM LOCAL FRAME OFFSET
 ;*
-IDXLB   LDA     #$60            ; RTS
-        STA     NEXTOP
-        JSR     LLB
-        LDA     #$C8            ; INY
-        STA     NEXTOP
-        JMP     IDXW
-IDXLBX  LDA     #$60            ; RTS
-        STA     NEXTOP
-        JSR     LLBX
-        LDA     #$C8            ; INY
-        STA     NEXTOP
-        JMP     IDXW
-IDXLW   LDA     #$60            ; RTS
-        STA     NEXTOP
-        JSR     LLW
-        LDA     #$C8            ; INY
-        STA     NEXTOP
-        JMP     IDXW
-IDXLWX  LDA     #$60            ; RTS
-        STA     NEXTOP
-        JSR     LLWX
-        LDA     #$C8            ; INY
-        STA     NEXTOP
-        JMP     IDXW
+IDXLB   INY                     ;+INC_IP
+        LDA     (IP),Y
+        STY     IPY
+        TAY
+        LDA     (IFP),Y
+        LDY     #$00
+        ASL
+        BCC     +
+        INY
+        CLC
++       ADC     ESTKL,X
+        STA     ESTKL,X
+        TYA
+        ADC     ESTKH,X
+        STA     ESTKH,X
+        LDY     IPY
+        JMP     NEXTOP
+IDXLBX  INY                     ;+INC_IP
+        LDA     (IP),Y
+        STY     IPY
+        TAY
+        STA     ALTRDOFF
+        LDA     (IFP),Y
+        LDY     #$00
+        ASL
+        BCC     +
+        INY
+        CLC
++       ADC     ESTKL,X
+        STA     ESTKL,X
+        TYA
+        ADC     ESTKH,X
+        STA     ESTKH,X
+        STA     ALTRDON
+        LDY     IPY
+        JMP     NEXTOP
+IDXLW   INY                     ;+INC_IP
+        LDA     (IP),Y
+        STY     IPY
+        TAY
+        STA     TMPL
+        LDA     (IFP),Y
+        ASL
+        STA     TMPL
+        INY
+        LDA     (IFP),Y
+        ROL
+        STA     TMPH
+        LDA     TMPL
+        CLC
+        ADC     ESTKL,X
+        STA     ESTKL,X
+        LDA     TMPH
+        ADC     ESTKH,X
+        STA     ESTKH,X
+        LDY     IPY
+        JMP     NEXTOP
+IDXLWX  INY                     ;+INC_IP
+        LDA     (IP),Y
+        STY     IPY
+        TAY
+        STA     ALTRDOFF
+        LDA     (IFP),Y
+        ASL
+        STA     TMPL
+        INY
+        LDA     (IFP),Y
+        ROL
+        STA     TMPH
+        LDA     TMPL
+        CLC
+        ADC     ESTKL,X
+        STA     ESTKL,X
+        LDA     TMPH
+        ADC     ESTKH,X
+        STA     ESTKH,X
+        LDY     IPY
+        JMP     NEXTOP
 ;*
 ;* LOAD VALUE FROM ABSOLUTE ADDRESS
 ;*
@@ -1134,56 +1220,166 @@ LAWX    INY                     ;+INC_IP
 ;*
 ;* ADD VALUE FROM ABSOLUTE ADDRESS
 ;*
-ADDAB   LDA     #$60            ; RTS
-        STA     NEXTOP
-        JSR     LAB
-        LDA     #$C8            ; INY
-        STA     NEXTOP
-        JMP     ADD
-ADDABX  LDA     #$60            ; RTS
-        STA     NEXTOP
-        JSR     LABX
-        LDA     #$C8            ; INY
-        STA     NEXTOP
-        JMP     ADD
-ADDAW   LDA     #$60            ; RTS
-        STA     NEXTOP
-        JSR     LAW
-        LDA     #$C8            ; INY
-        STA     NEXTOP
-        JMP     ADD
-ADDAWX  LDA     #$60            ; RTS
-        STA     NEXTOP
-        JSR     LAWX
-        LDA     #$C8            ; INY
-        STA     NEXTOP
-        JMP     ADD
+ADDAB   INY                     ;+INC_IP
+        LDA     (IP),Y
+        STA     ESTKH-2,X
+        INY                     ;+INC_IP
+        LDA     (IP),Y
+        STA     ESTKH-1,X
+        LDA     (ESTKH-2,X)
+        CLC
+        ADC     ESTKL,X
+        STA     ESTKL,X
+        BCC     +
+        INC     ESTKH,X
++       JMP     NEXTOP
+ADDABX  INY                     ;+INC_IP
+        LDA     (IP),Y
+        STA     ESTKH-2,X
+        INY                     ;+INC_IP
+        LDA     (IP),Y
+        STA     ESTKH-1,X
+        STA     ALTRDOFF
+        LDA     (ESTKH-2,X)
+        CLC
+        ADC     ESTKL,X
+        STA     ESTKL,X
+        BCC     +
+        INC     ESTKH,X
++       STA     ALTRDON
+        JMP     NEXTOP
+ADDAW   INY                     ;+INC_IP
+        LDA     (IP),Y
+        STA     TMPL
+        INY                     ;+INC_IP
+        LDA     (IP),Y
+        STA     TMPH
+        STY     IPY
+        LDY     #$00
+        LDA     (TMP),Y
+        CLC
+        ADC     ESTKL,X
+        STA     ESTKL,X
+        INY
+        LDA     (TMP),Y
+        ADC     ESTKH,X
+        STA     ESTKH,X
+        LDY     IPY
+        JMP     NEXTOP
+ADDAWX  INY                     ;+INC_IP
+        LDA     (IP),Y
+        STA     TMPL
+        INY                     ;+INC_IP
+        LDA     (IP),Y
+        STA     TMPH
+        STY     IPY
+        STA     ALTRDOFF
+        LDY     #$00
+        LDA     (TMP),Y
+        CLC
+        ADC     ESTKL,X
+        STA     ESTKL,X
+        INY
+        LDA     (TMP),Y
+        ADC     ESTKH,X
+        STA     ESTKH,X
+        STA     ALTRDON
+        LDY     IPY
+        JMP     NEXTOP
 ;*
 ;* INDEX VALUE FROM ABSOLUTE ADDRESS
 ;*
-IDXAB   LDA     #$60            ; RTS
-        STA     NEXTOP
-        JSR     LAB
-        LDA     #$C8            ; INY
-        STA     NEXTOP
-        JMP     IDXW
-IDXABX  LDA     #$60            ; RTS
-        STA     NEXTOP
-        JSR     LABX
-        LDA     #$C8            ; INY
-        STA     NEXTOP
-        JMP     IDXW
-IDXAW   LDA     #$60            ; RTS
-        STA     NEXTOP
-        JSR     LAW
-        LDA     #$C8            ; INY
-        STA     NEXTOP
-        JMP     IDXW
-IDXAWX  LDA     #$60            ; RTS
-        STA     NEXTOP
-        JSR     LAWX
-        LDA     #$C8            ; INY
-        STA     NEXTOP
+IDXAB   INY                     ;+INC_IP
+        LDA     (IP),Y
+        STA     ESTKH-2,X
+        INY                     ;+INC_IP
+        LDA     (IP),Y
+        STA     ESTKH-1,X
+        LDA     (ESTKH-2,X)
+        STY     IPY
+        LDY     #$00
+        ASL
+        BCC     +
+        INY
+        CLC
++       ADC     ESTKL,X
+        STA     ESTKL,X
+        TYA
+        ADC     ESTKH,X
+        STA     ESTKH,X
+        LDY     IPY
+        JMP     NEXTOP
+IDXABX  INY                     ;+INC_IP
+        LDA     (IP),Y
+        STA     ESTKH-2,X
+        INY                     ;+INC_IP
+        LDA     (IP),Y
+        STA     ESTKH-1,X
+        STA     ALTRDOFF
+        LDA     (ESTKH-2,X)
+        STY     IPY
+        LDY     #$00
+        ASL
+        BCC     +
+        INY
+        CLC
++       ADC     ESTKL,X
+        STA     ESTKL,X
+        TYA
+        ADC     ESTKH,X
+        STA     ESTKH,X
+        LDY     IPY
+        STA     ALTRDON
+        JMP     NEXTOP
+IDXAW   INY                     ;+INC_IP
+        LDA     (IP),Y
+        STA     SRCL
+        INY                     ;+INC_IP
+        LDA     (IP),Y
+        STA     SRCH
+        STY     IPY
+        LDY     #$00
+        LDA     (SRC),Y
+        ASL
+        STA     TMPL
+        INY
+        LDA     (SRC),Y
+        ROL
+        STA     TMPH
+        LDA     TMPL
+        CLC
+        ADC     ESTKL,X
+        STA     ESTKL,X
+        LDA     TMPH
+        ADC     ESTKH,X
+        STA     ESTKH,X
+        LDY     IPY
+        JMP     NEXTOP
+IDXAWX  INY                     ;+INC_IP
+        LDA     (IP),Y
+        STA     SRCL
+        INY                     ;+INC_IP
+        LDA     (IP),Y
+        STA     SRCH
+        STY     IPY
+        STA     ALTRDOFF
+        LDY     #$00
+        LDA     (SRC),Y
+        ASL
+        STA     TMPL
+        INY
+        LDA     (SRC),Y
+        ROL
+        STA     TMPH
+        LDA     TMPL
+        CLC
+        ADC     ESTKL,X
+        STA     ESTKL,X
+        LDA     TMPH
+        ADC     ESTKH,X
+        STA     ESTKH,X
+        STA     ALTRDON
+        LDY     IPY
         JMP     IDXW
 ;*
 ;* STORE VALUE TO ADDRESS
