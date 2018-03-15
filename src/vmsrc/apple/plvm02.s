@@ -1152,6 +1152,7 @@ IDXLWX  INY                     ;+INC_IP
         LDA     TMPH
         ADC     ESTKH,X
         STA     ESTKH,X
+        STA     ALTRDON
         LDY     IPY
         JMP     NEXTOP
 ;*
@@ -1250,37 +1251,37 @@ ADDABX  INY                     ;+INC_IP
         JMP     NEXTOP
 ADDAW   INY                     ;+INC_IP
         LDA     (IP),Y
-        STA     TMPL
+        STA     SRCL
         INY                     ;+INC_IP
         LDA     (IP),Y
-        STA     TMPH
+        STA     SRCH
         STY     IPY
         LDY     #$00
-        LDA     (TMP),Y
+        LDA     (SRC),Y
         CLC
         ADC     ESTKL,X
         STA     ESTKL,X
         INY
-        LDA     (TMP),Y
+        LDA     (SRC),Y
         ADC     ESTKH,X
         STA     ESTKH,X
         LDY     IPY
         JMP     NEXTOP
 ADDAWX  INY                     ;+INC_IP
         LDA     (IP),Y
-        STA     TMPL
+        STA     SRCL
         INY                     ;+INC_IP
         LDA     (IP),Y
-        STA     TMPH
+        STA     SRCH
         STY     IPY
         STA     ALTRDOFF
         LDY     #$00
-        LDA     (TMP),Y
+        LDA     (SRC),Y
         CLC
         ADC     ESTKL,X
         STA     ESTKL,X
         INY
-        LDA     (TMP),Y
+        LDA     (SRC),Y
         ADC     ESTKH,X
         STA     ESTKH,X
         STA     ALTRDON
@@ -1380,7 +1381,7 @@ IDXAWX  INY                     ;+INC_IP
         STA     ESTKH,X
         STA     ALTRDON
         LDY     IPY
-        JMP     IDXW
+        JMP     NEXTOP
 ;*
 ;* STORE VALUE TO ADDRESS
 ;*
