@@ -994,9 +994,8 @@ int parse_stmnt(void)
             {
                 seq = NULL;
             }
-            emit_seq(toseq);
-            emit_seq(fromseq);
-            step > 0 ? emit_brgt(break_tag) : emit_brlt(break_tag);
+            toseq = cat_seq(toseq, fromseq);
+            emit_seq(step > 0 ? gen_brgt(toseq, break_tag) : gen_brlt(toseq, break_tag));
             emit_codetag(tag_for);
             if (type & LOCAL_TYPE)
                 type & BYTE_TYPE ? emit_dlb(addr) : emit_dlw(addr);
