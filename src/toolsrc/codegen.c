@@ -867,6 +867,16 @@ void emit_caseblock(int casecnt, int *caseof, int *casetag)
         printf("\t%s\t_B%03d-*\n", DW, casetag[i]);
     }
 }
+void emit_breq(int tag)
+{
+    printf("\t%s\t$22\t\t\t; BREQ\t_B%03d\n", DB, tag);
+    printf("\t%s\t_B%03d-*\n", DW, tag);
+}
+void emit_brne(int tag)
+{
+    printf("\t%s\t$24\t\t\t; BRNE\t_B%03d\n", DB, tag);
+    printf("\t%s\t_B%03d-*\n", DW, tag);
+}
 void emit_brfls(int tag)
 {
     printf("\t%s\t$4C\t\t\t; BRFLS\t_B%03d\n", DB, tag);
@@ -1606,6 +1616,36 @@ int crunch_seq(t_opseq **seq, int pass)
                         break;
                 }
                 break; // LOGIC_NOT_CODE
+            case EQ_CODE:
+                switch (opnext->code)
+                {
+                    case BRFALSE_CODE:
+                        op->code = BRNE_CODE;
+                        op->tag  = opnext->tag;
+                        freeops  = 1;
+                        break;
+                    case BRTRUE_CODE:
+                        op->code = BREQ_CODE;
+                        op->tag  = opnext->tag;
+                        freeops  = 1;
+                        break;
+                }
+                break; // EQ_CODE
+            case NE_CODE:
+                switch (opnext->code)
+                {
+                    case BRFALSE_CODE:
+                        op->code = BREQ_CODE;
+                        op->tag  = opnext->tag;
+                        freeops  = 1;
+                        break;
+                    case BRTRUE_CODE:
+                        op->code = BRNE_CODE;
+                        op->tag  = opnext->tag;
+                        freeops  = 1;
+                        break;
+                }
+                break; // NE_CODE
             case SLB_CODE:
                 if ((opnext->code == LLB_CODE) && (op->offsz == opnext->offsz))
                 {
@@ -1923,6 +1963,12 @@ int emit_pending_seq()
                 break;
             case BROR_CODE:
                 emit_bror(op->tag);
+                break;
+            case BREQ_CODE:
+                emit_breq(op->tag);
+                break;
+            case BRNE_CODE:
+                emit_brne(op->tag);
                 break;
             case BRFALSE_CODE:
                 emit_brfls(op->tag);

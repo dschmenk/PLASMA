@@ -233,7 +233,7 @@ VMCORE  =        *
         !ALIGN  255,0
 OPTBL   !WORD   CN,CN,CN,CN,CN,CN,CN,CN                                 ; 00 02 04 06 08 0A 0C 0E
         !WORD   CN,CN,CN,CN,CN,CN,CN,CN                                 ; 10 12 14 16 18 1A 1C 1E
-        !WORD   MINUS1,NEXTOP,NEXTOP,LA,LLA,CB,CW,CS                    ; 20 22 24 26 28 2A 2C 2E
+        !WORD   MINUS1,BREQ,BRNE,LA,LLA,CB,CW,CS                        ; 20 22 24 26 28 2A 2C 2E
         !WORD   DROP,DROP2,DUP,DIVMOD,ADDI,SUBI,ANDI,ORI                ; 30 32 34 36 38 3A 3C 3E
         !WORD   ISEQ,ISNE,ISGT,ISLT,ISGE,ISLE,BRFLS,BRTRU               ; 40 42 44 46 48 4A 4C 4E
         !WORD   BRNCH,SEL,CALL,ICAL,ENTER,LEAVE,RET,CFFB                ; 50 52 54 56 58 5A 5C 5E
@@ -466,7 +466,7 @@ LCDEFCMD =      *-28            ; DEFCMD IN LC MEMORY
         !ALIGN  255,0
 OPXTBL  !WORD   CN,CN,CN,CN,CN,CN,CN,CN                                 ; 00 02 04 06 08 0A 0C 0E
         !WORD   CN,CN,CN,CN,CN,CN,CN,CN                                 ; 10 12 14 16 18 1A 1C 1E
-        !WORD   MINUS1,NEXTOP,NEXTOP,LA,LLA,CB,CW,CSX                   ; 20 22 24 26 28 2A 2C 2E
+        !WORD   MINUS1,BREQ,BRNE,LA,LLA,CB,CW,CSX                       ; 20 22 24 26 28 2A 2C 2E
         !WORD   DROP,DROP2,DUP,DIVMOD,ADDI,SUBI,ANDI,ORI                ; 30 32 34 36 38 3A 3C 3E
         !WORD   ISEQ,ISNE,ISGT,ISLT,ISGE,ISLE,BRFLS,BRTRU               ; 40 42 44 46 48 4A 4C 4E
         !WORD   BRNCH,SEL,CALLX,ICALX,ENTER,LEAVEX,RETX,CFFB            ; 50 52 54 56 58 5A 5C 5E
@@ -1407,6 +1407,18 @@ BRAND   LDA     TOS,S
 BROR    LDA     TOS,S
         BNE     BRNCH
         PLA                     ; DROP LEFT HALF OF OR
+        BRA     NOBRNCH
+BREQ    PLA
+        CMP     TOS,S
+        BNE     +
+        PLA
+        BRA     BRNCH
+BRNE    PLA
+        CMP     TOS,S
+        BEQ     +
+        PLA
+        BRA     BRNCH
++       PLA
         BRA     NOBRNCH
 BRTRU   PLA
         BNE     BRNCH

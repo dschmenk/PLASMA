@@ -64,10 +64,12 @@ typedef struct _opseq {
 #define BRNCH_CODE  0x0320
 #define BRFALSE_CODE 0x0321
 #define BRTRUE_CODE 0x0322
-#define BRAND_CODE  0x323
-#define BROR_CODE   0x324
-#define CODETAG_CODE 0x0325
-#define NOP_CODE    0x0326
+#define BREQ_CODE   0x0323
+#define BRNE_CODE   0x0324
+#define BRAND_CODE  0x325
+#define BROR_CODE   0x326
+#define CODETAG_CODE 0x0327
+#define NOP_CODE    0x0328
 #define ADDLB_CODE  0x0330
 #define ADDLW_CODE  0x0331
 #define ADDAB_CODE  0x0332
