@@ -829,7 +829,7 @@ t_opseq *parse_set(t_opseq *codeseq)
 int parse_stmnt(void)
 {
     int tag_prevbrk, tag_prevcnt, tag_else, tag_endif, tag_while, tag_wend, tag_repeat, tag_for, tag_choice, tag_of;
-    int type, addr, step, cfnvals, prev_for, constsize, casecnt;
+    int type, addr, step, cfnvals, prev_for, constsize, casecnt, i;
     int *caseval, *casetag;
     long constval;
     char *idptr;
@@ -1056,6 +1056,9 @@ int parse_stmnt(void)
                 {
                     constval = 0;
                     parse_constexpr(&constval, &constsize);
+                    for (i = 0; i < casecnt; i++)
+                        if (caseval[i] == constval)
+                            parse_error("Duplicate CASE");
                     tag_of           = tag_new(BRANCH_TYPE);
                     caseval[casecnt] = constval;
                     casetag[casecnt] = tag_of;

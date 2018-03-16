@@ -598,10 +598,10 @@ def parse_set(codeseq)
     return codeseq
 end
 def parse_stmnt
-    byte type, elem_type, elem_size, i, cfnvals, prev_for
+    byte type, elem_type, elem_size, cfnvals, prev_for
     word seq, fromseq, toseq, tag_prevbrk, tag_prevcnt, tag_else, tag_endif, tag_while, tag_wend
     word tag_repeat, tag_for, tag_choice, tag_of, idptr, addr, stepdir
-    word caseconst, casecnt, caseval, casetag
+    word caseconst, casecnt, caseval, casetag, i
 
     if token <> END_TKN and token <> DONE_TKN and token <> OF_TKN and token <> DEFAULT_TKN
         prevstmnt = token
@@ -794,8 +794,8 @@ def parse_stmnt
             tag_prevbrk = break_tag
             break_tag   = new_tag(RELATIVE_FIXUP)
             tag_choice  = new_tag(RELATIVE_FIXUP)
-            caseval     = heapalloc(512)
-            casetag     = heapalloc(512)
+            caseval     = heapalloc(CASENUM)
+            casetag     = heapalloc(CASENUM)
             casecnt     = 0
             seq, cfnvals = parse_expr(NULL)
             if !seq; exit_err(ERR_INVAL|ERR_STATE); fin
@@ -809,7 +809,11 @@ def parse_stmnt
             while token <> ENDCASE_TKN
                 when token
                     is OF_TKN
+                        if casecnt == CASENUM; exit_err(ERR_OVER|ERR_TABLE); fin
                         caseconst, drop, drop = parse_constexpr
+                        for i = 0 to casecnt-1
+                            if caseval=>[i] == caseconst; exit_err(ERR_DUP|ERR_STATE); fin
+                        next
                         tag_of                = new_tag(RELATIVE_FIXUP)
                         caseval=>[casecnt]    = caseconst
                         casetag=>[casecnt]    = tag_of
