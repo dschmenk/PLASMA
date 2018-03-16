@@ -6,6 +6,8 @@
 #define RVALUE      1
 #define MAX_LAMBDA  64
 
+int parse_mods(void);
+
 int infunc = 0, break_tag = 0, cont_tag = 0, stack_loop = 0, infor = 0;
 long infuncvals = 0;
 t_token prevstmnt;
@@ -1329,7 +1331,7 @@ int parse_struc(void)
 int parse_vars(int type)
 {
     long value;
-    int idlen, size, cfnparms;
+    int idlen, size, cfnparms, emit = 0;
     long cfnvals;
     char *idstr;
 
@@ -1392,6 +1394,7 @@ int parse_vars(int type)
             if (type & WORD_TYPE)
                 cfnvals *= 2;
             do parse_var(type, cfnvals); while (scantoken == COMMA_TOKEN);
+            emit = type == GLOBAL_TYPE;
             break;
         case PREDEF_TOKEN:
             /*
@@ -1432,6 +1435,12 @@ int parse_vars(int type)
                 else
                     parse_error("Bad function pre-declaration");
             } while (scantoken == COMMA_TOKEN);
+            break;
+        case IMPORT_TOKEN:
+            if (emit || type != GLOBAL_TYPE)
+                parse_error("IMPORT after emitting data");
+            parse_mods();
+            break;
         case EOL_TOKEN:
             break;
         default:
