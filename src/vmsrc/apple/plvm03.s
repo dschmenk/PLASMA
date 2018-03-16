@@ -193,21 +193,20 @@ _DIV    STY     IPY
         LDA     #$00
         STA     TMPL            ; REMNDRL
         STA     TMPH            ; REMNDRH
-        LDA     ESTKH,X
-        AND     #$80
         STA     DVSIGN
-        BPL     +
-        JSR     _NEG
-        INC     DVSIGN
-+       LDA     ESTKH+1,X
+        LDA     ESTKH+1,X
         BPL     +
         INX
         JSR     _NEG
         DEX
-        INC     DVSIGN
-        BNE     _DIV1
-+       ORA     ESTKL+1,X       ; DVDNDL
+        LDA     #$81
+        STA     DVSIGN
++       ORA     ESTKL+1,X         ; DVDNDL
         BEQ     _DIVEX
+        LDA     ESTKH,X
+        BPL     _DIV1
+        JSR     _NEG
+        INC     DVSIGN
 _DIV1   ASL     ESTKL+1,X       ; DVDNDL
         ROL     ESTKH+1,X       ; DVDNDH
         DEY
@@ -296,7 +295,7 @@ DIVMOD  JSR     _DIV
         STA     ESTKL,X
         LDA     TMPH            ; REMNDRH
         STA     ESTKH,X
-        LDA     DVSIGN          ; REMAINDER IS SIGN OF DIVIDEND
+        ASL     DVSIGN          ; REMAINDER IS SIGN OF DIVIDEND
         BMI     NEG
         JMP     NEXTOP
 ;*

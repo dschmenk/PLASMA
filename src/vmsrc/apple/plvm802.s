@@ -543,19 +543,20 @@ _MULLP  ASL
 _DIV    STY     IPY
         LDY     #$11            ; #BITS+1
         LDX     #$00
-        LDA     TOS+2,S         ; WE JSR'ED HERE SO OFFSET ACCORDINGLY
+        LDA     NOS+2,S         ; WE JSR'ED HERE SO OFFSET ACCORDINGLY
+        BEQ     _DIVEX
         BPL     +
         LDX     #$81
         EOR     #$FFFF
         INC
-        STA     TOS+2,S
-+       LDA     NOS+2,S
++       STA     TMP             ; NOS,S
+        LDA     TOS+2,S
         BPL     +
         INX
         EOR     #$FFFF
         INC
-+       STA     TMP             ; NOS,S
-        BEQ     _DIVEX
+        STA     TOS+2,S
++       LDA     TMP
 _DIV1   ASL                     ; DVDND
         DEY
         BCC     _DIV1
