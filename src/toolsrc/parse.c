@@ -1069,7 +1069,7 @@ int parse_stmnt(void)
                         casetag[i] = casetag[i-1];
                         i--;
                     }
-                    if (casecnt && (caseval[i] == constval))
+                    if ((i < casecnt) && (caseval[i] == constval))
                         parse_error("Duplicate CASE");
                     caseval[i] = constval;
                     casetag[i] = tag_of;
