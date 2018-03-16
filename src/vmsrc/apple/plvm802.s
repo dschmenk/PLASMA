@@ -1380,8 +1380,10 @@ SEL     TYA                     ; FLATTEN IP
         PLA
         INC     IP
 CASELP  CMP     (IP),Y
-        BEQ     ++
-        INY
+        BEQ     +
+        BVS     ++
+        BMI     CASEEND         ; CASE VALS IN ASCENDING ORDER, EXIT WHEN LESS
+-       INY
         INY
         INY
         DEX
@@ -1392,14 +1394,21 @@ CASELP  CMP     (IP),Y
         INC     IPH
         +ACCMEM16               ; 16 BIT A/M
         BRA     CASELP
++       INY
+        BRA     BRNCH
+++      BPL     -
+CASEEND TXA                     ; SKIP REMAINING CASES
+        ASL
+        ASL
+        CLC
+        ADC     IP
+        STA     IP
 FIXNEXT TYA
         LDY     #$00
         SEC
         ADC     IP
         STA     IP
         JMP     FETCHOP
-++      INY
-        BRA     BRNCH
 BRAND   LDA     TOS,S
         BEQ     BRNCH
         PLA                     ; DROP LEFT HALF OF AND
