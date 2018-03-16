@@ -634,12 +634,9 @@ LW      LDA     ESTKL,X
         LDA     (ESTKH-1,X)
         STA     ESTKL,X
         INC     ESTKH-1,X
-        BEQ     +
-        LDA     (ESTKH-1,X)
-        STA     ESTKH,X
-        JMP     NEXTOP
-+       INC     ESTKH,X
-        LDA     (ESTKH-1,X)
+        BNE     +
+        INC     ESTKH,X
++       LDA     (ESTKH-1,X)
         STA     ESTKH,X
         JMP     NEXTOP
 ;*
@@ -771,12 +768,9 @@ SW      LDA     ESTKL,X
         STA     (ESTKH-1,X)
         LDA     ESTKH+1,X
         INC     ESTKH-1,X
-        BEQ     +
-        STA     (ESTKH-1,X)
-        INX
-        JMP     DROP
-+       INC     ESTKH,X
-        STA     (ESTKH-1,X)
+        BNE     +
+        INC     ESTKH,X
++       STA     (ESTKH-1,X)
 ;*
 ;* DROP TOS, TOS-1
 ;*

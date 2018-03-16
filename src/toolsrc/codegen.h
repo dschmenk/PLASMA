@@ -66,10 +66,12 @@ typedef struct _opseq {
 #define BRTRUE_CODE 0x0322
 #define BREQ_CODE   0x0323
 #define BRNE_CODE   0x0324
-#define BRAND_CODE  0x325
-#define BROR_CODE   0x326
-#define CODETAG_CODE 0x0327
-#define NOP_CODE    0x0328
+#define BRAND_CODE  0x0325
+#define BROR_CODE   0x0326
+#define BRLT_CODE   0x0327
+#define BRGT_CODE   0x0328
+#define CODETAG_CODE 0x0329
+#define NOP_CODE    0x032A
 #define ADDLB_CODE  0x0330
 #define ADDLW_CODE  0x0331
 #define ADDAB_CODE  0x0332
@@ -95,6 +97,8 @@ typedef struct _opseq {
 #define gen_drop(seq)       gen_seq(seq,DROP_CODE,0,0,0,0)
 #define gen_brand(seq,tag)  gen_seq(seq,BRAND_CODE,0,tag,0,0)
 #define gen_bror(seq,tag)   gen_seq(seq,BROR_CODE,0,tag,0,0)
+#define gen_brgt(seq,tag)   gen_seq(seq,BRGT_CODE,0,tag,0,0)
+#define gen_brlt(seq,tag)   gen_seq(seq,BRLT_CODE,0,tag,0,0)
 #define gen_brfls(seq,tag)  gen_seq(seq,BRFALSE_CODE,0,tag,0,0)
 #define gen_brtru(seq,tag)  gen_seq(seq,BRTRUE_CODE,0,tag,0,0)
 #define gen_brnch(seq,tag)  gen_seq(seq,BRNCH_CODE,0,tag,0,0)

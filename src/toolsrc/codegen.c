@@ -1268,6 +1268,14 @@ int crunch_seq(t_opseq **seq, int pass)
                             freeops  = 1;
                         }
                         break;
+                    case BRGT_CODE:
+                        if (opprev && (opprev->code == CONST_CODE) && (op->val <= opprev->val))
+                            freeops = 1;
+                        break;
+                    case BRLT_CODE:
+                        if (opprev && (opprev->code == CONST_CODE) && (op->val >= opprev->val))
+                            freeops = 1;
+                        break;
                     case BROR_CODE:
                         if (!op->val)
                             freeops = -2; // Remove zero constant
@@ -1355,7 +1363,7 @@ int crunch_seq(t_opseq **seq, int pass)
                                 case BINARY_CODE(LE_TOKEN):
                                     op->val = op->val <= opnext->val ? 1 : 0;
                                     freeops  = 2;
-                                    break;
+                                    break;                                    
                             }
                         // End of collapse constant operation
                         if ((pass > 0) && (freeops == 0) && (op->val != 0))
@@ -1975,6 +1983,12 @@ int emit_pending_seq()
                 break;
             case BRTRUE_CODE:
                 emit_brtru(op->tag);
+                break;
+            case BRGT_CODE:
+                emit_brgt(op->tag);
+                break;
+            case BRLT_CODE:
+                emit_brlt(op->tag);
                 break;
             case CODETAG_CODE:
                 printf("_B%03d%c\n", op->tag, LBL);
