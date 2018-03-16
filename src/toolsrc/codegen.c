@@ -926,7 +926,7 @@ void emit_incbrle(int tag)
 void emit_addbrle(int tag)
 {
     emit_pending_seq();
-    printf("\t%s\t$A6\t\t\t; BRLE\t_B%03d\n", DB, tag);
+    printf("\t%s\t$A6\t\t\t; ADDBRLE\t_B%03d\n", DB, tag);
     printf("\t%s\t_B%03d-*\n", DW, tag);
 }
 void emit_decbrge(int tag)
@@ -938,7 +938,7 @@ void emit_decbrge(int tag)
 void emit_subbrge(int tag)
 {
     emit_pending_seq();
-    printf("\t%s\t$AA\t\t\t; BRGE\t_B%03d\n", DB, tag);
+    printf("\t%s\t$AA\t\t\t; SUBBRGE\t_B%03d\n", DB, tag);
     printf("\t%s\t_B%03d-*\n", DW, tag);
 }
 void emit_call(int tag, int type)
@@ -987,12 +987,12 @@ void emit_start(void)
 void emit_drop(void)
 {
     emit_pending_seq();
-    printf("\t%s\t$30\t\t\t; DROP\n", DB);
+    printf("\t%s\t$30\t\t\t; DROP \n", DB);
 }
 void emit_drop2(void)
 {
     emit_pending_seq();
-    printf("\t%s\t$32\t\t\t; DUP\n", DB);
+    printf("\t%s\t$32\t\t\t; DROP2\n", DB);
 }
 void emit_dup(void)
 {
@@ -1046,10 +1046,10 @@ int emit_op(t_token op)
             printf("\t%s\t$8A\t\t\t; MOD\n", DB);
             break;
         case ADD_TOKEN:
-            printf("\t%s\t$82\t\t\t; ADD\n", DB);
+            printf("\t%s\t$82\t\t\t; ADD \n", DB);
             break;
         case SUB_TOKEN:
-            printf("\t%s\t$84\t\t\t; SUB\n", DB);
+            printf("\t%s\t$84\t\t\t; SUB \n", DB);
             break;
         case SHL_TOKEN:
             printf("\t%s\t$9A\t\t\t; SHL\n", DB);
@@ -1058,10 +1058,10 @@ int emit_op(t_token op)
             printf("\t%s\t$9C\t\t\t; SHR\n", DB);
             break;
         case AND_TOKEN:
-            printf("\t%s\t$94\t\t\t; AND\n", DB);
+            printf("\t%s\t$94\t\t\t; AND \n", DB);
             break;
         case OR_TOKEN:
-            printf("\t%s\t$96\t\t\t; IOR\n", DB);
+            printf("\t%s\t$96\t\t\t; OR \n", DB);
             break;
         case EOR_TOKEN:
             printf("\t%s\t$98\t\t\t; XOR\n", DB);
