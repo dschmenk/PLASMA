@@ -1381,9 +1381,8 @@ SEL     TYA                     ; FLATTEN IP
         INC     IP
 CASELP  CMP     (IP),Y
         BEQ     +
-        BVS     ++
         BMI     CASEEND         ; CASE VALS IN ASCENDING ORDER, EXIT WHEN LESS
--       INY
+        INY
         INY
         INY
         DEX
@@ -1396,7 +1395,6 @@ CASELP  CMP     (IP),Y
         BRA     CASELP
 +       INY
         BRA     BRNCH
-++      BPL     -
 CASEEND TXA                     ; SKIP REMAINING CASES
         ASL
         ASL
