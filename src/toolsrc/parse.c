@@ -761,7 +761,7 @@ t_opseq *parse_expr(t_opseq *codeseq, int *stackdepth)
         if (stackdepth1 != *stackdepth)
             parse_error("Inconsistent AND value counts");
         codeseq = gen_codetag(codeseq, tag_or);
-    } 
+    }
     else if (scantoken == TERNARY_TOKEN)
     {
         int tag_else, tag_endtri;
@@ -1056,14 +1056,23 @@ int parse_stmnt(void)
             {
                 if (scantoken == OF_TOKEN)
                 {
+                    tag_of   = tag_new(BRANCH_TYPE);
                     constval = 0;
                     parse_constexpr(&constval, &constsize);
-                    for (i = 0; i < casecnt; i++)
-                        if (caseval[i] == constval)
-                            parse_error("Duplicate CASE");
-                    tag_of           = tag_new(BRANCH_TYPE);
-                    caseval[casecnt] = constval;
-                    casetag[casecnt] = tag_of;
+                    i = casecnt;
+                    while ((i > 0) && (caseval[i-1] > constval))
+                    {
+                        //
+                        // Move larger case consts up
+                        //
+                        caseval[i] = caseval[i-1];
+                        casetag[i] = casetag[i-1];
+                        i--;
+                    }
+                    if (casecnt && (caseval[i] == constval))
+                        parse_error("Duplicate CASE");
+                    caseval[i] = constval;
+                    casetag[i] = tag_of;
                     casecnt++;
                     emit_codetag(tag_of);
                     while (parse_stmnt()) next_line();
@@ -1124,7 +1133,7 @@ int parse_stmnt(void)
             if (infunc)
             {
                 int i;
-                
+
                 i = stack_loop;
                 while (i >= 2)
                 {
