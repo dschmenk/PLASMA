@@ -2,9 +2,6 @@ include "inc/cmdsys.plh"
 byte console[]    = ".CONSOLE"
 byte textmode[]   = 16, 0, 15
 byte prefix[64] = ""
-byte err[]
-byte autorun
-word cmdptr
 //
 // Utility functions
 //
@@ -217,9 +214,78 @@ def parsecmd(strptr)#1
     return cmd
 end
 //
-// Clear out module memory segment
+// Command line handler
 //
-cmdsys.modid = 0
+def shell#0
+    byte err[]
+    byte autorun
+    word cmdptr
+    //
+    // Try to load autorun.
+    //
+    cmdptr   = heapmark
+    ^cmdptr  = 0
+    autorun  = cmdsys:sysopen("AUTORUN")
+    if autorun > 0
+        ^cmdptr = cmdsys:sysread(autorun, cmdptr + 1, 64)
+        cmdsys:sysclose(autorun)
+    fin
+    //
+    // Handle commands.
+    //
+    while 1
+        if ^cmdptr
+            when toupper(parsecmd(cmdptr))
+                is 'C'
+                    catalog(cmdptr)
+                    break
+                is 'P'
+                    if ^cmdptr and ^(cmdptr + 1) <> '/'
+                        strcat(@prefix, cmdptr)
+                    else
+                        strcpy(@prefix, cmdptr)
+                    fin
+                    setpfx(@prefix)
+                    break
+                is '/'
+                    repeat
+                        prefix--
+                    until prefix[prefix] == '/'
+                    if prefix > 1
+                        setpfx(@prefix)
+                    fin
+                    break
+                is 'S'
+                    setpfx(cmdptr)
+                    strcat(getpfx(cmdsys:syspath), "SYS/"))
+                    break
+                is 'V'
+                    volumes
+                    break
+                is '+'
+                    saveX
+                    cmdsys:modexec(striptrail(cmdptr))
+                    restoreX
+                    cmdsys:sysclose(0)
+                    init_cons
+                    break
+                otherwise
+                    puts("?\n")
+            wend
+            if cmdsys.syserr
+                err = cmdsys.syserr
+                puts("ERR:$")
+                putb(err)
+            else
+                puts("OK")
+            fin
+            putln
+        fin
+        puts(getpfx(@prefix))
+        cmdptr = gets($BA)
+        strcpy(cmdsys:cmdline, cmdptr)
+    loop
+end
 //
 // Init console.
 //
@@ -227,77 +293,10 @@ init_cons
 //
 // Print PLASMA version
 //
-puts("PLASMA 2.0 Dev\n")//; prbyte(version.1); cout('.'); prbyte(version.0); crout
+puts("PLASMA 2.0 Dev\n")//; putb(version.1); putc('.'); putb(version.0); putln
+puts("MEM:$"); puth(heapavail); putln
 //
-// Try to load autorun.
+// Save pointer to command line handler
 //
-cmdptr   = heapmark
-^cmdptr  = 0
-autorun  = cmdsys:sysopen("AUTORUN")
-if autorun > 0
-    ^cmdptr = cmdsys:sysread(autorun, cmdptr + 1, 64)
-    cmdsys:sysclose(autorun)
-else
-    //
-    // Print some startup info.
-    //
-    puts("MEM:$")
-    puth(heapavail)
-    putln
-fin
-//
-// Handle commands.
-//
-while 1
-    if ^cmdptr
-        when toupper(parsecmd(cmdptr))
-            is 'C'
-                catalog(cmdptr)
-                break
-            is 'P'
-                if ^cmdptr and ^(cmdptr + 1) <> '/'
-                    strcat(@prefix, cmdptr)
-                else
-                    strcpy(@prefix, cmdptr)
-                fin
-                setpfx(@prefix)
-                break
-            is '/'
-                repeat
-                    prefix--
-                until prefix[prefix] == '/'
-                if prefix > 1
-                    setpfx(@prefix)
-                fin
-                break
-            is 'S'
-                setpfx(cmdptr)
-                strcat(getpfx(cmdsys:syspath), "SYS/"))
-                break
-            is 'V'
-                volumes
-                break
-            is '+'
-                saveX
-                cmdsys:modexec(striptrail(cmdptr))
-                restoreX
-                cmdsys:sysclose(0)
-                init_cons
-                break
-            otherwise
-                puts("?\n")
-        wend
-        if cmdsys.syserr
-            err = cmdsys.syserr
-            puts("ERR:$")
-            putb(err)
-        else
-            puts("OK")
-        fin
-        putln
-    fin
-    puts(getpfx(@prefix))
-    cmdptr = gets($BA)
-    strcpy(cmdsys:cmdline, cmdptr)
-loop
+cmdsys:cmdparser = @shell
 done
