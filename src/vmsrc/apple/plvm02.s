@@ -1631,21 +1631,20 @@ CASELP  LDA     ESTKL-1,X
         BPL     -
 CASEEND LDA     #$00
         STA     TMPH
+        DEC     TMPL
         LDA     TMPL
         ASL                 ; SKIP REMAINING CASES
         ROL     TMPH
         ASL
         ROL     TMPH
-        SBC     #$00        ; CARRY CLEAR = SUB #1
-        BCS     +
-        DEC     TMPH
-+       CLC
+;       CLC
         ADC     IPL
         STA     IPL
         LDA     TMPH
         ADC     IPH
         STA     IPH
-        DEY
+        INY
+        INY
 FIXNEXT TYA
         LDY     #$00
         SEC
