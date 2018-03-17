@@ -1398,10 +1398,10 @@ CASELP  CMP     (IP),Y
 CASEEND TXA                     ; SKIP REMAINING CASES
         ASL
         ASL
+        DEC
 ;        CLC
         ADC     IP
         STA     IP
-        DEY
 FIXNEXT TYA
         LDY     #$00
         SEC
