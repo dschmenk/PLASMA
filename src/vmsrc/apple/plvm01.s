@@ -814,20 +814,17 @@ SEL     INX
         DEY
         LDA     (IP),Y
         STA     TMPL            ; CASE COUNT
-        LDA     ESTKL-1,X
         INC     IPL
         BNE     CASELP
         INC     IPH
-CASELP  CMP     (IP),Y
-        BNE     +
+CASELP  LDA     ESTKL-1,X
+        CMP     (IP),Y
+        BEQ     +
         LDA     ESTKH-1,X
         INY
-        CMP     (IP),Y
-        BEQ     BRNCH
-        LDA     ESTKL-1,X
-        DEY
-+       INY
-        INY
+        SBC     (IP),Y
+        BMI     CASEEND
+-       INY
         INY
         DEC     TMPL
         BEQ     FIXNEXT
@@ -835,6 +832,28 @@ CASELP  CMP     (IP),Y
         BNE     CASELP
         INC     IPH
         BNE     CASELP
++       LDA     ESTKH-1,X
+        INY
+        SBC     (IP),Y
+        BEQ     BRNCH
+        BPL     -
+CASEEND LDA     #$00
+        STA     TMPH
+        LDA     TMPL
+        ASL                 ; SKIP REMAINING CASES
+        ROL     TMPH
+        ASL
+        ROL     TMPH
+        SBC     #$00        ; CARRY CLEAR = SUB #1
+        BCS     +
+        DEC     TMPH
++       CLC
+        ADC     IPL
+        STA     IPL
+        LDA     TMPH
+        ADC     IPH
+        STA     IPH
+        DEY
 FIXNEXT TYA
         LDY     #$00
         SEC
