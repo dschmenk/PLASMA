@@ -6,6 +6,7 @@ PLVM01     = rel/apple/A1PLASMA\#060280
 PLVM02	   = rel/apple/PLASMA.SYSTEM\#FF2000
 PLVM802	   = rel/apple/PLASMA16.SYSTEM\#FF2000
 PLVM03	   = rel/apple/SOS.INTERP\#050000
+SOSCMD     = rel/apple/SOS.CMD\#0FE1000
 CMD        = rel/apple/CMD\#061000
 PLVMZP_C64 = vmsrc/c64/plvmzp.inc
 PLVMC64    = rel/c64/PLASMA
@@ -75,7 +76,7 @@ TXTTYPE	= .TXT
 #SYSTYPE	= \#FF2000
 #TXTTYPE	= \#040000
 
-apple: $(PLVMZP_APL) $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVM802) $(PLVM03) $(CMD) $(PLASMAPLASM) $(CODEOPT) $(ARGS) $(MEMMGR) $(MEMTEST) $(FIBER) $(FIBERTEST) $(LONGJMP) $(ED) $(MON) $(SOS) $(ROD) $(SIEVE) $(UTHERNET2) $(UTHERNET) $(ETHERIP) $(INET) $(DHCP) $(HTTPD) $(ROGUE) $(ROGUEMAP) $(ROGUECOMBAT) $(GRAFIX) $(GFXDEMO) $(DGR) $(DGRTEST) $(FILEIO_APL) $(CONIO_APL) $(JOYBUZZ) $(PORTIO) $(SPIPORT) $(SDFAT) $(FATCAT) $(FATGET) $(FATPUT) $(FATWDSK) $(FATRDSK) $(SANE) $(FPSTR) $(FPU) $(SANITY) $(RPNCALC) $(SNDSEQ) $(PLAYSEQ)
+apple: $(PLVMZP_APL) $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVM802) $(PLVM03) $(CMD) $(SOSCMD) $(PLASMAPLASM) $(CODEOPT) $(ARGS) $(MEMMGR) $(MEMTEST) $(FIBER) $(FIBERTEST) $(LONGJMP) $(ED) $(MON) $(SOS) $(ROD) $(SIEVE) $(UTHERNET2) $(UTHERNET) $(ETHERIP) $(INET) $(DHCP) $(HTTPD) $(ROGUE) $(ROGUEMAP) $(ROGUECOMBAT) $(GRAFIX) $(GFXDEMO) $(DGR) $(DGRTEST) $(FILEIO_APL) $(CONIO_APL) $(JOYBUZZ) $(PORTIO) $(SPIPORT) $(SDFAT) $(FATCAT) $(FATGET) $(FATPUT) $(FATWDSK) $(FATRDSK) $(SANE) $(FPSTR) $(FPU) $(SANITY) $(RPNCALC) $(SNDSEQ) $(PLAYSEQ)
 	-rm vmsrc/plvmzp.inc
 
 c64: $(PLVMZP_C64) $(PLASM) $(PLVM) $(PLVMC64) 
@@ -148,16 +149,20 @@ $(CMD): vmsrc/apple/cmd.pla vmsrc/apple/cmdstub.s $(PLVM02) $(PLASM)
 	./$(PLASM) -AOW < vmsrc/apple/cmd.pla > vmsrc/apple/cmd.a
 	acme --setpc 8192 -o $(CMD) vmsrc/apple/cmdstub.s
 
+$(SOSCMD): vmsrc/apple/soscmd.pla $(PLVM03) $(PLASM)
+	./$(PLASM) -AMOW < vmsrc/apple/soscmd.pla > vmsrc/apple/soscmd.a
+	acme --setpc 4094 -o $(SOSCMD) vmsrc/apple/soscmd.a
+
 $(PLVM02): vmsrc/apple/plvm02.s
 	acme -o $(PLVM02) -l vmsrc/apple/plvm02.sym vmsrc/apple/plvm02.s
 
 $(PLVM802): vmsrc/apple/plvm802.s
 	acme -o $(PLVM802) -l vmsrc/apple/plvm802.sym vmsrc/apple/plvm802.s
 
-vmsrc/apple/soscmd.a: vmsrc/apple/soscmd.pla $(PLASM)
-	./$(PLASM) -AOW < vmsrc/apple/soscmd.pla > vmsrc/apple/soscmd.a
+vmsrc/apple/sossys.a: vmsrc/apple/sossys.pla $(PLASM)
+	./$(PLASM) -AOW < vmsrc/apple/sossys.pla > vmsrc/apple/sossys.a
 
-$(PLVM03): vmsrc/apple/plvm03.s vmsrc/apple/soscmd.a
+$(PLVM03): vmsrc/apple/plvm03.s vmsrc/apple/sossys.a
 	acme -o $(PLVM03) -l vmsrc/apple/plvm03.sym vmsrc/apple/plvm03.s
 
 #
