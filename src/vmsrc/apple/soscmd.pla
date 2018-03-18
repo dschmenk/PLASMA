@@ -1,7 +1,4 @@
 include "inc/cmdsys.plh"
-byte console[]    = ".CONSOLE"
-byte textmode[]   = 16, 0, 15
-byte prefix[64] = ""
 //
 // SOS routines
 // FILE I/O
@@ -33,27 +30,6 @@ def setpfx(path)#1
     fin
     return path
 end
-//
-// CONSOLE I/O
-//
-def dev_control(devnum, code, list)#1
-    byte params[5]
-
-    params.0 = 3
-    params.1 = devnum
-    params.2 = code
-    params:3 = list
-    return syscall($83, @params)
-end
-def dev_getnum(name)#1
-    byte params[4]
-
-    params.0 = 2
-    params:1 = name
-    params.3 = 0
-    syscall($84, @params)
-    return params.3
-end
 def dev_info(devnum, name, list, listlen)#1
     byte params[7]
 
@@ -63,16 +39,6 @@ def dev_info(devnum, name, list, listlen)#1
     params:4 = list
     params.6 = listlen
     return syscall($85, @params)
-end
-def init_cons()#0
-    byte nlmode[2]
-    cmdsys.refcons = cmdsys:sysopen(@console)
-    cmdsys:syswrite(cmdsys.refcons, @textmode, 3)
-    cmdsys.devcons  = dev_getnum(@console)
-    nlmode:0        = $0D80
-    //nlmode.0 = $80
-    //nlmode.1 = $0D
-    dev_control(cmdsys.devcons, $02, @nlmode)
 end
 def volume(devname, volname)#1
     byte params[9]
@@ -113,7 +79,7 @@ def catalog(path)#0
     word entry, filecnt, catptr
 
     if !^path
-        path = @prefix
+        getpfx(path)
     fin
     refnum = cmdsys:sysopen(path)
     if not refnum
@@ -206,25 +172,19 @@ end
 //
 // Command line handler
 //
-def shell#0
+def shell#1
+    byte textmode[3]
+    byte prefix[64]
     byte err[]
-    byte autorun
     word cmdptr
     //
-    // Try to load autorun.
+    // Copy AUTORUN commmand line
     //
-    cmdptr   = heapmark
-    ^cmdptr  = 0
-    puts("MEM:$"); puth(heapavail); putln
-    autorun  = cmdsys:sysopen("AUTORUN")
-    if autorun > 0
-        ^cmdptr = cmdsys:sysread(autorun, cmdptr + 1, 64)
-        cmdsys:sysclose(autorun)
-    fin
+    cmdptr = strcpy(heapmark, cmdsys:cmdline)
     //
     // Handle commands.
     //
-    while 1
+    repeat
         if ^cmdptr
             when toupper(parsecmd(cmdptr))
                 is 'C'
@@ -254,8 +214,9 @@ def shell#0
                     volumes
                     break
                 is '+'
-                    cmdsys:modexec(striptrail(cmdptr))
-                    cmdsys:syswrite(cmdsys.refcons, @textmode, 3)
+                    //cmdsys:modexec(striptrail(cmdptr))
+                    return striptrail(cmdptr)
+                    //cmdsys:syswrite(cmdsys.refcons, @textmode, 3)
                     break
                 otherwise
                     puts("?\n")
@@ -272,16 +233,9 @@ def shell#0
         puts(getpfx(@prefix))
         cmdptr = gets($BA)
         strcpy(cmdsys:cmdline, cmdptr)
-    loop
+    until 0
+    return 0
 end
-//
-// Init console.
-//
-init_cons
-//
-// Print PLASMA version
-//
-puts("PLASMA 2.0 Dev\n")//; putb(version.1); putc('.'); putb(version.0); putln
 //
 // Save pointer to command line handler
 //

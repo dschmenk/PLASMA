@@ -46,6 +46,12 @@ byte hexchar[]    = '0','1','2','3','4','5','6','7','8','9','A','B','C','D','E',
 //
 byte machid       = $F2 // Apple ///, 80 columns
 //
+// Console and textmode control characters
+//
+byte console[]    = ".CONSOLE"
+byte textmode[]   = 16, 0, 15
+
+//
 // Working input buffer overlayed with strings table
 //
 byte cmdln        = ""
@@ -120,8 +126,9 @@ word sysmodsym    = @exports
 //
 word systemflags = 0
 word heap        = $2000
-byte modid        = 0
+byte autorun[]
 byte modseg[15]
+byte modid        = 0
 word symtbl, lastsym
 //
 // CALL SOS
@@ -817,6 +824,38 @@ def write(refnum, buff, len)#1
     return perr
 end
 //
+// CONSOLE I/O
+//
+def dev_control(devnum, code, list)#1
+    byte params[5]
+
+    params.0 = 3
+    params.1 = devnum
+    params.2 = code
+    params:3 = list
+    return syscall($83, @params)
+end
+def dev_getnum(name)#1
+    byte params[4]
+
+    params.0 = 2
+    params:1 = name
+    params.3 = 0
+    syscall($84, @params)
+    return params.3
+end
+def init_cons()#0
+    byte nlmode[2]
+
+    refcons  = open(@console)
+    devcons  = dev_getnum(@console)
+    nlmode:0 = $0D80
+    //nlmode.0 = $80
+    //nlmode.1 = $0D
+    dev_control(devcons, $02, @nlmode)
+    write(refcons, @textmode, 3)
+end
+//
 // MEMORY CALLS
 //
 def seg_find(search, pages, id)#3
@@ -1228,9 +1267,27 @@ sysmods  = 0
 syspath  = @sysmods
 cmdlnptr = @cmdln
 //
+// Print PLASMA version
+//
+init_cons
+prstr("PLASMA 2.0 Dev\n")//; putb(version.1); putc('.'); putb(version.0); putln
+prstr("MEM:$"); prword(availheap); crout
+//
 // Exec command line parser
 //
 loadmod(@soscmd)
 modid = 0
-cmdparser()#0
+autorun  = open("AUTORUN")
+if autorun > 0
+    cmdln = read(autorun, @cmdln.1, 64)
+    close(autorun)
+fin
+//
+// Call cmd line parser
+//
+repeat
+    execmod(cmdparser())
+    write(refcons, @textmode, 3)
+    cmdln = 0
+until 0
 done
