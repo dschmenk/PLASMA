@@ -74,7 +74,7 @@ SEGSTART        =       $2000
         STA     PPH
         STA     IFPH
         !IF     1 {
-        LDA     #<VMCORE        ; COPY VM+CMD INTO SBANK
+        LDA     #<VMCORE        ; COPY VM+SYS INTO SBANK
         STA     SRCL
         LDA     #>VMCORE
         STA     SRCH
