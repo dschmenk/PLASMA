@@ -516,7 +516,12 @@ CN      DEX
         STA     ESTKH,X
         JMP     NEXTOP
 CFFB    LDA     #$FF
-        !BYTE   $2C             ; BIT $00A9 - effectively skips LDA #$00, no harm in reading this address
+        DEX
+        STA     ESTKH,X
+        INY                     ;+INC_IP
+        LDA     (IP),Y
+        STA     ESTKL,X
+        JMP     NEXTOP
 CB      LDA     #$00
         DEX
         STA     ESTKH,X
@@ -1282,7 +1287,7 @@ CALL    INY                     ;+INC_IP
         LDA     (IP),Y
         STA     CALLADR+2
 _CALL   TYA
-        CLC
+        SEC
         ADC     IPL
         PHA
         LDA     IPH
@@ -1297,7 +1302,7 @@ CALLADR JSR     $FFFF
         STA     IPH
         PLA
         STA     IPL
-        LDY     #$01
+        LDY     #$00
         JMP     FETCHOP
 ;*
 ;* ENTER FUNCTION WITH FRAME SIZE AND PARAM COUNT
