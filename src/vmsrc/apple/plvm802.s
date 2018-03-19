@@ -1518,7 +1518,7 @@ CALL    INY                     ;+INC_IP
         INY
 EMUSTK  STA     TMP
         TYA                     ; FLATTEN IP
-        CLC
+        SEC
         ADC     IP
         STA     IP
         SEC                     ; SWITCH TO EMULATED MODE
@@ -1614,7 +1614,7 @@ EMUSTK  STA     TMP
         LDX     #>DBGTBL
 }
         STX     OPPAGE
-        LDY     #$01
+        LDY     #$00
         JMP     FETCHOP
 ;*
 ;* INDIRECT CALL TO ADDRESS (NATIVE CODE)
@@ -1629,7 +1629,7 @@ CALLX   INY                     ;+INC_IP
         INY
 EMUSTKX STA     TMP
         TYA                     ; FLATTEN IP
-        CLC
+        SEC
         ADC     IP
         STA     IP
         SEC                     ; SWITCH TO EMULATION MODE
@@ -1727,7 +1727,7 @@ EMUSTKX STA     TMP
         LDX     #>DBGTBL
 }
         STX     OPPAGE
-        LDY     #$01
+        LDY     #$00
         JMP     FETCHOP
 ;*
 ;* JUMP INDIRECT THROUGH TMP
