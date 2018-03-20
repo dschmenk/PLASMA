@@ -1272,11 +1272,28 @@ ADDBRLE LDA     ESTKL,X
 ;* INDIRECT CALL TO ADDRESS (NATIVE CODE)
 ;*
 ICAL    LDA     ESTKL,X
-        STA     CALLADR+1
+        STA     ICALADR+1
         LDA     ESTKH,X
-        STA     CALLADR+2
+        STA     ICALADR+2
         INX
-        BNE     _CALL
+        TYA
+        SEC
+        ADC     IPL
+        PHA
+        LDA     IPH
+        ADC     #$00
+        PHA
+        LDA     IPX
+        PHA
+ICALADR JSR     $FFFF
+        PLA
+        STA     IPX
+        PLA
+        STA     IPH
+        PLA
+        STA     IPL
+        LDY     #$00
+        JMP     FETCHOP
 ;*
 ;* CALL INTO ABSOLUTE ADDRESS (NATIVE CODE)
 ;*
@@ -1286,7 +1303,7 @@ CALL    INY                     ;+INC_IP
         INY                     ;+INC_IP
         LDA     (IP),Y
         STA     CALLADR+2
-_CALL   TYA
+        TYA
         SEC
         ADC     IPL
         PHA

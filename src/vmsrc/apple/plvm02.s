@@ -1790,7 +1790,7 @@ CALL    INY                     ;+INC_IP
         LDA     (IP),Y
         STA     TMPH
         TYA
-        CLC
+        SEC
         ADC     IPL
         PHA
         LDA     IPH
@@ -1803,7 +1803,7 @@ CALL    INY                     ;+INC_IP
         STA     IPL
         LDA     #>OPTBL         ; MAKE SURE WE'RE INDEXING THE RIGHT TABLE
         STA     OPPAGE
-        LDY     #$01
+        LDY     #$00
         JMP     FETCHOP
 CALLX   INY                     ;+INC_IP
         LDA     (IP),Y
@@ -1812,7 +1812,7 @@ CALLX   INY                     ;+INC_IP
         LDA     (IP),Y
         STA     TMPH
         TYA
-        CLC
+        SEC
         ADC     IPL
         PHA
         LDA     IPH
@@ -1834,7 +1834,7 @@ CALLX   INY                     ;+INC_IP
         STA     IPL
         LDA     #>OPXTBL        ; MAKE SURE WE'RE INDEXING THE RIGHT TABLE
         STA     OPPAGE
-        LDY     #$01
+        LDY     #$00
         JMP     FETCHOP
 ;*
 ;* INDIRECT CALL TO ADDRESS (NATIVE CODE)
@@ -1845,7 +1845,7 @@ ICAL    LDA     ESTKL,X
         STA     TMPH
         INX
         TYA
-        CLC
+        SEC
         ADC     IPL
         PHA
         LDA     IPH
@@ -1858,7 +1858,7 @@ ICAL    LDA     ESTKL,X
         STA     IPL
         LDA     #>OPTBL         ; MAKE SURE WE'RE INDEXING THE RIGHT TABLE
         STA     OPPAGE
-        LDY     #$01
+        LDY     #$00
         JMP     FETCHOP
 ICALX   LDA     ESTKL,X
         STA     TMPL
@@ -1866,7 +1866,7 @@ ICALX   LDA     ESTKL,X
         STA     TMPH
         INX
         TYA
-        CLC
+        SEC
         ADC     IPL
         PHA
         LDA     IPH
@@ -1887,7 +1887,7 @@ ICALX   LDA     ESTKL,X
         STA     IPL
         LDA     #>OPXTBL        ; MAKE SURE WE'RE INDEXING THE RIGHT TABLE
         STA     OPPAGE
-        LDY     #$01
+        LDY     #$0
         JMP     FETCHOP
 ;*
 ;* JUMP INDIRECT TRHOUGH TMP

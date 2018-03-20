@@ -1007,7 +1007,7 @@ CALL    INY                     ;+INC_IP
         LDA     (IP),Y
         STA     TMPH
 _CALL   TYA
-        CLC
+        SEC
         ADC     IPL
         PHA
         LDA     IPH
@@ -1018,7 +1018,7 @@ _CALL   TYA
         STA     IPH
         PLA
         STA     IPL
-        LDY     #$01
+        LDY     #$00
         JMP     FETCHOP
 ;*
 ;* JUMP INDIRECT TRHOUGH TMP
