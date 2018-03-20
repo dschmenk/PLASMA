@@ -401,10 +401,10 @@ PAGE3   =       *
         BIT     LCRDEN+LCBNK2   ; $03DC - BYTECODE INDIRECT INTERPX ENTRY
         JMP     IINTRPX
 }
-DEFCMD  !FILL   28
+DEFCMD  =       *               ;!FILL   28
 ENDBYE  =       *
 }
-LCDEFCMD =      *-28            ; DEFCMD IN LC MEMORY
+LCDEFCMD =      *               ;*-28            ; DEFCMD IN LC MEMORY
 ;*****************
 ;*               *
 ;* OPXCODE TABLE *

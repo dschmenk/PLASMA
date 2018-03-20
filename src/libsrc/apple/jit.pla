@@ -31,8 +31,382 @@ const interpentry = $03DC
 // JIT compiler entry
 //
 def compiler(defptr)#0
+    word codeptr, addrxlate, bytecode, i, case
+    byte j
+    
     puts("JIT compiler invoked!\n")
     
+    addrxlate = heapmark          // 256 * sizeof(word) address xlate
+    bytecode  = addrxlate + 512   // def bytecode
+    //
+    // Copy bytecode def from AUX to heap for compiling
+    //
+    *$003C = defptr=>bytecodeaddr
+    *$003E = *$003C + defptr->bytecodesize
+    *$0042 = bytecode
+    call($C311, 0, 0, 0, $00) // CALL XMOVE with carry clear (AUX->MAIN)
+    //
+    // Print out bytecode
+    //
+    i = 0
+    repeat
+        putc('['); puti(i); puts("] ")
+        if bytecode->[i] < $20
+            // CN,CN,CN,CN,CN,CN,CN,CN                                 ; 00 02 04 06 08 0A 0C 0E
+            // CN,CN,CN,CN,CN,CN,CN,CN                                 ; 10 12 14 16 18 1A 1C 1E
+            puts("CN $"); putb(bytecode->[i]/2)
+        else
+            when bytecode->[i]
+                // MINUS1,BREQ,BRNE,LA,LLA,CB,CW,CS                        ; 20 22 24 26 28 2A 2C 2E
+                is $20
+                    puts("MINUS_ONE")
+                    break
+                is $22
+                    i++
+                    puts("BREQ "); puti(i + *(bytecode+i))
+                    i++
+                    break
+                is $24
+                    i++
+                    puts("BRNE "); puti(i + *(bytecode+i))
+                    i++
+                    break
+                is $26
+                    i++
+                    puts("LA $"); puth(*(bytecode+i))
+                    i++
+                    break
+                is $28
+                    i++
+                    puts("LLA "); puti(^(bytecode+i))
+                    break
+                is $2A
+                    i++
+                    puts("CB $"); putb(^(bytecode+i))
+                    break
+                is $2C
+                    i++
+                    puts("CW $"); puth(*(bytecode+i))
+                    i++
+                    break
+                is $2E
+                    i++
+                    puts("CS "); puts(bytecode+i)
+                    i = i + ^(bytecode+i)
+                    break
+                // DROP,DROP2,DUP,DIVMOD,ADDI,SUBI,ANDI,ORI                ; 30 32 34 36 38 3A 3C 3E
+                is $30
+                    puts("DROP")
+                    break
+                is $32
+                    puts("DROP2")
+                    break
+                is $34
+                    puts("DUP")
+                    break
+                is $36
+                    puts("DIVMOD")
+                    break
+                is $38
+                    i++
+                    puts("ADDI $"); putb(^(bytecode+i))
+                    break
+                is $3A
+                    i++
+                    puts("SUBI $"); putb(^(bytecode+i))
+                    break
+                is $3C
+                    i++
+                    puts("ANDI $"); putb(^(bytecode+i))
+                    break
+                is $3E
+                    i++
+                    puts("ORI $"); putb(^(bytecode+i))
+                    break
+                // ISEQ,ISNE,ISGT,ISLT,ISGE,ISLE,BRFLS,BRTRU               ; 40 42 44 46 48 4A 4C 4E
+                is $40
+                    puts("ISEQ")
+                    break
+                is $42
+                    puts("ISNE")
+                    break
+                is $44
+                    puts("ISGT")
+                    break
+                is $46
+                    puts("ISLT")
+                    break
+                is $48
+                    puts("ISGE")
+                    break
+                is $4A
+                    puts("ISLE")
+                    break
+                is $4C
+                    i++
+                    puts("BRFLS "); puti(i + *(bytecode+i))
+                    i++
+                    break
+                is $4E
+                    i++
+                    puts("BRTRU "); puti(i + *(bytecode+i))
+                    i++
+                    break
+                // BRNCH,SEL,CALL,ICAL,ENTER,LEAVE,RET,CFFB                ; 50 52 54 56 58 5A 5C 5E
+                is $50
+                    i++
+                    puts("BRNCH "); puti(i + *(bytecode+i))
+                    i++
+                    break
+                is $52
+                    i++
+                    case = i + *(bytecode+i)
+                    puts("SEL "); puti(case)
+                    j = ^case
+                    ^case = $FF // Flag as NOP
+                    case++
+                    repeat
+                        puts("    $"); puth(*case)
+                        *case = $FFFF
+                        case = case + 2
+                        puts("-->"); puti(case + *case)
+                        *case = $FFFF
+                        case = case + 2
+                        j--
+                    until not j
+                    i++
+                    break
+                is $54
+                    i++
+                    puts("CALL $"); puth(*(bytecode+i))
+                    i++
+                    break
+                is $56
+                    puts("ICAL")
+                    break
+                is $58
+                    i++
+                    puts("ENTER "); puti(^(bytecode+i))
+                    break
+                is $5A
+                    i++
+                    puts("LEAVE "); puti(^(bytecode+i))
+                    break
+                is $5C
+                    puts("RET")
+                    break
+                is $5E
+                    i++
+                    puts("CFFB $FF"); putb(^(bytecode+i))
+                    break
+                // LB,LW,LLB,LLW,LAB,LAW,DLB,DLW                           ; 60 62 64 66 68 6A 6C 6E
+                is $60
+                    puts("LB")
+                    break
+                is $62
+                    puts("LW")
+                    break
+                is $64
+                    i++
+                    puts("LLB "); puti(^(bytecode+i))
+                    break
+                is $66
+                    i++
+                    puts("LLW "); puti(^(bytecode+i))
+                    break
+                is $68
+                    i++
+                    puts("LAB $"); puth(*(bytecode+i))
+                    i++
+                    break
+                is $6A
+                    i++
+                    puts("LAW $"); puth(*(bytecode+i))
+                    i++
+                    break
+                is $6C
+                    i++
+                    puts("DLB "); puti(^(bytecode+i))
+                    break
+                is $6E
+                    i++
+                    puts("DLW "); puti(^(bytecode+i))
+                    break
+                // SB,SW,SLB,SLW,SAB,SAW,DAB,DAW                           ; 70 72 74 76 78 7A 7C 7E
+                is $70
+                    puts("SB")
+                    break
+                is $72
+                    puts("SW")
+                    break
+                is $74
+                    i++
+                    puts("SLB "); puti(^(bytecode+i))
+                    break
+                is $76
+                    i++
+                    puts("SLW "); puti(^(bytecode+i))
+                    break
+                is $78
+                    i++
+                    puts("SAB $"); puth(*(bytecode+i))
+                    i++
+                    break
+                is $7A
+                    i++
+                    puts("SAW $"); puth(*(bytecode+i))
+                    i++
+                    break
+                is $7C
+                    i++
+                    puts("DAB $"); puth(*(bytecode+i))
+                    i++
+                    break
+                is $7E
+                    i++
+                    puts("DAW $"); puth(*(bytecode+i))
+                    i++
+                    break
+                // LNOT,ADD,SUB,MUL,DIV,MOD,INCR,DECR                      ; 80 82 84 86 88 8A 8C 8E
+                is $80
+                    puts("NOT")
+                    break
+                is $82
+                    puts("ADD")
+                    break
+                is $84
+                    puts("SUB")
+                    break
+                is $86
+                    puts("MUL")
+                    break
+                is $88
+                    puts("DIV")
+                    break
+                is $8A
+                    puts("MOD")
+                    break
+                is $8C
+                    puts("INCR")
+                    break
+                is $8E
+                    puts("DECR")
+                    break
+                // NEG,COMP,BAND,IOR,XOR,SHL,SHR,IDXW                      ; 90 92 94 96 98 9A 9C 9E
+                is $90
+                    puts("NEG")
+                    break
+                is $92
+                    puts("COMP")
+                    break
+                is $94
+                    puts("AND")
+                    break
+                is $96
+                    puts("OR")
+                    break
+                is $98
+                    puts("XOR")
+                    break
+                is $9A
+                    puts("SHL")
+                    break
+                is $9C
+                    puts("SHR")
+                    break
+                is $9E
+                    puts("IDXW")
+                    break
+                // BRGT,BRLT,INCBRLE,ADDBRLE,DECBRGE,SUBBRGE,BRAND,BROR    ; A0 A2 A4 A6 A8 AA AC AE
+                is $A0
+                    i++
+                    puts("BRGT "); puti(i + *(bytecode+i))
+                    i++
+                    break
+                is $A2
+                    i++
+                    puts("BRLT "); puti(i + *(bytecode+i))
+                    i++
+                    break
+                is $A4
+                    i++
+                    puts("INCBRLE "); puti(i + *(bytecode+i))
+                    i++
+                    break
+                is $A6
+                    i++
+                    puts("ADDBRLE "); puti(i + *(bytecode+i))
+                    i++
+                    break
+                is $A8
+                    i++
+                    puts("DECBRGE "); puti(i + *(bytecode+i))
+                    i++
+                    break
+                is $AA
+                    i++
+                    puts("SUBBRGE "); puti(i + *(bytecode+i))
+                    i++
+                    break
+                is $AC
+                    i++
+                    puts("BRAND "); puti(i + *(bytecode+i))
+                    i++
+                    break
+                is $AE
+                    i++
+                    puts("BROR "); puti(i + *(bytecode+i))
+                    i++
+                    break
+                // ADDLB,ADDLW,ADDAB,ADDAW,IDXLB,IDXLW,IDXAB,IDXAW         ; B0 B2 B4 B6 B8 BA BC BE
+                is $B0
+                    i++
+                    puts("ADDLB "); puti(^(bytecode+i))
+                    break
+                is $B2
+                    i++
+                    puts("ADDLW "); puti(^(bytecode+i))
+                    break
+                is $B4
+                    i++
+                    puts("ADDAB $"); puth(*(bytecode+i))
+                    i++
+                    break
+                is $B6
+                    i++
+                    puts("ADDAW $"); puth(*(bytecode+i))
+                    i++
+                    break
+                is $B8
+                    i++
+                    puts("IDXLB "); puti(^(bytecode+i))
+                    break
+                is $BA
+                    i++
+                    puts("IDXLW "); puti(^(bytecode+i))
+                    break
+                is $BC
+                    i++
+                    puts("IDXAB $"); puth(*(bytecode+i))
+                    i++
+                    break
+                is $BE
+                    i++
+                    puts("IDXAW $"); puth(*(bytecode+i))
+                    i++
+                    break
+                is $FF // NOPed out earlier by SELect
+                    break
+                otherwise
+                    putc('$'); puth(^(bytecode+i))
+            wend
+        fin
+        putln
+        i++
+    until i >= defptr->bytecodesize
+    //
+    // Overwrite interpreter entrypoint with standard bytecode interpreter
+    //
     defptr=>interpaddr = interpentry
 end
 //
