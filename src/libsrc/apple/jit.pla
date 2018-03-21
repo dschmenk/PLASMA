@@ -54,6 +54,8 @@ def compiler(defptr)#0
     *$003E   = *$003C + defptr->bytecodesize
     *$0042   = bytecode
     call($C311, 0, 0, 0, $00) // CALL XMOVE with carry clear (AUX->MAIN)
+    puts("Addr Xlate: $"); puth(addrxlate); putln
+    puts("Bytecode:   $"); puth(bytecode); putln
     //
     // Compile the bytecodes
     //
@@ -72,12 +74,12 @@ def compiler(defptr)#0
                 case  = *dest
                 *dest = codeptr
                 dest  = case + *jitcodeptr
-            until not dest
+            until not case
         fin
         addrxlate=>[i] = codeptr
         putc('$'); puth(codeptr); putc(':')
         putc('['); puti(i); puts("] ")
-        if bytecode->[i] < $20
+        if ^(bytecode+i) < $20
             // CN,CN,CN,CN,CN,CN,CN,CN                                 ; 00 02 04 06 08 0A 0C 0E
             // CN,CN,CN,CN,CN,CN,CN,CN                                 ; 10 12 14 16 18 1A 1C 1E
             puts("CN $"); putb(^(bytecode+i)/2)
@@ -91,7 +93,7 @@ def compiler(defptr)#0
             ^codeptr = $95; codeptr++ // STA zp,X
             ^codeptr = $C0; codeptr++ // ESTKH
         else
-            when bytecode->[i]
+            when ^(bytecode+i)
                 // MINUS1,BREQ,BRNE,LA,LLA,CB,CW,CS                        ; 20 22 24 26 28 2A 2C 2E
                 is $20
                     puts("MINUS_ONE")
@@ -216,9 +218,9 @@ def compiler(defptr)#0
                     break
                 is $2E
                     i++
-                    j = ^(bytecode+i)
-                    puts("CS "); puts(bytecode+i)
-                    i++
+                    j    = ^(bytecode+i)
+                    dest = i + j + 1
+                    puts("CS "); puts(bytecode+i); puts("-->"); puti(dest)
                     if isule(codeptr + 12 + j, codemax)
                         ^codeptr = $CA; codeptr++ // DEX
                         ^codeptr = $A9; codeptr++ // LDA #imm
@@ -230,17 +232,14 @@ def compiler(defptr)#0
                         ^codeptr = $95; codeptr++ // STA zp,X
                         ^codeptr = $C0; codeptr++ // ESTKH
                         ^codeptr = $4C; codeptr++ // JMP abs
-                        *codeptr = addrxlate=>[i+j]
+                        *codeptr = addrxlate=>[dest]
                         if not (*codeptr & $8000) // Unresolved address list
-                            addrxlate=>[i+j] = codeptr - *jitcodeptr
+                            addrxlate=>[dest] = codeptr - *jitcodeptr
                         fin
                         codeptr  = codeptr + 2
-                        ^codeptr = j; codeptr++
-                        while j
-                            ^(bytecode+i); codeptr++
-                            i++
-                            j--
-                        loop
+                        strcpy(codeptr, bytecode+i)
+                        codeptr = codeptr + j + 1
+                        i       = i + j
                     else
                         codeptr = codeptr + 12 + j // Flag buffer overflow
                     fin
@@ -606,14 +605,16 @@ def compiler(defptr)#0
                    break
                 is $58
                     i++
-                    puts("ENTER "); puti(^(bytecode+i))
+                    puts("ENTER "); puti(^(bytecode+i)); putc(',');puti(^(bytecode+i+1))
                     //
                     // Call into VM
                     //
                     ^codeptr = $20; codeptr++ // JSR INTERP
                     *codeptr = $3D0; codeptr = codeptr + 2
                     ^codeptr = $58; codeptr++ // ENTER CODE
-                    ^codeptr = i;   codeptr++ // ENTER OPERAND
+                    ^codeptr = ^(bytecode+i); codeptr++ // ENTER FRAME SIZE
+                    i++
+                    ^codeptr = ^(bytecode+i); codeptr++ // ENTER ARG COUNT
                     ^codeptr = $C0; codeptr++ // NATV CODE
                     break
                 is $5A
@@ -624,8 +625,8 @@ def compiler(defptr)#0
                     //
                     ^codeptr = $20; codeptr++ // JSR INTERP
                     *codeptr = $3D0; codeptr = codeptr + 2
-                    ^codeptr = $58; codeptr++ // LEAVE CODE
-                    ^codeptr = i;   codeptr++ // LEAVE OPERAND
+                    ^codeptr = $5A; codeptr++ // LEAVE CODE
+                    ^codeptr = ^(bytecode+i); codeptr++ // LEAVE OPERAND
                     break
                 is $5C
                     puts("RET")
@@ -1557,10 +1558,7 @@ def compiler(defptr)#0
         i++
         if i >= defptr->bytecodesize
             //
-            // Done compiling
-            //
-            //
-            // Update DEF entry with JMP to compiled code
+            // Done compiling. Update DEF entry with JMP to compiled code
             //
             defptr->interpjsr  = $4C // JMP
             defptr=>interpaddr = *jitcodeptr
@@ -1569,8 +1567,11 @@ def compiler(defptr)#0
             // Free working bufffers
             //
             heaprelease(addrxlate)
+            puts("Done compiling\n")
+            getc
             return
         fin
+        getc
     loop
     //
     // If we got here. we ran out of code buffer space. Overwrite interpreter
@@ -1581,6 +1582,8 @@ def compiler(defptr)#0
     // Free working bufffers
     //
     heaprelease(addrxlate)
+    puts("Ran out of code buffer\n")
+    getc
 end
 //
 // Install JIT compiler
