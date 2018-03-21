@@ -31,40 +31,102 @@ const interpentry = $03DC
 // JIT compiler entry
 //
 def compiler(defptr)#0
-    word codeptr, addrxlate, bytecode, i, case
+    word codeptr, addrxlate, bytecode, i, case, dest
     byte j
     
     puts("JIT compiler invoked!\n")
     
-    addrxlate = heapmark          // 256 * sizeof(word) address xlate
-    bytecode  = addrxlate + 512   // def bytecode
+    addrxlate = heapalloc(512 + defptr->bytecodesize) // 256 * sizeof(word) address xlate
+    if not addrxlate
+        //
+        // Not enough heap available
+        //
+        defptr=>interpaddr = interpentry
+        return
+    fin
+    memset(addrxlate, 0, 512) // Clear xlate buffer
     //
     // Copy bytecode def from AUX to heap for compiling
     //
-    *$003C = defptr=>bytecodeaddr
-    *$003E = *$003C + defptr->bytecodesize
-    *$0042 = bytecode
+    bytecode = addrxlate + 512 // def bytecode
+    *$003C   = defptr=>bytecodeaddr
+    *$003E   = *$003C + defptr->bytecodesize
+    *$0042   = bytecode
     call($C311, 0, 0, 0, $00) // CALL XMOVE with carry clear (AUX->MAIN)
     //
-    // Print out bytecode
+    // Compile the bytecodes
     //
-    i = 0
-    repeat
+    codeptr = *jitcodeptr
+    i       = 0
+    while isule(codeptr, $BEF0)
+        //
+        // Update bytecode->native code address translation
+        //
+        if addrxlate=>[i]
+            //
+            // Address list awaiting resolution
+            //
+            dest = addrxlate=>[i] + *jitcodeptr
+            repeat
+                case  = *dest
+                *dest = codeptr
+                dest  = case + *jitcodeptr
+            until not dest
+        fin
+        addrxlate=>[i] = codeptr
+        putc('$'); puth(codeptr); putc(':')
         putc('['); puti(i); puts("] ")
         if bytecode->[i] < $20
             // CN,CN,CN,CN,CN,CN,CN,CN                                 ; 00 02 04 06 08 0A 0C 0E
             // CN,CN,CN,CN,CN,CN,CN,CN                                 ; 10 12 14 16 18 1A 1C 1E
-            puts("CN $"); putb(bytecode->[i]/2)
+            puts("CN $"); putb(^(bytecode+i)/2)
+            ^codeptr = $CA; codeptr++ // DEX
+            ^codeptr = $A9; codeptr++ // LDA #imm
+            ^codeptr = ^(bytecode+i)/2; codeptr++
+            ^codeptr = $95; codeptr++ // STA zp,X
+            ^codeptr = $D0; codeptr++ // ESTKL
+            ^codeptr = $A9; codeptr++ // LDA #imm
+            ^codeptr = $00; codeptr++ // $00
+            ^codeptr = $95; codeptr++ // STA zp,X
+            ^codeptr = $C0; codeptr++ // ESTKH
         else
             when bytecode->[i]
                 // MINUS1,BREQ,BRNE,LA,LLA,CB,CW,CS                        ; 20 22 24 26 28 2A 2C 2E
                 is $20
                     puts("MINUS_ONE")
+                    ^codeptr = $CA; codeptr++ // DEX
+                    ^codeptr = $A9; codeptr++ // LDA #imm
+                    ^codeptr = $FF; codeptr++ // $FF
+                    ^codeptr = $95; codeptr++ // STA zp,X
+                    ^codeptr = $D0; codeptr++ // ESTKL
+                    ^codeptr = $95; codeptr++ // STA zp,X
+                    ^codeptr = $C0; codeptr++ // ESTKH
                     break
                 is $22
                     i++
-                    puts("BREQ "); puti(i + *(bytecode+i))
+                    dest = i + *(bytecode+i)
                     i++
+                    puts("BREQ "); puti(dest)
+                    ^codeptr = $E8;   codeptr++ // INX
+                    ^codeptr = $E8;   codeptr++ // INX
+                    ^codeptr = $B5;   codeptr++ // LDA zp,X
+                    ^codeptr = $D0-2; codeptr++ // ESTKL-2
+                    ^codeptr = $D5;   codeptr++ // CMP zp,X
+                    ^codeptr = $D0-1; codeptr++ // ESTKL-1
+                    ^codeptr = $D0;   codeptr++ // BNE rel
+                    ^codeptr = $0A;   codeptr++ // +10
+                    ^codeptr = $B5;   codeptr++ // LDA zp,X
+                    ^codeptr = $C0-2; codeptr++ // ESTKH-2
+                    ^codeptr = $D5;   codeptr++ // CMP zp,X
+                    ^codeptr = $C0-1; codeptr++ // ESTKH-1
+                    ^codeptr = $D0;   codeptr++ // BNE rel
+                    ^codeptr = $04;   codeptr++ // +4
+                    ^codeptr = $4C;   codeptr++ // JMP xxyy
+                    *codeptr = addrxlate=>[dest]
+                    if not (*codeptr & $8000) // Unresolved address list
+                        addrxlate=>[dest] = codeptr - *jitcodeptr
+                    fin
+                    codeptr = codeptr + 2
                     break
                 is $24
                     i++
@@ -74,7 +136,16 @@ def compiler(defptr)#0
                 is $26
                     i++
                     puts("LA $"); puth(*(bytecode+i))
+                    ^codeptr = $CA; codeptr++ // DEX
+                    ^codeptr = $A9; codeptr++ // LDA #imm
+                    ^codeptr = ^(bytecode+i); codeptr++
                     i++
+                    ^codeptr = $95; codeptr++ // STA zp,X
+                    ^codeptr = $D0; codeptr++ // ESTKL
+                    ^codeptr = $A9; codeptr++ // LDA #imm
+                    ^codeptr = ^(bytecode+i); codeptr++
+                    ^codeptr = $95; codeptr++ // STA zp,X
+                    ^codeptr = $C0; codeptr++ // ESTKH
                     break
                 is $28
                     i++
@@ -83,11 +154,29 @@ def compiler(defptr)#0
                 is $2A
                     i++
                     puts("CB $"); putb(^(bytecode+i))
+                    ^codeptr = $CA; codeptr++ // DEX
+                    ^codeptr = $A9; codeptr++ // LDA #imm
+                    ^codeptr = ^(bytecode+i); codeptr++
+                    ^codeptr = $95; codeptr++ // STA zp,X
+                    ^codeptr = $D0; codeptr++ // ESTKL
+                    ^codeptr = $A9; codeptr++ // LDA #imm
+                    ^codeptr = $00; codeptr++ // $00
+                    ^codeptr = $95; codeptr++ // STA zp,X
+                    ^codeptr = $C0; codeptr++ // ESTKH
                     break
                 is $2C
                     i++
                     puts("CW $"); puth(*(bytecode+i))
+                    ^codeptr = $CA; codeptr++ // DEX
+                    ^codeptr = $A9; codeptr++ // LDA #imm
+                    ^codeptr = ^(bytecode+i); codeptr++
                     i++
+                    ^codeptr = $95; codeptr++ // STA zp,X
+                    ^codeptr = $D0; codeptr++ // ESTKL
+                    ^codeptr = $A9; codeptr++ // LDA #imm
+                    ^codeptr = ^(bytecode+i); codeptr++
+                    ^codeptr = $95; codeptr++ // STA zp,X
+                    ^codeptr = $C0; codeptr++ // ESTKH
                     break
                 is $2E
                     i++
@@ -179,25 +268,73 @@ def compiler(defptr)#0
                 is $54
                     i++
                     puts("CALL $"); puth(*(bytecode+i))
+                    //
+                    // Call address
+                    //
+                    ^codeptr = $20; codeptr++ // JSR xxyy
+                    *codeptr = *(bytecode+i); codeptr = codeptr + 2
                     i++
                     break
                 is $56
                     puts("ICAL")
-                    break
+                    //
+                    // Pull address off stack
+                    //
+                    ^codeptr = $B5; codeptr++ // LDA zp,X
+                    ^codeptr = $D0; codeptr++ // ESTKL
+                    ^codeptr = $85; codeptr++ // STA zp
+                    ^codeptr = $E7; codeptr++ // $E7:TMPL                           
+                    ^codeptr = $B5; codeptr++ // LDA zp,X
+                    ^codeptr = $C0; codeptr++ // ESTKH
+                    ^codeptr = $85; codeptr++ // STA zp
+                    ^codeptr = $E8; codeptr++ // $E8:TMPH                           
+                    ^codeptr = $E8; codeptr++ // INX
+                    //
+                    // Call through TMP
+                    //
+                    ^codeptr = $20; codeptr++ // JSR xxyy
+                    ^codeptr = $E6; codeptr++ // <JMPTMP
+                    ^codeptr = $00; codeptr++ // >JMPTMP
+                   break
                 is $58
                     i++
                     puts("ENTER "); puti(^(bytecode+i))
+                    //
+                    // Call into VM
+                    //
+                    ^codeptr = $20; codeptr++ // JSR INTERP
+                    *codeptr = $3D0; codeptr = codeptr + 2
+                    ^codeptr = $58; codeptr++ // ENTER CODE
+                    ^codeptr = i;   codeptr++ // ENTER OPERAND
+                    ^codeptr = $C0; codeptr++ // NATIVE CODE
                     break
                 is $5A
                     i++
                     puts("LEAVE "); puti(^(bytecode+i))
+                    //
+                    // Call into VM
+                    //
+                    ^codeptr = $20; codeptr++ // JSR INTERP
+                    *codeptr = $3D0; codeptr = codeptr + 2
+                    ^codeptr = $58; codeptr++ // LEAVE CODE
+                    ^codeptr = i;   codeptr++ // LEAVE OPERAND
                     break
                 is $5C
                     puts("RET")
-                    break
+                    ^codeptr = $60; codeptr++ // RTS
+                   break
                 is $5E
                     i++
                     puts("CFFB $FF"); putb(^(bytecode+i))
+                    ^codeptr = $CA; codeptr++ // DEX
+                    ^codeptr = $A9; codeptr++ // LDA #imm
+                    ^codeptr = ^(bytecode+i); codeptr++
+                    ^codeptr = $95; codeptr++ // STA zp,X
+                    ^codeptr = $D0; codeptr++ // ESTKL
+                    ^codeptr = $A9; codeptr++ // LDA #imm
+                    ^codeptr = $FF; codeptr++
+                    ^codeptr = $95; codeptr++ // STA zp,X
+                    ^codeptr = $C0; codeptr++ // ESTKH
                     break
                 // LB,LW,LLB,LLW,LAB,LAW,DLB,DLW                           ; 60 62 64 66 68 6A 6C 6E
                 is $60
@@ -403,11 +540,32 @@ def compiler(defptr)#0
         fin
         putln
         i++
-    until i >= defptr->bytecodesize
+        if i >= defptr->bytecodesize
+            //
+            // Done compiling
+            //
+            //
+            // Update DEF entry with JMP to compiled code
+            //
+            defptr->interpjsr  = $4C // JMP
+            defptr=>interpaddr = *jitcodeptr
+            *jitcodeptr        = codeptr
+            //
+            // Free working bufffers
+            //
+            heaprelease(addrxlate)
+            return
+        fin
+    loop
     //
-    // Overwrite interpreter entrypoint with standard bytecode interpreter
+    // If we got here. we ran out of code buffer space. Overwrite interpreter
+    // entrypoint with standard bytecode interpreter
     //
     defptr=>interpaddr = interpentry
+    //
+    // Free working bufffers
+    //
+    heaprelease(addrxlate)
 end
 //
 // Install JIT compiler
