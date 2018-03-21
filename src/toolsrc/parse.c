@@ -1624,8 +1624,9 @@ int parse_defs(void)
                 emit_const(0);
             emit_leave();
         }
-        while (lambda_cnt--)
-            emit_lambdafunc(lambda_tag[lambda_cnt], lambda_id[lambda_cnt], lambda_cparams[lambda_cnt], lambda_seq[lambda_cnt]);
+        for (cfnvals = 0; cfnvals < lambda_cnt; cfnvals++)
+            emit_lambdafunc(lambda_tag[cfnvals], lambda_id[cfnvals], lambda_cparams[cfnvals], lambda_seq[cfnvals]);
+        lambda_cnt = 0;
         return (1);
     }
     else if (scantoken == ASM_TOKEN)
@@ -1705,21 +1706,21 @@ int parse_module(void)
         while (parse_mods())            next_line();
         while (parse_vars(GLOBAL_TYPE)) next_line();
         while (parse_defs())            next_line();
+        emit_bytecode_seg();
+        emit_start();
+        idlocal_reset();
+        emit_idfunc(0, 0, NULL, 1);
+        prevstmnt = 0;
         if (scantoken != DONE_TOKEN && scantoken != EOF_TOKEN)
         {
-            emit_bytecode_seg();
-            emit_start();
-            idlocal_reset();
-            emit_idfunc(0, 0, NULL, 1);
-            prevstmnt = 0;
             while (parse_stmnt()) next_line();
             if (scantoken != DONE_TOKEN)
                 parse_error("Missing DONE");
-            if (prevstmnt != RETURN_TOKEN)
-            {
-                emit_const(0);
-                emit_ret();
-            }
+        }
+        if (prevstmnt != RETURN_TOKEN)
+        {
+            emit_const(0);
+            emit_ret();
         }
     }
     emit_trailer();

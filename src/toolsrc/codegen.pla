@@ -529,11 +529,13 @@ def init_idglobal#0
     word op
     word i
 
+    dfd_num     = DFDNUM
     tag_num     = TAGNUM
     fixup_num   = FIXUPNUM
     globalbufsz = IDGLOBALSZ
     localbufsz  = IDLOCALSZ
-    if isult(heapavail, $8000)
+    if isult(heapavail, $4000)
+        dfd_num     = DFDNUM/2
         tag_num     = TAGNUM/2
         fixup_num   = FIXUPNUM/2
         globalbufsz = IDGLOBALSZ
@@ -552,6 +554,7 @@ def init_idglobal#0
     //
     // Allocate remaining buffers
     //
+    dfd_tag      = heapalloc(dfd_num*2)
     tag_addr     = heapalloc(tag_num*2)
     tag_type     = heapalloc(tag_num)
     fixup_tag    = heapalloc(fixup_num*2)
@@ -602,6 +605,14 @@ def new_moddep(nameptr, len)#0
     moddep_tbl[moddep_cnt*16] = len
     moddep_cnt++
     if moddep_cnt > MODDEPNUM; parse_warn("Module dependency overflow"); fin
+end
+//
+// DFD list
+//
+def new_dfd(tag)#0
+    if dfd_cnt >= dfd_num; exit_err(ERR_OVER|ERR_CODE|ERR_TABLE); fin
+    dfd_tag=>[dfd_cnt] = tag
+    dfd_cnt++
 end
 //
 // Generate/add to a sequence of code
@@ -870,20 +881,23 @@ end
 // Write DeFinition Directory
 //
 def writeDFD(refnum, modfix)#0
-    word dfd, idptr, idcnt
+    word dfd, idptr, cnt
     byte defdir[128]
 
-    dfd, idptr, idcnt = @defdir, idglobal_tbl, globals
-    while idcnt
-        if idptr=>idtype & (FUNC_TYPE|EXTERN_TYPE) == FUNC_TYPE
+    dfd = @defdir
+    for cnt = 0 to dfd_cnt-1
+    //dfd, idptr, cnt = @defdir, idglobal_tbl, globals
+    //while cnt
+        //if idptr=>idtype & (FUNC_TYPE|EXTERN_TYPE) == FUNC_TYPE
             dfd->0 = $02
-            dfd=>1 = tag_addr=>[idptr=>idval] + modfix
+            dfd=>1 = tag_addr=>[dfd_tag=>[cnt]] + modfix
             dfd->3 = 0
             dfd    = dfd + 4
-        fin
-        idptr = idptr + idptr->idname + t_id
-        idcnt--
-    loop
+        //fin
+        //idptr = idptr + idptr->idname + t_id
+        //cnt--
+    //loop
+    next
     fileio:write(refnum, @defdir, dfd - @defdir)
 end
 //

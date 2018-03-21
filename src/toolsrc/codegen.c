@@ -382,12 +382,13 @@ void emit_header(void)
 }
 void emit_rld(void)
 {
-    int i;
+    int i, j;
 
     printf(";\n; RE-LOCATEABLE DICTIONARY\n;\n");
     /*
      * First emit the bytecode definition entrypoint information.
      */
+    /*
     for (i = 0; i < globals; i++)
         if (!(idglobal_type[i] & EXTERN_TYPE) && (idglobal_type[i] & DEF_TYPE))
         {
@@ -395,6 +396,14 @@ void emit_rld(void)
             printf("\t%s\t_C%03d\t\t\n", DW, idglobal_tag[i]);
             printf("\t%s\t$00\n", DB);
         }
+    */
+    j = outflags & INIT ? defs - 1 : defs;
+    for (i = 0; i < j; i++)
+    {
+        printf("\t%s\t$02\t\t\t; CODE TABLE FIXUP\n", DB);
+        printf("\t%s\t_C%03d\t\t\n", DW, i);
+        printf("\t%s\t$00\n", DB);
+    }
     /*
      * Now emit the fixup table.
      */
