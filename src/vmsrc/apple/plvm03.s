@@ -743,7 +743,6 @@ IDXLW   INY                     ;+INC_IP
         LDA     (IP),Y
         STY     IPY
         TAY
-        STA     TMPL
         LDA     (IFP),Y
         ASL
         STA     TMPL

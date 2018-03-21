@@ -223,7 +223,7 @@ OPTBL   !WORD   CN,CN,CN,CN,CN,CN,CN,CN                                 ; 00 02 
         !WORD   NEG,COMP,BAND,IOR,XOR,SHL,SHR,IDXW                      ; 90 92 94 96 98 9A 9C 9E
         !WORD   BRGT,BRLT,INCBRLE,ADDBRLE,DECBRGE,SUBBRGE,BRAND,BROR    ; A0 A2 A4 A6 A8 AA AC AE
         !WORD   ADDLB,ADDLW,ADDAB,ADDAW,IDXLB,IDXLW,IDXAB,IDXAW         ; B0 B2 B4 B6 B8 BA BC BE
-        !WORD   NATIVE                                                  ; C0
+        !WORD   NATV                                                    ; C0
 ;*
 ;* DIRECTLY ENTER INTO BYTECODE INTERPRETER
 ;*
@@ -424,7 +424,7 @@ OPXTBL  !WORD   CN,CN,CN,CN,CN,CN,CN,CN                                 ; 00 02 
         !WORD   NEG,COMP,BAND,IOR,XOR,SHL,SHR,IDXW                      ; 90 92 94 96 98 9A 9C 9E
         !WORD   BRGT,BRLT,INCBRLE,ADDBRLE,DECBRGE,SUBBRGE,BRAND,BROR    ; A0 A2 A4 A6 A8 AA AC AE
         !WORD   ADDLBX,ADDLWX,ADDABX,ADDAWX,IDXLBX,IDXLWX,IDXABX,IDXAWX ; B0 B2 B4 B6 B8 BA BC BE
-        !WORD   NATIVE                                                  ; C0
+        !WORD   NATV                                                    ; C0
 ;*
 ;* JIT PROFILING ENTRY INTO INTERPRETER
 ;*
@@ -1178,7 +1178,6 @@ IDXLW   INY                     ;+INC_IP
         LDA     (IP),Y
         STY     IPY
         TAY
-        STA     TMPL
         LDA     (IFP),Y
         ASL
         STA     TMPL
@@ -2024,7 +2023,7 @@ RET     RTS
 ;*
 ;* RETURN TO NATIVE CODE
 ;*
-NATIVE  TYA                     ; FLATTEN IP
+NATV    TYA                     ; FLATTEN IP
         SEC
         ADC     IPL
         STA     TMPL

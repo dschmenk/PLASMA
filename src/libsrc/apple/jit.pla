@@ -23,6 +23,7 @@ end
 const jitcount    = $10
 const jitcomp     = $03E2
 const jitcodeptr  = $03E4
+const codemax     = $BEF0
 //
 // AUX bytecode interpreter entrypoint
 //
@@ -58,7 +59,7 @@ def compiler(defptr)#0
     //
     codeptr = *jitcodeptr
     i       = 0
-    while isule(codeptr, $BEF0)
+    while isule(codeptr, codemax)
         //
         // Update bytecode->native code address translation
         //
@@ -114,14 +115,14 @@ def compiler(defptr)#0
                     ^codeptr = $D5;   codeptr++ // CMP zp,X
                     ^codeptr = $D0-1; codeptr++ // ESTKL-1
                     ^codeptr = $D0;   codeptr++ // BNE rel
-                    ^codeptr = $0A;   codeptr++ // +10
+                    ^codeptr = $09;   codeptr++ // +9
                     ^codeptr = $B5;   codeptr++ // LDA zp,X
                     ^codeptr = $C0-2; codeptr++ // ESTKH-2
                     ^codeptr = $D5;   codeptr++ // CMP zp,X
                     ^codeptr = $C0-1; codeptr++ // ESTKH-1
                     ^codeptr = $D0;   codeptr++ // BNE rel
-                    ^codeptr = $04;   codeptr++ // +4
-                    ^codeptr = $4C;   codeptr++ // JMP xxyy
+                    ^codeptr = $03;   codeptr++ // +3
+                    ^codeptr = $4C;   codeptr++ // JMP abs
                     *codeptr = addrxlate=>[dest]
                     if not (*codeptr & $8000) // Unresolved address list
                         addrxlate=>[dest] = codeptr - *jitcodeptr
@@ -130,8 +131,29 @@ def compiler(defptr)#0
                     break
                 is $24
                     i++
-                    puts("BRNE "); puti(i + *(bytecode+i))
+                    dest = i + *(bytecode+i)
                     i++
+                    puts("BRNE "); puti(dest)
+                    ^codeptr = $E8;   codeptr++ // INX
+                    ^codeptr = $E8;   codeptr++ // INX
+                    ^codeptr = $B5;   codeptr++ // LDA zp,X
+                    ^codeptr = $D0-2; codeptr++ // ESTKL-2
+                    ^codeptr = $D5;   codeptr++ // CMP zp,X
+                    ^codeptr = $D0-1; codeptr++ // ESTKL-1
+                    ^codeptr = $D0;   codeptr++ // BNE rel
+                    ^codeptr = $06;   codeptr++ // +6
+                    ^codeptr = $B5;   codeptr++ // LDA zp,X
+                    ^codeptr = $C0-2; codeptr++ // ESTKH-2
+                    ^codeptr = $D5;   codeptr++ // CMP zp,X
+                    ^codeptr = $C0-1; codeptr++ // ESTKH-1
+                    ^codeptr = $F0;   codeptr++ // BEQ rel
+                    ^codeptr = $03;   codeptr++ // +3
+                    ^codeptr = $4C;   codeptr++ // JMP abs
+                    *codeptr = addrxlate=>[dest]
+                    if not (*codeptr & $8000) // Unresolved address list
+                        addrxlate=>[dest] = codeptr - *jitcodeptr
+                    fin
+                    codeptr = codeptr + 2
                     break
                 is $26
                     i++
@@ -150,6 +172,20 @@ def compiler(defptr)#0
                 is $28
                     i++
                     puts("LLA "); puti(^(bytecode+i))
+                    ^codeptr = $CA; codeptr++ // DEX
+                    ^codeptr = $A9; codeptr++ // LDA #imm
+                    ^codeptr = ^(bytecode+i); codeptr++
+                    ^codeptr = $18; codeptr++ // CLC
+                    ^codeptr = $65; codeptr++ // ADC zp
+                    ^codeptr = $E0; codeptr++ // IFPL
+                    ^codeptr = $95; codeptr++ // STA zp,X
+                    ^codeptr = $D0; codeptr++ // ESTKL
+                    ^codeptr = $A9; codeptr++ // LDA #imm
+                    ^codeptr = $00; codeptr++ // $00
+                    ^codeptr = $65; codeptr++ // ADC zp
+                    ^codeptr = $E1; codeptr++ // IFPH
+                    ^codeptr = $95; codeptr++ // STA zp,X
+                    ^codeptr = $C0; codeptr++ // ESTKH
                     break
                 is $2A
                     i++
@@ -180,90 +216,362 @@ def compiler(defptr)#0
                     break
                 is $2E
                     i++
+                    j = ^(bytecode+i)
                     puts("CS "); puts(bytecode+i)
-                    i = i + ^(bytecode+i)
+                    i++
+                    if isule(codeptr + 12 + j, codemax)
+                        ^codeptr = $CA; codeptr++ // DEX
+                        ^codeptr = $A9; codeptr++ // LDA #imm
+                        ^codeptr = codeptr+10; codeptr++
+                        ^codeptr = $95; codeptr++ // STA zp,X
+                        ^codeptr = $D0; codeptr++ // ESTKL
+                        ^codeptr = $A9; codeptr++ // LDA #imm
+                        ^codeptr = (codeptr+6)>>8; codeptr++
+                        ^codeptr = $95; codeptr++ // STA zp,X
+                        ^codeptr = $C0; codeptr++ // ESTKH
+                        ^codeptr = $4C; codeptr++ // JMP abs
+                        *codeptr = addrxlate=>[i+j]
+                        if not (*codeptr & $8000) // Unresolved address list
+                            addrxlate=>[i+j] = codeptr - *jitcodeptr
+                        fin
+                        codeptr  = codeptr + 2
+                        ^codeptr = j; codeptr++
+                        while j
+                            ^(bytecode+i); codeptr++
+                            i++
+                            j--
+                        loop
+                    else
+                        codeptr = codeptr + 12 + j // Flag buffer overflow
+                    fin
                     break
                 // DROP,DROP2,DUP,DIVMOD,ADDI,SUBI,ANDI,ORI                ; 30 32 34 36 38 3A 3C 3E
                 is $30
                     puts("DROP")
+                    ^codeptr = $E8;   codeptr++ // INX
                     break
                 is $32
                     puts("DROP2")
+                    ^codeptr = $E8;   codeptr++ // INX
+                    ^codeptr = $E8;   codeptr++ // INX
                     break
                 is $34
                     puts("DUP")
+                    ^codeptr = $CA;   codeptr++ // DEX
+                    ^codeptr = $B5;   codeptr++ // LDA zp,X
+                    ^codeptr = $D0-1; codeptr++ // ESTKL-1
+                    ^codeptr = $95;   codeptr++ // STA zp,X
+                    ^codeptr = $D0;   codeptr++ // ESTKL
+                    ^codeptr = $B5;   codeptr++ // LDA zp,X
+                    ^codeptr = $C0-1; codeptr++ // ESTKH-1
+                    ^codeptr = $95;   codeptr++ // STA zp,X
+                    ^codeptr = $C0;   codeptr++ // ESTKH
                     break
                 is $36
                     puts("DIVMOD")
+                    //
+                    // Should never happen
+                    //
                     break
                 is $38
                     i++
                     puts("ADDI $"); putb(^(bytecode+i))
+                    ^codeptr = $A9; codeptr++ // LDA #imm
+                    ^codeptr = ^(bytecode+i); codeptr++
+                    ^codeptr = $18; codeptr++ // CLC
+                    ^codeptr = $75; codeptr++ // ADC zp,X
+                    ^codeptr = $D0; codeptr++ // ESTKL
+                    ^codeptr = $95; codeptr++ // STA zp,X
+                    ^codeptr = $D0; codeptr++ // ESTKL
+                    ^codeptr = $90; codeptr++ // BCC rel
+                    ^codeptr = $02; codeptr++ // +2
+                    ^codeptr = $F6; codeptr++ // INC zp,X
+                    ^codeptr = $C0; codeptr++ // ESTKH
                     break
                 is $3A
                     i++
                     puts("SUBI $"); putb(^(bytecode+i))
+                    ^codeptr = $B5; codeptr++ // LDA zp,X
+                    ^codeptr = $D0; codeptr++ // ESTKL
+                    ^codeptr = $18; codeptr++ // SEC
+                    ^codeptr = $E9; codeptr++ // SBC #imm
+                    ^codeptr = ^(bytecode+i); codeptr++
+                    ^codeptr = $95; codeptr++ // STA zp,X
+                    ^codeptr = $D0; codeptr++ // ESTKL
+                    ^codeptr = $B0; codeptr++ // BCS rel
+                    ^codeptr = $02; codeptr++ // +2
+                    ^codeptr = $D6; codeptr++ // DEC zp,X
+                    ^codeptr = $C0; codeptr++ // ESTKH
                     break
                 is $3C
                     i++
                     puts("ANDI $"); putb(^(bytecode+i))
+                    ^codeptr = $A9; codeptr++ // LDA #imm
+                    ^codeptr = ^(bytecode+i); codeptr++
+                    ^codeptr = $35; codeptr++ // AND zp,X
+                    ^codeptr = $D0; codeptr++ // ESTKL
+                    ^codeptr = $95; codeptr++ // STA zp,X
+                    ^codeptr = $D0; codeptr++ // ESTKL
+                    ^codeptr = $A9; codeptr++ // LDA #imm
+                    ^codeptr = $00; codeptr++ // $00
+                    ^codeptr = $95; codeptr++ // STA zp,X
+                    ^codeptr = $C0; codeptr++ // ESTKH
                     break
                 is $3E
                     i++
                     puts("ORI $"); putb(^(bytecode+i))
+                    ^codeptr = $A9; codeptr++ // LDA #imm
+                    ^codeptr = ^(bytecode+i); codeptr++
+                    ^codeptr = $15; codeptr++ // ORA zp,X
+                    ^codeptr = $D0; codeptr++ // ESTKL
+                    ^codeptr = $95; codeptr++ // STA zp,X
+                    ^codeptr = $D0; codeptr++ // ESTKL
                     break
                 // ISEQ,ISNE,ISGT,ISLT,ISGE,ISLE,BRFLS,BRTRU               ; 40 42 44 46 48 4A 4C 4E
                 is $40
                     puts("ISEQ")
+                    ^codeptr = $A0;   codeptr++ // LDY #imm
+                    ^codeptr = $00;   codeptr++ // $00
+                    ^codeptr = $B5;   codeptr++ // LDA zp,X
+                    ^codeptr = $D0+1; codeptr++ // ESTKL+1
+                    ^codeptr = $D5;   codeptr++ // CMP zp,X
+                    ^codeptr = $D0;   codeptr++ // ESTKL
+                    ^codeptr = $D0;   codeptr++ // BNE rel
+                    ^codeptr = $07;   codeptr++ // +7
+                    ^codeptr = $B5;   codeptr++ // LDA zp,X
+                    ^codeptr = $C0+1; codeptr++ // ESTKH+1
+                    ^codeptr = $D5;   codeptr++ // CMP zp,X
+                    ^codeptr = $C0;   codeptr++ // ESTKH
+                    ^codeptr = $D0;   codeptr++ // BNE rel
+                    ^codeptr = $01;   codeptr++ // +1                    
+                    ^codeptr = $88;   codeptr++ // DEY
+                    ^codeptr = $E8;   codeptr++ // INX
+                    ^codeptr = $94;   codeptr++ // STY zp,X
+                    ^codeptr = $D0;   codeptr++ // ESTKL
+                    ^codeptr = $94;   codeptr++ // STY zp,X
+                    ^codeptr = $C0;   codeptr++ // ESTKH
                     break
                 is $42
                     puts("ISNE")
+                    ^codeptr = $A0;   codeptr++ // LDY #imm
+                    ^codeptr = $00;   codeptr++ // $FF
+                    ^codeptr = $B5;   codeptr++ // LDA zp,X
+                    ^codeptr = $D0+1; codeptr++ // ESTKL+1
+                    ^codeptr = $D5;   codeptr++ // CMP zp,X
+                    ^codeptr = $D0;   codeptr++ // ESTKL
+                    ^codeptr = $D0;   codeptr++ // BNE rel
+                    ^codeptr = $07;   codeptr++ // +7
+                    ^codeptr = $B5;   codeptr++ // LDA zp,X
+                    ^codeptr = $C0+1; codeptr++ // ESTKH+1
+                    ^codeptr = $D5;   codeptr++ // CMP zp,X
+                    ^codeptr = $C0;   codeptr++ // ESTKH
+                    ^codeptr = $D0;   codeptr++ // BNE rel
+                    ^codeptr = $01;   codeptr++ // +1                    
+                    ^codeptr = $C8;   codeptr++ // INY
+                    ^codeptr = $E8;   codeptr++ // INX
+                    ^codeptr = $94;   codeptr++ // STY zp,X
+                    ^codeptr = $D0;   codeptr++ // ESTKL
+                    ^codeptr = $94;   codeptr++ // STY zp,X
+                    ^codeptr = $C0;   codeptr++ // ESTKH
                     break
                 is $44
                     puts("ISGT")
+                    ^codeptr = $A0;   codeptr++ // LDY #imm
+                    ^codeptr = $00;   codeptr++ // $FF
+                    ^codeptr = $B5;   codeptr++ // LDA zp,X
+                    ^codeptr = $D0;   codeptr++ // ESTKL
+                    ^codeptr = $D5;   codeptr++ // CMP zp,X
+                    ^codeptr = $D0+1; codeptr++ // ESTKL+1
+                    ^codeptr = $B5;   codeptr++ // LDA zp,X
+                    ^codeptr = $C0;   codeptr++ // ESTKH
+                    ^codeptr = $F5;   codeptr++ // SBC zp,X
+                    ^codeptr = $C0+1; codeptr++ // ESTKH+1
+                    ^codeptr = $50;   codeptr++ // BVC rel
+                    ^codeptr = $02;   codeptr++ // +2
+                    ^codeptr = $49;   codeptr++ // EOR #imm
+                    ^codeptr = $80;   codeptr++ // $80
+                    ^codeptr = $30;   codeptr++ // BMI rel
+                    ^codeptr = $01;   codeptr++ // +1                    
+                    ^codeptr = $C8;   codeptr++ // INY
+                    ^codeptr = $E8;   codeptr++ // INX
+                    ^codeptr = $94;   codeptr++ // STY zp,X
+                    ^codeptr = $D0;   codeptr++ // ESTKL
+                    ^codeptr = $94;   codeptr++ // STY zp,X
+                    ^codeptr = $C0;   codeptr++ // ESTKH                   
                     break
                 is $46
                     puts("ISLT")
+                    ^codeptr = $A0;   codeptr++ // LDY #imm
+                    ^codeptr = $00;   codeptr++ // $FF
+                    ^codeptr = $B5;   codeptr++ // LDA zp,X
+                    ^codeptr = $D0+1; codeptr++ // ESTKL+1
+                    ^codeptr = $D5;   codeptr++ // CMP zp,X
+                    ^codeptr = $D0;   codeptr++ // ESTKL
+                    ^codeptr = $B5;   codeptr++ // LDA zp,X
+                    ^codeptr = $C0+1; codeptr++ // ESTKH+1
+                    ^codeptr = $F5;   codeptr++ // SBC zp,X
+                    ^codeptr = $C0;   codeptr++ // ESTKH
+                    ^codeptr = $50;   codeptr++ // BVC rel
+                    ^codeptr = $02;   codeptr++ // +2
+                    ^codeptr = $49;   codeptr++ // EOR #imm
+                    ^codeptr = $80;   codeptr++ // $80
+                    ^codeptr = $30;   codeptr++ // BMI rel
+                    ^codeptr = $01;   codeptr++ // +1                    
+                    ^codeptr = $C8;   codeptr++ // INY
+                    ^codeptr = $E8;   codeptr++ // INX
+                    ^codeptr = $94;   codeptr++ // STY zp,X
+                    ^codeptr = $D0;   codeptr++ // ESTKL
+                    ^codeptr = $94;   codeptr++ // STY zp,X
+                    ^codeptr = $C0;   codeptr++ // ESTKH                   
                     break
                 is $48
                     puts("ISGE")
+                    ^codeptr = $A0;   codeptr++ // LDY #imm
+                    ^codeptr = $00;   codeptr++ // $FF
+                    ^codeptr = $B5;   codeptr++ // LDA zp,X
+                    ^codeptr = $D0+1; codeptr++ // ESTKL+1
+                    ^codeptr = $D5;   codeptr++ // CMP zp,X
+                    ^codeptr = $D0;   codeptr++ // ESTKL
+                    ^codeptr = $B5;   codeptr++ // LDA zp,X
+                    ^codeptr = $C0+1; codeptr++ // ESTKH+1
+                    ^codeptr = $F5;   codeptr++ // SBC zp,X
+                    ^codeptr = $C0;   codeptr++ // ESTKH
+                    ^codeptr = $50;   codeptr++ // BVC rel
+                    ^codeptr = $02;   codeptr++ // +2
+                    ^codeptr = $49;   codeptr++ // EOR #imm
+                    ^codeptr = $80;   codeptr++ // $80
+                    ^codeptr = $10;   codeptr++ // BPL rel
+                    ^codeptr = $01;   codeptr++ // +1                    
+                    ^codeptr = $C8;   codeptr++ // INY
+                    ^codeptr = $E8;   codeptr++ // INX
+                    ^codeptr = $94;   codeptr++ // STY zp,X
+                    ^codeptr = $D0;   codeptr++ // ESTKL
+                    ^codeptr = $94;   codeptr++ // STY zp,X
+                    ^codeptr = $C0;   codeptr++ // ESTKH                   
                     break
                 is $4A
                     puts("ISLE")
+                    ^codeptr = $A0;   codeptr++ // LDY #imm
+                    ^codeptr = $00;   codeptr++ // $FF
+                    ^codeptr = $B5;   codeptr++ // LDA zp,X
+                    ^codeptr = $D0;   codeptr++ // ESTKL
+                    ^codeptr = $D5;   codeptr++ // CMP zp,X
+                    ^codeptr = $D0+1; codeptr++ // ESTKL+1
+                    ^codeptr = $B5;   codeptr++ // LDA zp,X
+                    ^codeptr = $C0;   codeptr++ // ESTKH
+                    ^codeptr = $F5;   codeptr++ // SBC zp,X
+                    ^codeptr = $C0+1; codeptr++ // ESTKH+1
+                    ^codeptr = $50;   codeptr++ // BVC rel
+                    ^codeptr = $02;   codeptr++ // +2
+                    ^codeptr = $49;   codeptr++ // EOR #imm
+                    ^codeptr = $80;   codeptr++ // $80
+                    ^codeptr = $10;   codeptr++ // BPL rel
+                    ^codeptr = $01;   codeptr++ // +1                    
+                    ^codeptr = $C8;   codeptr++ // INY
+                    ^codeptr = $E8;   codeptr++ // INX
+                    ^codeptr = $94;   codeptr++ // STY zp,X
+                    ^codeptr = $D0;   codeptr++ // ESTKL
+                    ^codeptr = $94;   codeptr++ // STY zp,X
+                    ^codeptr = $C0;   codeptr++ // ESTKH                   
                     break
                 is $4C
                     i++
-                    puts("BRFLS "); puti(i + *(bytecode+i))
+                    dest = i + *(bytecode+i)
                     i++
+                    puts("BRFLS "); puti(dest)
+                    ^codeptr = $E8;   codeptr++ // INX
+                    ^codeptr = $B5;   codeptr++ // LDA zp,X
+                    ^codeptr = $D0-1; codeptr++ // ESTKL-1
+                    ^codeptr = $15;   codeptr++ // ORA zp,X
+                    ^codeptr = $C0-1; codeptr++ // ESTKH-1
+                    ^codeptr = $D0;   codeptr++ // BNE rel
+                    ^codeptr = $03;   codeptr++ // +3
+                    ^codeptr = $4C;   codeptr++ // JMP abs
+                    *codeptr = addrxlate=>[dest]
+                    if not (*codeptr & $8000) // Unresolved address list
+                        addrxlate=>[dest] = codeptr - *jitcodeptr
+                    fin
+                    codeptr = codeptr + 2
                     break
                 is $4E
                     i++
-                    puts("BRTRU "); puti(i + *(bytecode+i))
+                    dest = i + *(bytecode+i)
                     i++
+                    puts("BRTRU "); puti(dest)
+                    ^codeptr = $E8;   codeptr++ // INX
+                    ^codeptr = $B5;   codeptr++ // LDA zp,X
+                    ^codeptr = $D0-1; codeptr++ // ESTKL-1
+                    ^codeptr = $15;   codeptr++ // ORA zp,X
+                    ^codeptr = $C0-1; codeptr++ // ESTKH-1
+                    ^codeptr = $F0;   codeptr++ // BEQ rel
+                    ^codeptr = $03;   codeptr++ // +3
+                    ^codeptr = $4C;   codeptr++ // JMP abs
+                    *codeptr = addrxlate=>[dest]
+                    if not (*codeptr & $8000) // Unresolved address list
+                        addrxlate=>[dest] = codeptr - *jitcodeptr
+                    fin
+                    codeptr = codeptr + 2
                     break
                 // BRNCH,SEL,CALL,ICAL,ENTER,LEAVE,RET,CFFB                ; 50 52 54 56 58 5A 5C 5E
                 is $50
                     i++
-                    puts("BRNCH "); puti(i + *(bytecode+i))
+                    dest = i + *(bytecode+i)
                     i++
+                    puts("BRNCH "); puti(dest)
+                    ^codeptr = $4C; codeptr++ // JMP abs
+                    *codeptr = addrxlate=>[dest]
+                    if not (*codeptr & $8000) // Unresolved address list
+                        addrxlate=>[dest] = codeptr - *jitcodeptr
+                    fin
+                    codeptr = codeptr + 2
                     break
                 is $52
                     i++
                     case = i + *(bytecode+i)
                     puts("SEL "); puti(case)
                     j = ^case
-                    ^case = $FF // Flag as NOP
-                    case++
-                    repeat
-                        puts("    $"); puth(*case)
-                        *case = $FFFF
-                        case = case + 2
-                        puts("-->"); puti(case + *case)
-                        *case = $FFFF
-                        case = case + 2
-                        j--
-                    until not j
-                    i++
+                    dest = codeptr + 8 + case * 11)
+                    if isule(dest, codemax)
+                        ^case = $FF // Flag as NOP
+                        case++
+                        ^codeptr = $B5; codeptr++ // LDA zp,X
+                        ^codeptr = $D0; codeptr++ // ESTKL
+                        ^codeptr = $B4; codeptr++ // LDY zp,X
+                        ^codeptr = $C0; codeptr++ // ESTKH
+                        ^codeptr = $E8; codeptr++ // INX
+                        repeat
+                            puts("    $"); puth(*case)
+                            ^codeptr = $C9; codeptr++ // CMP #imm
+                            ^codeptr = ^(bytecode+case); codeptr++
+                            ^codeptr = $D0; codeptr++ // BNE rel
+                            ^codeptr = $07; codeptr++ // +7
+                            ^codeptr = $C0; codeptr++ // CPY #imm
+                            ^codeptr = ^(bytecode+case+1); codeptr++
+                            ^codeptr = $D0; codeptr++ // BNE rel
+                            ^codeptr = $03; codeptr++ // +3
+                            *case = $FFFF
+                            case = case + 2
+                            puts("-->"); puti(case + *case)
+                            ^codeptr = $4C; codeptr++ // JMP abs
+                            *codeptr = addrxlate=>[case]
+                            if not (*codeptr & $8000) // Unresolved address list
+                                addrxlate=>[case] = codeptr - *jitcodeptr
+                            fin
+                            codeptr = codeptr + 2                            
+                            *case = $FFFF
+                            case = case + 2
+                            j--
+                        until not j
+                        ^codeptr = $4C; codeptr++ // JMP abs
+                        *codeptr = addrxlate=>[case]
+                        if not (*codeptr & $8000) // Unresolved address list
+                            addrxlate=>[case] = codeptr - *jitcodeptr
+                        fin
+                        codeptr = codeptr + 2
+                        i++
+                    else
+                        codeptr = dest
+                    fin
                     break
                 is $54
                     i++
@@ -271,7 +579,7 @@ def compiler(defptr)#0
                     //
                     // Call address
                     //
-                    ^codeptr = $20; codeptr++ // JSR xxyy
+                    ^codeptr = $20; codeptr++ // JSR abs
                     *codeptr = *(bytecode+i); codeptr = codeptr + 2
                     i++
                     break
@@ -292,7 +600,7 @@ def compiler(defptr)#0
                     //
                     // Call through TMP
                     //
-                    ^codeptr = $20; codeptr++ // JSR xxyy
+                    ^codeptr = $20; codeptr++ // JSR abs
                     ^codeptr = $E6; codeptr++ // <JMPTMP
                     ^codeptr = $00; codeptr++ // >JMPTMP
                    break
@@ -306,7 +614,7 @@ def compiler(defptr)#0
                     *codeptr = $3D0; codeptr = codeptr + 2
                     ^codeptr = $58; codeptr++ // ENTER CODE
                     ^codeptr = i;   codeptr++ // ENTER OPERAND
-                    ^codeptr = $C0; codeptr++ // NATIVE CODE
+                    ^codeptr = $C0; codeptr++ // NATV CODE
                     break
                 is $5A
                     i++
@@ -332,204 +640,911 @@ def compiler(defptr)#0
                     ^codeptr = $95; codeptr++ // STA zp,X
                     ^codeptr = $D0; codeptr++ // ESTKL
                     ^codeptr = $A9; codeptr++ // LDA #imm
-                    ^codeptr = $FF; codeptr++
+                    ^codeptr = $FF; codeptr++ // $FF
                     ^codeptr = $95; codeptr++ // STA zp,X
                     ^codeptr = $C0; codeptr++ // ESTKH
                     break
                 // LB,LW,LLB,LLW,LAB,LAW,DLB,DLW                           ; 60 62 64 66 68 6A 6C 6E
                 is $60
                     puts("LB")
+                    ^codeptr = $B5;   codeptr++ // LDA zp,X
+                    ^codeptr = $D0;   codeptr++ // ESTKL
+                    ^codeptr = $95;   codeptr++ // STA zp,X
+                    ^codeptr = $C0-1; codeptr++ // ESTKH-1
+                    ^codeptr = $A1;   codeptr++ // LDA (zp,X)
+                    ^codeptr = $C0-1; codeptr++ // ESTKH-1
+                    ^codeptr = $95;   codeptr++ // STA zp,X
+                    ^codeptr = $D0;   codeptr++ // ESTKL                    
+                    ^codeptr = $A9;   codeptr++ // LDA #imm
+                    ^codeptr = $00;   codeptr++ // $00
+                    ^codeptr = $95;   codeptr++ // STA zp,X
+                    ^codeptr = $C0;   codeptr++ // ESTKH
                     break
                 is $62
                     puts("LW")
+                    ^codeptr = $B5;   codeptr++ // LDA zp,X
+                    ^codeptr = $D0;   codeptr++ // ESTKL
+                    ^codeptr = $95;   codeptr++ // STA zp,X
+                    ^codeptr = $C0-1; codeptr++ // ESTKH-1
+                    ^codeptr = $A1;   codeptr++ // LDA (zp,X)
+                    ^codeptr = $C0-1; codeptr++ // ESTKH-1
+                    ^codeptr = $95;   codeptr++ // STA zp,X
+                    ^codeptr = $D0;   codeptr++ // ESTKL                    
+                    ^codeptr = $A9;   codeptr++ // LDA #imm
+                    ^codeptr = $00;   codeptr++ // $00
+                    ^codeptr = $95;   codeptr++ // STA zp,X
+                    ^codeptr = $C0;   codeptr++ // ESTKH
+                    ^codeptr = $F6;   codeptr++ // INC zp,X
+                    ^codeptr = $C0-1; codeptr++ // ESTKH-1
+                    ^codeptr = $D0;   codeptr++ // BNE rel
+                    ^codeptr = $02;   codeptr++ // +2                    
+                    ^codeptr = $F6;   codeptr++ // INC zp,X
+                    ^codeptr = $C0;   codeptr++ // ESTKH
+                    ^codeptr = $A1;   codeptr++ // LDA (zp,X)
+                    ^codeptr = $C0-1; codeptr++ // ESTKH-1
+                    ^codeptr = $95;   codeptr++ // STA zp,X
+                    ^codeptr = $C0;   codeptr++ // ESTKH
                     break
                 is $64
                     i++
                     puts("LLB "); puti(^(bytecode+i))
+                    ^codeptr = $CA; codeptr++ // DEX
+                    ^codeptr = $A0; codeptr++ // LDY #imm
+                    ^codeptr = ^(bytecode+i); codeptr++
+                    ^codeptr = $B1; codeptr++ // LDA (zp),Y
+                    ^codeptr = $E0; codeptr++ // IFP
+                    ^codeptr = $95; codeptr++ // STA zp,X
+                    ^codeptr = $D0; codeptr++ // ESTKL
+                    ^codeptr = $A9; codeptr++ // LDA #imm
+                    ^codeptr = $FF; codeptr++ // $00
+                    ^codeptr = $95; codeptr++ // STA zp,X
+                    ^codeptr = $C0; codeptr++ // ESTKH
                     break
                 is $66
                     i++
                     puts("LLW "); puti(^(bytecode+i))
+                    ^codeptr = $CA; codeptr++ // DEX
+                    ^codeptr = $A0; codeptr++ // LDY #imm
+                    ^codeptr = ^(bytecode+i); codeptr++
+                    ^codeptr = $B1; codeptr++ // LDA (zp),Y
+                    ^codeptr = $E0; codeptr++ // IFP
+                    ^codeptr = $95; codeptr++ // STA zp,X
+                    ^codeptr = $D0; codeptr++ // ESTKL
+                    ^codeptr = $C8; codeptr++ // INY
+                    ^codeptr = $B1; codeptr++ // LDA (zp),Y
+                    ^codeptr = $E0; codeptr++ // IFP
+                    ^codeptr = $95; codeptr++ // STA zp,X
+                    ^codeptr = $C0; codeptr++ // ESTKH
                     break
                 is $68
                     i++
                     puts("LAB $"); puth(*(bytecode+i))
+                    ^codeptr = $CA; codeptr++ // DEX
+                    ^codeptr = $AD; codeptr++ // LDA abs
+                    *codeptr = *(bytecode+i); codeptr = codeptr + 2
+                    ^codeptr = $95; codeptr++ // STA zp,X
+                    ^codeptr = $D0; codeptr++ // ESTKL
+                    ^codeptr = $A9; codeptr++ // LDA #imm
+                    ^codeptr = $FF; codeptr++ // $00
+                    ^codeptr = $95; codeptr++ // STA zp,X
+                    ^codeptr = $C0; codeptr++ // ESTKH
                     i++
                     break
                 is $6A
                     i++
                     puts("LAW $"); puth(*(bytecode+i))
+                    ^codeptr = $CA; codeptr++ // DEX
+                    ^codeptr = $AD; codeptr++ // LDA abs
+                    *codeptr = *(bytecode+i);   codeptr = codeptr + 2
+                    ^codeptr = $95; codeptr++ // STA zp,X
+                    ^codeptr = $D0; codeptr++ // ESTKL
+                    ^codeptr = $AD; codeptr++ // LDA abs
+                    *codeptr = *(bytecode+i)+1; codeptr = codeptr + 2
+                    ^codeptr = $95; codeptr++ // STA zp,X
+                    ^codeptr = $C0; codeptr++ // ESTKH
                     i++
                     break
                 is $6C
                     i++
                     puts("DLB "); puti(^(bytecode+i))
+                    ^codeptr = $A0; codeptr++ // LDY #imm
+                    ^codeptr = ^(bytecode+i); codeptr++
+                    ^codeptr = $B5; codeptr++ // LDA zp,X
+                    ^codeptr = $D0; codeptr++ // ESTKL
+                    ^codeptr = $91; codeptr++ // STA (zp),Y
+                    ^codeptr = $E0; codeptr++ // IFP
                     break
                 is $6E
                     i++
                     puts("DLW "); puti(^(bytecode+i))
+                    ^codeptr = $A0; codeptr++ // LDY #imm
+                    ^codeptr = ^(bytecode+i); codeptr++
+                    ^codeptr = $B5; codeptr++ // LDA zp,X
+                    ^codeptr = $D0; codeptr++ // ESTKL
+                    ^codeptr = $91; codeptr++ // STA (zp),Y
+                    ^codeptr = $E0; codeptr++ // IFP
+                    ^codeptr = $C8; codeptr++ // INY
+                    ^codeptr = $B5; codeptr++ // LDA zp,X
+                    ^codeptr = $C0; codeptr++ // ESTKH
+                    ^codeptr = $91; codeptr++ // STA (zp),Y
+                    ^codeptr = $E0; codeptr++ // IFP
                     break
                 // SB,SW,SLB,SLW,SAB,SAW,DAB,DAW                           ; 70 72 74 76 78 7A 7C 7E
                 is $70
                     puts("SB")
+                    ^codeptr = $B5;   codeptr++ // LDA zp,X
+                    ^codeptr = $D0;   codeptr++ // ESTKL
+                    ^codeptr = $95;   codeptr++ // STA zp,X
+                    ^codeptr = $C0-1; codeptr++ // ESTKH-1
+                    ^codeptr = $B5;   codeptr++ // LDA zp,X
+                    ^codeptr = $D0+1; codeptr++ // ESTKL+1                    
+                    ^codeptr = $81;   codeptr++ // STA (zp,X)
+                    ^codeptr = $C0-1; codeptr++ // ESTKH-1
+                    ^codeptr = $E8;   codeptr++ // INX
+                    ^codeptr = $E8;   codeptr++ // INX
                     break
                 is $72
                     puts("SW")
+                    ^codeptr = $B5;   codeptr++ // LDA zp,X
+                    ^codeptr = $D0;   codeptr++ // ESTKL
+                    ^codeptr = $95;   codeptr++ // STA zp,X
+                    ^codeptr = $C0-1; codeptr++ // ESTKH-1
+                    ^codeptr = $B5;   codeptr++ // LDA zp,X
+                    ^codeptr = $D0+1; codeptr++ // ESTKL+1                    
+                    ^codeptr = $81;   codeptr++ // STA (zp,X)
+                    ^codeptr = $C0-1; codeptr++ // ESTKH-1
+                    ^codeptr = $B5;   codeptr++ // LDA zp,X
+                    ^codeptr = $C0+1; codeptr++ // ESTKH+1                    
+                    ^codeptr = $F6;   codeptr++ // INC zp,X
+                    ^codeptr = $C0-1; codeptr++ // ESTKH-1
+                    ^codeptr = $D0;   codeptr++ // BNE rel
+                    ^codeptr = $02;   codeptr++ // +2                    
+                    ^codeptr = $F6;   codeptr++ // INC zp,X
+                    ^codeptr = $C0;   codeptr++ // ESTKH
+                    ^codeptr = $81;   codeptr++ // STA (zp,X)
+                    ^codeptr = $C0-1; codeptr++ // ESTKH-1
+                    ^codeptr = $E8;   codeptr++ // INX
+                    ^codeptr = $E8;   codeptr++ // INX
                     break
                 is $74
                     i++
                     puts("SLB "); puti(^(bytecode+i))
+                    ^codeptr = $A0; codeptr++ // LDY #imm
+                    ^codeptr = ^(bytecode+i); codeptr++
+                    ^codeptr = $B5; codeptr++ // LDA zp,X
+                    ^codeptr = $D0; codeptr++ // ESTKL
+                    ^codeptr = $91; codeptr++ // STA (zp),Y
+                    ^codeptr = $E0; codeptr++ // IFP
+                    ^codeptr = $E8; codeptr++ // INX
                     break
                 is $76
                     i++
                     puts("SLW "); puti(^(bytecode+i))
+                    ^codeptr = $A0; codeptr++ // LDY #imm
+                    ^codeptr = ^(bytecode+i); codeptr++
+                    ^codeptr = $B5; codeptr++ // LDA zp,X
+                    ^codeptr = $D0; codeptr++ // ESTKL
+                    ^codeptr = $91; codeptr++ // STA (zp),Y
+                    ^codeptr = $E0; codeptr++ // IFP
+                    ^codeptr = $C8; codeptr++ // INY
+                    ^codeptr = $B5; codeptr++ // LDA zp,X
+                    ^codeptr = $C0; codeptr++ // ESTKH
+                    ^codeptr = $91; codeptr++ // STA (zp),Y
+                    ^codeptr = $E0; codeptr++ // IFP
+                    ^codeptr = $E8; codeptr++ // INX
                     break
                 is $78
                     i++
                     puts("SAB $"); puth(*(bytecode+i))
+                    ^codeptr = $B5; codeptr++ // LDA zp,X
+                    ^codeptr = $D0; codeptr++ // ESTKL
+                    ^codeptr = $8D; codeptr++ // STA abs
+                    *codeptr = *(bytecode+i); codeptr = codeptr + 2
+                    ^codeptr = $E8; codeptr++ // INX
                     i++
                     break
                 is $7A
                     i++
                     puts("SAW $"); puth(*(bytecode+i))
+                    ^codeptr = $B5; codeptr++ // LDA zp,X
+                    ^codeptr = $D0; codeptr++ // ESTKL
+                    ^codeptr = $8D; codeptr++ // STA abs
+                    *codeptr = *(bytecode+i);   codeptr = codeptr + 2
+                    ^codeptr = $B5; codeptr++ // LDA zp,X
+                    ^codeptr = $C0; codeptr++ // ESTKH
+                    ^codeptr = $8D; codeptr++ // STA abs
+                    *codeptr = *(bytecode+i)+1; codeptr = codeptr + 2
+                    ^codeptr = $E8; codeptr++ // INX
                     i++
                     break
                 is $7C
                     i++
                     puts("DAB $"); puth(*(bytecode+i))
+                    ^codeptr = $B5; codeptr++ // LDA zp,X
+                    ^codeptr = $D0; codeptr++ // ESTKL
+                    ^codeptr = $8D; codeptr++ // STA abs
+                    *codeptr = *(bytecode+i); codeptr = codeptr + 2
                     i++
                     break
                 is $7E
                     i++
                     puts("DAW $"); puth(*(bytecode+i))
+                    ^codeptr = $B5; codeptr++ // LDA zp,X
+                    ^codeptr = $D0; codeptr++ // ESTKL
+                    ^codeptr = $8D; codeptr++ // STA abs
+                    *codeptr = *(bytecode+i);   codeptr = codeptr + 2
+                    ^codeptr = $B5; codeptr++ // LDA zp,X
+                    ^codeptr = $C0; codeptr++ // ESTKH
+                    ^codeptr = $8D; codeptr++ // STA abs
+                    *codeptr = *(bytecode+i)+1; codeptr = codeptr + 2
                     i++
                     break
                 // LNOT,ADD,SUB,MUL,DIV,MOD,INCR,DECR                      ; 80 82 84 86 88 8A 8C 8E
                 is $80
                     puts("NOT")
+                    ^codeptr = $B5; codeptr++ // LDA zp,X
+                    ^codeptr = $D0; codeptr++ // ESTKL
+                    ^codeptr = $15; codeptr++ // ORA zp,X
+                    ^codeptr = $C0; codeptr++ // ESTKH
+                    ^codeptr = $F0; codeptr++ // BEQ rel
+                    ^codeptr = $02; codeptr++ // +2
+                    ^codeptr = $A9; codeptr++ // LDA #imm
+                    ^codeptr = $FF; codeptr++ // $FF
+                    ^codeptr = $49; codeptr++ // EOR #imm
+                    ^codeptr = $FF; codeptr++ // $FF
+                    ^codeptr = $95; codeptr++ // STA zp,X
+                    ^codeptr = $D0; codeptr++ // ESTKL
+                    ^codeptr = $95; codeptr++ // STA zp,X
+                    ^codeptr = $C0; codeptr++ // ESTKH
                     break
                 is $82
                     puts("ADD")
+                    ^codeptr = $B5;   codeptr++ // LDA zp,X
+                    ^codeptr = $D0;   codeptr++ // ESTKL
+                    ^codeptr = $18;   codeptr++ // CLC
+                    ^codeptr = $75;   codeptr++ // ADC zp,X
+                    ^codeptr = $D0+1; codeptr++ // ESTKL+1
+                    ^codeptr = $95;   codeptr++ // STA zp,X
+                    ^codeptr = $D0+1; codeptr++ // ESTKL+1
+                    ^codeptr = $B5;   codeptr++ // LDA zp,X
+                    ^codeptr = $C0;   codeptr++ // ESTKH
+                    ^codeptr = $75;   codeptr++ // ADC zp,X
+                    ^codeptr = $C0+1; codeptr++ // ESTKH+1
+                    ^codeptr = $95;   codeptr++ // STA zp,X
+                    ^codeptr = $C0+1; codeptr++ // ESTKH+1
+                    ^codeptr = $E8;   codeptr++ // INX
                     break
                 is $84
                     puts("SUB")
+                    ^codeptr = $B5;   codeptr++ // LDA zp,X
+                    ^codeptr = $D0+1; codeptr++ // ESTKL+1
+                    ^codeptr = $38;   codeptr++ // SEC
+                    ^codeptr = $F5;   codeptr++ // SBC zp,X
+                    ^codeptr = $D0;   codeptr++ // ESTKL
+                    ^codeptr = $95;   codeptr++ // STA zp,X
+                    ^codeptr = $D0+1; codeptr++ // ESTKL+1
+                    ^codeptr = $B5;   codeptr++ // LDA zp,X
+                    ^codeptr = $C0+1; codeptr++ // ESTKH+1
+                    ^codeptr = $F5;   codeptr++ // SBC zp,X
+                    ^codeptr = $C0;   codeptr++ // ESTKH
+                    ^codeptr = $95;   codeptr++ // STA zp,X
+                    ^codeptr = $C0+1; codeptr++ // ESTKH+1
+                    ^codeptr = $E8;   codeptr++ // INX
                     break
                 is $86
                     puts("MUL")
-                    break
+                    //
+                    // Call into VM
+                    //
+                    ^codeptr = $20; codeptr++ // JSR INTERP
+                    *codeptr = $3D0; codeptr = codeptr + 2
+                    ^codeptr = $86; codeptr++ // MUL CODE
+                    ^codeptr = $C0; codeptr++ // NATV CODE
+                     break
                 is $88
                     puts("DIV")
+                    //
+                    // Call into VM
+                    //
+                    ^codeptr = $20; codeptr++ // JSR INTERP
+                    *codeptr = $3D0; codeptr = codeptr + 2
+                    ^codeptr = $88; codeptr++ // DIV CODE
+                    ^codeptr = $C0; codeptr++ // NATV CODE
                     break
                 is $8A
                     puts("MOD")
+                    //
+                    // Call into VM
+                    //
+                    ^codeptr = $20; codeptr++ // JSR INTERP
+                    *codeptr = $3D0; codeptr = codeptr + 2
+                    ^codeptr = $8A; codeptr++ // MOD CODE
+                    ^codeptr = $C0; codeptr++ // NATV CODE
                     break
                 is $8C
                     puts("INCR")
+                    ^codeptr = $F6; codeptr++ // INC zp,X
+                    ^codeptr = $D0; codeptr++ // ESTKL
+                    ^codeptr = $D0; codeptr++ // BNE rel
+                    ^codeptr = $02; codeptr++ // +2                    
+                    ^codeptr = $F6; codeptr++ // INC zp,X
+                    ^codeptr = $C0; codeptr++ // ESTKH
                     break
                 is $8E
                     puts("DECR")
+                    ^codeptr = $B5; codeptr++ // LDA zp,X
+                    ^codeptr = $D0; codeptr++ // ESTKL
+                    ^codeptr = $D0; codeptr++ // BNE rel
+                    ^codeptr = $02; codeptr++ // +2                    
+                    ^codeptr = $D6; codeptr++ // DEC zp,X
+                    ^codeptr = $C0; codeptr++ // ESTKH
+                    ^codeptr = $D6; codeptr++ // DEC zp,X
+                    ^codeptr = $D0; codeptr++ // ESTKL
                     break
                 // NEG,COMP,BAND,IOR,XOR,SHL,SHR,IDXW                      ; 90 92 94 96 98 9A 9C 9E
                 is $90
                     puts("NEG")
+                    ^codeptr = $A9; codeptr++ // LDA #imm
+                    ^codeptr = $00; codeptr++ // $00
+                    ^codeptr = $38; codeptr++ // SEC
+                    ^codeptr = $F5; codeptr++ // SBC zp,X
+                    ^codeptr = $D0; codeptr++ // ESTKL
+                    ^codeptr = $95; codeptr++ // STA zp,X
+                    ^codeptr = $D0; codeptr++ // ESTKL
+                    ^codeptr = $A9; codeptr++ // LDA #imm
+                    ^codeptr = $00; codeptr++ // $00
+                    ^codeptr = $F5; codeptr++ // SBC zp,X
+                    ^codeptr = $C0; codeptr++ // ESTKH
+                    ^codeptr = $95; codeptr++ // STA zp,X
+                    ^codeptr = $C0; codeptr++ // ESTKH
                     break
                 is $92
                     puts("COMP")
+                    ^codeptr = $A9; codeptr++ // LDA #imm
+                    ^codeptr = $FF; codeptr++ // $FF
+                    ^codeptr = $55; codeptr++ // EOR zp,X
+                    ^codeptr = $D0; codeptr++ // ESTKL
+                    ^codeptr = $95; codeptr++ // STA zp,X
+                    ^codeptr = $D0; codeptr++ // ESTKL
+                    ^codeptr = $A9; codeptr++ // LDA #imm
+                    ^codeptr = $FF; codeptr++ // $FF
+                    ^codeptr = $55; codeptr++ // EOR zp,X
+                    ^codeptr = $C0; codeptr++ // ESTKH
+                    ^codeptr = $95; codeptr++ // STA zp,X
+                    ^codeptr = $C0; codeptr++ // ESTKH
                     break
                 is $94
                     puts("AND")
+                    ^codeptr = $B5;   codeptr++ // LDA zp,X
+                    ^codeptr = $D0;   codeptr++ // ESTKL
+                    ^codeptr = $35;   codeptr++ // AND zp,X
+                    ^codeptr = $D0+1; codeptr++ // ESTKL+1
+                    ^codeptr = $95;   codeptr++ // STA zp,X
+                    ^codeptr = $D0+1; codeptr++ // ESTKL+1
+                    ^codeptr = $B5;   codeptr++ // LDA zp,X
+                    ^codeptr = $C0;   codeptr++ // ESTKH
+                    ^codeptr = $35;   codeptr++ // AND zp,X
+                    ^codeptr = $C0+1; codeptr++ // ESTKH+1
+                    ^codeptr = $95;   codeptr++ // STA zp,X
+                    ^codeptr = $C0+1; codeptr++ // ESTKH+1
+                    ^codeptr = $E8;   codeptr++ // INX
                     break
                 is $96
                     puts("OR")
+                    ^codeptr = $B5;   codeptr++ // LDA zp,X
+                    ^codeptr = $D0;   codeptr++ // ESTKL
+                    ^codeptr = $15;   codeptr++ // ORA zp,X
+                    ^codeptr = $D0+1; codeptr++ // ESTKL+1
+                    ^codeptr = $95;   codeptr++ // STA zp,X
+                    ^codeptr = $D0+1; codeptr++ // ESTKL+1
+                    ^codeptr = $B5;   codeptr++ // LDA zp,X
+                    ^codeptr = $C0;   codeptr++ // ESTKH
+                    ^codeptr = $15;   codeptr++ // ORA zp,X
+                    ^codeptr = $C0+1; codeptr++ // ESTKH+1
+                    ^codeptr = $95;   codeptr++ // STA zp,X
+                    ^codeptr = $C0+1; codeptr++ // ESTKH+1
+                    ^codeptr = $E8;   codeptr++ // INX
                     break
                 is $98
                     puts("XOR")
+                    ^codeptr = $B5;   codeptr++ // LDA zp,X
+                    ^codeptr = $D0;   codeptr++ // ESTKL
+                    ^codeptr = $55;   codeptr++ // EOR zp,X
+                    ^codeptr = $D0+1; codeptr++ // ESTKL+1
+                    ^codeptr = $95;   codeptr++ // STA zp,X
+                    ^codeptr = $D0+1; codeptr++ // ESTKL+1
+                    ^codeptr = $B5;   codeptr++ // LDA zp,X
+                    ^codeptr = $C0;   codeptr++ // ESTKH
+                    ^codeptr = $55;   codeptr++ // EOR zp,X
+                    ^codeptr = $C0+1; codeptr++ // ESTKH+1
+                    ^codeptr = $95;   codeptr++ // STA zp,X
+                    ^codeptr = $C0+1; codeptr++ // ESTKH+1
+                    ^codeptr = $E8;   codeptr++ // INX
                     break
                 is $9A
                     puts("SHL")
+                    //
+                    // Call into VM
+                    //
+                    ^codeptr = $20; codeptr++ // JSR INTERP
+                    *codeptr = $3D0; codeptr = codeptr + 2
+                    ^codeptr = $9A; codeptr++ // MOD CODE
+                    ^codeptr = $C0; codeptr++ // NATV CODE
                     break
                 is $9C
                     puts("SHR")
+                    //
+                    // Call into VM
+                    //
+                    ^codeptr = $20; codeptr++ // JSR INTERP
+                    *codeptr = $3D0; codeptr = codeptr + 2
+                    ^codeptr = $9C; codeptr++ // MOD CODE
+                    ^codeptr = $C0; codeptr++ // NATV CODE
                     break
                 is $9E
                     puts("IDXW")
+                    ^codeptr = $B5;   codeptr++ // LDA zp,X
+                    ^codeptr = $D0;   codeptr++ // ESTKL
+                    ^codeptr = $0A;   codeptr++ // ASL
+                    ^codeptr = $36;   codeptr++ // ROL zp,X
+                    ^codeptr = $C0;   codeptr++ // ESTKH
+                    ^codeptr = $18;   codeptr++ // CLC
+                    ^codeptr = $75;   codeptr++ // ADC zp,X
+                    ^codeptr = $D0+1; codeptr++ // ESTKL+1
+                    ^codeptr = $95;   codeptr++ // STA zp,X
+                    ^codeptr = $D0+1; codeptr++ // ESTKL+1
+                    ^codeptr = $B5;   codeptr++ // LDA zp,X
+                    ^codeptr = $C0;   codeptr++ // ESTKH
+                    ^codeptr = $75;   codeptr++ // ADC zp,X
+                    ^codeptr = $C0+1; codeptr++ // ESTKH+1
+                    ^codeptr = $95;   codeptr++ // STA zp,X
+                    ^codeptr = $C0+1; codeptr++ // ESTKH+1
+                    ^codeptr = $E8;   codeptr++ // INX
                     break
                 // BRGT,BRLT,INCBRLE,ADDBRLE,DECBRGE,SUBBRGE,BRAND,BROR    ; A0 A2 A4 A6 A8 AA AC AE
                 is $A0
                     i++
-                    puts("BRGT "); puti(i + *(bytecode+i))
+                    dest = i + *(bytecode+i)
+                    puts("BRGT "); puti(dest)
                     i++
+                    ^codeptr = $B5;   codeptr++ // LDA zp,X
+                    ^codeptr = $D0+1; codeptr++ // ESTKL+1
+                    ^codeptr = $D5;   codeptr++ // CMP zp,X
+                    ^codeptr = $D0;   codeptr++ // ESTKL
+                    ^codeptr = $B5;   codeptr++ // LDA zp,X
+                    ^codeptr = $C0+1; codeptr++ // ESTKH+1
+                    ^codeptr = $F5;   codeptr++ // SBC zp,X
+                    ^codeptr = $C0;   codeptr++ // ESTKH
+                    ^codeptr = $50;   codeptr++ // BVC rel
+                    ^codeptr = $02;   codeptr++ // +2
+                    ^codeptr = $49;   codeptr++ // EOR #imm
+                    ^codeptr = $80;   codeptr++ // $80
+                    ^codeptr = $10;   codeptr++ // BPL rel
+                    ^codeptr = $05;   codeptr++ // +5                    
+                    ^codeptr = $E8;   codeptr++ // INX
+                    ^codeptr = $E8;   codeptr++ // INX
+                    ^codeptr = $4C;   codeptr++ // JMP abs
+                    *codeptr = addrxlate=>[dest]
+                    if not (*codeptr & $8000) // Unresolved address list
+                        addrxlate=>[dest] = codeptr - *jitcodeptr
+                    fin
+                    codeptr = codeptr + 2
                     break
                 is $A2
                     i++
-                    puts("BRLT "); puti(i + *(bytecode+i))
+                    dest = i + *(bytecode+i)
+                    puts("BRLT "); puti(dest)
                     i++
+                    ^codeptr = $B5;   codeptr++ // LDA zp,X
+                    ^codeptr = $D0;   codeptr++ // ESTKL
+                    ^codeptr = $D5;   codeptr++ // CMP zp,X
+                    ^codeptr = $D0+1; codeptr++ // ESTKL+1
+                    ^codeptr = $B5;   codeptr++ // LDA zp,X
+                    ^codeptr = $C0;   codeptr++ // ESTKH
+                    ^codeptr = $F5;   codeptr++ // SBC zp,X
+                    ^codeptr = $C0+1; codeptr++ // ESTKH+1
+                    ^codeptr = $50;   codeptr++ // BVC rel
+                    ^codeptr = $02;   codeptr++ // +2
+                    ^codeptr = $49;   codeptr++ // EOR #imm
+                    ^codeptr = $80;   codeptr++ // $80
+                    ^codeptr = $10;   codeptr++ // BPL rel
+                    ^codeptr = $05;   codeptr++ // +5                    
+                    ^codeptr = $E8;   codeptr++ // INX
+                    ^codeptr = $E8;   codeptr++ // INX
+                    ^codeptr = $4C;   codeptr++ // JMP abs
+                    *codeptr = addrxlate=>[dest]
+                    if not (*codeptr & $8000) // Unresolved address list
+                        addrxlate=>[dest] = codeptr - *jitcodeptr
+                    fin
+                    codeptr = codeptr + 2
                     break
                 is $A4
                     i++
-                    puts("INCBRLE "); puti(i + *(bytecode+i))
+                    dest = i + *(bytecode+i)
+                    puts("INCBRLE "); puti(dest)
                     i++
+                    //
+                    // INCR
+                    //
+                    ^codeptr = $F6; codeptr++ // INC zp,X
+                    ^codeptr = $D0; codeptr++ // ESTKL
+                    ^codeptr = $D0; codeptr++ // BNE rel
+                    ^codeptr = $02; codeptr++ // +2                    
+                    ^codeptr = $F6; codeptr++ // INC zp,X
+                    ^codeptr = $C0; codeptr++ // ESTKH
+                    //
+                    // BRLE
+                    //
+                    ^codeptr = $B5;   codeptr++ // LDA zp,X
+                    ^codeptr = $D0+1; codeptr++ // ESTKL+1
+                    ^codeptr = $D5;   codeptr++ // CMP zp,X
+                    ^codeptr = $D0;   codeptr++ // ESTKL
+                    ^codeptr = $B5;   codeptr++ // LDA zp,X
+                    ^codeptr = $C0+1; codeptr++ // ESTKH+1
+                    ^codeptr = $F5;   codeptr++ // SBC zp,X
+                    ^codeptr = $C0;   codeptr++ // ESTKH
+                    ^codeptr = $50;   codeptr++ // BVC rel
+                    ^codeptr = $02;   codeptr++ // +2
+                    ^codeptr = $49;   codeptr++ // EOR #imm
+                    ^codeptr = $80;   codeptr++ // $80
+                    ^codeptr = $30;   codeptr++ // BMI rel
+                    ^codeptr = $03;   codeptr++ // +3                    
+                    ^codeptr = $4C;   codeptr++ // JMP abs
+                    ^codeptr = $E8;   codeptr++ // INX
+                    ^codeptr = $E8;   codeptr++ // INX
+                    *codeptr = addrxlate=>[dest]
+                    if not (*codeptr & $8000) // Unresolved address list
+                        addrxlate=>[dest] = codeptr - *jitcodeptr
+                    fin
+                    codeptr = codeptr + 2
                     break
                 is $A6
                     i++
-                    puts("ADDBRLE "); puti(i + *(bytecode+i))
+                    dest = i + *(bytecode+i)
+                    puts("ADDBRLE "); puti(dest)
                     i++
+                    //
+                    // ADD
+                    //
+                    ^codeptr = $B5;   codeptr++ // LDA zp,X
+                    ^codeptr = $D0;   codeptr++ // ESTKL
+                    ^codeptr = $18;   codeptr++ // CLC
+                    ^codeptr = $75;   codeptr++ // ADC zp,X
+                    ^codeptr = $D0+1; codeptr++ // ESTKL+1
+                    ^codeptr = $95;   codeptr++ // STA zp,X
+                    ^codeptr = $D0+1; codeptr++ // ESTKL+1
+                    ^codeptr = $B5;   codeptr++ // LDA zp,X
+                    ^codeptr = $C0;   codeptr++ // ESTKH
+                    ^codeptr = $75;   codeptr++ // ADC zp,X
+                    ^codeptr = $C0+1; codeptr++ // ESTKH+1
+                    ^codeptr = $95;   codeptr++ // STA zp,X
+                    ^codeptr = $C0+1; codeptr++ // ESTKH+1
+                    ^codeptr = $E8;   codeptr++ // INX
+                    //
+                    // BRLE
+                    //
+                    ^codeptr = $B5;   codeptr++ // LDA zp,X
+                    ^codeptr = $D0+1; codeptr++ // ESTKL+1
+                    ^codeptr = $D5;   codeptr++ // CMP zp,X
+                    ^codeptr = $D0;   codeptr++ // ESTKL
+                    ^codeptr = $B5;   codeptr++ // LDA zp,X
+                    ^codeptr = $C0+1; codeptr++ // ESTKH+1
+                    ^codeptr = $F5;   codeptr++ // SBC zp,X
+                    ^codeptr = $C0;   codeptr++ // ESTKH
+                    ^codeptr = $50;   codeptr++ // BVC rel
+                    ^codeptr = $02;   codeptr++ // +2
+                    ^codeptr = $49;   codeptr++ // EOR #imm
+                    ^codeptr = $80;   codeptr++ // $80
+                    ^codeptr = $30;   codeptr++ // BMI rel
+                    ^codeptr = $03;   codeptr++ // +3                    
+                    ^codeptr = $4C;   codeptr++ // JMP abs
+                    ^codeptr = $E8;   codeptr++ // INX
+                    ^codeptr = $E8;   codeptr++ // INX
+                    *codeptr = addrxlate=>[dest]
+                    if not (*codeptr & $8000) // Unresolved address list
+                        addrxlate=>[dest] = codeptr - *jitcodeptr
+                    fin
+                    codeptr = codeptr + 2
                     break
                 is $A8
                     i++
-                    puts("DECBRGE "); puti(i + *(bytecode+i))
+                    dest = i + *(bytecode+i)
+                    puts("DECBRGE "); puti(dest)
                     i++
+                    //
+                    // DECR
+                    //
+                    ^codeptr = $B5; codeptr++ // LDA zp,X
+                    ^codeptr = $D0; codeptr++ // ESTKL
+                    ^codeptr = $D0; codeptr++ // BNE rel
+                    ^codeptr = $02; codeptr++ // +2                    
+                    ^codeptr = $D6; codeptr++ // DEC zp,X
+                    ^codeptr = $C0; codeptr++ // ESTKH
+                    ^codeptr = $D6; codeptr++ // DEC zp,X
+                    ^codeptr = $D0; codeptr++ // ESTKL
+                    //
+                    // BRGE
+                    //
+                    ^codeptr = $B5;   codeptr++ // LDA zp,X
+                    ^codeptr = $D0;   codeptr++ // ESTKL
+                    ^codeptr = $D5;   codeptr++ // CMP zp,X
+                    ^codeptr = $D0+1; codeptr++ // ESTKL+1
+                    ^codeptr = $B5;   codeptr++ // LDA zp,X
+                    ^codeptr = $C0;   codeptr++ // ESTKH
+                    ^codeptr = $F5;   codeptr++ // SBC zp,X
+                    ^codeptr = $C0+1; codeptr++ // ESTKH+1
+                    ^codeptr = $50;   codeptr++ // BVC rel
+                    ^codeptr = $02;   codeptr++ // +2
+                    ^codeptr = $49;   codeptr++ // EOR #imm
+                    ^codeptr = $80;   codeptr++ // $80
+                    ^codeptr = $30;   codeptr++ // BMI rel
+                    ^codeptr = $03;   codeptr++ // +3                    
+                    ^codeptr = $4C;   codeptr++ // JMP abs
+                    ^codeptr = $E8;   codeptr++ // INX
+                    ^codeptr = $E8;   codeptr++ // INX
+                    *codeptr = addrxlate=>[dest]
+                    if not (*codeptr & $8000) // Unresolved address list
+                        addrxlate=>[dest] = codeptr - *jitcodeptr
+                    fin
+                    codeptr = codeptr + 2
                     break
                 is $AA
                     i++
-                    puts("SUBBRGE "); puti(i + *(bytecode+i))
+                    dest = i + *(bytecode+i)
+                    puts("SUBBRGE "); puti(dest)
                     i++
+                    //
+                    // SUB
+                    //
+                    ^codeptr = $B5;   codeptr++ // LDA zp,X
+                    ^codeptr = $D0+1; codeptr++ // ESTKL+1
+                    ^codeptr = $38;   codeptr++ // SEC
+                    ^codeptr = $F5;   codeptr++ // SBC zp,X
+                    ^codeptr = $D0;   codeptr++ // ESTKL
+                    ^codeptr = $95;   codeptr++ // STA zp,X
+                    ^codeptr = $D0+1; codeptr++ // ESTKL+1
+                    ^codeptr = $B5;   codeptr++ // LDA zp,X
+                    ^codeptr = $C0+1; codeptr++ // ESTKH+1
+                    ^codeptr = $F5;   codeptr++ // SBC zp,X
+                    ^codeptr = $C0;   codeptr++ // ESTKH
+                    ^codeptr = $95;   codeptr++ // STA zp,X
+                    ^codeptr = $C0+1; codeptr++ // ESTKH+1
+                    ^codeptr = $E8;   codeptr++ // INX
+                    //
+                    // BRGE
+                    //
+                    ^codeptr = $B5;   codeptr++ // LDA zp,X
+                    ^codeptr = $D0;   codeptr++ // ESTKL
+                    ^codeptr = $D5;   codeptr++ // CMP zp,X
+                    ^codeptr = $D0+1; codeptr++ // ESTKL+1
+                    ^codeptr = $B5;   codeptr++ // LDA zp,X
+                    ^codeptr = $C0;   codeptr++ // ESTKH
+                    ^codeptr = $F5;   codeptr++ // SBC zp,X
+                    ^codeptr = $C0+1; codeptr++ // ESTKH+1
+                    ^codeptr = $50;   codeptr++ // BVC rel
+                    ^codeptr = $02;   codeptr++ // +2
+                    ^codeptr = $49;   codeptr++ // EOR #imm
+                    ^codeptr = $80;   codeptr++ // $80
+                    ^codeptr = $30;   codeptr++ // BMI rel
+                    ^codeptr = $03;   codeptr++ // +3                    
+                    ^codeptr = $4C;   codeptr++ // JMP abs
+                    ^codeptr = $E8;   codeptr++ // INX
+                    ^codeptr = $E8;   codeptr++ // INX
+                    *codeptr = addrxlate=>[dest]
+                    if not (*codeptr & $8000) // Unresolved address list
+                        addrxlate=>[dest] = codeptr - *jitcodeptr
+                    fin
+                    codeptr = codeptr + 2
                     break
                 is $AC
                     i++
-                    puts("BRAND "); puti(i + *(bytecode+i))
+                    dest = i + *(bytecode+i)
                     i++
+                    puts("BRAND "); puti(dest)
+                    ^codeptr = $B5; codeptr++ // LDA zp,X
+                    ^codeptr = $D0; codeptr++ // ESTKL
+                    ^codeptr = $15; codeptr++ // ORA zp,X
+                    ^codeptr = $C0; codeptr++ // ESTKH
+                    ^codeptr = $D0; codeptr++ // BNE rel
+                    ^codeptr = $03; codeptr++ // +3
+                    ^codeptr = $4C; codeptr++ // JMP abs
+                    *codeptr = addrxlate=>[dest]
+                    if not (*codeptr & $8000) // Unresolved address list
+                        addrxlate=>[dest] = codeptr - *jitcodeptr
+                    fin
+                    codeptr = codeptr + 2
+                    ^codeptr = $E8;   codeptr++ // INX
                     break
                 is $AE
                     i++
-                    puts("BROR "); puti(i + *(bytecode+i))
+                    dest = i + *(bytecode+i)
                     i++
+                    puts("BROR "); puti(dest)
+                    ^codeptr = $B5; codeptr++ // LDA zp,X
+                    ^codeptr = $D0; codeptr++ // ESTKL
+                    ^codeptr = $15; codeptr++ // ORA zp,X
+                    ^codeptr = $C0; codeptr++ // ESTKH
+                    ^codeptr = $F0; codeptr++ // BEQ rel
+                    ^codeptr = $03; codeptr++ // +3
+                    ^codeptr = $4C; codeptr++ // JMP abs
+                    *codeptr = addrxlate=>[dest]
+                    if not (*codeptr & $8000) // Unresolved address list
+                        addrxlate=>[dest] = codeptr - *jitcodeptr
+                    fin
+                    codeptr = codeptr + 2
+                    ^codeptr = $E8;   codeptr++ // INX
                     break
                 // ADDLB,ADDLW,ADDAB,ADDAW,IDXLB,IDXLW,IDXAB,IDXAW         ; B0 B2 B4 B6 B8 BA BC BE
                 is $B0
                     i++
                     puts("ADDLB "); puti(^(bytecode+i))
+                    ^codeptr = $A0; codeptr++ // LDY #imm
+                    ^codeptr = ^(bytecode+i); codeptr++
+                    ^codeptr = $B1; codeptr++ // LDA (zp),Y
+                    ^codeptr = $E0; codeptr++ // IFP
+                    ^codeptr = $18; codeptr++ // CLC
+                    ^codeptr = $75; codeptr++ // ADC zp,X
+                    ^codeptr = $D0; codeptr++ // ESTKL
+                    ^codeptr = $95; codeptr++ // STA zp,X
+                    ^codeptr = $D0; codeptr++ // ESTKL
+                    ^codeptr = $90; codeptr++ // BCC rel
+                    ^codeptr = $02; codeptr++ // +2
+                    ^codeptr = $F6; codeptr++ // INC zp,X
+                    ^codeptr = $C0; codeptr++ // ESTKH
                     break
                 is $B2
                     i++
                     puts("ADDLW "); puti(^(bytecode+i))
+                    ^codeptr = $A0; codeptr++ // LDY #imm
+                    ^codeptr = ^(bytecode+i); codeptr++
+                    ^codeptr = $B1; codeptr++ // LDA (zp),Y
+                    ^codeptr = $E0; codeptr++ // IFP
+                    ^codeptr = $18; codeptr++ // CLC
+                    ^codeptr = $75; codeptr++ // ADC zp,X
+                    ^codeptr = $D0; codeptr++ // ESTKL
+                    ^codeptr = $95; codeptr++ // STA zp,X
+                    ^codeptr = $D0; codeptr++ // ESTKL
+                    ^codeptr = $C8; codeptr++ // INY
+                    ^codeptr = $B1; codeptr++ // LDA (zp),Y
+                    ^codeptr = $E0; codeptr++ // IFP
+                    ^codeptr = $75; codeptr++ // ADC zp,X
+                    ^codeptr = $C0; codeptr++ // ESTKH
+                    ^codeptr = $95; codeptr++ // STA zp,X
+                    ^codeptr = $C0; codeptr++ // ESTKH
                     break
                 is $B4
                     i++
                     puts("ADDAB $"); puth(*(bytecode+i))
+                    ^codeptr = $AD; codeptr++ // LDA abs
+                    *codeptr = *(bytecode+i); codeptr = codeptr + 2
+                    ^codeptr = $18; codeptr++ // CLC
+                    ^codeptr = $75; codeptr++ // ADC zp,X
+                    ^codeptr = $D0; codeptr++ // ESTKL
+                    ^codeptr = $95; codeptr++ // STA zp,X
+                    ^codeptr = $D0; codeptr++ // ESTKL
+                    ^codeptr = $90; codeptr++ // BCC rel
+                    ^codeptr = $02; codeptr++ // +2
+                    ^codeptr = $F6; codeptr++ // INC zp,X
+                    ^codeptr = $C0; codeptr++ // ESTKH
                     i++
                     break
                 is $B6
                     i++
                     puts("ADDAW $"); puth(*(bytecode+i))
+                    ^codeptr = $AD; codeptr++ // LDA abs
+                    *codeptr = *(bytecode+i);   codeptr = codeptr + 2
+                    ^codeptr = $18; codeptr++ // CLC
+                    ^codeptr = $75; codeptr++ // ADC zp,X
+                    ^codeptr = $D0; codeptr++ // ESTKL
+                    ^codeptr = $95; codeptr++ // STA zp,X
+                    ^codeptr = $D0; codeptr++ // ESTKL
+                    ^codeptr = $AD; codeptr++ // LDA abs
+                    *codeptr = *(bytecode+i)+1; codeptr = codeptr + 2
+                    ^codeptr = $75; codeptr++ // ADC zp,X
+                    ^codeptr = $C0; codeptr++ // ESTKH
+                    ^codeptr = $95; codeptr++ // STA zp,X
+                    ^codeptr = $C0; codeptr++ // ESTKH
                     i++
                     break
                 is $B8
                     i++
                     puts("IDXLB "); puti(^(bytecode+i))
+                    ^codeptr = $A0; codeptr++ // LDY #imm
+                    ^codeptr = ^(bytecode+i); codeptr++
+                    ^codeptr = $B1; codeptr++ // LDA (zp),Y
+                    ^codeptr = $E0; codeptr++ // IFP
+                    ^codeptr = $A0; codeptr++ // LDY #imm
+                    ^codeptr = $00; codeptr++ // $00
+                    ^codeptr = $0A; codeptr++ // ASL
+                    ^codeptr = $90; codeptr++ // BCC rel
+                    ^codeptr = $02; codeptr++ // +2
+                    ^codeptr = $C8; codeptr++ // INY
+                    ^codeptr = $18; codeptr++ // CLC
+                    ^codeptr = $75; codeptr++ // ADC zp,X
+                    ^codeptr = $D0; codeptr++ // ESTKL
+                    ^codeptr = $95; codeptr++ // STA zp,X
+                    ^codeptr = $D0; codeptr++ // ESTKL
+                    ^codeptr = $98; codeptr++ // TYA
+                    ^codeptr = $75; codeptr++ // ADC zp,X
+                    ^codeptr = $C0; codeptr++ // ESTKH
+                    ^codeptr = $95; codeptr++ // STA zp,X
+                    ^codeptr = $C0; codeptr++ // ESTKH
                     break
                 is $BA
                     i++
                     puts("IDXLW "); puti(^(bytecode+i))
+                    ^codeptr = $A0; codeptr++ // LDY #imm
+                    ^codeptr = ^(bytecode+i); codeptr++
+                    ^codeptr = $B1; codeptr++ // LDA (zp),Y
+                    ^codeptr = $E0; codeptr++ // IFP
+                    ^codeptr = $0A; codeptr++ // ASL
+                    ^codeptr = $85; codeptr++ // STA zp
+                    ^codeptr = $E7; codeptr++ // $E7:TMPL                           
+                    ^codeptr = $C8; codeptr++ // INY
+                    ^codeptr = $B1; codeptr++ // LDA (zp),Y
+                    ^codeptr = $E0; codeptr++ // IFP
+                    ^codeptr = $2A; codeptr++ // ROL
+                    ^codeptr = $A8; codeptr++ // TAY
+                    ^codeptr = $A5; codeptr++ // LDA zp
+                    ^codeptr = $E7; codeptr++ // $E7:TMPL                           
+                    ^codeptr = $18; codeptr++ // CLC
+                    ^codeptr = $75; codeptr++ // ADC zp,X
+                    ^codeptr = $D0; codeptr++ // ESTKL
+                    ^codeptr = $95; codeptr++ // STA zp,X
+                    ^codeptr = $D0; codeptr++ // ESTKL
+                    ^codeptr = $98; codeptr++ // TYA
+                    ^codeptr = $75; codeptr++ // ADC zp,X
+                    ^codeptr = $C0; codeptr++ // ESTKH
+                    ^codeptr = $95; codeptr++ // STA zp,X
+                    ^codeptr = $C0; codeptr++ // ESTKH
                     break
                 is $BC
                     i++
                     puts("IDXAB $"); puth(*(bytecode+i))
+                    ^codeptr = $AD; codeptr++ // LDA abs
+                    *codeptr = *(bytecode+i); codeptr = codeptr + 2
+                    ^codeptr = $A0; codeptr++ // LDY #imm
+                    ^codeptr = $00; codeptr++ // $00
+                    ^codeptr = $0A; codeptr++ // ASL
+                    ^codeptr = $90; codeptr++ // BCC rel
+                    ^codeptr = $02; codeptr++ // +2
+                    ^codeptr = $C8; codeptr++ // INY
+                    ^codeptr = $18; codeptr++ // CLC
+                    ^codeptr = $75; codeptr++ // ADC zp,X
+                    ^codeptr = $D0; codeptr++ // ESTKL
+                    ^codeptr = $95; codeptr++ // STA zp,X
+                    ^codeptr = $D0; codeptr++ // ESTKL
+                    ^codeptr = $98; codeptr++ // TYA
+                    ^codeptr = $75; codeptr++ // ADC zp,X
+                    ^codeptr = $C0; codeptr++ // ESTKH
+                    ^codeptr = $95; codeptr++ // STA zp,X
+                    ^codeptr = $C0; codeptr++ // ESTKH
                     i++
                     break
                 is $BE
                     i++
                     puts("IDXAW $"); puth(*(bytecode+i))
+                    ^codeptr = $AD; codeptr++ // LDA abs
+                    *codeptr = *(bytecode+i);   codeptr = codeptr + 2
+                    ^codeptr = $0A; codeptr++ // ASL
+                    ^codeptr = $85; codeptr++ // STA zp
+                    ^codeptr = $E7; codeptr++ // $E7:TMPL                           
+                    ^codeptr = $AD; codeptr++ // LDA abs
+                    *codeptr = *(bytecode+i)+1; codeptr = codeptr + 2
+                    ^codeptr = $2A; codeptr++ // ROL
+                    ^codeptr = $A8; codeptr++ // TAY
+                    ^codeptr = $A5; codeptr++ // LDA zp
+                    ^codeptr = $E7; codeptr++ // $E7:TMPL                           
+                    ^codeptr = $18; codeptr++ // CLC
+                    ^codeptr = $75; codeptr++ // ADC zp,X
+                    ^codeptr = $D0; codeptr++ // ESTKL
+                    ^codeptr = $95; codeptr++ // STA zp,X
+                    ^codeptr = $D0; codeptr++ // ESTKL
+                    ^codeptr = $98; codeptr++ // TYA
+                    ^codeptr = $75; codeptr++ // ADC zp,X
+                    ^codeptr = $C0; codeptr++ // ESTKH
+                    ^codeptr = $95; codeptr++ // STA zp,X
+                    ^codeptr = $C0; codeptr++ // ESTKH
                     i++
                     break
                 is $FF // NOPed out earlier by SELect
