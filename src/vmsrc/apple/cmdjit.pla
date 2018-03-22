@@ -39,9 +39,9 @@ end
 //
 // JIT compiler constants
 //
-const jitcount    = $01//$10
 const jitcomp     = $03E2
 const jitcodeptr  = $03E4
+const jitwarming  = $03E6
 const jitcode     = $BF00
 //
 // Pedefined functions.
@@ -60,6 +60,9 @@ word syspath
 word syscmdln
 word            = @execmod, @open, @close, @read, @write
 byte perr
+byte jitcount   = $10
+byte jitsize    = $FF
+word jitwarmup  = $0100
 //
 // Working input buffer overlayed with strings table
 //
@@ -140,7 +143,7 @@ word sysmodsym  = @exports
 //
 word systemflags = 0
 word heap
-word xheap       = $0800
+word xheap       = $0C00//$0800 Skip text page2 for double lores
 word lastsym     = symtbl
 //
 // Utility functions
@@ -988,12 +991,12 @@ def allocxheap(size)#1
             xheap = xaddr + size
         fin
     fin
-    if systemflags & restxt2
-        if uword_isle(xaddr, $0C00) and uword_isgt(xheap, $0800)
-            xaddr = $0C00
-            xheap = xaddr + size
-        fin
-    fin
+    //if systemflags & restxt2
+    //    if uword_isle(xaddr, $0C00) and uword_isgt(xheap, $0800)
+    //        xaddr = $0C00
+    //        xheap = xaddr + size
+    //    fin
+    //fin
     if systemflags & resxhgr1
         if uword_isle(xaddr, $4000) and uword_isgt(xheap, $2000)
             xaddr = $4000
@@ -1067,9 +1070,9 @@ def adddef(isfirst, addr, deflast)#1
     if not isfirst
         preventry = defentry - t_defentry
         defsize   = addr - preventry=>bytecodeaddr
-        if *jitcomp and defsize < 256
+        if *jitcomp and defsize <= jitsize
             preventry=>interpaddr   = $03D6    // JSR $03D6 (JIT INTERP)
-            preventry->callcount    = jitcount // Set count
+            preventry->callcount    = jitcount // Set JIT countdown
             preventry->bytecodesize = defsize  // Set size
         fin
     fin
@@ -1186,9 +1189,13 @@ def loadmod(mod)#1
         codefix = defaddr - bytecode
         defofst = defaddr - defofst
         //
+        // Reser JIT warmup count
+        //
+        *jitwarming = jitwarmup
+        //
         // Run through the DeFinition Dictionary.
         //
-        deffirst = 1
+        deffirst    = 1
         while ^rld == $02
             //
             // This is a bytcode def entry - add it to the def directory.
