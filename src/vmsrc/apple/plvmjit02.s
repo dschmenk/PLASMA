@@ -444,19 +444,13 @@ JITINTRPX PHP
         LDY     #$05
         LDA     JITWARM+1       ; CHECK WARMING
         ORA     JITWARM
-        BEQ     ++
-        LDA     JITWARM
+        BEQ     DECCALL
+DECWARM LDA     JITWARM         ; DEC WARMING COUNT
         BNE     +
         DEC     JITWARM+1
 +       DEC     JITWARM
-        JMP     +++
-++      LDA     (TMP),Y         ; DEC JIT COUNT
-        SEC
-        SBC     #$01
-        STA     (TMP),Y
-        BEQ     RUNJIT
-+++     DEY
--       LDA     (TMP),Y
+NOJIT   DEY                     ; INTERP BYTECODE AS USUAL
+        LDA     (TMP),Y
         STA     IPH
         DEY
         LDA     (TMP),Y
@@ -466,6 +460,11 @@ JITINTRPX PHP
         STA     OPPAGE
         STA     ALTRDON
         JMP     FETCHOP
+DECCALL LDA     (TMP),Y         ; DEC JIT COUNT
+        SEC
+        SBC     #$01
+        STA     (TMP),Y
+        BNE     NOJIT
 RUNJIT  LDA     JITCOMP
         STA     SRCL
         LDA     JITCOMP+1
@@ -478,7 +477,7 @@ RUNJIT  LDA     JITCOMP
         STA     IPL
         DEX                     ; ADD PARAMETER TO DEF ENTRY
         LDA     TMPL
-        PHA
+        PHA                     ; AND SAVE IT FOR LATER
         STA     ESTKL,X
         LDA     TMPH
         PHA
@@ -492,7 +491,7 @@ RUNJIT  LDA     JITCOMP
         STA     TMPH
         PLA
         STA     TMPL
-        JMP     JMPTMP          ; RE-CALL ORIGINAL ROUTINE
+        JMP     JMPTMP          ; RE-CALL ORIGINAL DEF ENTRY
 ;*
 ;* ADD TOS TO TOS-1
 ;*
