@@ -260,25 +260,21 @@ def compiler(defptr)#0
         // Compile this bad boy...
         //
         if opcode < $20 // CONSTANT NYBBLE
-            //puts("CN $"); putb(^(bytecode+i)/2)
+            //puts("CN $"); putb(opcode/2)
             if A_IS_TOSL & TOSL_DIRTY
-                *codeptr = $D095+(VX<<8) // STA ESTKL,X
+                *codeptr = $D095+(VX<<8)            // STA ESTKL,X
                 codeptr  = codeptr + 2
             fin
-            VX-- // DEX
-            if ^(bytecode+i) == 0
-                ^codeptr = $98; codeptr++ // TYA -> LDA #$00
+            VX--                                    // DEX
+            if opcode == 0
+                ^codeptr = $98; codeptr++           // TYA -> LDA #$00
             else
-                *codeptr = $A9+(^(bytecode+i)/2<<8) // LDA #(CN/2)
-                //^codeptr = $A9;    codeptr++ // LDA #imm
-                //^codeptr = $CN/2;  codeptr++ // CN/2
+                *codeptr = $A9+(opcode/2<<8) // LDA #(CN/2)
                 codeptr  = codeptr + 2
             fin
-            *codeptr  = $C094+(VX<<8) // STY ESTKH,X
-            //^codeptr = $94;    codeptr++ // STY zp,X
-            //^codeptr = $C0+VX; codeptr++ // ESTKH
+            *codeptr  = $C094+(VX<<8)               // STY ESTKH,X
             codeptr   = codeptr + 2
-            A_IS_TOSL = TOSL_DIRTY
+            A_IS_TOSL = TOSL_DIRTY                  // STA ESTKL,X
         else
             when opcode
                 is $20 // MINUS ONE
@@ -288,57 +284,32 @@ def compiler(defptr)#0
                         codeptr  = codeptr + 2
                     fin
                     VX-- // DEX
-                    codeptr=>0 = $FFA9         // LDA #$FF
-                    //^codeptr = $A9;    codeptr++ // LDA #imm
-                    //^codeptr = $FF;    codeptr++ // $FF
-                    codeptr=>2 = $C095+(VX<<8) // STA ESTKH,X
+                    codeptr=>0 = $FFA9           // LDA #$FF
+                    codeptr=>2 = $C095+(VX<<8)   // STA ESTKH,X
                     codeptr    = codeptr + 4
-                    //^codeptr = $95;    codeptr++ // STA zp,X
-                    //^codeptr = $C0+VX; codeptr++ // ESTKH
-                    //^codeptr = $95;    codeptr++ // STA zp,X
-                    //^codeptr = $D0+VX; codeptr++ // ESTKL
-                    A_IS_TOSL  = TOSL_DIRTY
+                    A_IS_TOSL  = TOSL_DIRTY      // STA ESTKL,X
                     break
                 is $22 // BREQ
                     i++
                     dest = i + *(bytecode+i)
                     i++
                     //puts("BREQ "); puti(dest)
-                    codeptr, VX = resolveX(codeptr, VX + 2)
-                    // INX
-                    // INX
+                    codeptr, VX = resolveX(codeptr, VX + 2) // INX; INX
                     if not A_IS_TOSL
-                        *codeptr = ($D0B5-$0200)+(VX<<8) // LDA ESTKL-2,X
+                        *codeptr = $D0B5-$0200//+(VX<<8)    // LDA ESTKL-2,X
                         codeptr  = codeptr + 2
-                        //^codeptr = $B5;      codeptr++ // LDA zp,X
-                        //^codeptr = $D0-2+VX; codeptr++ // ESTKL-2
                     fin
-                    codeptr=>0  = ($D0D5-$0100)+(VX<<8) // CMP ESTKL-1,X
-                    //^codeptr = $D5;      codeptr++ // CMP zp,X
-                    //^codeptr = $D0-1+VX; codeptr++ // ESTKL-1
-                    codeptr=>2  = $09D0                 // BNE +9
-                    //^codeptr = $D0;      codeptr++ // BNE rel
-                    //^codeptr = $09;      codeptr++ // +9
-                    codeptr=>4  = ($C0B5-$0200)+(VX<<8) // LDA ESTKH-2,X
-                    //^codeptr = $B5;      codeptr++ // LDA zp,X
-                    //^codeptr = $C0-2+VX; codeptr++ // ESTKH-2
-                    codeptr=>6  = ($C0D5-$0100)+(VX<<8) // CMP ESTKH-1,X
-                    //^codeptr = $D5;      codeptr++ // CMP zp,X
-                    //^codeptr = $C0-1+VX; codeptr++ // ESTKH-1
-                    codeptr=>8  = $03D0                 // BNE +3
-                    //^codeptr = $D0;      codeptr++ // BNE rel
-                    //^codeptr = $03;      codeptr++ // +3
-                    codeptr->10 = $4C                   // JMP abs
-                    //^codeptr = $4C;      codeptr++ // JMP abs
+                    codeptr=>0  = $D0D5-$0100//+(VX<<8)     // CMP ESTKL-1,X
+                    codeptr=>2  = $09D0                     // BNE +9
+                    codeptr=>4  = $C0B5-$0200//+(VX<<8)     // LDA ESTKH-2,X
+                    codeptr=>6  = $C0D5-$0100//+(VX<<8)     // CMP ESTKH-1,X
+                    codeptr=>8  = $03D0                     // BNE +3
+                    codeptr->10 = $4C                       // JMP abs
                     codeptr=>11 = addrxlate=>[dest]
-                    //*codeptr = addrxlate=>[dest]
                     if not (codeptr->12 & $80) // Unresolved address list
-                    //if not (*codeptr & $8000) // Unresolved address list
                         addrxlate=>[dest] = codeptr + 11 - *jitcodeptr
-                        //addrxlate=>[dest] = codeptr - *jitcodeptr
                     fin
                     codeptr   = codeptr + 13
-                    //codeptr   = codeptr + 2
                     A_IS_TOSL = FALSE
                     break
                 is $24 // BRNE
@@ -346,105 +317,67 @@ def compiler(defptr)#0
                     dest = i + *(bytecode+i)
                     i++
                     //puts("BRNE "); puti(dest)
-                    codeptr, VX = resolveX(codeptr, VX + 2)
-                    // INX
-                    // INX
+                    codeptr, VX = resolveX(codeptr, VX + 2) // INX; INX
                     if not A_IS_TOSL
-                        *codeptr = ($D0B5-$0200)+(VX<<8) // LDA ESTKL-2,X
+                        *codeptr = $D0B5-$0200//+(VX<<8)    // LDA ESTKL-2,X
                         codeptr  = codeptr + 2
-                        //^codeptr = $B5;      codeptr++ // LDA zp,X
-                        //^codeptr = $D0-2+VX; codeptr++ // ESTKL-2
                     fin
-                    codeptr=>0  = ($D0D5-$0100)+(VX<<8) // CMP ESTKL-1,X
-                    //^codeptr = $D5;      codeptr++ // CMP zp,X
-                    //^codeptr = $D0-1+VX; codeptr++ // ESTKL-1
-                    codeptr=>2  = $06D0                 // BNE +6
-                    //^codeptr = $D0;      codeptr++ // BNE rel
-                    //^codeptr = $06;      codeptr++ // +6
-                    codeptr=>4  = ($C0B5-$0200)+(VX<<8) // LDA ESTKH-2,X
-                    //^codeptr = $B5;      codeptr++ // LDA zp,X
-                    //^codeptr = $C0-2+VX; codeptr++ // ESTKH-2
-                    codeptr=>6  = ($C0D5-$0100)+(VX<<8) // CMP ESTKH-1,X
-                    //^codeptr = $D5;      codeptr++ // CMP zp,X
-                    //^codeptr = $C0-1+VX; codeptr++ // ESTKH-1
-                    codeptr=>8  = $03F0                 // BEQ +3
-                    //^codeptr = $F0;      codeptr++ // BEQ rel
-                    //^codeptr = $03;      codeptr++ // +3
-                    codeptr->10 = $4C                   // JMP abs
-                    //^codeptr = $4C;      codeptr++ // JMP abs
+                    codeptr=>0  = $D0D5-$0100//+(VX<<8)     // CMP ESTKL-1,X
+                    codeptr=>2  = $06D0                     // BNE +6
+                    codeptr=>4  = $C0B5-$0200//+(VX<<8)     // LDA ESTKH-2,X
+                    codeptr=>6  = $C0D5-$0100//+(VX<<8)     // CMP ESTKH-1,X
+                    codeptr=>8  = $03F0                     // BEQ +3
+                    codeptr->10 = $4C                       // JMP abs
                     codeptr=>11 = addrxlate=>[dest]
-                    //*codeptr = addrxlate=>[dest]
                     if not (codeptr->12 & $80) // Unresolved address list
-                    //if not (*codeptr & $8000) // Unresolved address list
                         addrxlate=>[dest] = codeptr + 11 - *jitcodeptr
-                        //addrxlate=>[dest] = codeptr - *jitcodeptr
                     fin
                     codeptr   = codeptr + 13
-                    //codeptr  = codeptr + 2
                     A_IS_TOSL = FALSE
                     break
                 is $26 // LA
                 is $2C // CW
                     i++
-                    //puts("LA/CW $"); puth(*(bytecode+i))
+                    dest = *(bytecode+i)
+                    //puts("LA/CW $"); puth(dest)
                     if A_IS_TOSL & TOSL_DIRTY
-                        *codeptr = $D095+(VX<<8) // STA ESTKL,X
+                        *codeptr = $D095+(VX<<8)  // STA ESTKL,X
                         codeptr  = codeptr + 2
                     fin
-                    VX-- // DEX
-                    codeptr=>0 = $A9+(^(bytecode+i+1)<<8) // LDA #<VAL
-                    //^codeptr = $A9;    codeptr++ // LDA #imm
-                    //^codeptr = ^(bytecode+i+1); codeptr++
-                    codeptr=>2 = $C095+(VX<<8) // STA ESTKH,X
-                    //^codeptr = $95;    codeptr++ // STA zp,X
-                    //^codeptr = $C0+VX; codeptr++ // ESTKH
-                    if ^(bytecode+i) == 0
-                        codeptr->4 = $98 // TYA -> LDA #$00
+                    VX--                          // DEX
+                    codeptr=>0 = $A9+(dest&$FF00) // LDA #<VAL
+                    codeptr=>2 = $C095+(VX<<8)    // STA ESTKH,X
+                    if dest & $00FF == 0
+                        codeptr->4 = $98          // TYA -> LDA #$00
                         codeptr    = codeptr + 5
-                        //^codeptr = $98; codeptr++ // TYA -> LDA #$00
                     else
-                        codeptr=>4 = $A9+(^(bytecode+i)<<8) // LDA #>VAL
+                        codeptr=>4 = $A9+(dest<<8) // LDA #>VAL
                         codeptr    = codeptr + 6
-                        //^codeptr = $A9;    codeptr++ // LDA #imm
-                        //^codeptr = ^(bytecode+i); codeptr++
                     fin
-                    //^codeptr = $95;    codeptr++ // STA zp,X
-                    //^codeptr = $D0+VX; codeptr++ // ESTKL
-                    A_IS_TOSL  = TOSL_DIRTY
+                    A_IS_TOSL = TOSL_DIRTY         // STA ESTKL,X
                     i++
                     break
                 is $28 // LLA
                     i++
+                    j = ^(bytecode+i)
                     //puts("LLA "); puti(^(bytecode+i))
                     if A_IS_TOSL & TOSL_DIRTY
-                        *codeptr = $D095+(VX<<8) // STA ESTKL,X
+                        *codeptr = $D095+(VX<<8)  // STA ESTKL,X
                         codeptr  = codeptr + 2
                     fin
-                    VX-- // DEX
-                    if ^(bytecode+i) == 0
-                        ^codeptr = $98; codeptr++ // TYA -> LDA #$00
+                    VX--                          // DEX
+                    if j
+                        *codeptr = $A9+(j<<8)     // LDA #imm
+                        codeptr  = codeptr + 2
                     else
-                        *codeptr = $A9+(^(bytecode+i)<<8) // LDA #imm
-                        codeptr  = codeptr + 2
-                        //^codeptr = $A9;    codeptr++ // LDA #imm
-                        //^codeptr = ^(bytecode+i); codeptr++
+                        ^codeptr = $98; codeptr++ // TYA -> LDA #$00
                     fin
-                    codeptr->0 = $18 // CLC
-                    //^codeptr = $18;    codeptr++ // CLC
-                    codeptr=>1 = $E065 // ADC IFPL
-                    //^codeptr = $65;    codeptr++ // ADC zp
-                    //^codeptr = $E0;    codeptr++ // IFPL
-                    codeptr=>3 = $D095+(VX<<8) // STA ESTKL,X
-                    //^codeptr = $95;    codeptr++ // STA zp,X
-                    //^codeptr = $D0+VX; codeptr++ // ESTKL
-                    codeptr->5 = $98 // TYA -> LDA #$00
-                    //^codeptr = $98;    codeptr++ // TYA -> LDA #$00
-                    codeptr=>6 = $E165 // ADC IFPH
-                    //^codeptr = $65;    codeptr++ // ADC zp
-                    //^codeptr = $E1;    codeptr++ // IFPH
-                    codeptr=>8 = $C095+(VX<<8) // STA ESTKH,X
-                    //^codeptr = $95;    codeptr++ // STA zp,X
-                    //^codeptr = $C0+VX; codeptr++ // ESTKH
+                    codeptr->0 = $18              // CLC
+                    codeptr=>1 = $E065            // ADC IFPL
+                    codeptr=>3 = $D095+(VX<<8)    // STA ESTKL,X
+                    codeptr->5 = $98              // TYA -> LDA #$00
+                    codeptr=>6 = $E165            // ADC IFPH
+                    codeptr=>8 = $C095+(VX<<8)    // STA ESTKH,X
                     codeptr    = codeptr + 10
                     A_IS_TOSL  = FALSE
                     break
@@ -452,97 +385,63 @@ def compiler(defptr)#0
                     i++
                     //puts("CB $"); putb(^(bytecode+i))
                     if A_IS_TOSL & TOSL_DIRTY
-                        *codeptr = $D095+(VX<<8) // STA ESTKL,X
+                        *codeptr = $D095+(VX<<8)        // STA ESTKL,X
                         codeptr  = codeptr + 2
                     fin
-                    VX-- //^codeptr = $CA;    codeptr++ // DEX
+                    VX--                                // DEX
                     codeptr=>0 = $A9+(^(bytecode+i)<<8) // LDA #imm
-                    //^codeptr = $A9;    codeptr++ // LDA #imm
-                    //^codeptr = ^(bytecode+i); codeptr++
-                    codeptr=>2 = $C094+(VX<<8) // STY ESTKH,X
-                    //^codeptr = $94;    codeptr++ // STY zp,X
-                    //^codeptr = $C0+VX; codeptr++ // ESTKH
-                    //^codeptr = $95;    codeptr++ // STA zp,X
-                    //^codeptr = $D0+VX; codeptr++ // ESTKL
+                    codeptr=>2 = $C094+(VX<<8)          // STY ESTKH,X
                     codeptr    = codeptr + 4
-                    A_IS_TOSL  = TOSL_DIRTY
+                    A_IS_TOSL  = TOSL_DIRTY             // STA ESTKL,X
                     break
                 is $2E // CS
                     i++
                     j    = ^(bytecode+i)
                     dest = i + j + 1
                     //puts("CS "); //puts(bytecode+i); //puts("-->"); puti(dest)
-                    if isule(codeptr + 12 + j, codemax)
+                    if isule(codeptr + 10 + j, codemax)
                         if A_IS_TOSL & TOSL_DIRTY
-                            *codeptr = $D095+(VX<<8) // STA ESTKL,X
+                            *codeptr = $D095+(VX<<8)         // STA ESTKL,X
                             codeptr  = codeptr + 2
                         fin
-                        VX-- //^codeptr = $CA;    codeptr++ // DEX
-                        codeptr=>0 = $A9+((codeptr+11)<<8) // LDA #imm
-                        //^codeptr = $A9;    codeptr++ // LDA #imm
-                        //^codeptr = codeptr+10; codeptr++
-                        codeptr=>2 = $D095+(VX<<8) // STA ESTKL,X
-                        //^codeptr = $95;    codeptr++ // STA zp,X
-                        //^codeptr = $D0+VX; codeptr++ // ESTKL
-                        codeptr=>4 = $A9+((codeptr+11)&$FF00) // LDA #imm
-                        //^codeptr = $A9;    codeptr++ // LDA #imm
-                        //^codeptr = (codeptr+6)>>8; codeptr++
-                        codeptr=>6 = $C095+(VX<<8) // STA ESTKH,X
-                        //^codeptr = $95;    codeptr++ // STA zp,X
-                        //^codeptr = $C0+VX; codeptr++ // ESTKH
-                        codeptr->8 = $4C // JMP abs
-                        //^codeptr = $4C;    codeptr++ // JMP abs
-                        codeptr=>9 = addrxlate=>[dest]
-                        //*codeptr = addrxlate=>[dest]
-                        if not (codeptr->10 & $80) // Unresolved address list
-                        //if not (*codeptr & $8000) // Unresolved address list
-                            addrxlate=>[dest] = codeptr + 9 - *jitcodeptr
-                            //addrxlate=>[dest] = codeptr - *jitcodeptr
+                        VX--                                 // DEX
+                        codeptr=>0 = $A9+((codeptr+9)&$FF00) // LDA #>STRING
+                        codeptr=>2 = $C095+(VX<<8)           // STA ESTKH,X
+                        codeptr=>4 = $A9+((codeptr+9)<<8)    // LDA #<STRING
+                        codeptr->6 = $4C                     // JMP abs
+                        codeptr=>7 = addrxlate=>[dest]
+                        if not (codeptr->8 & $80) // Unresolved address list
+                            addrxlate=>[dest] = codeptr + 7 - *jitcodeptr
                         fin
-                        //codeptr = codeptr + 2
-                        strcpy(codeptr + 11, bytecode + i)
-                        //strcpy(codeptr + 2, bytecode+i)
-                        //codeptr = codeptr + j + 1
+                        strcpy(codeptr + 9, bytecode + i)
                         i = i + j
                     fin
-                    codeptr   = codeptr + 12 + j
-                    A_IS_TOSL = FALSE
+                    codeptr   = codeptr + 10 + j
+                    A_IS_TOSL = TOSL_DIRTY                   // STA ESTKL,X
                     break
                 is $32 // DROP2
                     //puts("DROP2")
-                    VX++ // INX
+                    VX++                               // INX
                 is $30 // DROP
                     //puts("DROP")
-                    VX++ // INX
+                    VX++                               // INX
                     A_IS_TOSL  = FALSE
                     break
                 is $34 // DUP
                     //puts("DUP")
                     if not A_IS_TOSL
-                        *codeptr = $D0B5+(VX<<8) // LDA ESTKL,X
+                        *codeptr = $D0B5+(VX<<8)     // LDA ESTKL,X
                         codeptr  = codeptr + 2
-                        //^codeptr = $B5;    codeptr++ // LDA zp,X
-                        //^codeptr = $D0+VX; codeptr++ // ESTKL
                     elsif A_IS_TOSL & TOSL_DIRTY
-                        *codeptr = $D095+(VX<<8) // STA ESTKL,X
+                        *codeptr = $D095+(VX<<8)     // STA ESTKL,X
                         codeptr  = codeptr + 2
                     fin
-                    VX-- // DEX
-                    codeptr=>0 = ($C0B4+$0100)+(VX<<8) // LDY ESTKH+1,X
-                    //^codeptr = $B4;      codeptr++ // LDY zp,X
-                    //^codeptr = $C0+1+VX; codeptr++ // ESTKH+1
-                    codeptr=>2 = $C094+(VX<<8) // STY ESTKH,X
-                    //^codeptr = $94;      codeptr++ // STY zp,X
-                    //^codeptr = $C0+VX;   codeptr++ // ESTKH
-                    codeptr=>4 = $00A0 // LDY #$00
-                    //^codeptr = $A0;      codeptr++ // LDY #imm
-                    //^codeptr = $00;      codeptr++ // $00
-                    //^codeptr = $B5;      codeptr++ // LDA zp,X
-                    //^codeptr = $D0+1+VX; codeptr++ // ESTKL+1
-                    //^codeptr = $95;      codeptr++ // STA zp,X
-                    //^codeptr = $D0+VX;   codeptr++ // ESTKL
+                    VX--                             // DEX
+                    codeptr=>0 = $C0B4+$0100+(VX<<8) // LDY ESTKH+1,X
+                    codeptr=>2 = $C094+(VX<<8)       // STY ESTKH,X
+                    codeptr=>4 = $00A0               // LDY #$00
                     codeptr    = codeptr + 6
-                    A_IS_TOSL  = TOSL_DIRTY
+                    A_IS_TOSL  = TOSL_DIRTY          // STA ESTKL,X
                     break
                 //is $36
                     //puts("DIVMOD")
@@ -554,342 +453,185 @@ def compiler(defptr)#0
                     i++
                     //puts("ADDI $"); putb(^(bytecode+i))
                     if not A_IS_TOSL
-                        *codeptr = $D0B5+(VX<<8) // LDA ESTKL,X
+                        *codeptr = $D0B5+(VX<<8)        // LDA ESTKL,X
                         codeptr  = codeptr + 2
                     fin
-                    codeptr->0 = $18 // CLC                    
-                    //^codeptr = $18;    codeptr++ // CLC
+                    codeptr->0 = $18                    // CLC                    
                     codeptr=>1 = $69+(^(bytecode+i)<<8) // ADC #imm
-                    //^codeptr = $69;    codeptr++ // ADC #imm
-                    //^codeptr = ^(bytecode+i); codeptr++
-                    codeptr=>3  = $0290 // BCC +2
-                    //^codeptr = $90;    codeptr++ // BCC rel
-                    //^codeptr = $02;    codeptr++ // +2
-                    codeptr=>5 = $C0F6+(VX<<8) // INC ESTKH,X
-                    //^codeptr = $F6;    codeptr++ // INC zp,X
-                    //^codeptr = $C0+VX; codeptr++ // ESTKH
-                    //^codeptr = $95;    codeptr++ // STA zp,X
-                    //^codeptr = $D0+VX; codeptr++ // ESTKL
+                    codeptr=>3 = $0290                  // BCC +2
+                    codeptr=>5 = $C0F6+(VX<<8)          // INC ESTKH,X
                     codeptr    = codeptr + 7
-                    A_IS_TOSL  = TOSL_DIRTY
+                    A_IS_TOSL  = TOSL_DIRTY             // STA ESTKL,X
                     break
                 is $3A // SUBI
                     i++
                     //puts("SUBI $"); putb(^(bytecode+i))
                     if not A_IS_TOSL
-                        *codeptr = $D0B5+(VX<<8) // LDA ESTKL,X
+                        *codeptr = $D0B5+(VX<<8)        // LDA ESTKL,X
                         codeptr  = codeptr + 2
                     fin
-                    codeptr->0 = $38 // SEC                    
-                    //^codeptr = $38;    codeptr++ // SEC
+                    codeptr->0 = $38                    // SEC                    
                     codeptr=>1 = $E9+(^(bytecode+i)<<8) // SBC #imm
-                    //^codeptr = $E9;    codeptr++ // SBC #imm
-                    //^codeptr = ^(bytecode+i); codeptr++
-                    codeptr=>3  = $02B0 // BCS +2
-                    //^codeptr = $B0;    codeptr++ // BCS rel
-                    //^codeptr = $02;    codeptr++ // +2
-                    codeptr=>5 = $C0D6+(VX<<8) // INC ESTKH,X
-                    //^codeptr = $D6;    codeptr++ // DEC zp,X
-                    //^codeptr = $C0+VX; codeptr++ // ESTKH
-                    //^codeptr = $95;    codeptr++ // STA zp,X
-                    //^codeptr = $D0+VX; codeptr++ // ESTKL
+                    codeptr=>3 = $02B0                  // BCS +2
+                    codeptr=>5 = $C0D6+(VX<<8)          // INC ESTKH,X
                     codeptr    = codeptr + 7
-                    A_IS_TOSL  = TOSL_DIRTY
+                    A_IS_TOSL  = TOSL_DIRTY             // STA ESTKL,X
                     break
                 is $3C // ANDI
                     i++
                     //puts("ANDI $"); putb(^(bytecode+i))
                     if not A_IS_TOSL
-                        *codeptr = $D0B5+(VX<<8) // LDA ESTKL,X
+                        *codeptr = $D0B5+(VX<<8)        // LDA ESTKL,X
                         codeptr  = codeptr + 2
                     fin
                     codeptr=>0 = $29+(^(bytecode+i)<<8) // AND #imm
-                    //^codeptr = $29;    codeptr++ // AND #imm
-                    //^codeptr = ^(bytecode+i); codeptr++
-                    codeptr=>2 = $C094+(VX<<8) // STY ESTKH,X
-                    //^codeptr = $94;    codeptr++ // STY zp,X
-                    //^codeptr = $C0+VX; codeptr++ // ESTKH
-                    //^codeptr = $95;    codeptr++ // STA zp,X
-                    //^codeptr = $D0+VX; codeptr++ // ESTKL
+                    codeptr=>2 = $C094+(VX<<8)          // STY ESTKH,X
                     codeptr    = codeptr + 4
-                    A_IS_TOSL  = TOSL_DIRTY
+                    A_IS_TOSL  = TOSL_DIRTY             // STA ESTKL,X
                     break
                 is $3E // ORI
                     i++
                     //puts("ORI $"); putb(^(bytecode+i))
                     if not A_IS_TOSL
-                        *codeptr = $D0B5+(VX<<8) // LDA ESTKL,X
+                        *codeptr = $D0B5+(VX<<8)        // LDA ESTKL,X
                         codeptr  = codeptr + 2
                     fin
                     codeptr=>0 = $09+(^(bytecode+i)<<8) // ORA #imm
-                    //^codeptr = $09;    codeptr++ // ORA #imm
-                    //^codeptr = ^(bytecode+i); codeptr++
-                    //^codeptr = $95;    codeptr++ // STA zp,X
-                    //^codeptr = $D0+VX; codeptr++ // ESTKL
                     codeptr    = codeptr + 2
-                    A_IS_TOSL  = TOSL_DIRTY
+                    A_IS_TOSL  = TOSL_DIRTY             // STA ESTKL,X
                     break
                 is $40 // ISEQ
                     //puts("ISEQ")
                     if not A_IS_TOSL
-                        *codeptr = $D0B5+(VX<<8) // LDA ESTKL,X
+                        *codeptr = $D0B5+(VX<<8)      // LDA ESTKL,X
                         codeptr  = codeptr + 2
                     fin
-                    codeptr=>0  = ($D0D5+$0100)+(VX<<8) // CMP ESTKL+1,X
-                    //^codeptr = $D5;      codeptr++ // CMP zp,X
-                    //^codeptr = $D0+1+VX; codeptr++ // ESTKL+1
-                    codeptr=>2  = $07D0 // BNE +7
-                    //^codeptr = $D0;      codeptr++ // BNE rel
-                    //^codeptr = $07;      codeptr++ // +7
-                    codeptr=>4  = $C0B5+(VX<<8) // LDA ESTKH,X
-                    //^codeptr = $B5;      codeptr++ // LDA zp,X
-                    //^codeptr = $C0+VX;   codeptr++ // ESTKH
-                    codeptr=>6  = ($C0D5+$0100)+(VX<<8) // CMP ESTKH+1
-                    //^codeptr = $D5;      codeptr++ // CMP zp,X
-                    //^codeptr = $C0+1+VX; codeptr++ // ESTKH+1
-                    codeptr=>8  = $01D0 // BNE +1
-                    //^codeptr = $D0;      codeptr++ // BNE rel
-                    //^codeptr = $01;      codeptr++ // +1
-                    codeptr=>10 = $9888 // DEY TYA                    
-                    //^codeptr = $88;      codeptr++ // DEY
-                    //^codeptr = $98;      codeptr++ // TYA
-                    codeptr=>12 = ($C094+$0100)+(VX<<8) // STY ESTKH+1,X
-                    //^codeptr = $94;      codeptr++ // STY zp,X
-                    //^codeptr = $C0+1+VX; codeptr++ // ESTKH+1
-                    codeptr=>14 = $00A0 // LDY #$00
-                    //^codeptr = $A0;      codeptr++ // LDY #imm
-                    //^codeptr = $00;      codeptr++ // $00
-                    VX++ // INX
-                    //^codeptr = $95;    codeptr++ // STA zp,X
-                    //^codeptr = $D0+VX; codeptr++ // ESTKL
+                    codeptr=>0  = $D0D5+$0100+(VX<<8) // CMP ESTKL+1,X
+                    codeptr=>2  = $07D0               // BNE +7
+                    codeptr=>4  = $C0B5+(VX<<8)       // LDA ESTKH,X
+                    codeptr=>6  = $C0D5+$0100+(VX<<8) // CMP ESTKH+1
+                    codeptr=>8  = $01D0               // BNE +1
+                    codeptr=>10 = $9888               // DEY; TYA                    
+                    codeptr=>12 = $C094+$0100+(VX<<8) // STY ESTKH+1,X
+                    codeptr=>14 = $00A0               // LDY #$00
+                    VX++                              // INX
                     codeptr     = codeptr + 16
-                    A_IS_TOSL   = TOSL_DIRTY
+                    A_IS_TOSL   = TOSL_DIRTY          // STA ESTKL,X
                     break
                 is $42 // ISNE
                     //puts("ISNE")
                     if not A_IS_TOSL
-                        *codeptr = $D0B5+(VX<<8) // LDA ESTKL,X
+                        *codeptr = $D0B5+(VX<<8)      // LDA ESTKL,X
                         codeptr  = codeptr + 2
                     fin
-                    codeptr=>0  = ($D0D5+$0100)+(VX<<8) // CMP ESTKL+1,X
-                    //^codeptr = $D5;      codeptr++ // CMP zp,X
-                    //^codeptr = $D0+1+VX; codeptr++ // ESTKL+1
-                    codeptr=>2  = $06D0 // BNE +6
-                    //^codeptr = $D0;      codeptr++ // BNE rel
-                    //^codeptr = $06;      codeptr++ // +6
-                    codeptr=>4  = $C0B5+(VX<<8) // LDA ESTKH,X
-                    //^codeptr = $B5;      codeptr++ // LDA zp,X
-                    //^codeptr = $C0+VX;   codeptr++ // ESTKH
-                    codeptr=>6  = ($C0D5+$0100)+(VX<<8) // CMP ESTKH+1
-                    //^codeptr = $D5;      codeptr++ // CMP zp,X
-                    //^codeptr = $C0+1+VX; codeptr++ // ESTKH+1
-                    codeptr=>8  = $01F0 // BEQ +1
-                    //^codeptr = $F0;      codeptr++ // BEQ rel
-                    //^codeptr = $01;      codeptr++ // +1                    
-                    codeptr=>10 = $9888 // DEY TYA                    
-                    //^codeptr = $88;      codeptr++ // DEY
-                    //^codeptr = $98;      codeptr++ // TYA
-                    codeptr=>12 = ($C094+$0100)+(VX<<8) // STY ESTKH+1,X
-                    //^codeptr = $94;      codeptr++ // STY zp,X
-                    //^codeptr = $C0+1+VX; codeptr++ // ESTKH+1
-                    codeptr=>14 = $00A0 // LDY #$00
-                    //^codeptr = $A0;      codeptr++ // LDY #imm
-                    //^codeptr = $00;      codeptr++ // $00
-                    VX++ // INX
-                    //^codeptr = $95;    codeptr++ // STA zp,X
-                    //^codeptr = $D0+VX; codeptr++ // ESTKL
+                    codeptr=>0  = $D0D5+$0100+(VX<<8) // CMP ESTKL+1,X
+                    codeptr=>2  = $06D0               // BNE +6
+                    codeptr=>4  = $C0B5+(VX<<8)       // LDA ESTKH,X
+                    codeptr=>6  = $C0D5+$0100+(VX<<8) // CMP ESTKH+1
+                    codeptr=>8  = $01F0               // BEQ +1
+                    codeptr=>10 = $9888               // DEY; TYA                    
+                    codeptr=>12 = $C094+$0100+(VX<<8) // STY ESTKH+1,X
+                    codeptr=>14 = $00A0               // LDY #$00
+                    VX++                              // INX
                     codeptr     = codeptr + 16
-                    A_IS_TOSL   = TOSL_DIRTY
+                    A_IS_TOSL   = TOSL_DIRTY          // STA ESTKL,X
                     break
                 is $44 // ISGT
                     //puts("ISGT")
                     if not A_IS_TOSL
-                        *codeptr = $D0B5+(VX<<8) // LDA ESTKL,X
+                        *codeptr = $D0B5+(VX<<8)      // LDA ESTKL,X
                         codeptr  = codeptr + 2
                     fin
-                    codeptr=>0  = ($D0D5+$0100)+(VX<<8) // CMP ESTKL+1,X
-                    //^codeptr = $D5;      codeptr++ // CMP zp,X
-                    //^codeptr = $D0+1+VX; codeptr++ // ESTKL+1
-                    codeptr=>2  = $C0B5+(VX<<8) // LDA ESTKH,X
-                    //^codeptr = $B5;      codeptr++ // LDA zp,X
-                    //^codeptr = $C0+VX;   codeptr++ // ESTKH
-                    codeptr=>4  = ($C0F5+$0100)+(VX<<8) // SBC ESTKH+1
-                    //^codeptr = $F5;      codeptr++ // SBC zp,X
-                    //^codeptr = $C0+1+VX; codeptr++ // ESTKH+1
-                    codeptr=>6  = $0250 // BVC +2
-                    //^codeptr = $50;      codeptr++ // BVC rel
-                    //^codeptr = $02;      codeptr++ // +2
-                    codeptr=>8  = $8049 // EOR #$80
-                    //^codeptr = $49;      codeptr++ // EOR #imm
-                    //^codeptr = $80;      codeptr++ // $80
-                    codeptr=>10 = $0110 // BPL +1
-                    //^codeptr = $10;      codeptr++ // BPL rel
-                    //^codeptr = $01;      codeptr++ // +1                    
-                    codeptr=>12 = $9888 // DEY TYA                    
-                    //^codeptr = $88;      codeptr++ // DEY
-                    //^codeptr = $98;      codeptr++ // TYA
-                    codeptr=>14 = ($C094+$0100)+(VX<<8) // STY ESTKH+1,X
-                    //^codeptr = $94;      codeptr++ // STY zp,X
-                    //^codeptr = $C0+1+VX; codeptr++ // ESTKH+1
-                    codeptr=>16 = $00A0 // LDY #$00
-                    //^codeptr = $A0;      codeptr++ // LDY #imm
-                    //^codeptr = $00;      codeptr++ // $00
-                    VX++ // INX
-                    //^codeptr = $95;    codeptr++ // STA zp,X
-                    //^codeptr = $D0+VX; codeptr++ // ESTKL
+                    codeptr=>0  = $D0D5+$0100+(VX<<8) // CMP ESTKL+1,X
+                    codeptr=>2  = $C0B5+(VX<<8)       // LDA ESTKH,X
+                    codeptr=>4  = $C0F5+$0100+(VX<<8) // SBC ESTKH+1
+                    codeptr=>6  = $0250               // BVC +2
+                    codeptr=>8  = $8049               // EOR #$80
+                    codeptr=>10 = $0110               // BPL +1
+                    codeptr=>12 = $9888               // DEY TYA                    
+                    codeptr=>14 = $C094+$0100+(VX<<8) // STY ESTKH+1,X
+                    codeptr=>16 = $00A0               // LDY #$00
+                    VX++                              // INX
                     codeptr     = codeptr + 18
-                    A_IS_TOSL   = TOSL_DIRTY
+                    A_IS_TOSL   = TOSL_DIRTY          // STA ESTKL,X
                     break
                 is $46
                     //puts("ISLT")
                     if A_IS_TOSL & TOSL_DIRTY
-                        *codeptr = $D095+(VX<<8) // STA ESTKL,X
+                        *codeptr = $D095+(VX<<8)      // STA ESTKL,X
                         codeptr  = codeptr + 2
                     fin
-                    codeptr=>0  = ($D0B5+$0100)+(VX<<8) // LDA ESTKL+1,X
-                    //^codeptr = $B5;      codeptr++ // LDA zp,X
-                    //^codeptr = $D0+1+VX; codeptr++ // ESTKL+1
-                    codeptr=>2  = $D0D5+(VX<<8) // CMP ESTKL,X
-                    //^codeptr = $D5;      codeptr++ // CMP zp,X
-                    //^codeptr = $D0+VX;   codeptr++ // ESTKL
-                    codeptr=>4  = ($C0B5+$0100)+(VX<<8) // LDA ESTKH+1,X
-                    //^codeptr = $B5;      codeptr++ // LDA zp,X
-                    //^codeptr = $C0+1+VX; codeptr++ // ESTKH+1
-                    codeptr=>6  = $C0F5+(VX<<8) // SBC ESTKH
-                    //^codeptr = $F5;      codeptr++ // SBC zp,X
-                    //^codeptr = $C0+VX;   codeptr++ // ESTKH
-                    codeptr=>8  = $0250 // BVC +2
-                    //^codeptr = $50;      codeptr++ // BVC rel
-                    //^codeptr = $02;      codeptr++ // +2
-                    codeptr=>10 = $8049 // EOR #$80
-                    //^codeptr = $49;      codeptr++ // EOR #imm
-                    //^codeptr = $80;      codeptr++ // $80
-                    codeptr=>12 = $0110 // BPL +1
-                    //^codeptr = $10;      codeptr++ // BPL rel
-                    //^codeptr = $01;      codeptr++ // +1                    
-                    codeptr=>14 = $9888 // DEY TYA                    
-                    //^codeptr = $88;      codeptr++ // DEY
-                    //^codeptr = $98;      codeptr++ // TYA
-                    codeptr=>16 = ($C094+$0100)+(VX<<8) // STY ESTKH+1,X
-                    //^codeptr = $94;      codeptr++ // STY zp,X
-                    //^codeptr = $C0+1+VX; codeptr++ // ESTKH+1
-                    codeptr=>18 = $00A0 // LDY #$00
-                    //^codeptr = $A0;      codeptr++ // LDY #imm
-                    //^codeptr = $00;      codeptr++ // $00
-                    VX++ // INX
-                    //^codeptr = $95;    codeptr++ // STA zp,X
-                    //^codeptr = $D0+VX; codeptr++ // ESTKL
+                    codeptr=>0  = $D0B5+$0100+(VX<<8) // LDA ESTKL+1,X
+                    codeptr=>2  = $D0D5+(VX<<8)       // CMP ESTKL,X
+                    codeptr=>4  = $C0B5+$0100+(VX<<8) // LDA ESTKH+1,X
+                    codeptr=>6  = $C0F5+(VX<<8)       // SBC ESTKH
+                    codeptr=>8  = $0250               // BVC +2
+                    codeptr=>10 = $8049               // EOR #$80
+                    codeptr=>12 = $0110               // BPL +1
+                    codeptr=>14 = $9888               // DEY; TYA                    
+                    codeptr=>16 = $C094+$0100+(VX<<8) // STY ESTKH+1,X
+                    codeptr=>18 = $00A0               // LDY #$00
+                    VX++                              // INX
                     codeptr     = codeptr + 20
-                    A_IS_TOSL   = TOSL_DIRTY
+                    A_IS_TOSL   = TOSL_DIRTY          // STA ESTKL,X
                     break
                 is $48
                     //puts("ISGE")
                     if A_IS_TOSL & TOSL_DIRTY
-                        *codeptr = $D095+(VX<<8) // STA ESTKL,X
+                        *codeptr = $D095+(VX<<8)      // STA ESTKL,X
                         codeptr  = codeptr + 2
                     fin
-                    codeptr=>0  = ($D0B5+$0100)+(VX<<8) // LDA ESTKL+1,X
-                    //^codeptr = $B5;      codeptr++ // LDA zp,X
-                    //^codeptr = $D0+1+VX; codeptr++ // ESTKL+1
-                    codeptr=>2  = $D0D5+(VX<<8) // CMP ESTKL,X
-                    //^codeptr = $D5;      codeptr++ // CMP zp,X
-                    //^codeptr = $D0+VX;   codeptr++ // ESTKL
-                    codeptr=>4  = ($C0B5+$0100)+(VX<<8) // LDA ESTKH+1,X
-                    //^codeptr = $B5;      codeptr++ // LDA zp,X
-                    //^codeptr = $C0+1+VX; codeptr++ // ESTKH+1
-                    codeptr=>6  = $C0F5+(VX<<8) // SBC ESTKH
-                    //^codeptr = $F5;      codeptr++ // SBC zp,X
-                    //^codeptr = $C0+VX;   codeptr++ // ESTKH
-                    codeptr=>8  = $0250 // BVC +2
-                    //^codeptr = $50;      codeptr++ // BVC rel
-                    //^codeptr = $02;      codeptr++ // +2
-                    codeptr=>10 = $8049 // EOR #$80
-                    //^codeptr = $49;      codeptr++ // EOR #imm
-                    //^codeptr = $80;      codeptr++ // $80
-                    codeptr=>12 = $0130 // BMI +1
-                    //^codeptr = $30;      codeptr++ // BMI rel
-                    //^codeptr = $01;      codeptr++ // +1                    
-                    codeptr=>14 = $9888 // DEY TYA                    
-                    //^codeptr = $88;      codeptr++ // DEY
-                    //^codeptr = $98;      codeptr++ // TYA
-                    codeptr=>16 = ($C094+$0100)+(VX<<8) // STY ESTKH+1,X
-                    //^codeptr = $94;      codeptr++ // STY zp,X
-                    //^codeptr = $C0+1+VX; codeptr++ // ESTKH+1
-                    codeptr=>18 = $00A0 // LDY #$00
-                    //^codeptr = $A0;      codeptr++ // LDY #imm
-                    //^codeptr = $00;      codeptr++ // $00
-                    VX++ // INX
-                    //^codeptr = $95;    codeptr++ // STA zp,X
-                    //^codeptr = $D0+VX; codeptr++ // ESTKL
+                    codeptr=>0  = $D0B5+$0100+(VX<<8) // LDA ESTKL+1,X
+                    codeptr=>2  = $D0D5+(VX<<8)       // CMP ESTKL,X
+                    codeptr=>4  = $C0B5+$0100+(VX<<8) // LDA ESTKH+1,X
+                    codeptr=>6  = $C0F5+(VX<<8)       // SBC ESTKH
+                    codeptr=>8  = $0250               // BVC +2
+                    codeptr=>10 = $8049               // EOR #$80
+                    codeptr=>12 = $0130               // BMI +1
+                    codeptr=>14 = $9888               // DEY; TYA                    
+                    codeptr=>16 = $C094+$0100+(VX<<8) // STY ESTKH+1,X
+                    codeptr=>18 = $00A0               // LDY #$00
+                    VX++                              // INX
                     codeptr     = codeptr + 20
-                    A_IS_TOSL   = TOSL_DIRTY
+                    A_IS_TOSL   = TOSL_DIRTY          // STA ESTKL,X
                     break
                 is $4A // ISLE
                     //puts("ISLE")
                     if not A_IS_TOSL
-                        *codeptr = $D0B5+(VX<<8) // LDA ESTKL,X
+                        *codeptr = $D0B5+(VX<<8)      // LDA ESTKL,X
                         codeptr  = codeptr + 2
                     fin
-                    codeptr=>0  = ($D0D5+$0100)+(VX<<8) // CMP ESTKL+1,X
-                    //^codeptr = $D5;      codeptr++ // CMP zp,X
-                    //^codeptr = $D0+1+VX; codeptr++ // ESTKL+1
-                    codeptr=>2  = $C0B5+(VX<<8) // LDA ESTKH,X
-                    //^codeptr = $B5;      codeptr++ // LDA zp,X
-                    //^codeptr = $C0+VX;   codeptr++ // ESTKH
-                    codeptr=>4  = ($C0F5+$0100)+(VX<<8) // SBC ESTKH+1
-                    //^codeptr = $F5;      codeptr++ // SBC zp,X
-                    //^codeptr = $C0+1+VX; codeptr++ // ESTKH+1
-                    codeptr=>6  = $0250 // BVC +2
-                    //^codeptr = $50;      codeptr++ // BVC rel
-                    //^codeptr = $02;      codeptr++ // +2
-                    codeptr=>8  = $8049 // EOR #$80
-                    //^codeptr = $49;      codeptr++ // EOR #imm
-                    //^codeptr = $80;      codeptr++ // $80
-                    codeptr=>10 = $0130 // BMI +1
-                    //^codeptr = $30;      codeptr++ // BMI rel
-                    //^codeptr = $01;      codeptr++ // +1                    
-                    codeptr=>12 = $9888 // DEY TYA                    
-                    //^codeptr = $88;      codeptr++ // DEY
-                    //^codeptr = $98;      codeptr++ // TYA
-                    codeptr=>14 = ($C094+$0100)+(VX<<8) // STY ESTKH+1,X
-                    //^codeptr = $94;      codeptr++ // STY zp,X
-                    //^codeptr = $C0+1+VX; codeptr++ // ESTKH+1
-                    codeptr=>16 = $00A0 // LDY #$00
-                    //^codeptr = $A0;      codeptr++ // LDY #imm
-                    //^codeptr = $00;      codeptr++ // $00
-                    VX++ // INX
-                    //^codeptr = $95;    codeptr++ // STA zp,X
-                    //^codeptr = $D0+VX; codeptr++ // ESTKL
+                    codeptr=>0  = $D0D5+$0100+(VX<<8) // CMP ESTKL+1,X
+                    codeptr=>2  = $C0B5+(VX<<8)       // LDA ESTKH,X
+                    codeptr=>4  = $C0F5+$0100+(VX<<8) // SBC ESTKH+1
+                    codeptr=>6  = $0250               // BVC +2
+                    codeptr=>8  = $8049               // EOR #$80
+                    codeptr=>10 = $0130               // BMI +1
+                    codeptr=>12 = $9888               // DEY; TYA                    
+                    codeptr=>14 = $C094+$0100+(VX<<8) // STY ESTKH+1,X
+                    codeptr=>16 = $00A0               // LDY #$00
+                    VX++                              // INX
                     codeptr     = codeptr + 18
-                    A_IS_TOSL   = TOSL_DIRTY
+                    A_IS_TOSL   = TOSL_DIRTY          // STA ESTKL,X
                     break
                 is $4C // BRFLS
                     i++
                     dest = i + *(bytecode+i)
                     i++
                     //puts("BRFLS "); puti(dest)
-                    codeptr, VX = resolveX(codeptr, VX + 1) //VX++ // INX
+                    codeptr, VX = resolveX(codeptr, VX + 1) // INX
                     if not A_IS_TOSL
-                        *codeptr = ($D0B5-$0100)+(VX<<8) // LDA ESTKL-1,X
+                        *codeptr = $D0B5-$0100//+(VX<<8)    // LDA ESTKL-1,X
                         codeptr  = codeptr + 2
                     fin
-                    codeptr=>0  = ($C015-$0100)+(VX<<8) // ORA ESTKH-1,X
-                    //^codeptr = $15;      codeptr++ // ORA zp,X
-                    //^codeptr = $C0-1+VX; codeptr++ // ESTKH-1
-                    codeptr=>2  = $03D0 // BNE +3
-                    //^codeptr = $D0;      codeptr++ // BNE rel
-                    //^codeptr = $03;      codeptr++ // +3
-                    codeptr->4 = $4C // JMP abs
-                    //^codeptr = $4C;      codeptr++ // JMP abs
+                    codeptr=>0  = $C015-$0100//+(VX<<8)     // ORA ESTKH-1,X
+                    codeptr=>2  = $03D0                     // BNE +3
+                    codeptr->4 = $4C                        // JMP abs
                     codeptr=>5 = addrxlate=>[dest]
-                    //*codeptr = addrxlate=>[dest]
                     if not (codeptr->6 & $80) // Unresolved address list
-                    //if not (*codeptr & $8000) // Unresolved address list
                         addrxlate=>[dest] = codeptr + 5 - *jitcodeptr
-                        //addrxlate=>[dest] = codeptr - *jitcodeptr
                     fin
                     codeptr   = codeptr + 7
-                    //codeptr  = codeptr + 2
                     A_IS_TOSL = FALSE
                     break
                 is $4E // BRTRU
@@ -897,28 +639,19 @@ def compiler(defptr)#0
                     dest = i + *(bytecode+i)
                     i++
                     //puts("BRTRU "); puti(dest)
-                    codeptr, VX = resolveX(codeptr, VX + 1) //VX++ // INX
+                    codeptr, VX = resolveX(codeptr, VX + 1) // INX
                     if not A_IS_TOSL
-                        *codeptr = ($D0B5-$0100)+(VX<<8) // LDA ESTKL-1,X
+                        *codeptr = $D0B5-$0100//+(VX<<8)    // LDA ESTKL-1,X
                         codeptr  = codeptr + 2
                     fin
-                    codeptr=>0  = ($C015-$0100)+(VX<<8) // ORA ESTKH-1,X
-                    //^codeptr = $15;      codeptr++ // ORA zp,X
-                    //^codeptr = $C0-1+VX; codeptr++ // ESTKH-1
-                    codeptr=>2  = $03F0 // BEQ +3
-                    //^codeptr = $F0;      codeptr++ // BEQ rel
-                    //^codeptr = $03;      codeptr++ // +3
-                    codeptr->4 = $4C // JMP abs
-                    //^codeptr = $4C;      codeptr++ // JMP abs
+                    codeptr=>0 = $C015-$0100//+(VX<<8)      // ORA ESTKH-1,X
+                    codeptr=>2 = $03F0                      // BEQ +3
+                    codeptr->4 = $4C                        // JMP abs
                     codeptr=>5 = addrxlate=>[dest]
-                    //*codeptr = addrxlate=>[dest]
                     if not (codeptr->6 & $80) // Unresolved address list
-                    //if not (*codeptr & $8000) // Unresolved address list
                         addrxlate=>[dest] = codeptr + 5 - *jitcodeptr
-                        //addrxlate=>[dest] = codeptr - *jitcodeptr
                     fin
                     codeptr   = codeptr + 7
-                    //codeptr  = codeptr + 2
                     A_IS_TOSL = FALSE
                     break
                 is $50 // BRNCH
@@ -928,20 +661,15 @@ def compiler(defptr)#0
                     //puts("BRNCH "); puti(dest)
                     codeptr, VX = resolveX(codeptr, VX)
                     if A_IS_TOSL & TOSL_DIRTY
-                        *codeptr = $D095+(VX<<8) // STA ESTKL,X
+                        *codeptr = $D095//+(VX<<8) // STA ESTKL,X
                         codeptr  = codeptr + 2
                     fin
-                    codeptr->0 = $4C // JMP abs
-                    //^codeptr = $4C; codeptr++ // JMP abs
+                    codeptr->0 = $4C               // JMP abs
                     codeptr=>1 = addrxlate=>[dest]
-                    //*codeptr = addrxlate=>[dest]
                     if not (codeptr->2 & $80) // Unresolved address list
-                    //if not (*codeptr & $8000) // Unresolved address list
                         addrxlate=>[dest] = codeptr + 1 - *jitcodeptr
-                        //addrxlate=>[dest] = codeptr - *jitcodeptr
                     fin
                     codeptr   = codeptr + 3
-                    //codeptr = codeptr + 2
                     A_IS_TOSL = FALSE
                     break
                 is $52 // SEL
@@ -950,69 +678,45 @@ def compiler(defptr)#0
                     i++
                     //puts("SEL "); puti(case); putln
                     j = ^(bytecode+case)
-                    dest = codeptr + 8 + case * 11)
+                    dest = codeptr + 9 + case * 11)
                     if isule(dest, codemax)
                         ^(bytecode+case) = $FE // Flag as NOP
                         case++
                         if not A_IS_TOSL
-                            *codeptr = $D0B5+(VX<<8) // LDA ESTKL,X
+                            *codeptr = $D0B5+(VX<<8)                // LDA ESTKL,X
                             codeptr  = codeptr + 2
                         fin
-                        codeptr=>0 = $C0B4+(VX<<8) // LDY ESTKH,X
-                        //^codeptr = $B4;    codeptr++ // LDY zp,X
-                        //^codeptr = $C0+VX; codeptr++ // ESTKH
-                        codeptr    = codeptr + 2
-                        codeptr, VX = resolveX(codeptr, VX + 1) // INX
+                        codeptr=>0 = $C0B4+(VX<<8)                  // LDY ESTKH,X
+                        codeptr, VX = resolveX(codeptr + 2, VX + 1) // INX
                         repeat
-                            //puts("    $"); puth(*(bytecode+case))
-                            codeptr=>0  = $C9+(^(bytecode+case)<<8) // CMP #imm
-                            //^codeptr = $C9; codeptr++ // CMP #imm
-                            //^codeptr = ^(bytecode+case); codeptr++
-                            codeptr=>2  = $09D0 // BNE +9
-                            //^codeptr = $D0; codeptr++ // BNE rel
-                            //^codeptr = $09; codeptr++ // +9
-                            codeptr=>4  = $C0+(^(bytecode+case+1)<<8) // CPY #imm
-                            //^codeptr = $C0; codeptr++ // CPY #imm
-                            //^codeptr = ^(bytecode+case+1); codeptr++
-                            codeptr=>6  = $05D0 // BNE +5
-                            //^codeptr = $D0; codeptr++ // BNE rel
-                            //^codeptr = $05; codeptr++ // +5
+                            dest = case + *(bytecode+case)
+                            //puts("    $"); puth(dest)
+                            codeptr=>0  = $C9+(dest<<8)             // CMP #imm
+                            codeptr=>2  = $09D0                     // BNE +9
+                            codeptr=>4  = $C0+(dest&$FF00)          // CPY #imm
+                            codeptr=>6  = $05D0                     // BNE +5
                             *(bytecode+case) = $FEFE
                             case = case + 2
                             dest = case + *(bytecode+case)
                             //puts("-->"); puti(dest); putln
-                            codeptr=>8  = $00A0 // LDY #$00
-                            //^codeptr = $A0; codeptr++ // LDY #imm
-                            //^codeptr = $00; codeptr++ // $00
-                            codeptr->10 = $4C // JMP abs
-                            //^codeptr = $4C; codeptr++ // JMP abs
+                            codeptr=>8  = $00A0                     // LDY #$00
+                            codeptr->10 = $4C                       // JMP abs
                             codeptr=>11 = addrxlate=>[dest]
-                            //*codeptr = addrxlate=>[dest]
                             if not (codeptr->12 & $80) // Unresolved address list
-                            //if not (*codeptr & $8000) // Unresolved address list
                                 addrxlate=>[dest] = codeptr + 11 - *jitcodeptr
-                                //addrxlate=>[dest] = codeptr - *jitcodeptr
                             fin
                             codeptr          = codeptr + 13
-                            //codeptr          = codeptr + 2                            
                             *(bytecode+case) = $FEFE
                             case = case + 2
                             j--
                         until not j
-                        codeptr=>0 = $00A0 // LDY #$00
-                        //^codeptr = $A0; codeptr++ // LDY #imm
-                        //^codeptr = $00; codeptr++ // $00
-                        codeptr->1 = $4C // JMP abs
-                        //^codeptr = $4C; codeptr++ // JMP abs
+                        codeptr=>0 = $00A0                          // LDY #$00
+                        codeptr->1 = $4C                            // JMP abs
                         codeptr=>2 = addrxlate=>[case]
-                        //*codeptr = addrxlate=>[case]
                         if not (codeptr->3 & $80) // Unresolved address list
-                        //if not (*codeptr & $8000) // Unresolved address list
-                            addrxlate=>[case] = codeptr + 2- *jitcodeptr
-                            //addrxlate=>[case] = codeptr - *jitcodeptr
+                            addrxlate=>[case] = codeptr + 2 - *jitcodeptr
                         fin
                         codeptr = codeptr + 4
-                        //codeptr = codeptr + 2
                     else
                         codeptr = dest
                     fin
@@ -1024,18 +728,14 @@ def compiler(defptr)#0
                     //
                     // Call address
                     //
+                    codeptr, VX = resolveX(codeptr, VX)
                     if A_IS_TOSL & TOSL_DIRTY
-                        *codeptr = $D095+(VX<<8) // STA ESTKL,X
+                        *codeptr = $D095//+(VX<<8) // STA ESTKL,X
                         codeptr  = codeptr + 2
                     fin
-                    codeptr, VX = resolveX(codeptr, VX)
-                    codeptr->0 = $20 // JSR abs
-                    //^codeptr = $20; codeptr++ // JSR abs
+                    codeptr->0 = $20               // JSR abs
                     codeptr=>1 = *(bytecode+i)
-                    //*codeptr = *(bytecode+i); codeptr = codeptr + 2
-                    codeptr=>3 = $00A0 // LDY #$00
-                    //^codeptr = $A0; codeptr++ // LDY #imm
-                    //^codeptr = $00; codeptr++ // $00
+                    codeptr=>3 = $00A0             // LDY #$00
                     codeptr    = codeptr + 5
                     A_IS_TOSL  = FALSE
                     i++
@@ -1046,32 +746,19 @@ def compiler(defptr)#0
                     // Pull address off stack
                     //
                     if not A_IS_TOSL
-                        *codeptr = $D0B5+(VX<<8) // LDA ESTKL,X
+                        *codeptr = $D0B5+(VX<<8)                // LDA ESTKL,X
                         codeptr  = codeptr + 2
                     fin
-                    codeptr=>0 = $E785 // STA $E7:TMPL
-                    //^codeptr = $85;    codeptr++ // STA zp
-                    //^codeptr = $E7;    codeptr++ // $E7:TMPL                           
-                    codeptr=>2 = $C0B5+(VX<<8) // LDA ESTKH,X
-                    //^codeptr = $B5;    codeptr++ // LDA zp,X
-                    //^codeptr = $C0+VX; codeptr++ // ESTKH
-                    codeptr=>4 = $E885 // STA $E8:TMPH
-                    //^codeptr = $85;    codeptr++ // STA zp
-                    //^codeptr = $E8;    codeptr++ // $E8:TMPH                           
-                    //^codeptr = $E8;    codeptr++ // INX
-                    codeptr    = codeptr + 6
+                    codeptr=>0 = $E785                          // STA $E7:TMPL
+                    codeptr=>2 = $C0B5+(VX<<8)                  // LDA ESTKH,X
+                    codeptr=>4 = $E885                          // STA $E8:TMPH
+                    codeptr, VX = resolveX(codeptr + 6, VX + 1) // INX
                     //
                     // Call through TMP
                     //
-                    codeptr, VX = resolveX(codeptr, VX + 1) // INX
-                    codeptr->0 = $20 // JSR abs
-                    //^codeptr = $20; codeptr++ // JSR abs
-                    codeptr=>1 = $00E6 // JMPTMP
-                    //^codeptr = $E6; codeptr++ // <JMPTMP
-                    //^codeptr = $00; codeptr++ // >JMPTMP
-                    codeptr=>3 = $00A0 // LDY #$00
-                    //^codeptr = $A0; codeptr++ // LDY #imm
-                    //^codeptr = $00; codeptr++ // $00
+                    codeptr->0 = $20                            // JSR abs
+                    codeptr=>1 = $00E6                          // $E6:JMPTMP
+                    codeptr=>3 = $00A0                          // LDY #$00
                     codeptr    = codeptr + 5
                     A_IS_TOSL  = FALSE
                    break
@@ -1081,178 +768,120 @@ def compiler(defptr)#0
                     //
                     // Call into VM
                     //
+                    codeptr, VX = resolveX(codeptr, VX)
                     if A_IS_TOSL & TOSL_DIRTY
-                        *codeptr = $D095+(VX<<8) // STA ESTKL,X
+                        *codeptr = $D095//+(VX<<8)        // STA ESTKL,X
                         codeptr  = codeptr + 2
                     fin
-                    codeptr, VX = resolveX(codeptr, VX)
-                    codeptr->0 = $20 // JSR abs
-                    //^codeptr = $20;  codeptr++ // JSR INTERP
-                    codeptr=>1 = $03D0 // INTERP
-                    //*codeptr = $3D0; codeptr = codeptr + 2
+                    codeptr->0 = $20                      // JSR abs
+                    codeptr=>1 = $03D0                    // INTERP
                     codeptr=>3 = $5A + (^(bytecode+i)<<8) // LEAVE CODE AND OPERAND
-                    //^codeptr = $5A;  codeptr++ // LEAVE CODE
-                    //^codeptr = ^(bytecode+i); codeptr++ // LEAVE OPERAND
                     codeptr    = codeptr + 5
                     A_IS_TOSL  = FALSE
                     break
                 is $5C // RET
                     //puts("RET")
+                    codeptr, VX = resolveX(codeptr, VX)
                     if A_IS_TOSL & TOSL_DIRTY
-                        *codeptr = $D095+(VX<<8) // STA ESTKL,X
+                        *codeptr = $D095//+(VX<<8) // STA ESTKL,X
                         codeptr  = codeptr + 2
                     fin
-                    codeptr, VX = resolveX(codeptr, VX)
-                    ^codeptr = $60 //RTS
+                    ^codeptr  = $60                 // RTS
                     codeptr++
-                    A_IS_TOSL  = FALSE
+                    A_IS_TOSL = FALSE
                    break
                 is $5E // CFFB
                     i++
                     //puts("CFFB $FF"); putb(^(bytecode+i))
                     if A_IS_TOSL & TOSL_DIRTY
-                        *codeptr = $D095+(VX<<8) // STA ESTKL,X
+                        *codeptr = $D095+(VX<<8)        // STA ESTKL,X
                         codeptr  = codeptr + 2
                     fin
-                    VX-- // DEX
-                    codeptr=>0 = $FFA9 // LDA #$FF
-                    //^codeptr = $A9;    codeptr++ // LDA #imm
-                    //^codeptr = $FF;    codeptr++ // $FF
-                    codeptr=>2 = $C095+(VX<<8) // STA ESTKH,X
-                    //^codeptr = $95;    codeptr++ // STA zp,X
-                    //^codeptr = $C0+VX; codeptr++ // ESTKH
+                    VX--                                // DEX
+                    codeptr=>0 = $FFA9                  // LDA #$FF
+                    codeptr=>2 = $C095+(VX<<8)          // STA ESTKH,X
                     codeptr=>4 = $A9+(^(bytecode+i)<<8) // LDA #imm
-                    //^codeptr = $A9;    codeptr++ // LDA #imm
-                    //^codeptr = ^(bytecode+i); codeptr++
-                    //^codeptr = $95;    codeptr++ // STA zp,X
-                    //^codeptr = $D0+VX; codeptr++ // ESTKL
                     codeptr    = codeptr + 6
-                    A_IS_TOSL  = TOSL_DIRTY
+                    A_IS_TOSL  = TOSL_DIRTY             // STA ESTKL,X
                     break
                 is $60 // LB
                     //puts("LB")
                     if not A_IS_TOSL
-                        *codeptr = $D0B5+(VX<<8) // LDA ESTKL,X
+                        *codeptr = $D0B5+(VX<<8)     // LDA ESTKL,X
                         codeptr  = codeptr + 2
                     fin
-                    codeptr=>0 = ($C095-$0100)+(VX<<8) // STA ESTKH-1,X
-                    //^codeptr = $95;      codeptr++ // STA zp,X
-                    //^codeptr = $C0-1+VX; codeptr++ // ESTKH-1
-                    codeptr=>2 = ($C0A1-$0100)+(VX<<8) // LDA (ESTKH-1,X)
-                    //^codeptr = $A1;      codeptr++ // LDA (zp,X)
-                    //^codeptr = $C0-1+VX; codeptr++ // ESTKH-1
-                    codeptr=>4 = $C094+(VX<<8) // STY ESTKH,X
-                    //^codeptr = $94;      codeptr++ // STY zp,X
-                    //^codeptr = $C0+VX;   codeptr++ // ESTKH
-                    //^codeptr = $95;      codeptr++ // STA zp,X
-                    //^codeptr = $D0+VX;   codeptr++ // ESTKL                    
+                    codeptr=>0 = $C095-$0100+(VX<<8) // STA ESTKH-1,X
+                    codeptr=>2 = $C0A1-$0100+(VX<<8) // LDA (ESTKH-1,X)
+                    codeptr=>4 = $C094+(VX<<8)       // STY ESTKH,X
                     codeptr    = codeptr + 6
-                    A_IS_TOSL  = TOSL_DIRTY
+                    A_IS_TOSL  = TOSL_DIRTY          // STA ESTKL,X
                     break
                 is $62 // LW
                     //puts("LW")
                     if not A_IS_TOSL
-                        *codeptr = $D0B5+(VX<<8) // LDA ESTKL,X
+                        *codeptr = $D0B5+(VX<<8)      // LDA ESTKL,X
                         codeptr  = codeptr + 2
                     fin
-                    codeptr=>0  = ($C095-$0100)+(VX<<8) // STA ESTKH-1,X
-                    //^codeptr = $95;      codeptr++ // STA zp,X
-                    //^codeptr = $C0-1+VX; codeptr++ // ESTKH-1
-                    codeptr=>2  = ($C0A1-$0100)+(VX<<8) // LDA (ESTKH-1,X)
-                    //^codeptr = $A1;      codeptr++ // LDA (zp,X)
-                    //^codeptr = $C0-1+VX; codeptr++ // ESTKH-1
-                    codeptr=>4  = $D095+(VX<<8) // STA ESTKL,X
-                    //^codeptr = $95;      codeptr++ // STA zp,X
-                    //^codeptr = $D0+VX;   codeptr++ // ESTKL                    
-                    codeptr=>6  = ($C0F6-$0100)+(VX<<8) // INC ESTKH-1,X
-                    //^codeptr = $F6;      codeptr++ // INC zp,X
-                    //^codeptr = $C0-1+VX; codeptr++ // ESTKH-1
-                    codeptr=>8  = $02D0 // BNE +2
-                    //^codeptr = $D0;      codeptr++ // BNE rel
-                    //^codeptr = $02;      codeptr++ // +2                    
-                    codeptr=>10 = $C0F6+(VX<<8) // INC ESTKH,X
-                    //^codeptr = $F6;      codeptr++ // INC zp,X
-                    //^codeptr = $C0+VX;   codeptr++ // ESTKH
-                    codeptr=>12 = ($C0A1-$0100)+(VX<<8) // LDA (ESTKH-1,X)
-                    //^codeptr = $A1;      codeptr++ // LDA (zp,X)
-                    //^codeptr = $C0-1+VX; codeptr++ // ESTKH-1
-                    codeptr=>14 = $C095+(VX<<8) // STA ESTKH,X
-                    //^codeptr = $95;      codeptr++ // STA zp,X
-                    //^codeptr = $C0+VX;   codeptr++ // ESTKH
+                    codeptr=>0  = $C095-$0100+(VX<<8) // STA ESTKH-1,X
+                    codeptr=>2  = $C0A1-$0100+(VX<<8) // LDA (ESTKH-1,X)
+                    codeptr=>4  = $D095+(VX<<8)       // STA ESTKL,X
+                    codeptr=>6  = $C0F6-$0100+(VX<<8) // INC ESTKH-1,X
+                    codeptr=>8  = $02D0               // BNE +2
+                    codeptr=>10 = $C0F6+(VX<<8)       // INC ESTKH,X
+                    codeptr=>12 = $C0A1-$0100+(VX<<8) // LDA (ESTKH-1,X)
+                    codeptr=>14 = $C095+(VX<<8)       // STA ESTKH,X
                     codeptr     = codeptr + 16
                     A_IS_TOSL   = FALSE
                     break
                 is $64 // LLB
                     i++
-                    //puts("LLB "); puti(^(bytecode+i))
+                    j = ^(bytecode+i)
+                    //puts("LLB "); puti(j)
                     if A_IS_TOSL & TOSL_DIRTY
-                        *codeptr = $D095+(VX<<8) // STA ESTKL,X
+                        *codeptr = $D095+(VX<<8)          // STA ESTKL,X
                         codeptr  = codeptr + 2
                     fin
-                    VX-- // DEX
-                    if ^(bytecode+i) <> 0
-                        *codeptr = $A0+(^(bytecode+i)<<8) // LDY #imm
+                    VX--                                  // DEX
+                    if j
+                        *codeptr = $A0+(j<<8) // LDY #imm
                         codeptr  = codeptr + 2
-                        //^codeptr = $A0;    codeptr++ // LDY #imm
-                        //^codeptr = ^(bytecode+i); codeptr++
                     fin
-                    *codeptr = $E0B1 // LDA (IFP),Y
+                    *codeptr = $E0B1                      // LDA (IFP),Y
                     codeptr  = codeptr + 2
-                    //^codeptr = $B1;    codeptr++ // LDA (zp),Y
-                    //^codeptr = $E0;    codeptr++ // IFP
-                    if ^(bytecode+i) <> 0
-                        *codeptr = $00A0 // LDY #$00
+                    if j
+                        *codeptr = $00A0                  // LDY #$00
                         codeptr  = codeptr + 2
-                        //^codeptr = $A0;    codeptr++ // LDY #imm
-                        //^codeptr = $00;    codeptr++ // $00
                     fin
-                    *codeptr = $C094+(VX<<8) // STY ESTKH,X
-                    //^codeptr = $94;    codeptr++ // STY zp,X
-                    //^codeptr = $C0+VX; codeptr++ // ESTKH
-                    //^codeptr = $95;    codeptr++ // STA zp,X
-                    //^codeptr = $D0+VX; codeptr++ // ESTKL
+                    *codeptr  = $C094+(VX<<8)             // STY ESTKH,X
                     codeptr   = codeptr + 2
-                    A_IS_TOSL = TOSL_DIRTY
+                    A_IS_TOSL = TOSL_DIRTY                // STA ESTKL,X
                     break
                 is $66 // LLW
                     i++
-                    //puts("LLW "); puti(^(bytecode+i))
+                    j = ^(bytecode+i)
+                    //puts("LLW "); puti(j)
                     if A_IS_TOSL & TOSL_DIRTY
-                        *codeptr = $D095+(VX<<8) // STA ESTKL,X
+                        *codeptr = $D095+(VX<<8)  // STA ESTKL,X
                         codeptr  = codeptr + 2
                     fin
-                    VX-- // DEX
-                    if ^(bytecode+i) <> 0
-                        *codeptr = $A0+(^(bytecode+i)<<8) // LDY #imm
+                    VX--                          // DEX
+                    if j
+                        *codeptr = $A0+((j+1)<<8) // LDY #imm
                         codeptr  = codeptr + 2
-                        //^codeptr = $A0;    codeptr++ // LDY #imm
-                        //^codeptr = ^(bytecode+i); codeptr++
-                    fin
-                    codeptr=>0 = $E0B1 // LDA (IFP),Y
-                    //^codeptr = $B1;    codeptr++ // LDA (zp),Y
-                    //^codeptr = $E0;    codeptr++ // IFP
-                    codeptr=>2 = $D095+(VX<<8) // STA ESTKL,X
-                    //^codeptr = $95;    codeptr++ // STA zp,X
-                    //^codeptr = $D0+VX; codeptr++ // ESTKL
-                    codeptr->4 = $C8 // INY
-                    //^codeptr = $C8;    codeptr++ // INY
-                    codeptr=>5 = $E0B1 // LDA (IFP),Y
-                    //^codeptr = $B1;    codeptr++ // LDA (zp),Y
-                    //^codeptr = $E0;    codeptr++ // IFP
-                    codeptr=>7 = $C095+(VX<<8) // STA ESTKH,X
-                    //^codeptr = $95;    codeptr++ // STA zp,X
-                    //^codeptr = $C0+VX; codeptr++ // ESTKH
-                    if ^(bytecode+i) <> 0
-                        codeptr=>9 = $00A0 // LDY #$00
-                        codeptr    = codeptr + 11
-                        //^codeptr = $A0;    codeptr++ // LDY #imm
-                        //^codeptr = $00;    codeptr++ // $00
                     else
-                        codeptr->9 = $88 // DEY
-                        codeptr    = codeptr + 10
-                        //^codeptr = $88;    codeptr++ // DEY
+                        ^codeptr = $C8; codeptr++ // INY
                     fin
-                    A_IS_TOSL = FALSE
+                    codeptr=>0 = $E0B1            // LDA (IFP),Y
+                    codeptr=>2 = $C095+(VX<<8)    // STA ESTKH,X
+                    codeptr->4 = $88              // DEY
+                    codeptr=>5 = $E0B1            // LDA (IFP),Y
+                    codeptr    = codeptr + 7
+                    if j
+                        *codeptr = $00A0          // LDY #$00
+                        codeptr  = codeptr + 2
+                    else
+                    fin
+                    A_IS_TOSL = TOSL_DIRTY        // STA ESTKL,X
                     break
                 is $68 // LAB
                     i++
@@ -1261,227 +890,155 @@ def compiler(defptr)#0
                         *codeptr = $D095+(VX<<8) // STA ESTKL,X
                         codeptr  = codeptr + 2
                     fin
-                    VX-- // DEX
-                    codeptr->0 = $AD // LDA abs
-                    //^codeptr = $AD;    codeptr++ // LDA abs
+                    VX--                         // DEX
+                    codeptr->0 = $AD             // LDA abs
                     codeptr=>1 = *(bytecode+i)
-                    //*codeptr = *(bytecode+i); codeptr = codeptr + 2
-                    codeptr=>3 = $C094+(VX<<8) // STY ESTKH,X
-                    //^codeptr = $94;    codeptr++ // STY zp,X
-                    //^codeptr = $C0+VX; codeptr++ // ESTKH
-                    //^codeptr = $95;    codeptr++ // STA zp,X
-                    //^codeptr = $D0+VX; codeptr++ // ESTKL
-                    codeptr   = codeptr + 5
-                    A_IS_TOSL = TOSL_DIRTY
+                    codeptr=>3 = $C094+(VX<<8)   // STY ESTKH,X
+                    codeptr    = codeptr + 5
+                    A_IS_TOSL  = TOSL_DIRTY      // STA ESTKL,X
                     i++
                     break
                 is $6A // LAW
                     i++
-                    //puts("LAW $"); puth(*(bytecode+i))
+                    dest = *(bytecode+i)
+                    //puts("LAW $"); puth(dest)
                     if A_IS_TOSL & TOSL_DIRTY
                         *codeptr = $D095+(VX<<8) // STA ESTKL,X
                         codeptr  = codeptr + 2
                     fin
-                    VX-- // DEX
-                    codeptr->0 = $AD // LDA abs
-                    //^codeptr = $AD;    codeptr++ // LDA abs
-                    codeptr=>1 = *(bytecode+i)+1
-                    //*codeptr = *(bytecode+i)+1; codeptr = codeptr + 2
-                    codeptr=>3 = $C095+(VX<<8) // STA ESTKH,X
-                    //^codeptr = $95;    codeptr++ // STA zp,X
-                    //^codeptr = $C0+VX; codeptr++ // ESTKH
-                    codeptr->5 = $AD // LDA abs
-                    //^codeptr = $AD;    codeptr++ // LDA abs
-                    codeptr=>6 = *(bytecode+i)
-                    //*codeptr = *(bytecode+i);   codeptr = codeptr + 2
-                    //^codeptr = $95;    codeptr++ // STA zp,X
-                    //^codeptr = $D0+VX; codeptr++ // ESTKL
-                    codeptr   = codeptr + 8
-                    A_IS_TOSL = TOSL_DIRTY
+                    VX--                         // DEX
+                    codeptr->0 = $AD             // LDA abs
+                    codeptr=>1 = dest+1
+                    codeptr=>3 = $C095+(VX<<8)   // STA ESTKH,X
+                    codeptr->5 = $AD             // LDA abs
+                    codeptr=>6 = dest
+                    codeptr    = codeptr + 8
+                    A_IS_TOSL  = TOSL_DIRTY      // STA ESTKL,X
                     i++
                     break
                 is $6C // DLB
                     i++
-                    //puts("DLB "); puti(^(bytecode+i))
+                    j = ^(bytecode+i)
+                    //puts("DLB "); puti(j)
                     if not A_IS_TOSL
                         *codeptr = $D0B5+(VX<<8) // LDA ESTKL,X
                         codeptr  = codeptr + 2
                         A_IS_TOSL  = TOSL_CLEAN
                     fin
-                    if ^(bytecode+i) <> 0
-                        *codeptr = $A0+(^(bytecode+i)<<8) // LDY #imm
+                    if j
+                        *codeptr = $A0+(j<<8)    // LDY #imm
                         codeptr  = codeptr + 2
-                        //^codeptr = $A0;    codeptr++ // LDY #imm
-                        //^codeptr = ^(bytecode+i); codeptr++
                     fin
-                    *codeptr = $E091 // STA (IFP),Y
+                    *codeptr = $E091             // STA (IFP),Y
                     codeptr  = codeptr + 2
-                    //^codeptr = $91;    codeptr++ // STA (zp),Y
-                    //^codeptr = $E0;    codeptr++ // IFP
-                    if ^(bytecode+i) <> 0
-                        *codeptr = $00A0 // LDY #$00
+                    if j
+                        *codeptr = $00A0         // LDY #$00
                         codeptr  = codeptr + 2
-                        //^codeptr = $A0;    codeptr++ // LDY #imm
-                        //^codeptr = $00;    codeptr++ // $00
                     fin
                     break
                 is $6E // DLW
                     i++
-                    //puts("DLW "); puti(^(bytecode+i))
+                    j = ^(bytecode+i)
+                    //puts("DLW "); puti(j)
                     if A_IS_TOSL & TOSL_DIRTY
-                        *codeptr = $D095+(VX<<8) // STA ESTKL,X
+                        *codeptr = $D095+(VX<<8)  // STA ESTKL,X
                         codeptr  = codeptr + 2
                     fin
-                    if ^(bytecode+i) <> 0
-                        *codeptr = $A0+((^(bytecode+i)+1)<<8) // LDY #imm
+                    if j 
+                        *codeptr = $A0+((j+1)<<8) // LDY #imm
                         codeptr  = codeptr + 2
-                        //^codeptr = $A0;    codeptr++ // LDY #imm
-                        //^codeptr = ^(bytecode+i)+1; codeptr++
                     else
-                        ^codeptr = $C8;    codeptr++ // INY
+                        ^codeptr = $C8; codeptr++ // INY
                     fin
-                    codeptr=>0 = $C0B5+(VX<<8) // LDA ESTKH,X
-                    //^codeptr = $B5;    codeptr++ // LDA zp,X
-                    //^codeptr = $C0+VX; codeptr++ // ESTKH
-                    codeptr=>2 = $E091 // STA (IFP),Y
-                    //^codeptr = $91;    codeptr++ // STA (zp),Y
-                    //^codeptr = $E0;    codeptr++ // IFP
-                    codeptr->4 = $88 // DEY
-                    //^codeptr = $88;    codeptr++ // DEY
-                    codeptr=>5 = $D0B5+(VX<<8) // LDA ESTKL,X
-                    //^codeptr = $B5;    codeptr++ // LDA zp,X
-                    //^codeptr = $D0+VX; codeptr++ // ESTKL
-                    codeptr=>7 = $E091 // STA (IFP),Y
-                    //^codeptr = $91;    codeptr++ // STA (zp),Y
-                    //^codeptr = $E0;    codeptr++ // IFP
+                    codeptr=>0 = $C0B5+(VX<<8)    // LDA ESTKH,X
+                    codeptr=>2 = $E091            // STA (IFP),Y
+                    codeptr->4 = $88              // DEY
+                    codeptr=>5 = $D0B5+(VX<<8)    // LDA ESTKL,X
+                    codeptr=>7 = $E091            // STA (IFP),Y
                     codeptr    = codeptr + 9
-                    if ^(bytecode+i) <> 0                    
-                        *codeptr = $00A0 // LDY #$00
+                    if j                   
+                        *codeptr = $00A0          // LDY #$00
                         codeptr  = codeptr + 2
-                        //^codeptr = $A0;    codeptr++ // LDY #imm
-                        //^codeptr = $00;    codeptr++ // $00
                     fin
-                    A_IS_TOSL  = TOSL_CLEAN
+                    A_IS_TOSL = TOSL_CLEAN
                     break
                 is $70 // SB
                     //puts("SB")
                     if not A_IS_TOSL
-                        *codeptr = $D0B5+(VX<<8) // LDA ESTKL,X
+                        *codeptr = $D0B5+(VX<<8)     // LDA ESTKL,X
                         codeptr  = codeptr + 2
                     fin
-                    codeptr=>0  = ($C095-$0100)+(VX<<8) // STA ESTKH-1,X
-                    //^codeptr = $95;      codeptr++ // STA zp,X
-                    //^codeptr = $C0-1+VX; codeptr++ // ESTKH-1
-                    codeptr=>2  = ($D0B5+$0100)+(VX<<8) // LDA ESTKL+1,X
-                    //^codeptr = $B5;      codeptr++ // LDA zp,X
-                    //^codeptr = $D0+1+VX; codeptr++ // ESTKL+1                    
-                    codeptr=>4  = ($C081-$0100)+(VX<<8) // STA (ESTKH-1,X)
-                    //^codeptr = $81;      codeptr++ // STA (zp,X)
-                    //^codeptr = $C0-1+VX; codeptr++ // ESTKH-1
-                    //^codeptr = $E8;      codeptr++ // INX
-                    //^codeptr = $E8;      codeptr++ // INX
-                    VX = VX + 2 // INX INX
+                    codeptr=>0 = $C095-$0100+(VX<<8) // STA ESTKH-1,X
+                    codeptr=>2 = $D0B5+$0100+(VX<<8) // LDA ESTKL+1,X
+                    codeptr=>4 = $C081-$0100+(VX<<8) // STA (ESTKH-1,X)
+                    VX         = VX + 2              // INX; INX
                     codeptr    = codeptr + 6
                     A_IS_TOSL  = FALSE
                     break
                 is $72 // SW
                     //puts("SW")
                     if not A_IS_TOSL
-                        *codeptr = $D0B5+(VX<<8) // LDA ESTKL,X
+                        *codeptr = $D0B5+(VX<<8)      // LDA ESTKL,X
                         codeptr  = codeptr + 2
                     fin
-                    codeptr=>0  = ($C095-$0100)+(VX<<8) // STA ESTKH-1,X
-                    //^codeptr = $95;      codeptr++ // STA zp,X
-                    //^codeptr = $C0-1+VX; codeptr++ // ESTKH-1
-                    codeptr=>2  = ($D0B5+$0100)+(VX<<8) // LDA ESTKL+1,X
-                    //^codeptr = $B5;      codeptr++ // LDA zp,X
-                    //^codeptr = $D0+1+VX; codeptr++ // ESTKL+1                    
-                    codeptr=>4  = ($C081-$0100)+(VX<<8) // STA (ESTKH-1,X)
-                    //^codeptr = $81;      codeptr++ // STA (zp,X)
-                    //^codeptr = $C0-1+VX; codeptr++ // ESTKH-1
-                    codeptr=>6  = ($C0B5+$0100)+(VX<<8) // LDA ESTKH+1,X
-                    //^codeptr = $B5;      codeptr++ // LDA zp,X
-                    //^codeptr = $C0+1+VX; codeptr++ // ESTKH+1                    
-                    codeptr=>8  = ($C0F6-$0100)+(VX<<8) // INC ESTKH-1,X
-                    //^codeptr = $F6;      codeptr++ // INC zp,X
-                    //^codeptr = $C0-1+VX; codeptr++ // ESTKH-1
-                    codeptr=>10 = $02D0 // BNE +2
-                    //^codeptr = $D0;      codeptr++ // BNE rel
-                    //^codeptr = $02;      codeptr++ // +2                    
-                    codeptr=>12 = $C0F6+(VX<<8) // INC ESTKH,X
-                    //^codeptr = $F6;      codeptr++ // INC zp,X
-                    //^codeptr = $C0+VX;   codeptr++ // ESTKH
-                    codeptr=>14  = ($C081-$0100)+(VX<<8) // STA (ESTKH-1,X)
-                    //^codeptr = $81;      codeptr++ // STA (zp,X)
-                    //^codeptr = $C0-1+VX; codeptr++ // ESTKH-1
-                    //^codeptr = $E8;      codeptr++ // INX
-                    //^codeptr = $E8;      codeptr++ // INX
-                    VX = VX + 2 // INX INX
+                    codeptr=>0  = $C095-$0100+(VX<<8) // STA ESTKH-1,X
+                    codeptr=>2  = $D0B5+$0100+(VX<<8) // LDA ESTKL+1,X
+                    codeptr=>4  = $C081-$0100+(VX<<8) // STA (ESTKH-1,X)
+                    codeptr=>6  = $C0B5+$0100+(VX<<8) // LDA ESTKH+1,X
+                    codeptr=>8  = $C0F6-$0100+(VX<<8) // INC ESTKH-1,X
+                    codeptr=>10 = $02D0               // BNE +2
+                    codeptr=>12 = $C0F6+(VX<<8)       // INC ESTKH,X
+                    codeptr=>14 = $C081-$0100+(VX<<8) // STA (ESTKH-1,X)
+                    VX          = VX + 2              // INX; INX
                     codeptr    = codeptr + 16
                     A_IS_TOSL  = FALSE
                     break
                 is $74 // SLB
                     i++
-                    //puts("SLB "); puti(^(bytecode+i))
+                    j = ^(bytecode+i)
+                    //puts("SLB "); puti(j)
                     if not A_IS_TOSL
                         *codeptr = $D0B5+(VX<<8) // LDA ESTKL,X
                         codeptr  = codeptr + 2
                     fin
-                    if ^(bytecode+i) <> 0                    
-                        *codeptr = $A0+(^(bytecode+i)<<8) // LDY #imm
+                    if j                   
+                        *codeptr = $A0+(j<<8)    // LDY #imm
                         codeptr  = codeptr + 2
-                        //^codeptr = $A0;    codeptr++ // LDY #imm
-                        //^codeptr = ^(bytecode+i); codeptr++
                     fin
-                    *codeptr = $E091 // STA (IFP),Y
+                    *codeptr = $E091             // STA (IFP),Y
                     codeptr  = codeptr + 2
-                    //^codeptr = $91;    codeptr++ // STA (zp),Y
-                    //^codeptr = $E0;    codeptr++ // IFP
-                    if ^(bytecode+i) <> 0                    
-                        *codeptr = $00A0 // LDY #$00
+                    if j                   
+                        *codeptr = $00A0         // LDY #$00
                         codeptr  = codeptr + 2
-                        //^codeptr = $A0;    codeptr++ // LDY #imm
-                        //^codeptr = $00;    codeptr++ // $00
                     fin
-                    VX++ // INX
-                    A_IS_TOSL  = FALSE
+                    VX++                         // INX
+                    A_IS_TOSL = FALSE
                     break
                 is $76 // SLW
                     i++
-                    //puts("SLW "); puti(^(bytecode+i))
+                    j = ^(bytecode+i)
+                    //puts("SLW "); puti(j)
                     if not A_IS_TOSL
                         *codeptr = $D0B5+(VX<<8) // LDA ESTKL,X
                         codeptr  = codeptr + 2
                     fin
-                    if ^(bytecode+i) <> 0                    
-                        *codeptr = $A0+(^(bytecode+i)<<8) // LDY #imm
+                    if j                  
+                        *codeptr = $A0+(j<<8)    // LDY #imm
                         codeptr  = codeptr + 2
-                        //^codeptr = $A0;    codeptr++ // LDY #imm
-                        //^codeptr = ^(bytecode+i); codeptr++
                     fin
-                    codeptr=>0 = $E091 // STA (IFP),Y
-                    //^codeptr = $91;    codeptr++ // STA (zp),Y
-                    //^codeptr = $E0;    codeptr++ // IFP
-                    codeptr->2 = $C8 // INY
-                    //^codeptr = $C8;    codeptr++ // INY
-                    codeptr=>3 = $C0B5+(VX<<8) // LDA ESTKH,X
-                    //^codeptr = $B5;    codeptr++ // LDA zp,X
-                    //^codeptr = $C0+VX; codeptr++ // ESTKH
-                    codeptr=>5 = $E091 // STA (IFP),Y
-                    //^codeptr = $91;    codeptr++ // STA (zp),Y
-                    //^codeptr = $E0;    codeptr++ // IFP
-                    if ^(bytecode+i) <> 0                    
-                        codeptr=>7 = $00A0 // LDY #$00
+                    codeptr=>0 = $E091           // STA (IFP),Y
+                    codeptr->2 = $C8             // INY
+                    codeptr=>3 = $C0B5+(VX<<8)   // LDA ESTKH,X
+                    codeptr=>5 = $E091           // STA (IFP),Y
+                    if j                  
+                        codeptr=>7 = $00A0       // LDY #$00
                         codeptr    = codeptr + 9
-                        //^codeptr = $A0;    codeptr++ // LDY #imm
-                        //^codeptr = $00;    codeptr++ // $00
                     else
-                        codeptr->7 = $88 // DEY
+                        codeptr->7 = $88         // DEY
                         codeptr    = codeptr + 8
-                        //^codeptr = $88;    codeptr++ // DEY
                     fin
-                    VX++ // INX
-                    A_IS_TOSL  = FALSE
+                    VX++                         // INX
+                    A_IS_TOSL = FALSE
                     break
                 is $78 // SAB
                     i++
@@ -1490,34 +1047,27 @@ def compiler(defptr)#0
                         *codeptr = $D0B5+(VX<<8) // LDA ESTKL,X
                         codeptr  = codeptr + 2
                     fin
-                    codeptr->0 = $8D // STA abs
+                    codeptr->0 = $8D             // STA abs
                     codeptr=>1 = *(bytecode+i)
-                    //^codeptr = $8D;    codeptr++ // STA abs
-                    //*codeptr = *(bytecode+i); codeptr = codeptr + 2
-                    VX++ // INX
+                    VX++                         // INX
                     codeptr    = codeptr + 3
                     A_IS_TOSL  = FALSE
                     i++
                     break
                 is $7A // SAW
                     i++
-                    //puts("SAW $"); puth(*(bytecode+i))
+                    dest = *(bytecode+i)
+                    //puts("SAW $"); puth(dest)
                     if not A_IS_TOSL
                         *codeptr = $D0B5+(VX<<8) // LDA ESTKL,X
                         codeptr  = codeptr + 2
                     fin
-                    codeptr->0 = $8D // STA abs
-                    codeptr=>1 = *(bytecode+i)
-                    //^codeptr = $8D;    codeptr++ // STA abs
-                    //*codeptr = *(bytecode+i);   codeptr = codeptr + 2
-                    codeptr=>3 = $C0B5+(VX<<8) // LDA ESTKH,X
-                    //^codeptr = $B5;    codeptr++ // LDA zp,X
-                    //^codeptr = $C0+VX; codeptr++ // ESTKH
-                    codeptr->5 = $8D // STA abs
-                    codeptr=>6 = *(bytecode+i)+1
-                    //^codeptr = $8D;    codeptr++ // STA abs
-                    //*codeptr = *(bytecode+i)+1; codeptr = codeptr + 2
-                    VX++ // INX
+                    codeptr->0 = $8D             // STA abs
+                    codeptr=>1 = dest
+                    codeptr=>3 = $C0B5+(VX<<8)   // LDA ESTKH,X
+                    codeptr->5 = $8D             // STA abs
+                    codeptr=>6 = dest+1
+                    VX++                         // INX
                     codeptr    = codeptr + 8
                     A_IS_TOSL  = FALSE
                     i++
@@ -1526,39 +1076,30 @@ def compiler(defptr)#0
                     i++
                     //puts("DAB $"); puth(*(bytecode+i))
                     if not A_IS_TOSL
-                        *codeptr = $D0B5+(VX<<8) // LDA ESTKL,X
-                        codeptr  = codeptr + 2
-                        A_IS_TOSL  = TOSL_CLEAN
+                        *codeptr  = $D0B5+(VX<<8) // LDA ESTKL,X
+                        codeptr   = codeptr + 2
+                        A_IS_TOSL = TOSL_CLEAN
                     fin
-                    codeptr->0 = $8D // STA abs
+                    codeptr->0 = $8D             // STA abs
                     codeptr=>1 = *(bytecode+i)
-                    //^codeptr = $8D; codeptr++ // STA abs
-                    //*codeptr = *(bytecode+i); codeptr = codeptr + 2
                     codeptr    = codeptr + 3
                     i++
                     break
                 is $7E // DAW
                     i++
+                    dest = *(bytecode+i)
                     //puts("DAW $"); puth(*(bytecode+i))
                     if not A_IS_TOSL
-                        *codeptr = $D0B5+(VX<<8) // LDA ESTKL,X
-                        codeptr  = codeptr + 2
-                        A_IS_TOSL  = TOSL_CLEAN
+                        *codeptr  = $D0B5+(VX<<8) // LDA ESTKL,X
+                        codeptr   = codeptr + 2
+                        A_IS_TOSL = TOSL_CLEAN
                     fin
-                    codeptr->0 = $8D // STA abs
-                    codeptr=>1 = *(bytecode+i)
-                    //^codeptr = $8D;    codeptr++ // STA abs
-                    //*codeptr = *(bytecode+i);   codeptr = codeptr + 2
-                    codeptr=>3 = $C0B4+(VX<<8) // LDY ESTKH,X
-                    //^codeptr = $B4;    codeptr++ // LDY zp,X
-                    //^codeptr = $C0+VX; codeptr++ // ESTKH
-                    codeptr->5 = $8C // STY abs
-                    codeptr=>6 = *(bytecode+i)+1
-                    //^codeptr = $8C;    codeptr++ // STY abs
-                    //*codeptr = *(bytecode+i)+1; codeptr = codeptr + 2
-                    codeptr=>8 = $00A0 // LDY #$00
-                    //^codeptr = $A0;    codeptr++ // LDY #imm
-                    //^codeptr = $00;    codeptr++ // $00
+                    codeptr->0 = $8D             // STA abs
+                    codeptr=>1 = dest
+                    codeptr=>3 = $C0B4+(VX<<8)   // LDY ESTKH,X
+                    codeptr->5 = $8C             // STY abs
+                    codeptr=>6 = dest+1
+                    codeptr=>8 = $00A0           // LDY #$00
                     codeptr    = codeptr + 10
                     i++
                     break
@@ -1568,82 +1109,46 @@ def compiler(defptr)#0
                         *codeptr = $D0B5+(VX<<8) // LDA ESTKL,X
                         codeptr  = codeptr + 2
                     fin
-                    codeptr=>0 = $C015+(VX<<8) // ORA ESTKH,X
-                    //^codeptr = $15;    codeptr++ // ORA zp,X
-                    //^codeptr = $C0+VX; codeptr++ // ESTKH
-                    codeptr=>2 = $02F0 // BEQ +2
-                    //^codeptr = $F0;    codeptr++ // BEQ rel
-                    //^codeptr = $02;    codeptr++ // +2
-                    codeptr=>4 = $FFA9 // LDA #$FF
-                    //^codeptr = $A9;    codeptr++ // LDA #imm
-                    //^codeptr = $FF;    codeptr++ // $FF
-                    codeptr=>6 = $FF49 // EOR #$FF
-                    //^codeptr = $49;    codeptr++ // EOR #imm
-                    //^codeptr = $FF;    codeptr++ // $FF
-                    codeptr=>8 = $C095+(VX<<8) // STA ESTKH,X
-                    //^codeptr = $95;    codeptr++ // STA zp,X
-                    //^codeptr = $C0+VX; codeptr++ // ESTKH
-                    //^codeptr = $95;    codeptr++ // STA zp,X
-                    //^codeptr = $D0+VX; codeptr++ // ESTKL
+                    codeptr=>0 = $C015+(VX<<8)   // ORA ESTKH,X
+                    codeptr=>2 = $02F0           // BEQ +2
+                    codeptr=>4 = $FFA9           // LDA #$FF
+                    codeptr=>6 = $FF49           // EOR #$FF
+                    codeptr=>8 = $C095+(VX<<8)   // STA ESTKH,X
                     codeptr    = codeptr + 10
-                    A_IS_TOSL  = TOSL_DIRTY
+                    A_IS_TOSL  = TOSL_DIRTY      // STA ESTKL,X
                     break
                 is $82 // ADD
                     //puts("ADD")
                     if not A_IS_TOSL
-                        *codeptr = $D0B5+(VX<<8) // LDA ESTKL,X
+                        *codeptr = $D0B5+(VX<<8)     // LDA ESTKL,X
                         codeptr  = codeptr + 2
                     fin
-                    codeptr->0 = $18 // CLC
-                    //^codeptr = $18;      codeptr++ // CLC
-                    codeptr=>1 = ($D075+$0100)+(VX<<8) // ADC ESTKL+1,X
-                    //^codeptr = $75;      codeptr++ // ADC zp,X
-                    //^codeptr = $D0+1+VX; codeptr++ // ESTKL+1
-                    codeptr=>3 = ($D095+$0100)+(VX<<8) // STA ESTKL+1,X
-                    //^codeptr = $95;      codeptr++ // STA zp,X
-                    //^codeptr = $D0+1+VX; codeptr++ // ESTKL+1
-                    codeptr=>5 = $C0B5+(VX<<8) // LDA ESTKH,X
-                    //^codeptr = $B5;      codeptr++ // LDA zp,X
-                    //^codeptr = $C0+VX;   codeptr++ // ESTKH
-                    codeptr=>7 = ($C075+$0100)+(VX<<8) // ADC ESTKH+1,X
-                    //^codeptr = $75;      codeptr++ // ADC zp,X
-                    //^codeptr = $C0+1+VX; codeptr++ // ESTKH+1
-                    codeptr=>9 = ($C095+$0100)+(VX<<8) // STA ESTKH+1,X
-                    //^codeptr = $95;      codeptr++ // STA zp,X
-                    //^codeptr = $C0+1+VX; codeptr++ // ESTKH+1
-                    VX++ // INX
+                    codeptr->0 = $18                 // CLC
+                    codeptr=>1 = $D075+$0100+(VX<<8) // ADC ESTKL+1,X
+                    codeptr=>3 = $D095+$0100+(VX<<8) // STA ESTKL+1,X
+                    codeptr=>5 = $C0B5+(VX<<8)       // LDA ESTKH,X
+                    codeptr=>7 = $C075+$0100+(VX<<8) // ADC ESTKH+1,X
+                    codeptr=>9 = $C095+$0100+(VX<<8) // STA ESTKH+1,X
+                    VX++                             // INX
                     codeptr    = codeptr + 11
                     A_IS_TOSL  = FALSE
                     break
                 is $84 // SUB
                     //puts("SUB")
                     if A_IS_TOSL & TOSL_DIRTY
-                        *codeptr = $D095+(VX<<8) // STA ESTKL,X
+                        *codeptr = $D095+(VX<<8)      // STA ESTKL,X
                         codeptr  = codeptr + 2
                     fin
-                    codeptr=>0  = ($D0B5+$0100)+(VX<<8) // LDA ESTKL+1,X
-                    //^codeptr  = $B5;      codeptr++ // LDA zp,X
-                    //^codeptr  = $D0+1+VX; codeptr++ // ESTKL+1
-                    codeptr->2  = $38 // SEC
-                    //^codeptr  = $38;      codeptr++ // SEC
-                    codeptr=>3  = $D0F5+(VX<<8) // SBC ESTKL,X
-                    //^codeptr  = $F5;      codeptr++ // SBC zp,X
-                    //^codeptr  = $D0+VX;   codeptr++ // ESTKL
-                    codeptr=>5  = ($D095+$0100)+(VX<<8) // STA ESTKL+1,X
-                    //^codeptr  = $95;      codeptr++ // STA zp,X
-                    //^codeptr  = $D0+1+VX; codeptr++ // ESTKL+1
-                    codeptr=>7  = ($C0B5+$0100)+(VX<<8) // LDA ESTKH+1,X
-                    //^codeptr  = $B5;      codeptr++ // LDA zp,X
-                    //^codeptr  = $C0+1+VX; codeptr++ // ESTKH+1
-                    codeptr=>9  = $C0F5+(VX<<8) // SBC ESTKH,X
-                    //^codeptr  = $F5;      codeptr++ // SBC zp,X
-                    //^codeptr  = $C0+VX;   codeptr++ // ESTKH
-                    codeptr=>11 = ($C095+$0100)+(VX<<8) // STA ESTKH+1,X
-                    //^codeptr  = $95;      codeptr++ // STA zp,X
-                    //^codeptr  = $C0+1+VX; codeptr++ // ESTKH+1
-                    VX++ // INX
+                    codeptr=>0  = $D0B5+$0100+(VX<<8) // LDA ESTKL+1,X
+                    codeptr->2  = $38                 // SEC
+                    codeptr=>3  = $D0F5+(VX<<8)       // SBC ESTKL,X
+                    codeptr=>5  = $D095+$0100+(VX<<8) // STA ESTKL+1,X
+                    codeptr=>7  = $C0B5+$0100+(VX<<8) // LDA ESTKH+1,X
+                    codeptr=>9  = $C0F5+(VX<<8)       // SBC ESTKH,X
+                    codeptr=>11 = $C095+$0100+(VX<<8) // STA ESTKH+1,X
+                    VX++                              // INX
                     codeptr     = codeptr + 13
-                    A_IS_TOSL  = FALSE
+                    A_IS_TOSL   = FALSE
                     break
                 is $86 // MUL
                 is $88 // DIV
@@ -1666,21 +1171,15 @@ def compiler(defptr)#0
                     //
                     // Call into VM
                     //
+                    codeptr, VX = resolveX(codeptr, VX)
                     if A_IS_TOSL & TOSL_DIRTY
-                        *codeptr = $D095+(VX<<8) // STA ESTKL,X
+                        *codeptr = $D095//+(VX<<8) // STA ESTKL,X
                         codeptr  = codeptr + 2
                     fin
-                    codeptr, VX = resolveX(codeptr, VX)
-                    codeptr->0 = $20 // JSR INTERP
-                    codeptr=>1 = $3D0 // INTERP
-                    //^codeptr = $20;  codeptr++ // JSR INTERP
-                    //*codeptr = $3D0; codeptr = codeptr + 2
-                    codeptr=>3 = $C000+opcode // OPCODE; NATV CODE
-                    //^codeptr = opcode;  codeptr++ // OPCODE
-                    //^codeptr = $C0;  codeptr++ // NATV CODE
-                    codeptr=>5 = $00A0 // LDY #$00
-                    //^codeptr = $A0;  codeptr++ // LDY #imm
-                    //^codeptr = $00;  codeptr++ // $00
+                    codeptr->0 = $20               // JSR INTERP
+                    codeptr=>1 = $3D0              // INTERP
+                    codeptr=>3 = $C000+opcode      // OPCODE; NATV CODE
+                    codeptr=>5 = $00A0             // LDY #$00
                     codeptr    = codeptr + 7
                     A_IS_TOSL  = FALSE
                     break
@@ -1690,21 +1189,12 @@ def compiler(defptr)#0
                         *codeptr = $D0B5+(VX<<8) // LDA ESTKL,X
                         codeptr  = codeptr + 2
                     fin
-                    codeptr->0 = $18 // CLC
-                    //^codeptr = $18;    codeptr++ // CLC
-                    codeptr=>1 = $0169 // ADC #$01
-                    //^codeptr = $69;    codeptr++ // ADC #imm
-                    //^codeptr = $01;    codeptr++ // $01
-                    codeptr=>3 = $0290 // BCC +2
-                    //^codeptr = $90;    codeptr++ // BCC rel
-                    //^codeptr = $02;    codeptr++ // +2
-                    codeptr=>5  = $C0F6+(VX<<8) // INC ESTKH,X
-                    //^codeptr = $F6;    codeptr++ // INC zp,X
-                    //^codeptr = $C0+VX; codeptr++ // ESTKH
-                    //^codeptr = $95;    codeptr++ // STA zp,X
-                    //^codeptr = $D0+VX; codeptr++ // ESTKL
+                    codeptr->0 = $18             // CLC
+                    codeptr=>1 = $0169           // ADC #$01
+                    codeptr=>3 = $0290           // BCC +2
+                    codeptr=>5 = $C0F6+(VX<<8)   // INC ESTKH,X
                     codeptr    = codeptr + 7
-                    A_IS_TOSL  = TOSL_DIRTY
+                    A_IS_TOSL  = TOSL_DIRTY      // STA ESTKL,X
                     break
                 is $8E // DECR
                     //puts("DECR")
@@ -1712,21 +1202,12 @@ def compiler(defptr)#0
                         *codeptr = $D0B5+(VX<<8) // LDA ESTKL,X
                         codeptr  = codeptr + 2
                     fin
-                    codeptr->0 = $38 // SEC
-                    //^codeptr = $38;    codeptr++ // SEC
-                    codeptr=>1 = $01E9 // SBC #$01
-                    //^codeptr = $E9;    codeptr++ // SBC #imm
-                    //^codeptr = $01;    codeptr++ // $01
-                    codeptr=>3 = $02B0 // BCS +2
-                    //^codeptr = $B0;    codeptr++ // BCS rel
-                    //^codeptr = $02;    codeptr++ // +2
-                    codeptr=>5  = $C0D6+(VX<<8) // DEC ESTKH,X
-                    //^codeptr = $D6;    codeptr++ // DEC zp,X
-                    //^codeptr = $C0+VX; codeptr++ // ESTKH
-                    //^codeptr = $95;    codeptr++ // STA zp,X
-                    //^codeptr = $D0+VX; codeptr++ // ESTKL
+                    codeptr->0 = $38             // SEC
+                    codeptr=>1 = $01E9           // SBC #$01
+                    codeptr=>3 = $02B0           // BCS +2
+                    codeptr=>5 = $C0D6+(VX<<8)   // DEC ESTKH,X
                     codeptr    = codeptr + 7
-                    A_IS_TOSL  = TOSL_DIRTY
+                    A_IS_TOSL  = TOSL_DIRTY      // STA ESTKL,X
                     break
                 is $90 // NEG
                     //puts("NEG")
@@ -1734,23 +1215,12 @@ def compiler(defptr)#0
                         *codeptr = $D095+(VX<<8) // STA ESTKL,X
                         codeptr  = codeptr + 2
                     fin
-                    codeptr=>0 = $3898 // TYA -> LDA #$00; SEC
-                    //^codeptr = $98;    codeptr++ // TYA -> LDA #$00
-                    //^codeptr = $38;    codeptr++ // SEC
-                    codeptr=>2 = $D0F5+(VX<<8) // SBC ESTKL,X
-                    //^codeptr = $F5;    codeptr++ // SBC zp,X
-                    //^codeptr = $D0+VX; codeptr++ // ESTKL
-                    codeptr=>4 = $D095+(VX<<8) // STA ESTKL,X
-                    //^codeptr = $95;    codeptr++ // STA zp,X
-                    //^codeptr = $D0+VX; codeptr++ // ESTKL
-                    codeptr->6 = $98 // TYA -> LDA #00
-                    //^codeptr = $98;    codeptr++ // TYA -> LDA #00
-                    codeptr=>7 = $C0F5+(VX<<8) // SBC ESTKH,X
-                    //^codeptr = $F5;    codeptr++ // SBC zp,X
-                    //^codeptr = $C0+VX; codeptr++ // ESTKH
-                    codeptr=>9 = $C095+(VX<<8) // STA ESTKH,X
-                    //^codeptr = $95;    codeptr++ // STA zp,X
-                    //^codeptr = $C0+VX; codeptr++ // ESTKH
+                    codeptr=>0 = $3898           // TYA -> LDA #$00; SEC
+                    codeptr=>2 = $D0F5+(VX<<8)   // SBC ESTKL,X
+                    codeptr=>4 = $D095+(VX<<8)   // STA ESTKL,X
+                    codeptr->6 = $98             // TYA -> LDA #00
+                    codeptr=>7 = $C0F5+(VX<<8)   // SBC ESTKH,X
+                    codeptr=>9 = $C095+(VX<<8)   // STA ESTKH,X
                     codeptr    = codeptr + 11
                     A_IS_TOSL  = FALSE
                     break
@@ -1760,128 +1230,74 @@ def compiler(defptr)#0
                         *codeptr = $D0B5+(VX<<8) // LDA ESTKL,X
                         codeptr  = codeptr + 2
                     fin
-                    codeptr=>0 = $FF49 // EOR #$FF
-                    //^codeptr = $49;    codeptr++ // EOR #imm
-                    //^codeptr = $FF;    codeptr++ // $FF
-                    codeptr=>2 = $D095+(VX<<8) // STA ESTKL,X
-                    //^codeptr = $95;    codeptr++ // STA zp,X
-                    //^codeptr = $D0+VX; codeptr++ // ESTKL
-                    codeptr=>4 = $C0B5+(VX<<8) // LDA ESTKH,X
-                    //^codeptr = $B5;    codeptr++ // LDA zp,X
-                    //^codeptr = $C0+VX; codeptr++ // ESTKH
-                    codeptr=>6 = $FF49 // EOR #$FF
-                    //^codeptr = $49;    codeptr++ // EOR #imm
-                    //^codeptr = $FF;    codeptr++ // $FF
-                    codeptr=>8 = $C095+(VX<<8) // STA ESTKH,X
-                    //^codeptr = $95;    codeptr++ // STA zp,X
-                    //^codeptr = $C0+VX; codeptr++ // ESTKH
+                    codeptr=>0 = $FF49           // EOR #$FF
+                    codeptr=>2 = $D095+(VX<<8)   // STA ESTKL,X
+                    codeptr=>4 = $C0B5+(VX<<8)   // LDA ESTKH,X
+                    codeptr=>6 = $FF49           // EOR #$FF
+                    codeptr=>8 = $C095+(VX<<8)   // STA ESTKH,X
                     codeptr    = codeptr + 10
                     A_IS_TOSL  = FALSE
                     break
                 is $94 // AND
                     //puts("AND")
                     if not A_IS_TOSL
-                        *codeptr = $D0B5+(VX<<8) // LDA ESTKL,X
+                        *codeptr = $D0B5+(VX<<8)      // LDA ESTKL,X
                         codeptr  = codeptr + 2
                     fin
-                    codeptr=>0  = ($D035+$0100)+(VX<<8) // AND ESTKL+1,X
-                    //^codeptr = $35;      codeptr++ // AND zp,X
-                    //^codeptr = $D0+1+VX; codeptr++ // ESTKL+1
-                    codeptr=>2  = ($D095+$0100)+(VX<<8) // STA ESTKL+1,X
-                    //^codeptr = $95;      codeptr++ // STA zp,X
-                    //^codeptr = $D0+1+VX; codeptr++ // ESTKL+1
-                    codeptr=>4  = $C0B5+(VX<<8) // LDA ESTKH,X
-                    //^codeptr = $B5;      codeptr++ // LDA zp,X
-                    //^codeptr = $C0+VX;   codeptr++ // ESTKH
-                    codeptr=>6  = ($C035+$0100)+(VX<<8) // AND ESTKH+1,X
-                    //^codeptr = $35;      codeptr++ // AND zp,X
-                    //^codeptr = $C0+1+VX; codeptr++ // ESTKH+1
-                    codeptr=>8  = ($C095+$0100)+(VX<<8) // STA ESTKH+1,X
-                    //^codeptr = $95;      codeptr++ // STA zp,X
-                    //^codeptr = $C0+1+VX; codeptr++ // ESTKH+1
-                    VX++ // INX
-                    codeptr    = codeptr + 10
-                    A_IS_TOSL  = FALSE
+                    codeptr=>0  = $D035+$0100+(VX<<8) // AND ESTKL+1,X
+                    codeptr=>2  = $D095+$0100+(VX<<8) // STA ESTKL+1,X
+                    codeptr=>4  = $C0B5+(VX<<8)       // LDA ESTKH,X
+                    codeptr=>6  = $C035+$0100+(VX<<8) // AND ESTKH+1,X
+                    codeptr=>8  = $C095+$0100+(VX<<8) // STA ESTKH+1,X
+                    VX++                              // INX
+                    codeptr     = codeptr + 10
+                    A_IS_TOSL   = FALSE
                     break
                 is $96 // OR
                     //puts("OR")
                     if not A_IS_TOSL
-                        *codeptr = $D0B5+(VX<<8) // LDA ESTKL,X
+                        *codeptr = $D0B5+(VX<<8)      // LDA ESTKL,X
                         codeptr  = codeptr + 2
                     fin
-                    codeptr=>0  = ($D015+$0100)+(VX<<8) // ORA ESTKL+1,X
-                    //^codeptr = $15;      codeptr++ // ORA zp,X
-                    //^codeptr = $D0+1+VX; codeptr++ // ESTKL+1
-                    codeptr=>2  = ($D095+$0100)+(VX<<8) // STA ESTKL+1,X
-                    //^codeptr = $95;      codeptr++ // STA zp,X
-                    //^codeptr = $D0+1+VX; codeptr++ // ESTKL+1
-                    codeptr=>4  = $C0B5+(VX<<8) // LDA ESTKH,X
-                    //^codeptr = $B5;      codeptr++ // LDA zp,X
-                    //^codeptr = $C0+VX;   codeptr++ // ESTKH
-                    codeptr=>6  = ($C015+$0100)+(VX<<8) // ORA ESTKH+1,X
-                    //^codeptr = $15;      codeptr++ // ORA zp,X
-                    //^codeptr = $C0+1+VX; codeptr++ // ESTKH+1
-                    codeptr=>8  = ($C095+$0100)+(VX<<8) // STA ESTKH+1,X
-                    //^codeptr = $95;      codeptr++ // STA zp,X
-                    //^codeptr = $C0+1+VX; codeptr++ // ESTKH+1
-                    VX++ // INX
-                    codeptr    = codeptr + 10
-                    A_IS_TOSL  = FALSE
+                    codeptr=>0  = $D015+$0100+(VX<<8) // ORA ESTKL+1,X
+                    codeptr=>2  = $D095+$0100+(VX<<8) // STA ESTKL+1,X
+                    codeptr=>4  = $C0B5+(VX<<8)       // LDA ESTKH,X
+                    codeptr=>6  = $C015+$0100+(VX<<8) // ORA ESTKH+1,X
+                    codeptr=>8  = $C095+$0100+(VX<<8) // STA ESTKH+1,X
+                    VX++                              // INX
+                    codeptr     = codeptr + 10
+                    A_IS_TOSL   = FALSE
                     break
                 is $98 // XOR
                     //puts("XOR")
                     if not A_IS_TOSL
-                        *codeptr = $D0B5+(VX<<8) // LDA ESTKL,X
+                        *codeptr = $D0B5+(VX<<8)      // LDA ESTKL,X
                         codeptr  = codeptr + 2
                     fin
-                    codeptr=>0  = ($D055+$0100)+(VX<<8) // EOR ESTKL+1,X
-                    //^codeptr = $55;      codeptr++ // EOR zp,X
-                    //^codeptr = $D0+1+VX; codeptr++ // ESTKL+1
-                    codeptr=>2  = ($D095+$0100)+(VX<<8) // STA ESTKL+1,X
-                    //^codeptr = $95;      codeptr++ // STA zp,X
-                    //^codeptr = $D0+1+VX; codeptr++ // ESTKL+1
-                    codeptr=>4  = $C0B5+(VX<<8) // LDA ESTKH,X
-                    //^codeptr = $B5;      codeptr++ // LDA zp,X
-                    //^codeptr = $C0+VX;   codeptr++ // ESTKH
-                    codeptr=>6  = ($C055+$0100)+(VX<<8) // EOR ESTKH+1,X
-                    //^codeptr = $55;      codeptr++ // EOR zp,X
-                    //^codeptr = $C0+1+VX; codeptr++ // ESTKH+1
-                    codeptr=>8  = ($C095+$0100)+(VX<<8) // STA ESTKH+1,X
-                    //^codeptr = $95;      codeptr++ // STA zp,X
-                    //^codeptr = $C0+1+VX; codeptr++ // ESTKH+1
-                    VX++ // INX
-                    codeptr    = codeptr + 10
-                    A_IS_TOSL  = FALSE
+                    codeptr=>0  = $D055+$0100+(VX<<8) // EOR ESTKL+1,X
+                    codeptr=>2  = $D095+$0100+(VX<<8) // STA ESTKL+1,X
+                    codeptr=>4  = $C0B5+(VX<<8)       // LDA ESTKH,X
+                    codeptr=>6  = $C055+$0100+(VX<<8) // EOR ESTKH+1,X
+                    codeptr=>8  = $C095+$0100+(VX<<8) // STA ESTKH+1,X
+                    VX++                              // INX
+                    codeptr     = codeptr + 10
+                    A_IS_TOSL   = FALSE
                     break
                 is $9E // IDXW
                     //puts("IDXW")
                     if not A_IS_TOSL
-                        *codeptr = $D0B5+(VX<<8) // LDA ESTKL,X
+                        *codeptr = $D0B5+(VX<<8)      // LDA ESTKL,X
                         codeptr  = codeptr + 2
                     fin
-                    codeptr->0  = $0A // ASL
-                    //^codeptr = $0A;      codeptr++ // ASL
-                    codeptr=>1  = $C036+(VX<<8) // ROL ESTKH,X
-                    //^codeptr = $36;      codeptr++ // ROL zp,X
-                    //^codeptr = $C0+VX;   codeptr++ // ESTKH
-                    codeptr->3  = $18 // CLC
-                    //^codeptr = $18;      codeptr++ // CLC
-                    codeptr=>4  = ($D075+$0100)+(VX<<8) // ADC ESTKL+1,X
-                    //^codeptr = $75;      codeptr++ // ADC zp,X
-                    //^codeptr = $D0+1+VX; codeptr++ // ESTKL+1
-                    codeptr=>6  = ($D095+$0100)+(VX<<8) // STA ESTKL+1,X
-                    //^codeptr = $95;      codeptr++ // STA zp,X
-                    //^codeptr = $D0+1+VX; codeptr++ // ESTKL+1
-                    codeptr=>8  = $C0B5+(VX<<8) // LDA ESTKH,X
-                    //^codeptr = $B5;      codeptr++ // LDA zp,X
-                    //^codeptr = $C0+VX;   codeptr++ // ESTKH
-                    codeptr=>10 = ($C075+$0100)+(VX<<8) // ADC ESTKH+1,X
-                    //^codeptr = $75;      codeptr++ // ADC zp,X
-                    //^codeptr = $C0+1+VX; codeptr++ // ESTKH+1
-                    codeptr=>12 = ($C095+$0100)+(VX<<8) // STA ESTKH+1,X
-                    //^codeptr = $95;      codeptr++ // STA zp,X
-                    //^codeptr = $C0+1+VX; codeptr++ // ESTKH+1
-                    VX++ // INX
+                    codeptr->0  = $0A                 // ASL
+                    codeptr=>1  = $C036+(VX<<8)       // ROL ESTKH,X
+                    codeptr->3  = $18                 // CLC
+                    codeptr=>4  = $D075+$0100+(VX<<8) // ADC ESTKL+1,X
+                    codeptr=>6  = $D095+$0100+(VX<<8) // STA ESTKL+1,X
+                    codeptr=>8  = $C0B5+(VX<<8)       // LDA ESTKH,X
+                    codeptr=>10 = $C075+$0100+(VX<<8) // ADC ESTKH+1,X
+                    codeptr=>12 = $C095+$0100+(VX<<8) // STA ESTKH+1,X
+                    VX++                              // INX
                     codeptr     = codeptr + 14
                     A_IS_TOSL   = FALSE
                     break
@@ -1892,44 +1308,23 @@ def compiler(defptr)#0
                     i++
                     codeptr, VX = resolveX(codeptr, VX)
                     if A_IS_TOSL & TOSL_DIRTY
-                        *codeptr = $D095+(VX<<8) // STA ESTKL,X
+                        *codeptr = $D095//+(VX<<8)      // STA ESTKL,X
                         codeptr  = codeptr + 2
                     fin
-                    codeptr=>0  = ($D0B5+$0100)+(VX<<8) // LDA ESTKL+1,X
-                    //^codeptr = $B5;      codeptr++ // LDA zp,X
-                    //^codeptr = $D0+1+VX; codeptr++ // ESTKL+1
-                    codeptr=>2  = $D0D5+(VX<<8) // CMP ESTKL,X
-                    //^codeptr = $D5;      codeptr++ // CMP zp,X
-                    //^codeptr = $D0+VX;   codeptr++ // ESTKL
-                    codeptr=>4  = ($C0B5+$0100)+(VX<<8) // LDA ESTKH+1,X
-                    //^codeptr = $B5;      codeptr++ // LDA zp,X
-                    //^codeptr = $C0+1+VX; codeptr++ // ESTKH+1
-                    codeptr=>6  = $C0F5+(VX<<8) // SBC ESTKH
-                    //^codeptr = $F5;      codeptr++ // SBC zp,X
-                    //^codeptr = $C0+VX;   codeptr++ // ESTKH
-                    codeptr=>8  = $0250 // BVC +2
-                    //^codeptr = $50;      codeptr++ // BVC rel
-                    //^codeptr = $02;      codeptr++ // +2
-                    codeptr=>10 = $8049 // EOR #$80
-                    //^codeptr = $49;      codeptr++ // EOR #imm
-                    //^codeptr = $80;      codeptr++ // $80
-                    codeptr=>12 = $0510 // BPL +5
-                    //^codeptr = $10;      codeptr++ // BPL rel
-                    //^codeptr = $05;      codeptr++ // +5                    
-                    codeptr=>14 = $E8E8 // INX; INX
-                    //^codeptr = $E8;      codeptr++ // INX
-                    //^codeptr = $E8;      codeptr++ // INX
-                    codeptr->16  = $4C // JMP abs
-                    //^codeptr = $4C;      codeptr++ // JMP abs
+                    codeptr=>0  = $D0B5+$0100//+(VX<<8) // LDA ESTKL+1,X
+                    codeptr=>2  = $D0D5//+(VX<<8)       // CMP ESTKL,X
+                    codeptr=>4  = $C0B5+$0100//+(VX<<8) // LDA ESTKH+1,X
+                    codeptr=>6  = $C0F5//+(VX<<8)       // SBC ESTKH
+                    codeptr=>8  = $0250                 // BVC +2
+                    codeptr=>10 = $8049                 // EOR #$80
+                    codeptr=>12 = $0510                 // BPL +5
+                    codeptr=>14 = $E8E8                 // INX; INX
+                    codeptr->16 = $4C                   // JMP abs
                     codeptr=>17 = addrxlate=>[dest]
-                    //*codeptr = addrxlate=>[dest]
                     if not (codeptr->18 & $80) // Unresolved address list
-                    //if not (*codeptr & $8000) // Unresolved address list
                         addrxlate=>[dest] = codeptr + 17 - *jitcodeptr
-                        //addrxlate=>[dest] = codeptr - *jitcodeptr
                     fin
                     codeptr   = codeptr + 19
-                    //codeptr  = codeptr + 2
                     A_IS_TOSL = FALSE
                     break
                 is $A2 // BRLT - FOR/NEXT SPECIFIC TEST & BRANCH 
@@ -1939,46 +1334,25 @@ def compiler(defptr)#0
                     i++
                     codeptr, VX = resolveX(codeptr, VX)
                     if not A_IS_TOSL
-                        *codeptr = $D0B5+(VX<<8) // LDA ESTKL,X
+                        *codeptr = $D0B5//+(VX<<8)      // LDA ESTKL,X
                         codeptr  = codeptr + 2
                     elsif A_IS_TOSL & TOSL_DIRTY
-                        *codeptr = $D095+(VX<<8) // STA ESTKL,X
+                        *codeptr = $D095//+(VX<<8)      // STA ESTKL,X
                         codeptr  = codeptr + 2
-                        //^codeptr = $95;    codeptr++ // STA zp,X
-                        //^codeptr = $D0+VX; codeptr++ // ESTKL
                     fin
-                    codeptr=>0  = ($D0D5+$0100)+(VX<<8) // CMP ESTKL+1,X
-                    //^codeptr = $D5;      codeptr++ // CMP zp,X
-                    //^codeptr = $D0+1+VX; codeptr++ // ESTKL+1
-                    codeptr=>2  = $C0B5+(VX<<8) // LDA ESTKH,X
-                    //^codeptr = $B5;      codeptr++ // LDA zp,X
-                    //^codeptr = $C0+VX;   codeptr++ // ESTKH
-                    codeptr=>4  = ($C0F5+$0100)+(VX<<8) // SBC ESTKH+1
-                    //^codeptr = $F5;      codeptr++ // SBC zp,X
-                    //^codeptr = $C0+1+VX; codeptr++ // ESTKH+1
-                    codeptr=>6  = $0250 // BVC +2
-                    //^codeptr = $50;      codeptr++ // BVC rel
-                    //^codeptr = $02;      codeptr++ // +2
-                    codeptr=>8  = $8049 // EOR #$80
-                    //^codeptr = $49;      codeptr++ // EOR #imm
-                    //^codeptr = $80;      codeptr++ // $80
-                    codeptr=>10 = $0510 // BPL +5
-                    //^codeptr = $10;      codeptr++ // BPL rel
-                    //^codeptr = $05;      codeptr++ // +5                    
-                    codeptr=>12 = $E8E8 // INX; INX
-                    //^codeptr = $E8;      codeptr++ // INX
-                    //^codeptr = $E8;      codeptr++ // INX
-                    codeptr->14  = $4C // JMP abs
-                    //^codeptr = $4C;      codeptr++ // JMP abs
+                    codeptr=>0  = $D0D5+$0100//+(VX<<8) // CMP ESTKL+1,X
+                    codeptr=>2  = $C0B5//+(VX<<8)       // LDA ESTKH,X
+                    codeptr=>4  = $C0F5+$0100//+(VX<<8) // SBC ESTKH+1
+                    codeptr=>6  = $0250                 // BVC +2
+                    codeptr=>8  = $8049                 // EOR #$80
+                    codeptr=>10 = $0510                 // BPL +5
+                    codeptr=>12 = $E8E8                 // INX; INX
+                    codeptr->14 = $4C                   // JMP abs
                     codeptr=>15 = addrxlate=>[dest]
-                    //*codeptr = addrxlate=>[dest]
                     if not (codeptr->16 & $80) // Unresolved address list
-                    //if not (*codeptr & $8000) // Unresolved address list
                         addrxlate=>[dest] = codeptr + 15 - *jitcodeptr
-                        //addrxlate=>[dest] = codeptr - *jitcodeptr
                     fin
                     codeptr   = codeptr + 17
-                    //codeptr  = codeptr + 2
                     A_IS_TOSL = FALSE
                     break
                 is $A4 // INCBRLE - FOR/NEXT SPECIFIC INC & TEST & BRANCH
@@ -1993,60 +1367,30 @@ def compiler(defptr)#0
                         *codeptr = $D0B5+(VX<<8) // LDA ESTKL,X
                         codeptr  = codeptr + 2
                     fin
-                    codeptr->0 = $18 // CLC
-                    //^codeptr = $18;    codeptr++ // CLC
-                    codeptr=>1 = $0169 // ADC #$01
-                    //^codeptr = $69;    codeptr++ // ADC #imm
-                    //^codeptr = $01;    codeptr++ // $01
-                    codeptr=>3  = $D095+(VX<<8) // STA ESTKL,X
-                    //^codeptr = $95;    codeptr++ // STA zp,X
-                    //^codeptr = $D0+VX; codeptr++ // ESTKL
-                    codeptr=>5 = $0290 // BCC +2
-                    //^codeptr = $90;    codeptr++ // BCC rel
-                    //^codeptr = $02;    codeptr++ // +2
-                    codeptr=>7  = $C0F6+(VX<<8) // INC ESTKH,X
-                    //^codeptr = $F6;    codeptr++ // INC zp,X
-                    //^codeptr = $C0+VX; codeptr++ // ESTKH
+                    codeptr->0 = $18             // CLC
+                    codeptr=>1 = $0169           // ADC #$01
+                    codeptr=>3 = $D095+(VX<<8)   // STA ESTKL,X
+                    codeptr=>5 = $0290           // BCC +2
+                    codeptr=>7 = $C0F6+(VX<<8)   // INC ESTKH,X
                     codeptr, VX = resolveX(codeptr + 9, VX)
                     //
                     // BRLE
                     //
-                    codeptr=>0  = ($D0B5+$0100)+(VX<<8) // LDA ESTKL+1,X
-                    //^codeptr = $B5;      codeptr++ // LDA zp,X
-                    //^codeptr = $D0+1+VX; codeptr++ // ESTKL+1
-                    codeptr=>2  = $D0D5+(VX<<8) // CMP ESTKL,X
-                    //^codeptr = $D5;      codeptr++ // CMP zp,X
-                    //^codeptr = $D0+VX;   codeptr++ // ESTKL
-                    codeptr=>4  = ($C0B5+$0100)+(VX<<8) // LDA ESTKH+1,X
-                    //^codeptr = $B5;      codeptr++ // LDA zp,X
-                    //^codeptr = $C0+1+VX; codeptr++ // ESTKH+1
-                    codeptr=>6  = $C0F5+(VX<<8) // SBC ESTKH
-                    //^codeptr = $F5;      codeptr++ // SBC zp,X
-                    //^codeptr = $C0+VX;   codeptr++ // ESTKH
-                    codeptr=>8  = $0250 // BVC +2
-                    //^codeptr = $50;      codeptr++ // BVC rel
-                    //^codeptr = $02;      codeptr++ // +2
-                    codeptr=>10 = $8049 // EOR #$80
-                    //^codeptr = $49;      codeptr++ // EOR #imm
-                    //^codeptr = $80;      codeptr++ // $80
-                    codeptr=>12 = $0330 // BMI +3
-                    //^codeptr = $30;      codeptr++ // BMI rel
-                    //^codeptr = $03;      codeptr++ // +3                    
-                    codeptr->14 = $4C // JMP abs
-                    //^codeptr = $4C;      codeptr++ // JMP abs
+                    codeptr=>0  = $D0B5+$0100//+(VX<<8) // LDA ESTKL+1,X
+                    codeptr=>2  = $D0D5//+(VX<<8)       // CMP ESTKL,X
+                    codeptr=>4  = $C0B5+$0100//+(VX<<8) // LDA ESTKH+1,X
+                    codeptr=>6  = $C0F5//+(VX<<8)       // SBC ESTKH
+                    codeptr=>8  = $0250                 // BVC +2
+                    codeptr=>10 = $8049                 // EOR #$80
+                    codeptr=>12 = $0330                 // BMI +3
+                    codeptr->14 = $4C                   // JMP abs
                     codeptr=>15 = addrxlate=>[dest]
-                    //*codeptr = addrxlate=>[dest]
                     if not (codeptr->16 & $80) // Unresolved address list
-                    //if not (*codeptr & $8000) // Unresolved address list
                         addrxlate=>[dest] = codeptr + 15 - *jitcodeptr
-                        //addrxlate=>[dest] = codeptr - *jitcodeptr
                     fin
-                    //codeptr  = codeptr + 2
-                    codeptr=>17 = $E8E8 // INX; INX
-                    //^codeptr = $E8;      codeptr++ // INX
-                    //^codeptr = $E8;      codeptr++ // INX
-                    codeptr    = codeptr + 19
-                    A_IS_TOSL  = FALSE
+                    codeptr=>17 = $E8E8                 // INX; INX
+                    codeptr     = codeptr + 19
+                    A_IS_TOSL   = FALSE
                     break
                 is $A6 // ADDBRLE - FOR/NEXT SPECIFIC ADD & TEST & BRANCH
                     i++
@@ -2057,66 +1401,34 @@ def compiler(defptr)#0
                     // ADD
                     //
                     if not A_IS_TOSL
-                        *codeptr = $D0B5+(VX<<8) // LDA ESTKL,X
+                        *codeptr = $D0B5+(VX<<8)                 // LDA ESTKL,X
                         codeptr  = codeptr + 2
                     fin
-                    codeptr->0 = $18 // CLC
-                    //^codeptr = $18;      codeptr++ // CLC
-                    codeptr=>1 = ($D075+$0100)+(VX<<8) // ADC ESTKL+1,X
-                    //^codeptr = $75;      codeptr++ // ADC zp,X
-                    //^codeptr = $D0+1+VX; codeptr++ // ESTKL+1
-                    codeptr=>3 = ($D095+$0100)+(VX<<8) // STA ESTKL+1,X
-                    //^codeptr = $95;      codeptr++ // STA zp,X
-                    //^codeptr = $D0+1+VX; codeptr++ // ESTKL+1
-                    codeptr=>5 = $C0B5+(VX<<8) // LDA ESTKH,X
-                    //^codeptr = $B5;      codeptr++ // LDA zp,X
-                    //^codeptr = $C0+VX;   codeptr++ // ESTKH
-                    codeptr=>7 = ($C075+$0100)+(VX<<8) // ADC ESTKH+1,X
-                    //^codeptr = $75;      codeptr++ // ADC zp,X
-                    //^codeptr = $C0+1+VX; codeptr++ // ESTKH+1
-                    codeptr=>9 = ($C095+$0100)+(VX<<8) // STA ESTKH+1,X
-                    //^codeptr = $95;      codeptr++ // STA zp,X
-                    //^codeptr = $C0+1+VX; codeptr++ // ESTKH+1
-                    codeptr, VX = resolveX(codeptr + 11, VX + 1) //VX++ // INX
+                    codeptr->0 = $18                             // CLC
+                    codeptr=>1 = $D075+$0100+(VX<<8)             // ADC ESTKL+1,X
+                    codeptr=>3 = $D095+$0100+(VX<<8)             // STA ESTKL+1,X
+                    codeptr=>5 = $C0B5+(VX<<8)                   // LDA ESTKH,X
+                    codeptr=>7 = $C075+$0100+(VX<<8)             // ADC ESTKH+1,X
+                    codeptr=>9 = $C095+$0100+(VX<<8)             // STA ESTKH+1,X
+                    codeptr, VX = resolveX(codeptr + 11, VX + 1) // INX
                     //
                     // BRLE
                     //
-                    codeptr=>0  = ($D0B5+$0100)+(VX<<8) // LDA ESTKL+1,X
-                    //^codeptr = $B5;      codeptr++ // LDA zp,X
-                    //^codeptr = $D0+1+VX; codeptr++ // ESTKL+1
-                    codeptr=>2  = $D0D5+(VX<<8) // CMP ESTKL,X
-                    //^codeptr = $D5;      codeptr++ // CMP zp,X
-                    //^codeptr = $D0+VX;   codeptr++ // ESTKL
-                    codeptr=>4  = ($C0B5+$0100)+(VX<<8) // LDA ESTKH+1,X
-                    //^codeptr = $B5;      codeptr++ // LDA zp,X
-                    //^codeptr = $C0+1+VX; codeptr++ // ESTKH+1
-                    codeptr=>6  = $C0F5+(VX<<8) // SBC ESTKH
-                    //^codeptr = $F5;      codeptr++ // SBC zp,X
-                    //^codeptr = $C0+VX;   codeptr++ // ESTKH
-                    codeptr=>8  = $0250 // BVC +2
-                    //^codeptr = $50;      codeptr++ // BVC rel
-                    //^codeptr = $02;      codeptr++ // +2
-                    codeptr=>10 = $8049 // EOR #$80
-                    //^codeptr = $49;      codeptr++ // EOR #imm
-                    //^codeptr = $80;      codeptr++ // $80
-                    codeptr=>12 = $0330 // BMI +3
-                    //^codeptr = $30;      codeptr++ // BMI rel
-                    //^codeptr = $03;      codeptr++ // +3                    
-                    codeptr->14 = $4C // JMP abs
-                    //^codeptr = $4C;      codeptr++ // JMP abs
+                    codeptr=>0  = $D0B5+$0100//+(VX<<8) // LDA ESTKL+1,X
+                    codeptr=>2  = $D0D5+(VX<<8)         // CMP ESTKL,X
+                    codeptr=>4  = $C0B5+$0100//+(VX<<8) // LDA ESTKH+1,X
+                    codeptr=>6  = $C0F5+(VX<<8)         // SBC ESTKH
+                    codeptr=>8  = $0250                 // BVC +2
+                    codeptr=>10 = $8049                 // EOR #$80
+                    codeptr=>12 = $0330                 // BMI +3
+                    codeptr->14 = $4C                   // JMP abs
                     codeptr=>15 = addrxlate=>[dest]
-                    //*codeptr = addrxlate=>[dest]
                     if not (codeptr->16 & $80) // Unresolved address list
-                    //if not (*codeptr & $8000) // Unresolved address list
                         addrxlate=>[dest] = codeptr + 15 - *jitcodeptr
-                        //addrxlate=>[dest] = codeptr - *jitcodeptr
                     fin
-                    //codeptr  = codeptr + 2
-                    codeptr=>17 = $E8E8 // INX; INX
-                    //^codeptr = $E8;      codeptr++ // INX
-                    //^codeptr = $E8;      codeptr++ // INX
-                    codeptr    = codeptr + 19
-                    A_IS_TOSL  = FALSE
+                    codeptr=>17 = $E8E8                 // INX; INX
+                    codeptr     = codeptr + 19
+                    A_IS_TOSL   = FALSE
                     break
                 is $A8 // DECBRGR - FOR/NEXT SPECIFIC DEC & TEST & BRANCH
                     i++
@@ -2130,59 +1442,29 @@ def compiler(defptr)#0
                         *codeptr = $D0B5+(VX<<8) // LDA ESTKL,X
                         codeptr  = codeptr + 2
                     fin
-                    codeptr->0 = $38 // SEC
-                    //^codeptr = $38;    codeptr++ // SEC
-                    codeptr=>1 = $01E9 // SBC #$01
-                    //^codeptr = $E9;    codeptr++ // SBC #imm
-                    //^codeptr = $01;    codeptr++ // $01
-                    codeptr=>3  = $D095+(VX<<8) // STA ESTKL,X
-                    //^codeptr = $95;    codeptr++ // STA zp,X
-                    //^codeptr = $D0+VX; codeptr++ // ESTKL
-                    codeptr=>5 = $02B0 // BCS +2
-                    //^codeptr = $B0;    codeptr++ // BCS rel
-                    //^codeptr = $02;    codeptr++ // +2
-                    codeptr=>7  = $C0D6+(VX<<8) // DEC ESTKH,X
-                    //^codeptr = $D6;    codeptr++ // DEC zp,X
-                    //^codeptr = $C0+VX; codeptr++ // ESTKH
+                    codeptr->0 = $38             // SEC
+                    codeptr=>1 = $01E9           // SBC #$01
+                    codeptr=>3 = $D095+(VX<<8)   // STA ESTKL,X
+                    codeptr=>5 = $02B0           // BCS +2
+                    codeptr=>7 = $C0D6+(VX<<8)   // DEC ESTKH,X
                     codeptr, VX = resolveX(codeptr + 9, VX)
                     //
                     // BRGE
                     //
-                    //^codeptr = $B5;      codeptr++ // LDA zp,X
-                    //^codeptr = $D0+VX;   codeptr++ // ESTKL
-                    codeptr=>0  = ($D0D5+$0100)+(VX<<8) // CMP ESTKL+1,X
-                    //^codeptr = $D5;      codeptr++ // CMP zp,X
-                    //^codeptr = $D0+1+VX; codeptr++ // ESTKL+1
-                    codeptr=>2 = $C0B5+(VX<<8) // LDA ESTKH,X
-                    //^codeptr = $B5;      codeptr++ // LDA zp,X
-                    //^codeptr = $C0+VX;   codeptr++ // ESTKH
-                    codeptr=>4 = ($C0F5+$0100)+(VX<<8) // SBC ESTKH+1,X
-                    //^codeptr = $F5;      codeptr++ // SBC zp,X
-                    //^codeptr = $C0+1+VX; codeptr++ // ESTKH+1
-                    codeptr=>6  = $0250 // BVC +2
-                    //^codeptr = $50;      codeptr++ // BVC rel
-                    //^codeptr = $02;      codeptr++ // +2
-                    codeptr=>8 = $8049 // EOR #$80
-                    //^codeptr = $49;      codeptr++ // EOR #imm
-                    //^codeptr = $80;      codeptr++ // $80
-                    codeptr=>10 = $0330 // BMI +3
-                    //^codeptr = $30;      codeptr++ // BMI rel
-                    //^codeptr = $03;      codeptr++ // +3                    
-                    codeptr->12 = $4C // JMP abs
-                    //^codeptr = $4C;      codeptr++ // JMP abs
+                    codeptr=>0  = $D0D5+$0100//+(VX<<8) // CMP ESTKL+1,X
+                    codeptr=>2  = $C0B5//+(VX<<8)       // LDA ESTKH,X
+                    codeptr=>4  = $C0F5+$0100//+(VX<<8) // SBC ESTKH+1,X
+                    codeptr=>6  = $0250                 // BVC +2
+                    codeptr=>8  = $8049                 // EOR #$80
+                    codeptr=>10 = $0330                 // BMI +3
+                    codeptr->12 = $4C                   // JMP abs
                     codeptr=>13 = addrxlate=>[dest]
-                    //*codeptr = addrxlate=>[dest]
                     if not (codeptr->14 & $80) // Unresolved address list
-                    //if not (*codeptr & $8000) // Unresolved address list
                         addrxlate=>[dest] = codeptr + 13 - *jitcodeptr
-                        //addrxlate=>[dest] = codeptr - *jitcodeptr
                     fin
-                    //codeptr  = codeptr + 2
-                    codeptr=>15 = $E8E8 // INX; INX
-                    //^codeptr = $E8;      codeptr++ // INX
-                    //^codeptr = $E8;      codeptr++ // INX
-                    codeptr    = codeptr + 17
-                    A_IS_TOSL  = FALSE
+                    codeptr=>15 = $E8E8                 // INX; INX
+                    codeptr     = codeptr + 17
+                    A_IS_TOSL   = FALSE
                     break
                 is $AA // SUBBRGE - FOR/NEXT SPECIFIC SUB & TEST & BRANCH
                     i++
@@ -2193,69 +1475,35 @@ def compiler(defptr)#0
                     // SUB
                     //
                     if A_IS_TOSL & TOSL_DIRTY
-                        *codeptr = $D095+(VX<<8) // STA ESTKL,X
+                        *codeptr = $D095+(VX<<8)                 // STA ESTKL,X
                         codeptr  = codeptr + 2
                     fin
-                    codeptr=>0  = ($D0B5+$0100)+(VX<<8) // LDA ESTKL+1,X
-                    //^codeptr = $B5;      codeptr++ // LDA zp,X
-                    //^codeptr = $D0+1+VX; codeptr++ // ESTKL+1
-                    codeptr->2  = $38 // SEC
-                    //^codeptr = $38;      codeptr++ // SEC
-                    codeptr=>3  = $D0F5+(VX<<8) // SBC ESTKL,X
-                    //^codeptr = $F5;      codeptr++ // SBC zp,X
-                    //^codeptr = $D0+VX;   codeptr++ // ESTKL
-                    codeptr=>5  = ($D095+$0100)+(VX<<8) // STA ESTKL+1,X
-                    //^codeptr = $95;      codeptr++ // STA zp,X
-                    //^codeptr = $D0+1+VX; codeptr++ // ESTKL+1
-                    codeptr=>7  = ($C0B5+$0100)+(VX<<8) // LDA ESTKH+1,X
-                    //^codeptr = $B5;      codeptr++ // LDA zp,X
-                    //^codeptr = $C0+1+VX; codeptr++ // ESTKH+1
-                    codeptr=>9  = $C0F5+(VX<<8) // SBC ESTKH,X
-                    //^codeptr = $F5;      codeptr++ // SBC zp,X
-                    //^codeptr = $C0+VX;   codeptr++ // ESTKH
-                    codeptr=>11 = ($C095+$0100)+(VX<<8) // STA ESTKH+1,X
-                    //^codeptr = $95;      codeptr++ // STA zp,X
-                    //^codeptr = $C0+1+VX; codeptr++ // ESTKH+1
-                    codeptr, VX = resolveX(codeptr + 13, VX + 1) //VX++ // INX
+                    codeptr=>0  = $D0B5+$0100+(VX<<8)            // LDA ESTKL+1,X
+                    codeptr->2  = $38                            // SEC
+                    codeptr=>3  = $D0F5+(VX<<8)                  // SBC ESTKL,X
+                    codeptr=>5  = $D095+$0100+(VX<<8)            // STA ESTKL+1,X
+                    codeptr=>7  = $C0B5+$0100+(VX<<8)            // LDA ESTKH+1,X
+                    codeptr=>9  = $C0F5+(VX<<8)                  // SBC ESTKH,X
+                    codeptr=>11 = $C095+$0100+(VX<<8)            // STA ESTKH+1,X
+                    codeptr, VX = resolveX(codeptr + 13, VX + 1) // INX
                     //
                     // BRGE
                     //
-                    codeptr=>0  = $D0B5+(VX<<8) // LDA ESTKL,X
-                    //^codeptr = $B5;      codeptr++ // LDA zp,X
-                    //^codeptr = $D0+VX;   codeptr++ // ESTKL
-                    codeptr=>2  = ($D0D5+$0100)+(VX<<8) // CMP ESTKL+1,X
-                    //^codeptr = $D5;      codeptr++ // CMP zp,X
-                    //^codeptr = $D0+1+VX; codeptr++ // ESTKL+1
-                    codeptr=>4  = $C0B5+(VX<<8) // LDA ESTKH,X
-                    //^codeptr = $B5;      codeptr++ // LDA zp,X
-                    //^codeptr = $C0+VX;   codeptr++ // ESTKH
-                    codeptr=>6  = ($C0F5+$0100)+(VX<<8) // SBC ESTKH+1,X
-                    //^codeptr = $F5;      codeptr++ // SBC zp,X
-                    //^codeptr = $C0+1+VX; codeptr++ // ESTKH+1
-                    codeptr=>8  = $0250 // BVC +2
-                    //^codeptr = $50;      codeptr++ // BVC rel
-                    //^codeptr = $02;      codeptr++ // +2
-                    codeptr=>10 = $8049 // EOR #$80
-                    //^codeptr = $49;      codeptr++ // EOR #imm
-                    //^codeptr = $80;      codeptr++ // $80
-                    codeptr=>12 = $0330 // BMI +3
-                    //^codeptr = $30;      codeptr++ // BMI rel
-                    //^codeptr = $03;      codeptr++ // +3                    
-                    codeptr->14 = $4C // JMP abs
-                    //^codeptr = $4C;      codeptr++ // JMP abs
+                    codeptr=>0  = $D0B5//+(VX<<8)       // LDA ESTKL,X
+                    codeptr=>2  = $D0D5+$0100//+(VX<<8) // CMP ESTKL+1,X
+                    codeptr=>4  = $C0B5//+(VX<<8)       // LDA ESTKH,X
+                    codeptr=>6  = $C0F5+$0100//+(VX<<8) // SBC ESTKH+1,X
+                    codeptr=>8  = $0250                 // BVC +2
+                    codeptr=>10 = $8049                 // EOR #$80
+                    codeptr=>12 = $0330                 // BMI +3
+                    codeptr->14 = $4C                   // JMP abs
                     codeptr=>15 = addrxlate=>[dest]
-                    //*codeptr = addrxlate=>[dest]
                     if not (codeptr->16 & $80) // Unresolved address list
-                    //if not (*codeptr & $8000) // Unresolved address list
                         addrxlate=>[dest] = codeptr + 15 - *jitcodeptr
-                        //addrxlate=>[dest] = codeptr - *jitcodeptr
                     fin
-                    //codeptr  = codeptr + 2
-                    codeptr=>17 = $E8E8 // INX; INX
-                    //^codeptr = $E8;      codeptr++ // INX
-                    //^codeptr = $E8;      codeptr++ // INX
-                    codeptr    = codeptr + 19
-                    A_IS_TOSL  = FALSE
+                    codeptr=>17 = $E8E8                 // INX; INX
+                    codeptr     = codeptr + 19
+                    A_IS_TOSL   = FALSE
                     break
                 is $AC // BRAND - LOGICAL AND SPECIFIC BRANCH
                     i++
@@ -2264,31 +1512,22 @@ def compiler(defptr)#0
                     //puts("BRAND "); puti(dest)
                     codeptr, VX = resolveX(codeptr, VX)
                     if not A_IS_TOSL
-                        *codeptr = $D0B5+(VX<<8) // LDA ESTKL,X
+                        *codeptr = $D0B5//+(VX<<8) // LDA ESTKL,X
                         codeptr  = codeptr + 2
                     elsif A_IS_TOSL & TOSL_DIRTY
-                        *codeptr = $D095+(VX<<8) // STA ESTKL,X
+                        *codeptr = $D095//+(VX<<8) // STA ESTKL,X
                         codeptr  = codeptr + 2
                     fin
-                    codeptr=>0 = $C015+(VX<<8) // ORA ESTKH,X
-                    //^codeptr = $15;    codeptr++ // ORA zp,X
-                    //^codeptr = $C0+VX; codeptr++ // ESTKH
-                    codeptr=>2 = $03D0 // BNE +3
-                    //^codeptr = $D0;    codeptr++ // BNE rel
-                    //^codeptr = $03;    codeptr++ // +3
-                    codeptr->4 = $4C // JMP abs
-                    //^codeptr = $4C;    codeptr++ // JMP abs
+                    codeptr=>0 = $C015//+(VX<<8)   // ORA ESTKH,X
+                    codeptr=>2 = $03D0             // BNE +3
+                    codeptr->4 = $4C               // JMP abs
                     codeptr=>5 = addrxlate=>[dest]
-                    //*codeptr = addrxlate=>[dest]
                     if not (codeptr->6 & $80) // Unresolved address list
-                    //if not (*codeptr & $8000) // Unresolved address list
                         addrxlate=>[dest] = codeptr + 5 - *jitcodeptr
-                        //addrxlate=>[dest] = codeptr - *jitcodeptr
                     fin
-                    //codeptr  = codeptr + 2
-                    VX++ // INX
-                    codeptr    = codeptr + 7
-                    A_IS_TOSL  = FALSE
+                    VX++                           // INX
+                    codeptr   = codeptr + 7
+                    A_IS_TOSL = FALSE
                     break
                 is $AE // BROR - LOGICAL OR SPECIFIC BRANCH
                     i++
@@ -2297,104 +1536,71 @@ def compiler(defptr)#0
                     //puts("BROR "); puti(dest)
                     codeptr, VX = resolveX(codeptr, VX)
                     if not A_IS_TOSL
-                        *codeptr = $D0B5+(VX<<8) // LDA ESTKL,X
+                        *codeptr = $D0B5//+(VX<<8) // LDA ESTKL,X
                         codeptr  = codeptr + 2
                     elsif A_IS_TOSL & TOSL_DIRTY
-                        *codeptr = $D095+(VX<<8) // STA ESTKL,X
+                        *codeptr = $D095//+(VX<<8) // STA ESTKL,X
                         codeptr  = codeptr + 2
                     fin
-                    codeptr=>0 = $C015+(VX<<8) // ORA ESTKH,X
-                    //^codeptr = $15;    codeptr++ // ORA zp,X
-                    //^codeptr = $C0+VX; codeptr++ // ESTKH
-                    codeptr=>2 = $03F0 // BEQ +3
-                    //^codeptr = $F0;    codeptr++ // BEQ rel
-                    //^codeptr = $03;    codeptr++ // +3
-                    codeptr->4 = $4C // JMP abs
-                    //^codeptr = $4C;    codeptr++ // JMP abs
+                    codeptr=>0 = $C015//+(VX<<8)   // ORA ESTKH,X
+                    codeptr=>2 = $03F0             // BEQ +3
+                    codeptr->4 = $4C               // JMP abs
                     codeptr=>5 = addrxlate=>[dest]
-                    //*codeptr = addrxlate=>[dest]
                     if not (codeptr->6 & $80) // Unresolved address list
-                    //if not (*codeptr & $8000) // Unresolved address list
                         addrxlate=>[dest] = codeptr + 5 - *jitcodeptr
-                        //addrxlate=>[dest] = codeptr - *jitcodeptr
                     fin
-                    //codeptr  = codeptr + 2
-                    VX++ // INX
-                    codeptr    = codeptr + 7
-                    A_IS_TOSL  = FALSE
+                    VX++                           // INX
+                    codeptr   = codeptr + 7
+                    A_IS_TOSL = FALSE
                     break
                 is $B0 // ADDLB
                     i++
-                    //puts("ADDLB "); puti(^(bytecode+i))
+                    j = ^(bytecode+i)
+                    //puts("ADDLB "); puti(j)
                     if not A_IS_TOSL
                         *codeptr = $D0B5+(VX<<8) // LDA ESTKL,X
                         codeptr  = codeptr + 2
                     fin
-                    if ^(bytecode+i) <> 0                    
-                        *codeptr = $A0+(^(bytecode+i)<<8) // LDY #imm
+                    if j                  
+                        *codeptr = $A0+(j<<8)    // LDY #imm
                         codeptr  = codeptr + 2
                     fin
-                    codeptr->0 = $18 // CLC                    
-                    //^codeptr = $18;    codeptr++ // CLC
-                    codeptr=>1 = $E071 // ADC (IFP),Y
-                    //^codeptr = $71;    codeptr++ // ADC (zp),Y
-                    //^codeptr = $E0;    codeptr++ // IFP
-                    codeptr=>3 = $0290 // BCC +2
-                    //^codeptr = $90;    codeptr++ // BCC rel
-                    //^codeptr = $02;    codeptr++ // +2
-                    codeptr=>5 = $C0F6+(VX<<8) // INC ESTKH,X
-                    //^codeptr = $F6;    codeptr++ // INC zp,X
-                    //^codeptr = $C0+VX; codeptr++ // ESTKH
+                    codeptr->0 = $18             // CLC                    
+                    codeptr=>1 = $E071           // ADC (IFP),Y
+                    codeptr=>3 = $0290           // BCC +2
+                    codeptr=>5 = $C0F6+(VX<<8)   // INC ESTKH,X
                     codeptr    = codeptr + 7
-                    if ^(bytecode+i) <> 0                    
-                        *codeptr = $00A0 // LDY #$00
+                    if j                    
+                        *codeptr = $00A0         // LDY #$00
                         codeptr  = codeptr + 2
-                        //^codeptr = $A0;    codeptr++ // LDY #imm
-                        //^codeptr = $00;    codeptr++ // $00
                     fin
-                    //^codeptr = $95;    codeptr++ // STA zp,X
-                    //^codeptr = $D0+VX; codeptr++ // ESTKL
-                    A_IS_TOSL  = TOSL_DIRTY
+                    A_IS_TOSL = TOSL_DIRTY       // STA ESTKL,X
                     break
                 is $B2 // ADDLW
                     i++
-                    //puts("ADDLW "); puti(^(bytecode+i))
+                    j = ^(bytecode+i)
+                    //puts("ADDLW "); puti(j)
                     if not A_IS_TOSL
                         *codeptr = $D0B5+(VX<<8) // LDA ESTKL,X
                         codeptr  = codeptr + 2
                     fin
-                    if ^(bytecode+i) <> 0                    
-                        *codeptr = $A0+(^(bytecode+i)<<8) // LDY #imm
+                    if j                
+                        *codeptr = $A0+(j<<8)    // LDY #imm
                         codeptr  = codeptr + 2
                     fin
-                    codeptr->0 = $18 // CLC                    
-                    //^codeptr = $18;    codeptr++ // CLC
-                    codeptr=>1 = $E071 // ADC (IFP),Y
-                    //^codeptr = $71;    codeptr++ // ADC (zp),Y
-                    //^codeptr = $E0;    codeptr++ // IFP
-                    codeptr=>3 = $D095+(VX<<8) // STA ESTKL,X
-                    //^codeptr = $95;    codeptr++ // STA zp,X
-                    //^codeptr = $D0+VX; codeptr++ // ESTKL
-                    codeptr=>5  = $C0B5+(VX<<8) // LDA ESTKH,X
-                    //^codeptr = $B5;    codeptr++ // LDA zp,X
-                    //^codeptr = $C0+VX; codeptr++ // ESTKH
-                    codeptr->7  = $C8 // INY
-                    //^codeptr = $C8;    codeptr++ // INY
-                    codeptr=>8 = $E071 // ADC (IFP),Y
-                    //^codeptr = $71;    codeptr++ // ADC (zp),Y
-                    //^codeptr = $E0;    codeptr++ // IFP
-                    codeptr=>10 = $C095+(VX<<8) // STA ESTKH,X
-                    //^codeptr = $95;    codeptr++ // STA zp,X
-                    //^codeptr = $C0+VX; codeptr++ // ESTKH
-                    if ^(bytecode+i) <> 0                    
-                        codeptr=>12 = $00A0 // LDY #$00
+                    codeptr->0  = $18            // CLC                    
+                    codeptr=>1  = $E071          // ADC (IFP),Y
+                    codeptr=>3  = $D095+(VX<<8)  // STA ESTKL,X
+                    codeptr=>5  = $C0B5+(VX<<8)  // LDA ESTKH,X
+                    codeptr->7  = $C8            // INY
+                    codeptr=>8  = $E071          // ADC (IFP),Y
+                    codeptr=>10 = $C095+(VX<<8)  // STA ESTKH,X
+                    if j                   
+                        codeptr=>12 = $00A0      // LDY #$00
                         codeptr     = codeptr + 14
-                        //^codeptr = $A0;    codeptr++ // LDY #imm
-                        //^codeptr = $00;    codeptr++ // $00
                     else
-                        codeptr->12 = $88 // DEY
+                        codeptr->12 = $88        // DEY
                         codeptr     = codeptr + 13
-                        //^codeptr = $88;    codeptr++ // DEY
                     fin
                     A_IS_TOSL = FALSE
                     break
@@ -2405,150 +1611,91 @@ def compiler(defptr)#0
                         *codeptr = $D0B5+(VX<<8) // LDA ESTKL,X
                         codeptr  = codeptr + 2
                     fin
-                    codeptr=>0 = $6D18 // CLC; ADC abs                    
-                    //^codeptr = $18;    codeptr++ // CLC
-                    //^codeptr = $6D;    codeptr++ // ADC abs
+                    codeptr=>0 = $6D18           // CLC; ADC abs                    
                     codeptr=>2 = *(bytecode+i)
-                    //*codeptr = *(bytecode+i); codeptr = codeptr + 2
-                    codeptr=>4 = $0290 // BCC +2
-                    //^codeptr = $90;    codeptr++ // BCC rel
-                    //^codeptr = $02;    codeptr++ // +2
-                    codeptr=>6 = $C0F6+(VX<<8) // INC ESTKH,X
-                    //^codeptr = $F6;    codeptr++ // INC zp,X
-                    //^codeptr = $C0+VX; codeptr++ // ESTKH
-                    //^codeptr = $95;    codeptr++ // STA zp,X
-                    //^codeptr = $D0+VX; codeptr++ // ESTKL
-                    codeptr = codeptr + 8
-                    A_IS_TOSL  = TOSL_DIRTY
+                    codeptr=>4 = $0290           // BCC +2
+                    codeptr=>6 = $C0F6+(VX<<8)   // INC ESTKH,X
+                    codeptr    = codeptr + 8
+                    A_IS_TOSL  = TOSL_DIRTY      // STA ESTKL,X
                     i++
                     break
                 is $B6 // ADDAW
                     i++
-                    //puts("ADDAW $"); puth(*(bytecode+i))
+                    dest = *(bytecode+i)
+                    i++
+                    //puts("ADDAW $"); puth(dest)
                     if not A_IS_TOSL
                         *codeptr = $D0B5+(VX<<8) // LDA ESTKL,X
                         codeptr  = codeptr + 2
                     fin
-                    codeptr=>0  = $6D18 // CLC; ADC abs                    
-                    //^codeptr = $18;    codeptr++ // CLC
-                    //^codeptr = $6D;    codeptr++ // ADC abs
-                    codeptr=>2  = *(bytecode+i)
-                    //*codeptr = *(bytecode+i);   codeptr = codeptr + 2
-                    codeptr=>4  = $D095+(VX<<8) // STA ESTKL,X
-                    //^codeptr = $95;    codeptr++ // STA zp,X
-                    //^codeptr = $D0+VX; codeptr++ // ESTKL
-                    codeptr=>6  = $C0B5+(VX<<8) // LDA ESTKH,X
-                    //^codeptr = $B5;    codeptr++ // LDA zp,X
-                    //^codeptr = $C0+VX; codeptr++ // ESTKH
-                    codeptr->8  = $6D // ADC abs                    
-                    //^codeptr = $6D;    codeptr++ // ADC abs
-                    codeptr=>9  = *(bytecode+i)+1
-                    //*codeptr = *(bytecode+i)+1; codeptr = codeptr + 2
-                    codeptr=>11 = $C095+(VX<<8) // STA ESTKH,X
-                    //^codeptr = $95;    codeptr++ // STA zp,X
-                    //^codeptr = $C0+VX; codeptr++ // ESTKH
-                    codeptr = codeptr + 13
-                    A_IS_TOSL  = FALSE
-                    i++
+                    codeptr=>0  = $6D18          // CLC; ADC abs                    
+                    codeptr=>2  = dest
+                    codeptr=>4  = $D095+(VX<<8)  // STA ESTKL,X
+                    codeptr=>6  = $C0B5+(VX<<8)  // LDA ESTKH,X
+                    codeptr->8  = $6D            // ADC abs                    
+                    codeptr=>9  = dest+1
+                    codeptr=>11 = $C095+(VX<<8)  // STA ESTKH,X
+                    codeptr     = codeptr + 13
+                    A_IS_TOSL   = FALSE
                     break
                 is $B8 // IDXLB
                     i++
-                    //puts("IDXLB "); puti(^(bytecode+i))
+                    j = ^(bytecode+i)
+                    //puts("IDXLB "); puti(j)
                     if A_IS_TOSL & TOSL_DIRTY
                         *codeptr = $D095+(VX<<8) // STA ESTKL,X
                         codeptr  = codeptr + 2
                     fin
-                    if ^(bytecode+i) <> 0                    
-                        *codeptr = $A0+(^(bytecode+i)<<8) // LDY #imm
+                    if j                  
+                        *codeptr = $A0+(j<<8)    // LDY #imm
                         codeptr  = codeptr + 2
                     fin
-                    *codeptr = $E0B1 // LDA (IFP),Y
+                    *codeptr = $E0B1             // LDA (IFP),Y
                     codeptr  = codeptr + 2
-                    //^codeptr = $B1;    codeptr++ // LDA (zp),Y
-                    //^codeptr = $E0;    codeptr++ // IFP
-                    if ^(bytecode+i) <> 0                    
-                        *codeptr = $00A0 // LDY #$00
+                    if j                    
+                        *codeptr = $00A0         // LDY #$00
                         codeptr  = codeptr + 2
                     fin
-                    codeptr->0  = $0A // ASL
-                    //^codeptr = $0A;    codeptr++ // ASL
-                    codeptr=>1  = $0290 // BCC +2
-                    //^codeptr = $90;    codeptr++ // BCC rel
-                    //^codeptr = $02;    codeptr++ // +2
-                    codeptr=>3  = $18C8 // INY; CLC
-                    //^codeptr = $C8;    codeptr++ // INY
-                    //^codeptr = $18;    codeptr++ // CLC
-                    codeptr=>5  = $D075+(VX<<8) // ADC ESTKL,X
-                    //^codeptr = $75;    codeptr++ // ADC zp,X  
-                    //^codeptr = $D0+VX; codeptr++ // ESTKL
-                    codeptr=>7  = $D095+(VX<<8) // STA ESTKL,X
-                    //^codeptr = $95;    codeptr++ // STA zp,X
-                    //^codeptr = $D0+VX; codeptr++ // ESTKL
-                    codeptr->9  = $98 // TYA
-                    //^codeptr = $98;    codeptr++ // TYA
-                    codeptr=>10 = $C075+(VX<<8) // ADC ESTKH,X
-                    //^codeptr = $75;    codeptr++ // ADC zp,X
-                    //^codeptr = $C0+VX; codeptr++ // ESTKH
-                    codeptr=>12 = $C095+(VX<<8) // STA ESTKH,X
-                    //^codeptr = $95;    codeptr++ // STA zp,X
-                    //^codeptr = $C0+VX; codeptr++ // ESTKH
-                    codeptr=>14 = $00A0 // LDY #$00
-                    //^codeptr = $A0;    codeptr++ // LDY #imm
-                    //^codeptr = $00;    codeptr++ // $00
+                    codeptr->0  = $0A            // ASL
+                    codeptr=>1  = $0290          // BCC +2
+                    codeptr=>3  = $18C8          // INY; CLC
+                    codeptr=>5  = $D075+(VX<<8)  // ADC ESTKL,X
+                    codeptr=>7  = $D095+(VX<<8)  // STA ESTKL,X
+                    codeptr->9  = $98            // TYA
+                    codeptr=>10 = $C075+(VX<<8)  // ADC ESTKH,X
+                    codeptr=>12 = $C095+(VX<<8)  // STA ESTKH,X
+                    codeptr=>14 = $00A0          // LDY #$00
                     codeptr     = codeptr + 16
                     A_IS_TOSL   = FALSE
                     break
                 is $BA // IDXLW
                     i++
-                    //puts("IDXLW "); puti(^(bytecode+i))
+                    j = ^(bytecode+i)
+                    //puts("IDXLW "); puti(j)
                     if A_IS_TOSL & TOSL_DIRTY
                         *codeptr = $D095+(VX<<8) // STA ESTKL,X
                         codeptr  = codeptr + 2
                     fin
-                    if ^(bytecode+i) <> 0                    
-                        *codeptr = $A0+(^(bytecode+i)<<8) // LDY #imm
+                    if j                  
+                        *codeptr = $A0+(j<<8)    // LDY #imm
                         codeptr  = codeptr + 2
                     fin
-                    codeptr=>0  = $E0B1 // LDA (IFP),Y
-                    //^codeptr = $B1;    codeptr++ // LDA (zp),Y
-                    //^codeptr = $E0;    codeptr++ // IFP
-                    codeptr->2  = $0A // ASL
-                    //^codeptr = $0A;    codeptr++ // ASL
-                    codeptr=>3  = $E785 // STA $E7:TMPL
-                    //^codeptr = $85;    codeptr++ // STA zp
-                    //^codeptr = $E7;    codeptr++ // $E7:TMPL                           
-                    codeptr->5  = $C8 // INY
-                    //^codeptr = $C8;    codeptr++ // INY
-                    codeptr=>6  = $E0B1 // LDA (IFP),Y
-                    //^codeptr = $B1;    codeptr++ // LDA (zp),Y
-                    //^codeptr = $E0;    codeptr++ // IFP
-                    codeptr=>8  = $A82A // ROL; TAY
-                    //^codeptr = $2A;    codeptr++ // ROL
-                    //^codeptr = $A8;    codeptr++ // TAY
-                    codeptr=>10 = $E7A5 // LDA $E7:TMPL
-                    //^codeptr = $A5;    codeptr++ // LDA zp
-                    //^codeptr = $E7;    codeptr++ // $E7:TMPL                           
-                    codeptr->12 = $18 // CLC
-                    //^codeptr = $18;    codeptr++ // CLC
-                    codeptr=>13 = $D075+(VX<<8) // ADC ESTKL,X
-                    //^codeptr = $75;    codeptr++ // ADC zp,X
-                    //^codeptr = $D0+VX; codeptr++ // ESTKL
-                    codeptr=>15 = $D095+(VX<<8) // STA ESTKL,X
-                    //^codeptr = $95;    codeptr++ // STA zp,X
-                    //^codeptr = $D0+VX; codeptr++ // ESTKL
-                    codeptr->17 = $98 // TAY
-                    //^codeptr = $98;    codeptr++ // TYA
-                    codeptr=>18 = $C075+(VX<<8) // ADC ESTKLH,X
-                    //^codeptr = $75;    codeptr++ // ADC zp,X
-                    //^codeptr = $C0+VX; codeptr++ // ESTKH
-                    codeptr=>20 = $C095+(VX<<8) // STA ESTKLH,X
-                    //^codeptr = $95;    codeptr++ // STA zp,X
-                    //^codeptr = $C0+VX; codeptr++ // ESTKH
-                    codeptr=>22 = $00A0 // LDY #$00
-                    //^codeptr = $A0;    codeptr++ // LDY #imm
-                    //^codeptr = $00;    codeptr++ // $00
-                    codeptr    = codeptr + 24
-                    A_IS_TOSL  = FALSE
+                    codeptr=>0  = $E0B1          // LDA (IFP),Y
+                    codeptr->2  = $0A            // ASL
+                    codeptr=>3  = $E785          // STA $E7:TMPL
+                    codeptr->5  = $C8            // INY
+                    codeptr=>6  = $E0B1          // LDA (IFP),Y
+                    codeptr=>8  = $A82A          // ROL; TAY
+                    codeptr=>10 = $E7A5          // LDA $E7:TMPL
+                    codeptr->12 = $18            // CLC
+                    codeptr=>13 = $D075+(VX<<8)  // ADC ESTKL,X
+                    codeptr=>15 = $D095+(VX<<8)  // STA ESTKL,X
+                    codeptr->17 = $98            // TAY
+                    codeptr=>18 = $C075+(VX<<8)  // ADC ESTKLH,X
+                    codeptr=>20 = $C095+(VX<<8)  // STA ESTKLH,X
+                    codeptr=>22 = $00A0          // LDY #$00
+                    codeptr     = codeptr + 24
+                    A_IS_TOSL   = FALSE
                     break
                 is $BC // IDXAB
                     i++
@@ -2557,87 +1704,47 @@ def compiler(defptr)#0
                         *codeptr = $D095+(VX<<8) // STA ESTKL,X
                         codeptr  = codeptr + 2
                     fin
-                    codeptr->0  = $AD // LDA abs
-                    //^codeptr = $AD;    codeptr++ // LDA abs
+                    codeptr->0  = $AD            // LDA abs
                     codeptr=>1  = *(bytecode+i)
-                    //*codeptr = *(bytecode+i); codeptr = codeptr + 2
-                    codeptr->3  = $0A // ASL
-                    //^codeptr = $0A;    codeptr++ // ASL
-                    codeptr=>4  = $0290 // BCC +2
-                    //^codeptr = $90;    codeptr++ // BCC rel
-                    //^codeptr = $02;    codeptr++ // +2
-                    codeptr=>6  = $18C8 // INY; CLC
-                    //^codeptr = $C8;    codeptr++ // INY
-                    //^codeptr = $18;    codeptr++ // CLC
-                    codeptr=>8  = $D075+(VX<<8) // ADC ESTKL,X
-                    //^codeptr = $75;    codeptr++ // ADC zp,X
-                    //^codeptr = $D0+VX; codeptr++ // ESTKL
-                    codeptr=>10 = $D095+(VX<<8) // STA ESTKL,X
-                    //^codeptr = $95;    codeptr++ // STA zp,X
-                    //^codeptr = $D0+VX; codeptr++ // ESTKL
-                    codeptr->12 = $98 // TYA
-                    //^codeptr = $98;    codeptr++ // TYA
-                    codeptr=>13 = $C075+(VX<<8) // ADC ESTKH,X
-                    //^codeptr = $75;    codeptr++ // ADC zp,X
-                    //^codeptr = $C0+VX; codeptr++ // ESTKH
-                    codeptr=>15 = $C095+(VX<<8) // STA ESTKLH,X
-                    //^codeptr = $95;    codeptr++ // STA zp,X
-                    //^codeptr = $C0+VX; codeptr++ // ESTKH
-                    codeptr=>17 = $00A0 // LDY #$00
-                    //^codeptr = $A0;    codeptr++ // LDY #imm
-                    //^codeptr = $00;    codeptr++ // $00
-                    codeptr    = codeptr + 19
-                    A_IS_TOSL  = FALSE
+                    codeptr->3  = $0A            // ASL
+                    codeptr=>4  = $0290          // BCC +2
+                    codeptr=>6  = $18C8          // INY; CLC
+                    codeptr=>8  = $D075+(VX<<8)  // ADC ESTKL,X
+                    codeptr=>10 = $D095+(VX<<8)  // STA ESTKL,X
+                    codeptr->12 = $98            // TYA
+                    codeptr=>13 = $C075+(VX<<8)  // ADC ESTKH,X
+                    codeptr=>15 = $C095+(VX<<8)  // STA ESTKLH,X
+                    codeptr=>17 = $00A0          // LDY #$00
+                    codeptr     = codeptr + 19
+                    A_IS_TOSL   = FALSE
                     i++
                     break
                 is $BE
                     i++
-                    //puts("IDXAW $"); puth(*(bytecode+i))
+                    dest = *(bytecode+i)
+                    i++
+                    //puts("IDXAW $"); puth(dest)
                     if A_IS_TOSL & TOSL_DIRTY
                         *codeptr = $D095+(VX<<8) // STA ESTKL,X
                         codeptr  = codeptr + 2
                     fin
-                    codeptr->0  = $AD // LDA abs
-                    //^codeptr = $AD;    codeptr++ // LDA abs
-                    codeptr=>1  = *(bytecode+i)
-                    //*codeptr = *(bytecode+i);   codeptr = codeptr + 2
-                    codeptr->3  = $0A // ASL
-                    //^codeptr = $0A;    codeptr++ // ASL
-                    codeptr=>4  = $E785 // STA $E7:TMPL
-                    //^codeptr = $85;    codeptr++ // STA zp
-                    //^codeptr = $E7;    codeptr++ // $E7:TMPL                           
-                    codeptr->6  = $AD // LDA abs                    
-                    //^codeptr = $AD;    codeptr++ // LDA abs
-                    codeptr=>7  = *(bytecode+i)+1
-                    //*codeptr = *(bytecode+i)+1; codeptr = codeptr + 2
-                    codeptr=>9  = $A82A // ROL; TAY
-                    //^codeptr = $2A;    codeptr++ // ROL
-                    //^codeptr = $A8;    codeptr++ // TAY
-                    codeptr=>11 = $E7A5 // LDA $E7:TMPL
-                    //^codeptr = $A5;    codeptr++ // LDA zp
-                    //^codeptr = $E7;    codeptr++ // $E7:TMPL                           
-                    codeptr->13 = $18 // CLC
-                    //^codeptr = $18;    codeptr++ // CLC
-                    codeptr=>14 = $D075+(VX<<8) // ADC ESTKL,X
-                    //^codeptr = $75;    codeptr++ // ADC zp,X
-                    //^codeptr = $D0+VX; codeptr++ // ESTKL
-                    codeptr=>16 = $D095+(VX<<8) // STA ESTKL,X
-                    //^codeptr = $95;    codeptr++ // STA zp,X
-                    //^codeptr = $D0+VX; codeptr++ // ESTKL
-                    codeptr->18 = $98 // TYA
-                    //^codeptr = $98;    codeptr++ // TYA
-                    codeptr=>19 = $C075+(VX<<8) // ADC ESTKH,X
-                    //^codeptr = $75;    codeptr++ // ADC zp,X
-                    //^codeptr = $C0+VX; codeptr++ // ESTKH
-                    codeptr=>21 = $C095+(VX<<8) // STA ESTKLH,X
-                    //^codeptr = $95;    codeptr++ // STA zp,X
-                    //^codeptr = $C0+VX; codeptr++ // ESTKH
-                    codeptr=>23 = $00A0 // LDY #$00
-                    //^codeptr = $A0;    codeptr++ // LDY #imm
-                    //^codeptr = $00;    codeptr++ // $00
-                    codeptr    = codeptr + 25
-                    A_IS_TOSL  = FALSE
-                    i++
+                    codeptr->0  = $AD            // LDA abs
+                    codeptr=>1  = dest
+                    codeptr->3  = $0A            // ASL
+                    codeptr=>4  = $E785          // STA $E7:TMPL
+                    codeptr->6  = $AD            // LDA abs                    
+                    codeptr=>7  = dest+1
+                    codeptr=>9  = $A82A          // ROL; TAY
+                    codeptr=>11 = $E7A5          // LDA $E7:TMPL
+                    codeptr->13 = $18            // CLC
+                    codeptr=>14 = $D075+(VX<<8)  // ADC ESTKL,X
+                    codeptr=>16 = $D095+(VX<<8)  // STA ESTKL,X
+                    codeptr->18 = $98            // TYA
+                    codeptr=>19 = $C075+(VX<<8)  // ADC ESTKH,X
+                    codeptr=>21 = $C095+(VX<<8)  // STA ESTKLH,X
+                    codeptr=>23 = $00A0          // LDY #$00
+                    codeptr     = codeptr + 25
+                    A_IS_TOSL   = FALSE
                     break
                 is $FE // NOPed out earlier by SELect
                     break
