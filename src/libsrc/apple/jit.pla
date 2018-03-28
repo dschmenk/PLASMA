@@ -84,7 +84,7 @@ def compiler(defptr)#0
     isdata = addrxlate // Use this buffer
     i = 0
     while i <= defptr->bytecodesize
-        if not isdata->[i]
+        if not ^(isdata+i)
             when (^(bytecode+i) & $FE)
                 //
                 // Multi-byte operands
@@ -164,20 +164,16 @@ def compiler(defptr)#0
                     i++
                     case = i + *(bytecode+i)
                     i++
-                    isdata->[case] = 1 // Flag as data
+                    ^(isdata+case) = TRUE // Flag as data
                     j = ^(bytecode+case)
                     case++
                     repeat
-                        isdata->[case] = 1 // Flag as data
-                        case++
-                        isdata->[case] = 1 // Flag as data
-                        case++
-                        dest = case + *(bytecode+case)
+                        *(isdata+case)   = TRUE // Flag as data
+                        case             = case + 2
+                        dest             = case + *(bytecode+case)
                         ^(bytecode+dest) = ^(bytecode+dest) | 1 // Flag as branch dest
-                        isdata->[case] = 1 // Flag as data
-                        case++
-                        isdata->[case] = 1 // Flag as data
-                        case++
+                        *(isdata+case)   = TRUE // Flag as data
+                        case             = case + 2
                         j--
                     until not j
                     break
@@ -203,8 +199,8 @@ def compiler(defptr)#0
         codeptr->3 = $58           // ENTER CODE
         codeptr=>4 = *(bytecode+1) // ENTER FRAME SIZE & ARG COUNT
         codeptr->6 = $C0           // NATV CODE
-        codeptr = codeptr + 7
-        i = 3
+        codeptr    = codeptr + 7
+        i          = 3
     fin
     //
     // First optimization is to keep zero in Y register at all times
@@ -624,8 +620,8 @@ def compiler(defptr)#0
                         *codeptr = $D0B5-$0100//+(VX<<8)    // LDA ESTKL-1,X
                         codeptr  = codeptr + 2
                     fin
-                    codeptr=>0  = $C015-$0100//+(VX<<8)     // ORA ESTKH-1,X
-                    codeptr=>2  = $03D0                     // BNE +3
+                    codeptr=>0 = $C015-$0100//+(VX<<8)      // ORA ESTKH-1,X
+                    codeptr=>2 = $03D0                      // BNE +3
                     codeptr->4 = $4C                        // JMP abs
                     codeptr=>5 = addrxlate=>[dest]
                     if not (codeptr->6 & $80) // Unresolved address list
@@ -711,12 +707,12 @@ def compiler(defptr)#0
                             j--
                         until not j
                         codeptr=>0 = $00A0                          // LDY #$00
-                        codeptr->1 = $4C                            // JMP abs
-                        codeptr=>2 = addrxlate=>[case]
-                        if not (codeptr->3 & $80) // Unresolved address list
-                            addrxlate=>[case] = codeptr + 2 - *jitcodeptr
+                        codeptr->2 = $4C                            // JMP abs
+                        codeptr=>3 = addrxlate=>[case]
+                        if not (codeptr->4 & $80) // Unresolved address list
+                            addrxlate=>[case] = codeptr + 3 - *jitcodeptr
                         fin
-                        codeptr = codeptr + 4
+                        codeptr = codeptr + 5
                     else
                         codeptr = dest
                     fin
