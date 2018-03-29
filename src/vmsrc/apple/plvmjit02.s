@@ -54,7 +54,6 @@ STRBUF  =       $0280
 INTERP  =       $03D0
 JITCOMP =       $03E2
 JITCODE =       $03E4
-JITWARM =       $03E6
 ;******************************
 ;*                            *
 ;* INTERPRETER INITIALIZATION *
@@ -442,14 +441,12 @@ JITINTRPX PHP
         SBC     #$00
         STA     TMPH
         LDY     #$05
-        LDA     JITWARM+1       ; CHECK WARMING
-        ORA     JITWARM
-        BEQ     DECCALL
-DECWARM LDA     JITWARM         ; DEC WARMING COUNT
-        BNE     +
-        DEC     JITWARM+1
-+       DEC     JITWARM
-NOJIT   DEY                     ; INTERP BYTECODE AS USUAL
+        LDA     (TMP),Y         ; DEC JIT COUNT
+        SEC
+        SBC     #$01
+        STA     (TMP),Y
+        BEQ     RUNJIT
+        DEY                     ; INTERP BYTECODE AS USUAL
         LDA     (TMP),Y
         STA     IPH
         DEY
@@ -460,11 +457,6 @@ NOJIT   DEY                     ; INTERP BYTECODE AS USUAL
         STA     OPPAGE
         STA     ALTRDON
         JMP     FETCHOP
-DECCALL LDA     (TMP),Y         ; DEC JIT COUNT
-        SEC
-        SBC     #$01
-        STA     (TMP),Y
-        BNE     NOJIT
 RUNJIT  LDA     JITCOMP
         STA     SRCL
         LDA     JITCOMP+1
