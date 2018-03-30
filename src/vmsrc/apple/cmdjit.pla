@@ -49,14 +49,14 @@ predef crout()#0, cout(c)#0, prstr(s)#0, prbyte(b)#0, prword(w)#0, print(i)#0, c
 predef markheap()#1, allocheap(size)#1, allocalignheap(size, pow2, freeaddr)#1, releaseheap(newheap)#1, availheap()#1
 predef memset(addr,value,size)#0, memcpy(dst,src,size)#0, strcpy(dst,src)#1, strcat(dst,src)#1
 predef uword_isgt(a,b)#1, uword_isge(a,b)#1, uword_islt(a,b)#1, uword_isle(a,b)#1, sext(a)#1, divmod(a,b)#2
-predef execmod(modfile)#1, open(path)#1, close(refnum)#1, read(refnum, buff, len)#1, write(refnum, buff, len)#1
+predef execmod(modfile)#1, open(path)#1, close(refnum)#1, read(refnum, buf, len)#1
 //
 // Exported CMDSYS table
 //
 word version    = $0200 // 02.00 Dev
 word syspath
 word syscmdln
-word            = @execmod, @open, @close, @read, @write
+word            = @execmod, @open, @close, @read, 0 // Mark write() as NULL
 byte perr
 byte jitcount   = 45
 byte jitsize    = 255
@@ -140,7 +140,8 @@ word sysmodsym  = @exports
 //
 word systemflags = 0
 word heap
-word xheap       = $0C00//$0800 Skip text page2 for double lores
+word xheap       = $A000 // Set load address for JIT compiler
+word xheaptop    = $C000
 word lastsym     = symtbl
 //
 // Utility functions
@@ -343,36 +344,6 @@ REVCPYLP LDA    (SRC),Y
         DEC     ESTKH-3,X
         BNE     REVCPYLP
 CPYMEX  RTS
-end
-//
-// COPY FROM MAIN MEM TO AUX MEM.
-//
-// MEMXCPY(DST, SRC, SIZE)
-//
-asm memxcpy(dst,src,size)#0
-        LDA     ESTKL+1,X
-        STA     $3C
-        CLC
-        ADC     ESTKL,X
-        STA     $3E
-        LDA     ESTKH+1,X
-        STA     $3D
-        ADC     ESTKH,X
-        STA     $3F
-        LDA     ESTKL+2,X
-        STA     $42
-        LDA     ESTKH+2,X
-        STA     $43
-        STX     ESP
-        BIT     ROMEN
-        SEC
-        JSR     $C311
-        BIT     LCRDEN+LCBNK2
-        LDX     ESP
-        INX
-        INX
-        INX
-        RTS
 end
 asm crout()#0
         LDA     #$8D
@@ -908,18 +879,7 @@ def close(refnum)#1
     perr     = syscall($CC, @params)
     return perr
 end
-def read(refnum, buff, len)#1
-    byte params[8]
-
-    params.0 = 4
-    params.1 = refnum
-    params:2 = buff
-    params:4 = len
-    params:6 = 0
-    perr     = syscall($CA, @params)
-    return params:6
-end
-def write(refnum, buf, len)#1
+def read(refnum, buf, len)#1
     byte params[8]
 
     params.0 = 4
@@ -927,7 +887,7 @@ def write(refnum, buf, len)#1
     params:2 = buf
     params:4 = len
     params:6 = 0
-    perr     = syscall($CB, @params)
+    perr     = syscall($CA, @params)
     return params:6
 end
 //
@@ -990,12 +950,12 @@ def allocxheap(size)#1
             xheap = xaddr + size
         fin
     fin
-    //if systemflags & restxt2
-    //    if uword_isle(xaddr, $0C00) and uword_isgt(xheap, $0800)
-    //        xaddr = $0C00
-    //        xheap = xaddr + size
-    //    fin
-    //fin
+    if systemflags & restxt2
+        if uword_isle(xaddr, $0C00) and uword_isgt(xheap, $0800)
+            xaddr = $0C00
+            xheap = xaddr + size
+        fin
+    fin
     if systemflags & resxhgr1
         if uword_isle(xaddr, $4000) and uword_isgt(xheap, $2000)
             xaddr = $4000
@@ -1008,7 +968,7 @@ def allocxheap(size)#1
             xheap = xaddr + size
         fin
     fin
-    if uword_isge(xheap, $BF00)
+    if uword_isge(xheap, xheaptop)
         return 0
     fin
     return xaddr
@@ -1233,7 +1193,10 @@ def loadmod(mod)#1
         //
         // Move bytecode to AUX bank.
         //
-        memxcpy(defaddr, bytecode, modsize - (bytecode - modaddr))
+        *$003C   = bytecode
+        *$003E   = modaddr + modsize
+        *$0042   = defaddr
+        call($C311, 0, 0, 0, $05) // CALL XMOVE with carry set (MAIN->AUX) and ints disabled
     fin
     if perr
         return -perr
@@ -1464,6 +1427,8 @@ strcat(strcpy(@sysmods, $280), "SYS/")) // This is the path to CMD
 syspath  = @sysmods // Update external interface table
 syscmdln = @cmdln
 loadmod(@jitmod)
+xheap    = $0800 // Reset heap to point at low memory
+xheaptop = $A000 // Top where JIT loaded
 //
 // Try to load autorun.
 //
