@@ -587,13 +587,15 @@ def save_idlocal#0
     savelocals = locals
     savesize   = framesize
     savelast   = lastlocal
-    memcpy(heapmark, idlocal_tbl, lastlocal - idlocal_tbl)
+    savetbl    = heapalloc(lastlocal - idlocal_tbl)
+    memcpy(savetbl, idlocal_tbl, lastlocal - idlocal_tbl)
 end
 def restore_idlocal#0
     locals    = savelocals
     framesize = savesize
     lastlocal = savelast
-    memcpy(idlocal_tbl, heapmark, lastlocal - idlocal_tbl)
+    memcpy(idlocal_tbl, savetbl, lastlocal - idlocal_tbl)
+    heaprelease(savetbl)
 end
 //
 // Module dependency list
@@ -904,10 +906,11 @@ end
 // Build External Symbol Directory on heap
 //
 def buildESD(modfix)#2
-    word modofst, esd, idptr, idcnt, len
+    word modofst, esdtbl, esd, idptr, idcnt, len
     byte symnum
 
-    symnum, esd, idptr, idcnt = 0, heapmark, idglobal_tbl, globals
+    symnum, esdtbl, idptr, idcnt = 0, heapalloc(heapavail - 256), idglobal_tbl, globals
+    esd = esdtbl
     while idcnt
         if idptr=>idtype & EXPORT_TYPE
             esd           = esd + stodci(@idptr->idname, esd)
@@ -926,26 +929,27 @@ def buildESD(modfix)#2
         idcnt--
     loop
     ^esd = 0
-    len  = esd - heapmark + 1
-    esd  = heapalloc(len)
-    return esd, len
+    len  = esd - esdtbl + 1
+    heaprelease(esdtbl + len)
+    return esdtbl, len
 end
 //
 // Write ReLocation Directory
 //
 def writeRLD(refnum, modofst)#0
-    word rld, rldlen, fixups, updtptr, idptr, idcnt, tag
+    word rldtbl, rld, rldlen, fixups, updtptr, idptr, idcnt, tag
     byte type
 
-    rld    = heapmark
+    rldtbl = heapalloc(heapavail - 256)
+    rld    = rldtbl
     rldlen = 0
     for fixups = fixup_cnt-1 downto 0
         tag  = fixup_tag=>[fixups]
         type = tag_type->[tag]
         if not (type & RELATIVE_FIXUP)
             if rldlen == 64 // Write out blocks of entries
-                fileio:write(refnum, heapmark, rld - heapmark)
-                rld    = heapmark
+                fileio:write(refnum, rldtbl, rld - rldtbl)
+                rld    = rldtbl
                 rldlen = 0
             fin
             if type & EXTERN_FIXUP
@@ -967,7 +971,8 @@ def writeRLD(refnum, modofst)#0
         fin
     next
     ^rld = 0
-    fileio:write(refnum, heapmark, rld - heapmark + 1)
+    fileio:write(refnum, rldtbl, rld - rldtbl + 1)
+    heaprelease(rldtbl)
 end
 //
 // Write Extended REL file
