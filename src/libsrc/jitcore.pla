@@ -27,13 +27,14 @@ end
 def compiler(defptr)#0
     word codeptr, isdata, addrxlate, bytecode, i, case, dest, VX, VY
     byte opcode, j, A_IS_TOSL
-    
+
     //puts("JIT compiler invoked for :$"); puth(defptr=>bytecodeaddr); putln
     if isult(heapavail, 512 + defptr->bytecodesize) // 256 * sizeof(word) address xlate
         //
         // Not enough heap available
         //
-        defptr=>interpaddr = interpentry
+        //puts("Not enough free heap\n")
+        defptr=>interpaddr = indirectentry
         return
     fin
     addrxlate = heapmark
@@ -166,7 +167,7 @@ def compiler(defptr)#0
         // Call into VM
         //
         codeptr->0 = $20           // JSR INTERP
-        codeptr=>1 = $3D0
+        codeptr=>1 = directentry
         codeptr->3 = $58           // ENTER CODE
         codeptr=>4 = *(bytecode+1) // ENTER FRAME SIZE & ARG COUNT
         codeptr->6 = $C0           // NATV CODE
@@ -428,7 +429,7 @@ def compiler(defptr)#0
                         *codeptr = $D0B5+(VX<<8) // LDA ESTKL,X
                         codeptr  = codeptr + 2
                     fin
-                    codeptr->0 = $18             // CLC                    
+                    codeptr->0 = $18             // CLC
                     codeptr=>1 = $69+(j<<8)      // ADC #imm
                     codeptr=>3 = $0290           // BCC +2
                     codeptr=>5 = $C0F6+(VX<<8)   // INC ESTKH,X
@@ -448,7 +449,7 @@ def compiler(defptr)#0
                         *codeptr = $D0B5+(VX<<8) // LDA ESTKL,X
                         codeptr  = codeptr + 2
                     fin
-                    codeptr->0 = $38             // SEC                    
+                    codeptr->0 = $38             // SEC
                     codeptr=>1 = $E9+(j<<8)      // SBC #imm
                     codeptr=>3 = $02B0           // BCS +2
                     codeptr=>5 = $C0D6+(VX<<8)   // DEC ESTKH,X
@@ -505,7 +506,7 @@ def compiler(defptr)#0
                     codeptr=>0  = $D0D5+$0100+(VX<<8) // CMP ESTKL+1,X
                     codeptr=>4  = $C0B5+(VX<<8)       // LDA ESTKH,X
                     codeptr=>6  = $C0D5+$0100+(VX<<8) // CMP ESTKH+1
-                    codeptr=>10 = $9888               // DEY; TYA                    
+                    codeptr=>10 = $9888               // DEY; TYA
                     codeptr=>12 = $C094+$0100+(VX<<8) // STY ESTKH+1,X
                     codeptr     = codeptr + 14
                     VX++                              // INX
@@ -534,7 +535,7 @@ def compiler(defptr)#0
                         //puts("ISLE")
                         codeptr=>10 = $0130           // BMI +1
                     fin
-                    codeptr=>12 = $9888               // DEY TYA                    
+                    codeptr=>12 = $9888               // DEY TYA
                     codeptr=>14 = $C094+$0100+(VX<<8) // STY ESTKH+1,X
                     codeptr     = codeptr + 16
                     VX++                              // INX
@@ -564,7 +565,7 @@ def compiler(defptr)#0
                         //puts("ISGE")
                         codeptr=>12 = $0130           // BMI +1
                     fin
-                    codeptr=>14 = $9888               // DEY; TYA                    
+                    codeptr=>14 = $9888               // DEY; TYA
                     codeptr=>16 = $C094+$0100+(VX<<8) // STY ESTKH+1,X
                     codeptr     = codeptr + 18
                     VX++                              // INX
@@ -716,7 +717,7 @@ def compiler(defptr)#0
                         codeptr  = codeptr + 2
                     fin
                     codeptr->0 = $20                      // JSR abs
-                    codeptr=>1 = $03D0                    // INTERP
+                    codeptr=>1 = directentry              // INTERP
                     codeptr=>3 = $5A + (^(bytecode+i)<<8) // LEAVE CODE AND OPERAND
                     codeptr    = codeptr + 5
                     A_IS_TOSL  = FALSE
@@ -877,7 +878,7 @@ def compiler(defptr)#0
                         codeptr   = codeptr + 2
                         A_IS_TOSL = TOS_CLEAN
                     fin
-                    if VY <> j                   
+                    if VY <> j
                         *codeptr = $A0+(j<<8)    // LDY #imm
                         codeptr  = codeptr + 2
                         VY       = j
@@ -900,7 +901,7 @@ def compiler(defptr)#0
                         *codeptr = $D0B5+(VX<<8) // LDA ESTKL,X
                         codeptr  = codeptr + 2
                     fin
-                    if VY <> j                  
+                    if VY <> j
                         *codeptr = $A0+(j<<8)    // LDY #imm
                         codeptr  = codeptr + 2
                     fin
@@ -1066,7 +1067,7 @@ def compiler(defptr)#0
                         codeptr  = codeptr + 2
                     fin
                     codeptr->0 = $20               // JSR INTERP
-                    codeptr=>1 = $3D0              // INTERP
+                    codeptr=>1 = directentry      // INTERP
                     codeptr=>3 = $C000+opcode      // OPCODE; NATV CODE
                     codeptr    = codeptr + 5
                     VY         = UNKNOWN
@@ -1181,7 +1182,7 @@ def compiler(defptr)#0
                     codeptr   = codeptr + 19
                     A_IS_TOSL = FALSE
                     break
-                is $A2 // BRLT - FOR/NEXT SPECIFIC TEST & BRANCH 
+                is $A2 // BRLT - FOR/NEXT SPECIFIC TEST & BRANCH
                     i++
                     dest = i + *(bytecode+i)
                     //puts("BRLT "); puti(dest)
@@ -1361,11 +1362,11 @@ def compiler(defptr)#0
                         *codeptr = $D0B5+(VX<<8)    // LDA ESTKL,X
                         codeptr  = codeptr + 2
                     fin
-                    if VY <> j                  
+                    if VY <> j
                         *codeptr = $A0+(j<<8)       // LDY #imm
                         codeptr  = codeptr + 2
                     fin
-                    codeptr->0 = $18                // CLC                    
+                    codeptr->0 = $18                // CLC
                     codeptr=>1 = $E071              // ADC (IFP),Y
                     if opcode == $B0
                         //puts("ADDLB "); puti(j)
@@ -1395,7 +1396,7 @@ def compiler(defptr)#0
                         *codeptr = $D0B5+(VX<<8)    // LDA ESTKL,X
                         codeptr  = codeptr + 2
                     fin
-                    codeptr=>0 = $6D18              // CLC; ADC abs                    
+                    codeptr=>0 = $6D18              // CLC; ADC abs
                     codeptr=>2 = dest
                     if opcode == $B4
                         //puts("ADDAB $"); puth(dest)
@@ -1407,7 +1408,7 @@ def compiler(defptr)#0
                         //puts("ADDAW $"); puth(dest)
                         codeptr=>4  = $D095+(VX<<8) // STA ESTKL,X
                         codeptr=>6  = $C0B5+(VX<<8) // LDA ESTKH,X
-                        codeptr->8  = $6D           // ADC abs                    
+                        codeptr->8  = $6D           // ADC abs
                         codeptr=>9  = dest+1
                         codeptr=>11 = $C095+(VX<<8) // STA ESTKH,X
                         codeptr     = codeptr + 13
@@ -1422,13 +1423,13 @@ def compiler(defptr)#0
                         *codeptr = $D095+(VX<<8) // STA ESTKL,X
                         codeptr  = codeptr + 2
                     fin
-                    if VY <> j                  
+                    if VY <> j
                         *codeptr = $A0+(j<<8)    // LDY #imm
                         codeptr  = codeptr + 2
                     fin
                     *codeptr = $E0B1             // LDA (IFP),Y
                     codeptr  = codeptr + 2
-                    if j                    
+                    if j
                         *codeptr = $00A0         // LDY #$00
                         codeptr  = codeptr + 2
                     fin
@@ -1452,7 +1453,7 @@ def compiler(defptr)#0
                         *codeptr = $D095+(VX<<8) // STA ESTKL,X
                         codeptr  = codeptr + 2
                     fin
-                    if VY <> j                  
+                    if VY <> j
                         *codeptr = $A0+(j<<8)    // LDY #imm
                         codeptr  = codeptr + 2
                     fin
@@ -1512,7 +1513,7 @@ def compiler(defptr)#0
                     codeptr=>1  = dest
                     codeptr->3  = $0A            // ASL
                     codeptr=>4  = $E785          // STA $E7:TMPL
-                    codeptr->6  = $AD            // LDA abs                    
+                    codeptr->6  = $AD            // LDA abs
                     codeptr=>7  = dest+1
                     codeptr=>9  = $A82A          // ROL; TAY
                     codeptr=>11 = $E7A5          // LDA $E7:TMPL
@@ -1549,13 +1550,12 @@ def compiler(defptr)#0
             //getc
             return
         fin
-        //if opcode == $B6; getc; fin
     loop
     //
     // If we got here. we ran out of code buffer space. Overwrite interpreter
     // entrypoint with standard bytecode interpreter
     //
-    defptr=>interpaddr = interpentry
+    defptr=>interpaddr = indirectentry
     //
     // Free working bufffers
     //

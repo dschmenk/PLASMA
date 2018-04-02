@@ -157,7 +157,7 @@ $(CMDJIT): vmsrc/apple/cmdjit.pla vmsrc/apple/cmdjitstub.s $(PLVMJIT) $(PLASM)
 	./$(PLASM) -AOW < vmsrc/apple/cmdjit.pla > vmsrc/apple/cmdjit.a
 	acme --setpc 8192 -o $(CMDJIT) vmsrc/apple/cmdjitstub.s
 
-$(SOSCMD): vmsrc/apple/soscmd.pla $(PLVM03) $(PLASM)
+$(SOSCMD): vmsrc/apple/soscmd.pla libsrc/jitcore.pla $(PLVM03) $(PLASM)
 	./$(PLASM) -AMOW < vmsrc/apple/soscmd.pla > vmsrc/apple/soscmd.a
 	acme --setpc 4094 -o $(SOSCMD) vmsrc/apple/soscmd.a
 
@@ -366,7 +366,7 @@ $(SOS): libsrc/apple/sos.pla $(PLVM03) $(PLASM)
 	./$(PLASM) -AMO < libsrc/apple/sos.pla > libsrc/apple/sos.a
 	acme --setpc 4094 -o $(SOS) libsrc/apple/sos.a
 
-$(JIT): libsrc/apple/jit.pla $(PLVMJIT) $(PLASM)
+$(JIT): libsrc/apple/jit.pla libsrc/jitcore.pla $(PLVMJIT) $(PLASM)
 	./$(PLASM) -AMO < libsrc/apple/jit.pla > libsrc/apple/jit.a
 	acme --setpc 4094 -o $(JIT) libsrc/apple/jit.a
 
