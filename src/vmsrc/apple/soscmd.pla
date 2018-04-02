@@ -18,55 +18,50 @@ end
 //
 const jitcomp       = $B7F0
 const jitcodeptr    = $B7F2
-const codemax       = $A000
+const codemax       = $9FE0
 const directentry   = $A0C2 // Right afer opcode table
 const indirectentry = $A0D5 // Yikes! Grabbed from plvm03.sym
 //
 // COPY FROM EXT MEM TO MAIN MEM.
 //
-// XMEMCPY(DST, XSRC, SIZE)
-//
-asm xmemcpy(dst, src, srcx, size)#0
+asm defcpy(dst, defentry)#0
         !SOURCE "vmsrc/plvmzp.inc"
 XPAGE   =       $1600
 SRCX    =       XPAGE+SRCH
 DSTX    =       XPAGE+DSTH
 
-        LDA     ESTKL,X
-        ORA     ESTKH,X
-        BEQ     CPYXMEX
-        LDA     ESTKL+3,X
-        STA     DSTL
-        LDA     ESTKH+3,X
-        STA     DSTH
-        LDA     ESTKL+2,X
-        STA     SRCL
-        LDA     ESTKH+2,X
-        STA     SRCH
         LDA     ESTKL+1,X
+        STA     DSTL
+        LDA     ESTKH+1,X
+        STA     DSTH
+        LDA     ESTKL,X
+        STA     TMPL
+        LDA     ESTKH,X
+        STA     TMPH
+        LDY     #$05
+        LDA     (TMP),Y
         STA     SRCX
-        INC     ESTKH,X
-        LDY     #$00
-CPYXLP  LDA     (SRC),Y
+        DEY
+        LDA     (TMP),Y
+        STA     SRCH
+        DEY
+        LDA     (TMP),Y
+        STA     SRCL
+        LDY     #$07
+        LDA     (TMP),Y
+        TAY
+        DEY
+        BEQ     +
+-       LDA     (SRC),Y
         STA     (DST),Y
-        INY
-        BNE     +
-        INC     DSTH
-        INC     SRCH
-+       DEC     ESTKL,X
-        BNE     CPYXLP
-        DEC     ESTKH,X
-        BNE     CPYXLP
-        LDA     #$00
-        STA     SRCX
-CPYXMEX INX
-        INX
+        DEY
+        BNE     -
++       LDA     (SRC),Y
+        STA     (DST),Y
+        STY     SRCX
         INX
         INX
         RTS
-end
-def defcpy(dst, defentry)#0
-    xmemcpy(dst, defentry=>bytecodeaddr, defentry->bytecodexbyte, defentry->bytecodesize)
 end
 include "libsrc/jitcore.pla"
 //
