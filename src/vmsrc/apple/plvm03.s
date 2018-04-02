@@ -31,6 +31,8 @@ JMPTMPX =       XPAGE+JMPTMP
 TMPX    =       XPAGE+TMPH
 SRCX    =       XPAGE+SRCH
 DSTX    =       XPAGE+DSTH
+JITCOMP =       $B7F0           ; JIT VARS AT THE END OF INTER
+JITCODE =       $B7F2
 ;*
 ;* SOS
 ;*
@@ -49,10 +51,6 @@ SEGSTART        =       $2000
         !WORD   SEGSTART
         !WORD   SEGEND-SEGSTART
 
-;        +SOS    $40, SEGREQ     ; ALLOCATE SEG 1 AND MAP IT
-;        BNE     FAIL            ; PRHEX
-;        LDA     #$00
-;        STA     MEMBANK
         LDY     #$0F            ; INSTALL PAGE 0 FETCHOP ROUTINE
         LDA     #$00
 -       LDX     PAGE0,Y
@@ -65,15 +63,8 @@ SEGSTART        =       $2000
         STA     TMPX            ; CLEAR ALL EXTENDED POINTERS
         STA     SRCX
         STA     DSTX
-        STA     PPX             ; INIT FRAME & POOL POINTERS
+        STA     PPX
         STA     IFPX
-        LDA     #$00
-        STA     PPL
-        STA     IFPL
-        LDA     #$A0
-        STA     PPH
-        STA     IFPH
-        !IF     1 {
         LDA     #<VMCORE        ; COPY VM+SYS INTO SBANK
         STA     SRCL
         LDA     #>VMCORE
@@ -91,7 +82,16 @@ SEGSTART        =       $2000
         LDA     DSTH
         CMP     #$B8
         BNE     -
-}
+        LDA     #$00            ; INIT JIT, FRAME & POOL POINTERS
+        STA     JITCOMP
+        STA     JITCOMP+1
+        STA     JITCODE
+        STA     PPL
+        STA     IFPL
+        LDA     #$90            ; RESERVE 4K FOR JITCODE
+        STA     JITCODE+1
+        STA     PPH
+        STA     IFPH
         LDX     #$FF            ; INIT STACK POINTER
         TXS
         LDX     #ESTKSZ/2       ; INIT EVAL STACK INDEX
@@ -230,7 +230,6 @@ RUNJIT  LDA     JITCOMP
         PLA
         STA     TMPL
         JMP     JMPTMP          ; RE-CALL ORIGINAL DEF ENTRY
-JITCOMP !WORD   0
 ;*
 ;* INTERNAL DIVIDE ALGORITHM
 ;*
@@ -1432,5 +1431,6 @@ NATV    TYA                     ; FLATTEN IP
         JMP     JMPTMP
 SOSCMD  =       *
         !SOURCE "vmsrc/apple/sossys.a"
+
 }
 SEGEND  =       *

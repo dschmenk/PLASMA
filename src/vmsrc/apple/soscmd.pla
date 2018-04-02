@@ -14,46 +14,39 @@ struc t_defentry
     byte bytecodesize
 end
 //
-// JIT compiler constants
+// JIT compiler values
 //
-const jitcomp     = $03E2
+const jitcomp     = $B7F0
+const jitcodeptr  = $B7F2
 const codemax     = $A000
+word  interpentry
 //
 // AUX bytecode interpreter entrypoint
 //
-word jitcodeptr
-word codeptr
-word interpentry
 //
 // COPY FROM EXT MEM TO MAIN MEM.
 //
 // XMEMCPY(DST, XSRC, SIZE)
 //
-asm defcpy(dst,defentry)#0
+asm xmemcpy(dst, src, srcx, size)#0
         !SOURCE "vmsrc/plvmzp.inc"
 XPAGE   =       $1600
 SRCX    =       XPAGE+SRCH
 DSTX    =       XPAGE+DSTH
 
-//asm memxcpy(dst,src,size)#0
         LDA     ESTKL,X
         ORA     ESTKH,X
         BEQ     CPYXMEX
-        LDY     #$00
+        LDA     ESTKL+3,X
         STY     DSTL
-        LDA     ESTKH+2,X
-        CLC
-        ADC     #$60
+        LDA     ESTKH+3,X
         STA     DSTH
         LDA     ESTKL+2,X
-        CLC
-        ADC     #$7F
-        STA     DSTX
-        LDA     ESTKL+1,X
         STA     SRCL
-        LDA     ESTKH+1,X
+        LDA     ESTKH+2,X
         STA     SRCH
-        INC     ESTKH,X
+        LDA     ESTKL+1,X
+        STA     SRCX
 CPYXLP  LDA     (SRC),Y
         STA     (DST),Y
         INY
@@ -65,11 +58,15 @@ CPYXLP  LDA     (SRC),Y
         DEC     ESTKH,X
         BNE     CPYXLP
         LDA     #$00
-        STA     DSTX
+        STA     SRCX
 CPYXMEX INX
         INX
         INX
+        INX
         RTS
+end
+def defcpy(dst, defentry)#0
+    xmemcpy(dst, defentry=>bytecodeaddr, defentry->bytecodexbyte, defentry->bytecodesize)
 end
 include "libsrc/jitcore.pla"
 //
@@ -316,5 +313,7 @@ cmdsys:cmdparser = @shell
 //
 // Install JIT compiler
 //
+puts("JITC 1.0\n")
 cmdsys:jitc = @compiler
+interpentry = compiler:interpaddr
 done

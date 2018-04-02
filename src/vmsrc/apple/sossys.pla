@@ -17,6 +17,17 @@ const resxhgr2    = $0080
 const modkeep     = $2000
 const modinitkeep = $4000
 //
+// Indirect interpreter DEFinition entrypoint
+//
+struc t_defentry
+    byte interpjsr
+    word interpaddr
+    word bytecodeaddr
+    byte bytecodexbyte
+    byte callcount
+    byte bytecodesize
+end
+//
 // Pedefined functions.
 //
 predef syscall(cmd,params)#1, call(addr,areg,xreg,yreg,status)#1
@@ -449,6 +460,14 @@ asm interp()#1
         STA     ESTKH,X
         RTS
 end
+asm jitinterp()#1
+        DEX
+        LDA     #<JITINTRP
+        STA     ESTKL,X
+        LDA     #>JITINTRP
+        STA     ESTKH,X
+        RTS
+end
 //
 // A DCI string is one that has the high bit set for every character except the last.
 // More efficient than C or Pascal strings.
@@ -662,7 +681,7 @@ end
 //        if deftbl=>3 == addr
 //            return deftbl
 //        fin
-//        deftbl = deftbl + 6
+//        deftbl = deftbl + t_defentry
 //    loop
 //    return 0
 //end
@@ -689,7 +708,7 @@ asm lookupdef(addr, deftbl)#1
         LDA     SRCH
         STA     ESTKH,X
         RTS
-+       LDA     #$06
++       LDA     #$08            ; T_DEFENTRY
         CLC
         ADC     SRCL
         STA     SRCL
@@ -1014,18 +1033,28 @@ def lookupextern(esd, index)#1
     fin
     return 0
 end
-def adddef(ext, addr, deflast)#1
-    word defentry
+def adddef(isfirst, ext, addr, deflast)#1
+    word preventry, defentry, defsize
     defentry = *deflast
-    *deflast = defentry + 6
-    defentry->0 = $20
-    defentry=>1 = interp
-    defentry=>3 = addr
-    defentry=>5 = ext // ext is byte, so this nulls out next entry
+    *deflast = defentry + t_defentry
+    if not isfirst
+        preventry = defentry - t_defentry
+        defsize   = addr - preventry=>bytecodeaddr
+        if *jitcomp and defsize <= jitsize
+            preventry=>interpaddr   = jitinterp // JSR JITINTRP
+            preventry->callcount    = jitcount  // Set JIT countdown
+            preventry->bytecodesize = defsize   // Set size
+        fin
+    fin
+    defentry->interpjsr     = $20
+    defentry=>interpaddr    = interp
+    defentry=>bytecodeaddr  = addr
+    defentry->bytecodexbyte = ext
+    defentry->t_defentry    = 0
     return defentry
 end
 def loadmod(mod)#1
-    word refnum, rdlen, modsize, bytecode, codefix, defofst, defcnt, init, fixup
+    word refnum[], deffirst, rdlen, modsize, bytecode, codefix, defofst, defcnt, init, fixup
     word addr, defaddr, modaddr, modfix, modofst, modend
     word deftbl, deflast, codeseg
     word moddep, rld, esd, sym
@@ -1149,11 +1178,13 @@ def loadmod(mod)#1
         //
         // Run through the DeFinition Dictionary.
         //
+        deffirst    = 1
         while ^rld == $02
             //
             // This is a bytcode def entry - add it to the def directory.
             //
-            adddef(defext, rld=>1 + defofst, @deflast)
+            adddef(deffirst, defext, rld=>1 + defofst, @deflast)
+            deffirst = 0
             rld = rld + 4
         loop
         //
@@ -1231,7 +1262,7 @@ def loadmod(mod)#1
     //
     fixup = 0
     if init
-        fixup = adddef(defext, init + defofst, @deflast)()
+        fixup = adddef(deffirst, defext, init + defofst, @deflast)()
         if fixup < 0
             perr = -fixup
         fin
