@@ -192,13 +192,16 @@ JITINTRP PLA
         PLA
         SBC     #$00
         STA     TMPH
-        LDY     #$05
+        LDY     #$06
         LDA     (TMP),Y         ; DEC JIT COUNT
         SEC
         SBC     #$01
         STA     (TMP),Y
         BEQ     RUNJIT
         DEY                     ; INTERP BYTECODE AS USUAL
+        LDA     (TMP),Y
+        STA     IPX
+        DEY
         LDA     (TMP),Y
         STA     IPH
         DEY
@@ -210,7 +213,10 @@ RUNJIT  LDA     JITCOMP
         STA     SRCL
         LDA     JITCOMP+1
         STA     SRCH
-        DEY                     ; LDY     #$04
+        DEY                     ; LDY     #$05
+        LDA     (SRC),Y
+        STA     IPX
+        DEY
         LDA     (SRC),Y
         STA     IPH
         DEY
