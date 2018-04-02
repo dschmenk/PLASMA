@@ -1220,65 +1220,68 @@ def parse_defs
     word type, idstr, func_tag, idptr
 
     type = FUNC_TYPE
-    if token == EXPORT_TKN
-        if scan <> DEF_TKN; exit_err(ERR_INVAL|ERR_STATE); fin
-        type = type | EXPORT_TYPE
-    fin
-    if token == DEF_TKN
-        if scan <> ID_TKN; exit_err(ERR_INVAL|ERR_ID); fin
-        lambda_cnt = 0
-        cfnparms   = 0
-        infuncvals = 1
-        infunc     = TRUE
-        idstr      = tknptr
-        idlen      = tknlen
-        init_idlocal
-        if scan == OPEN_PAREN_TKN
-            repeat
-                if scan == ID_TKN
-                    cfnparms++
-                    new_idlocal(tknptr, tknlen, WORD_TYPE, 2)
-                    scan
-                fin
-            until token <> COMMA_TKN
-            if token <> CLOSE_PAREN_TKN; exit_err(ERR_MISS|ERR_CLOSE|ERR_SYNTAX); fin
+    when token
+        is CONST_TKN
+        is STRUC_TKN
+            return parse_vars(GLOBAL_TYPE)
+        is EXPORT_TKN
+            if scan <> DEF_TKN; exit_err(ERR_INVAL|ERR_STATE); fin
+            type = type | EXPORT_TYPE
+        is DEF_TKN
+            if scan <> ID_TKN; exit_err(ERR_INVAL|ERR_ID); fin
+            lambda_cnt = 0
+            cfnparms   = 0
+            infuncvals = 1
+            infunc     = TRUE
+            idstr      = tknptr
+            idlen      = tknlen
+            init_idlocal
+            if scan == OPEN_PAREN_TKN
+                repeat
+                    if scan == ID_TKN
+                        cfnparms++
+                        new_idlocal(tknptr, tknlen, WORD_TYPE, 2)
+                        scan
+                    fin
+                until token <> COMMA_TKN
+                if token <> CLOSE_PAREN_TKN; exit_err(ERR_MISS|ERR_CLOSE|ERR_SYNTAX); fin
+                scan
+            fin
+            if token == POUND_TKN
+                if not parse_const(@infuncvals); exit_err(ERR_INVAL|ERR_CONST); fin
+                scan
+            fin
+            idptr = lookup_idglobal(idstr, idlen)
+            if idptr
+                if not idptr=>idtype & PREDEF_TYPE; exit_err(ERR_DUP|ERR_ID); fin
+                if idptr->funcparms <> cfnparms or idptr->funcvals <> infuncvals; exit_err(ERR_DUP|ERR_CODE|ERR_ID); fin
+                func_tag = idptr=>idval
+                idptr=>idtype = idptr=>idtype | type
+            else
+                func_tag = new_tag(WORD_FIXUP)
+                new_idfunc(idstr, idlen, type, func_tag, cfnparms, infuncvals)
+            fin
+            emit_tag(func_tag)
+            new_dfd(func_tag)
+            while parse_vars(LOCAL_TYPE); nextln; loop
+            emit_enter(cfnparms)
+            prevstmnt = 0
+            while parse_stmnt; nextln; loop
+            infunc = FALSE
+            if token <> END_TKN; exit_err(ERR_MISS|ERR_CLOSE|ERR_STATE); fin
             scan
-        fin
-        if token == POUND_TKN
-            if not parse_const(@infuncvals); exit_err(ERR_INVAL|ERR_CONST); fin
-            scan
-        fin
-        idptr = lookup_idglobal(idstr, idlen)
-        if idptr
-            if not idptr=>idtype & PREDEF_TYPE; exit_err(ERR_DUP|ERR_ID); fin
-            if idptr->funcparms <> cfnparms or idptr->funcvals <> infuncvals; exit_err(ERR_DUP|ERR_CODE|ERR_ID); fin
-            func_tag = idptr=>idval
-            idptr=>idtype = idptr=>idtype | type
-        else
-            func_tag = new_tag(WORD_FIXUP)
-            new_idfunc(idstr, idlen, type, func_tag, cfnparms, infuncvals)
-        fin
-        emit_tag(func_tag)
-        new_dfd(func_tag)
-        while parse_vars(LOCAL_TYPE); nextln; loop
-        emit_enter(cfnparms)
-        prevstmnt = 0
-        while parse_stmnt; nextln; loop
-        infunc = FALSE
-        if token <> END_TKN; exit_err(ERR_MISS|ERR_CLOSE|ERR_STATE); fin
-        scan
-        if prevstmnt <> RETURN_TKN
-            if infuncvals; parse_warn("No return values"); fin
-            for cfnvals = infuncvals - 1 downto 0
-                emit_const(0)
+            if prevstmnt <> RETURN_TKN
+                if infuncvals; parse_warn("No return values"); fin
+                for cfnvals = infuncvals - 1 downto 0
+                    emit_const(0)
+                next
+                emit_leave
+            fin
+            for cfnvals = 0 to lambda_cnt-1
+                emit_lambdafunc(lambda_tag[cfnvals], lambda_cparms[cfnvals], lambda_seq[cfnvals])
+                new_dfd(lambda_tag[cfnvals])
             next
-            emit_leave
-        fin
-        for cfnvals = 0 to lambda_cnt-1
-            emit_lambdafunc(lambda_tag[cfnvals], lambda_cparms[cfnvals], lambda_seq[cfnvals])
-            new_dfd(lambda_tag[cfnvals])
-        next
-    fin
+    wend
     return token == EOL_TKN ?? TRUE :: FALSE
 end
 def parse_module#0

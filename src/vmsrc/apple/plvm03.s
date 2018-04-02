@@ -150,6 +150,7 @@ OPTBL   !WORD   CN,CN,CN,CN,CN,CN,CN,CN                                 ; 00 02 
         !WORD   NEG,COMP,BAND,IOR,XOR,SHL,SHR,IDXW                      ; 90 92 94 96 98 9A 9C 9E
         !WORD   BRGT,BRLT,INCBRLE,ADDBRLE,DECBRGE,SUBBRGE,BRAND,BROR    ; A0 A2 A4 A6 A8 AA AC AE
         !WORD   ADDLB,ADDLW,ADDAB,ADDAW,IDXLB,IDXLW,IDXAB,IDXAW         ; B0 B2 B4 B6 B8 BA BC BE
+        !WORD   NATV                                                    ; C0
 ;*
 ;* SYSTEM INTERPRETER ENTRYPOINT
 ;*
@@ -181,6 +182,55 @@ XINTERP PLA
         STA     IPL
         DEY
         JMP     FETCHOP
+;*
+;* JIT PROFILING ENTRY INTO INTERPRETER
+;*
+JITINTRP PLA
+        SEC
+        SBC     #$02            ; POINT TO DEF ENTRY
+        STA     TMPL
+        PLA
+        SBC     #$00
+        STA     TMPH
+        LDY     #$05
+        LDA     (TMP),Y         ; DEC JIT COUNT
+        SEC
+        SBC     #$01
+        STA     (TMP),Y
+        BEQ     RUNJIT
+        DEY                     ; INTERP BYTECODE AS USUAL
+        LDA     (TMP),Y
+        STA     IPH
+        DEY
+        LDA     (TMP),Y
+        STA     IPL
+        LDY     #$00
+        JMP     FETCHOP
+RUNJIT  LDA     JITCOMP
+        STA     SRCL
+        LDA     JITCOMP+1
+        STA     SRCH
+        DEY                     ; LDY     #$04
+        LDA     (SRC),Y
+        STA     IPH
+        DEY
+        LDA     (SRC),Y
+        STA     IPL
+        DEX                     ; ADD PARAMETER TO DEF ENTRY
+        LDA     TMPL
+        PHA                     ; AND SAVE IT FOR LATER
+        STA     ESTKL,X
+        LDA     TMPH
+        PHA
+        STA     ESTKH,X
+        LDY     #$00
+        JSR     FETCHOP         ; CALL JIT COMPILER
+        PLA
+        STA     TMPH
+        PLA
+        STA     TMPL
+        JMP     JMPTMP          ; RE-CALL ORIGINAL DEF ENTRY
+JITCOMP !WORD   0
 ;*
 ;* INTERNAL DIVIDE ALGORITHM
 ;*
@@ -1369,6 +1419,17 @@ LEAVE   INY                     ;+INC_IP
         PLA
         STA     IFPH
 RET     RTS
+;*
+;* RETURN TO NATIVE CODE
+;*
+NATV    TYA                     ; FLATTEN IP
+        SEC
+        ADC     IPL
+        STA     TMPL
+        LDA     #$00
+        ADC     IPH
+        STA     TMPH
+        JMP     JMPTMP
 SOSCMD  =       *
         !SOURCE "vmsrc/apple/sossys.a"
 }

@@ -1540,11 +1540,16 @@ int parse_defs(void)
     char c, *idstr;
     int idlen, func_tag, cfnparms, cfnvals, type = GLOBAL_TYPE, pretype;
     static char bytecode = 0;
-    if (scantoken == EXPORT_TOKEN)
+
+    switch (scantoken)
     {
-        if (scan() != DEF_TOKEN && scantoken != ASM_TOKEN)
-            parse_error("Bad export definition");
-        type = EXPORT_TYPE;
+        case CONST_TOKEN:
+        case STRUC_TOKEN:
+            return parse_vars(GLOBAL_TYPE);
+        case EXPORT_TOKEN:
+            if (scan() != DEF_TOKEN && scantoken != ASM_TOKEN)
+                parse_error("Bad export definition");
+            type = EXPORT_TYPE;
     }
     if (scantoken == DEF_TOKEN)
     {
