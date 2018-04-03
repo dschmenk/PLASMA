@@ -31,8 +31,6 @@ JMPTMPX =       XPAGE+JMPTMP
 TMPX    =       XPAGE+TMPH
 SRCX    =       XPAGE+SRCH
 DSTX    =       XPAGE+DSTH
-JITCOMP =       $B7F0           ; JIT VARS AT THE END OF INTER
-JITCODE =       $B7F2
 ;*
 ;* SOS
 ;*
@@ -134,6 +132,10 @@ PAGE0   =       *
 }
 VMCORE  =       *
         !PSEUDOPC       $A000 {
+TEMPBUF !FILL   $F0
+CMDPARS !WORD   0               ; $A0F0
+JITCOMP !WORD   0               ; $A0F2
+JITCODE !WORD   0               ; $A0F4
 ;*
 ;* OPCODE TABLE
 ;*
@@ -171,7 +173,7 @@ XINTERP PLA
         STA     TMPL
         PLA
         STA     TMPH
-        LDY     #$03
+-       LDY     #$03
         LDA     (TMP),Y
         STA     IPX
         DEY
@@ -186,34 +188,20 @@ XINTERP PLA
 ;* JIT PROFILING ENTRY INTO INTERPRETER
 ;*
 JITINTRP PLA
-        SEC
-        SBC     #$02            ; POINT TO DEF ENTRY
         STA     TMPL
         PLA
-        SBC     #$00
         STA     TMPH
-        LDY     #$06
+        LDY     #$04
         LDA     (TMP),Y         ; DEC JIT COUNT
         SEC
         SBC     #$01
         STA     (TMP),Y
-        BEQ     RUNJIT
-        DEY                     ; INTERP BYTECODE AS USUAL
-        LDA     (TMP),Y
-        STA     IPX
-        DEY
-        LDA     (TMP),Y
-        STA     IPH
-        DEY
-        LDA     (TMP),Y
-        STA     IPL
-        LDY     #$00
-        JMP     FETCHOP
-RUNJIT  LDA     JITCOMP
+        BNE     -               ; INTERP BYTECODE
+        LDA     JITCOMP         ; CALL JIT COMPILER
         STA     SRCL
         LDA     JITCOMP+1
         STA     SRCH
-        DEY                     ; LDY     #$05
+        INY                     ; LDY     #$05
         LDA     (SRC),Y
         STA     IPX
         DEY
@@ -224,9 +212,12 @@ RUNJIT  LDA     JITCOMP
         STA     IPL
         DEX                     ; ADD PARAMETER TO DEF ENTRY
         LDA     TMPL
+        SEC
+        SBC     #$02            ; POINT TO DEF ENTRY
         PHA                     ; AND SAVE IT FOR LATER
         STA     ESTKL,X
         LDA     TMPH
+        SBC     #$00
         PHA
         STA     ESTKH,X
         LDY     #$00
@@ -1357,7 +1348,7 @@ CALL    INY                     ;+INC_IP
         INY                     ;+INC_IP
         LDA     (IP),Y
         STA     CALLADR+2
-        TYA
+_CALL   TYA
         SEC
         ADC     IPL
         PHA
