@@ -339,7 +339,7 @@ CMDENTRY =      *
         STA     $01FF           ; CLEAR CMDLINE BUFF
         STA     PPL             ; INIT FRAME POINTER
         STA     IFPL
-        LDA     #$B0            ; FRAME POINTER AT $B000, BELOW JIT BUFFER
+        LDA     #$AF            ; FRAME POINTER AT $AF00, BELOW JIT BUFFER
         STA     PPH
         STA     IFPH
         LDX     #$FE            ; INIT STACK POINTER (YES, $FE. SEE GETS)
