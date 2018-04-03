@@ -17,10 +17,12 @@ const resxhgr2    = $0080
 const modkeep     = $2000
 const modinitkeep = $4000
 //
-// Temp buff addresses
+// Private addresses
 //
 const instr       = $A020
 const cmdparser   = $A0F0
+const xinterp     = $A0F8
+const jitinterp   = $A0FA
 //
 // Indirect interpreter DEFinition entrypoint
 //
@@ -456,25 +458,6 @@ asm sext(a)#1
         BPL     +
         DEY
 +       STY     ESTKH,X
-        RTS
-end
-//
-// Addresses of internal routines.
-//
-asm xinterp()#1
-        DEX
-        LDA     #<XINTERP
-        STA     ESTKL,X
-        LDA     #>XINTERP
-        STA     ESTKH,X
-        RTS
-end
-asm jitinterp()#1
-        DEX
-        LDA     #<JITINTRP
-        STA     ESTKL,X
-        LDA     #>JITINTRP
-        STA     ESTKH,X
         RTS
 end
 //
@@ -1050,13 +1033,13 @@ def adddef(isfirst, ext, addr, deflast)#1
         preventry = defentry - t_defentry
         defsize   = addr - preventry=>bytecodeaddr
         if defsize <= jitsize
-            preventry=>interpaddr   = jitinterp // JSR JITINTRP
-            preventry->callcount    = jitcount  // Set JIT countdown
-            preventry->bytecodesize = defsize   // Set size
+            preventry=>interpaddr   = *jitinterp // JSR JITINTRP
+            preventry->callcount    = jitcount   // Set JIT countdown
+            preventry->bytecodesize = defsize    // Set size
         fin
     fin
-    defentry->interpjsr     = $20
-    defentry=>interpaddr    = xinterp
+    defentry->interpjsr     = $20      // JSR
+    defentry=>interpaddr    = *xinterp // XINTERP
     defentry=>bytecodeaddr  = addr
     defentry->bytecodexbyte = ext
     defentry->t_defentry    = 0

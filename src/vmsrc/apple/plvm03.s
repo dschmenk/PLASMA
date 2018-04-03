@@ -136,6 +136,9 @@ TEMPBUF !FILL   $F0
 CMDPARS !WORD   0               ; $A0F0
 JITCOMP !WORD   0               ; $A0F2
 JITCODE !WORD   0               ; $A0F4
+SENTRY  !WORD   INTERP          ; $A0F6
+XENTRY  !WORD   XINTERP         ; $A0F8
+JENTRY  !WORD   JITINTRP        ; $A0FA
 ;*
 ;* OPCODE TABLE
 ;*
