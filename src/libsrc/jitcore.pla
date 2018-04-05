@@ -25,7 +25,7 @@ end
 // JIT compiler entry
 //
 def compiler(defptr)#0
-    word codeptr, isdata, addrxlate, bytecode, i, case, dest, VX, VY
+    word codeptr, isdata[], addrxlate, bytecode, i, case, dest, VX, VY
     byte opcode, j, A_IS_TOSL
 
     //puts("JIT compiler invoked for :$"); puth(defptr=>bytecodeaddr); putln
@@ -38,7 +38,6 @@ def compiler(defptr)#0
         return
     fin
     addrxlate = heapmark
-    memset(addrxlate, 0, 512) // Clear xlate buffer
     //
     // Copy bytecode def from AUX to heap for compiling
     //
@@ -52,18 +51,12 @@ def compiler(defptr)#0
     // All PLASMA ops are even (LSB clear), so this will flag when to fence optimizations
     // During compiling.
     //
-    isdata = addrxlate // Use this buffer
+    //isdata = addrxlate     // Use this buffer
+    memset(isdata, 0, 256) // Clear isdata buffer
     i = 0
     while i <= defptr->bytecodesize
         if not ^(isdata+i)
             when ^(bytecode+i) & $FE
-                //
-                // Multi-byte operands
-                //
-                is $2E // CS
-                    i++
-                    i = i + ^(bytecode+i)
-                    break
                 //
                 // Double byte operands
                 //
@@ -81,7 +74,13 @@ def compiler(defptr)#0
                 is $B6 // ADDAW
                 is $BC // IDXAB
                 is $BE // IDXAW
-                    i++
+                    i = i + 2
+                    break
+                //
+                // Multi-byte operands
+                //
+                is $2E // CS
+                    i = i + ^(bytecode+i+1)
                 //
                 // Single byte operands
                 //
@@ -122,12 +121,9 @@ def compiler(defptr)#0
                 is $AC // BRAND
                 is $AE // BROR
                     i++
-                    //
-                    // Flag branch destination
-                    //
                     dest = i + *(bytecode+i)
-                    ^(bytecode+dest) = ^(bytecode+dest) | 1
                     i++
+                    ^(bytecode+dest) = ^(bytecode+dest) | 1 // Flag as branch dest
                     break
                 //
                 // SELect/caseblock
@@ -153,10 +149,10 @@ def compiler(defptr)#0
         fin
         i++
     loop
-    memset(isdata, 0, 256) // Clear part of xlate buffer used for isdata
     //
     // Compile the bytecodes
     //
+    memset(addrxlate, 0, 512) // Clear xlate buffer
     codeptr   = *jitcodeptr
     A_IS_TOSL = FALSE
     VY        = UNKNOWN // Virtual Y register
