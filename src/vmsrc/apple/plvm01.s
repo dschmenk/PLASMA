@@ -658,6 +658,8 @@ DLB     INY                     ;+INC_IP
         TAY
         LDA     ESTKL,X
         STA     (IFP),Y
+        LDA     #$00
+        STA     ESTKH,X
         LDY     IPY
         JMP     NEXTOP
 DLW     INY                     ;+INC_IP
@@ -718,6 +720,8 @@ DAB     INY                     ;+INC_IP
         STA     ESTKH-1,X
         LDA     ESTKL,X
         STA     (ESTKH-2,X)
+        LDA     #$00
+        STA     ESTKH,X
         JMP     NEXTOP
 DAW     INY                     ;+INC_IP
         LDA     (IP),Y

@@ -1262,6 +1262,8 @@ DLB     INY                     ;+INC_IP
         LDA     TOS,S
         STA     (IFP),Y
         +ACCMEM16               ; 16 BIT A/M
+        AND     #$00FF
+        STA     TOS,S
         TXY
         JMP     NEXTOP
 DLW     INY                     ;+INC_IP
@@ -1304,6 +1306,8 @@ DAB     INY                     ;+INC_IP
         LDA     TOS,S
         STA     (TMP)
         +ACCMEM16               ; 16 BIT A/M
+        AND     #$00FF
+        STA     TOS,S
         INY                     ;+INC_IP
         JMP     NEXTOP
 DAW     INY                     ;+INC_IP

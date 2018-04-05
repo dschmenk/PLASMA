@@ -1511,6 +1511,8 @@ DLB     INY                     ;+INC_IP
         TAY
         LDA     ESTKL,X
         STA     (IFP),Y
+        LDA     #$00
+        STA     ESTKH,X
         LDY     IPY
         JMP     NEXTOP
 DLW     INY                     ;+INC_IP
@@ -1572,6 +1574,8 @@ DAB     INY                     ;+INC_IP
         STA     ESTKH-1,X
         LDA     ESTKL,X
         STA     (ESTKH-2,X)
+        LDA     #$00
+        STA     ESTKH,X
         JMP     NEXTOP
 DAW     INY                     ;+INC_IP
         LDA     (IP),Y
@@ -2304,6 +2308,37 @@ CDAW    INY                     ;+INC_IP
         LDY     IPY
         JMP     NEXTOP
 CDAWEND
+;
+        LDA     #<DAB
+        LDX     #>DAB
+        LDY     #(CDABEND-CDAB)
+        JSR     OPCPY
+CDAB    INY                     ;+INC_IP
+        LDA     (IP),Y
+        STA     ESTKH-2,X
+        INY                     ;+INC_IP
+        LDA     (IP),Y
+        STA     ESTKH-1,X
+        LDA     ESTKL,X
+        STA     (ESTKH-2,X)
+        STZ     ESTKH,X
+        JMP     NEXTOP
+CDABEND
+;
+        LDA     #<DLB
+        LDX     #>DLB
+        LDY     #(CDLBEND-CDLB)
+        JSR     OPCPY
+CDLB    INY                     ;+INC_IP
+        LDA     (IP),Y
+        STY     IPY
+        TAY
+        LDA     ESTKL,X
+        STA     (IFP),Y
+        STZ     ESTKH,X
+        LDY     IPY
+        JMP     NEXTOP
+CDLBEND
 ;
         LDA     #<ISFLS
         LDX     #>ISFLS
