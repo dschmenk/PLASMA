@@ -51,6 +51,7 @@ IPH     =       IPL+1
 OPIDX   =       FETCHOP+6
 OPPAGE  =       OPIDX+1
 STRBUF  =       $0280
+JITMOD  =       $02E0
 INTERP  =       $03D0
 JITCOMP =       $03E2
 JITCODE =       $03E4
@@ -276,6 +277,15 @@ BYE     LDY     DEFCMD
 ;        INY                     ; CLEAR CMDLINE BUFF
 ;        STY     $01FF
 CMDENTRY =      *
+;
+; SET DCI STRING FOR JIT MODULE
+;
+        LDA     #'J'|$80
+        STA     JITMOD+0
+        LDA     #'I'|$80
+        STA     JITMOD+1
+        LDA     #'T'
+        STA     JITMOD+2
 ;
 ; DEACTIVATE 80 COL CARDS
 ;
