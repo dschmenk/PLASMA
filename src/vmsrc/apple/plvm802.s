@@ -65,6 +65,8 @@ OPPAGE  =       OPIDX+1
 ;
 STRBUF  =       $0280
 INTERP  =       $03D0
+JITCOMP =       $03E2
+JITCODE =       $03E4
 ;*
 ;* HARDWARE STACK OFFSETS
 ;*
@@ -88,18 +90,35 @@ NOS     =       $03             ; TOS-1
 ;******************************
 *        =      $2000
 ;*
-;* CHECK CPU TYPE
+;* MUST HAVE 128K FOR JIT
 ;*
-        CLC
-        XCE                     ; SWITCH TO NATIVE MODE
-        BCS     ++              ; NOPE, NOT 65802/65816
++       LDA     MACHID
+        AND     #$30
+        CMP     #$30
+        BEQ     ++
         LDY     #$00
--       LDA     BADCPU,Y
+-       LDA     NEEDAUX,Y
         BEQ     +
         ORA     #$80
         JSR     $FDED
         INY
         BNE     -
+        LDY     #ANYKEY-BADCPU
+        BNE     +++
+NEEDAUX !TEXT   "128K MEMORY REQUIRED.", 13, 0
+;*
+;* CHECK CPU TYPE
+;*
+++      CLC
+        XCE                     ; SWITCH TO NATIVE MODE
+        BCS     ++
+        LDY     #$00            ; NOPE, NOT 65802/65816
+-       LDA     BADCPU,Y
+        BEQ     +
+        ORA     #$80
+        JSR     $FDED
+        INY
++++     BNE     -
 +       LDA     $C000
         BPL     -
         LDA     $C010
@@ -112,7 +131,7 @@ BYEPARMS !BYTE  4
         !BYTE   0
         !WORD   0
 BADCPU  !TEXT   "65C802/65C816 CPU REQUIRED.", 13
-        !TEXT   "PRESS ANY KEY...", 0
+ANYKEY  !TEXT   "PRESS ANY KEY...", 0
 ++      XCE                     ; SWITCH BACK TO EMULATED MODE
 
 ;*
@@ -193,7 +212,7 @@ RAMDONE ;CLI UNTIL I KNOW WHAT TO DO WITH THE UNENHANCED IIE
         JSR     PRODOS          ; GET PREFIX
         !BYTE   $C7
         !WORD   GETPFXPARMS
-        LDY     STRBUF          ; APPEND "CMD"
+        LDY     STRBUF          ; APPEND "CMDJIT"
         LDA     #"/"
         CMP     STRBUF,Y
         BEQ     +
@@ -206,6 +225,15 @@ RAMDONE ;CLI UNTIL I KNOW WHAT TO DO WITH THE UNENHANCED IIE
         INY
         STA     STRBUF,Y
         LDA     #"D"
+        INY
+        STA     STRBUF,Y
+        LDA     #"J"
+        INY
+        STA     STRBUF,Y
+        LDA     #"I"
+        INY
+        STA     STRBUF,Y
+        LDA     #"T"
         INY
         STA     STRBUF,Y
         STY     STRBUF
@@ -243,30 +271,30 @@ OPTBL   !WORD   CN,CN,CN,CN,CN,CN,CN,CN                                 ; 00 02 
         !WORD   NEG,COMP,BAND,IOR,XOR,SHL,SHR,IDXW                      ; 90 92 94 96 98 9A 9C 9E
         !WORD   BRGT,BRLT,INCBRLE,ADDBRLE,DECBRGE,SUBBRGE,BRAND,BROR    ; A0 A2 A4 A6 A8 AA AC AE
         !WORD   ADDLB,ADDLW,ADDAB,ADDAW,IDXLB,IDXLW,IDXAB,IDXAW         ; B0 B2 B4 B6 B8 BA BC BE
+        !WORD   NATV                                                    ; C0
 ;*
 ;* ENTER INTO BYTECODE INTERPRETER - IMMEDIATELY SWITCH TO NATIVE
 ;*
         !AS
-IINTRP  PHP
+DINTRP  PHP
         PLA
         STA     PSR
         SEI
         CLC                     ; SWITCH TO NATIVE MODE
         XCE
         +ACCMEM16               ; 16 BIT A/M
-        LDY     #$01
-        LDA     (TOS,S),Y
-        DEY
-        STA     IP
         PLA
+        INC
+        STA     IP
         STX     ESP
         TSX
         STX     HWSP
         LDX     #>OPTBL
 !IF DEBUG {
-        BRA     SETDBG
+        JMP     SETDBG
 } ELSE {
         STX     OPPAGE
+        LDY     #$00
         JMP     FETCHOP
 }
         !AS
@@ -330,9 +358,6 @@ CMDENTRY =      *
 !IF     DEBUG {
         LDA     #20             ; SET TEXT WINDOW ABOVE DEBUG OUTPUT
         STA     $23
-;        LDA     $BF98           ; FORCE 64K
-;        AND     #$CF
-;        STA     $BF98
 }
 ;
 ; INSTALL PAGE 0 FETCHOP ROUTINE
@@ -379,11 +404,11 @@ CMDENTRY =      *
 ;
 ; INIT VM ENVIRONMENT STACK POINTERS
 ;
-;        LDA     #$00
+;       LDA     #$00
         STA     $01FF           ; CLEAR CMDLINE BUFF
         STA     PPL             ; INIT FRAME POINTER
         STA     IFPL
-        LDA     #$BF
+        LDA     #$AF            ; FRAME POINTER AT $AF00, BELOW JIT BUFFER
         STA     PPH
         STA     IFPH
         LDX     #$FE            ; INIT STACK POINTER (YES, $FE. SEE GETS)
@@ -394,7 +419,7 @@ CMDENTRY =      *
 ;
         LDA     STRBUF
         SEC
-        SBC     #$03
+        SBC     #$06
         STA     STRBUF
         JMP     $2000           ; JUMP TO LOADED SYSTEM COMMAND
 ;
@@ -441,8 +466,8 @@ PAGE3   =       *
         !PSEUDOPC       $03D0 {
         BIT     LCRDEN+LCBNK2   ; $03D0 - DIRECT INTERP ENTRY
         JMP     DINTRP
-        BIT     LCRDEN+LCBNK2   ; $03D6 - INDIRECT INTERP ENTRY
-        JMP     IINTRP
+        BIT     LCRDEN+LCBNK2   ; $03D6 - JIT INDIRECT INTERPX ENTRY
+        JMP     JITINTRPX
         BIT     LCRDEN+LCBNK2   ; $03DC - INDIRECT INTERPX ENTRY
         JMP     IINTRPX
 }
@@ -476,28 +501,85 @@ OPXTBL  !WORD   CN,CN,CN,CN,CN,CN,CN,CN                                 ; 00 02 
         !WORD   NEG,COMP,BAND,IOR,XOR,SHL,SHR,IDXW                      ; 90 92 94 96 98 9A 9C 9E
         !WORD   BRGT,BRLT,INCBRLE,ADDBRLE,DECBRGE,SUBBRGE,BRAND,BROR    ; A0 A2 A4 A6 A8 AA AC AE
         !WORD   ADDLBX,ADDLWX,ADDABX,ADDAWX,IDXLBX,IDXLWX,IDXABX,IDXAWX ; B0 B2 B4 B6 B8 BA BC BE
-        !AS
-DINTRP  PHP
+        !WORD   NATV                                                    ; C0
+;*
+;* JIT PROFILING ENTRY INTO INTERPRETER
+;*
+JITINTRPX PHP
         PLA
         STA     PSR
         SEI
+        PLA
+        SEC
+        SBC     #$02            ; POINT TO DEF ENTRY
+        STA     TMPL
+        PLA
+        SBC     #$00
+        STA     TMPH
+        LDY     #$05
+        LDA     (TMP),Y         ; DEC JIT COUNT
+        DEC
+        STA     (TMP),Y
+        BEQ     RUNJIT
         CLC                     ; SWITCH TO NATIVE MODE
         XCE
         +ACCMEM16               ; 16 BIT A/M
-        PLA
-        INC
+        LDY     #$3             ; INTERP BYTECODE AS USUAL
+        LDA     (TMP),Y
         STA     IP
         STX     ESP
         TSX
         STX     HWSP
-        LDX     #>OPTBL
+        STX     ALTRDON
+        LDX     #>OPXTBL
 !IF DEBUG {
-        JMP     SETDBG
-} ELSE {
+SETDBG  LDY     LCRWEN+LCBNK2
+        LDY     LCRWEN+LCBNK2
+        STX     DBG_OP+2
+        LDY     LCRDEN+LCBNK2
+        LDX     #>DBGTBL
+}
         STX     OPPAGE
         LDY     #$00
         JMP     FETCHOP
+;
+        !AS
+RUNJIT  DEX                     ; ADD PARAMETER TO DEF ENTRY
+        LDA     TMPL
+        PHA                     ; AND SAVE IT FOR LATER
+        STA     ESTKL,X
+        LDA     TMPH
+        PHA
+        STA     ESTKH,X
+        CLC                     ; SWITCH TO NATIVE MODE
+        XCE
+        +ACCMEM16               ; 16 BIT A/M
+        LDA     JITCOMP
+        STA     SRC
+        LDY     #$03
+        LDA     (SRC),Y
+        STA     IP
+        STX     ESP
+        TSX
+        STX     HWSP
+        STX     ALTRDON
+        LDX     #>OPXTBL
+!IF DEBUG {
+SETDBG  LDY     LCRWEN+LCBNK2
+        LDY     LCRWEN+LCBNK2
+        STX     DBG_OP+2
+        LDY     LCRDEN+LCBNK2
+        LDX     #>DBGTBL
 }
+        STX     OPPAGE
+        LDY     #$00
+        JSR     FETCHOP         ; CALL JIT COMPILER
+        !AS
+        PLA
+        STA     TMPH
+        PLA
+        STA     TMPL
+        JMP     (TMP)           ; RE-CALL ORIGINAL DEF ENTRY
 ;*********************************************************************
 ;*
 ;*      CODE BELOW HERE DEFAULTS TO NATIVE 16 BIT A/M, 8 BIT X,Y
@@ -1823,7 +1905,7 @@ LEAVEX  INY                     ;+INC_IP
         BEQ     +
         LDX     #$80+'L'
         STX     $7D0+30
--       LDX    $C000
+-       LDX     $C000
         BPL     -
         LDX     $C010
 +
@@ -1882,7 +1964,7 @@ RET     SEC                     ; SWITCH TO EMULATION MODE
         BEQ     +
         LDX     #$80+'X'
         STX     $7D0+30
--       LDX    $C000
+-       LDX     $C000
         BPL     -
         LDX     $C010
 +
@@ -1892,6 +1974,59 @@ RET     SEC                     ; SWITCH TO EMULATION MODE
         PHA
         PLP
         RTS
+;*
+;* RETURN TO NATIVE CODE
+;*
+NATV    TYA                     ; FLATTEN IP
+        SEC
+        ADC     IP
+        STA     IP
+        SEC                     ; SWITCH TO EMULATION MODE
+        XCE
+        !AS
+        ;+ACCMEM8                ; 8 BIT A/M
+        TSC                     ; MOVE HW EVAL STACK TO ZP EVAL STACK
+        EOR     #$FF
+        SEC
+        ADC     HWSP            ; STACK DEPTH = (HWSP - SP)/2
+        LSR
+!IF     DEBUG {
+        PHA
+        CLC
+        ADC     #$80+'0'
+        STA     $7D0+31
+        PLA
+}
+        EOR     #$FF
+        SEC
+        ADC     ESP             ; ESP - STACK DEPTH
+        TAX
+        CPX     ESP
+        BEQ     ++
+        TAY
+-       PLA
+        STA     ESTKL,X
+        PLA
+        STA     ESTKH,X
+        INX
+        CPX     ESP
+        BNE     -
+!IF     DEBUG {
+        TSX
+        CPX     HWSP
+        BEQ     +
+        LDX     #$80+'V'
+        STX     $7D0+30
+-       LDX     $C000
+        BPL     -
+        LDX     $C010
++
+}
+        TYX
+++      LDA     PSR
+        PHA
+        PLP
+        JMP     (IP)
 !IF     DEBUG {
 ;*****************
 ;*               *
@@ -1911,6 +2046,7 @@ DBGTBL  !WORD   STEP,STEP,STEP,STEP,STEP,STEP,STEP,STEP         ; 00 02 04 06 08
         !WORD   STEP,STEP,STEP,STEP,STEP,STEP,STEP,STEP         ; 90 92 94 96 98 9A 9C 9E
         !WORD   STEP,STEP,STEP,STEP,STEP,STEP,STEP,STEP         ; A0 A2 A4 A6 A8 AA AC AE
         !WORD   STEP,STEP,STEP,STEP,STEP,STEP,STEP,STEP         ; B0 B2 B4 B6 B8 BA BC BE
+        !WORD   STEP                                            ; C0
 ;*
 ;* DEBUG PRINT ROUTINES
 ;*

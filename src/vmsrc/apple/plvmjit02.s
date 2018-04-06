@@ -483,7 +483,7 @@ RUNJIT  LDA     JITCOMP
         STA     TMPH
         PLA
         STA     TMPL
-        JMP     JMPTMP          ; RE-CALL ORIGINAL DEF ENTRY
+        JMP     (TMP)           ; RE-CALL ORIGINAL DEF ENTRY
 ;*
 ;* ADD TOS TO TOS-1
 ;*

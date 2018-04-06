@@ -229,7 +229,7 @@ JITINTRP PLA
         STA     TMPH
         PLA
         STA     TMPL
-        JMP     JMPTMP          ; RE-CALL ORIGINAL DEF ENTRY
+        JMP     (TMP)           ; RE-CALL ORIGINAL DEF ENTRY
 ;*
 ;* INTERNAL DIVIDE ALGORITHM
 ;*
