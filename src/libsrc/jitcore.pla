@@ -29,6 +29,8 @@ def compiler(defptr)#0
     byte opcode, j, A_IS_TOSL
 
     //puts("JIT compiler invoked for :$"); puth(defptr=>bytecodeaddr); putln
+    addrxlate = heapmark // heapalloc(512 + defptr->bytecodesize)
+    //if not addrxlate
     if isult(heapavail, 512 + defptr->bytecodesize) // 256 * sizeof(word) address xlate
         //
         // Not enough heap available
@@ -37,14 +39,12 @@ def compiler(defptr)#0
         defptr=>interpaddr = indirectentry
         return
     fin
-    addrxlate = heapmark
     //
     // Copy bytecode def from AUX to heap for compiling
     //
     bytecode = addrxlate + 512 // def bytecode
     defcpy(bytecode, defptr)
     //puts("Addr Xlate: $"); puth(addrxlate); putln
-    //puts("Bytecode:   $"); puth(bytecode); putln
     //
     // Find all branch targets and optimization fences. Tag the opcode with the LSB set
     //
@@ -54,8 +54,9 @@ def compiler(defptr)#0
     //isdata = addrxlate     // Use this buffer
     memset(isdata, 0, 256) // Clear isdata buffer
     i = 0
-    while i <= defptr->bytecodesize
+    while i < defptr->bytecodesize
         if not ^(isdata+i)
+            //puth(bytecode+i); putc(':'); putb(^(bytecode+i) & $FE); putln; getc
             when ^(bytecode+i) & $FE
                 //
                 // Double byte operands
@@ -153,6 +154,7 @@ def compiler(defptr)#0
     // Compile the bytecodes
     //
     memset(addrxlate, 0, 512) // Clear xlate buffer
+    //puts("Bytecode:   $"); puth(bytecode); putln; getc
     codeptr   = *jitcodeptr
     A_IS_TOSL = FALSE
     VY        = UNKNOWN // Virtual Y register
@@ -288,9 +290,8 @@ def compiler(defptr)#0
                     break
                 is $26 // LA
                 is $2C // CW
-                    i++
-                    dest = *(bytecode+i)
-                    i++
+                    dest = *(bytecode+i+1)
+                    i    = i + 2
                     //puts("LA/CW $"); puth(dest)
                     if A_IS_TOSL & TOS_DIRTY
                         *codeptr = $D095+(VX<<8)  // STA ESTKL,X
@@ -312,16 +313,22 @@ def compiler(defptr)#0
                         codeptr  = codeptr + 2
                     fin
                     VX--                          // DEX
-                    codeptr=>0 = $A9+(j<<8)       // LDA #imm
-                    codeptr->2 = $18              // CLC
-                    codeptr=>3 = $E065            // ADC IFPL
-                    codeptr=>5 = $D095+(VX<<8)    // STA ESTKL,X
-                    if VY == 0
-                        codeptr->7 = $98          // TYA -> LDA #00
-                        codeptr    = codeptr + 8
+                    if VY == j
+                        ^codeptr = $98; codeptr++ // TYA -> LDA #imm
+                        
                     else
-                        codeptr=>7 = $00A9        // LDA #$00
-                        codeptr    = codeptr + 9
+                        *codeptr = $A9+(j<<8)     // LDA #imm
+                        codeptr  = codeptr + 2
+                    fin
+                    codeptr->0 = $18              // CLC
+                    codeptr=>1 = $E065            // ADC IFPL
+                    codeptr=>3 = $D095+(VX<<8)    // STA ESTKL,X
+                    if VY == 0
+                        codeptr->5 = $98          // TYA -> LDA #00
+                        codeptr    = codeptr + 6
+                    else
+                        codeptr=>5 = $00A9        // LDA #$00
+                        codeptr    = codeptr + 7
                     fin
                     codeptr=>0 = $E165            // ADC IFPH
                     codeptr=>2 = $C095+(VX<<8)    // STA ESTKH,X
@@ -658,7 +665,6 @@ def compiler(defptr)#0
                     A_IS_TOSL = FALSE
                     break
                 is $54 // CALL
-                    i++
                     //puts("CALL $"); puth(*(bytecode+i))
                     //
                     // Call address
@@ -669,11 +675,11 @@ def compiler(defptr)#0
                         codeptr  = codeptr + 2
                     fin
                     codeptr->0 = $20               // JSR abs
-                    codeptr=>1 = *(bytecode+i)
+                    codeptr=>1 = *(bytecode+i+1)
                     codeptr    = codeptr + 3
                     VY         = UNKNOWN
                     A_IS_TOSL  = FALSE
-                    i++
+                    i          = i + 2
                     break
                 is $56 // ICAL
                     //puts("ICAL")
@@ -807,9 +813,8 @@ def compiler(defptr)#0
                     break
                 is $68 // LAB
                 is $6A // LAW
-                    i++
-                    dest = *(bytecode+i)
-                    i++
+                    dest = *(bytecode+i+1)
+                    i    = i + 2
                     if A_IS_TOSL & TOS_DIRTY
                         *codeptr = $D095+(VX<<8)   // STA ESTKL,X
                         codeptr  = codeptr + 2
@@ -937,9 +942,8 @@ def compiler(defptr)#0
                     break
                 is $78 // SAB
                 is $7A // SAW
-                    i++
-                    dest = *(bytecode+i)
-                    i++
+                    dest = *(bytecode+i+1)
+                    i    = i + 2
                     //puts("SAW $"); puth(dest)
                     if not A_IS_TOSL
                         *codeptr = $D0B5+(VX<<8)   // LDA ESTKL,X
@@ -961,9 +965,8 @@ def compiler(defptr)#0
                     break
                 is $7C // DAB
                 is $7E // DAW
-                    i++
-                    dest = *(bytecode+i)
-                    i++
+                    dest = *(bytecode+i+1)
+                    i    = i + 2
                     //puts("DAW $"); puth(*(bytecode+i))
                     if not A_IS_TOSL
                         *codeptr  = $D0B5+(VX<<8)  // LDA ESTKL,X
@@ -1386,9 +1389,8 @@ def compiler(defptr)#0
                     break
                 is $B4 // ADDAB
                 is $B6 // ADDAW
-                    i++
-                    dest = *(bytecode+i)
-                    i++
+                    dest = *(bytecode+i+1)
+                    i    = i + 2
                     if not A_IS_TOSL
                         *codeptr = $D0B5+(VX<<8)    // LDA ESTKL,X
                         codeptr  = codeptr + 2
@@ -1498,9 +1500,8 @@ def compiler(defptr)#0
                     i++
                     break
                 is $BE // IDXAW
-                    i++
-                    dest = *(bytecode+i)
-                    i++
+                    dest = *(bytecode+i+1)
+                    i    = i + 2
                     //puts("IDXAW $"); puth(dest)
                     if A_IS_TOSL & TOS_DIRTY
                         *codeptr = $D095+(VX<<8) // STA ESTKL,X
