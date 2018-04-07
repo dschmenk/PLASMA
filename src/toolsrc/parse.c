@@ -1,11 +1,14 @@
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 #include "plasm.h"
 #define LVALUE      0
 #define RVALUE      1
 #define MAX_LAMBDA  64
 
-int infunc = 0, break_tag = 0, cont_tag = 0, stack_loop = 0;
+int parse_mods(void);
+
+int infunc = 0, break_tag = 0, cont_tag = 0, stack_loop = 0, infor = 0;
 long infuncvals = 0;
 t_token prevstmnt;
 static int      lambda_num = 0;
@@ -23,9 +26,7 @@ t_token binary_ops_table[] = {
     EOR_TOKEN,
     OR_TOKEN,
     GT_TOKEN, GE_TOKEN, LT_TOKEN, LE_TOKEN,
-    EQ_TOKEN, NE_TOKEN,
-    LOGIC_AND_TOKEN,
-    LOGIC_OR_TOKEN
+    EQ_TOKEN, NE_TOKEN
     /* Lowest precedence  */
 };
 t_token binary_ops_precedence[] = {
@@ -37,9 +38,7 @@ t_token binary_ops_precedence[] = {
     5,
     6,
     7, 7, 7, 7,
-    8, 8,
-    9,
-    10
+    8, 8
     /* Lowest precedence  */
 };
 
@@ -729,14 +728,48 @@ t_opseq *parse_expr(t_opseq *codeseq, int *stackdepth)
         if (stackdepth)
             (*stackdepth)--;
     }
-    /*
-     * Look for ternary operator
-     */
-    if (scantoken == TERNARY_TOKEN)
+    if (scantoken == LOGIC_AND_TOKEN)
+    {
+        int tag_and;
+        int stackdepth1;
+
+        /*
+         * Short-circuit AND
+         */
+        if (*stackdepth != 1)
+            parse_error("AND must evaluate to single value");
+        tag_and = tag_new(BRANCH_TYPE);
+        codeseq = gen_brand(codeseq, tag_and);
+        codeseq = parse_expr(codeseq, &stackdepth1);
+        if (stackdepth1 != *stackdepth)
+            parse_error("Inconsistent AND value counts");
+        codeseq = gen_codetag(codeseq, tag_and);
+    }
+    else if (scantoken == LOGIC_OR_TOKEN)
+    {
+        int tag_or;
+        int stackdepth1;
+
+        /*
+         * Short-circuit OR
+         */
+        if (*stackdepth != 1)
+            parse_error("OR must evaluate to single value");
+        tag_or  = tag_new(BRANCH_TYPE);
+        codeseq = gen_bror(codeseq, tag_or);
+        codeseq = parse_expr(codeseq, &stackdepth1);
+        if (stackdepth1 != *stackdepth)
+            parse_error("Inconsistent AND value counts");
+        codeseq = gen_codetag(codeseq, tag_or);
+    }
+    else if (scantoken == TERNARY_TOKEN)
     {
         int tag_else, tag_endtri;
         int stackdepth1;
 
+        /*
+         * Look for ternary operator
+         */
         if (*stackdepth != 1)
             parse_error("Ternary op must evaluate to single value");
         tag_else   = tag_new(BRANCH_TYPE);
@@ -798,9 +831,11 @@ t_opseq *parse_set(t_opseq *codeseq)
 int parse_stmnt(void)
 {
     int tag_prevbrk, tag_prevcnt, tag_else, tag_endif, tag_while, tag_wend, tag_repeat, tag_for, tag_choice, tag_of;
-    int type, addr, step, cfnvals;
+    int type, addr, step, cfnvals, prev_for, constsize, casecnt, i;
+    int *caseval, *casetag;
+    long constval;
     char *idptr;
-    t_opseq *seq;
+    t_opseq *seq, *fromseq, *toseq;
 
     /*
      * Optimization for last function LEAVE and OF clause.
@@ -856,12 +891,15 @@ int parse_stmnt(void)
                 parse_error("Missing IF/FIN");
             break;
         case WHILE_TOKEN:
+            prev_for    = infor;
+            infor       = 0;
             tag_while   = tag_new(BRANCH_TYPE);
             tag_wend    = tag_new(BRANCH_TYPE);
             tag_prevcnt = cont_tag;
-            cont_tag    = tag_while;
+            cont_tag    = tag_new(BRANCH_TYPE);
             tag_prevbrk = break_tag;
             break_tag   = tag_wend;
+            emit_brnch(cont_tag);
             emit_codetag(tag_while);
             if (!(seq = parse_expr(NULL, &cfnvals)))
                 parse_error("Bad expression");
@@ -870,17 +908,20 @@ int parse_stmnt(void)
                 parse_warn("Expression value overflow");
                 while (cfnvals-- > 1) seq = gen_drop(seq);
             }
-            seq = gen_brfls(seq, tag_wend);
-            emit_seq(seq);
+            seq = gen_brtru(seq, tag_while);
             while (parse_stmnt()) next_line();
             if (scantoken != LOOP_TOKEN)
                 parse_error("Missing WHILE/END");
-            emit_brnch(tag_while);
+            emit_codetag(cont_tag);
+            emit_seq(seq);
             emit_codetag(tag_wend);
             break_tag = tag_prevbrk;
             cont_tag  = tag_prevcnt;
+            infor     = prev_for;
             break;
         case REPEAT_TOKEN:
+            prev_for    = infor;
+            infor       = 0;
             tag_prevbrk = break_tag;
             break_tag   = tag_new(BRANCH_TYPE);
             tag_repeat  = tag_new(BRANCH_TYPE);
@@ -904,48 +945,43 @@ int parse_stmnt(void)
             emit_seq(seq);
             emit_codetag(break_tag);
             break_tag = tag_prevbrk;
+            infor     = prev_for;
             break;
         case FOR_TOKEN:
-            stack_loop++;
+            stack_loop += 2;
+            prev_for    = infor;
+            infor       = 1;
             tag_prevbrk = break_tag;
             break_tag   = tag_new(BRANCH_TYPE);
             tag_for     = tag_new(BRANCH_TYPE);
             tag_prevcnt = cont_tag;
-            cont_tag    = tag_for;
+            cont_tag    = tag_new(BRANCH_TYPE);
             if (scan() != ID_TOKEN)
                 parse_error("Missing FOR variable");
             type = id_type(tokenstr, tokenlen);
             addr = id_tag(tokenstr, tokenlen);
             if (scan() != SET_TOKEN)
                 parse_error("Missing FOR =");
-            if (!(seq = parse_expr(NULL, &cfnvals)))
+            if (!(fromseq = parse_expr(NULL, &cfnvals)))
                 parse_error("Bad FOR expression");
             if (cfnvals > 1)
             {
                 parse_warn("Expression value overflow");
                 while (cfnvals-- > 1) seq = gen_drop(seq);
             }
-            emit_seq(seq);
-            emit_codetag(tag_for);
-            if (type & LOCAL_TYPE)
-                type & BYTE_TYPE ? emit_dlb(addr) : emit_dlw(addr);
-            else
-                type & BYTE_TYPE ? emit_dab(addr, 0, type) : emit_daw(addr, 0, type);
             if (scantoken == TO_TOKEN)
                 step = 1;
             else if (scantoken == DOWNTO_TOKEN)
                 step = -1;
             else
                 parse_error("Missing FOR TO");
-            if (!(seq = parse_expr(NULL, &cfnvals)))
+            if (!(toseq = parse_expr(NULL, &cfnvals)))
                 parse_error("Bad FOR TO expression");
             if (cfnvals > 1)
             {
                 parse_warn("Expression value overflow");
                 while (cfnvals-- > 1) seq = gen_drop(seq);
             }
-            emit_seq(seq);
-            step > 0 ? emit_brgt(break_tag) : emit_brlt(break_tag);
             if (scantoken == STEP_TOKEN)
             {
                 if (!(seq = parse_expr(NULL, &cfnvals)))
@@ -955,27 +991,57 @@ int parse_stmnt(void)
                     parse_warn("Expression value overflow");
                     while (cfnvals-- > 1) seq = gen_drop(seq);
                 }
-                emit_seq(seq);
-                emit_op(step > 0 ? ADD_TOKEN : SUB_TOKEN);
             }
             else
-                emit_unaryop(step > 0 ? INC_TOKEN : DEC_TOKEN);
+            {
+                seq = NULL;
+            }
+            toseq = cat_seq(toseq, fromseq);
+            emit_seq(step > 0 ? gen_brgt(toseq, break_tag) : gen_brlt(toseq, break_tag));
+            emit_codetag(tag_for);
+            if (type & LOCAL_TYPE)
+                type & BYTE_TYPE ? emit_dlb(addr) : emit_dlw(addr);
+            else
+                type & BYTE_TYPE ? emit_dab(addr, 0, type) : emit_daw(addr, 0, type);
             while (parse_stmnt()) next_line();
             if (scantoken != NEXT_TOKEN)
                 parse_error("Missing FOR/NEXT");
-            emit_brnch(tag_for);
+            emit_codetag(cont_tag);
             cont_tag = tag_prevcnt;
+            if (step > 0)
+            {
+                if (seq)
+                {
+                    emit_seq(seq);
+                    emit_addbrle(tag_for);
+                }
+                else
+                    emit_incbrle(tag_for);
+            }
+            else
+            {
+                if (seq)
+                {
+                    emit_seq(seq);
+                    emit_subbrge(tag_for);
+                }
+                else
+                    emit_decbrge(tag_for);
+            }
             emit_codetag(break_tag);
-            emit_drop();
-            break_tag = tag_prevbrk;
-            stack_loop--;
+            break_tag   = tag_prevbrk;
+            infor       = prev_for;
+            stack_loop -= 2;
             break;
         case CASE_TOKEN:
-            stack_loop++;
+            prev_for    = infor;
+            infor       = 0;
             tag_prevbrk = break_tag;
             break_tag   = tag_new(BRANCH_TYPE);
             tag_choice  = tag_new(BRANCH_TYPE);
-            tag_of      = tag_new(BRANCH_TYPE);
+            caseval     = malloc(sizeof(int)*256);
+            casetag     = malloc(sizeof(int)*256);
+            casecnt     = 0;
             if (!(seq = parse_expr(NULL, &cfnvals)))
                 parse_error("Bad CASE expression");
             if (cfnvals > 1)
@@ -984,33 +1050,48 @@ int parse_stmnt(void)
                 while (cfnvals-- > 1) seq = gen_drop(seq);
             }
             emit_seq(seq);
+            emit_select(tag_choice);
             next_line();
             while (scantoken != ENDCASE_TOKEN)
             {
                 if (scantoken == OF_TOKEN)
                 {
-                    if (!(seq = parse_expr(NULL, &cfnvals)))
-                        parse_error("Bad CASE OF expression");
-                    if (cfnvals > 1)
+                    tag_of   = tag_new(BRANCH_TYPE);
+                    constval = 0;
+                    parse_constexpr(&constval, &constsize);
+                    i = casecnt;
+                    while ((i > 0) && (caseval[i-1] > constval))
                     {
-                        parse_warn("Expression value overflow");
-                        while (cfnvals-- > 1) seq = gen_drop(seq);
+                        //
+                        // Move larger case consts up
+                        //
+                        caseval[i] = caseval[i-1];
+                        casetag[i] = casetag[i-1];
+                        i--;
                     }
-                    emit_seq(seq);
-                    emit_brne(tag_choice);
+                    if ((i < casecnt) && (caseval[i] == constval))
+                        parse_error("Duplicate CASE");
+                    caseval[i] = constval;
+                    casetag[i] = tag_of;
+                    casecnt++;
                     emit_codetag(tag_of);
                     while (parse_stmnt()) next_line();
-                    tag_of = tag_new(BRANCH_TYPE);
-                    if (prevstmnt != BREAK_TOKEN) // Fall through to next OF if no break
-                        emit_brnch(tag_of);
-                    emit_codetag(tag_choice);
-                    tag_choice = tag_new(BRANCH_TYPE);
                 }
                 else if (scantoken == DEFAULT_TOKEN)
                 {
-                    emit_codetag(tag_of);
-                    tag_of = 0;
+                    if (prevstmnt != BREAK_TOKEN) // Branch around caseblock if falling through
+                    {
+                        tag_of = tag_new(BRANCH_TYPE);
+                        emit_brnch(tag_of);
+                    }
+                    else
+                        tag_of = 0;
+                    emit_codetag(tag_choice);
+                    emit_caseblock(casecnt, caseval, casetag);
+                    tag_choice = 0;
                     scan();
+                    if (tag_of)
+                        emit_codetag(tag_of);
                     while (parse_stmnt()) next_line();
                     if (scantoken != ENDCASE_TOKEN)
                         parse_error("Bad CASE DEFAULT clause");
@@ -1020,16 +1101,25 @@ int parse_stmnt(void)
                 else
                     parse_error("Bad CASE clause");
             }
-            if (tag_of)
-                emit_codetag(tag_of);
+            if (tag_choice)
+            {
+                emit_brnch(break_tag);
+                emit_codetag(tag_choice);
+                emit_caseblock(casecnt, caseval, casetag);
+            }
+            free(caseval);
+            free(casetag);
             emit_codetag(break_tag);
-            emit_drop();
             break_tag = tag_prevbrk;
-            stack_loop--;
+            infor     = prev_for;
             break;
         case BREAK_TOKEN:
             if (break_tag)
+            {
+                if (infor)
+                    emit_drop2();
                 emit_brnch(break_tag);
+            }
             else
                 parse_error("BREAK without loop");
             break;
@@ -1043,7 +1133,14 @@ int parse_stmnt(void)
             if (infunc)
             {
                 int i;
-                for (i = 0; i < stack_loop; i++)
+
+                i = stack_loop;
+                while (i >= 2)
+                {
+                    emit_drop2();
+                    i -= 2;
+                }
+                if (i)
                     emit_drop();
                 cfnvals = 0;
                 emit_seq(parse_list(NULL, &cfnvals));
@@ -1243,7 +1340,7 @@ int parse_struc(void)
 int parse_vars(int type)
 {
     long value;
-    int idlen, size, cfnparms;
+    int idlen, size, cfnparms, emit = 0;
     long cfnvals;
     char *idstr;
 
@@ -1306,6 +1403,7 @@ int parse_vars(int type)
             if (type & WORD_TYPE)
                 cfnvals *= 2;
             do parse_var(type, cfnvals); while (scantoken == COMMA_TOKEN);
+            emit = type == GLOBAL_TYPE;
             break;
         case PREDEF_TOKEN:
             /*
@@ -1346,6 +1444,12 @@ int parse_vars(int type)
                 else
                     parse_error("Bad function pre-declaration");
             } while (scantoken == COMMA_TOKEN);
+            break;
+        case IMPORT_TOKEN:
+            if (emit || type != GLOBAL_TYPE)
+                parse_error("IMPORT after emitting data");
+            parse_mods();
+            break;
         case EOL_TOKEN:
             break;
         default:
@@ -1436,11 +1540,16 @@ int parse_defs(void)
     char c, *idstr;
     int idlen, func_tag, cfnparms, cfnvals, type = GLOBAL_TYPE, pretype;
     static char bytecode = 0;
-    if (scantoken == EXPORT_TOKEN)
+
+    switch (scantoken)
     {
-        if (scan() != DEF_TOKEN && scantoken != ASM_TOKEN)
-            parse_error("Bad export definition");
-        type = EXPORT_TYPE;
+        case CONST_TOKEN:
+        case STRUC_TOKEN:
+            return parse_vars(GLOBAL_TYPE);
+        case EXPORT_TOKEN:
+            if (scan() != DEF_TOKEN && scantoken != ASM_TOKEN)
+                parse_error("Bad export definition");
+            type = EXPORT_TYPE;
     }
     if (scantoken == DEF_TOKEN)
     {
@@ -1520,8 +1629,9 @@ int parse_defs(void)
                 emit_const(0);
             emit_leave();
         }
-        while (lambda_cnt--)
-            emit_lambdafunc(lambda_tag[lambda_cnt], lambda_id[lambda_cnt], lambda_cparams[lambda_cnt], lambda_seq[lambda_cnt]);
+        for (cfnvals = 0; cfnvals < lambda_cnt; cfnvals++)
+            emit_lambdafunc(lambda_tag[cfnvals], lambda_id[cfnvals], lambda_cparams[cfnvals], lambda_seq[cfnvals]);
+        lambda_cnt = 0;
         return (1);
     }
     else if (scantoken == ASM_TOKEN)
@@ -1601,21 +1711,21 @@ int parse_module(void)
         while (parse_mods())            next_line();
         while (parse_vars(GLOBAL_TYPE)) next_line();
         while (parse_defs())            next_line();
+        emit_bytecode_seg();
+        emit_start();
+        idlocal_reset();
+        emit_idfunc(0, 0, NULL, 1);
+        prevstmnt = 0;
         if (scantoken != DONE_TOKEN && scantoken != EOF_TOKEN)
         {
-            emit_bytecode_seg();
-            emit_start();
-            idlocal_reset();
-            emit_idfunc(0, 0, NULL, 1);
-            prevstmnt = 0;
             while (parse_stmnt()) next_line();
             if (scantoken != DONE_TOKEN)
                 parse_error("Missing DONE");
-            if (prevstmnt != RETURN_TOKEN)
-            {
-                emit_const(0);
-                emit_ret();
-            }
+        }
+        if (prevstmnt != RETURN_TOKEN)
+        {
+            emit_const(0);
+            emit_ret();
         }
     }
     emit_trailer();

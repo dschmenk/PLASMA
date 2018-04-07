@@ -51,7 +51,10 @@ IPH     =       IPL+1
 OPIDX   =       FETCHOP+6
 OPPAGE  =       OPIDX+1
 STRBUF  =       $0280
+JITMOD  =       $02E0
 INTERP  =       $03D0
+JITCOMP =       $03E2
+JITCODE =       $03E4
 ;******************************
 ;*                            *
 ;* INTERPRETER INITIALIZATION *
@@ -63,13 +66,36 @@ INTERP  =       $03D0
         LDX    #$00
         STX    $01FF
 ;*
-;* DISCONNECT /RAM
+;* MUST HAVE 128K FOR JIT
 ;*
-        ;SEI                    ; DISABLE /RAM
-        LDA     MACHID
++       LDA     MACHID
         AND     #$30
         CMP     #$30
-        BNE     RAMDONE
+        BEQ     ++
+        LDY     #$00
+-       LDA     NEEDAUX,Y
+        BEQ     +
+        ORA     #$80
+        JSR     $FDED
+        INY
+        BNE     -
++       LDA     $C000
+        BPL     -
+        LDA     $C010
+        JSR     PRODOS
+        !BYTE   $65
+        !WORD   BYEPARMS
+BYEPARMS !BYTE  4
+        !BYTE   4
+        !WORD   0
+        !BYTE   0
+        !WORD   0
+NEEDAUX !TEXT   "128K MEMORY REQUIRED.", 13
+        !TEXT   "PRESS ANY KEY...", 0
+;*
+;* DISCONNECT /RAM
+;*
+++      ;SEI                    ; DISABLE /RAM
         LDA     RAMSLOT
         CMP     NODEV
         BNE     RAMCONT
@@ -135,27 +161,12 @@ RAMDONE ;CLI UNTIL I KNOW WHAT TO DO WITH THE UNENHANCED IIE
         BEQ     +
         JSR     C02OPS
 ;*
-;* SET 64K ENTER/LEAVE (NO NEED FOR STRING POOL)
-;*
-+       LDA     MACHID
-        AND     #$30
-        CMP     #$30
-        BEQ     +
-        LDA     #<ENTER64
-        STA     OPTBL+$58
-        LDA     #>ENTER64
-        STA     OPTBL+$59
-        LDA     #<LEAVE64
-        STA     OPTBL+$5A
-        LDA     #>LEAVE64
-        STA     OPTBL+$5B
-;*
 ;* SAVE DEFAULT COMMAND INTERPRETER PATH IN LC
 ;*
 +       JSR     PRODOS          ; GET PREFIX
         !BYTE   $C7
         !WORD   GETPFXPARMS
-        LDY     STRBUF          ; APPEND "CMD"
+        LDY     STRBUF          ; APPEND "CMDJIT"
         LDA     #"/"
         CMP     STRBUF,Y
         BEQ     +
@@ -168,6 +179,15 @@ RAMDONE ;CLI UNTIL I KNOW WHAT TO DO WITH THE UNENHANCED IIE
         INY
         STA     STRBUF,Y
         LDA     #"D"
+        INY
+        STA     STRBUF,Y
+        LDA     #"J"
+        INY
+        STA     STRBUF,Y
+        LDA     #"I"
+        INY
+        STA     STRBUF,Y
+        LDA     #"T"
         INY
         STA     STRBUF,Y
         STY     STRBUF
@@ -205,24 +225,24 @@ OPTBL   !WORD   CN,CN,CN,CN,CN,CN,CN,CN                                 ; 00 02 
         !WORD   NEG,COMP,BAND,IOR,XOR,SHL,SHR,IDXW                      ; 90 92 94 96 98 9A 9C 9E
         !WORD   BRGT,BRLT,INCBRLE,ADDBRLE,DECBRGE,SUBBRGE,BRAND,BROR    ; A0 A2 A4 A6 A8 AA AC AE
         !WORD   ADDLB,ADDLW,ADDAB,ADDAW,IDXLB,IDXLW,IDXAB,IDXAW         ; B0 B2 B4 B6 B8 BA BC BE
+        !WORD   NATV                                                    ; C0
 ;*
+;* DIRECTLY ENTER INTO BYTECODE INTERPRETER
+;*
+DINTRP  PLA
+        CLC
+        ADC     #$01
+        STA     IPL
+        PLA
+        ADC     #$00
+        STA     IPH
+        LDY     #$00
+        LDA     #>OPTBL
+        STA     OPPAGE
+        JMP     FETCHOP
 ;*
 ;* INDIRECTLY ENTER INTO BYTECODE INTERPRETER
 ;*
-IINTRP  PLA
-        STA     TMPL
-        PLA
-        STA     TMPH
-        LDY     #$02
-        LDA     (TMP),Y
-        STA     IPH
-        DEY
-        LDA     (TMP),Y
-        STA     IPL
-        DEY
-+       LDA     #>OPTBL
-        STA     OPPAGE
-        JMP     FETCHOP
 IINTRPX PHP
         PLA
         STA     PSR
@@ -258,6 +278,15 @@ BYE     LDY     DEFCMD
 ;        STY     $01FF
 CMDENTRY =      *
 ;
+; SET DCI STRING FOR JIT MODULE
+;
+        LDA     #'J'|$80
+        STA     JITMOD+0
+        LDA     #'I'|$80
+        STA     JITMOD+1
+        LDA     #'T'
+        STA     JITMOD+2
+;
 ; DEACTIVATE 80 COL CARDS
 ;
         BIT     ROMEN
@@ -287,7 +316,7 @@ CMDENTRY =      *
 ;
 ; INSTALL PAGE 3 VECTORS
 ;
-        LDY     #$12
+        LDY     #$16
 -       LDA     PAGE3,Y
         STA     INTERP,Y
         DEY
@@ -320,7 +349,7 @@ CMDENTRY =      *
         STA     $01FF           ; CLEAR CMDLINE BUFF
         STA     PPL             ; INIT FRAME POINTER
         STA     IFPL
-        LDA     #$BF
+        LDA     #$AF            ; FRAME POINTER AT $AF00, BELOW JIT BUFFER
         STA     PPH
         STA     IFPH
         LDX     #$FE            ; INIT STACK POINTER (YES, $FE. SEE GETS)
@@ -331,7 +360,7 @@ CMDENTRY =      *
 ;
         LDA     STRBUF
         SEC
-        SBC     #$03
+        SBC     #$06
         STA     STRBUF
         JMP     $2000           ; JUMP TO LOADED SYSTEM COMMAND
 ;
@@ -377,11 +406,11 @@ PAGE3   =       *
 ;* PAGE 3 VECTORS INTO INTERPRETER
 ;*
         !PSEUDOPC       $03D0 {
-        BIT     LCRDEN+LCBNK2   ; $03D0 - DIRECT INTERP ENTRY
+        BIT     LCRDEN+LCBNK2   ; $03D0 - BYTECODE DIRECT INTERP ENTRY
         JMP     DINTRP
-        BIT     LCRDEN+LCBNK2   ; $03D6 - INDIRECT INTERP ENTRY
-        JMP     IINTRP
-        BIT     LCRDEN+LCBNK2   ; $03DC - INDIRECT INTERPX ENTRY
+        BIT     LCRDEN+LCBNK2   ; $03D6 - JIT INDIRECT INTERPX ENTRY
+        JMP     JITINTRPX
+        BIT     LCRDEN+LCBNK2   ; $03DC - BYTECODE INDIRECT INTERPX ENTRY
         JMP     IINTRPX
 }
 DEFCMD  =       *               ;!FILL   28
@@ -406,21 +435,65 @@ OPXTBL  !WORD   CN,CN,CN,CN,CN,CN,CN,CN                                 ; 00 02 
         !WORD   NEG,COMP,BAND,IOR,XOR,SHL,SHR,IDXW                      ; 90 92 94 96 98 9A 9C 9E
         !WORD   BRGT,BRLT,INCBRLE,ADDBRLE,DECBRGE,SUBBRGE,BRAND,BROR    ; A0 A2 A4 A6 A8 AA AC AE
         !WORD   ADDLBX,ADDLWX,ADDABX,ADDAWX,IDXLBX,IDXLWX,IDXABX,IDXAWX ; B0 B2 B4 B6 B8 BA BC BE
+        !WORD   NATV                                                    ; C0
 ;*
+;* JIT PROFILING ENTRY INTO INTERPRETER
 ;*
-;* DIRECTLY ENTER INTO BYTECODE INTERPRETER
-;*
-DINTRP  PLA
-        CLC
-        ADC     #$01
-        STA     IPL
+JITINTRPX PHP
         PLA
-        ADC     #$00
+        STA     PSR
+        SEI
+        PLA
+        SEC
+        SBC     #$02            ; POINT TO DEF ENTRY
+        STA     TMPL
+        PLA
+        SBC     #$00
+        STA     TMPH
+        LDY     #$05
+        LDA     (TMP),Y         ; DEC JIT COUNT
+        SEC
+        SBC     #$01
+        STA     (TMP),Y
+        BEQ     RUNJIT
+        DEY                     ; INTERP BYTECODE AS USUAL
+        LDA     (TMP),Y
         STA     IPH
+        DEY
+        LDA     (TMP),Y
+        STA     IPL
         LDY     #$00
-        LDA     #>OPTBL
+        LDA     #>OPXTBL
         STA     OPPAGE
+        STA     ALTRDON
         JMP     FETCHOP
+RUNJIT  LDA     JITCOMP
+        STA     SRCL
+        LDA     JITCOMP+1
+        STA     SRCH
+        DEY                     ; LDY     #$04
+        LDA     (SRC),Y
+        STA     IPH
+        DEY
+        LDA     (SRC),Y
+        STA     IPL
+        DEX                     ; ADD PARAMETER TO DEF ENTRY
+        LDA     TMPL
+        PHA                     ; AND SAVE IT FOR LATER
+        STA     ESTKL,X
+        LDA     TMPH
+        PHA
+        STA     ESTKH,X
+        LDY     #$00
+        LDA     #>OPXTBL
+        STA     OPPAGE
+        STA     ALTRDON
+        JSR     FETCHOP         ; CALL JIT COMPILER
+        PLA
+        STA     TMPH
+        PLA
+        STA     TMPL
+        JMP     (TMP)           ; RE-CALL ORIGINAL DEF ENTRY
 ;*
 ;* ADD TOS TO TOS-1
 ;*
@@ -1793,7 +1866,7 @@ CALL    INY                     ;+INC_IP
         LDA     (IP),Y
         STA     TMPH
         TYA
-        SEC
+        CLC
         ADC     IPL
         PHA
         LDA     IPH
@@ -1806,7 +1879,7 @@ CALL    INY                     ;+INC_IP
         STA     IPL
         LDA     #>OPTBL         ; MAKE SURE WE'RE INDEXING THE RIGHT TABLE
         STA     OPPAGE
-        LDY     #$00
+        LDY     #$01
         JMP     FETCHOP
 CALLX   INY                     ;+INC_IP
         LDA     (IP),Y
@@ -1815,7 +1888,7 @@ CALLX   INY                     ;+INC_IP
         LDA     (IP),Y
         STA     TMPH
         TYA
-        SEC
+        CLC
         ADC     IPL
         PHA
         LDA     IPH
@@ -1837,7 +1910,7 @@ CALLX   INY                     ;+INC_IP
         STA     IPL
         LDA     #>OPXTBL        ; MAKE SURE WE'RE INDEXING THE RIGHT TABLE
         STA     OPPAGE
-        LDY     #$00
+        LDY     #$01
         JMP     FETCHOP
 ;*
 ;* INDIRECT CALL TO ADDRESS (NATIVE CODE)
@@ -1848,7 +1921,7 @@ ICAL    LDA     ESTKL,X
         STA     TMPH
         INX
         TYA
-        SEC
+        CLC
         ADC     IPL
         PHA
         LDA     IPH
@@ -1861,7 +1934,7 @@ ICAL    LDA     ESTKL,X
         STA     IPL
         LDA     #>OPTBL         ; MAKE SURE WE'RE INDEXING THE RIGHT TABLE
         STA     OPPAGE
-        LDY     #$00
+        LDY     #$01
         JMP     FETCHOP
 ICALX   LDA     ESTKL,X
         STA     TMPL
@@ -1869,7 +1942,7 @@ ICALX   LDA     ESTKL,X
         STA     TMPH
         INX
         TYA
-        SEC
+        CLC
         ADC     IPL
         PHA
         LDA     IPH
@@ -1890,7 +1963,7 @@ ICALX   LDA     ESTKL,X
         STA     IPL
         LDA     #>OPXTBL        ; MAKE SURE WE'RE INDEXING THE RIGHT TABLE
         STA     OPPAGE
-        LDY     #$0
+        LDY     #$01
         JMP     FETCHOP
 ;*
 ;* JUMP INDIRECT TRHOUGH TMP
@@ -1899,29 +1972,6 @@ ICALX   LDA     ESTKL,X
 ;*
 ;* ENTER FUNCTION WITH FRAME SIZE AND PARAM COUNT
 ;*
-ENTER64 INY
-        LDA     (IP),Y
-        EOR     #$FF
-        SEC
-        ADC     IFPL
-        STA     IFPL
-        BCS     +
-        DEC     IFPH
-+       INY
-        LDA     (IP),Y
-        BEQ     +
-        ASL
-        TAY
--       LDA     ESTKH,X
-        DEY
-        STA     (IFP),Y
-        LDA     ESTKL,X
-        INX
-        DEY
-        STA     (IFP),Y
-        BNE     -
-+       LDY     #$03
-        JMP     FETCHOP
 ENTER   LDA     IFPH
         PHA                     ; SAVE ON STACK FOR LEAVE
         LDA     IFPL
@@ -1972,15 +2022,6 @@ RETX    STA     ALTRDOFF
         PHA
         PLP
         RTS
-LEAVE64 INY                     ;+INC_IP
-        LDA     (IP),Y
-        CLC
-        ADC     IFPL
-        STA     IFPL
-        BCS     +
-        RTS
-+       INC     IFPH
-        RTS
 LEAVE   INY                     ;+INC_IP
         LDA     (IP),Y
         CLC
@@ -1994,6 +2035,17 @@ LEAVE   INY                     ;+INC_IP
         PLA
         STA     IFPH
 RET     RTS
+;*
+;* RETURN TO NATIVE CODE
+;*
+NATV    TYA                     ; FLATTEN IP
+        SEC
+        ADC     IPL
+        STA     TMPL
+        LDA     #$00
+        ADC     IPH
+        STA     TMPH
+        JMP     JMPTMP
 VMEND   =       *
 }
 ;***************************************

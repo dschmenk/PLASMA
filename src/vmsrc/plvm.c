@@ -36,7 +36,7 @@ uword sp = 0x01FE, fp = 0xFFFF, heap = 0x0200, deftbl = DEF_CALL, lastdef = DEF_
 #define UPOP        ((uword)(*(esp++)))
 #define TOS     (esp[0])
 word eval_stack[EVAL_STACKSZ];
-word *esp = eval_stack + EVAL_STACKSZ;
+word *esp = &eval_stack[EVAL_STACKSZ];
 
 #define SYMTBLSZ    1024
 #define SYMSZ       16
@@ -524,21 +524,30 @@ void call(uword pc)
 /*
  * OPCODE TABLE
  *
-OPTBL:  DW  ZERO,ADD,SUB,MUL,DIV,MOD,INCR,DECR      ; 00 02 04 06 08 0A 0C 0E
-        DW  NEG,COMP,AND,IOR,XOR,SHL,SHR,IDXW       ; 10 12 14 16 18 1A 1C 1E
-        DW  NOT,LOR,LAND,LA,LLA,CB,CW,CS            ; 20 22 24 26 28 2A 2C 2E
-        DW  DROP,DUP,PUSH,PULL,BRGT,BRLT,BREQ,BRNE      ; 30 32 34 36 38 3A 3C 3E
-        DW  ISEQ,ISNE,ISGT,ISLT,ISGE,ISLE,BRFLS,BRTRU   ; 40 42 44 46 48 4A 4C 4E
-        DW  BRNCH,IBRNCH,CALL,ICAL,ENTER,LEAVE,RET,CFFB  ; 50 52 54 56 58 5A 5C 5E
-        DW  LB,LW,LLB,LLW,LAB,LAW,DLB,DLW           ; 60 62 64 66 68 6A 6C 6E
-        DW  SB,SW,SLB,SLW,SAB,SAW,DAB,DAW           ; 70 72 74 76 78 7A 7C 7E
+OPTBL   DW CN,CN,CN,CN,CN,CN,CN,CN                                 ; 00 02 04 06 08 0A 0C 0E
+        DW CN,CN,CN,CN,CN,CN,CN,CN                                 ; 10 12 14 16 18 1A 1C 1E
+        DW MINUS1,NEXTOP,NEXTOP,LA,LLA,CB,CW,CS                    ; 20 22 24 26 28 2A 2C 2E
+        DW DROP,DROP2,DUP,DIVMOD,ADDI,SUBI,ANDI,ORI                ; 30 32 34 36 38 3A 3C 3E
+        DW ISEQ,ISNE,ISGT,ISLT,ISGE,ISLE,BRFLS,BRTRU               ; 40 42 44 46 48 4A 4C 4E
+        DW BRNCH,SEL,CALL,ICAL,ENTER,LEAVE,RET,CFFB                ; 50 52 54 56 58 5A 5C 5E
+        DW LB,LW,LLB,LLW,LAB,LAW,DLB,DLW                           ; 60 62 64 66 68 6A 6C 6E
+        DW SB,SW,SLB,SLW,SAB,SAW,DAB,DAW                           ; 70 72 74 76 78 7A 7C 7E
+        DW LNOT,ADD,SUB,MUL,DIV,MOD,INCR,DECR                      ; 80 82 84 86 88 8A 8C 8E
+        DW NEG,COMP,BAND,IOR,XOR,SHL,SHR,IDXW                      ; 90 92 94 96 98 9A 9C 9E
+        DW BRGT,BRLT,INCBRLE,ADDBRLE,DECBRGE,SUBBRGE,BRAND,BROR    ; A0 A2 A4 A6 A8 AA AC AE
 */
 void interp(code *ip)
 {
-    int val, ea, frmsz, parmcnt;
+    int val, ea, frmsz, parmcnt, nybble;
+    code *previp = ip;
 
     while (1)
     {
+        if ((esp - eval_stack) < 0 || (esp - eval_stack) > EVAL_STACKSZ)
+        {
+            printf("Eval stack over/underflow! - $%04X: $%02X [%d]\n", previp - mem_data, *previp, EVAL_STACKSZ - (esp - eval_stack));
+            show_state = 1;
+        }
         if (show_state)
         {
             char cmdline[16];
@@ -549,83 +558,45 @@ void interp(code *ip)
             printf("]\n");
             gets(cmdline);
         }
+        nybble = 15;
+        previp = ip;
         switch (*ip++)
         {
-        /*
-         * 0x00-0x0F
-         */
-            case 0x00: // ZERO : TOS = 0
-                PUSH(0);
-                break;
-            case 0x02: // ADD : TOS = TOS + TOS-1
-                val = POP;
-                ea  = POP;
-                PUSH(ea + val);
-                break;
-            case 0x04: // SUB : TOS = TOS-1 - TOS
-                val = POP;
-                ea  = POP;
-                PUSH(ea - val);
-                break;
-            case 0x06: // MUL : TOS = TOS * TOS-1
-                val = POP;
-                ea  = POP;
-                PUSH(ea * val);
-                break;
-            case 0x08: // DIV : TOS = TOS-1 / TOS
-                val = POP;
-                ea  = POP;
-                PUSH(ea / val);
-                break;
-            case 0x0A: // MOD : TOS = TOS-1 % TOS
-                val = POP;
-                ea  = POP;
-                PUSH(ea % val);
-                break;
-            case 0x0C: // INCR : TOS = TOS + 1
-                TOS++;;
-                break;
-            case 0x0E: // DECR : TOS = TOS - 1
-                TOS--;
-                break;
-                /*
-                 * 0x10-0x1F
-                 */
-            case 0x10: // NEG : TOS = -TOS
-                TOS = -TOS;
-                break;
-            case 0x12: // COMP : TOS = ~TOS
-                TOS = ~TOS;
-                break;
-            case 0x14: // AND : TOS = TOS & TOS-1
-                val = POP;
-                ea  = POP;
-                PUSH(ea & val);
-                break;
-            case 0x16: // IOR : TOS = TOS ! TOS-1
-                val = POP;
-                ea  = POP;
-                PUSH(ea | val);
-                break;
-            case 0x18: // XOR : TOS = TOS ^ TOS-1
-                val = POP;
-                ea  = POP;
-                PUSH(ea ^ val);
-                break;
-            case 0x1A: // SHL : TOS = TOS-1 << TOS
-                val = POP;
-                ea  = POP;
-                PUSH(ea << val);
-                break;
-            case 0x1C: // SHR : TOS = TOS-1 >> TOS
-                val = POP;
-                ea  = POP;
-                PUSH(ea >> val);
-                break;
-            case 0x1E: // IDXW : TOS = TOS * 2 + TOS-1
-                val = POP;
-                ea  = POP;
-                PUSH(ea + val * 2);
+            /*
+             * 0x00-0x1F
+             */
+            case 0x00:
+                nybble--;
+            case 0x02:
+                nybble--;
+            case 0x04:
+                nybble--;
+            case 0x06:
+                nybble--;
+            case 0x08:
+                nybble--;
+            case 0x0A:
+                nybble--;
+            case 0x0C:
+                nybble--;
+            case 0x0E:
+                nybble--;
+            case 0x10:
+                nybble--;
+            case 0x12:
+                nybble--;
+            case 0x14:
+                nybble--;
+            case 0x16:
+                nybble--;
+            case 0x18:
+                nybble--;
+            case 0x1A:
+                nybble--;
+            case 0x1C:
+                nybble--;
+            case 0x1E:
+                PUSH(nybble);
                 break;
                 /*
                  * 0x20-0x2F
@@ -669,41 +640,31 @@ void interp(code *ip)
             case 0x30: // DROP : TOS =
                 POP;
                 break;
-            case 0x32: // DUP : TOS = TOS
+            case 0x32: // DROP2 : TOS ==
+                POP;
+                POP;
+                break;
+            case 0x34: // DUP : TOS = TOS
                 val = TOS;
                 PUSH(val);
                 break;
-            case 0x34: // NOP
+            case 0x36: // DIVMOD
                 break;
-            case 0x36: // NOP
+            case 0x38: // ADDI
+                PUSH(POP + BYTE_PTR(ip));
+                ip++;
                 break;
-            case 0x38: // BRGT : TOS-1 > TOS ? IP += (IP)
-                val = POP;
-                if (TOS > val)
-                    ip += WORD_PTR(ip);
-                else
-                    ip += 2;
+            case 0x3A: // SUBI
+                PUSH(POP - BYTE_PTR(ip));
+                ip++;
                 break;
-            case 0x3A: // BRLT : TOS-1 < TOS ? IP += (IP)
-                val = POP;
-                if (TOS < val)
-                    ip += WORD_PTR(ip);
-                else
-                    ip += 2;
+            case 0x3C: // ANDI
+                PUSH(POP & BYTE_PTR(ip));
+                ip++;
                 break;
-            case 0x3C: // BREQ : TOS == TOS-1 ? IP += (IP)
-                val = POP;
-                if (TOS == val)
-                    ip += WORD_PTR(ip);
-                else
-                    ip += 2;
-                break;
-            case 0x3E: // BRNE : TOS != TOS-1 ? IP += (IP)
-                val = POP;
-                if (TOS != val)
-                    ip += WORD_PTR(ip);
-                else
-                    ip += 2;
+            case 0x3E: // ORI
+                PUSH(POP | BYTE_PTR(ip));
+                ip++;
                 break;
                 /*
                  * 0x40-0x4F
@@ -756,8 +717,22 @@ void interp(code *ip)
             case 0x50: // BRNCH : IP += (IP)
                 ip += WORD_PTR(ip);
                 break;
-            case 0x52: // IBRNCH : IP += TOS
-                ip += POP;
+            case 0x52: // SELECT
+                val = POP;
+                ip += WORD_PTR(ip);
+                parmcnt = BYTE_PTR(ip);
+                ip++;
+                while (parmcnt--)
+                {
+                    if (WORD_PTR(ip) == val)
+                    {
+                        ip += 2;
+                        ip += WORD_PTR(ip);
+                        parmcnt = 0;
+                    }
+                    else
+                        ip += 4;                        
+                }
                 break;
             case 0x54: // CALL : TOFP = IP, IP = (IP) ; call
                 call(UWORD_PTR(ip));
@@ -879,6 +854,191 @@ void interp(code *ip)
                 mem_data[ea]     = TOS;
                 mem_data[ea + 1] = TOS >> 8;
                 ip += 2;
+                break;
+             /*
+             * 0x080-0x08F
+             */
+            case 0x80: // ZERO : TOS = 0
+                PUSH(0);
+                break;
+            case 0x82: // ADD : TOS = TOS + TOS-1
+                val = POP;
+                ea  = POP;
+                PUSH(ea + val);
+                break;
+            case 0x84: // SUB : TOS = TOS-1 - TOS
+                val = POP;
+                ea  = POP;
+                PUSH(ea - val);
+                break;
+            case 0x86: // MUL : TOS = TOS * TOS-1
+                val = POP;
+                ea  = POP;
+                PUSH(ea * val);
+                break;
+            case 0x88: // DIV : TOS = TOS-1 / TOS
+                val = POP;
+                ea  = POP;
+                PUSH(ea / val);
+                break;
+            case 0x8A: // MOD : TOS = TOS-1 % TOS
+                val = POP;
+                ea  = POP;
+                PUSH(ea % val);
+                break;
+            case 0x8C: // INCR : TOS = TOS + 1
+                TOS++;;
+                break;
+            case 0x8E: // DECR : TOS = TOS - 1
+                TOS--;
+                break;
+                /*
+                 * 0x90-0x9F
+                 */
+            case 0x90: // NEG : TOS = -TOS
+                TOS = -TOS;
+                break;
+            case 0x92: // COMP : TOS = ~TOS
+                TOS = ~TOS;
+                break;
+            case 0x94: // AND : TOS = TOS & TOS-1
+                val = POP;
+                ea  = POP;
+                PUSH(ea & val);
+                break;
+            case 0x96: // IOR : TOS = TOS ! TOS-1
+                val = POP;
+                ea  = POP;
+                PUSH(ea | val);
+                break;
+            case 0x98: // XOR : TOS = TOS ^ TOS-1
+                val = POP;
+                ea  = POP;
+                PUSH(ea ^ val);
+                break;
+            case 0x9A: // SHL : TOS = TOS-1 << TOS
+                val = POP;
+                ea  = POP;
+                PUSH(ea << val);
+                break;
+            case 0x9C: // SHR : TOS = TOS-1 >> TOS
+                val = POP;
+                ea  = POP;
+                PUSH(ea >> val);
+                break;
+            case 0x9E: // IDXW : TOS = TOS * 2 + TOS-1
+                val = POP;
+                ea  = POP;
+                PUSH(ea + val * 2);
+                break;
+               /*
+                 * 0xA0-0xAF
+                 */
+            case 0xA0: // BRGT : TOS-1 > TOS ? IP += (IP)
+                val = POP;
+                if (TOS < val)
+                {
+                    POP;
+                    ip += WORD_PTR(ip);
+                }
+                else
+                {
+                    PUSH(val);
+                    ip += 2;
+                }
+                break;
+            case 0xA2: // BRLT : TOS-1 < TOS ? IP += (IP)
+                val = POP;
+                if (TOS > val)
+                {
+                    POP;
+                    ip += WORD_PTR(ip);
+                }
+                else
+                {
+                    PUSH(val);
+                    ip += 2;
+                }
+                break;
+            case 0xA4: // INCBRLE : TOS = TOS + 1
+                val = POP;
+                val++;
+                if (TOS >= val)
+                {
+                    PUSH(val);
+                    ip += WORD_PTR(ip);
+                }
+                else
+                {
+                    POP;
+                    ip += 2;
+                }
+                break;
+            case 0xA6: // ADDBRLE : TOS = TOS + TOS-1
+                val = POP;
+                ea  = POP;
+                val = ea + val;
+                if (TOS >= val)
+                {
+                    PUSH(val);
+                    ip += WORD_PTR(ip);
+                }
+                else
+                {
+                    POP;
+                    ip += 2;
+                }
+                break;
+            case 0xA8: // DECBRGE : TOS = TOS - 1
+                val = POP;
+                val--;
+                if (TOS <= val)
+                {
+                    PUSH(val);
+                    ip += WORD_PTR(ip);
+                }
+                else
+                {
+                    POP;
+                    ip += 2;
+                }
+                break;
+            case 0xAA: // SUBBRGE : TOS = TOS-1 - TOS
+                val = POP;
+                ea  = POP;
+                val = ea - val;
+                if (TOS <= val)
+                {
+                    PUSH(val);
+                    ip += WORD_PTR(ip);
+                }
+                else
+                {
+                    POP;
+                    ip += 2;
+                }
+                break;
+            case 0xAC: // BRAND : SHORT CIRCUIT AND
+                if (TOS) // EVALUATE RIGHT HAND OF AND
+                {
+                    POP;
+                    ip += 2;
+                }
+                else // MUST BE FALSE, SKIP RIGHT HAND
+                {
+                    ip += WORD_PTR(ip);
+                }
+                break;
+            case 0xAE: // BROR : SHORT CIRCUIT OR
+                if (!TOS) // EVALUATE RIGHT HAND OF OR
+                {
+                    POP;
+                    ip += 2;
+                }
+                else // MUST BE TRUE, SKIP RIGHT HAND
+                {
+                    ip += WORD_PTR(ip);
+                }
                 break;
                 /*
                  * Odd codes and everything else are errors.

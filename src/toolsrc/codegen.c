@@ -382,12 +382,13 @@ void emit_header(void)
 }
 void emit_rld(void)
 {
-    int i;
+    int i, j;
 
     printf(";\n; RE-LOCATEABLE DICTIONARY\n;\n");
     /*
      * First emit the bytecode definition entrypoint information.
      */
+    /*
     for (i = 0; i < globals; i++)
         if (!(idglobal_type[i] & EXTERN_TYPE) && (idglobal_type[i] & DEF_TYPE))
         {
@@ -395,6 +396,14 @@ void emit_rld(void)
             printf("\t%s\t_C%03d\t\t\n", DW, idglobal_tag[i]);
             printf("\t%s\t$00\n", DB);
         }
+    */
+    j = outflags & INIT ? defs - 1 : defs;
+    for (i = 0; i < j; i++)
+    {
+        printf("\t%s\t$02\t\t\t; CODE TABLE FIXUP\n", DB);
+        printf("\t%s\t_C%03d\t\t\n", DW, i);
+        printf("\t%s\t$00\n", DB);
+    }
     /*
      * Now emit the fixup table.
      */
@@ -600,8 +609,10 @@ void emit_codetag(int tag)
 void emit_const(int cval)
 {
     emit_pending_seq();
-    if (cval == 0x0000)
-        printf("\t%s\t$00\t\t\t; ZERO\n", DB);
+    if ((cval & 0xFFFF) == 0xFFFF)
+        printf("\t%s\t$20\t\t\t; MINUS ONE\n", DB);
+    else if ((cval & 0xFFF0) == 0x0000)
+        printf("\t%s\t$%02X\t\t\t; CN\t%d\n", DB, cval*2, cval);
     else if ((cval & 0xFF00) == 0x0000)
         printf("\t%s\t$2A,$%02X\t\t\t; CB\t%d\n", DB, cval, cval);
     else if ((cval & 0xFF00) == 0xFF00)
@@ -613,6 +624,26 @@ void emit_conststr(long conststr)
 {
     printf("\t%s\t$2E\t\t\t; CS\n", DB);
     emit_data(0, STRING_TYPE, conststr, 0);
+}
+void emit_addi(int cval)
+{
+    emit_pending_seq();
+    printf("\t%s\t$38,$%02X\t\t\t; ADDI\t%d\n", DB, cval, cval);
+}
+void emit_subi(int cval)
+{
+    emit_pending_seq();
+    printf("\t%s\t$3A,$%02X\t\t\t; SUBI\t%d\n", DB, cval, cval);
+}
+void emit_andi(int cval)
+{
+    emit_pending_seq();
+    printf("\t%s\t$3C,$%02X\t\t\t; ANDI\t%d\n", DB, cval, cval);
+}
+void emit_ori(int cval)
+{
+    emit_pending_seq();
+    printf("\t%s\t$3E,$%02X\t\t\t; ORI\t%d\n", DB, cval, cval);
 }
 void emit_lb(void)
 {
@@ -629,6 +660,22 @@ void emit_llb(int index)
 void emit_llw(int index)
 {
     printf("\t%s\t$66,$%02X\t\t\t; LLW\t[%d]\n", DB, index, index);
+}
+void emit_addlb(int index)
+{
+    printf("\t%s\t$B0,$%02X\t\t\t; ADDLB\t[%d]\n", DB, index, index);
+}
+void emit_addlw(int index)
+{
+    printf("\t%s\t$B2,$%02X\t\t\t; ADDLW\t[%d]\n", DB, index, index);
+}
+void emit_idxlb(int index)
+{
+    printf("\t%s\t$B8,$%02X\t\t\t; IDXLB\t[%d]\n", DB, index, index);
+}
+void emit_idxlw(int index)
+{
+    printf("\t%s\t$BA,$%02X\t\t\t; IDXLW\t[%d]\n", DB, index, index);
 }
 void emit_lab(int tag, int offset, int type)
 {
@@ -656,6 +703,62 @@ void emit_law(int tag, int offset, int type)
     else
     {
         printf("\t%s\t$6A,$%02X,$%02X\t\t; LAW\t%d\n", DB, offset&0xFF,(offset>>8)&0xFF, offset);
+    }
+}
+void emit_addab(int tag, int offset, int type)
+{
+    if (type)
+    {
+        int fixup = fixup_new(tag, type, FIXUP_WORD);
+        char *taglbl = tag_string(tag, type);
+        printf("\t%s\t$B4\t\t\t; ADDAB\t%s+%d\n", DB, taglbl, offset);
+        printf("_F%03d%c\t%s\t%s+%d\t\t\n", fixup, LBL, DW, type & EXTERN_TYPE ? "0" : taglbl, offset);
+    }
+    else
+    {
+        printf("\t%s\t$B4,$%02X,$%02X\t\t; ADDAB\t%d\n", DB, offset&0xFF,(offset>>8)&0xFF, offset);
+    }
+}
+void emit_addaw(int tag, int offset, int type)
+{
+    if (type)
+    {
+        int fixup = fixup_new(tag, type, FIXUP_WORD);
+        char *taglbl = tag_string(tag, type);
+        printf("\t%s\t$B6\t\t\t; ADDAW\t%s+%d\n", DB, taglbl, offset);
+        printf("_F%03d%c\t%s\t%s+%d\t\t\n", fixup, LBL, DW, type & EXTERN_TYPE ? "0" : taglbl, offset);
+    }
+    else
+    {
+        printf("\t%s\t$B6,$%02X,$%02X\t\t; ADDAW\t%d\n", DB, offset&0xFF,(offset>>8)&0xFF, offset);
+    }
+}
+void emit_idxab(int tag, int offset, int type)
+{
+    if (type)
+    {
+        int fixup = fixup_new(tag, type, FIXUP_WORD);
+        char *taglbl = tag_string(tag, type);
+        printf("\t%s\t$BC\t\t\t; IDXAB\t%s+%d\n", DB, taglbl, offset);
+        printf("_F%03d%c\t%s\t%s+%d\t\t\n", fixup, LBL, DW, type & EXTERN_TYPE ? "0" : taglbl, offset);
+    }
+    else
+    {
+        printf("\t%s\t$BC,$%02X,$%02X\t\t; IDXAB\t%d\n", DB, offset&0xFF,(offset>>8)&0xFF, offset);
+    }
+}
+void emit_idxaw(int tag, int offset, int type)
+{
+    if (type)
+    {
+        int fixup = fixup_new(tag, type, FIXUP_WORD);
+        char *taglbl = tag_string(tag, type);
+        printf("\t%s\t$BE\t\t\t; IDXAW\t%s+%d\n", DB, taglbl, offset);
+        printf("_F%03d%c\t%s\t%s+%d\t\t\n", fixup, LBL, DW, type & EXTERN_TYPE ? "0" : taglbl, offset);
+    }
+    else
+    {
+        printf("\t%s\t$BE,$%02X,$%02X\t\t; IDXAW\t%d\n", DB, offset&0xFF,(offset>>8)&0xFF, offset);
     }
 }
 void emit_sb(void)
@@ -747,11 +850,41 @@ void emit_globaladdr(int tag, int offset, int type)
 }
 void emit_indexbyte(void)
 {
-    printf("\t%s\t$02\t\t\t; IDXB\n", DB);
+    printf("\t%s\t$82\t\t\t; IDXB\n", DB);
 }
 void emit_indexword(void)
 {
-    printf("\t%s\t$1E\t\t\t; IDXW\n", DB);
+    printf("\t%s\t$9E\t\t\t; IDXW\n", DB);
+}
+void emit_select(int tag)
+{
+    emit_pending_seq();
+    printf("\t%s\t$52\t\t\t; SEL\n", DB);
+    printf("\t%s\t_B%03d-*\n", DW, tag);
+}
+void emit_caseblock(int casecnt, int *caseof, int *casetag)
+{
+    int i;
+    
+    if (casecnt < 1 || casecnt > 256)
+        parse_error("Switch count under/overflow\n");
+    emit_pending_seq();
+    printf("\t%s\t$%02lX\t\t\t; CASEBLOCK\n", DB, casecnt & 0xFF);
+    for (i = 0; i < casecnt; i++)
+    {
+        printf("\t%s\t$%04lX\n", DW, caseof[i] & 0xFFFF);
+        printf("\t%s\t_B%03d-*\n", DW, casetag[i]);
+    }
+}
+void emit_breq(int tag)
+{
+    printf("\t%s\t$22\t\t\t; BREQ\t_B%03d\n", DB, tag);
+    printf("\t%s\t_B%03d-*\n", DW, tag);
+}
+void emit_brne(int tag)
+{
+    printf("\t%s\t$24\t\t\t; BRNE\t_B%03d\n", DB, tag);
+    printf("\t%s\t_B%03d-*\n", DW, tag);
 }
 void emit_brfls(int tag)
 {
@@ -769,28 +902,52 @@ void emit_brnch(int tag)
     printf("\t%s\t$50\t\t\t; BRNCH\t_B%03d\n", DB, tag);
     printf("\t%s\t_B%03d-*\n", DW, tag);
 }
-void emit_breq(int tag)
+void emit_brand(int tag)
 {
     emit_pending_seq();
-    printf("\t%s\t$3C\t\t\t; BREQ\t_B%03d\n", DB, tag);
+    printf("\t%s\t$AC\t\t\t; BRAND\t_B%03d\n", DB, tag);
     printf("\t%s\t_B%03d-*\n", DW, tag);
 }
-void emit_brne(int tag)
+void emit_bror(int tag)
 {
     emit_pending_seq();
-    printf("\t%s\t$3E\t\t\t; BRNE\t_B%03d\n", DB, tag);
+    printf("\t%s\t$AE\t\t\t; BROR\t_B%03d\n", DB, tag);
     printf("\t%s\t_B%03d-*\n", DW, tag);
 }
 void emit_brgt(int tag)
 {
     emit_pending_seq();
-    printf("\t%s\t$38\t\t\t; BRGT\t_B%03d\n", DB, tag);
+    printf("\t%s\t$A0\t\t\t; BRGT\t_B%03d\n", DB, tag);
     printf("\t%s\t_B%03d-*\n", DW, tag);
 }
 void emit_brlt(int tag)
 {
     emit_pending_seq();
-    printf("\t%s\t$3A\t\t\t; BRLT\t_B%03d\n", DB, tag);
+    printf("\t%s\t$A2\t\t\t; BRLT\t_B%03d\n", DB, tag);
+    printf("\t%s\t_B%03d-*\n", DW, tag);
+}
+void emit_incbrle(int tag)
+{
+    emit_pending_seq();
+    printf("\t%s\t$A4\t\t\t; INCBRLE\t_B%03d\n", DB, tag);
+    printf("\t%s\t_B%03d-*\n", DW, tag);
+}
+void emit_addbrle(int tag)
+{
+    emit_pending_seq();
+    printf("\t%s\t$A6\t\t\t; ADDBRLE\t_B%03d\n", DB, tag);
+    printf("\t%s\t_B%03d-*\n", DW, tag);
+}
+void emit_decbrge(int tag)
+{
+    emit_pending_seq();
+    printf("\t%s\t$A8\t\t\t; DECBRGE\t_B%03d\n", DB, tag);
+    printf("\t%s\t_B%03d-*\n", DW, tag);
+}
+void emit_subbrge(int tag)
+{
+    emit_pending_seq();
+    printf("\t%s\t$AA\t\t\t; SUBBRGE\t_B%03d\n", DB, tag);
     printf("\t%s\t_B%03d-*\n", DW, tag);
 }
 void emit_call(int tag, int type)
@@ -839,11 +996,17 @@ void emit_start(void)
 void emit_drop(void)
 {
     emit_pending_seq();
-    printf("\t%s\t$30\t\t\t; DROP\n", DB);
+    printf("\t%s\t$30\t\t\t; DROP \n", DB);
+}
+void emit_drop2(void)
+{
+    emit_pending_seq();
+    printf("\t%s\t$32\t\t\t; DROP2\n", DB);
 }
 void emit_dup(void)
 {
-    printf("\t%s\t$32\t\t\t; DUP\n", DB);
+    emit_pending_seq();
+    printf("\t%s\t$34\t\t\t; DUP\n", DB);
 }
 int emit_unaryop(t_token op)
 {
@@ -851,19 +1014,19 @@ int emit_unaryop(t_token op)
     switch (op)
     {
         case NEG_TOKEN:
-            printf("\t%s\t$10\t\t\t; NEG\n", DB);
+            printf("\t%s\t$90\t\t\t; NEG\n", DB);
             break;
         case COMP_TOKEN:
-            printf("\t%s\t$12\t\t\t; COMP\n", DB);
+            printf("\t%s\t$92\t\t\t; COMP\n", DB);
             break;
         case LOGIC_NOT_TOKEN:
-            printf("\t%s\t$20\t\t\t; NOT\n", DB);
+            printf("\t%s\t$80\t\t\t; NOT\n", DB);
             break;
         case INC_TOKEN:
-            printf("\t%s\t$0C\t\t\t; INCR\n", DB);
+            printf("\t%s\t$8C\t\t\t; INCR\n", DB);
             break;
         case DEC_TOKEN:
-            printf("\t%s\t$0E\t\t\t; DECR\n", DB);
+            printf("\t%s\t$8E\t\t\t; DECR\n", DB);
             break;
         case BPTR_TOKEN:
             emit_lb();
@@ -883,34 +1046,34 @@ int emit_op(t_token op)
     switch (op)
     {
         case MUL_TOKEN:
-            printf("\t%s\t$06\t\t\t; MUL\n", DB);
+            printf("\t%s\t$86\t\t\t; MUL\n", DB);
             break;
         case DIV_TOKEN:
-            printf("\t%s\t$08\t\t\t; DIV\n", DB);
+            printf("\t%s\t$88\t\t\t; DIV\n", DB);
             break;
         case MOD_TOKEN:
-            printf("\t%s\t$0A\t\t\t; MOD\n", DB);
+            printf("\t%s\t$8A\t\t\t; MOD\n", DB);
             break;
         case ADD_TOKEN:
-            printf("\t%s\t$02\t\t\t; ADD\n", DB);
+            printf("\t%s\t$82\t\t\t; ADD \n", DB);
             break;
         case SUB_TOKEN:
-            printf("\t%s\t$04\t\t\t; SUB\n", DB);
+            printf("\t%s\t$84\t\t\t; SUB \n", DB);
             break;
         case SHL_TOKEN:
-            printf("\t%s\t$1A\t\t\t; SHL\n", DB);
+            printf("\t%s\t$9A\t\t\t; SHL\n", DB);
             break;
         case SHR_TOKEN:
-            printf("\t%s\t$1C\t\t\t; SHR\n", DB);
+            printf("\t%s\t$9C\t\t\t; SHR\n", DB);
             break;
         case AND_TOKEN:
-            printf("\t%s\t$14\t\t\t; AND\n", DB);
+            printf("\t%s\t$94\t\t\t; AND \n", DB);
             break;
         case OR_TOKEN:
-            printf("\t%s\t$16\t\t\t; IOR\n", DB);
+            printf("\t%s\t$96\t\t\t; OR \n", DB);
             break;
         case EOR_TOKEN:
-            printf("\t%s\t$18\t\t\t; XOR\n", DB);
+            printf("\t%s\t$98\t\t\t; XOR\n", DB);
             break;
         case EQ_TOKEN:
             printf("\t%s\t$40\t\t\t; ISEQ\n", DB);
@@ -929,12 +1092,6 @@ int emit_op(t_token op)
             break;
         case LE_TOKEN:
             printf("\t%s\t$4A\t\t\t; ISLE\n", DB);
-            break;
-        case LOGIC_OR_TOKEN:
-            printf("\t%s\t$22\t\t\t; LOR\n", DB);
-            break;
-        case LOGIC_AND_TOKEN:
-            printf("\t%s\t$24\t\t\t; LAND\n", DB);
             break;
         case COMMA_TOKEN:
             break;
@@ -1063,13 +1220,6 @@ int crunch_seq(t_opseq **seq, int pass)
                         freeops = 1;
                         break;
                     }
-                    if (opnext->code == BINARY_CODE(SHL_TOKEN))
-                    {
-                        op->code = DUP_CODE;
-                        opnext->code = BINARY_CODE(ADD_TOKEN);
-                        crunched = 1;
-                        break;
-                    }
                 }
                 switch (opnext->code)
                 {
@@ -1126,6 +1276,22 @@ int crunch_seq(t_opseq **seq, int pass)
                             op->tag  = opnext->tag;
                             freeops  = 1;
                         }
+                        break;
+                    case BRGT_CODE:
+                        if (opprev && (opprev->code == CONST_CODE) && (op->val <= opprev->val))
+                            freeops = 1;
+                        break;
+                    case BRLT_CODE:
+                        if (opprev && (opprev->code == CONST_CODE) && (op->val >= opprev->val))
+                            freeops = 1;
+                        break;
+                    case BROR_CODE:
+                        if (!op->val)
+                            freeops = -2; // Remove zero constant
+                        break;
+                    case BRAND_CODE:
+                        if (op->val)
+                            freeops = -2; // Remove non-zero constant
                         break;
                     case NE_CODE:
                         if (!op->val)
@@ -1206,20 +1372,64 @@ int crunch_seq(t_opseq **seq, int pass)
                                 case BINARY_CODE(LE_TOKEN):
                                     op->val = op->val <= opnext->val ? 1 : 0;
                                     freeops  = 2;
-                                    break;
-                                case BINARY_CODE(LOGIC_OR_TOKEN):
-                                    op->val = op->val || opnext->val ? 1 : 0;
-                                    freeops  = 2;
-                                    break;
-                                case BINARY_CODE(LOGIC_AND_TOKEN):
-                                    op->val = op->val && opnext->val ? 1 : 0;
-                                    freeops  = 2;
-                                    break;
+                                    break;                                    
                             }
                         // End of collapse constant operation
                         if ((pass > 0) && (freeops == 0) && (op->val != 0))
                             crunched = try_dupify(op);
                         break; // CONST_CODE
+                    case BINARY_CODE(ADD_TOKEN):
+                        if (op->val == 0)
+                        {
+                            freeops = -2;
+                        }
+                        else if (op->val > 0 && op->val <= 255)
+                        {
+                            op->code = ADDI_CODE;
+                            freeops  = 1;
+                        }
+                        else if (op->val >= -255 && op->val < 0)
+                        {
+                            op->code = SUBI_CODE;
+                            op->val  = -op->val;
+                            freeops  = 1;
+                        }
+                        break;
+                    case BINARY_CODE(SUB_TOKEN):
+                        if (op->val == 0)
+                        {
+                            freeops = -2;
+                        }
+                        else if (op->val > 0 && op->val <= 255)
+                        {
+                            op->code = SUBI_CODE;
+                            freeops  = 1;
+                        }
+                        else if (op->val >= -255 && op->val < 0)
+                        {
+                            op->code = ADDI_CODE;
+                            op->val  = -op->val;
+                            freeops  = 1;
+                        }
+                        break;
+                    case BINARY_CODE(AND_TOKEN):
+                        if (op->val >= 0 && op->val <= 255)
+                        {
+                            op->code = ANDI_CODE;
+                            freeops  = 1;
+                        }
+                        break;
+                    case BINARY_CODE(OR_TOKEN):
+                        if (op->val == 0)
+                        {
+                            freeops = -2;
+                        }
+                        else if (op->val > 0 && op->val <= 255)
+                        {
+                            op->code = ORI_CODE;
+                            freeops  = 1;
+                        }
+                        break;
                     case BINARY_CODE(MUL_TOKEN):
                         for (shiftcnt = 0; shiftcnt < 16; shiftcnt++)
                         {
@@ -1325,7 +1535,17 @@ int crunch_seq(t_opseq **seq, int pass)
                     crunched = try_dupify(op);
                 break; // GADDR_CODE
             case LLB_CODE:
-                if (pass > 0)
+                if ((opnext->code == ADD_CODE) || (opnext->code == INDEXB_CODE))
+                {
+                    op->code = ADDLB_CODE;
+                    freeops  = 1;
+                }
+                else if (opnext->code == INDEXW_CODE)
+                {
+                    op->code = IDXLB_CODE;
+                    freeops  = 1;
+                }
+                else if (pass > 0)
                     crunched = try_dupify(op);
                 break; // LLB_CODE
             case LLW_CODE:
@@ -1343,11 +1563,31 @@ int crunch_seq(t_opseq **seq, int pass)
                         }
                     }
                 }
-                if ((pass > 0) && (freeops == 0))
+                else if ((opnext->code == ADD_CODE) || (opnext->code == INDEXB_CODE))
+                {
+                    op->code = ADDLW_CODE;
+                    freeops  = 1;
+                }
+                else if (opnext->code == INDEXW_CODE)
+                {
+                    op->code = IDXLW_CODE;
+                    freeops  = 1;
+                }
+                else if (pass > 0)
                     crunched = try_dupify(op);
                 break; // LLW_CODE
             case LAB_CODE:
-                if ((pass > 0) && (op->type || !is_hardware_address(op->offsz)))
+                if ((opnext->code == ADD_CODE) || (opnext->code == INDEXB_CODE))
+                {
+                    op->code = ADDAB_CODE;
+                    freeops  = 1;
+                }
+                else if (opnext->code == INDEXW_CODE)
+                {
+                    op->code = IDXAB_CODE;
+                    freeops  = 1;
+                }
+                else if ((pass > 0) && (op->type || !is_hardware_address(op->offsz)))
                     crunched = try_dupify(op);
                 break; // LAB_CODE
             case LAW_CODE:
@@ -1365,8 +1605,17 @@ int crunch_seq(t_opseq **seq, int pass)
                         }
                     }
                 }
-                if ((pass > 0) && (freeops == 0) &&
-                    (op->type || !is_hardware_address(op->offsz)))
+                else if ((opnext->code == ADD_CODE) || (opnext->code == INDEXB_CODE))
+                {
+                    op->code = ADDAW_CODE;
+                    freeops  = 1;
+                }
+                else if (opnext->code == INDEXW_CODE)
+                {
+                    op->code = IDXAW_CODE;
+                    freeops  = 1;
+                }
+                else if ((pass > 0) && (op->type || !is_hardware_address(op->offsz)))
                     crunched = try_dupify(op);
                 break; // LAW_CODE
             case LOGIC_NOT_CODE:
@@ -1384,6 +1633,36 @@ int crunch_seq(t_opseq **seq, int pass)
                         break;
                 }
                 break; // LOGIC_NOT_CODE
+            case EQ_CODE:
+                switch (opnext->code)
+                {
+                    case BRFALSE_CODE:
+                        op->code = BRNE_CODE;
+                        op->tag  = opnext->tag;
+                        freeops  = 1;
+                        break;
+                    case BRTRUE_CODE:
+                        op->code = BREQ_CODE;
+                        op->tag  = opnext->tag;
+                        freeops  = 1;
+                        break;
+                }
+                break; // EQ_CODE
+            case NE_CODE:
+                switch (opnext->code)
+                {
+                    case BRFALSE_CODE:
+                        op->code = BREQ_CODE;
+                        op->tag  = opnext->tag;
+                        freeops  = 1;
+                        break;
+                    case BRTRUE_CODE:
+                        op->code = BRNE_CODE;
+                        op->tag  = opnext->tag;
+                        freeops  = 1;
+                        break;
+                }
+                break; // NE_CODE
             case SLB_CODE:
                 if ((opnext->code == LLB_CODE) && (op->offsz == opnext->offsz))
                 {
@@ -1577,8 +1856,6 @@ int emit_pending_seq()
             case LT_CODE:
             case GT_CODE:
             case LE_CODE:
-            case LOGIC_OR_CODE:
-            case LOGIC_AND_CODE:
                 emit_op(op->code);
                 break;
             case CONST_CODE:
@@ -1586,6 +1863,18 @@ int emit_pending_seq()
                 break;
             case STR_CODE:
                 emit_conststr(op->val);
+                break;
+            case ADDI_CODE:
+                emit_addi(op->val);
+                break;
+            case SUBI_CODE:
+                emit_subi(op->val);
+                break;
+            case ANDI_CODE:
+                emit_andi(op->val);
+                break;
+            case ORI_CODE:
+                emit_ori(op->val);
                 break;
             case LB_CODE:
                 emit_lb();
@@ -1599,11 +1888,35 @@ int emit_pending_seq()
             case LLW_CODE:
                 emit_llw(op->offsz);
                 break;
+            case ADDLB_CODE:
+                emit_addlb(op->offsz);
+                break;
+            case ADDLW_CODE:
+                emit_addlw(op->offsz);
+                break;
+            case IDXLB_CODE:
+                emit_idxlb(op->offsz);
+                break;
+            case IDXLW_CODE:
+                emit_idxlw(op->offsz);
+                break;
             case LAB_CODE:
                 emit_lab(op->tag, op->offsz, op->type);
                 break;
             case LAW_CODE:
                 emit_law(op->tag, op->offsz, op->type);
+                break;
+            case ADDAB_CODE:
+                emit_addab(op->tag, op->offsz, op->type);
+                break;
+            case ADDAW_CODE:
+                emit_addaw(op->tag, op->offsz, op->type);
+                break;
+            case IDXAB_CODE:
+                emit_idxab(op->tag, op->offsz, op->type);
+                break;
+            case IDXAW_CODE:
+                emit_idxaw(op->tag, op->offsz, op->type);
                 break;
             case SB_CODE:
                 emit_sb();
@@ -1662,11 +1975,29 @@ int emit_pending_seq()
             case BRNCH_CODE:
                 emit_brnch(op->tag);
                 break;
+            case BRAND_CODE:
+                emit_brand(op->tag);
+                break;
+            case BROR_CODE:
+                emit_bror(op->tag);
+                break;
+            case BREQ_CODE:
+                emit_breq(op->tag);
+                break;
+            case BRNE_CODE:
+                emit_brne(op->tag);
+                break;
             case BRFALSE_CODE:
                 emit_brfls(op->tag);
                 break;
             case BRTRUE_CODE:
                 emit_brtru(op->tag);
+                break;
+            case BRGT_CODE:
+                emit_brgt(op->tag);
+                break;
+            case BRLT_CODE:
+                emit_brlt(op->tag);
                 break;
             case CODETAG_CODE:
                 printf("_B%03d%c\n", op->tag, LBL);
