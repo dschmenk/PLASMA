@@ -343,26 +343,15 @@ BYE     LDY     DEFCMD
 ;        STY     $01FF
 CMDENTRY =      *
 ;
-; SET DCI STRING FOR JIT MODULE
-;
-        LDA     #'J'|$80
-        STA     JITMOD+0
-        LDA     #'I'|$80
-        STA     JITMOD+1
-        LDA     #'T'|$80
-        STA     JITMOD+2
-        LDA     #'1'|$80
-        STA     JITMOD+3
-        LDA     #'6'
-        STA     JITMOD+4
-;
-; DEACTIVATE 80 COL CARDS
+; DEACTIVATE 80 COL CARDS AND SET DCI STRING FOR JIT MODULE
 ;
         BIT     ROMEN
         LDY     #4
 -       LDA     DISABLE80,Y
         ORA     #$80
         JSR     $FDED
+        LDA     JITDCI,Y
+        STA     JITMOD,Y
         DEY
         BPL     -
         BIT     $C054           ; SET TEXT MODE
@@ -376,7 +365,7 @@ CMDENTRY =      *
 ;
 ; INSTALL PAGE 0 FETCHOP ROUTINE
 ;
-        LDY     #$11
+        LDY     #$0F
 -       LDA     PAGE0,Y
         STA     DROP,Y
         DEY
@@ -440,7 +429,7 @@ CMDENTRY =      *
 ; PRINT FAIL MESSAGE, WAIT FOR KEYPRESS, AND REBOOT
 ;
 FAIL    INC     $3F4            ; INVALIDATE POWER-UP BYTE
-        LDY     #31
+        LDY     #11
 -       LDA     FAILMSG,Y
         ORA     #$80
         JSR     $FDED
@@ -460,7 +449,8 @@ READPARMS !BYTE 4
 CLOSEPARMS !BYTE 1
         !BYTE   0
 DISABLE80 !BYTE 21, 13, '1', 26, 13
-FAILMSG !TEXT   "...TESER OT YEK YNA .DMC GNISSIM"
+JITDCI  !BYTE       'J'|$80,'I'|$80,'T'|$80,'1'|$80,'6'
+FAILMSG !TEXT   ".DMC GNISSIM"
 PAGE0    =      *
 ;******************************
 ;*                            *
@@ -575,6 +565,8 @@ RUNJIT  DEX                     ; ADD PARAMETER TO DEF ENTRY
         STA     IP
         STX     ESP
         TSX
+        DEX                     ; TAKE INTO ACCOUNT JSR BELOW
+        DEX
         STX     HWSP
         STX     ALTRDON
         LDX     #>OPXTBL
@@ -588,7 +580,7 @@ SETDBG  LDY     LCRWEN+LCBNK2
         STX     OPPAGE
         LDY     #$00
         JSR     FETCHOP         ; CALL JIT COMPILER
-        !AS
+        !AS                     ; RETURN IN EMULATION MODE
         PLA
         STA     TMPH
         PLA
@@ -1989,7 +1981,7 @@ RET     SEC                     ; SWITCH TO EMULATION MODE
         PLP
         RTS
 ;*
-;* RETURN TO NATIVE CODE
+;* RETURN TO NATIVE CODE (EMULATION MODE FOR NOW, ACTUALLY)
 ;*
 NATV    TYA                     ; FLATTEN IP
         SEC

@@ -278,22 +278,15 @@ BYE     LDY     DEFCMD
 ;        STY     $01FF
 CMDENTRY =      *
 ;
-; SET DCI STRING FOR JIT MODULE
-;
-        LDA     #'J'|$80
-        STA     JITMOD+0
-        LDA     #'I'|$80
-        STA     JITMOD+1
-        LDA     #'T'
-        STA     JITMOD+2
-;
-; DEACTIVATE 80 COL CARDS
+; DEACTIVATE 80 COL CARDS AND SET DCI STRING FOR JIT MODULE
 ;
         BIT     ROMEN
         LDY     #4
 -       LDA     DISABLE80,Y
         ORA     #$80
         JSR     $FDED
+        LDA     JITDCI,Y
+        STA     JITMOD,Y
         DEY
         BPL     -
         BIT     $C054           ; SET TEXT MODE
@@ -316,7 +309,7 @@ CMDENTRY =      *
 ;
 ; INSTALL PAGE 3 VECTORS
 ;
-        LDY     #$16
+        LDY     #$12
 -       LDA     PAGE3,Y
         STA     INTERP,Y
         DEY
@@ -387,6 +380,7 @@ READPARMS !BYTE 4
 CLOSEPARMS !BYTE 1
         !BYTE   0
 DISABLE80 !BYTE 21, 13, '1', 26, 13
+JITDCI  !BYTE       'J'|$80,'I'|$80,'T'
 FAILMSG !TEXT   ".DMC GNISSIM"
 PAGE0    =      *
 ;******************************
