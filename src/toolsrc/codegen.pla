@@ -132,8 +132,10 @@ def emit_codeseg#0
 end
 def emit_const(cval)#0
     emit_pending_seq
-    if cval == $0000            // ZERO
-        emit_byte($00)
+    if cval == $FFFF            // MINUS ONE
+        emit_byte($20)
+    elsif cval & $FFF0 == $0000 // Constant NYBBLE
+        emit_byte(cval*2)
     elsif cval & $FF00 == $0000 // Constant BYTE
         emit_byte($2A)
         emit_byte(cval)
@@ -171,24 +173,65 @@ def emit_daw(tag, offset)#0
     emit_byte($7E)
     emit_addr(tag, offset)
 end
-def emit_brgt(tag)#0
+def emit_select(tag)#0
     emit_pending_seq
-    emit_byte($38)
+    emit_byte($52)
     emit_reladdr(tag)
 end
-def emit_brlt(tag)#0
+def emit_caseblock(cnt, oflist, taglist)#0
+    byte i
+    
+    if not cnt or cnt > 256; exit_err(ERR_OVER|ERR_STATE); fin
     emit_pending_seq
-    emit_byte($3A)
-    emit_reladdr(tag)
-end
-def emit_brne(tag)#0
-    emit_pending_seq
-    emit_byte($3E)
-    emit_reladdr(tag)
+    emit_byte(cnt)
+    for i = 0 to cnt-1
+        emit_word(oflist=>[i])
+        emit_reladdr(taglist=>[i])
+    next
 end
 def emit_branch(tag)#0
     emit_pending_seq
     emit_byte($50)
+    emit_reladdr(tag)
+end
+def emit_brgt(tag)#0
+    emit_pending_seq
+    emit_byte($A0)
+    emit_reladdr(tag)
+end
+def emit_brlt(tag)#0
+    emit_pending_seq
+    emit_byte($A2)
+    emit_reladdr(tag)
+end
+def emit_incbrle(tag)#0
+    emit_pending_seq
+    emit_byte($A4)
+    emit_reladdr(tag)
+end
+def emit_addbrle(tag)#0
+    emit_pending_seq
+    emit_byte($A6)
+    emit_reladdr(tag)
+end
+def emit_decbrge(tag)#0
+    emit_pending_seq
+    emit_byte($A8)
+    emit_reladdr(tag)
+end
+def emit_subbrge(tag)#0
+    emit_pending_seq
+    emit_byte($AA)
+    emit_reladdr(tag)
+end
+def emit_brand(tag)#0
+    emit_pending_seq
+    emit_byte($AC)
+    emit_reladdr(tag)
+end
+def emit_bror(tag)#0
+    emit_pending_seq
+    emit_byte($AE)
     emit_reladdr(tag)
 end
 def emit_leave#0
@@ -266,8 +309,11 @@ def emit_pending_seq#0
             //
             is CONST_GROUP
                 if op->opcode == CONST_CODE
-                    if op=>opval == $0000            // ZERO
-                        ^codeptr = $00
+                    if op=>opval == $FFFF            // MINUS 1
+                        ^codeptr = $20
+                        codeptr++
+                    elsif op=>opval & $FFF0 == $0000 // Constant NYBBLE
+                        ^codeptr = op->opval*2
                         codeptr++
                     elsif op=>opval & $FF00 == $0000 // Constant BYTE
                         *codeptr = $2A | (op->opval << 8)
@@ -280,6 +326,9 @@ def emit_pending_seq#0
                         codeptr=>1 = op=>opval
                         codeptr    = codeptr + 3
                     fin
+                else
+                    *codeptr = op->opcode | (op->opval << 8) // IMMEDIATE BYTE OP
+                    codeptr  = codeptr + 2
                 fin
                 break
             //
@@ -382,9 +431,10 @@ def idmatch(nameptr, len, idptr, idcnt)
 
     while idcnt
         if len == idptr->idname
-            for i = 1 to len
-                if nameptr->[i - 1] <> idptr->idname.[i]; break; fin
-            next
+            i = 1; while i <= len and nameptr->[i - 1] == idptr->idname.[i]; i++; loop
+            //for i = 1 to len
+            //    if nameptr->[i - 1] <> idptr->idname.[i]; break; fin
+            //next
             if i > len; return idptr; fin
         fin
         idptr = idptr + idptr->idname + t_id
@@ -479,11 +529,13 @@ def init_idglobal#0
     word op
     word i
 
+    dfd_num     = DFDNUM
     tag_num     = TAGNUM
     fixup_num   = FIXUPNUM
     globalbufsz = IDGLOBALSZ
     localbufsz  = IDLOCALSZ
-    if isult(heapavail, $8000)
+    if isult(heapavail, $4000)
+        dfd_num     = DFDNUM/2
         tag_num     = TAGNUM/2
         fixup_num   = FIXUPNUM/2
         globalbufsz = IDGLOBALSZ
@@ -502,6 +554,7 @@ def init_idglobal#0
     //
     // Allocate remaining buffers
     //
+    dfd_tag      = heapalloc(dfd_num*2)
     tag_addr     = heapalloc(tag_num*2)
     tag_type     = heapalloc(tag_num)
     fixup_tag    = heapalloc(fixup_num*2)
@@ -534,13 +587,15 @@ def save_idlocal#0
     savelocals = locals
     savesize   = framesize
     savelast   = lastlocal
-    memcpy(heapmark, idlocal_tbl, lastlocal - idlocal_tbl)
+    savetbl    = heapalloc(lastlocal - idlocal_tbl)
+    memcpy(savetbl, idlocal_tbl, lastlocal - idlocal_tbl)
 end
 def restore_idlocal#0
     locals    = savelocals
     framesize = savesize
     lastlocal = savelast
-    memcpy(idlocal_tbl, heapmark, lastlocal - idlocal_tbl)
+    memcpy(idlocal_tbl, savetbl, lastlocal - idlocal_tbl)
+    heaprelease(savetbl)
 end
 //
 // Module dependency list
@@ -552,6 +607,14 @@ def new_moddep(nameptr, len)#0
     moddep_tbl[moddep_cnt*16] = len
     moddep_cnt++
     if moddep_cnt > MODDEPNUM; parse_warn("Module dependency overflow"); fin
+end
+//
+// DFD list
+//
+def new_dfd(tag)#0
+    if dfd_cnt >= dfd_num; exit_err(ERR_OVER|ERR_CODE|ERR_TABLE); fin
+    dfd_tag=>[dfd_cnt] = tag
+    dfd_cnt++
 end
 //
 // Generate/add to a sequence of code
@@ -690,15 +753,15 @@ def gen_uop(seq, tkn)
     fin
     when tkn
         is NEG_TKN
-            code = $10; break
+            code = $90; break
         is COMP_TKN
-            code = $12; break
+            code = $92; break
         is LOGIC_NOT_TKN
-            code = $20; break
+            code = $80; break
         is INC_TKN
-            code = $0C; break
+            code = $8C; break
         is DEC_TKN
-            code = $0E; break
+            code = $8E; break
         is BPTR_TKN
             code = $60; break
         is WPTR_TKN
@@ -725,25 +788,25 @@ def gen_bop(seq, tkn)
     fin
     when tkn
         is MUL_TKN
-            code = $06; break
+            code = $86; break
         is DIV_TKN
-            code = $08; break
+            code = $88; break
         is MOD_TKN
-            code = $0A; break
+            code = $8A; break
         is ADD_TKN
-            code = $02; break
+            code = $82; break
         is SUB_TKN
-            code = $04; break
+            code = $84; break
         is SHL_TKN
-            code = $1A; break
+            code = $9A; break
         is SHR_TKN
-            code = $1C; break
+            code = $9C; break
         is AND_TKN
-            code = $14; break
+            code = $94; break
         is OR_TKN
-            code = $16; break
+            code = $96; break
         is EOR_TKN
-            code = $18; break
+            code = $98; break
         is EQ_TKN
             code = $40; break
         is NE_TKN
@@ -756,10 +819,6 @@ def gen_bop(seq, tkn)
             code = $44; break
         is LE_TKN
             code = $4A; break
-        is LOGIC_OR_TKN
-            code = $22; break
-        is LOGIC_AND_TKN
-            code = $24; break
         otherwise
             exit_err(ERR_INVAL|ERR_SYNTAX)
     wend
@@ -824,30 +883,34 @@ end
 // Write DeFinition Directory
 //
 def writeDFD(refnum, modfix)#0
-    word dfd, idptr, idcnt
+    word dfd, idptr, cnt
     byte defdir[128]
 
-    dfd, idptr, idcnt = @defdir, idglobal_tbl, globals
-    while idcnt
-        if idptr=>idtype & (FUNC_TYPE|EXTERN_TYPE) == FUNC_TYPE
+    dfd = @defdir
+    for cnt = 0 to dfd_cnt-1
+    //dfd, idptr, cnt = @defdir, idglobal_tbl, globals
+    //while cnt
+        //if idptr=>idtype & (FUNC_TYPE|EXTERN_TYPE) == FUNC_TYPE
             dfd->0 = $02
-            dfd=>1 = tag_addr=>[idptr=>idval] + modfix
+            dfd=>1 = tag_addr=>[dfd_tag=>[cnt]] + modfix
             dfd->3 = 0
             dfd    = dfd + 4
-        fin
-        idptr = idptr + idptr->idname + t_id
-        idcnt--
-    loop
+        //fin
+        //idptr = idptr + idptr->idname + t_id
+        //cnt--
+    //loop
+    next
     fileio:write(refnum, @defdir, dfd - @defdir)
 end
 //
 // Build External Symbol Directory on heap
 //
 def buildESD(modfix)#2
-    word modofst, esd, idptr, idcnt, len
+    word modofst, esdtbl, esd, idptr, idcnt, len
     byte symnum
 
-    symnum, esd, idptr, idcnt = 0, heapmark, idglobal_tbl, globals
+    symnum, esdtbl, idptr, idcnt = 0, heapalloc(heapavail - 256), idglobal_tbl, globals
+    esd = esdtbl
     while idcnt
         if idptr=>idtype & EXPORT_TYPE
             esd           = esd + stodci(@idptr->idname, esd)
@@ -866,26 +929,27 @@ def buildESD(modfix)#2
         idcnt--
     loop
     ^esd = 0
-    len  = esd - heapmark + 1
-    esd  = heapalloc(len)
-    return esd, len
+    len  = esd - esdtbl + 1
+    heaprelease(esdtbl + len)
+    return esdtbl, len
 end
 //
 // Write ReLocation Directory
 //
 def writeRLD(refnum, modofst)#0
-    word rld, rldlen, fixups, updtptr, idptr, idcnt, tag
+    word rldtbl, rld, rldlen, fixups, updtptr, idptr, idcnt, tag
     byte type
 
-    rld    = heapmark
+    rldtbl = heapalloc(heapavail - 256)
+    rld    = rldtbl
     rldlen = 0
     for fixups = fixup_cnt-1 downto 0
         tag  = fixup_tag=>[fixups]
         type = tag_type->[tag]
         if not (type & RELATIVE_FIXUP)
             if rldlen == 64 // Write out blocks of entries
-                fileio:write(refnum, heapmark, rld - heapmark)
-                rld    = heapmark
+                fileio:write(refnum, rldtbl, rld - rldtbl)
+                rld    = rldtbl
                 rldlen = 0
             fin
             if type & EXTERN_FIXUP
@@ -907,7 +971,8 @@ def writeRLD(refnum, modofst)#0
         fin
     next
     ^rld = 0
-    fileio:write(refnum, heapmark, rld - heapmark + 1)
+    fileio:write(refnum, rldtbl, rld - rldtbl + 1)
+    heaprelease(rldtbl)
 end
 //
 // Write Extended REL file

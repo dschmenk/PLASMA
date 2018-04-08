@@ -31,8 +31,6 @@ typedef struct _opseq {
 #define LT_CODE     (0x0200|LT_TOKEN)
 #define GT_CODE     (0x0200|GT_TOKEN)
 #define LE_CODE     (0x0200|LE_TOKEN)
-#define LOGIC_OR_CODE (0x0200|LOGIC_OR_TOKEN)
-#define LOGIC_AND_CODE (0x0200|LOGIC_AND_TOKEN)
 #define CONST_CODE  0x0300
 #define STR_CODE    0x0301
 #define LB_CODE     0x0302
@@ -59,11 +57,29 @@ typedef struct _opseq {
 #define INDEXW_CODE 0x0317
 #define DROP_CODE   0x0318
 #define DUP_CODE    0x0319
-#define BRNCH_CODE  0x031C
-#define BRFALSE_CODE 0x031D
-#define BRTRUE_CODE 0x031E
-#define CODETAG_CODE 0x031F
-#define NOP_CODE    0x0320
+#define ADDI_CODE   0x031A
+#define SUBI_CODE   0x031B
+#define ANDI_CODE   0x031C
+#define ORI_CODE    0x31D
+#define BRNCH_CODE  0x0320
+#define BRFALSE_CODE 0x0321
+#define BRTRUE_CODE 0x0322
+#define BREQ_CODE   0x0323
+#define BRNE_CODE   0x0324
+#define BRAND_CODE  0x0325
+#define BROR_CODE   0x0326
+#define BRLT_CODE   0x0327
+#define BRGT_CODE   0x0328
+#define CODETAG_CODE 0x0329
+#define NOP_CODE    0x032A
+#define ADDLB_CODE  0x0330
+#define ADDLW_CODE  0x0331
+#define ADDAB_CODE  0x0332
+#define ADDAW_CODE  0x0333
+#define IDXLB_CODE  0x0334
+#define IDXLW_CODE  0x0335
+#define IDXAB_CODE  0x0336
+#define IDXAW_CODE  0x0337
 
 #define gen_uop(seq,op)     gen_seq(seq,UNARY_CODE(op),0,0,0,0)
 #define gen_op(seq,op)      gen_seq(seq,BINARY_CODE(op),0,0,0,0)
@@ -79,6 +95,10 @@ typedef struct _opseq {
 #define gen_sw(seq)         gen_seq(seq,SW_CODE,0,0,0,0)
 #define gen_icall(seq)      gen_seq(seq,ICAL_CODE,0,0,0,0)
 #define gen_drop(seq)       gen_seq(seq,DROP_CODE,0,0,0,0)
+#define gen_brand(seq,tag)  gen_seq(seq,BRAND_CODE,0,tag,0,0)
+#define gen_bror(seq,tag)   gen_seq(seq,BROR_CODE,0,tag,0,0)
+#define gen_brgt(seq,tag)   gen_seq(seq,BRGT_CODE,0,tag,0,0)
+#define gen_brlt(seq,tag)   gen_seq(seq,BRLT_CODE,0,tag,0,0)
 #define gen_brfls(seq,tag)  gen_seq(seq,BRFALSE_CODE,0,tag,0,0)
 #define gen_brtru(seq,tag)  gen_seq(seq,BRTRUE_CODE,0,tag,0,0)
 #define gen_brnch(seq,tag)  gen_seq(seq,BRNCH_CODE,0,tag,0,0)
@@ -102,6 +122,10 @@ int emit_data(int vartype, int consttype, long constval, int constsize);
 void emit_codetag(int tag);
 void emit_const(int cval);
 void emit_conststr(long conststr);
+void emit_addi(int cval);
+void emit_subi(int cval);
+void emit_andi(int cval);
+void emit_ori(int cval);
 void emit_lb(void);
 void emit_lw(void);
 void emit_llb(int index);
@@ -126,14 +150,23 @@ void emit_indexbyte(void);
 void emit_indexword(void);
 int emit_unaryop(t_token op);
 int emit_op(t_token op);
+void emit_select(int tag);
+void emit_caseblock(int casecnt, int *caseof, int *casetag);
+void emit_brand(int tag);
+void emit_bror(int tag);
 void emit_brtru(int tag);
 void emit_brfls(int tag);
-void emit_brgt(int tag);
-void emit_brlt(int tag);
 void emit_brne(int tag);
 void emit_brnch(int tag);
+void emit_brgt(int tag);
+void emit_brlt(int tag);
+void emit_addbrle(int tag);
+void emit_incbrle(int tag);
+void emit_subbrge(int tag);
+void emit_decbrge(int tag);
 void emit_empty(void);
 void emit_drop(void);
+void emit_drop2(void);
 void emit_dup(void);
 void emit_leave(void);
 void emit_ret(void);

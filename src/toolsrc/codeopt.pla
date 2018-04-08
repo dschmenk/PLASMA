@@ -79,13 +79,6 @@ def crunch_seq(seq, pass)
                         freeops     = 1
                         break
                     fin
-                    if nextop->opcode == SHL_CODE
-                        op->opcode     = DUP_CODE
-                        op->opgroup    = STACK_GROUP
-                        nextop->opcode = ADD_CODE
-                        crunched       = 1
-                        break
-                    fin
                 fin
                 when nextop->opcode
                     is NEG_CODE
@@ -120,6 +113,26 @@ def crunch_seq(seq, pass)
                             freeops     = 1
                         fin
                         break
+                    is BRGT_CODE
+                        if opprev and (opprev->opcode == CONST_CODE) and (op=>opval <= opprev=>opval)
+                            freeops = 1
+                        fin
+                        break
+                    is BRLT_CODE
+                        if opprev and (opprev->opcode == CONST_CODE) and (op=>opval >= opprev=>opval)
+                            freeops = 1
+                        fin
+                        break
+                    is BROR_CODE
+                        if not op=>opval
+                            freeops = -2 // Remove zero constant
+                        fin
+                        break
+                    is BRAND_CODE
+                        if op=>opval
+                            freeops = -2 // Remove non-zero constant
+                        fin
+                        break
                     is NE_CODE
                         if not op=>opval
                             freeops = -2 // Remove ZERO:ISNE
@@ -129,7 +142,7 @@ def crunch_seq(seq, pass)
                         if not op=>opval
                             op->opcode  = LOGIC_NOT_CODE // Replace ZERO:ISEQ
                             op->opgroup = STACK_GROUP
-                      freeops    = 1
+                            freeops     = 1
                         fin
                         break
                     is CONST_CODE // Collapse constant operation
@@ -200,20 +213,50 @@ def crunch_seq(seq, pass)
                                     op=>opval = op=>opval <= nextop=>opval
                                     freeops   = 2
                                     break
-                                is LOGIC_OR_CODE
-                                    op=>opval = op=>opval or nextop=>opval
-                                    freeops   = 2
-                                    break
-                                is LOGIC_AND_CODE
-                                    op=>opval = op=>opval and nextop=>opval
-                                    freeops   = 2
-                                    break
                             wend // End of collapse constant operation
                         fin
                         if pass and not freeops and op=>opval
                             crunched = try_dupify(op)
                         fin
                         break // CONST_CODE
+                    is ADD_CODE
+                        if op=>opval == 0
+                            freeops = -2
+                        elsif op=>opval > 0 and op=>opval <= 255
+                            op->opcode = ADDI_CODE
+                            freeops    = 1
+                        elsif op=>opval >= -255 and op=>opval < 0
+                            op->opcode = SUBI_CODE
+                            op=>opval  = -op=>opval
+                            freeops    = 1
+                        fin
+                        break
+                    is SUB_CODE
+                        if op=>opval == 0
+                            freeops = -2
+                        elsif op=>opval > 0 and op=>opval <= 255
+                            op->opcode = SUBI_CODE
+                            freeops    = 1
+                        elsif op=>opval >= -255 and op=>opval < 0
+                            op->opcode = ADDI_CODE
+                            op=>opval  = -op=>opval
+                            freeops    = 1
+                        fin
+                        break
+                    is AND_CODE
+                        if op=>opval >= 0 and op=>opval <= 255
+                            op->opcode = ANDI_CODE
+                            freeops    = 1
+                        fin
+                        break
+                    is OR_CODE
+                        if op=>opval == 0
+                            freeops = -2
+                        elsif op=>opval > 0 and op=>opval <= 255
+                            op->opcode = ORI_CODE
+                            freeops    = 1
+                        fin
+                        break
                     is MUL_CODE
                         for shiftcnt = 0 to 15
                             if op=>opval == 1 << shiftcnt
@@ -240,7 +283,7 @@ def crunch_seq(seq, pass)
                         if nextop=>opnext
                             nextopnext = nextop=>opnext
                             when nextopnext->opcode
-                                is INDEXB_CODE // ADD_CODE
+                                is ADD_CODE // INDEXB_CODE
                                     op=>opoffset = op=>opoffset + nextop=>opval
                                     freeops      = 2
                                     break
@@ -278,7 +321,7 @@ def crunch_seq(seq, pass)
                         if nextop=>opnext
                             nextopnext = nextop=>opnext
                             when nextopnext->opcode
-                                is INDEXB_CODE // ADD_CODE
+                                is ADD_CODE // INDEXB_CODE
                                     op=>opoffset = op=>opoffset + nextop=>opval
                                     freeops      = 2
                                     break
@@ -315,45 +358,85 @@ def crunch_seq(seq, pass)
                 fin
                 break // GADDR_CODE
             is LLB_CODE
-                if pass
+                when nextop->opcode
+                    is ADD_CODE // INDEXB_CODE
+                        op->opcode = ADDLB_CODE
+                        freeops    = 1
+                        break
+                    is INDEXW_CODE
+                        op->opcode = IDXLB_CODE
+                        freeops    = 1
+                        break
+                wend
+                if pass and not freeops
                     crunched = try_dupify(op)
                 fin
                 break // LLB_CODE
             is LLW_CODE
-                // LLW [n]:CB 8:SHR -> LLB [n+1]
-                if nextop->opcode == CONST_CODE and nextop=>opval == 8
-                    if nextop=>opnext
-                        nextopnext = nextop=>opnext
-                        if nextopnext->opcode == SHR_CODE
-                            op->opcode = LLB_CODE
-                            op=>opoffset++
-                            freeops = 2
-                            break
+                when nextop->opcode
+                    is ADD_CODE // INDEXB_CODE
+                        op->opcode = ADDLW_CODE
+                        freeops    = 1
+                        break
+                    is INDEXW_CODE
+                        op->opcode = IDXLW_CODE
+                        freeops    = 1
+                        break
+                    is CONST_CODE
+                        // LLW [n]:CB 8:SHR -> LLB [n+1]
+                        if nextop=>opval == 8 and nextop=>opnext
+                            nextopnext = nextop=>opnext
+                            if nextopnext->opcode == SHR_CODE
+                                op->opcode = LLB_CODE
+                                op=>opoffset++
+                                freeops = 2
+                                break
+                            fin
                         fin
-                    fin
-                fin
+                        break
+                wend
                 if pass and not freeops
                     crunched = try_dupify(op)
                 fin
                 break // LLW_CODE
             is LAB_CODE
-                if pass and not is_hardware_address(op=>opoffset)
+                when nextop->opcode
+                    is ADD_CODE // INDEXB_CODE
+                        op->opcode = ADDAB_CODE
+                        freeops    = 1
+                        break
+                    is INDEXW_CODE
+                        op->opcode = IDXAB_CODE
+                        freeops    = 1
+                        break
+                wend
+                if pass and not freeops and not is_hardware_address(op=>opoffset)
                     crunched = try_dupify(op)
                 fin
                 break // LAB_CODE
             is LAW_CODE
-                // LAW x:CB 8:SHR -> LAB x+1
-                if nextop->opcode == CONST_CODE and nextop=>opval == 8
-                    if nextop=>opnext
-                        nextopnext = nextop=>opnext
-                        if nextopnext->opcode == SHR_CODE
-                            op->opcode = LAB_CODE
-                            op=>opoffset++
-                            freeops = 2
-                            break
+                when nextop->opcode
+                    is ADD_CODE // INDEXB_CODE
+                        op->opcode = ADDAW_CODE
+                        freeops    = 1
+                        break
+                    is INDEXW_CODE
+                        op->opcode = IDXAW_CODE
+                        freeops    = 1
+                        break
+                    is CONST_CODE
+                        // LLW [n]:CB 8:SHR -> LLB [n+1]
+                        if nextop=>opval == 8 and nextop=>opnext
+                            nextopnext = nextop=>opnext
+                            if nextopnext->opcode == SHR_CODE
+                                op->opcode = LAB_CODE
+                                op=>opoffset++
+                                freeops = 2
+                                break
+                            fin
                         fin
-                    fin
-                fin
+                        break
+                wend
                 if pass and not freeops and not is_hardware_address(op=>opoffset)
                     crunched = try_dupify(op)
                 fin
@@ -374,6 +457,38 @@ def crunch_seq(seq, pass)
                         break
                 wend
                 break // LOGIC_NOT_CODE
+            is EQ_CODE
+                when nextop->opcode
+                    is BRFALSE_CODE
+                        op->opcode  = BRNE_CODE
+                        op->opgroup = RELATIVE_GROUP
+                        op=>optag   = nextop=>optag
+                        freeops     = 1
+                        break
+                    is BRTRUE_CODE
+                        op->opcode  = BREQ_CODE
+                        op->opgroup = RELATIVE_GROUP
+                        op=>optag   = nextop=>optag
+                        freeops     = 1
+                        break
+                wend
+                break // EQ_CODE
+            is NE_CODE
+                when nextop->opcode
+                    is BRFALSE_CODE
+                        op->opcode  = BREQ_CODE
+                        op->opgroup = RELATIVE_GROUP
+                        op=>optag   = nextop=>optag
+                        freeops     = 1
+                        break
+                    is BRTRUE_CODE
+                        op->opcode  = BRNE_CODE
+                        op->opgroup = RELATIVE_GROUP
+                        op=>optag   = nextop=>optag
+                        freeops     = 1
+                        break
+                wend
+                break // NE_CODE
             is SLB_CODE
                 if nextop->opcode == LLB_CODE and op=>opoffset == nextop=>opoffset
                     op->opcode = DLB_CODE

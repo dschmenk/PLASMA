@@ -7,6 +7,7 @@
 include "inc/cmdsys.plh"
 include "inc/args.plh"
 include "inc/fileio.plh"
+sysflags nojitc // Keep JITC from compiling and pausing while editing
 //
 // Hardware constants
 //
@@ -169,8 +170,8 @@ def sizemask(size)
     return 0
 end
 def strpoolalloc(size)
-    byte szmask, i
-    word mapmask, addr
+    byte szmask
+    word mapmask, addr, i
 
     szmask = sizemask(size)
     for i = strplmapsize - 1 downto 0
@@ -357,14 +358,13 @@ def writetxt(filename)#0
     //
     // Remove blank lines at end of text.
     //
-    while numlines > 1 and strlinbuf=>[numlines - 1] == @nullstr; numlines = numlines - 1; loop
+    while numlines > 1 and strlinbuf=>[numlines - 1] == @nullstr; numlines--; loop
     //
     // Write all the text line to the file.
     //
     for i = 0 to numlines - 1
         cpyln(strlinbuf=>[i], @txtbuf)
-        txtbuf = txtbuf + 1
-        txtbuf[txtbuf] = $0D
+        txtbuf++; txtbuf[txtbuf] = $0D // Add CR to end of line
         fileio:write(refnum, @txtbuf + 1, txtbuf)
         if !(i & $0F); putc('.'); fin
     next
@@ -503,7 +503,7 @@ end
 def pgup#0
     byte i
 
-    for i = pgjmp downto 0
+    for i = 0 to pgjmp
         cursup
     next
 end
@@ -523,7 +523,7 @@ end
 def pgdown#0
     byte i
 
-    for i = pgjmp downto 0
+    for i = 0 to pgjmp
         cursdown
     next
 end
@@ -543,7 +543,7 @@ end
 def pgleft#0
     byte i
 
-    for i = 7 downto 0
+    for i = 0 to 7
         cursleft
     next
 end
@@ -563,7 +563,7 @@ end
 def pgright#0
     byte i
 
-    for i = 7 downto 0
+    for i = 0 to 7
         cursright
     next
 end
@@ -623,8 +623,6 @@ def keyin3
                 key = keyctrlf; break
             is $80 | '\\'
                 key = keydelete; break // Delete
-            is keyenter
-                key = keyctrlf; break
             //
             // Map OA+keypad
             //
@@ -692,33 +690,45 @@ def keyin2
         fin
     until key >= 128
     ^keystrobe
-    if key == keyctrln
-        key = $DB // '['
-    elsif key == $9E // SHIFT+CTRL+N
-        key = $FE // '~'
-    elsif key == keyctrlp
-        key = $DC // '\'
-    elsif key == $80 // SHIFT+CTRL+P -> CTRL+@
-        key = $FC // '|'
-    elsif key == keyctrlg
-        key = $DF // '_'
-    elsif key == keyarrowleft
-        if ^pushbttn3 < 128
-            key = keydelete
-        fin
-    elsif key >= $C0 and flags < shiftlock
-        if ^pushbttn3 < 128
-            if key == $C0
-                key = $D0 // P
-            elsif key == $DD
-                key = $CD // M
-            elsif key == $DE
-                key = $CE // N
+    when key
+        is keyctrln
+            key = $DB // '['
+            break
+        is $9E // SHIFT+CTRL+N
+            key = $FE // '~'
+            break
+        is keyctrlp
+            key = $DC // '\'
+            break
+        is $80 // SHIFT+CTRL+P -> CTRL+@
+            key = $FC // '|'
+            break
+        is keyctrlg
+            key = $DF // '_'
+            break
+        is keyarrowleft
+            if ^pushbttn3 < 128
+                key = keydelete
             fin
-        else
-           key = key | $E0
-        fin
-    fin
+            break
+        otherwise
+            if key >= $C0 and flags < shiftlock
+                if ^pushbttn3 < 128
+                    when key
+                        is $C0
+                            key = $D0 // P
+                            break
+                        is $DD
+                            key = $CD // M
+                            break
+                        is $DE
+                            key = $CE // N
+                    wend
+                else
+                   key = key | $E0
+                fin
+            fin
+    wend
     return key
 end
 def setkeyin#0
@@ -836,13 +846,7 @@ def splitline#0
     fin
 end
 def editkey(key)
-    if key >= keyspace
-        return TRUE
-    elsif key == keydelete
-        return TRUE
-    elsif key == keyctrld
-        return TRUE
-    elsif key == keyctrlr
+    if key >= keyspace or key == keydelete or key == keyctrld or key == keyctrlr
         return TRUE
     fin
     return FALSE
@@ -1022,7 +1026,6 @@ def editmode#0
                     fin
                     redraw
                 fin
-                break
         wend
     until exit
 end
@@ -1123,7 +1126,7 @@ def cmdmode#0
     word cmdptr
 
     clrscrn
-    puts("PLASMA Editor, Version 1.1\n")
+    puts("PLASMA Editor, Version 2.0 Dev\n")
     while not exit
         puts(@filename)
         cmdptr = gets($BA)

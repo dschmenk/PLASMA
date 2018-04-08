@@ -1,10 +1,5 @@
-const MACHID      = $BF98
-const iobuffer    = $0800
-const databuff    = $2000
+const membank     = $FFEF
 const RELADDR     = $1000
-const symtbl      = $0C00
-const freemem     = $0006
-const getlnbuf    = $01FF
 //
 // System flags: memory allocator screen holes.
 //
@@ -16,126 +11,153 @@ const reshgr1     = $0010
 const reshgr2     = $0020
 const resxhgr1    = $0040
 const resxhgr2    = $0080
+const nojitc      = $0100
 //
 // Module don't free memory
 //
 const modkeep     = $2000
 const modinitkeep = $4000
 //
-// Prefix commands
+// Private addresses
 //
-const GET_PFX     = $C7
-const SET_PFX     = $C6
+const instr       = $A020
+const cmdparser   = $A0F0
+const xinterp     = $A0F8
+const jitinterp   = $A0FA
+//
+// Indirect interpreter DEFinition entrypoint
+//
+struc t_defentry
+    byte interpjsr
+    word interpaddr
+    word bytecodeaddr
+    byte bytecodexbyte
+    byte callcount
+    byte bytecodesize
+end
+//
+// JIT compiler values
+//
+const jitcomp     = $A0F2
+const jitcodeptr  = $A0F4
+const codemax     = $A000
 //
 // Pedefined functions.
 //
 predef syscall(cmd,params)#1, call(addr,areg,xreg,yreg,status)#1
-predef crout()#0, cout(c)#0, prstr(s)#0, prbyte(b)#0, prword(w)#0, print(i)#0, cin()#1, rdstr(p)#1, toupper(c)#1
-predef markheap()#1, allocheap(size)#1, allocalignheap(size, pow2, freeaddr)#1, releaseheap(newheap)#1, availheap()#1
-predef memset(addr,value,size)#0, memcpy(dst,src,size)#0, strcpy(dst,src)#1, strcat(dst,src)#1
+predef crout()#0, cout(c)#0, prstr(s)#0, print(i)#0, prbyte(b)#0, prword(w)#0
+predef cin()#1, rdstr(p)#1, toupper(c)#1, strcpy(dst,src)#1, strcat(dst,src)#1
+predef markheap()#1, allocheap(size)#1, allocalignheap(size, pow2, freeaddr), releaseheap(newheap)#1, availheap()#1
+predef memset(addr,value,size)#0, memcpy(dst,src,size)#0
 predef uword_isgt(a,b)#1, uword_isge(a,b)#1, uword_islt(a,b)#1, uword_isle(a,b)#1, sext(a)#1, divmod(a,b)#2
 predef execmod(modfile)#1, open(path)#1, close(refnum)#1, read(refnum, buff, len)#1, write(refnum, buff, len)#1
 //
 // Exported CMDSYS table
 //
-word version    = $0200 // 02.00 Dev
+word version      = $0200 // 02.00
 word syspath
-word syscmdln
-word            = @execmod, @open, @close, @read, @write
+word cmdlnptr
+word              = @execmod, @open, @close, @read, @write
 byte perr
-byte jitcount   = $10
-byte jitsize    = $FF
+byte jitcount     = 0
+byte jitsize      = 0
+byte refcons      = 0
+byte devcons      = 0
+//
+// String pool.
+//
+byte hexchar[]    = '0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F'
+//
+// Exported Machine ID.
+//
+byte machid       = $F2 // Apple ///, 80 columns
+//
+// Console and textmode control characters
+//
+byte console[]    = ".CONSOLE"
+byte textmode[]   = 16, 0, 15
+
 //
 // Working input buffer overlayed with strings table
 //
-byte cmdln      = ""
+byte cmdln        = ""
 //
-// Name for auto-run file (must follow cmdln)
+// SOS.CMD as DCI string
 //
-byte autorun    = "AUTORUN"
+byte soscmd       = 'S'|$80,'O'|$80,'S'|$80,'.'|$80,'C'|$80,'M'|$80,'D'
 //
 // Standard Library exported functions.
 //
-byte sysmodstr  = "CMDSYS"
-byte putsstr    = "PUTS"
-byte putistr    = "PUTI"
-byte putcstr    = "PUTC"
-byte putlnstr   = "PUTLN"
-byte putbstr    = "PUTB"
-byte putwstr    = "PUTH"
-byte getcstr    = "GETC"
-byte getsstr    = "GETS"
-byte toupstr    = "TOUPPER"
-byte strcpystr  = "STRCPY"
-byte strcatstr  = "STRCAT"
-byte hpmarkstr  = "HEAPMARK"
-byte hpalignstr = "HEAPALLOCALIGN"
-byte hpallocstr = "HEAPALLOC"
-byte hprelstr   = "HEAPRELEASE"
-byte hpavlstr   = "HEAPAVAIL"
-byte sysmods[] // overlay with exported strings
-word memsetstr  = "MEMSET"
-byte memcpystr  = "MEMCPY"
-byte uisgtstr   = "ISUGT"
-byte uisgestr   = "ISUGE"
-byte uisltstr   = "ISULT"
-byte uislestr   = "ISULE"
-byte sextstr    = "SEXT"
-byte divmodstr  = "DIVMOD"
-byte machidstr  = "MACHID"
-byte sysstr     = "SYSCALL"
-byte callstr    = "CALL"
-byte prefix[] // overlay with exported symbols table
-word exports    = @sysmodstr, @version
-word            = @sysstr,    @syscall
-word            = @callstr,   @call
-word            = @putcstr,   @cout
-word            = @putlnstr,  @crout
-word            = @putsstr,   @prstr
-word            = @putbstr,   @prbyte
-word            = @putwstr,   @prword
-word            = @putistr,   @print
-word            = @getcstr,   @cin
-word            = @getsstr,   @rdstr
-word            = @toupstr,   @toupper
-word            = @hpmarkstr, @markheap
-word            = @hpallocstr,@allocheap
-word            = @hpalignstr,@allocalignheap
-word            = @hprelstr,  @releaseheap
-word            = @hpavlstr,  @availheap
-word            = @memsetstr, @memset
-word            = @memcpystr, @memcpy
-word            = @uisgtstr,  @uword_isgt
-word            = @uisgestr,  @uword_isge
-word            = @uisltstr,  @uword_islt
-word            = @uislestr,  @uword_isle
-word            = @strcpystr, @strcpy
-word            = @strcatstr, @strcat
-word            = @sextstr,   @sext
-word            = @divmodstr, @divmod
-word            = @machidstr, MACHID
-word            = 0
-word sysmodsym  = @exports
+byte sysmodstr[]  = "CMDSYS"
+byte machidstr[]  = "MACHID"
+byte sysstr[]     = "SYSCALL"
+byte callstr[]    = "CALL"
+byte putcstr[]    = "PUTC"
+byte putlnstr[]   = "PUTLN"
+byte putsstr[]    = "PUTS"
+byte putistr[]    = "PUTI"
+byte putbstr[]    = "PUTB"
+byte putwstr[]    = "PUTH"
+byte getcstr[]    = "GETC"
+byte getsstr[]    = "GETS"
+byte toupstr[]    = "TOUPPER"
+byte strcpystr[]  = "STRCPY"
+byte strcatstr[]  = "STRCAT"
+byte hpmarkstr[]  = "HEAPMARK"
+byte hpalignstr[] = "HEAPALLOCALIGN"
+byte hpallocstr[] = "HEAPALLOC"
+byte hprelstr[]   = "HEAPRELEASE"
+byte hpavlstr[]   = "HEAPAVAIL"
+byte memsetstr[]  = "MEMSET"
+byte memcpystr[]  = "MEMCPY"
+byte uisgtstr[]   = "ISUGT"
+byte uisgestr[]   = "ISUGE"
+byte uisltstr[]   = "ISULT"
+byte uislestr[]   = "ISULE"
+byte sextstr[]    = "SEXT"
+byte divmodstr[]  = "DIVMOD"
+byte sysmods[]    = "" // overlay sys path with exports
+word exports[]    = @sysmodstr, @version
+word              = @sysstr,    @syscall
+word              = @callstr,   @call
+word              = @putcstr,   @cout
+word              = @putlnstr,  @crout
+word              = @putsstr,   @prstr
+word              = @putistr,   @print
+word              = @putbstr,   @prbyte
+word              = @putwstr,   @prword
+word              = @getcstr,   @cin
+word              = @getsstr,   @rdstr
+word              = @toupstr,   @toupper
+word              = @hpmarkstr, @markheap
+word              = @hpallocstr,@allocheap
+word              = @hpalignstr,@allocalignheap
+word              = @hprelstr,  @releaseheap
+word              = @hpavlstr,  @availheap
+word              = @memsetstr, @memset
+word              = @memcpystr, @memcpy
+word              = @strcpystr, @strcpy
+word              = @strcatstr, @strcat
+word              = @uisgtstr,  @uword_isgt
+word              = @uisgestr,  @uword_isge
+word              = @uisltstr,  @uword_islt
+word              = @uislestr,  @uword_isle
+word              = @sextstr,   @sext
+word              = @divmodstr, @divmod
+word              = @machidstr, @machid
+word              = 0
+word sysmodsym    = @exports
 //
-// System variable.
+// System variables.
 //
 word systemflags = 0
-word heap
-word xheap       = $0800
-word lastsym     = symtbl
+word heap        = $2000
+byte autorun[]
+byte modseg[15]
+byte modid        = 0
+word symtbl, lastsym
 //
-// Utility functions
-//
-//asm equates included from cmdstub.s
-//
-asm saveX#0
-        STX     XREG+1
-end
-asm restoreX#0
-XREG    LDX     #$00
-        RTS
-end
-// CALL PRODOS
+// CALL SOS
 // SYSCALL(CMD, PARAMS)
 //
 asm syscall(cmd,params)#1
@@ -146,43 +168,41 @@ asm syscall(cmd,params)#1
         INX
         LDA     ESTKL,X
         STA     CMD
-        JSR     $BF00
-CMD:    !BYTE   00
-PARAMS: !WORD   0000
-;        LDY     #$00
+        BRK
+CMD     !BYTE   00
+PARAMS  !WORD   0000
+        LDY     #$00
         STA     ESTKL,X
-;        STY     ESTKH,X
+        STY     ESTKH,X
         RTS
 end
 //
 // CALL 6502 ROUTINE
-// CALL(ADDR, AREG, XREG, YREG, STATUS)
+// CALL(AREG, XREG, YREG, STATUS, ADDR)
 //
-asm call(addr,areg,xreg,yreg,status)#1
-REGVALS =   SRC
+asm call(addr,areg,xreg,yreg,sstatus)#1
+REGVALS =       SRC
         PHP
-        LDA     ESTKL+4,X
+        LDA     ESTKL,X
         STA     TMPL
-        LDA     ESTKH+4,X
+        LDA     ESTKH,X
         STA     TMPH
+        INX
         LDA     ESTKL,X
         PHA
-        LDY     ESTKL+1,X
-        LDA     ESTKL+3,X
+        INX
+        LDY     ESTKL,X
+        INX
+        LDA     ESTKL+1,X
         PHA
-        LDA     ESTKL+2,X
-        INX
-        INX
-        INX
+        LDA     ESTKL,X
         INX
         STX     ESP
         TAX
         PLA
-        BIT     ROMEN
         PLP
         JSR     JMPTMP
         PHP
-        BIT     LCRDEN+LCBNK2
         STA     REGVALS+0
         STX     REGVALS+1
         STY     REGVALS+2
@@ -195,21 +215,6 @@ REGVALS =   SRC
         STY     ESTKH,X
         PLP
         RTS
-end
-//
-// CALL LOADED SYSTEM PROGRAM
-//
-asm exec()#0
-        BIT     ROMEN
-        JMP     $2000
-end
-//
-// EXIT
-//
-asm reboot()#0
-        BIT     ROMEN
-        DEC     $03F4       ; INVALIDATE POWER-UP BYTE
-        JMP     ($FFFC)     ; RESET
 end
 //
 // SET MEMORY TO VALUE
@@ -325,114 +330,75 @@ REVCPYLP LDA    (SRC),Y
         BNE     REVCPYLP
 CPYMEX  RTS
 end
-asm crout()#0
-        LDA     #$8D
-        BNE     ++
-end
 //
-// CHAR OUT
-// COUT(CHAR)
+// COPY FROM MAIN MEM TO EXT MEM.
 //
-asm cout(c)#0
+// MEMXCPY(DSTSEG, SRC, SIZE)
+//
+asm memxcpy(dst,src,size)#0
         LDA     ESTKL,X
-        BIT     $BF98
-        BMI     +
-        JSR     TOUPR
-+       ORA     #$80
-        INX
-++      BIT     ROMEN
-        JSR     $FDED
-        BIT     LCRDEN+LCBNK2
-        RTS
-end
-//
-// CHAR IN
-// RDKEY()
-//
-asm cin()#1
-        BIT     ROMEN
-        JSR     $FD0C
-        BIT     LCRDEN+LCBNK2
-        DEX
+        ORA     ESTKH,X
+        BEQ     CPYXMEX
         LDY     #$00
-        AND     #$7F
-        STA     ESTKL,X
-        STY     ESTKH,X
-        RTS
-end
-//
-// PRINT STRING
-// PRSTR(STR)
-//
-asm prstr(s)#0
-        LDY     #$00
-        LDA     ESTKL,X
+        STY     DSTL
+        LDA     ESTKH+2,X
+        CLC
+        ADC     #$60
+        STA     DSTH
+        LDA     ESTKL+2,X
+        CLC
+        ADC     #$7F
+        STA     DSTX
+        LDA     ESTKL+1,X
         STA     SRCL
-        LDA     ESTKH,X
+        LDA     ESTKH+1,X
         STA     SRCH
-        LDA     (SRC),Y
-        BEQ     ++
-        STA     TMP
-        BIT     ROMEN
--       INY
-        LDA     (SRC),Y
-        BIT     $BF98
-        BMI     +
-        JSR     TOUPR
-+       ORA     #$80
-        JSR     $FDED
-        CPY     TMP
-        BNE     -
-        BIT     LCRDEN+LCBNK2
-++      INX
-        RTS
-end
-//
-// PRINT WORD
-//
-asm prword(w)#0
-        LDA     ESTKH,X
-        JSR     +
-        DEX
-        ; FALL THROUGH TO PRBYTE
-end
-//
-// PRINT BYTE
-//
-asm prbyte(b)#0
-        LDA     ESTKL,X
-+       STX     ESP
-        BIT     ROMEN
-        JSR     $FDDA
-        LDX     ESP
-        BIT     LCRDEN+LCBNK2
+        INC     ESTKH,X
+CPYXLP  LDA     (SRC),Y
+        STA     (DST),Y
+        INY
+        BNE     +
+        INC     DSTH
+        INC     SRCH
++       DEC     ESTKL,X
+        BNE     CPYXLP
+        DEC     ESTKH,X
+        BNE     CPYXLP
+        LDA     #$00
+        STA     DSTX
+CPYXMEX INX
+        INX
         INX
         RTS
 end
 //
-// READ STRING
-// STR = RDSTR(PROMPTCHAR)
+// POKE BYTE VAL INTO EXT MEM.
 //
-asm rdstr(p)#1
+// XPOKEB(SEG, DST, BYTEVAL)
+//
+asm xpokeb(seg, dst, byteval)#0
+        LDA     ESTKL+1,X
+        STA     DSTL
+        LDA     ESTKH+1,X
+        CLC
+        ADC     #$60
+        STA     DSTH
+        LDA     ESTKL+2,X
+        CLC
+        ADC     #$7F
+        STA     DSTX
+        LDY     #$00
         LDA     ESTKL,X
-        STA     $33
-        STX     ESP
-        BIT     ROMEN
-        JSR     $FD6A
-        STX     $01FF
--       LDA     $01FF,X
-        AND     #$7F
-        STA     $01FF,X
-        DEX
-        BPL     -
-        TXA
-        LDX     ESP
-        STA     ESTKL,X
-        LDA     #$01
-        STA     ESTKH,X
-        BIT     LCRDEN+LCBNK2
+        STA     (DST),Y
+        STY     DSTX
+        INX
+        INX
+        INX
         RTS
 end
+//
+// Unsigned word comparisons.
+//
 asm uword_isge(a,b)#1
         LDA     ESTKL+1,X
         CMP     ESTKL,X
@@ -496,8 +462,6 @@ asm sext(a)#1
         RTS
 end
 //
-// Utility routines.
-//
 // A DCI string is one that has the high bit set for every character except the last.
 // More efficient than C or Pascal strings.
 //
@@ -552,7 +516,7 @@ end
 //    loop
 //    return ^str
 //end
-asm stodci(str,dci)#1
+asm stodci(str, dci)#1
         LDA     ESTKL,X
         STA     DSTL
         LDA     ESTKH,X
@@ -612,16 +576,20 @@ end
 //    loop
 //    return 0
 asm lookuptbl(dci, tbl)#1
-        LDA     ESTKL,X
-        STA     DSTL
+        LDY     #$00
+        STY     DSTL
         LDA     ESTKH,X
+        CLC
+        ADC     #$60
         STA     DSTH
-        INX
         LDA     ESTKL,X
+        CLC
+        ADC     #$7F
+        STA     DSTX
+        LDA     ESTKL+1,X
         STA     SRCL
-        LDA     ESTKH,X
+        LDA     ESTKH+1,X
         STA     SRCH
---      LDY     #$00
 -       LDA     (DST),Y
         BEQ     +
         CMP     (SRC),Y
@@ -630,27 +598,31 @@ asm lookuptbl(dci, tbl)#1
         ASL
         BCS     -
         LDA     (DST),Y
-        STA     ESTKL,X             ; MATCH
+        PHA
         INY
         LDA     (DST),Y
-        STA     ESTKH,X
+        TAY
+        PLA
++       INX
+        STA     ESTKL,X
+        STY     ESTKH,X
+        LDA     #$00
+        STA     DSTX
         RTS
-+       STA     ESTKL,X             ; NO MATCH
-        STA     ESTKH,X
-        RTS
-++
--       LDA     (DST),Y             ; NEXT ENTRY
-        BPL     +
-        INY
-        BNE     -
-+       TYA
-        CLC
-        ADC     #$03
+++      LDY     #$00
+--      LDA     (DST),Y
+        INC     DSTL
+        BEQ     +
+---     ASL
+        BCS     --
+        LDA     #$02
         ADC     DSTL
         STA     DSTL
-        BCC     --
+        BCC     -
         INC     DSTH
-        BNE     --
+        BCS     -
++       INC     DSTH
+        BNE     ---
 end
 // def lookupidx(esd, index)
 //    word sym
@@ -702,7 +674,7 @@ end
 //        if deftbl=>3 == addr
 //            return deftbl
 //        fin
-//        deftbl = deftbl + 5
+//        deftbl = deftbl + t_defentry
 //    loop
 //    return 0
 //end
@@ -729,7 +701,7 @@ asm lookupdef(addr, deftbl)#1
         LDA     SRCH
         STA     ESTKH,X
         RTS
-+       LDA     #$05
++       LDA     #$08            ; T_DEFENTRY
         CLC
         ADC     SRCL
         STA     SRCL
@@ -823,33 +795,19 @@ RLDEX   INX
         RTS
 end
 //
-// Cheap and dirty print integer
+// SOS routines
+// FILE I/O
 //
-def print(i)#0
-    if i < 0; cout('-'); i = -i; fin
-    if i >= 10; print(i / 10); fin
-    cout(i % 10 + '0')
-end
-//
-// ProDOS routines
-//
-def pfxop(path, op)#1
-    byte params[3]
-
-    params.0 = 1
-    params:1 = path
-    perr     = syscall(op, @params)
-    return path
-end
 def open(path)#1
-    byte params[6]
+    byte params[7]
 
-    params.0 = 3
+    params.0 = 4
     params:1 = path
-    params:3 = iobuffer
-    params.5 = 0
+    params.3 = 0
+    params:4 = 0
+    params.6 = 0
     perr     = syscall($C8, @params)
-    return params.5
+    return params.3
 end
 def close(refnum)#1
     byte params[2]
@@ -870,16 +828,120 @@ def read(refnum, buff, len)#1
     perr     = syscall($CA, @params)
     return params:6
 end
-def write(refnum, buf, len)#1
-    byte params[8]
+def write(refnum, buff, len)#1
+    byte params[6]
 
-    params.0 = 4
+    params.0 = 3
     params.1 = refnum
-    params:2 = buf
+    params:2 = buff
     params:4 = len
-    params:6 = 0
     perr     = syscall($CB, @params)
-    return params:6
+    return perr
+end
+//
+// CONSOLE I/O
+//
+def dev_control(devnum, code, list)#1
+    byte params[5]
+
+    params.0 = 3
+    params.1 = devnum
+    params.2 = code
+    params:3 = list
+    return syscall($83, @params)
+end
+def dev_getnum(name)#1
+    byte params[4]
+
+    params.0 = 2
+    params:1 = name
+    params.3 = 0
+    syscall($84, @params)
+    return params.3
+end
+def init_cons()#0
+    byte nlmode[2]
+
+    refcons  = open(@console)
+    devcons  = dev_getnum(@console)
+    nlmode:0 = $0D80
+    //nlmode.0 = $80
+    //nlmode.1 = $0D
+    dev_control(devcons, $02, @nlmode)
+    write(refcons, @textmode, 3)
+end
+//
+// MEMORY CALLS
+//
+def seg_find(search, pages, id)#3
+    byte params[10]
+
+    params.0 = 6
+    params.1 = search
+    params.2 = id
+    params:3 = pages
+    params:5 = 0
+    params:7 = 0
+    params.9 = 0
+    perr     = syscall($41, @params)
+    return params.9, params:5, params:7
+end
+def seg_release(segnum)#1
+    byte params[2]
+
+    params.0 = 1
+    params.1 = segnum
+    perr     = syscall($45, @params)
+    return perr
+end
+//
+// CONSOLE I/O
+//
+def cout(ch)#0
+    byte nc
+
+    nc = 1
+    if ch == $0D
+        ch = $0A0D
+        nc = 2
+    fin
+    write(refcons, @ch, nc)
+end
+def crout()#0
+    cout($0D)
+end
+def cin()#1
+    byte ch
+    read(refcons, @ch, 1)
+    return ch & $7F
+end
+def prstr(str)#0
+    write(refcons, str + 1, ^str)
+    if str->[^str] == $0D
+        cout($0A)
+    fin
+end
+def print(i)#0
+    if i < 0; cout('-'); i = -i; fin
+    if i >= 10; print(i / 10); fin
+    cout(i % 10 + '0')
+end
+def rdstr(prompt)#1
+    cout(prompt)
+    ^instr = read(refcons, instr+1, 128)
+    if instr->[^instr] == $0D
+        ^instr--
+    fin
+    crout
+    return instr
+end
+def prbyte(v)#0
+    cout(hexchar[(v >> 4) & $0F])
+    cout(hexchar[v & $0F])
+end
+def prword(v)#0
+    prbyte(v >> 8)
+    prbyte(v)
 end
 //
 // Heap routines.
@@ -889,36 +951,23 @@ def availheap()#1
     return @fp - heap
 end
 def allocheap(size)#1
-    word oldheap, addr
-    oldheap = heap
-    addr    = heap
-    heap    = heap + size
-    if systemflags & reshgr1
-        if uword_islt(addr, $4000) and uword_isgt(heap, $2000)
-            addr = $4000
-            heap = addr + size
-        fin
-    fin
-    if systemflags & reshgr2
-        if uword_islt(addr, $6000) and uword_isgt(heap, $4000)
-            addr = $6000
-            heap = addr + size
-        fin
-    fin
+    word addr
+    addr = heap
+    heap = heap + size
     if uword_isge(heap, @addr)
-        heap = oldheap
+        heap = addr
         return 0
     fin
     return addr
 end
-def allocalignheap(size, pow2, freeaddr)
+def allocalignheap(size, pow2, freeaddr)#1
     word align, addr
     if freeaddr
         *freeaddr = heap
     fin
     align = (1 << pow2) - 1
-    addr  = (heap | align) + 1
-    heap  = addr + size
+    addr = (heap | align) + 1
+    heap = addr + size
     if uword_isge(heap, @addr)
         return 0
     fin
@@ -931,52 +980,20 @@ def releaseheap(newheap)#1
     heap = newheap
     return @newheap - heap
 end
-def allocxheap(size)#1
-    word xaddr
-    xaddr = xheap
-    xheap = xheap + size
-    if systemflags & restxt1
-        if uword_isle(xaddr, $0800) and uword_isgt(xheap, $0400)
-            xaddr = $0800
-            xheap = xaddr + size
-        fin
-    fin
-    if systemflags & restxt2
-        if uword_isle(xaddr, $0C00) and uword_isgt(xheap, $0800)
-            xaddr = $0C00
-            xheap = xaddr + size
-        fin
-    fin
-    if systemflags & resxhgr1
-        if uword_isle(xaddr, $4000) and uword_isgt(xheap, $2000)
-            xaddr = $4000
-            xheap = xaddr + size
-        fin
-    fin
-    if systemflags & resxhgr2
-        if uword_isle(xaddr, $6000) and uword_isgt(xheap, $4000)
-            xaddr = $6000
-            xheap = xaddr + size
-        fin
-    fin
-    if uword_isge(xheap, $BF00)
-        return 0
-    fin
-    return xaddr
-end
 //
 // Symbol table routines.
 //
 def addsym(sym, addr)#0
     while ^sym & $80
-        ^lastsym = ^sym
-        lastsym++
-        sym++
+        xpokeb(symtbl.0, lastsym, ^sym)
+        lastsym  = lastsym + 1
+        sym      = sym     + 1
     loop
-    lastsym->0 = ^sym
-    lastsym=>1 = addr
-    lastsym    = lastsym + 3
-    ^lastsym   = 0
+    xpokeb(symtbl.0, lastsym, ^sym)
+    xpokeb(symtbl.0, lastsym + 1, addr.0)
+    xpokeb(symtbl.0, lastsym + 2, addr.1)
+    xpokeb(symtbl.0, lastsym + 3, 0)
+    lastsym = lastsym + 3
 end
 //
 // String routines.
@@ -1009,23 +1026,34 @@ def lookupextern(esd, index)#1
     fin
     return 0
 end
-def adddef(bank, addr, deflast)#1
-    word defentry
+def adddef(isfirst, ext, addr, deflast)#1
+    word preventry, defentry, defsize
     defentry = *deflast
-    *deflast = defentry + 5
-    defentry->0 = $20
-    defentry=>1 = bank ?? $03DC :: $03D6 // JSR $03DC (AUX MEM INTERP) or $03D6 (MAIN MEM INTERP)
-    defentry=>3 = addr
-    defentry->5 = 0 // NULL out next entry
+    *deflast = defentry + t_defentry
+    if not isfirst
+        preventry = defentry - t_defentry
+        defsize   = addr - preventry=>bytecodeaddr
+        if defsize <= jitsize
+            preventry=>interpaddr   = *jitinterp // JSR JITINTRP
+            preventry->callcount    = jitcount   // Set JIT countdown
+            preventry->bytecodesize = defsize    // Set size
+        fin
+    fin
+    defentry->interpjsr     = $20      // JSR
+    defentry=>interpaddr    = *xinterp // XINTERP
+    defentry=>bytecodeaddr  = addr
+    defentry->bytecodexbyte = ext
+    defentry->t_defentry    = 0
     return defentry
 end
 def loadmod(mod)#1
-    word rdlen, modsize, bytecode, codefix, defofst, defcnt, init, fixup
+    word refnum[], deffirst, rdlen, modsize, bytecode, codefix, defofst, defcnt, init, fixup
     word addr, defaddr, modaddr, modfix, modofst, modend
-    word deftbl, deflast
+    word deftbl, deflast, codeseg
     word moddep, rld, esd, sym
-    byte refnum, defbank, filename[64], str[]
+    byte lerr, defext, skipjit, fileinfo[], str[16], filename[33]
     byte header[128]
+    lerr = 0
     //
     // Read the RELocatable module header (first 128 bytes)
     //
@@ -1038,9 +1066,11 @@ def loadmod(mod)#1
         refnum = open(strcpy(@filename,strcat(strcpy(@header, @sysmods), @filename)))
     fin
     if refnum
-        header.0 = $0A
+        header.0 = 3
         header:1 = @filename
-        if not syscall($C4, @header) and header.4 <> $FE // Make sure it's a REL module
+        header:3 = @fileinfo
+        header.5 = 2
+        if not syscall($C4, @header) and fileinfo.1 <> $FE // Make sure it's a REL module
             close(refnum)
             perr = $4A // Incompatible type
             return -perr
@@ -1049,23 +1079,27 @@ def loadmod(mod)#1
         modsize = header:0
         moddep  = @header.1
         defofst = modsize + RELADDR
+        defext  = 0
         init    = 0
         if rdlen > 4 and header:2 == $6502 // magic number
             //
             // This is an EXTended RELocatable (data+bytecode) module.
             //
-            systemflags = header:4 | systemflags
-            defofst  = header:6
-            defcnt   = header:8
-            init     = header:10
-            moddep   = @header.12
+            systemflags = header.4 | systemflags
+            skipjit     = header.5 & (nojitc >> 8)
+            defofst     = header:6
+            defcnt      = header:8
+            init        = header:10
+            moddep      = @header.12
             //
             // Load module dependencies.
             //
             while ^moddep
                 if !lookuptbl(moddep, symtbl)
-                    close(refnum)
-                    refnum = 0
+                    if refnum
+                        close(refnum)
+                        refnum = 0
+                    fin
                     if loadmod(moddep) < 0
                         return -perr
                     fin
@@ -1075,7 +1109,7 @@ def loadmod(mod)#1
             //
             // Init def table.
             //
-            deftbl   = allocheap(defcnt * 5 + 1)
+            deftbl   = allocheap(defcnt * t_defentry + 1)
             deflast  = deftbl
             ^deflast = 0
             if !refnum
@@ -1089,7 +1123,7 @@ def loadmod(mod)#1
         //
         // Alloc heap space for relocated module (data + bytecode).
         //
-        moddep  = moddep  + 1
+        moddep++
         modfix  = moddep  - @header.2 // Adjust to skip header
         modsize = modsize - modfix
         rdlen   = rdlen   - modfix - 2
@@ -1120,29 +1154,32 @@ def loadmod(mod)#1
         while ^esd         // Scan to end of ESD
             esd = esd + 4
         loop
-        esd = esd + 1
-        //
-        // Locate bytecode defs in appropriate bank.
-        //
-        if ^MACHID & $30 == $30
-            defbank = 1
-            defaddr = allocxheap(rld - bytecode)
-            modend  = bytecode
-        else
-            defbank = 0
-            defaddr = bytecode
+        esd++
+        if defcnt
+            //
+            // Locate bytecode defs in allocated segment.
+            //
+            modseg[modid], codeseg, drop = seg_find($00, (rld - bytecode + 255) >> 8, modid + $12)
+            if perr
+                return -perr
+            fin
+            modid++
+            defext  =  codeseg.0 + $7F // (codeseg.0 | $80) - 1
+            defaddr = (codeseg & $FF00) + $6000
+            codefix = defaddr - bytecode
+            defofst = defaddr - defofst
         fin
-        codefix = defaddr - bytecode
-        defofst = defaddr - defofst
         //
         // Run through the DeFinition Dictionary.
         //
+        deffirst    = 1
         while ^rld == $02
             //
             // This is a bytcode def entry - add it to the def directory.
             //
-            adddef(defbank, rld=>1 + defofst, @deflast)
-            rld = rld + 4
+            adddef(deffirst, defext, rld=>1 + defofst, @deflast)
+            deffirst = skipjit // Calculate JIT potential or not
+            rld      = rld + 4
         loop
         //
         // Run through the Re-Location Dictionary.
@@ -1200,313 +1237,99 @@ def loadmod(mod)#1
             fin
             esd = esd + 3
         loop
-        if defbank
+        if defext
             //
-            // Move bytecode to AUX bank.
+            // Copy bytecode to code segment.
             //
-            *$003C   = bytecode
-            *$003E   = modaddr + modsize
-            *$0042   = defaddr
-            call($C311, 0, 0, 0, $05) // CALL XMOVE with carry set (MAIN->AUX) and ints disabled
+            memxcpy(codeseg, bytecode, modsize - (bytecode - modaddr))
         fin
     else
-        perr = $46
+        lerr = $46
     fin
-    if perr
-        return -perr
+    if lerr
+        return -lerr
     fin
     //
-    // Free up rld+esd (and bytecode on 128K) in main memory.
+    // Free up end-of-module main memory.
     //
-    releaseheap(modend)
+    releaseheap(bytecode)
     //
     // Call init routine if it exists.
     //
-    fixup = 0 // This is repurposed for the return code
+    fixup = 0
     if init
-        init  = init + defofst
-        fixup = adddef(defbank, init, @deflast)()
-        if fixup < modinitkeep
-            //
-            // Free init routine unless initkeep
-            //
-            if defbank
-                xheap = init
-            else
-                //
-                // Free up init code in main memory.
-                //
-                releaseheap(init)
-            fin
-            if fixup < 0
-                perr = -fixup
-            fin
-        else
-            fixup = fixup & ~modinitkeep
+        fixup = adddef(deffirst, defext, init + defofst, @deflast)()
+        if fixup < 0
+            perr = -fixup
         fin
     fin
     return fixup
 end
-//
-// Command mode
-//
-def volumes()#0
-    byte params[4]
-    word strbuf
-    byte i
-
-    params.0 = 2
-    params.1 = 0
-    params:2 = databuff
-    perr     = syscall($C5, @params)
-    strbuf   = databuff
-    for i = 0 to 15
-        ^strbuf = ^strbuf & $0F
-        if ^strbuf
-            cout('/'); prstr(strbuf); crout()
-        fin
-        strbuf = strbuf + 16
-    next
-end
-def catalog(path)#0
-    byte refnum
-    byte firstblk
-    byte entrylen, entriesblk
-    byte i, type, len
-    word entry, filecnt
-
-    if !^path
-        path = @prefix
-    fin
-    refnum = open(path)
-    if perr
-        return
-    fin
-    firstblk = 1
-    repeat
-        if read(refnum, databuff, 512) == 512
-            entry = databuff + 4
-            if firstblk
-                entrylen   = databuff.$23
-                entriesblk = databuff.$24
-                filecnt    = databuff:$25
-                entry      = entry + entrylen
-            fin
-            for i = firstblk to entriesblk
-                type = ^entry
-                if type
-                    len = type & $0F
-                    ^entry = len
-                    prstr(entry)
-                    type = ' '
-                    when entry->$10
-                        is $0F // Is it a directory?
-                            type = '/'
-                            break
-                        is $FF // SYSTEM file
-                            type = '-'
-                            break
-                        is $FE // REL file
-                            type = '+'
-                    wend
-                    cout(type)
-                    for len = 18 - len downto 0
-                        cout(' ')
-                    next
-                    filecnt--
-                fin
-                entry = entry + entrylen
-            next
-            firstblk = 0
-        else
-            filecnt = 0
-        fin
-    until !filecnt
-    close(refnum)
-    crout()
-end
-def stripchars(strptr)#1
-    while ^strptr and ^(strptr + 1) > ' '
-        memcpy(strptr + 1, strptr + 2, ^strptr)
-        ^strptr--
-    loop
-    return ^strptr
-end
-def stripspaces(strptr)#0
-    while ^strptr and ^(strptr + ^strptr) <= ' '
-        ^strptr--
-    loop
-    while ^strptr and ^(strptr + 1) <= ' '
-        memcpy(strptr + 1, strptr + 2, ^strptr)
-        ^strptr--
-    loop
-end
-def striptrail(strptr)#1
-    byte i
-
-    for i = 1 to ^strptr
-        if ^(strptr + i) <= ' '
-            ^strptr = i - 1
-            break
-        fin
-    next
-    return strptr
-end
-def parsecmd(strptr)#1
-    byte cmd
-
-    cmd = 0
-    stripspaces(strptr)
-    if ^strptr
-        cmd = ^(strptr + 1)
-        memcpy(strptr + 1, strptr + 2, ^strptr)
-        ^strptr--
-    fin
-    stripspaces(strptr)
-    return cmd
-end
-def resetmemfiles()#0
-    //
-    // Close all files
-    //
-    ^$BFD8 = 0
-    close(0)
-    //
-    // Set memory bitmap
-    //
-    memset($BF58, 0, 24)
-    ^$BF58 = $CF
-    ^$BF6F = $01
-end
-def execsys(sysfile)#0
-    byte refnum
-    word len
-
-    if ^sysfile
-        strcpy($280, sysfile)
-        striptrail(sysfile)
-        refnum = open(sysfile)
-        if refnum
-            len = read(refnum, databuff, $FFFF)
-            resetmemfiles()
-            if len
-                strcpy(sysfile, $280)
-                if stripchars(sysfile) and ^$2000 == $4C and *$2003 == $EEEE
-                    stripspaces(sysfile)
-                    if ^$2005 >= ^sysfile + 1
-                        strcpy($2006, sysfile)
-                    fin
-                fin
-                striptrail($280)
-                exec()
-            fin
-        fin
-    fin
-end
 def execmod(modfile)#1
     byte moddci[17]
-    word saveheap, savexheap, savesym, saveflags
+    word saveheap, savesym, saveflags, savejit
 
     perr = 1
     if stodci(modfile, @moddci)
         saveheap  = heap
-        savexheap = xheap
         savesym   = lastsym
         saveflags = systemflags
+        savejit   = *jitcodeptr
         if loadmod(@moddci) < modkeep
-            lastsym = savesym
-            xheap   = savexheap
-            heap    = saveheap
+            lastsym     = savesym
+            heap        = saveheap
+            *jitcodeptr = savejit
+            while modid
+                modid--
+                seg_release(modseg[modid])
+            loop
+            xpokeb(symtbl.0, lastsym, 0)
+            systemflags = saveflags
+        else
+            modid = 0
         fin
-        ^lastsym    = 0
-        systemflags = saveflags
     fin
     return -perr
 end
 //
-// Get heap start.
+// Init 2K symbol table.
 //
-heap = *freemem
-//
-// Print PLASMA version
-//
-prstr("PLASMA 2.0 Dev\n")//; prbyte(version.1); cout('.'); prbyte(version.0); crout
-//
-// Init symbol table.
-//
+drop, symtbl, drop = seg_find($00, $08, $11)
+lastsym = symtbl & $FF00
+xpokeb(symtbl.0, lastsym, 0)
 while *sysmodsym
     stodci(sysmodsym=>0, heap)
     addsym(heap, sysmodsym=>2)
     sysmodsym = sysmodsym + 4
 loop
 //
-// Set system path
+// Clear system path and command line
 //
-strcat(strcpy(@sysmods, $280), "SYS/")) // This is the path to CMD
-syspath  = @sysmods // Update external interface table
-syscmdln = @cmdln
+sysmods  = 0
+syspath  = @sysmods
+cmdlnptr = @cmdln
 //
-// Try to load autorun.
+// Print PLASMA version
 //
-autorun = open(@autorun)
+init_cons
+prstr("PLASMA JITC 2.0 Dev\n")//; putb(version.1); putc('.'); putb(version.0); putln
+prstr("MEM:$"); prword(availheap); crout
+//
+// Exec command line parser
+//
+loadmod(@soscmd)
+modid = 0
+autorun  = open("AUTORUN")
 if autorun > 0
-    cmdln = read(autorun, @autorun, 128)
-    close(0)
-else
-    //
-    // Print some startup info.
-    //
-    prstr("MEM FREE:$"); prword(availheap); crout
+    cmdln = read(autorun, @cmdln.1, 64)
+    close(autorun)
 fin
-perr = 0
-while 1
-    if ^getlnbuf
-        when toupper(parsecmd(getlnbuf))
-            is 'Q'
-                reboot()
-                break
-            is 'C'
-                catalog(getlnbuf)
-                break
-            is 'P'
-                pfxop(getlnbuf, SET_PFX)
-                break
-            is '/'
-                repeat
-                    prefix--
-                until prefix[prefix] == '/'
-                if prefix > 1
-                    pfxop(@prefix, SET_PFX)
-                fin
-                break
-            is 'V'
-                volumes()
-                break
-            is '-'
-                execsys(getlnbuf)
-                break
-            is '+'
-                saveX
-                execmod(striptrail(getlnbuf))
-                //
-                // Clean up
-                //
-                restoreX
-                resetmemfiles
-                break
-            otherwise
-                cout('?')
-        wend
-        if perr
-            prstr("ERR:$")
-            prbyte(perr)
-            perr = 0
-        else
-            prstr("OK")
-        fin
-        crout()
-    fin
-    prstr(pfxop(@prefix, GET_PFX))
-    strcpy(@cmdln, rdstr($BA))
-loop
+//
+// Call cmd line parser
+//
+repeat
+    execmod((*cmdparser)())
+    write(refcons, @textmode, 3)
+    cmdln = 0
+until 0
 done
