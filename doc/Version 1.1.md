@@ -4,13 +4,13 @@ Welcome to PLASMA: the Grand Unifying Platform for the Apple 1, ][, and ///.
 
 Download the four disk images (three if you don't plan to boot an Apple ///):
 
-[PLASMA 1.1 System and ProDOS Boot](https://github.com/dschmenk/PLASMA/blob/master/PLASMA-SYS1.PO?raw=true)
+[PLASMA 1.1 System and ProDOS Boot](https://github.com/dschmenk/PLASMA/blob/ver-1/PLASMA-SYS1.PO?raw=true)
 
-[PLASMA 1.1 Build Tools](https://github.com/dschmenk/PLASMA/blob/master/PLASMA-BLD1.PO?raw=true)
+[PLASMA 1.1 Build Tools](https://github.com/dschmenk/PLASMA/blob/ver-1/PLASMA-BLD1.PO?raw=true)
 
-[PLASMA 1.1 Demos](https://github.com/dschmenk/PLASMA/blob/master/PLASMA-DEM1.PO?raw=true)
+[PLASMA 1.1 Demos](https://github.com/dschmenk/PLASMA/blob/ver-1/PLASMA-DEM1.PO?raw=true)
 
-[PLASMA 1.1 Apple /// SOS Boot ](https://github.com/dschmenk/PLASMA/blob/master/PLASMA-SOS1.PO?raw=true)
+[PLASMA 1.1 Apple /// SOS Boot ](https://github.com/dschmenk/PLASMA/blob/ver-1/PLASMA-SOS1.PO?raw=true)
 
 PLASMA can be run from floppies, System in Drive 1, and Build or Demos in Drive 2. Mass storage is the recommended installation that looks like (replacing HARDISK with your volume name of choice):
 
