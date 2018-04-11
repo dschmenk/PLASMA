@@ -232,7 +232,7 @@ hello:	samplesrc/hello.pla $(PLVM) $(PLASM)
 	acme --setpc 4094 -o $(HELLO) samplesrc/hello.a
 	./$(PLVM) HELLO
 $(ROD): samplesrc/rod.pla $(PLVM02) $(PLASM)
-	./$(PLASM) -AMO < samplesrc/rod.pla > samplesrc/rod.a
+	./$(PLASM) -AMOW < samplesrc/rod.pla > samplesrc/rod.a
 	acme --setpc 4094 -o $(ROD) samplesrc/rod.a
 
 $(SIEVE): samplesrc/sieve.pla $(PLVM02) $(PLASM)
@@ -364,19 +364,19 @@ $(MON): samplesrc/mon.pla $(PLVM02) $(PLASM)
 	acme --setpc 4094 -o $(MON) samplesrc/mon.a
 
 $(SOS): libsrc/apple/sos.pla $(PLVM03) $(PLASM)
-	./$(PLASM) -AMO < libsrc/apple/sos.pla > libsrc/apple/sos.a
+	./$(PLASM) -AMOW < libsrc/apple/sos.pla > libsrc/apple/sos.a
 	acme --setpc 4094 -o $(SOS) libsrc/apple/sos.a
 
 $(JIT): libsrc/apple/jit.pla libsrc/jitcore.pla $(PLVMJIT) $(PLASM)
-	./$(PLASM) -AMO < libsrc/apple/jit.pla > libsrc/apple/jit.a
+	./$(PLASM) -AMOW < libsrc/apple/jit.pla > libsrc/apple/jit.a
 	acme --setpc 4094 -o $(JIT) libsrc/apple/jit.a
 
 $(JIT16): libsrc/apple/jit16.pla libsrc/jit16core.pla $(PLVMJIT) $(PLASM)
-	./$(PLASM) -AMO < libsrc/apple/jit16.pla > libsrc/apple/jit16.a
+	./$(PLASM) -AMOW < libsrc/apple/jit16.pla > libsrc/apple/jit16.a
 	acme --setpc 4094 -o $(JIT16) libsrc/apple/jit16.a
 
 $(JITUNE): libsrc/apple/jitune.pla $(PLVMJIT) $(PLASM)
-	./$(PLASM) -AMO < libsrc/apple/jitune.pla > libsrc/apple/jitune.a
+	./$(PLASM) -AMOW < libsrc/apple/jitune.pla > libsrc/apple/jitune.a
 	acme --setpc 4094 -o $(JITUNE) libsrc/apple/jitune.a
 
 
