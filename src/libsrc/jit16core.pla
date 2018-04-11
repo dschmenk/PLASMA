@@ -280,10 +280,12 @@ def compiler(defptr)#0
                         codeptr  = codeptr + 2
                         X_IS_IFP = TRUE
                     fin
-                    codeptr=>0 = $188A            // TXA; CLC
-                    codeptr->2 = $69              // ADC #imm
-                    codeptr=>3 = j
-                    codeptr    = codeptr + 5
+                    ^codeptr = $8A; codeptr++     // TXA
+                    if j <> 0
+                        codeptr=>0 = $6918        // CLC; ADC #imm
+                        codeptr=>2 = j
+                        codeptr    = codeptr + 4
+                    fin
                     A_IS_TOS   = TRUE
                     break
                 is $2A // CB
@@ -441,8 +443,8 @@ def compiler(defptr)#0
                     codeptr->0 = $A0              // LDY #$0000
                     codeptr=>1  = $0000
                     codeptr->3  = $38             // SEC
-                    codeptr=>4  = $C3+(TOS<<8)    // SBC TOS,S
-                    codeptr=>6  = $0250           // BVC +3
+                    codeptr=>4  = $E3+(TOS<<8)    // SBC TOS,S
+                    codeptr=>6  = $0350           // BVC +3
                     codeptr->8  = $49             // EOR #$8000
                     codeptr=>9  = $8000
                     if opcode == $44
@@ -464,10 +466,10 @@ def compiler(defptr)#0
                     fin
                     codeptr->0  = $A0             // LDY #$0000
                     codeptr=>1  = $0000
-                    codeptr=>3  = $E685           // STA TMP
+                    codeptr=>3  = $E785           // STA TMP
                     codeptr=>5  = $3868           // PLA; SEC
-                    codeptr=>7  = $E6E5           // SBC TMP
-                    codeptr=>9  = $0250           // BVC +3
+                    codeptr=>7  = $E7E5           // SBC TMP
+                    codeptr=>9  = $0350           // BVC +3
                     codeptr->11 = $49             // EOR #$8000
                     codeptr=>12 = $8000
                     if opcode == $46
@@ -567,99 +569,67 @@ def compiler(defptr)#0
                     A_IS_TOS = FALSE
                     break
                 is $54 // CALL
-                    //puts("CALL $"); puth(*(bytecode+i))
-                    //
-                    // Call address
-                    //
-                    if A_IS_TOS
-                        ^codeptr = $48; codeptr++ // PHA
-                    fin
-                    codeptr=>0  = $10E2           // SEP #$10 -> 8 BIT X/Y
-                    codeptr->2  = $A9             // LDA #imm
-                    codeptr=>3  = codeptr + 13
-                    codeptr=>5  = $F285           // STA IP
-                    codeptr->7  = $A0             // LDY #$0000
-                    codeptr=>8  = $0000
-                    codeptr->10 = $4C             // JMP FETCHOP
-                    codeptr=>11 = $00F1           // FETCHOP
-                    codeptr->13 = $54             // CALL ADDR
-                    codeptr=>14 = *(bytecode+i+1)
-                    codeptr->16 = $C0             // NATV
-                    codeptr     = codeptr + 17
-                    X_IS_IFP    = FALSE
-                    A_IS_TOS    = FALSE
-                    i           = i + 2
-                    break
                 is $56 // ICAL
-                    //puts("ICAL")
-                    //
-                    // Pull address off stack
-                    //
-                    if A_IS_TOS
-                        ^codeptr = $48; codeptr++ // PHA
-                    fin
-                    codeptr=>0  = $10E2           // SEP #$10 -> 8 BIT X/Y
-                    codeptr->2  = $A9             // LDA #imm
-                    codeptr=>3  = codeptr + 13
-                    codeptr=>5  = $F285           // STA IP
-                    codeptr->7  = $A0             // LDY #$0000
-                    codeptr=>8  = $0000
-                    codeptr->10 = $4C             // JMP FETCHOP
-                    codeptr=>11 = $00F1           // FETCHOP
-                    codeptr->13 = $56             // ICAL
-                    codeptr->14 = $C0             // NATV
-                    codeptr     = codeptr + 15
-                    X_IS_IFP    = FALSE
-                    A_IS_TOS    = FALSE
-                   break
                 is $5A // LEAVE
-                    i++
-                    //puts("LEAVE "); puti(^(bytecode+i))
-                    //
-                    // Call into VM
-                    //
+                is $5C // RET
                     if A_IS_TOS
                         ^codeptr = $48; codeptr++ // PHA
                     fin
                     codeptr=>0  = $10E2           // SEP #$10 -> 8 BIT X/Y
                     codeptr->2  = $A9             // LDA #imm
-                    codeptr=>3  = codeptr + 13
+                    codeptr=>3  = codeptr + 12
                     codeptr=>5  = $F285           // STA IP
-                    codeptr->7  = $A0             // LDY #$0000
-                    codeptr=>8  = $0000
-                    codeptr->10 = $4C             // JMP FETCHOP
-                    codeptr=>11 = $00F1           // FETCHOP
-                    codeptr=>13 = $5A + (^(bytecode+i)<<8) // LEAVE CODE AND OPERAND
-                    codeptr     = codeptr + 15
+                    codeptr=>7  = $00A0           // LDY #$00
+                    codeptr->9  = $4C             // JMP FETCHOP
+                    codeptr=>10 = $00F1           // FETCHOP
+                    codeptr->12 = opcode          // OP
+                    when opcode
+                        is $54 // CALL
+                            //
+                            // Call address
+                            //
+                            //puts("CALL $"); puth(*(bytecode+i))
+                            codeptr=>13 = *(bytecode+i+1) // CALL ADDR
+                            codeptr->15 = $C0             // NATV
+                            codeptr     = codeptr + 16
+                            i           = i + 2
+                            break
+                        is $56 // ICAL
+                            //
+                            // Call address off stack
+                            //
+                            //puts("ICAL")
+                            codeptr->13 = $C0             // NATV
+                            codeptr     = codeptr + 14
+                            break
+                        is $5A // LEAVE
+                            //
+                            // Leave routine
+                            //
+                            i++
+                            //puts("LEAVE "); puti(^(bytecode+i))
+                            codeptr->13 = ^(bytecode+i)   // LEAVE CODE OPERAND
+                            codeptr     = codeptr + 14
+                            break
+                        is $5C // RET
+                            //
+                            // Quick return from routine
+                            //
+                            //puts("RET")
+                            codeptr     = codeptr + 13
+                            break
+                    wend
                     X_IS_IFP    = FALSE
                     A_IS_TOS    = FALSE
                     break
-                is $5C // RET
-                    //puts("RET")
-                    if A_IS_TOS
-                        ^codeptr = $48; codeptr++ // PHA
-                    fin
-                    codeptr=>0  = $10E2           // SEP #$10 -> 8 BIT X/Y
-                    codeptr->2  = $A9             // LDA #imm
-                    codeptr=>3  = codeptr + 13
-                    codeptr=>5  = $F285           // STA IP
-                    codeptr->7  = $A0             // LDY #$0000
-                    codeptr=>8  = $0000
-                    codeptr->10 = $4C             // JMP FETCHOP
-                    codeptr=>11 = $00F1           // FETCHOP
-                    codeptr->13 = $5C             // RET
-                    codeptr     = codeptr + 14
-                    X_IS_IFP    = FALSE
-                    A_IS_TOS    = FALSE
-                   break
                 is $60 // LB
                     //puts("LB")
                     if not A_IS_TOS
                         ^codeptr = $68; codeptr++ // PLA
                     fin
-                    codeptr=>0 = $E685            // STA TMP
+                    codeptr=>0 = $E785            // STA TMP
                     codeptr=>2 = $20E2            // SEP #$20 -> 8 BIT ACCUM/MEM
-                    codeptr=>4 = $E6B2            // LDA (TMP)
+                    codeptr=>4 = $E7B2            // LDA (TMP)
                     codeptr=>6 = $20C2            // REP #$20 -> 16 BIT ACCUM/MEM
                     codeptr->8 = $29              // AND #$00FF
                     codeptr=>9 = $00FF
@@ -671,9 +641,9 @@ def compiler(defptr)#0
                     if not A_IS_TOS
                         ^codeptr = $68; codeptr++ // PLA
                     fin
-                    codeptr=>0 = $E685            // STA TMP
-                    codeptr=>4 = $E6B2            // LDA (TMP)
-                    codeptr    = codeptr + 6
+                    codeptr=>0 = $E785            // STA TMP
+                    codeptr=>2 = $E7B2            // LDA (TMP)
+                    codeptr    = codeptr + 4
                     A_IS_TOS   = TRUE             // PHA
                     break
                 is $64 // LLB
@@ -688,7 +658,7 @@ def compiler(defptr)#0
                         codeptr  = codeptr + 2
                         X_IS_IFP = TRUE
                     fin
-                    codeptr=>0 = $B5+(J<<8)       // LDA dp,X
+                    codeptr=>0 = $B5+(j<<8)       // LDA dp,X
                     codeptr->2 = $29              // AND #$00FF
                     codeptr=>3 = $00FF
                     codeptr    = codeptr + 5
@@ -706,7 +676,7 @@ def compiler(defptr)#0
                         codeptr  = codeptr + 2
                         X_IS_IFP = TRUE
                     fin
-                    codeptr=>0 = $B5+(J<<8)       // LDA dp,X
+                    codeptr=>0 = $B5+(j<<8)       // LDA dp,X
                     codeptr    = codeptr + 2
                     A_IS_TOS   = TRUE             // PHA
                     break
@@ -751,7 +721,7 @@ def compiler(defptr)#0
                         X_IS_IFP = TRUE
                     fin
                     codeptr=>0 = $20E2            // SEP #$20 -> 8 BIT ACCUM/MEM
-                    codeptr=>2 = $55+(J<<8)       // STA dp,X
+                    codeptr=>2 = $95+(j<<8)       // STA dp,X
                     codeptr=>4 = $20C2            // REP #$20 -> 16 BIT ACCUM/MEM
                     if opcode == $6C
                         //puts("DLB "); puti(j)
@@ -777,7 +747,7 @@ def compiler(defptr)#0
                         codeptr  = codeptr + 2
                         X_IS_IFP = TRUE
                     fin
-                    codeptr=>0 = $55+(J<<8)       // STA dp,X
+                    codeptr=>0 = $95+(j<<8)       // STA dp,X
                     codeptr    = codeptr + 2
                     if opcode == $6E
                         //puts("DLW "); puti(j)
@@ -792,10 +762,10 @@ def compiler(defptr)#0
                     if not A_IS_TOS
                         ^codeptr = $68; codeptr++ // PLA
                     fin
-                    codeptr=>0 = $E685            // STA TMP
+                    codeptr=>0 = $E785            // STA TMP
                     codeptr->2 = $68              // PLA
                     codeptr=>3 = $20E2            // SEP #$20 -> 8 BIT ACCUM/MEM
-                    codeptr=>5 = $E692            // STA (TMP)
+                    codeptr=>5 = $E792            // STA (TMP)
                     codeptr=>7 = $20C2            // REP #$20 -> 16 BIT ACCUM/MEM
                     codeptr    = codeptr + 9
                     A_IS_TOS   = FALSE
@@ -805,9 +775,9 @@ def compiler(defptr)#0
                     if not A_IS_TOS
                         ^codeptr = $68; codeptr++ // PLA
                     fin
-                    codeptr=>0 = $E685            // STA TMP
+                    codeptr=>0 = $E785            // STA TMP
                     codeptr->2 = $68              // PLA
-                    codeptr=>3 = $E692            // STA (TMP)
+                    codeptr=>3 = $E792            // STA (TMP)
                     codeptr    = codeptr + 5
                     A_IS_TOS   = FALSE
                     break
@@ -883,9 +853,9 @@ def compiler(defptr)#0
                     if not A_IS_TOS
                         ^codeptr = $68; codeptr++ // PLA
                     fin
-                    codeptr=>0 = $E685            // STA TMP
+                    codeptr=>0 = $E785            // STA TMP
                     codeptr=>2 = $3868            // PLA; SEC
-                    codeptr=>4 = $E6E5            // SBC TMP
+                    codeptr=>4 = $E7E5            // SBC TMP
                     codeptr    = codeptr + 6
                     A_IS_TOS   = TRUE
                     break
@@ -915,14 +885,13 @@ def compiler(defptr)#0
                     fin
                     codeptr=>0  = $10E2           // SEP #$10 -> 8 BIT X/Y
                     codeptr->2  = $A9             // LDA #imm
-                    codeptr=>3  = codeptr + 13
+                    codeptr=>3  = codeptr + 12
                     codeptr=>5  = $F285           // STA IP
-                    codeptr->7  = $A0             // LDY #$0000
-                    codeptr=>8  = $0000
-                    codeptr->10 = $4C             // JMP FETCHOP
-                    codeptr=>11 = $00F1           // FETCHOP
-                    codeptr=>13 = $C000+opcode    // OPCODE; NATV CODE
-                    codeptr     = codeptr + 15
+                    codeptr=>7  = $00A0           // LDY #$00
+                    codeptr->9  = $4C             // JMP FETCHOP
+                    codeptr=>10 = $00F1           // FETCHOP
+                    codeptr=>12 = $C000+opcode    // OPCODE; NATV CODE
+                    codeptr     = codeptr + 14
                     X_IS_IFP    = FALSE
                     A_IS_TOS    = FALSE
                     break
@@ -999,7 +968,7 @@ def compiler(defptr)#0
                     codeptr=>0  = $A3+(NOS<<8)    // LDA S,NOS
                     codeptr->2  = $38             // SEC
                     codeptr=>3  = $E3+(TOS<<8)    // SBC S,TOS
-                    codeptr=>5  = $0250           // BVC +3
+                    codeptr=>5  = $0350           // BVC +3
                     codeptr->7  = $49             // EOR #$8000
                     codeptr=>8  = $8000
                     codeptr=>10 = $0510           // BPL +5
@@ -1022,7 +991,7 @@ def compiler(defptr)#0
                     fin
                     codeptr->0  = $38             // SEC
                     codeptr=>1  = $E3+(NOS<<8)    // SBC S,NOS
-                    codeptr=>3  = $0250           // BVC +3
+                    codeptr=>3  = $0350           // BVC +3
                     codeptr->5  = $49             // EOR #$8000
                     codeptr=>6  = $8000
                     codeptr=>8  = $0510           // BPL +5
@@ -1066,7 +1035,7 @@ def compiler(defptr)#0
                     codeptr=>0  = $A3+(NOS<<8)    // LDA S,NOS
                     codeptr->2  = $38             // SEC
                     codeptr=>3  = $E3+(TOS<<8)    // SBC S,TOS
-                    codeptr=>5  = $0250           // BVC +3
+                    codeptr=>5  = $0350           // BVC +3
                     codeptr->7  = $49             // EOR #$8000
                     codeptr=>8  = $8000
                     codeptr=>10 = $0330           // BMI +3
@@ -1099,10 +1068,10 @@ def compiler(defptr)#0
                         // SUB
                         //
                         //puts("SUBBRGE "); puti(dest)
-                        codeptr=>0 = $E685        // STA TMP
+                        codeptr=>0 = $E785        // STA TMP
                         codeptr=>2 = $A3+(TOS<<8) // LDA S,TOS
                         codeptr->4 = $68          // SEC
-                        codeptr=>5 = $E6E5        // SBC TMP
+                        codeptr=>5 = $E7E5        // SBC TMP
                         codeptr=>3 = $83+(TOS<<8) // STA S,TOS
                         codeptr    = codeptr + 6
                     fin
@@ -1111,7 +1080,7 @@ def compiler(defptr)#0
                     //
                     codeptr->0  = $38             // SEC
                     codeptr=>1  = $E3+(NOS<<8)    // SBC S,NOS
-                    codeptr=>3  = $0250           // BVC +3
+                    codeptr=>3  = $0350           // BVC +3
                     codeptr->5  = $49             // EOR #$8000
                     codeptr=>6  = $8000
                     codeptr=>8  = $0330           // BMI +3
@@ -1136,10 +1105,10 @@ def compiler(defptr)#0
                     fin
                     if opcode == $AC
                         //puts("BRAND "); puti(dest)
-                        codeptr=>1 = $03D0         // BNE +3
+                        codeptr=>1 = $04D0         // BNE +4
                     else
                         //puts("BROR "); puti(dest)
-                        codeptr=>1 = $03F0         // BEQ +3
+                        codeptr=>1 = $04F0         // BEQ +4
                     fin
                     codeptr=>3 = $4C48             // PHA; JMP abs
                     codeptr=>5 = addrxlate=>[dest]
@@ -1161,12 +1130,12 @@ def compiler(defptr)#0
                         codeptr  = codeptr + 2
                         X_IS_IFP = TRUE
                     fin
-                    codeptr=>0 = $E685            // STA TMP
+                    codeptr=>0 = $E785            // STA TMP
                     codeptr=>2 = $B5+(J<<8)       // LDA dp,X
                     codeptr->4 = $29              // AND #$00FF
                     codeptr=>5 = $00FF
                     codeptr->7 = $18              // CLC
-                    codeptr=>8 = $E665            // ADC TMP
+                    codeptr=>8 = $E765            // ADC TMP
                     codeptr    = codeptr + 10
                     A_IS_TOS   = TRUE             // PHA
                     break
@@ -1194,7 +1163,7 @@ def compiler(defptr)#0
                     if not A_IS_TOS
                         ^codeptr = $68; codeptr++ // PLA
                     fin
-                    codeptr=>0  = $E685           // STA TMP
+                    codeptr=>0  = $E785           // STA TMP
                     codeptr=>2  = $20E2           // SEP #$20 -> 8 BIT ACCUM/MEM
                     codeptr->4  = $AD             // LDA abs
                     codeptr=>5  = dest
@@ -1202,7 +1171,7 @@ def compiler(defptr)#0
                     codeptr->9  = $29             // AND #$00FF
                     codeptr=>10 = $00FF
                     codeptr->12 = $18             // CLC
-                    codeptr=>13 = $E665           // ADC TMP
+                    codeptr=>13 = $E765           // ADC TMP
                     codeptr     = codeptr + 15
                     A_IS_TOS    = TRUE            // PHA
                     break
@@ -1229,12 +1198,12 @@ def compiler(defptr)#0
                         codeptr  = codeptr + 2
                         X_IS_IFP = TRUE
                     fin
-                    codeptr=>0 = $E685            // STA TMP
+                    codeptr=>0 = $E785            // STA TMP
                     codeptr=>2 = $B5+(J<<8)       // LDA dp,X
                     codeptr->4 = $29              // AND #$00FF
                     codeptr=>5 = $00FF
                     codeptr->7 = $0A              // ASL
-                    codeptr=>8 = $E665            // ADC TMP
+                    codeptr=>8 = $E765            // ADC TMP
                     codeptr    = codeptr + 10
                     A_IS_TOS   = TRUE             // PHA
                     break
@@ -1264,7 +1233,7 @@ def compiler(defptr)#0
                     if not A_IS_TOS
                         ^codeptr = $68; codeptr++ // PLA
                     fin
-                    codeptr=>0  = $E685           // STA TMP
+                    codeptr=>0  = $E785           // STA TMP
                     codeptr=>2  = $20E2           // SEP #$20 -> 8 BIT ACCUM/MEM
                     codeptr->4  = $AD             // LDA abs
                     codeptr=>5  = dest
@@ -1272,7 +1241,7 @@ def compiler(defptr)#0
                     codeptr->9  = $29             // AND #$00FF
                     codeptr=>10 = $00FF
                     codeptr->12 = $0A             // ASL
-                    codeptr=>13 = $E665           // ADC TMP
+                    codeptr=>13 = $E765           // ADC TMP
                     codeptr     = codeptr + 15
                     A_IS_TOS    = TRUE            // PHA
                     break
@@ -1287,8 +1256,8 @@ def compiler(defptr)#0
                     codeptr=>2 = dest
                     codeptr=>4 = $6D18            // CLC; ADC abs
                     codeptr=>6 = dest
-                    codeptr     = codeptr + 8
-                    A_IS_TOS    = TRUE            // PHA
+                    codeptr    = codeptr + 8
+                    A_IS_TOS   = TRUE            // PHA
                     break
                 is $FE // NOPed out earlier by SELect
                     break
