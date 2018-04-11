@@ -84,6 +84,14 @@ NOS     =       $03             ; TOS-1
         REP     #$20            ; 16 BIT A/M
         !AL
         }
+        !MACRO  INDEX8 {
+        SEP     #$10            ; 8 BIT X/Y
+        !AS
+        }
+        !MACRO  INDEX16 {
+        REP     #$10            ; 16 BIT X/Y
+        !AL
+        }
 ;******************************
 ;*                            *
 ;* INTERPRETER INITIALIZATION *
@@ -460,7 +468,7 @@ PAGE0    =      *
         !PSEUDOPC       DROP {
         PLA                     ; DROP @ $EF
         INY                     ; NEXTOP @ $F0
-        LDX     $FFFF,Y         ; FETCHOP @ $F3, IP MAPS OVER $FFFF @ $F4
+        LDX     $FFFF,Y         ; FETCHOP @ $F1, IP MAPS OVER $FFFF @ $F2
         JMP     (OPTBL,X)       ; OPIDX AND OPPAGE MAP OVER OPTBL
 }
 PAGE3   =       *
@@ -1981,57 +1989,13 @@ RET     SEC                     ; SWITCH TO EMULATION MODE
         PLP
         RTS
 ;*
-;* RETURN TO NATIVE CODE (EMULATION MODE FOR NOW, ACTUALLY)
+;* RETURN TO NATIVE CODE
 ;*
 NATV    TYA                     ; FLATTEN IP
         SEC
         ADC     IP
         STA     IP
-        SEC                     ; SWITCH TO EMULATION MODE
-        XCE
-        !AS
-        ;+ACCMEM8                ; 8 BIT A/M
-        TSC                     ; MOVE HW EVAL STACK TO ZP EVAL STACK
-        EOR     #$FF
-        SEC
-        ADC     HWSP            ; STACK DEPTH = (HWSP - SP)/2
-        LSR
-!IF     DEBUG {
-        PHA
-        CLC
-        ADC     #$80+'0'
-        STA     $7D0+31
-        PLA
-}
-        EOR     #$FF
-        SEC
-        ADC     ESP             ; ESP - STACK DEPTH
-        TAX
-        CPX     ESP
-        BEQ     ++
-        TAY
--       PLA
-        STA     ESTKL,X
-        PLA
-        STA     ESTKH,X
-        INX
-        CPX     ESP
-        BNE     -
-!IF     DEBUG {
-        TSX
-        CPX     HWSP
-        BEQ     +
-        LDX     #$80+'V'
-        STX     $7D0+30
--       LDX     $C000
-        BPL     -
-        LDX     $C010
-+
-}
-        TYX
-++      LDA     PSR
-        PHA
-        PLP
+        +INDEX16                ; SET 16 BIT X/Y
         JMP     (IP)
 !IF     DEBUG {
 ;*****************
