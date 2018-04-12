@@ -545,7 +545,7 @@ JITINTRPX PHP
         STX     ALTRDON
         LDX     #>OPXTBL
 !IF DEBUG {
-SETDBG  LDY     LCRWEN+LCBNK2
+        LDY     LCRWEN+LCBNK2
         LDY     LCRWEN+LCBNK2
         STX     DBG_OP+2
         LDY     LCRDEN+LCBNK2
@@ -579,7 +579,7 @@ RUNJIT  DEX                     ; ADD PARAMETER TO DEF ENTRY
         STX     ALTRDON
         LDX     #>OPXTBL
 !IF DEBUG {
-SETDBG  LDY     LCRWEN+LCBNK2
+        LDY     LCRWEN+LCBNK2
         LDY     LCRWEN+LCBNK2
         STX     DBG_OP+2
         LDY     LCRDEN+LCBNK2
@@ -1589,7 +1589,7 @@ _BRLE   LDA     NOS,S
         BPL     BRNCH
         PLA                     ; DROP FOR VALUES
         PLA
-        BNE     NOBRNCH         ; BMI     NOBRNCH
+        BRA     NOBRNCH         ; BMI     NOBRNCH
 +       BMI     BRNCH
         PLA                     ; DROP FOR VALUES
         PLA
