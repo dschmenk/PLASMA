@@ -1519,7 +1519,7 @@ READVM  !BYTE 4
         !WORD   0
 CLOSEVM !BYTE   1
         !BYTE   0
-VM128   !BYTE   8, 'P', 'L', 'V', 'M', '-', '1', '2', '8'
+VM128   !BYTE   8, 'P', 'L', 'V', 'M', '.', '1', '2', '8'
 VM16    !BYTE   6, 'P', 'L', 'V', 'M', '1', '6'
         !CPU    6502
 }
