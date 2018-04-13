@@ -32,10 +32,9 @@ LCBNK1  =       $08
 ;
 ; INIT VM ENVIRONMENT STACK POINTERS
 ;
-        STY     PPL
+        STY     $01FF
         STY     IFPL        ; INIT FRAME POINTER = $BF00
         LDA     #$BF
-        STA     PPH
         STA     IFPH
         LDX     #$FE        ; INIT STACK POINTER (YES, $FE. SEE GETS)
         TXS

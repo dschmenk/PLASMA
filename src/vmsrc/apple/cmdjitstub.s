@@ -34,6 +34,7 @@ JITCODE =       $03E4
 ;
 ; INIT VM ENVIRONMENT STACK POINTERS
 ;
+        STY     $01FF
         STY     PPL
         STY     IFPL        ; INIT FRAME POINTER = $AF00 (4K FOR JIT CODE)
         STY     JITCODE

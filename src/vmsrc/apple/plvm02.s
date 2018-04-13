@@ -29,8 +29,7 @@ LCRWEN  =       $C083
 LCBNK2  =       $00
 LCBNK1  =       $08
         !SOURCE "vmsrc/plvmzp.inc"
-PSR     =       TMP+2
-DVSIGN  =       PSR+1
+DVSIGN  =       TMP+3
 DROP    =       $EF
 NEXTOP  =       $F0
 FETCHOP =       NEXTOP+1
@@ -245,19 +244,6 @@ CMDENTRY =      *
         !WORD   CLOSEPARMS
         BNE     FAIL
 ;
-; INIT VM ENVIRONMENT STACK POINTERS
-;
-;       LDA     #$00
-        STA     $01FF           ; CLEAR CMDLINE BUFF
-        STA     PPL             ; INIT FRAME POINTER
-        STA     IFPL
-        LDA     #$BF            ; FRAME POINTER AT $BF00, BELOW PRODOS
-        STA     PPH
-        STA     IFPH
-        LDX     #$FE            ; INIT STACK POINTER (YES, $FE. SEE GETS)
-        TXS
-        LDX     #ESTKSZ/2       ; INIT EVAL STACK INDEX
-;
 ; CHANGE CMD STRING TO SYSPATH STRING
 ;
         LDA     STRBUF
@@ -317,6 +303,7 @@ DEFCMD  =       *               ;!FILL   28
 ENDBYE  =       *
 }
 LCDEFCMD =      *               ;*-28            ; DEFCMD IN LC MEMORY
+        !ALIGN  255,0
 ;*
 ;* ADD TOS TO TOS-1
 ;*

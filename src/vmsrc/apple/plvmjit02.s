@@ -329,19 +329,6 @@ CMDENTRY =      *
         !WORD   CLOSEPARMS
         BNE     FAIL
 ;
-; INIT VM ENVIRONMENT STACK POINTERS
-;
-;       LDA     #$00
-        STA     $01FF           ; CLEAR CMDLINE BUFF
-        STA     PPL             ; INIT FRAME POINTER
-        STA     IFPL
-        LDA     #$AF            ; FRAME POINTER AT $AF00, BELOW JIT BUFFER
-        STA     PPH
-        STA     IFPH
-        LDX     #$FE            ; INIT STACK POINTER (YES, $FE. SEE GETS)
-        TXS
-        LDX     #ESTKSZ/2       ; INIT EVAL STACK INDEX
-;
 ; CHANGE CMD STRING TO SYSPATH STRING
 ;
         LDA     STRBUF
