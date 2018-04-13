@@ -931,39 +931,6 @@ def releaseheap(newheap)#1
     heap = newheap
     return @newheap - heap
 end
-def allocxheap(size)#1
-    word xaddr
-    xaddr = xheap
-    xheap = xheap + size
-    if systemflags & restxt1
-        if uword_isle(xaddr, $0800) and uword_isgt(xheap, $0400)
-            xaddr = $0800
-            xheap = xaddr + size
-        fin
-    fin
-    if systemflags & restxt2
-        if uword_isle(xaddr, $0C00) and uword_isgt(xheap, $0800)
-            xaddr = $0C00
-            xheap = xaddr + size
-        fin
-    fin
-    if systemflags & resxhgr1
-        if uword_isle(xaddr, $4000) and uword_isgt(xheap, $2000)
-            xaddr = $4000
-            xheap = xaddr + size
-        fin
-    fin
-    if systemflags & resxhgr2
-        if uword_isle(xaddr, $6000) and uword_isgt(xheap, $4000)
-            xaddr = $6000
-            xheap = xaddr + size
-        fin
-    fin
-    if uword_isge(xheap, $BF00)
-        return 0
-    fin
-    return xaddr
-end
 //
 // Symbol table routines.
 //
@@ -1009,12 +976,12 @@ def lookupextern(esd, index)#1
     fin
     return 0
 end
-def adddef(bank, addr, deflast)#1
+def adddef(addr, deflast)#1
     word defentry
     defentry = *deflast
     *deflast = defentry + 5
     defentry->0 = $20
-    defentry=>1 = bank ?? $03DC :: $03D6 // JSR $03DC (AUX MEM INTERP) or $03D6 (MAIN MEM INTERP)
+    defentry=>1 = $03D6
     defentry=>3 = addr
     defentry->5 = 0 // NULL out next entry
     return defentry
@@ -1024,7 +991,7 @@ def loadmod(mod)#1
     word addr, defaddr, modaddr, modfix, modofst, modend
     word deftbl, deflast
     word moddep, rld, esd, sym
-    byte refnum, defbank, filename[64], str[]
+    byte refnum, filename[64], str[]
     byte header[128]
     //
     // Read the RELocatable module header (first 128 bytes)
@@ -1121,17 +1088,7 @@ def loadmod(mod)#1
             esd = esd + 4
         loop
         esd = esd + 1
-        //
-        // Locate bytecode defs in appropriate bank.
-        //
-        if ^MACHID & $30 == $30
-            defbank = 1
-            defaddr = allocxheap(rld - bytecode)
-            modend  = bytecode
-        else
-            defbank = 0
-            defaddr = bytecode
-        fin
+        defaddr = bytecode
         codefix = defaddr - bytecode
         defofst = defaddr - defofst
         //
@@ -1141,7 +1098,7 @@ def loadmod(mod)#1
             //
             // This is a bytcode def entry - add it to the def directory.
             //
-            adddef(defbank, rld=>1 + defofst, @deflast)
+            adddef(rld=>1 + defofst, @deflast)
             rld = rld + 4
         loop
         //
@@ -1153,31 +1110,6 @@ def loadmod(mod)#1
                 *addr = ^rld & $10 ?? *addr + lookupextern(esd, rld->3) :: lookupdef(fixup + codefix, deftbl)
                 rld   = rld + 4
             fin
-            //addr = rld=>1 + modfix
-            //if uword_isge(addr, modaddr) // Skip fixups to header
-            //    if type & $80 // WORD sized fixup.
-            //        fixup = *addr
-            //    else          // BYTE sized fixup.
-            //        fixup = ^addr
-            //    fin
-            //    if ^rld & $10 // EXTERN reference.
-            //        fixup = fixup + lookupextern(esd, rld->3)
-            //    else          // INTERN fixup.
-            //        fixup = fixup + modofst
-            //        if uword_isge(fixup, bytecode)
-            //            //
-            //            // Bytecode address - replace with call def directory.
-            //            //
-            //            fixup = lookupdef(fixup + codefix, deftbl)
-            //        fin
-            //    fin
-            //    if type & $80 // WORD sized fixup.
-            //        *addr = fixup
-            //    else          // BYTE sized fixup.
-            //        ^addr = fixup
-            //    fin
-            //fin
-            //rld = rld + 4
         loop
         //
         // Run through the External/Entry Symbol Directory.
@@ -1200,15 +1132,6 @@ def loadmod(mod)#1
             fin
             esd = esd + 3
         loop
-        if defbank
-            //
-            // Move bytecode to AUX bank.
-            //
-            *$003C   = bytecode
-            *$003E   = modaddr + modsize
-            *$0042   = defaddr
-            call($C311, 0, 0, 0, $05) // CALL XMOVE with carry set (MAIN->AUX) and ints disabled
-        fin
     else
         perr = $46
     fin
@@ -1216,7 +1139,7 @@ def loadmod(mod)#1
         return -perr
     fin
     //
-    // Free up rld+esd (and bytecode on 128K) in main memory.
+    // Free up rld+esd in main memory.
     //
     releaseheap(modend)
     //
@@ -1225,19 +1148,12 @@ def loadmod(mod)#1
     fixup = 0 // This is repurposed for the return code
     if init
         init  = init + defofst
-        fixup = adddef(defbank, init, @deflast)()
+        fixup = adddef(init, @deflast)()
         if fixup < modinitkeep
             //
             // Free init routine unless initkeep
             //
-            if defbank
-                xheap = init
-            else
-                //
-                // Free up init code in main memory.
-                //
-                releaseheap(init)
-            fin
+            releaseheap(init)
             if fixup < 0
                 perr = -fixup
             fin
@@ -1366,6 +1282,9 @@ def parsecmd(strptr)#1
     return cmd
 end
 def resetmemfiles()#0
+    byte terr
+
+    terr = perr // Save perr
     //
     // Close all files
     //
@@ -1377,6 +1296,7 @@ def resetmemfiles()#0
     memset($BF58, 0, 24)
     ^$BF58 = $CF
     ^$BF6F = $01
+    perr = terr // Restore perr
 end
 def execsys(sysfile)#0
     byte refnum
@@ -1430,7 +1350,7 @@ heap = *freemem
 //
 // Print PLASMA version
 //
-prstr("PLASMA 2.0 Dev\n")//; prbyte(version.1); cout('.'); prbyte(version.0); crout
+prstr("PLASMA 64K 2.0 Dev\n")//; prbyte(version.1); cout('.'); prbyte(version.0); crout
 //
 // Init symbol table.
 //

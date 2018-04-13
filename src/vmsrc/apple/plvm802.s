@@ -97,7 +97,7 @@ NOS     =       $03             ; TOS-1
 ;* INTERPRETER INITIALIZATION *
 ;*                            *
 ;******************************
-*        =      $2000
+*       =      $2000
 ;*
 ;* MUST HAVE 128K FOR JIT
 ;*
@@ -144,13 +144,6 @@ ANYKEY  !TEXT   "PRESS ANY KEY...", 0
 ++      XCE                     ; SWITCH BACK TO EMULATED MODE
 
 ;*
-;* INITIALIZE STACK
-;*
-;INITSP  LDX     #$FE
-;        TXS
-;        LDX     #$00
-;        STX     $01FF
-;*
 ;* DISCONNECT /RAM
 ;*
         ;SEI                    ; DISABLE /RAM
@@ -196,7 +189,7 @@ RAMDONE ;CLI UNTIL I KNOW WHAT TO DO WITH THE UNENHANCED IIE
         STY     DSTL
         LDA     #$D0
         STA     DSTH
--       LDA     (SRC),Y         ; COPY VM+CMD INTO LANGUAGE CARD
+-       LDA     (SRC),Y         ; COPY VM+BYE INTO LANGUAGE CARD
         STA     (DST),Y
         INY
         BNE     -
@@ -208,10 +201,7 @@ RAMDONE ;CLI UNTIL I KNOW WHAT TO DO WITH THE UNENHANCED IIE
 ;*
 ;* MOVE FIRST PAGE OF 'BYE' INTO PLACE
 ;*
-        STY     SRCL
-        LDA     #$D1
-        STA     SRCH
--       LDA     (SRC),Y
+-       LDA     $D100,Y
         STA     $1000,Y
         INY
         BNE     -
@@ -236,13 +226,13 @@ RAMDONE ;CLI UNTIL I KNOW WHAT TO DO WITH THE UNENHANCED IIE
         LDA     #"D"
         INY
         STA     STRBUF,Y
-        LDA     #"J"
+        LDA     #"1"
         INY
         STA     STRBUF,Y
-        LDA     #"I"
+        LDA     #"2"
         INY
         STA     STRBUF,Y
-        LDA     #"T"
+        LDA     #"8"
         INY
         STA     STRBUF,Y
         STY     STRBUF
