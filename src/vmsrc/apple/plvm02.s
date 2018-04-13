@@ -251,7 +251,7 @@ CMDENTRY =      *
         STA     $01FF           ; CLEAR CMDLINE BUFF
         STA     PPL             ; INIT FRAME POINTER
         STA     IFPL
-        LDA     #$BF
+        LDA     #$BF            ; FRAME POINTER AT $BF00, BELOW PRODOS
         STA     PPH
         STA     IFPH
         LDX     #$FE            ; INIT STACK POINTER (YES, $FE. SEE GETS)
@@ -1484,14 +1484,14 @@ ALTVM   =       *
         BCC     +               ; NOT 65802/65816 IF CARRY CLEAR
         XCE                     ; SWITCH BACK TO EMULATED MODE
         LDA     #<VM16          ; TRY 16 BIT VM
-        STA     OPENVM
-        LDA     #>VM16
         STA     OPENVM+1
+        LDA     #>VM16
+        STA     OPENVM+2
         JSR     +
         LDA     #<VM128         ; NOPE. TRY 128K VM
-        STA     OPENVM
-        LDA     #>VM128
         STA     OPENVM+1
+        LDA     #>VM128
+        STA     OPENVM+2
 +       JSR     PRODOS          ; OPEN CMD
         !BYTE   $C8
         !WORD   OPENVM
@@ -1508,11 +1508,11 @@ ALTVM   =       *
         BNE     NOVM
         JMP     $2000           ; JUMP TO ALT VM
 NOVM    RTS
-OPENVM  !BYTE 3
+OPENVM  !BYTE   3
         !WORD   VM128
         !WORD   $0800
 REFVM   !BYTE   0
-READVM  !BYTE 4
+READVM  !BYTE   4
         !BYTE   0
         !WORD   $2000
         !WORD   $9F00
