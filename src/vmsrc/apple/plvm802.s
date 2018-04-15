@@ -728,31 +728,31 @@ DIVMOD  +ACCMEM8
 ;*
 ;* NEGATE TOS
 ;*
-NEG     LDA     #$0000
-        SEC
-        SBC     TOS,S
-        STA     TOS,S
+NEG     PLA
+        EOR     #$FFFF
+        INC
+        PHA
         JMP     NEXTOP
 ;*
 ;* INCREMENT TOS
 ;*
-INCR    LDA     TOS,S
+INCR    PLA
         INC
-        STA     TOS,S
+        PHA
         JMP     NEXTOP
 ;*
 ;* DECREMENT TOS
 ;*
-DECR    LDA     TOS,S
+DECR    PLA
         DEC
-        STA     TOS,S
+        PHA
         JMP     NEXTOP
 ;*
 ;* BITWISE COMPLIMENT TOS
 ;*
-COMP    LDA     TOS,S
+COMP    PLA
         EOR     #$FFFF
-        STA     TOS,S
+        PHA
         JMP     NEXTOP
 ;*
 ;* BITWISE AND TOS TO TOS-1
@@ -781,11 +781,11 @@ XOR     PLA
 SHL     PLA
         TAX
         BEQ     +
-        LDA     TOS,S
+        PLA
 -       ASL
         DEX
         BNE     -
-        STA     TOS,S
+        PHA
 +       JMP     NEXTOP
 ;*
 ;* SHIFT TOS-1 RIGHT BY TOS
@@ -793,12 +793,12 @@ SHL     PLA
 SHR     PLA
         TAX
         BEQ     +
-        LDA     TOS,S
+        PLA
 -       CMP     #$8000
         ROR
         DEX
         BNE     -
-        STA     TOS,S
+        PHA
 +       JMP     NEXTOP
 ;*
 ;* DUPLICATE TOS
@@ -1558,9 +1558,9 @@ BRLT    LDA     TOS,S
         PLA                     ; DROP FOR VALUES
         PLA
         BRA     BRNCH           ; BMI     BRNCH
-DECBRGE LDA     TOS,S
+DECBRGE PLA
         DEC
-        STA     TOS,S
+        PHA
 _BRGE   LDA     TOS,S
         SEC
         SBC     NOS,S
@@ -1569,9 +1569,9 @@ _BRGE   LDA     TOS,S
         PLA                     ; DROP FOR VALUES
         PLA
         BRA     NOBRNCH         ; BMI     NOBRNCH
-INCBRLE LDA     TOS,S
+INCBRLE PLA
         INC
-        STA     TOS,S
+        PHA
 _BRLE   LDA     NOS,S
         SEC
         SBC     TOS,S

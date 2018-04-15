@@ -2016,9 +2016,9 @@ NATV    TYA                     ; FLATTEN IP
         SEC
         ADC     IPL
         STA     IPL
-        LDA     #$00
-        ADC     IPH
-        STA     IPH
+        BCS     +
+        JMP     (IP)
++       INC     IPH
         JMP     (IP)
 VMEND   =       *
 }

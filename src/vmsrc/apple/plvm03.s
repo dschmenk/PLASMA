@@ -1428,11 +1428,11 @@ RET     RTS
 NATV    TYA                     ; FLATTEN IP
         SEC
         ADC     IPL
-        STA     TMPL
-        LDA     #$00
-        ADC     IPH
-        STA     TMPH
-        JMP     JMPTMP
+        STA     IPL
+        BCS     +
+        JMP     (IP)
++       INC     IPH
+        JMP     (IP)
 SOSCMD  =       *
         !SOURCE "vmsrc/apple/sossys.a"
 
