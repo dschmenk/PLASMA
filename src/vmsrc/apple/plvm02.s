@@ -1379,8 +1379,6 @@ CALL    INY                     ;+INC_IP
         STA     IPH
         PLA
         STA     IPL
-        LDA     #>OPTBL         ; MAKE SURE WE'RE INDEXING THE RIGHT TABLE
-        STA     OPPAGE
         LDY     #$00
         JMP     FETCHOP
 ;*
@@ -1403,8 +1401,6 @@ ICAL    LDA     ESTKL,X
         STA     IPH
         PLA
         STA     IPL
-        LDA     #>OPTBL         ; MAKE SURE WE'RE INDEXING THE RIGHT TABLE
-        STA     OPPAGE
         LDY     #$00
         JMP     FETCHOP
 ;*
