@@ -33,7 +33,7 @@ end
 //
 // External interface to net class. Must be first.
 //
-export byte[t_inet] iNet
+res[t_inet] iNet
 //
 // List of loadable network device drivers
 //
@@ -87,14 +87,14 @@ def parseIP(ipstr, ipaddr)
 
     endstr = ipstr + ^ipstr
     for i = 0 to 3
-    ipstr = ipstr + 1
-        while ^ipstr >= '0' and ^ipstr <= '9' and ipstr <= endstr
-        ipaddr->[i] = ipaddr->[i] * 10 + ^ipstr - '0'
         ipstr = ipstr + 1
-    loop
-    if ^ipstr <> '.' and ipstr < endstr
-        return 0
-    fin
+            while ^ipstr >= '0' and ^ipstr <= '9' and ipstr <= endstr
+            ipaddr->[i] = ipaddr->[i] * 10 + ^ipstr - '0'
+            ipstr = ipstr + 1
+        loop
+        if ^ipstr <> '.' and ipstr < endstr
+            return 0
+        fin
     next
     return i == 3
 end
@@ -105,11 +105,11 @@ def parseDomain(domstr, msgptr)
     l = 0
     for i = 1 to ^domstr
         if domstr->[i] == '.'
-        msgptr->[l] = i - l - 1
-        l = i
-    else
-        msgptr->[i] = domstr->[i]
-    fin
+            msgptr->[l] = i - l - 1
+            l = i
+        else
+            msgptr->[i] = domstr->[i]
+        fin
     next
     msgptr->[l] = i - l - 1
     msgptr  = msgptr + i
@@ -171,7 +171,7 @@ def iNetResolve(namestr, ipaddr)
         //
         // Query Domain Name Server for address
         //
-        dnspkt             = heapmark // Use heap as working DNS query packet
+        dnspkt             = heapalloc(^namestr + t_dnshdr + 8) // Use heap as working DNS query packet
         msgptr             = dnspkt
         msgptr=>dnsID      = $BEEF
         msgptr=>dnsCode    = $0001 // RD (Recursion Desired)
@@ -181,9 +181,8 @@ def iNetResolve(namestr, ipaddr)
         msgptr=>dnsArCount = 0
         msgptr             = parseDomain(namestr, msgptr + t_dnshdr)
         msgptr=>0          = $0100 // BE TYPE  = Address
-        msgptr=>2          = $0100 // BE CLASS = INternet
+        msgptr=>2          = $0100 // BE CLASS = Internet
         msglen             = msgptr - dnspkt + 4
-        heapalloc(msglen)
         //
         // Prepare to receive DNS answer from server
         //
@@ -210,21 +209,17 @@ def iNetInit
     // Look for net hardware
     //
     while ^driver
-        //puts(driver);putln
         if cmdsys:modexec(driver) >= 0
-                break
+            //
+            // Get an IP address
+            //
+            cmdsys:modexec("DHCP")
+            iNet:resolveIP = @iNetResolve
+            return @iNet
         fin
         driver = driver + ^driver + 1
     loop
-    if !^driver
-        return 0
-    fin
-    //
-    // Get an IP address
-    //
-    cmdsys:modexec("DHCP")
-    iNet:resolveIP = @iNetResolve
-    return @iNet
+    return NULL
 end
 
 //

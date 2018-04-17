@@ -1262,32 +1262,16 @@ BRGT    LDA     ESTKL+1,X
         CMP     ESTKL,X
         LDA     ESTKH+1,X
         SBC     ESTKH,X
-        BVS     +
-        BPL     NOBRNCH
--       INX                     ; DROP FOR VALUES
-        INX
-        BNE     BRNCH           ; BMI     BRNCH
+        BVS     ++
+-       BPL     NOBRNCH
+        BMI     BRNCH
 BRLT    LDA     ESTKL,X
         CMP     ESTKL+1,X
         LDA     ESTKH,X
         SBC     ESTKH+1,X
-        BVS     +
+        BVS     ++
         BPL     NOBRNCH
-        BMI     -
-+       BMI     NOBRNCH
-        BPL     -
-INCBRLE INC     ESTKL,X
-        BNE     _BRLE
-        INC     ESTKH,X
-_BRLE   LDA     ESTKL+1,X
-        CMP     ESTKL,X
-        LDA     ESTKH+1,X
-        SBC     ESTKH,X
-        BVS     +
-        BPL     BRNCH
--       INX                     ; DROP FOR VALUES
-        INX
-        BNE     NOBRNCH         ; BMI     NOBRNCH
+        BMI     BRNCH
 DECBRGE DEC     ESTKL,X
         LDA     ESTKL,X
         CMP     #$FF
@@ -1297,11 +1281,19 @@ _BRGE   LDA     ESTKL,X
 +       CMP     ESTKL+1,X
         LDA     ESTKH,X
         SBC     ESTKH+1,X
-        BVS     +
+        BVS     -
         BPL     BRNCH
-        BMI     -
-+       BMI     BRNCH
-        BPL     -
+        BMI     NOBRNCH
+INCBRLE INC     ESTKL,X
+        BNE     _BRLE
+        INC     ESTKH,X
+_BRLE   LDA     ESTKL+1,X
+        CMP     ESTKL,X
+        LDA     ESTKH+1,X
+        SBC     ESTKH,X
+        BVS     -
+++      BPL     BRNCH
+        BMI     NOBRNCH
 SUBBRGE LDA     ESTKL+1,X
         SEC
         SBC     ESTKL,X

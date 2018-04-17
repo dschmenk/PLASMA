@@ -1543,21 +1543,15 @@ BRGT    LDA     NOS,S
         SBC     TOS,S
         BVS     +
         BPL     NOBRNCH
-        PLA                     ; DROP FOR VALUES
-        PLA
-        BRA     BRNCH           ; BMI     BRNCH
+        BMI     BRNCH
 BRLT    LDA     TOS,S
         SEC
         SBC     NOS,S
         BVS     +
         BPL     NOBRNCH
-        PLA                     ; DROP FOR VALUES
-        PLA
-        BRA     BRNCH           ; BMI     BRNCH
+        BMI     BRNCH
 +       BMI     NOBRNCH
-        PLA                     ; DROP FOR VALUES
-        PLA
-        BRA     BRNCH           ; BMI     BRNCH
+        BPL     BRNCH
 DECBRGE PLA
         DEC
         PHA
@@ -1566,9 +1560,7 @@ _BRGE   LDA     TOS,S
         SBC     NOS,S
         BVS     +
         BPL     BRNCH
-        PLA                     ; DROP FOR VALUES
-        PLA
-        BRA     NOBRNCH         ; BMI     NOBRNCH
+        BMI     NOBRNCH
 INCBRLE PLA
         INC
         PHA
@@ -1577,13 +1569,9 @@ _BRLE   LDA     NOS,S
         SBC     TOS,S
         BVS     +
         BPL     BRNCH
-        PLA                     ; DROP FOR VALUES
-        PLA
-        BRA     NOBRNCH         ; BMI     NOBRNCH
+        BMI     NOBRNCH
 +       BMI     BRNCH
-        PLA                     ; DROP FOR VALUES
-        PLA
-        BRA     NOBRNCH         ; BMI     NOBRNCH
+        BPL     NOBRNCH
 SUBBRGE LDA     NOS,S
         SEC
         SBC     TOS,S
