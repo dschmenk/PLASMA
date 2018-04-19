@@ -1,0 +1,107 @@
+include "inc/cmdsys.plh"
+include "inc/args.plh"
+include "inc/fileio.plh"
+include "inc/lz4.plh"
+
+struc t_header
+    word magic[2]
+    byte FLG
+    byte BD
+end
+word arg
+byte ref
+
+def lz4ReadBlock(flags)#2
+    word size[2], block, data, len
+    
+    len = fileio:read(ref, @size, 4)
+    if len <> 4 or size[0] == 0 or size[1] & $7FFF
+        return NULL, 0
+    fin
+    block = heapalloc(size[0])
+    if block
+        len = fileio:read(ref, block, size[0])
+        if len <> size[0]
+            heaprelease(block)
+            return NULL, 0
+        fin
+    else
+        return NULL, 0
+    fin
+    if size[1] & $8000
+        //
+        // Uncompressed block
+        //
+        data = block
+    else
+        //
+        // Decompress block
+        //
+        len  = heapavail - 256 // Allocate almost entire heap to decompress into
+        data = heapalloc(len)
+        if data
+            len = lz4Unpack(block, block + size[0], data, data + len)
+            memcpy(block, data, len)
+            data = block
+        else
+            len = 0
+        fin
+        heaprelease(block + len)
+    fin
+    if flags & $10 // Block Checksum
+        fileio:read(ref, @size, 4)
+    fin
+    return data, len
+end
+def lz4ReadFrame#0
+    word data, len
+    byte header[t_header], opt
+
+    fileio:read(ref, @header, t_header)
+    if header:magic[1] <> $184D or header:magic[0] <> $2204
+        puts("Not LZ4 file.\n")
+        return
+    fin
+    if header.FLG & $C0 <> $40
+        puts("Wrong LZ4 version.\n")
+        return
+    fin
+    if header.BD & $70 <> $40
+        puts("Not 64K block size.\n")
+        return
+    fin
+    opt = 1
+    if header.FLG & $08 // Content Size
+        opt = opt + 8
+    fin
+    if header.FLG & $01 // Dictionary ID
+        opt = opt + 4
+    fin
+    fileio:read(ref, heapmark, opt) // Read rest of header and throw away
+    repeat
+        data, len = lz4ReadBlock(header.FLG)
+        if len
+            while len
+                putc(^data <> $0A ?? ^data :: $0D)
+                data++
+                len--
+            loop
+            heaprelease(data)
+        fin
+    until not data
+    if header.FLG & $04 // Content Checksun
+        fileio:read(ref, heapmark, 4)
+    fin
+end
+arg = argNext(argFirst)
+if ^arg
+    ref = fileio:open(arg)
+    if ref
+        lz4ReadFrame
+        fileio:close(ref)
+    else
+        puts("File not found.\n")
+    fin
+fin
+
+done
