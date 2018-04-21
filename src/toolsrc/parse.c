@@ -1119,19 +1119,19 @@ int parse_stmnt(void)
                 parse_error("CONTINUE without loop");
             break;
         case RETURN_TOKEN:
+            cfnvals = stack_loop;
+            while (cfnvals >= 2)
+            {
+                emit_drop2();
+                cfnvals -= 2;
+            }
+            if (cfnvals)
+            {
+                emit_drop();
+                cfnvals--;
+            }
             if (infunc)
             {
-                int i;
-
-                i = stack_loop;
-                while (i >= 2)
-                {
-                    emit_drop2();
-                    i -= 2;
-                }
-                if (i)
-                    emit_drop();
-                cfnvals = 0;
                 emit_seq(parse_list(NULL, &cfnvals));
                 if (cfnvals > infuncvals)
                     parse_error("Too many return values");
