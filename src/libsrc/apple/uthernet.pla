@@ -27,6 +27,7 @@ byte rxdata_lo, rxdata_hi
 byte txcmd
 byte txlen
 byte isq
+word rom[]
 byte pregidx
 byte pregdata
 //
@@ -213,33 +214,36 @@ end
 // Identify Uthernet card and initialize
 //
 for slot = $90 to $F0 step $10
-    if (peekiow(slot+TX_CMD) & $CC3F) == $09
-        pokeiow(slot+PREG_INDEX, 0)
-        if peekiow(slot+PREG_DATA) == $630E
-            pokepreg($0114, $40)   // RESET
-            rxdata_hi   = slot + 1
-            txcmd       = slot + TX_CMD
-            txlen       = slot + TX_LEN
-            isq         = slot + INT_STATUS
-            pregidx     = slot + PREG_INDEX
-            pregdata    = slot + PREG_DATA
-            _pokefrml.1 = slot
-            _pokefrmh.1 = slot+1
-            _peekfrml.1 = slot
-            _peekfrmh.1 = slot+1
-            pokepreg($0158, utherMAC:0) // MAC addr
-            pokepreg($015A, utherMAC:2) // MAC addr
-            pokepreg($015C, utherMAC:4) // MAC addr
-            pokepreg($0102, $0100)      // Recv cfg
-            pokepreg($0104, $0D00)      // Recv ctrl
-            pokepreg($0106, $8200)      // Xmit cfg
-            pokepreg($0112, $00C0)      // Line ctrl
-            //
-            // Install etherip driver
-            //
-            puts("Found Uthernet I in slot #"); putc('0' + ((slot - $80) >> 4)); putln
-            setEtherDriver(@utherMAC, @peekfrmlen, @peekfrm, @pokefrmlen, @pokefrm)
-            return modkeep
+    rom = ((slot & $70) << 4) | $C000
+    if rom=>$06 <> $3C86 or (slot == $0B or (rom->$05 <> $38 and rom->$07 <> $18)) // Skip slots with signature
+        if (peekiow(slot+TX_CMD) & $CC3F) == $0009
+            pokeiow(slot+PREG_INDEX, 0)
+            if peekiow(slot+PREG_DATA) == $630E
+                pokepreg($0114, $40)   // RESET
+                rxdata_hi   = slot + 1
+                txcmd       = slot + TX_CMD
+                txlen       = slot + TX_LEN
+                isq         = slot + INT_STATUS
+                pregidx     = slot + PREG_INDEX
+                pregdata    = slot + PREG_DATA
+                _pokefrml.1 = slot
+                _pokefrmh.1 = slot+1
+                _peekfrml.1 = slot
+                _peekfrmh.1 = slot+1
+                pokepreg($0158, utherMAC:0) // MAC addr
+                pokepreg($015A, utherMAC:2) // MAC addr
+                pokepreg($015C, utherMAC:4) // MAC addr
+                pokepreg($0102, $0100)      // Recv cfg
+                pokepreg($0104, $0D00)      // Recv ctrl
+                pokepreg($0106, $8200)      // Xmit cfg
+                pokepreg($0112, $00C0)      // Line ctrl
+                //
+                // Install etherip driver
+                //
+                puts("Found Uthernet I in slot #"); putc('0' + ((slot - $80) >> 4)); putln
+                setEtherDriver(@utherMAC, @peekfrmlen, @peekfrm, @pokefrmlen, @pokefrm)
+                return modkeep
+            fin
         fin
     fin
 next

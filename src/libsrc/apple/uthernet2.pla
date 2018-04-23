@@ -72,6 +72,7 @@ const WIZ_RXMEM3 = $7800
 // Wiznet indirect registers
 //
 byte slot
+word rom[]
 word saveidx
 byte regidx
 byte regdata
@@ -842,71 +843,74 @@ end
 // Identify Uthernet II card and initialize
 //
 for slot = $90 to $F0 step $10
-    regdata = peekio(slot)
-    if (regdata & $E4) == $00
-        pokeio(slot, $03) // Try setting auto-increment indirect I/F
-        if peekio(slot) == $03
-            saveidx = peekiow(slot + 1)
-            peekio(slot + 3) // Dummy read to data register should increment index
-            if peekiow(slot + 1) == saveidx + 1
-                //
-                // Good chance this is it
-                //
-                pokeio(slot, $80) // RESET
-                regidx      = slot + 1
-                regdata     = slot + 3
-                _pokedata.1 = regdata
-                _peekdata.1 = regdata
-                pokeio(slot, $03) // Auto-increment indirect I/F + enable ping
-                //
-                // The following looks redundant, but it sets up the peek/poke locations
-                // for peekreg(s)/pokereg(s)
-                //
-                pokeiow(regidx, WIZ_MR)
-                pokeio(regdata, $03) // Auto-increment indirect I/F + enable ping
-                peekio(regdata)
-                //
-                // Initialize common registers
-                //
-                pokeregs(WIZ_SHAR, @wizMAC, 6) // MAC addr
-                pokeregw(WIZ_RTR, 5000)        // Timeout period to 500ms
-                pokereg(WIZ_RMSR, $55)         // 2K Rx memory/channel
-                pokereg(WIZ_TMSR, $55)         // 2K Tx memory/channel
-                //
-                // Print settings
-                //
-                puts("Found Uthernet II in slot #")
-                putc('0' + ((slot - $80) >> 4))
-                putln
-                //
-                // Fill channel structure
-                //
-                saveidx = @wizChannel
-                for slot = 0 to 3
-                    saveidx=>channel_regs  = WIZ_SREGS + (WIZ_SSIZE  * slot)
-                    saveidx=>channel_txmem = WIZ_TXMEM + (WIZ_TXSIZE * slot)
-                    saveidx=>channel_rxmem = WIZ_RXMEM + (WIZ_RXSIZE * slot)
-                    saveidx = saveidx + t_channel
-                next
-                //
-                // Fill in Net class
-                //
-                iNet:serviceIP      = @wizServiceIP
-                iNet:openUDP        = @wizOpenUDP
-                iNet:sendUDP        = @wizSendUDP
-                iNet:closeUDP       = @wizCloseUDP
-                iNet:listenTCP      = @wizListenTCP
-                iNet:connectTCP     = @wizConnectTCP
-                iNet:sendTCP        = @wizSendTCP
-                iNet:closeTCP       = @wizCloseTCP
-                iNet:setInterfaceIP = @setWizIP
-                iNet:getInterfaceHA = @getWizHA
-                iNet:setCallback    = @wizSetCallback
-                iNet:setParam       = @wizSetParam
-                return modkeep
+    rom = ((slot & $70) << 4) | $C000
+    if rom=>$06 <> $3C86 or (slot == $0B or (rom->$05 <> $38 and rom->$07 <> $18)) // Skip slots with signature
+        regdata = peekio(slot)
+        if (regdata & $E4) == $00
+            pokeio(slot, $03) // Try setting auto-increment indirect I/F
+            if peekio(slot) == $03
+                saveidx = peekiow(slot + 1)
+                peekio(slot + 3) // Dummy read to data register should increment index
+                if peekiow(slot + 1) == saveidx + 1
+                    //
+                    // Good chance this is it
+                    //
+                    pokeio(slot, $80) // RESET
+                    regidx      = slot + 1
+                    regdata     = slot + 3
+                    _pokedata.1 = regdata
+                    _peekdata.1 = regdata
+                    pokeio(slot, $03) // Auto-increment indirect I/F + enable ping
+                    //
+                    // The following looks redundant, but it sets up the peek/poke locations
+                    // for peekreg(s)/pokereg(s)
+                    //
+                    pokeiow(regidx, WIZ_MR)
+                    pokeio(regdata, $03) // Auto-increment indirect I/F + enable ping
+                    peekio(regdata)
+                    //
+                    // Initialize common registers
+                    //
+                    pokeregs(WIZ_SHAR, @wizMAC, 6) // MAC addr
+                    pokeregw(WIZ_RTR, 5000)        // Timeout period to 500ms
+                    pokereg(WIZ_RMSR, $55)         // 2K Rx memory/channel
+                    pokereg(WIZ_TMSR, $55)         // 2K Tx memory/channel
+                    //
+                    // Print settings
+                    //
+                    puts("Found Uthernet II in slot #")
+                    putc('0' + ((slot - $80) >> 4))
+                    putln
+                    //
+                    // Fill channel structure
+                    //
+                    saveidx = @wizChannel
+                    for slot = 0 to 3
+                        saveidx=>channel_regs  = WIZ_SREGS + (WIZ_SSIZE  * slot)
+                        saveidx=>channel_txmem = WIZ_TXMEM + (WIZ_TXSIZE * slot)
+                        saveidx=>channel_rxmem = WIZ_RXMEM + (WIZ_RXSIZE * slot)
+                        saveidx = saveidx + t_channel
+                    next
+                    //
+                    // Fill in Net class
+                    //
+                    iNet:serviceIP      = @wizServiceIP
+                    iNet:openUDP        = @wizOpenUDP
+                    iNet:sendUDP        = @wizSendUDP
+                    iNet:closeUDP       = @wizCloseUDP
+                    iNet:listenTCP      = @wizListenTCP
+                    iNet:connectTCP     = @wizConnectTCP
+                    iNet:sendTCP        = @wizSendTCP
+                    iNet:closeTCP       = @wizCloseTCP
+                    iNet:setInterfaceIP = @setWizIP
+                    iNet:getInterfaceHA = @getWizHA
+                    iNet:setCallback    = @wizSetCallback
+                    iNet:setParam       = @wizSetParam
+                    return modkeep
+                fin
             fin
+            pokeio(slot, regdata) // Restore register
         fin
-        pokeio(slot, regdata) // Restore register
     fin
 next
 //
