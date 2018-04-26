@@ -1,3 +1,96 @@
+include "inc/cmdsys.plh"
+//
+// Mouse driver
+//
+word rom
+byte slot, index
+//
+// Serve Mouse/VBL IRQ
+//
+asm servMouse#0
+SLOT    =       $FA             ; TEMPS FOR TESTING
+TIMER   =       $FB
+        CLD
+        JSR     $C400
+        BCS     MOUEX           ; NOT MOUSE INT
+        LDY     SLOT            ; CHECK MOUSE INT CAUSE
+        LDA     $0778,Y         ; WAS IT VBL?
+        AND     #$08
+        BEQ     +               ; NOPE, MOVE OR BUTTON
+        INC     TIMER
+        BNE     +
+        INC     TIMER+1
+        BNE     +
+        INC     TIMER+2
+        BNE     +
+        INC     TIMER+3
++       LDA     $0778,Y         ; MOUSE MOVE OR BUTTON ACTIVE
+        AND     #$86
+        BNE     +
+MOUEX   SEC
+        RTS
+end
+asm readMouse#0
++       LDX     #$C4
+        LDY     #$40
+        JSR     $C400           ; IIGS REQUIRES THIS HAPPEN IN IRQ
+        CLC
+        RTS
+end
+export asm readTimer#2
+        PHP
+        SEI
+        DEX
+        DEX
+        LDA     TIMER
+        STA     ESTKL+1,X
+        LDA     TIMER+1
+        STA     ESTKH+1,X
+        LDA     TIMER+2
+        STA     ESTKL,X
+        LDA     TIMER+3
+        STA     ESTKH,X
+        PLP
+        RTS
+end
+export def mouseInit
+    byte params[4]
+    
+    //
+    // Hook mouse IRQ handler into ProDOS IRQ chain
+    //
+    params.0 = 2
+    params.1 = 0
+    params:2 = @servMouse
+    syscall($40, @params)
+    return rom <> 0
+end
+//
+// Identify Mouse card/slot and initialize
+//
+for rom = $C100 to $C700 step $0100
+    if rom->5 == $38 and rom->7 == $18 and rom->11 == $01 and rom->12 == $20
+        //
+        // Fix-up IRQ routine
+        //
+        slot  = rom >> 8
+        index = slot << 4
+        servMouse:2 = rom
+        readMouse.1 = slot
+        readMouse.3 = index
+        readMouse:5 = rom
+        puts("Found Mouse in slot #"); putc('0' + ((rom >> 8) & $07)); putln
+        return
+    fin
+next
+//
+// Not found
+//
+rom = 0
+done
+
+What follows is the relevant parts to the mouse driver for VM02
+
 CHKMOUSE:   LDX #$20        ; LOOK FOR MOUSE
     LDA #$01
     JSR SCAN_SLOTS
@@ -28,6 +121,44 @@ CHKMOUSE:   LDX #$20        ; LOOK FOR MOUSE
     LDA #<MOUSE_DRIVER      ; LOAD MOUSE DRIVER
     LDX #>MOUSE_DRIVER
     JSR LOAD_DRIVER
+;
+; SCAN SLOTS FOR MATCHING CARD ID
+; ENTRY: A = START SLOT SCAN
+;        X = CARD ID
+; EXIT:  A = SLOT # :: C = 0
+;        X = SLOT PAGE
+;
+SCAN_SLOTS:	ORA	#$C0
+	STA	TMPTR+1
+	LDA	#$00
+	STA	TMPTR
+CHKSIG:	LDY	#$05
+	LDA	(TMPTR),Y
+	CMP	#$38		; LOOK FOR PASCAL COMPAT SIG
+	BNE	:+
+	LDY	#$07
+	LDA	(TMPTR),Y
+	CMP	#$18
+	BNE	:+
+	LDY	#$0B
+	LDA	(TMPTR),Y
+	CMP	#$01
+	BNE	:+
+	LDY	#$0C
+	TXA			; LOOK FOR MATCHING ID
+	CMP	(TMPTR),Y
+	BNE	:+
+	LDA	TMPTR+1
+	TAX
+	AND	#$07
+	CLC
+	RTS
+:	INC	TMPTR+1
+	LDA	TMPTR+1
+	CMP	#$C8
+	BCC	CHKSIG
+	SEC
+	RTS
 
 ;*
 ;* TURN VBL INTS ON AFTER INIT
@@ -54,6 +185,48 @@ CALLVBLPROC:    JSR $0000
     .ASCIIZ "VBlank timer active"
 NOVBL:  RTS
 
+	JSR	PRODOS
+	.BYTE	$40		; ALLOC INTERRUPT
+	.ADDR	ALLOCINTPARMS
+.IFDEF	DEBUG	
+	BCC	:+
+	JSR	PUTSLN
+	.ASCIIZ	"FAILED TO ALLOCATE INTERRUPT"
+:
+.ENDIF
+	RTS
+ALLOCINTPARMS:	.BYTE	$02
+	.BYTE	$00		; INT NUM
+	.ADDR	IO_INTERRUPT		; INT CODE
+
+;*
+;* I/O INTERRUPT ROUTINE
+;*
+IO_INTERRUPT:	CLD
+	LDY	#$02		; SLOT #1 * 2
+FNDIRQPROC:	LDA	LINK_DEVIRQ+1,Y
+	BEQ	NXTIRQPROC
+	STA	CALLIRQPROC+2
+	LDA	LINK_DEVIRQ,Y
+	STA	CALLIRQPROC+1
+	TYA
+	LSR
+	PHA
+CALLIRQPROC:	JSR	$0000
+	BCS	:+
+	PLA
+	TAY
+	PHA
+	JSR	THREAD_NOTIFYIO
+:	PLA
+	ASL
+	TAY
+NXTIRQPROC:	INY
+	INY
+	CPY	#$10
+	BCC	FNDIRQPROC
+	CLC
+	RTS
 
 ;*
 ;* MOUSE DEVICE DRIVER
