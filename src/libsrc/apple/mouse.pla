@@ -1,20 +1,39 @@
 include "inc/cmdsys.plh"
 //
+// Status bits
+//
+const BUTTON_DOWN      = $80
+const BUTTON_LAST_DOWN = $40
+const MOUSE_MOVED      = $20
+const VBL_INT          = $08
+const BUTTON_INT       = $04
+const MOVE_INT         = $02
+//
+// Mode bits
+//
+const VBL_INT_ENABLE   = $08
+const BUTTON_INT_ENABLE= $04
+const MOVE_INT_ENABLE  = $02
+//
 // Mouse driver
 //
 word rom
-byte slot, index
+byte slot, index, page
+word setMouseFW, serveMouseFW, readMouseFW, clearMouseFW, posMouseFW, clampMouseFW, homeMouseFW, initMouseFW
+word minClamp, maxClamp, xMouse, yMouse, statMouse, modeMouse
+asm equates
+    !SOURCE "vmsrc/plvmzp.inc"
+end
 //
 // Serve Mouse/VBL IRQ
 //
-asm servMouse#0
-SLOT    =       $FA             ; TEMPS FOR TESTING
-TIMER   =       $FB
+asm serviceMouse#0
+TIMER   =       $400+36 ; $FB
         CLD
         JSR     $C400
         BCS     MOUEX           ; NOT MOUSE INT
-        LDY     SLOT            ; CHECK MOUSE INT CAUSE
-        LDA     $0778,Y         ; WAS IT VBL?
+        LDY     $0778+4         ; CHECK MOUSE INT CAUSE
+        TYA                     ; WAS IT VBL?
         AND     #$08
         BEQ     +               ; NOPE, MOVE OR BUTTON
         INC     TIMER
@@ -24,18 +43,15 @@ TIMER   =       $FB
         INC     TIMER+2
         BNE     +
         INC     TIMER+3
-+       LDA     $0778,Y         ; MOUSE MOVE OR BUTTON ACTIVE
++       TYA                     ; MOUSE MOVE OR BUTTON ACTIVE
         AND     #$86
         BNE     +
-MOUEX   SEC
-        RTS
+MOUEX   RTS
 end
-asm readMouse#0
+asm updateMouse#0
 +       LDX     #$C4
         LDY     #$40
-        JSR     $C400           ; IIGS REQUIRES THIS HAPPEN IN IRQ
-        CLC
-        RTS
+        JMP     $C400           ; IIGS REQUIRES THIS HAPPEN IN IRQ
 end
 export asm readTimer#2
         PHP
@@ -53,17 +69,45 @@ export asm readTimer#2
         PLP
         RTS
 end
+export asm readMouse#3
+        LDY     #$04
+        PHP
+        SEI
+        DEX
+        DEX
+        DEX
+        LDA     $0478,Y
+        STA     ESTKL+2,X
+        LDA     $0578,Y
+        STA     ESTKH+2,X
+        LDA     $04F8,Y
+        STA     ESTKL+1,X
+        LDA     $05F8,Y
+        STA     ESTKH+1,X
+        LDA     $0778,Y
+        STA     ESTKL,X
+        LDA     #$00
+        STA     ESTKH,X
+        PLP
+        RTS
+end
 export def mouseInit
     byte params[4]
     
-    //
-    // Hook mouse IRQ handler into ProDOS IRQ chain
-    //
-    params.0 = 2
-    params.1 = 0
-    params:2 = @servMouse
-    syscall($40, @params)
-    return rom <> 0
+    if rom
+        //
+        // Hook mouse IRQ handler into ProDOS IRQ chain
+        //
+        puts("serviceMouse @ $"); puth(@serviceMouse); putln; getc
+        params.0 = 2
+        params.1 = 0
+        params:2 = @serviceMouse
+        syscall($40, @params)
+        call(initMouseFW, $00, slot, page, $04)
+        call(setMouseFW,  $09, slot, page, $04)
+        return 0
+    fin
+    return -1
 end
 //
 // Identify Mouse card/slot and initialize
@@ -73,14 +117,32 @@ for rom = $C100 to $C700 step $0100
         //
         // Fix-up IRQ routine
         //
-        slot  = rom >> 8
-        index = slot << 4
-        servMouse:2 = rom
-        readMouse.1 = slot
-        readMouse.3 = index
-        readMouse:5 = rom
+        slot           = rom >> 8
+        index          = slot & $07
+        page           = index << 4
+        minClamp       = $0478
+        maxClamp       = $04F8
+        xMouse         = $0478 + index
+        yMouse         = $04F8 + index
+        statMouse      = $0778 + index
+        modeMouse      = $07F8 + index
+        setMouseFW     = rom + rom->$12
+        serveMouseFW   = rom + rom->$13
+        readMouseFW    = rom + rom->$14
+        clearMouseFW   = rom + rom->$15
+        posMouseFW     = rom + rom->$16
+        clampMouseFW   = rom + rom->$17
+        homeMouseFW    = rom + rom->$18
+        initMouseFW    = rom + rom->$19
+        serviceMouse:2 = serveMouseFW
+        serviceMouse:7 = statMouse
+        updateMouse.1  = slot
+        updateMouse.3  = page
+        updateMouse:5  = readMouseFW
+        readMouse.1    = index
         puts("Found Mouse in slot #"); putc('0' + ((rom >> 8) & $07)); putln
-        return
+        mouseInit
+        return modkeep
     fin
 next
 //
