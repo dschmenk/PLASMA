@@ -1,6 +1,5 @@
 const MACHID      = $BF98
 const iobuffer    = $0800
-const databuff    = $2000
 const RELADDR     = $1000
 const symtbl      = $0C00
 const freemem     = $0006
@@ -1157,9 +1156,9 @@ def volumes()#0
 
     params.0 = 2
     params.1 = 0
-    params:2 = databuff
+    params:2 = heap
     perr     = syscall($C5, @params)
-    strbuf   = databuff
+    strbuf   = heap
     for i = 0 to 15
         ^strbuf = ^strbuf & $0F
         if ^strbuf
@@ -1184,12 +1183,12 @@ def catalog(path)#0
     fin
     firstblk = 1
     repeat
-        if read(refnum, databuff, 512) == 512
-            entry = databuff + 4
+        if read(refnum, heap, 512) == 512
+            entry = heap + 4
             if firstblk
-                entrylen   = databuff.$23
-                entriesblk = databuff.$24
-                filecnt    = databuff:$25
+                entrylen   = heap->$23
+                entriesblk = heap->$24
+                filecnt    = heap=>$25
                 entry      = entry + entrylen
             fin
             for i = firstblk to entriesblk
@@ -1272,7 +1271,7 @@ def resetmemfiles()#0
     //
     // Close all files
     //
-    ^$BFD8 = 0
+    ^$BF94 = 0
     close(0)
     //
     // Set memory bitmap
@@ -1291,7 +1290,7 @@ def execsys(sysfile)#0
         striptrail(sysfile)
         refnum = open(sysfile)
         if refnum
-            len = read(refnum, databuff, $FFFF)
+            len = read(refnum, $2000, $FFFF)
             resetmemfiles()
             if len
                 strcpy(sysfile, $280)
@@ -1326,13 +1325,68 @@ def execmod(modfile)#1
     return -perr
 end
 //
+// Command line processor
+//
+def docmds#0
+    while 1
+        if ^getlnbuf
+            strcpy(@cmdln, getlnbuf)
+            when toupper(parsecmd(getlnbuf))
+                is 'C'
+                    catalog(getlnbuf)
+                    break
+                is 'P'
+                    pfxop(getlnbuf, SET_PFX)
+                    break
+                is '/'
+                    repeat
+                        prefix--
+                    until prefix[prefix] == '/'
+                    if prefix > 1
+                        pfxop(@prefix, SET_PFX)
+                    fin
+                    break
+                is 'V'
+                    volumes()
+                    break
+                is '-'
+                    execsys(getlnbuf)
+                    break
+                is '+'
+                    execmod(striptrail(getlnbuf))
+                    //
+                    // Clean up
+                    //
+                    resetmemfiles
+                    break
+                otherwise
+                    cout('?')
+            wend
+            if perr
+                prstr("ERR:$")
+                prbyte(perr)
+            else
+                prstr("OK")
+            fin
+            crout()
+        fin
+        prstr(pfxop(@prefix, GET_PFX))
+        rdstr($BA)
+    loop
+end
+//
+// Dummy definition to get free heap
+//
+def lastdef#0
+end
+//
 // Get heap start.
 //
-heap = *freemem
+heap = @lastdef
 //
 // Print PLASMA version
 //
-prstr("PLASMA 2.0 Dev 64K \n")//; prbyte(version.1); cout('.'); prbyte(version.0); crout
+prstr("PLASMA 2.0 Dev 64K\n")//; prbyte(version.1); cout('.'); prbyte(version.0); crout
 //
 // Init symbol table.
 //
@@ -1361,49 +1415,5 @@ else
     prstr("MEM FREE:$"); prword(availheap); crout
 fin
 perr = 0
-while 1
-    if ^getlnbuf
-        strcpy(@cmdln, getlnbuf)
-        when toupper(parsecmd(getlnbuf))
-            is 'C'
-                catalog(getlnbuf)
-                break
-            is 'P'
-                pfxop(getlnbuf, SET_PFX)
-                break
-            is '/'
-                repeat
-                    prefix--
-                until prefix[prefix] == '/'
-                if prefix > 1
-                    pfxop(@prefix, SET_PFX)
-                fin
-                break
-            is 'V'
-                volumes()
-                break
-            is '-'
-                execsys(getlnbuf)
-                break
-            is '+'
-                execmod(striptrail(getlnbuf))
-                //
-                // Clean up
-                //
-                resetmemfiles
-                break
-            otherwise
-                cout(perr)//cout('?')
-        wend
-        if perr
-            prstr("ERR:$")
-            prbyte(perr)
-        else
-            prstr("OK")
-        fin
-        crout()
-    fin
-    prstr(pfxop(@prefix, GET_PFX))
-    rdstr($BA)
-loop
+docmds
 done

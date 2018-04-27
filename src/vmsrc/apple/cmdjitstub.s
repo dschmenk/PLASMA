@@ -27,10 +27,6 @@ JITCODE =       $03E4
         INC     DSTH
         DEX                 ; STOP WHEN DST=$2000 REACHED
         BNE     -
-        LDA     #<_CMDEND
-        STA     SRCL
-        LDA     #>_CMDEND
-        STA     SRCH
 ;
 ; INIT VM ENVIRONMENT STACK POINTERS
 ;
