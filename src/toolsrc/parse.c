@@ -1688,6 +1688,7 @@ int parse_defs(void)
             next_line();
         } while (scantoken != END_TOKEN);
         scan();
+        infunc = 0;
         return (1);
     }
     return (scantoken == EOL_TOKEN);
