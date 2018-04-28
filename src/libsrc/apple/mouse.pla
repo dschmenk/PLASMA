@@ -92,44 +92,21 @@ export asm readMouse#3
         PLP
         RTS
 end
-export def mouseInit
-    byte params[4]
-    
-    if rom
-        //
-        // Hook mouse IRQ handler into ProDOS IRQ chain
-        //
-        puts("serviceMouse @ $"); puth(@serviceMouse); putln
-        params.0 = 2
-        params.1 = 0
-        params:2 = @serviceMouse
-        syscall($40, @params)
-        call(initMouseFW, $00, slot, page, $04)
-        call(setMouseFW,  $07, slot, page, $04)
-        return 0
-    fin
-    return -1
-end
-def printmouse#0
-    word x, y
-    byte stat
-    
-    while ^$C000 < 128
-        x, y, stat = readMouse
-        ^$24 = ^$20
-        puti(x); puts(", ")
-        puti(y); puts(", $")
-        putb(stat); puts("   ")
-    loop
-    ^$C010
-end
 //
 // Identify Mouse card/slot and initialize
 //
 for rom = $C100 to $C700 step $0100
     if rom->5 == $38 and rom->7 == $18 and rom->11 == $01 and rom->12 == $20
+        puts("Found Mouse in slot #"); putc('0' + ((rom >> 8) & $07)); putln
         //
-        // Fix-up IRQ routine
+        // Hook mouse IRQ handler into ProDOS IRQ chain
+        //
+        params.0 = 2
+        params.1 = 0
+        params:2 = @serviceMouse
+        syscall($40, @params)
+        //
+        // Set values
         //
         slot           = rom >> 8
         index          = slot & $07
@@ -148,15 +125,16 @@ for rom = $C100 to $C700 step $0100
         clampMouseFW   = rom + rom->$17
         homeMouseFW    = rom + rom->$18
         initMouseFW    = rom + rom->$19
+        //
+        // Fix-up IRQ routine
+        //
         serviceMouse:2 = serveMouseFW
         serviceMouse:7 = statMouse
         updateMouse.1  = slot
         updateMouse.3  = page
         updateMouse:5  = readMouseFW
         readMouse.1    = index
-        puts("Found Mouse in slot #"); putc('0' + ((rom >> 8) & $07)); putln
-        mouseInit
-        printmouse
+        call(initMouseFW, $00, slot, page, $04)
         return modkeep
     fin
 next
