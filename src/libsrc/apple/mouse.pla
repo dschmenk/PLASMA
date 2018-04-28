@@ -18,7 +18,7 @@ const MOVE_INT_ENABLE  = $02
 // Mouse driver
 //
 word rom
-byte slot, index, page
+byte slot, index, page, vblInt, mouInt
 byte params[]
 word setMouseFW, serveMouseFW, readMouseFW, clearMouseFW, posMouseFW, clampMouseFW, homeMouseFW, initMouseFW
 word minClamp, maxClamp, xMouse, yMouse, statMouse, modeMouse
@@ -29,7 +29,8 @@ end
 // Serve Mouse/VBL IRQ
 //
 asm serviceMouse#0
-TIMER   =       $400+36 ; $FB
+VBLINT  =       $400            ; DUMMY VALUES TO BE FIXED-UP
+MOUINT  =       $401
         CLD
         JSR     $C400
         BCS     MOUEX           ; NOT MOUSE INT
@@ -37,46 +38,29 @@ TIMER   =       $400+36 ; $FB
         TYA                     ; WAS IT VBL?
         AND     #$08
         BEQ     +               ; NOPE, MOVE OR BUTTON
-        INC     TIMER
-        BNE     +
-        INC     TIMER+1
-        BNE     +
-        INC     TIMER+2
-        BNE     +
-        INC     TIMER+3
+end
+asm vblEvent
+        INC     VBLINT          ; INC VBL EVENT
 +       TYA                     ; MOUSE MOVE OR BUTTON ACTIVE
         AND     #$86
         BNE     +
 MOUEX   RTS
 end
+asm mouseEvent
++       INC     MOUINT          ; INC MOUSE EVENT
+end
 asm updateMouse#0
-+       LDX     #$C4
+        LDX     #$C4
         LDY     #$40
         JMP     $C400           ; IIGS REQUIRES THIS HAPPEN IN IRQ
 end
-export asm readTimer#2
-        PHP
-        SEI
-        DEX
-        DEX
-        LDA     TIMER
-        STA     ESTKL+1,X
-        LDA     TIMER+1
-        STA     ESTKH+1,X
-        LDA     TIMER+2
-        STA     ESTKL,X
-        LDA     TIMER+3
-        STA     ESTKH,X
-        PLP
-        RTS
-end
 export asm readMouse#3
         LDY     #$04
+        DEX
+        DEX
+        DEX
         PHP
         SEI
-        DEX
-        DEX
-        DEX
         LDA     $0478,Y
         STA     ESTKL+2,X
         LDA     $0578,Y
@@ -91,6 +75,29 @@ export asm readMouse#3
         STA     ESTKH,X
         PLP
         RTS
+end
+//
+// Check for VBL (timer) and Mouse events
+//
+asm chkEvt(addr)
+        LDA     ESTKL,X
+        STA     ESTKH-1,X
+        PHP
+        SEI
+        LDA     (ESTKH-1,X)     ; READ INT COUNT
+        TAY
+        LDA     #$00
+        STA     (ESTKH-1,X)     ; CLEAR INT COUNT
+        PLP
+        STY     ESTKL,X         ; RETURN INT COUNT
+        STA     ESTKH,X
+        RTS
+end
+def chkTimer
+    return chkEvt(@vblInt)
+end
+def chkMouse
+    return chkEvt(@mouInt)
 end
 //
 // Identify Mouse card/slot and initialize
@@ -130,6 +137,8 @@ for rom = $C100 to $C700 step $0100
         //
         serviceMouse:2 = serveMouseFW
         serviceMouse:7 = statMouse
+        vblEvent.1     = @vblInt
+        mouseEvent.1   = @mouInt
         updateMouse.1  = slot
         updateMouse.3  = page
         updateMouse:5  = readMouseFW
