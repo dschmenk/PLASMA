@@ -191,7 +191,7 @@ def readUDP(ipsrc, portsrc, data, len, param)
             fin
             if param == 512 // Size of initial read
                 param = fileio:read(ref, buff+datBytes, 512)
-                if netscii
+                if type == $04 // TXT type
                     xlat($0D, $0A, buff+datBytes, param)
                 fin
                 block++
@@ -228,7 +228,7 @@ def writeUDP(ipsrc, portsrc, data, len, param)
                 break
             fin
             len = len - t_datPkt
-            if netscii
+            if type == $04 // TXT type
                 xlat($0A, $0D, data+datBytes, len)
             fin
             if fileio:write(ref, data+datBytes, len) <> len
@@ -259,6 +259,8 @@ def writeUDP(ipsrc, portsrc, data, len, param)
     return 0
 end
 def servUDP(ipsrc, portsrc, data, len, param)
+    byte info[24]
+    
     when *data
         is RRQ // Read request
             //
@@ -284,12 +286,16 @@ def servUDP(ipsrc, portsrc, data, len, param)
                 iNet:sendUDP(portTFTP, ipsrc, portsrc, @tftpError, t_errPkt)
                 return 0
             fin
+            info.0 = $0A
+            info:1 = @filename
+            syscall($C4, @info)
+            type = info.4
             puts("Reading file: "); puts(@filename); putln
             TID              = (TID + TID_INC) | $1000
             block            = 1
             buff=>datBlock   = swab(block)
             len = fileio:read(ref, buff+datBytes, 512)
-            if netscii
+            if type == $04 // TXT type
                 xlat($0D, $0A, buff+datBytes, 512)
             fin
             portTID = iNet:openUDP(TID, @readUDP, len)
