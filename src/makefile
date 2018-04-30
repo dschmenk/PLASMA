@@ -30,6 +30,7 @@ SNDSEQ     = rel/apple/SNDSEQ\#FE1000
 PLAYSEQ    = rel/apple/PLAYSEQ\#FE1000
 SANITY     = rel/SANITY\#FE1000
 RPNCALC    = rel/RPNCALC\#FE1000
+MOUSE      = rel/apple/MOUSE\#FE1000
 UTHERNET2  = rel/apple/UTHERNET2\#FE1000
 UTHERNET   = rel/apple/UTHERNET\#FE1000
 ETHERIP    = rel/ETHERIP\#FE1000
@@ -76,7 +77,7 @@ TXTTYPE	= .TXT
 #SYSTYPE	= \#FF2000
 #TXTTYPE	= \#040000
 
-apple: $(PLVMZP_APL) $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVM802) $(PLVM03) $(CMD) $(PLASMAPLASM) $(CODEOPT) $(ARGS) $(MEMMGR) $(MEMTEST) $(FIBER) $(FIBERTEST) $(LONGJMP) $(ED) $(MON) $(SOS) $(ROD) $(SIEVE) $(UTHERNET2) $(UTHERNET) $(ETHERIP) $(INET) $(DHCP) $(HTTPD) $(TFTPD) $(ROGUE) $(ROGUEMAP) $(ROGUECOMBAT) $(GRAFIX) $(GFXDEMO) $(DGR) $(DGRTEST) $(FILEIO_APL) $(CONIO_APL) $(JOYBUZZ) $(PORTIO) $(SPIPORT) $(SDFAT) $(FATCAT) $(FATGET) $(FATPUT) $(FATWDSK) $(FATRDSK) $(SANE) $(FPSTR) $(FPU) $(SANITY) $(RPNCALC) $(SNDSEQ) $(PLAYSEQ)
+apple: $(PLVMZP_APL) $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVM802) $(PLVM03) $(CMD) $(PLASMAPLASM) $(CODEOPT) $(ARGS) $(MEMMGR) $(MEMTEST) $(FIBER) $(FIBERTEST) $(LONGJMP) $(ED) $(MON) $(SOS) $(ROD) $(SIEVE) $(MOUSE) $(UTHERNET2) $(UTHERNET) $(ETHERIP) $(INET) $(DHCP) $(HTTPD) $(TFTPD) $(ROGUE) $(ROGUEMAP) $(ROGUECOMBAT) $(GRAFIX) $(GFXDEMO) $(DGR) $(DGRTEST) $(FILEIO_APL) $(CONIO_APL) $(JOYBUZZ) $(PORTIO) $(SPIPORT) $(SDFAT) $(FATCAT) $(FATGET) $(FATPUT) $(FATWDSK) $(FATRDSK) $(SANE) $(FPSTR) $(FPU) $(SANITY) $(RPNCALC) $(SNDSEQ) $(PLAYSEQ)
 	-rm vmsrc/plvmzp.inc
 
 c64: $(PLVMZP_C64) $(PLASM) $(PLVM) $(PLVMC64) 
@@ -264,6 +265,10 @@ $(HTTPD): samplesrc/httpd.pla $(PLVM02) $(PLASM)
 $(TFTPD): samplesrc/tftpd.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AMOW < samplesrc/tftpd.pla > samplesrc/tftpd.a
 	acme --setpc 4094 -o $(TFTPD) samplesrc/tftpd.a
+
+$(MOUSE): libsrc/apple/mouse.pla $(PLVM02) $(PLASM)
+	./$(PLASM) -AMOW < libsrc/apple/mouse.pla > libsrc/apple/mouse.a
+	acme --setpc 4094 -o $(MOUSE) libsrc/apple/mouse.a
 
 $(UTHERNET): libsrc/apple/uthernet.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AMOW < libsrc/apple/uthernet.pla > libsrc/apple/uthernet.a

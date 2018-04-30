@@ -1447,6 +1447,7 @@ ICALX   LDA     ESTKL,X
         PHP
         PLA
         STA     PSR
+        SEI
         STA     ALTRDON
         PLA
         STA     IPH
