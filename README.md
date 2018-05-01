@@ -1,5 +1,5 @@
-# 3/13/2018 PLASMA 1.1 Available!
-[Download and read the Release Notes](https://github.com/dschmenk/PLASMA/blob/master/doc/Version%201.1.md)
+# 4/29/2018 PLASMA 1.2 Available!
+[Download and read the Release Notes](https://github.com/dschmenk/PLASMA/blob/master/doc/Version%201.2.md)
 
 # The PLASMA Programming Language
 
