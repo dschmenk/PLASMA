@@ -8,7 +8,7 @@ word rom
 byte params[]
 byte slot, index, page
 word setMouseFW
-byte vblDiv, vblInt, mouInt
+byte vblDiv, vblInt, mouInt, bttnPrev
 asm equates
     !SOURCE "vmsrc/plvmzp.inc"
 end
@@ -18,10 +18,12 @@ end
 asm serviceMouse#0
 VBLINT  =       $400            ; DUMMY VALUES TO BE FIXED-UP
 MOUINT  =       $401
+LASTBTTN=       $402
         CLD
         JSR     $C400
-        BCS     MOUEX           ; NOT MOUSE INT
-        LDY     $0778+4         ; CHECK MOUSE INT CAUSE
+        BCC     +
+        RTS                     ; NOT MOUSE INT
++       LDY     $0778+4         ; CHECK MOUSE INT CAUSE
         TYA                     ; WAS IT VBL?
         AND     #$08
         BEQ     +               ; NOPE, MOVE OR BUTTON
@@ -30,11 +32,18 @@ asm vblEvent
         INC     VBLINT          ; INC VBL EVENT
 +       TYA                     ; MOUSE MOVE OR BUTTON ACTIVE
         AND     #$86
-        BNE     +
-MOUEX   RTS
+end
+asm bttnEvent
+        EOR     LASTBTTN
+        BEQ     +
 end
 asm mouseEvent
-+       INC     MOUINT          ; INC MOUSE EVENT
+        INC     MOUINT          ; INC MOUSE EVENT
++       TYA
+        AND     #$80
+end
+asm updateBttn
+        STA     LASTBTTN
 end
 asm updateMouse
         LDX     #$C4
@@ -176,9 +185,11 @@ for rom = $C100 to $C700 step $0100
         // Fix-up IRQ routine
         //
         serviceMouse:2 = rom + rom->$13 // serveMouseFW
-        serviceMouse:7 = $0778+index
+        serviceMouse:8 = $0778+index
         vblEvent:1     = @vblInt
+        bttnEvent:1    = @bttnPrev
         mouseEvent:1   = @mouInt
+        updateBttn:1   = @bttnPrev
         updateMouse.1  = slot
         updateMouse.3  = page
         updateMouse:5  = rom + rom->$14 // readMouseFW
@@ -190,7 +201,7 @@ next
 //
 // Not found
 //
-rom = 0
+return -1
 done
 
 What follows is the relevant parts to the mouse driver for VM02
