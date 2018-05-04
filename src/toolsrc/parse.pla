@@ -80,8 +80,6 @@ def calc_binaryop(op)#0
     push_val(val1, size1, type1)
 end
 def parse_constterm
-    word val
-    byte size, type
 
     when scan
         is OPEN_PAREN_TKN
@@ -598,7 +596,7 @@ def parse_set(codeseq)
     return codeseq
 end
 def parse_stmnt
-    byte type, elem_type, elem_size, cfnvals, prev_for
+    byte type, elem_type, elem_size, cfnvals
     word seq, fromseq, toseq, tag_prevbrk, tag_prevcnt, tag_else, tag_endif, tag_while, tag_wend
     word tag_repeat, tag_for, tag_choice, tag_of, idptr, addr, stepdir
     word caseconst, casecnt, caseval, casetag, i
@@ -652,8 +650,6 @@ def parse_stmnt
             if token <> FIN_TKN; exit_err(ERR_MISS|ERR_CLOSE|ERR_STATE); fin
             break
         is WHILE_TKN
-            prev_for    = infor
-            infor       = FALSE
             tag_while   = new_tag(RELATIVE_FIXUP)
             tag_wend    = new_tag(RELATIVE_FIXUP)
             tag_prevcnt = cont_tag
@@ -678,11 +674,8 @@ def parse_stmnt
             emit_tag(tag_wend)
             break_tag = tag_prevbrk
             cont_tag  = tag_prevcnt
-            infor     = prev_for
             break
         is REPEAT_TKN
-            prev_for    = infor
-            infor       = FALSE
             tag_repeat  = new_tag(RELATIVE_FIXUP)
             tag_prevbrk = break_tag
             break_tag   = new_tag(RELATIVE_FIXUP)
@@ -706,11 +699,8 @@ def parse_stmnt
             emit_seq(seq)
             emit_tag(break_tag)
             break_tag = tag_prevbrk
-            infor     = prev_for
             break
         is FOR_TKN
-            prev_for    = infor
-            infor       = TRUE
             stack_loop  = stack_loop + 2
             tag_for     = new_tag(RELATIVE_FIXUP)
             tag_prevcnt = cont_tag
@@ -784,13 +774,16 @@ def parse_stmnt
                 fin
             fin
             emit_tag(break_tag)
+            if type & LOCAL_TYPE
+                if type & BYTE_TYPE; emit_slb(addr); else; emit_slw(addr); fin
+            else
+                if type & BYTE_TYPE; emit_sab(addr, 0); else; emit_saw(addr, 0); fin
+            fin
+            emit_code(DROP_CODE)
             break_tag  = tag_prevbrk
             stack_loop = stack_loop - 2
-            infor      = prev_for
             break
         is CASE_TKN
-            prev_for    = infor
-            infor       = FALSE
             tag_prevbrk = break_tag
             break_tag   = new_tag(RELATIVE_FIXUP)
             tag_choice  = new_tag(RELATIVE_FIXUP)
@@ -863,11 +856,9 @@ def parse_stmnt
             heaprelease(caseval)
             emit_tag(break_tag)
             break_tag = tag_prevbrk
-            infor     = prev_for
             break
         is BREAK_TKN
             if break_tag
-                if infor; emit_code(DROP2_CODE); fin
                 emit_branch(break_tag)
             else
                 exit_err(ERR_INVAL|ERR_STATE)
@@ -881,15 +872,15 @@ def parse_stmnt
             fin
             break
         is RETURN_TKN
+            i = stack_loop
+            while i >= 2
+                emit_code(DROP2_CODE)
+                i = i - 2
+            loop
+            if i
+                emit_code(DROP_CODE)
+            fin
             if infunc
-                i = stack_loop
-                while i >= 2
-                    emit_code(DROP2_CODE)
-                    i = i - 2
-                loop
-                if i
-                    emit_code(DROP_CODE)
-                fin
                 seq, cfnvals = parse_list
                 emit_seq(seq)
                 if cfnvals > infuncvals

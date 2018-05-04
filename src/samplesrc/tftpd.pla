@@ -1,0 +1,503 @@
+//
+// TFTP Daemon
+//
+include "inc/cmdsys.plh"
+include "inc/inet.plh"
+include "inc/fileio.plh"
+include "inc/conio.plh"
+//
+// TFTP values
+//
+const TFTP_PORT = 69
+const TID_INC   = $0010
+const RRQ       = $0100
+const WRQ       = $0200
+const DATAPKT   = $0300
+const ACKPKT    = $0400
+const ERRPKT    = $0500
+struc t_errPkt
+    word errOp
+    word errCode
+    byte errStr[]
+    byte errStrNull
+end
+struc t_ackPkt
+    word ackOp
+    word ackBlock
+end
+struc t_datPkt
+    word datOp
+    word datBlock
+    byte datBytes[]
+end
+res[t_errPkt] tftpError = $00, $05, $00, $00, $00
+res[t_ackPkt] tftpAck   = $00, $04, $00, $00
+//
+// Current file operations
+//
+byte ref, type, , netscii, filename[256]
+word aux, block
+word buff, TID = $1001
+word portTFTP, portTID
+//
+// Swap bytes in word
+//
+asm swab(val)
+        !SOURCE "vmsrc/plvmzp.inc"
+        LDA     ESTKL,X
+        LDY     ESTKH,X
+        STA     ESTKH,X
+        STY     ESTKL,X
+        RTS
+end
+//
+// Translate 'in' value to 'out' value
+//
+asm xlat(in, out, buf, len)#0
+        INX
+        INX
+        INX
+        INX
+        LDA     ESTKL-4,X
+        ORA     ESTKH-4,X
+        BEQ     XLATEX
+        LDA     ESTKL-3,X
+        STA     SRCL
+        LDA     ESTKH-3,X
+        STA     SRCH
+        LDA     ESTKL-1,X
+        LDY     ESTKL-4,X
+        BEQ     XLATLP
+        INC     ESTKH-4,X
+        LDY     #$00
+XLATLP  CMP     (SRC),Y
+        BNE     +
+        LDA     ESTKL-2,X
+        STA     (SRC),Y
+        LDA     ESTKL-1,X
++       INY
+        BNE     +
+        INC     DSTH
+        INC     SRCH
++       DEC     ESTKL-4,X
+        BNE     XLATLP
+        DEC     ESTKH-4,X
+        BNE     XLATLP
+XLATEX  RTS
+end
+//
+// Convert byte to two hex chars
+//
+def btoh(cptr, b)#0
+    byte h
+
+    h = ((b >> 4) & $0F) + '0'
+    if h > '9'
+        h = h + 7
+    fin
+    ^cptr = h
+    cptr++
+    h = (b & $0F) + '0'
+    if h > '9'
+        h = h + 7
+    fin
+    ^cptr = h
+end
+
+def hexByte(hexChars)
+    byte lo, hi
+
+    lo = toupper(^(hexChars + 1)) - '0'
+    if lo > 9
+        lo = lo - 7
+    fin
+    hi = toupper(^hexChars) - '0'
+    if hi > 9
+        hi = hi - 7
+    fin
+    return (hi << 4) | lo
+end
+def hexWord(hexChars)
+    return (hexByte(hexChars) << 8) | hexByte(hexChars + 2)
+end
+def mkProName(netName, proName)#3
+    byte n, l, ascii, proType
+    word proAux
+
+    proType = $02   // default to BIN
+    proAux  = $0000 // default to 0
+    //
+    // Check for CiderPress style extension
+    //
+    for l = 0 to 255
+        if netName->[l] == 0; break; fin
+    next
+    ascii = toupper(netName->[l + 1]) == 'N' // Netscii mode
+    if l > 7 and ^(netName + l - 7) == '#'
+        proType = hexByte(netName + l - 6)
+        proAux  = hexWord(netName + l - 4)
+        l = l - 7
+    fin
+    memcpy(proName + 1, netName, l)
+    ^proName = l
+    return ascii, proType, proAux
+end
+def mkNetName(proName, netName)
+    word l, n
+    byte fileinfo[t_fileinfo]
+
+    if !fileio:getfileinfo(proName, @fileinfo)
+        //
+        // Scan backward looking for dir seperator
+        //
+        l = ^proName
+        for n = l downto 1
+            if ^(proName + n) == '/'
+                break
+            fin
+        next
+        memcpy(netName + 1, proName + 1 + n, l - n)
+        ^netName = l - n + 7
+        //
+        // Build CiderPress style extension
+        //
+        n = netName + ^netName - 6
+        ^n = '#'
+        btoh(n + 1, fileinfo.file_type)
+        btoh(n + 3, fileinfo.aux_type.1)
+        btoh(n + 5, fileinfo.aux_type)
+    else
+        //
+        // Error getting info on file
+        //
+        puts("Error reading "); puts(proName); putln
+        return -1
+    fin
+    return 0
+end
+
+def readUDP(ipsrc, portsrc, data, len, param)
+    word err
+
+    err = 0
+    when *data
+        is $0500 // Error
+            err = *data
+        is $0400 // Ack
+            if swab(data=>ackBlock) <> block
+                puts("RRQ: Out-of-sequence block\n")
+                err = $0800 // Out-of-sequence block
+                break
+            fin
+            if param == 512 // Size of initial read
+                param = fileio:read(ref, buff+datBytes, 512)
+                if type == $04 // TXT type
+                    xlat($0D, $0A, buff+datBytes, param)
+                fin
+                block++
+                buff=>datBlock = swab(block)
+                iNet:sendUDP(portTID, ipsrc, portsrc, buff, t_datPkt + param)
+            fin
+            if err
+                tftpError:errCode = err
+                iNet:sendUDP(portTID, ipsrc, portsrc, @tftpError, t_errPkt)
+            fin
+            if param < 512 or err
+                //
+                // All done
+                //
+                iNet:closeUDP(portTID)
+                fileio:close(ref)
+                ref = 0
+            fin
+            break
+        otherwise
+            puts("TFTP: RRQ Unexpected packet opcode: $"); puth(*data); putln
+    wend
+    return 0
+end
+def writeUDP(ipsrc, portsrc, data, len, param)
+    word err
+
+    err = 0
+    when *data
+        is $0300 // Data packet
+            if swab(data=>datBlock) <> block
+                puts("WRQ: Out-of-sequence block\n")
+                err = $0800 // Out-of-sequence block
+                break
+            fin
+            len = len - t_datPkt
+            if type == $04 // TXT type
+                xlat($0A, $0D, data+datBytes, len)
+            fin
+            if fileio:write(ref, data+datBytes, len) <> len
+                puts("WRQ: File write error\n")
+                tftpError:errCode = $0300 // Disk full error
+                break
+            fin
+            if not err
+                tftpAck:ackBlock = swab(block)
+                block++
+                iNet:sendUDP(portTID, ipsrc, portsrc, @tftpAck, t_ackPkt)
+            else
+                tftpError:errCode = err
+                iNet:sendUDP(portTID, ipsrc, portsrc, @tftpError, t_errPkt)
+            fin
+            if len < 512 or err
+                //
+                // All done
+                //
+                iNet:closeUDP(portTID)
+                fileio:close(ref)
+                ref = 0
+            fin
+            break
+        otherwise
+            puts("WRQ: Unexpected packet opcode: $"); puth(*data); putln
+    wend
+    return 0
+end
+def servUDP(ipsrc, portsrc, data, len, param)
+    byte info[24]
+    
+    when *data
+        is RRQ // Read request
+            //
+            // Initiate file read
+            //
+            if ref
+                //
+                // File already open and active
+                //
+                tftpError:errCode = $0300 // Allocation exceeded
+                iNet:sendUDP(portTFTP, ipsrc, portsrc, @tftpError, t_errPkt)
+                return 0
+            fin
+            //
+            // Extract filename
+            //
+            netscii, type, aux = mkProName(data + 2, @filename)
+            ref = fileio:open(@filename)
+            if not ref
+                puts("Error opening file: "); puts(@filename)
+                puts(", Error: "); putb(perr); putln
+                tftpError:errCode = $0100 // File not found
+                iNet:sendUDP(portTFTP, ipsrc, portsrc, @tftpError, t_errPkt)
+                return 0
+            fin
+            info.0 = $0A
+            info:1 = @filename
+            syscall($C4, @info)
+            type = info.4
+            puts("Reading file: "); puts(@filename); putln
+            TID              = (TID + TID_INC) | $1000
+            block            = 1
+            buff=>datBlock   = swab(block)
+            len = fileio:read(ref, buff+datBytes, 512)
+            if type == $04 // TXT type
+                xlat($0D, $0A, buff+datBytes, 512)
+            fin
+            portTID = iNet:openUDP(TID, @readUDP, len)
+            iNet:sendUDP(portTID, ipsrc, portsrc, buff, t_datPkt + len)
+            break
+        is WRQ // Write request
+            //
+            // Initiate file write
+            //
+            if ref
+                //
+                // File already open and active
+                //
+                tftpError:errCode = $0300 // Allocation exceeded
+                iNet:sendUDP(portTFTP, ipsrc, portsrc, @tftpError, t_errPkt)
+                return 0
+            fin
+            //
+            // Extract filename
+            //
+            netscii, type, aux = mkProName(data + 2, @filename)
+            fileio:destroy(@filename)
+            if fileio:create(@filename, type, aux)
+                puts("Create file error: "); putb(perr); putln
+            fin
+            ref = fileio:open(@filename)
+            if not ref
+                puts("Error opening file: "); puts(@filename)
+                puts(", Error: "); putb(perr); putln
+                tftpError:errCode = $0200 // Access violation
+                iNet:sendUDP(portTFTP, ipsrc, portsrc, @tftpError, t_errPkt)
+                return 0
+            fin
+            puts("Writing file: "); puts(@filename); putln
+            TID              = (TID + TID_INC) | $1000
+            block            = 1
+            tftpAck:ackBlock = 0
+            portTID = iNet:openUDP(TID, @writeUDP, 0)
+            iNet:sendUDP(portTID, ipsrc, portsrc, @tftpAck, t_ackPkt)
+            break
+        otherwise
+            puts("TFTP: Server Unexpected packet opcode: $"); puth(*data); putln
+    wend
+    return 0
+end
+
+if !iNet:initIP()
+    return -1
+fin
+puts("TFTP Server Version 0.1\n")
+portTFTP = iNet:openUDP(TFTP_PORT, @servUDP, 0)
+//
+// Alloc aligned file/io buffers
+//
+buff = heapalloc(t_datPkt + 512)
+buff=>datOp = $0300 // Data op
+//
+// Service IP
+//
+repeat
+    iNet:serviceIP()
+until conio:keypressed()
+done
+
+Experpts from: RFC 1350, TFTP Revision 2, July 1992
+
+TFTP Formats
+
+   Type   Op #     Format without header
+
+          2 bytes    string   1 byte     string   1 byte
+          -----------------------------------------------
+   RRQ/  | 01/02 |  Filename  |   0  |    Mode    |   0  |
+   WRQ    -----------------------------------------------
+          2 bytes    2 bytes       n bytes
+          ---------------------------------
+   DATA  | 03    |   Block #  |    Data    |
+          ---------------------------------
+          2 bytes    2 bytes
+          -------------------
+   ACK   | 04    |   Block #  |
+          --------------------
+          2 bytes  2 bytes        string    1 byte
+          ----------------------------------------
+   ERROR | 05    |  ErrorCode |   ErrMsg   |   0  |
+          ----------------------------------------
+
+Initial Connection Protocol for reading a file
+
+   1. Host  A  sends  a  "RRQ"  to  host  B  with  source= A's TID,
+      destination= 69.
+
+   2. Host B sends a "DATA" (with block number= 1) to host  A  with
+      source= B's TID, destination= A's TID.
+
+Error Codes
+
+   Value     Meaning
+
+   0         Not defined, see error message (if any).
+   1         File not found.
+   2         Access violation.
+   3         Disk full or allocation exceeded.
+   4         Illegal TFTP operation.
+   5         Unknown transfer ID.
+   6         File already exists.
+   7         No such user.
+
+Internet User Datagram Header [2]
+
+   (This has been included only for convenience.  TFTP need not be
+   implemented on top of the Internet User Datagram Protocol.)
+
+     Format
+
+    0                   1                   2                   3
+    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |          Source Port          |       Destination Port        |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+   |            Length             |           Checksum            |
+   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+
+   Values of Fields
+
+
+   Source Port     Picked by originator of packet.
+
+   Dest. Port      Picked by destination machine (69 for RRQ or WRQ).
+
+   Length          Number of bytes in UDP packet, including UDP header.
+
+   Checksum        Reference 2 describes rules for computing checksum.
+                   (The implementor of this should be sure that the
+                   correct algorithm is used here.)
+                   Field contains zero if unused.
+
+   Note: TFTP passes transfer identifiers (TID's) to the Internet User
+   Datagram protocol to be used as the source and destination ports.
+
+
+   A transfer is established by sending a request (WRQ to write onto a
+   foreign file system, or RRQ to read from it), and receiving a
+   positive reply, an acknowledgment packet for write, or the first data
+   packet for read.  In general an acknowledgment packet will contain
+   the block number of the data packet being acknowledged.  Each data
+   packet has associated with it a block number; block numbers are
+   consecutive and begin with one.  Since the positive response to a
+   write request is an acknowledgment packet, in this special case the
+   block number will be zero.  (Normally, since an acknowledgment packet
+   is acknowledging a data packet, the acknowledgment packet will
+   contain the block number of the data packet being acknowledged.)  If
+   the reply is an error packet, then the request has been denied.
+
+   In order to create a connection, each end of the connection chooses a
+   TID for itself, to be used for the duration of that connection.  The
+   TID's chosen for a connection should be randomly chosen, so that the
+   probability that the same number is chosen twice in immediate
+   succession is very low.  Every packet has associated with it the two
+   TID's of the ends of the connection, the source TID and the
+   destination TID.  These TID's are handed to the supporting UDP (or
+   other datagram protocol) as the source and destination ports.  A
+   requesting host chooses its source TID as described above, and sends
+   its initial request to the known TID 69 decimal (105 octal) on the
+   serving host.  The response to the request, under normal operation,
+   uses a TID chosen by the server as its source TID and the TID chosen
+   for the previous message by the requestor as its destination TID.
+   The two chosen TID's are then used for the remainder of the transfer.
+
+   As an example, the following shows the steps used to establish a
+   connection to write a file.  Note that WRQ, ACK, and DATA are the
+   names of the write request, acknowledgment, and data types of packets
+   respectively.  The appendix contains a similar example for reading a
+   file.
+
+      1. Host A sends  a  "WRQ"  to  host  B  with  source=  A's  TID,
+         destination= 69.
+
+      2. Host  B  sends  a "ACK" (with block number= 0) to host A with
+         source= B's TID, destination= A's TID.
+
+   At this point the connection has been established and the first data
+   packet can be sent by Host A with a sequence number of 1.  In the
+   next step, and in all succeeding steps, the hosts should make sure
+   that the source TID matches the value that was agreed on in steps 1
+   and 2.  If a source TID does not match, the packet should be
+   discarded as erroneously sent from somewhere else.  An error packet
+   should be sent to the source of the incorrect packet, while not
+   disturbing the transfer.  This can be done only if the TFTP in fact
+   receives a packet with an incorrect TID.  If the supporting protocols
+   do not allow it, this particular error condition will not arise.
+
+   The following example demonstrates a correct operation of the
+   protocol in which the above situation can occur.  Host A sends a
+   request to host B. Somewhere in the network, the request packet is
+   duplicated, and as a result two acknowledgments are returned to host
+   A, with different TID's chosen on host B in response to the two
+   requests.  When the first response arrives, host A continues the
+   connection.  When the second response to the request arrives, it
+   should be rejected, but there is no reason to terminate the first
+   connection.  Therefore, if different TID's are chosen for the two
+   connections on host B and host A checks the source TID's of the
+   messages it receives, the first connection can be maintained while
+   the second is rejected by returning an error packet.

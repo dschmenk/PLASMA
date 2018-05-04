@@ -1,6 +1,5 @@
 const MACHID      = $BF98
 const iobuffer    = $0800
-const databuff    = $2000
 const RELADDR     = $1000
 const symtbl      = $0C00
 const freemem     = $0006
@@ -43,8 +42,8 @@ word syspath
 word syscmdln
 word            = @execmod, @open, @close, @read, @write
 byte perr
-byte jitcount   = $10
-byte jitsize    = $FF
+byte jitcount   = 0
+byte jitsize    = 0
 //
 // Working input buffer overlayed with strings table
 //
@@ -121,20 +120,12 @@ word sysmodsym  = @exports
 //
 word systemflags = 0
 word heap
-word xheap       = $0800
 word lastsym     = symtbl
 //
 // Utility functions
 //
 //asm equates included from cmdstub.s
 //
-asm saveX#0
-        STX     XREG+1
-end
-asm restoreX#0
-XREG    LDX     #$00
-        RTS
-end
 // CALL PRODOS
 // SYSCALL(CMD, PARAMS)
 //
@@ -202,14 +193,6 @@ end
 asm exec()#0
         BIT     ROMEN
         JMP     $2000
-end
-//
-// EXIT
-//
-asm reboot()#0
-        BIT     ROMEN
-        DEC     $03F4       ; INVALIDATE POWER-UP BYTE
-        JMP     ($FFFC)     ; RESET
 end
 //
 // SET MEMORY TO VALUE
@@ -931,39 +914,6 @@ def releaseheap(newheap)#1
     heap = newheap
     return @newheap - heap
 end
-def allocxheap(size)#1
-    word xaddr
-    xaddr = xheap
-    xheap = xheap + size
-    if systemflags & restxt1
-        if uword_isle(xaddr, $0800) and uword_isgt(xheap, $0400)
-            xaddr = $0800
-            xheap = xaddr + size
-        fin
-    fin
-    if systemflags & restxt2
-        if uword_isle(xaddr, $0C00) and uword_isgt(xheap, $0800)
-            xaddr = $0C00
-            xheap = xaddr + size
-        fin
-    fin
-    if systemflags & resxhgr1
-        if uword_isle(xaddr, $4000) and uword_isgt(xheap, $2000)
-            xaddr = $4000
-            xheap = xaddr + size
-        fin
-    fin
-    if systemflags & resxhgr2
-        if uword_isle(xaddr, $6000) and uword_isgt(xheap, $4000)
-            xaddr = $6000
-            xheap = xaddr + size
-        fin
-    fin
-    if uword_isge(xheap, $BF00)
-        return 0
-    fin
-    return xaddr
-end
 //
 // Symbol table routines.
 //
@@ -1009,29 +959,29 @@ def lookupextern(esd, index)#1
     fin
     return 0
 end
-def adddef(bank, addr, deflast)#1
+def adddef(addr, deflast)#1
     word defentry
     defentry = *deflast
     *deflast = defentry + 5
     defentry->0 = $20
-    defentry=>1 = bank ?? $03DC :: $03D6 // JSR $03DC (AUX MEM INTERP) or $03D6 (MAIN MEM INTERP)
+    defentry=>1 = $03D6
     defentry=>3 = addr
     defentry->5 = 0 // NULL out next entry
     return defentry
 end
 def loadmod(mod)#1
-    word rdlen, modsize, bytecode, codefix, defofst, defcnt, init, fixup
+    word rdlen, modsize, bytecode, codefix, defofst, defcnt, init, initcode[], fixup
     word addr, defaddr, modaddr, modfix, modofst, modend
     word deftbl, deflast
     word moddep, rld, esd, sym
-    byte refnum, defbank, filename[64], str[]
+    byte refnum, filename[64], str[]
     byte header[128]
     //
     // Read the RELocatable module header (first 128 bytes)
     //
     dcitos(mod, @filename)
     refnum = open(@filename)
-    if !refnum
+    if !refnum and filename < 16
         //
         // Try system path
         //
@@ -1121,17 +1071,7 @@ def loadmod(mod)#1
             esd = esd + 4
         loop
         esd = esd + 1
-        //
-        // Locate bytecode defs in appropriate bank.
-        //
-        if ^MACHID & $30 == $30
-            defbank = 1
-            defaddr = allocxheap(rld - bytecode)
-            modend  = bytecode
-        else
-            defbank = 0
-            defaddr = bytecode
-        fin
+        defaddr = bytecode
         codefix = defaddr - bytecode
         defofst = defaddr - defofst
         //
@@ -1141,7 +1081,7 @@ def loadmod(mod)#1
             //
             // This is a bytcode def entry - add it to the def directory.
             //
-            adddef(defbank, rld=>1 + defofst, @deflast)
+            adddef(rld=>1 + defofst, @deflast)
             rld = rld + 4
         loop
         //
@@ -1153,31 +1093,6 @@ def loadmod(mod)#1
                 *addr = ^rld & $10 ?? *addr + lookupextern(esd, rld->3) :: lookupdef(fixup + codefix, deftbl)
                 rld   = rld + 4
             fin
-            //addr = rld=>1 + modfix
-            //if uword_isge(addr, modaddr) // Skip fixups to header
-            //    if type & $80 // WORD sized fixup.
-            //        fixup = *addr
-            //    else          // BYTE sized fixup.
-            //        fixup = ^addr
-            //    fin
-            //    if ^rld & $10 // EXTERN reference.
-            //        fixup = fixup + lookupextern(esd, rld->3)
-            //    else          // INTERN fixup.
-            //        fixup = fixup + modofst
-            //        if uword_isge(fixup, bytecode)
-            //            //
-            //            // Bytecode address - replace with call def directory.
-            //            //
-            //            fixup = lookupdef(fixup + codefix, deftbl)
-            //        fin
-            //    fin
-            //    if type & $80 // WORD sized fixup.
-            //        *addr = fixup
-            //    else          // BYTE sized fixup.
-            //        ^addr = fixup
-            //    fin
-            //fin
-            //rld = rld + 4
         loop
         //
         // Run through the External/Entry Symbol Directory.
@@ -1200,15 +1115,6 @@ def loadmod(mod)#1
             fin
             esd = esd + 3
         loop
-        if defbank
-            //
-            // Move bytecode to AUX bank.
-            //
-            *$003C   = bytecode
-            *$003E   = modaddr + modsize
-            *$0042   = defaddr
-            call($C311, 0, 0, 0, $05) // CALL XMOVE with carry set (MAIN->AUX) and ints disabled
-        fin
     else
         perr = $46
     fin
@@ -1216,36 +1122,29 @@ def loadmod(mod)#1
         return -perr
     fin
     //
-    // Free up rld+esd (and bytecode on 128K) in main memory.
+    // Free up rld+esd in main memory.
     //
     releaseheap(modend)
     //
     // Call init routine if it exists.
     //
-    fixup = 0 // This is repurposed for the return code
+    initcode = 0
     if init
-        init  = init + defofst
-        fixup = adddef(defbank, init, @deflast)()
-        if fixup < modinitkeep
+        init     = init + defofst
+        initcode = adddef(init, @deflast)()
+        if initcode < modinitkeep
             //
             // Free init routine unless initkeep
             //
-            if defbank
-                xheap = init
-            else
-                //
-                // Free up init code in main memory.
-                //
-                releaseheap(init)
-            fin
-            if fixup < 0
-                perr = -fixup
+            releaseheap(init)
+            if initcode < 0
+                perr = -initcode
             fin
         else
-            fixup = fixup & ~modinitkeep
+            initcode = initcode & ~modinitkeep
         fin
     fin
-    return fixup
+    return initcode
 end
 //
 // Command mode
@@ -1257,9 +1156,9 @@ def volumes()#0
 
     params.0 = 2
     params.1 = 0
-    params:2 = databuff
+    params:2 = heap
     perr     = syscall($C5, @params)
-    strbuf   = databuff
+    strbuf   = heap
     for i = 0 to 15
         ^strbuf = ^strbuf & $0F
         if ^strbuf
@@ -1284,12 +1183,12 @@ def catalog(path)#0
     fin
     firstblk = 1
     repeat
-        if read(refnum, databuff, 512) == 512
-            entry = databuff + 4
+        if read(refnum, heap, 512) == 512
+            entry = heap + 4
             if firstblk
-                entrylen   = databuff.$23
-                entriesblk = databuff.$24
-                filecnt    = databuff:$25
+                entrylen   = heap->$23
+                entriesblk = heap->$24
+                filecnt    = heap=>$25
                 entry      = entry + entrylen
             fin
             for i = firstblk to entriesblk
@@ -1366,10 +1265,13 @@ def parsecmd(strptr)#1
     return cmd
 end
 def resetmemfiles()#0
+    byte terr
+
+    terr = perr // Save perr
     //
     // Close all files
     //
-    ^$BFD8 = 0
+    ^$BF94 = 0
     close(0)
     //
     // Set memory bitmap
@@ -1377,6 +1279,7 @@ def resetmemfiles()#0
     memset($BF58, 0, 24)
     ^$BF58 = $CF
     ^$BF6F = $01
+    perr = terr // Restore perr
 end
 def execsys(sysfile)#0
     byte refnum
@@ -1387,7 +1290,7 @@ def execsys(sysfile)#0
         striptrail(sysfile)
         refnum = open(sysfile)
         if refnum
-            len = read(refnum, databuff, $FFFF)
+            len = read(refnum, $2000, $FFFF)
             resetmemfiles()
             if len
                 strcpy(sysfile, $280)
@@ -1405,17 +1308,15 @@ def execsys(sysfile)#0
 end
 def execmod(modfile)#1
     byte moddci[17]
-    word saveheap, savexheap, savesym, saveflags
+    word saveheap, savesym, saveflags
 
     perr = 1
     if stodci(modfile, @moddci)
         saveheap  = heap
-        savexheap = xheap
         savesym   = lastsym
         saveflags = systemflags
         if loadmod(@moddci) < modkeep
             lastsym = savesym
-            xheap   = savexheap
             heap    = saveheap
         fin
         ^lastsym    = 0
@@ -1424,13 +1325,68 @@ def execmod(modfile)#1
     return -perr
 end
 //
+// Command line processor
+//
+def docmds#0
+    while 1
+        if ^getlnbuf
+            strcpy(@cmdln, getlnbuf)
+            when toupper(parsecmd(getlnbuf))
+                is 'C'
+                    catalog(getlnbuf)
+                    break
+                is 'P'
+                    pfxop(getlnbuf, SET_PFX)
+                    break
+                is '/'
+                    repeat
+                        prefix--
+                    until prefix[prefix] == '/'
+                    if prefix > 1
+                        pfxop(@prefix, SET_PFX)
+                    fin
+                    break
+                is 'V'
+                    volumes()
+                    break
+                is '-'
+                    execsys(getlnbuf)
+                    break
+                is '+'
+                    execmod(striptrail(getlnbuf))
+                    //
+                    // Clean up
+                    //
+                    resetmemfiles
+                    break
+                otherwise
+                    cout('?')
+            wend
+            if perr
+                prstr("ERR:$")
+                prbyte(perr)
+            else
+                prstr("OK")
+            fin
+            crout()
+        fin
+        prstr(pfxop(@prefix, GET_PFX))
+        rdstr($BA)
+    loop
+end
+//
+// Dummy definition to get free heap
+//
+def lastdef#0
+end
+//
 // Get heap start.
 //
-heap = *freemem
+heap = @lastdef
 //
 // Print PLASMA version
 //
-prstr("PLASMA 2.0 Dev\n")//; prbyte(version.1); cout('.'); prbyte(version.0); crout
+prstr("PLASMA 2.0 Dev 64K\n")//; prbyte(version.1); cout('.'); prbyte(version.0); crout
 //
 // Init symbol table.
 //
@@ -1449,8 +1405,8 @@ syscmdln = @cmdln
 // Try to load autorun.
 //
 autorun = open(@autorun)
-if autorun > 0
-    cmdln = read(autorun, @autorun, 128)
+if autorun
+    ^getlnbuf = read(autorun, getlnbuf + 1, 128)
     close(0)
 else
     //
@@ -1459,54 +1415,5 @@ else
     prstr("MEM FREE:$"); prword(availheap); crout
 fin
 perr = 0
-while 1
-    if ^getlnbuf
-        when toupper(parsecmd(getlnbuf))
-            is 'Q'
-                reboot()
-                break
-            is 'C'
-                catalog(getlnbuf)
-                break
-            is 'P'
-                pfxop(getlnbuf, SET_PFX)
-                break
-            is '/'
-                repeat
-                    prefix--
-                until prefix[prefix] == '/'
-                if prefix > 1
-                    pfxop(@prefix, SET_PFX)
-                fin
-                break
-            is 'V'
-                volumes()
-                break
-            is '-'
-                execsys(getlnbuf)
-                break
-            is '+'
-                saveX
-                execmod(striptrail(getlnbuf))
-                //
-                // Clean up
-                //
-                restoreX
-                resetmemfiles
-                break
-            otherwise
-                cout('?')
-        wend
-        if perr
-            prstr("ERR:$")
-            prbyte(perr)
-            perr = 0
-        else
-            prstr("OK")
-        fin
-        crout()
-    fin
-    prstr(pfxop(@prefix, GET_PFX))
-    strcpy(@cmdln, rdstr($BA))
-loop
+docmds
 done

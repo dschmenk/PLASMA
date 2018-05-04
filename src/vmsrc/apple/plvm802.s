@@ -84,12 +84,20 @@ NOS     =       $03             ; TOS-1
         REP     #$20            ; 16 BIT A/M
         !AL
         }
+        !MACRO  INDEX8 {
+        SEP     #$10            ; 8 BIT X/Y
+        !AS
+        }
+        !MACRO  INDEX16 {
+        REP     #$10            ; 16 BIT X/Y
+        !AL
+        }
 ;******************************
 ;*                            *
 ;* INTERPRETER INITIALIZATION *
 ;*                            *
 ;******************************
-*        =      $2000
+*       =      $2000
 ;*
 ;* MUST HAVE 128K FOR JIT
 ;*
@@ -136,13 +144,6 @@ ANYKEY  !TEXT   "PRESS ANY KEY...", 0
 ++      XCE                     ; SWITCH BACK TO EMULATED MODE
 
 ;*
-;* INITIALIZE STACK
-;*
-;INITSP  LDX     #$FE
-;        TXS
-;        LDX     #$00
-;        STX     $01FF
-;*
 ;* DISCONNECT /RAM
 ;*
         ;SEI                    ; DISABLE /RAM
@@ -188,7 +189,7 @@ RAMDONE ;CLI UNTIL I KNOW WHAT TO DO WITH THE UNENHANCED IIE
         STY     DSTL
         LDA     #$D0
         STA     DSTH
--       LDA     (SRC),Y         ; COPY VM+CMD INTO LANGUAGE CARD
+-       LDA     (SRC),Y         ; COPY VM+BYE INTO LANGUAGE CARD
         STA     (DST),Y
         INY
         BNE     -
@@ -200,10 +201,7 @@ RAMDONE ;CLI UNTIL I KNOW WHAT TO DO WITH THE UNENHANCED IIE
 ;*
 ;* MOVE FIRST PAGE OF 'BYE' INTO PLACE
 ;*
-        STY     SRCL
-        LDA     #$D1
-        STA     SRCH
--       LDA     (SRC),Y
+-       LDA     $D100,Y
         STA     $1000,Y
         INY
         BNE     -
@@ -228,13 +226,13 @@ RAMDONE ;CLI UNTIL I KNOW WHAT TO DO WITH THE UNENHANCED IIE
         LDA     #"D"
         INY
         STA     STRBUF,Y
-        LDA     #"J"
+        LDA     #"1"
         INY
         STA     STRBUF,Y
-        LDA     #"I"
+        LDA     #"2"
         INY
         STA     STRBUF,Y
-        LDA     #"T"
+        LDA     #"8"
         INY
         STA     STRBUF,Y
         STY     STRBUF
@@ -343,26 +341,15 @@ BYE     LDY     DEFCMD
 ;        STY     $01FF
 CMDENTRY =      *
 ;
-; SET DCI STRING FOR JIT MODULE
-;
-        LDA     #'J'|$80
-        STA     JITMOD+0
-        LDA     #'I'|$80
-        STA     JITMOD+1
-        LDA     #'T'|$80
-        STA     JITMOD+2
-        LDA     #'1'|$80
-        STA     JITMOD+3
-        LDA     #'6'
-        STA     JITMOD+4
-;
-; DEACTIVATE 80 COL CARDS
+; DEACTIVATE 80 COL CARDS AND SET DCI STRING FOR JIT MODULE
 ;
         BIT     ROMEN
         LDY     #4
 -       LDA     DISABLE80,Y
         ORA     #$80
         JSR     $FDED
+        LDA     JITDCI,Y
+        STA     JITMOD,Y
         DEY
         BPL     -
         BIT     $C054           ; SET TEXT MODE
@@ -376,7 +363,7 @@ CMDENTRY =      *
 ;
 ; INSTALL PAGE 0 FETCHOP ROUTINE
 ;
-        LDY     #$11
+        LDY     #$0F
 -       LDA     PAGE0,Y
         STA     DROP,Y
         DEY
@@ -440,7 +427,7 @@ CMDENTRY =      *
 ; PRINT FAIL MESSAGE, WAIT FOR KEYPRESS, AND REBOOT
 ;
 FAIL    INC     $3F4            ; INVALIDATE POWER-UP BYTE
-        LDY     #31
+        LDY     #11
 -       LDA     FAILMSG,Y
         ORA     #$80
         JSR     $FDED
@@ -460,7 +447,8 @@ READPARMS !BYTE 4
 CLOSEPARMS !BYTE 1
         !BYTE   0
 DISABLE80 !BYTE 21, 13, '1', 26, 13
-FAILMSG !TEXT   "...TESER OT YEK YNA .DMC GNISSIM"
+JITDCI  !BYTE       'J'|$80,'I'|$80,'T'|$80,'1'|$80,'6'
+FAILMSG !TEXT   ".DMC GNISSIM"
 PAGE0    =      *
 ;******************************
 ;*                            *
@@ -470,7 +458,7 @@ PAGE0    =      *
         !PSEUDOPC       DROP {
         PLA                     ; DROP @ $EF
         INY                     ; NEXTOP @ $F0
-        LDX     $FFFF,Y         ; FETCHOP @ $F3, IP MAPS OVER $FFFF @ $F4
+        LDX     $FFFF,Y         ; FETCHOP @ $F1, IP MAPS OVER $FFFF @ $F2
         JMP     (OPTBL,X)       ; OPIDX AND OPPAGE MAP OVER OPTBL
 }
 PAGE3   =       *
@@ -547,7 +535,7 @@ JITINTRPX PHP
         STX     ALTRDON
         LDX     #>OPXTBL
 !IF DEBUG {
-SETDBG  LDY     LCRWEN+LCBNK2
+        LDY     LCRWEN+LCBNK2
         LDY     LCRWEN+LCBNK2
         STX     DBG_OP+2
         LDY     LCRDEN+LCBNK2
@@ -575,11 +563,13 @@ RUNJIT  DEX                     ; ADD PARAMETER TO DEF ENTRY
         STA     IP
         STX     ESP
         TSX
+        DEX                     ; TAKE INTO ACCOUNT JSR BELOW
+        DEX
         STX     HWSP
         STX     ALTRDON
         LDX     #>OPXTBL
 !IF DEBUG {
-SETDBG  LDY     LCRWEN+LCBNK2
+        LDY     LCRWEN+LCBNK2
         LDY     LCRWEN+LCBNK2
         STX     DBG_OP+2
         LDY     LCRDEN+LCBNK2
@@ -588,7 +578,7 @@ SETDBG  LDY     LCRWEN+LCBNK2
         STX     OPPAGE
         LDY     #$00
         JSR     FETCHOP         ; CALL JIT COMPILER
-        !AS
+        !AS                     ; RETURN IN EMULATION MODE
         PLA
         STA     TMPH
         PLA
@@ -738,31 +728,31 @@ DIVMOD  +ACCMEM8
 ;*
 ;* NEGATE TOS
 ;*
-NEG     LDA     #$0000
-        SEC
-        SBC     TOS,S
-        STA     TOS,S
+NEG     PLA
+        EOR     #$FFFF
+        INC
+        PHA
         JMP     NEXTOP
 ;*
 ;* INCREMENT TOS
 ;*
-INCR    LDA     TOS,S
+INCR    PLA
         INC
-        STA     TOS,S
+        PHA
         JMP     NEXTOP
 ;*
 ;* DECREMENT TOS
 ;*
-DECR    LDA     TOS,S
+DECR    PLA
         DEC
-        STA     TOS,S
+        PHA
         JMP     NEXTOP
 ;*
 ;* BITWISE COMPLIMENT TOS
 ;*
-COMP    LDA     TOS,S
+COMP    PLA
         EOR     #$FFFF
-        STA     TOS,S
+        PHA
         JMP     NEXTOP
 ;*
 ;* BITWISE AND TOS TO TOS-1
@@ -791,11 +781,11 @@ XOR     PLA
 SHL     PLA
         TAX
         BEQ     +
-        LDA     TOS,S
+        PLA
 -       ASL
         DEX
         BNE     -
-        STA     TOS,S
+        PHA
 +       JMP     NEXTOP
 ;*
 ;* SHIFT TOS-1 RIGHT BY TOS
@@ -803,12 +793,12 @@ SHL     PLA
 SHR     PLA
         TAX
         BEQ     +
-        LDA     TOS,S
+        PLA
 -       CMP     #$8000
         ROR
         DEX
         BNE     -
-        STA     TOS,S
+        PHA
 +       JMP     NEXTOP
 ;*
 ;* DUPLICATE TOS
@@ -1553,47 +1543,35 @@ BRGT    LDA     NOS,S
         SBC     TOS,S
         BVS     +
         BPL     NOBRNCH
-        PLA                     ; DROP FOR VALUES
-        PLA
-        BRA     BRNCH           ; BMI     BRNCH
+        BMI     BRNCH
 BRLT    LDA     TOS,S
         SEC
         SBC     NOS,S
         BVS     +
         BPL     NOBRNCH
-        PLA                     ; DROP FOR VALUES
-        PLA
-        BRA     BRNCH           ; BMI     BRNCH
+        BMI     BRNCH
 +       BMI     NOBRNCH
-        PLA                     ; DROP FOR VALUES
-        PLA
-        BRA     BRNCH           ; BMI     BRNCH
-DECBRGE LDA     TOS,S
+        BPL     BRNCH
+DECBRGE PLA
         DEC
-        STA     TOS,S
+        PHA
 _BRGE   LDA     TOS,S
         SEC
         SBC     NOS,S
         BVS     +
         BPL     BRNCH
-        PLA                     ; DROP FOR VALUES
-        PLA
-        BRA     NOBRNCH         ; BMI     NOBRNCH
-INCBRLE LDA     TOS,S
+        BMI     NOBRNCH
+INCBRLE PLA
         INC
-        STA     TOS,S
+        PHA
 _BRLE   LDA     NOS,S
         SEC
         SBC     TOS,S
         BVS     +
         BPL     BRNCH
-        PLA                     ; DROP FOR VALUES
-        PLA
-        BNE     NOBRNCH         ; BMI     NOBRNCH
+        BMI     NOBRNCH
 +       BMI     BRNCH
-        PLA                     ; DROP FOR VALUES
-        PLA
-        BRA     NOBRNCH         ; BMI     NOBRNCH
+        BPL     NOBRNCH
 SUBBRGE LDA     NOS,S
         SEC
         SBC     TOS,S
@@ -1995,51 +1973,7 @@ NATV    TYA                     ; FLATTEN IP
         SEC
         ADC     IP
         STA     IP
-        SEC                     ; SWITCH TO EMULATION MODE
-        XCE
-        !AS
-        ;+ACCMEM8                ; 8 BIT A/M
-        TSC                     ; MOVE HW EVAL STACK TO ZP EVAL STACK
-        EOR     #$FF
-        SEC
-        ADC     HWSP            ; STACK DEPTH = (HWSP - SP)/2
-        LSR
-!IF     DEBUG {
-        PHA
-        CLC
-        ADC     #$80+'0'
-        STA     $7D0+31
-        PLA
-}
-        EOR     #$FF
-        SEC
-        ADC     ESP             ; ESP - STACK DEPTH
-        TAX
-        CPX     ESP
-        BEQ     ++
-        TAY
--       PLA
-        STA     ESTKL,X
-        PLA
-        STA     ESTKH,X
-        INX
-        CPX     ESP
-        BNE     -
-!IF     DEBUG {
-        TSX
-        CPX     HWSP
-        BEQ     +
-        LDX     #$80+'V'
-        STX     $7D0+30
--       LDX     $C000
-        BPL     -
-        LDX     $C010
-+
-}
-        TYX
-++      LDA     PSR
-        PHA
-        PLP
+        +INDEX16                ; SET 16 BIT X/Y
         JMP     (IP)
 !IF     DEBUG {
 ;*****************

@@ -1,6 +1,6 @@
 ;**********************************************************
 ;*
-;*          APPLE ][ 64K/128K PLASMA INTERPRETER
+;*          APPLE ][ 128K PLASMA INTERPRETER
 ;*
 ;*              SYSTEM ROUTINES AND LOCATIONS
 ;*
@@ -61,10 +61,6 @@ JITCODE =       $03E4
 ;*                            *
 ;******************************
 *       =       $2000
-        LDX     #$FE
-        TXS
-        LDX    #$00
-        STX    $01FF
 ;*
 ;* MUST HAVE 128K FOR JIT
 ;*
@@ -134,7 +130,7 @@ RAMDONE ;CLI UNTIL I KNOW WHAT TO DO WITH THE UNENHANCED IIE
         STY     DSTL
         LDA     #$D0
         STA     DSTH
--       LDA     (SRC),Y         ; COPY VM+CMD INTO LANGUAGE CARD
+-       LDA     (SRC),Y         ; COPY VM+BYE INTO LANGUAGE CARD
         STA     (DST),Y
         INY
         BNE     -
@@ -146,10 +142,7 @@ RAMDONE ;CLI UNTIL I KNOW WHAT TO DO WITH THE UNENHANCED IIE
 ;*
 ;* MOVE FIRST PAGE OF 'BYE' INTO PLACE
 ;*
-        STY     SRCL
-        LDA     #$D1
-        STA     SRCH
--       LDA     (SRC),Y
+-       LDA     $D100,Y
         STA     $1000,Y
         INY
         BNE     -
@@ -181,13 +174,13 @@ RAMDONE ;CLI UNTIL I KNOW WHAT TO DO WITH THE UNENHANCED IIE
         LDA     #"D"
         INY
         STA     STRBUF,Y
-        LDA     #"J"
+        LDA     #"1"
         INY
         STA     STRBUF,Y
-        LDA     #"I"
+        LDA     #"2"
         INY
         STA     STRBUF,Y
-        LDA     #"T"
+        LDA     #"8"
         INY
         STA     STRBUF,Y
         STY     STRBUF
@@ -278,22 +271,15 @@ BYE     LDY     DEFCMD
 ;        STY     $01FF
 CMDENTRY =      *
 ;
-; SET DCI STRING FOR JIT MODULE
-;
-        LDA     #'J'|$80
-        STA     JITMOD+0
-        LDA     #'I'|$80
-        STA     JITMOD+1
-        LDA     #'T'
-        STA     JITMOD+2
-;
-; DEACTIVATE 80 COL CARDS
+; DEACTIVATE 80 COL CARDS AND SET DCI STRING FOR JIT MODULE
 ;
         BIT     ROMEN
         LDY     #4
 -       LDA     DISABLE80,Y
         ORA     #$80
         JSR     $FDED
+        LDA     JITDCI,Y
+        STA     JITMOD,Y
         DEY
         BPL     -
         BIT     $C054           ; SET TEXT MODE
@@ -316,7 +302,7 @@ CMDENTRY =      *
 ;
 ; INSTALL PAGE 3 VECTORS
 ;
-        LDY     #$16
+        LDY     #$12
 -       LDA     PAGE3,Y
         STA     INTERP,Y
         DEY
@@ -342,19 +328,6 @@ CMDENTRY =      *
         !BYTE   $CC
         !WORD   CLOSEPARMS
         BNE     FAIL
-;
-; INIT VM ENVIRONMENT STACK POINTERS
-;
-;       LDA     #$00
-        STA     $01FF           ; CLEAR CMDLINE BUFF
-        STA     PPL             ; INIT FRAME POINTER
-        STA     IFPL
-        LDA     #$AF            ; FRAME POINTER AT $AF00, BELOW JIT BUFFER
-        STA     PPH
-        STA     IFPH
-        LDX     #$FE            ; INIT STACK POINTER (YES, $FE. SEE GETS)
-        TXS
-        LDX     #ESTKSZ/2       ; INIT EVAL STACK INDEX
 ;
 ; CHANGE CMD STRING TO SYSPATH STRING
 ;
@@ -387,6 +360,7 @@ READPARMS !BYTE 4
 CLOSEPARMS !BYTE 1
         !BYTE   0
 DISABLE80 !BYTE 21, 13, '1', 26, 13
+JITDCI  !BYTE       'J'|$80,'I'|$80,'T'
 FAILMSG !TEXT   ".DMC GNISSIM"
 PAGE0    =      *
 ;******************************
@@ -1796,20 +1770,16 @@ BRGT    LDA     ESTKL+1,X
         SBC     ESTKH,X
         BVS     +
         BPL     NOBRNCH
--       INX                     ; DROP FOR VALUES
-        INX
-        BNE     BRNCH           ; BMI     BRNCH
+        BMI     BRNCH
 BRLT    LDA     ESTKL,X
         CMP     ESTKL+1,X
         LDA     ESTKH,X
         SBC     ESTKH+1,X
         BVS     +
         BPL     NOBRNCH
-        INX                     ; DROP FOR VALUES
-        INX
-        BNE     BRNCH           ; BMI     BRNCH
+        BMI     BRNCH
 +       BMI     NOBRNCH
-        BPL     -
+        BPL     BRNCH
 DECBRGE DEC     ESTKL,X
         LDA     ESTKL,X
         CMP     #$FF
@@ -1821,9 +1791,7 @@ _BRGE   LDA     ESTKL,X
         SBC     ESTKH+1,X
         BVS     +
         BPL     BRNCH
--       INX                     ; DROP FOR VALUES
-        INX
-        BNE     NOBRNCH         ; BMI     NOBRNCH
+        BMI     NOBRNCH
 INCBRLE INC     ESTKL,X
         BNE     _BRLE
         INC     ESTKH,X
@@ -1833,11 +1801,9 @@ _BRLE   LDA     ESTKL+1,X
         SBC     ESTKH,X
         BVS     +
         BPL     BRNCH
-        INX                     ; DROP FOR VALUES
-        INX
-        BNE     NOBRNCH         ; BMI     NOBRNCH
+        BMI     NOBRNCH
 +       BMI     BRNCH
-        BPL     -
+        BPL     NOBRNCH
 SUBBRGE LDA     ESTKL+1,X
         SEC
         SBC     ESTKL,X
@@ -1866,7 +1832,7 @@ CALL    INY                     ;+INC_IP
         LDA     (IP),Y
         STA     TMPH
         TYA
-        CLC
+        SEC
         ADC     IPL
         PHA
         LDA     IPH
@@ -1879,7 +1845,7 @@ CALL    INY                     ;+INC_IP
         STA     IPL
         LDA     #>OPTBL         ; MAKE SURE WE'RE INDEXING THE RIGHT TABLE
         STA     OPPAGE
-        LDY     #$01
+        LDY     #$00
         JMP     FETCHOP
 CALLX   INY                     ;+INC_IP
         LDA     (IP),Y
@@ -1888,7 +1854,7 @@ CALLX   INY                     ;+INC_IP
         LDA     (IP),Y
         STA     TMPH
         TYA
-        CLC
+        SEC
         ADC     IPL
         PHA
         LDA     IPH
@@ -1910,7 +1876,7 @@ CALLX   INY                     ;+INC_IP
         STA     IPL
         LDA     #>OPXTBL        ; MAKE SURE WE'RE INDEXING THE RIGHT TABLE
         STA     OPPAGE
-        LDY     #$01
+        LDY     #$00
         JMP     FETCHOP
 ;*
 ;* INDIRECT CALL TO ADDRESS (NATIVE CODE)
@@ -1921,7 +1887,7 @@ ICAL    LDA     ESTKL,X
         STA     TMPH
         INX
         TYA
-        CLC
+        SEC
         ADC     IPL
         PHA
         LDA     IPH
@@ -1934,7 +1900,7 @@ ICAL    LDA     ESTKL,X
         STA     IPL
         LDA     #>OPTBL         ; MAKE SURE WE'RE INDEXING THE RIGHT TABLE
         STA     OPPAGE
-        LDY     #$01
+        LDY     #$00
         JMP     FETCHOP
 ICALX   LDA     ESTKL,X
         STA     TMPL
@@ -1942,7 +1908,7 @@ ICALX   LDA     ESTKL,X
         STA     TMPH
         INX
         TYA
-        CLC
+        SEC
         ADC     IPL
         PHA
         LDA     IPH
@@ -1956,6 +1922,7 @@ ICALX   LDA     ESTKL,X
         PHP
         PLA
         STA     PSR
+        SEI
         STA     ALTRDON
         PLA
         STA     IPH
@@ -1963,7 +1930,7 @@ ICALX   LDA     ESTKL,X
         STA     IPL
         LDA     #>OPXTBL        ; MAKE SURE WE'RE INDEXING THE RIGHT TABLE
         STA     OPPAGE
-        LDY     #$01
+        LDY     #$00
         JMP     FETCHOP
 ;*
 ;* JUMP INDIRECT TRHOUGH TMP
@@ -2041,11 +2008,11 @@ RET     RTS
 NATV    TYA                     ; FLATTEN IP
         SEC
         ADC     IPL
-        STA     TMPL
-        LDA     #$00
-        ADC     IPH
-        STA     TMPH
-        JMP     JMPTMP
+        STA     IPL
+        BCS     +
+        JMP     (IP)
++       INC     IPH
+        JMP     (IP)
 VMEND   =       *
 }
 ;***************************************

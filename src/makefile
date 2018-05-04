@@ -4,12 +4,12 @@ PLVM       = plvm
 PLVMZP_APL = vmsrc/apple/plvmzp.inc
 PLVM01     = rel/apple/A1PLASMA\#060280
 PLVM02	   = rel/apple/PLASMA.SYSTEM\#FF2000
-PLVMJIT    = rel/apple/PLASMAJIT.SYSTEM\#FF2000
-PLVM802	   = rel/apple/PLASMA16.SYSTEM\#FF2000
+PLVMJIT    = rel/apple/PLVM.128\#FF2000
+PLVM802	   = rel/apple/PLVM16\#FF2000
 PLVM03	   = rel/apple/SOS.INTERP\#050000
 SOSCMD     = rel/apple/SOS.CMD\#FE1000
 CMD        = rel/apple/CMD\#061000
-CMDJIT     = rel/apple/CMDJIT\#061000
+CMDJIT     = rel/apple/CMD128\#061000
 PLVMZP_C64 = vmsrc/c64/plvmzp.inc
 PLVMC64    = rel/c64/PLASMA
 ED         = rel/ED\#FE1000
@@ -36,12 +36,16 @@ SNDSEQ     = rel/apple/SNDSEQ\#FE1000
 PLAYSEQ    = rel/apple/PLAYSEQ\#FE1000
 SANITY     = rel/SANITY\#FE1000
 RPNCALC    = rel/RPNCALC\#FE1000
+LZ4        = rel/LZ4\#FE1000
+LZ4CAT     = rel/LZ4CAT\#FE1000
+MOUSE      = rel/apple/MOUSE\#FE1000
 UTHERNET2  = rel/apple/UTHERNET2\#FE1000
 UTHERNET   = rel/apple/UTHERNET\#FE1000
 ETHERIP    = rel/ETHERIP\#FE1000
 INET       = rel/INET\#FE1000
 DHCP       = rel/DHCP\#FE1000
 HTTPD      = rel/HTTPD\#FE1000
+TFTPD      = rel/TFTPD\#FE1000
 DGR        = rel/apple/DGR\#FE1000
 GRAFIX     = rel/apple/GRAFIX\#FE1000
 GFXDEMO    = rel/apple/GFXDEMO\#FE1000
@@ -81,7 +85,7 @@ TXTTYPE	= .TXT
 #SYSTYPE	= \#FF2000
 #TXTTYPE	= \#040000
 
-apple: $(PLVMZP_APL) $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVMJIT) $(PLVM802) $(PLVM03) $(CMD) $(CMDJIT) $(JIT) $(JIT16) $(JITUNE) $(SOSCMD) $(PLASMAPLASM) $(CODEOPT) $(ARGS) $(MEMMGR) $(MEMTEST) $(FIBER) $(FIBERTEST) $(LONGJMP) $(ED) $(MON) $(SOS) $(ROD) $(SIEVE) $(UTHERNET2) $(UTHERNET) $(ETHERIP) $(INET) $(DHCP) $(HTTPD) $(ROGUE) $(ROGUEMAP) $(ROGUECOMBAT) $(GRAFIX) $(GFXDEMO) $(DGR) $(DGRTEST) $(FILEIO_APL) $(CONIO_APL) $(JOYBUZZ) $(PORTIO) $(SPIPORT) $(SDFAT) $(FATCAT) $(FATGET) $(FATPUT) $(FATWDSK) $(FATRDSK) $(SANE) $(FPSTR) $(FPU) $(SANITY) $(RPNCALC) $(SNDSEQ) $(PLAYSEQ)
+apple: $(PLVMZP_APL) $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVMJIT) $(PLVM802) $(PLVM03) $(CMD) $(CMDJIT) $(JIT) $(JIT16) $(JITUNE) $(SOSCMD) $(PLASMAPLASM) $(CODEOPT) $(ARGS) $(MEMMGR) $(MEMTEST) $(FIBER) $(FIBERTEST) $(LONGJMP) $(ED) $(MON) $(SOS) $(ROD) $(SIEVE) $(MOUSE) $(UTHERNET2) $(UTHERNET) $(ETHERIP) $(INET) $(DHCP) $(HTTPD) $(TFTPD) $(ROGUE) $(ROGUEMAP) $(ROGUECOMBAT) $(GRAFIX) $(GFXDEMO) $(DGR) $(DGRTEST) $(FILEIO_APL) $(CONIO_APL) $(JOYBUZZ) $(PORTIO) $(SPIPORT) $(SDFAT) $(FATCAT) $(FATGET) $(FATPUT) $(FATWDSK) $(FATRDSK) $(SANE) $(FPSTR) $(FPU) $(SANITY) $(LZ4) $(LZ4CAT) $(RPNCALC) $(SNDSEQ) $(PLAYSEQ)
 	-rm vmsrc/plvmzp.inc
 
 c64: $(PLVMZP_C64) $(PLASM) $(PLVM) $(PLVMC64) 
@@ -232,7 +236,7 @@ hello:	samplesrc/hello.pla $(PLVM) $(PLASM)
 	acme --setpc 4094 -o $(HELLO) samplesrc/hello.a
 	./$(PLVM) HELLO
 $(ROD): samplesrc/rod.pla $(PLVM02) $(PLASM)
-	./$(PLASM) -AMO < samplesrc/rod.pla > samplesrc/rod.a
+	./$(PLASM) -AMOW < samplesrc/rod.pla > samplesrc/rod.a
 	acme --setpc 4094 -o $(ROD) samplesrc/rod.a
 
 $(SIEVE): samplesrc/sieve.pla $(PLVM02) $(PLASM)
@@ -255,6 +259,14 @@ $(SANITY): samplesrc/sanity.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AMOW < samplesrc/sanity.pla > samplesrc/sanity.a
 	acme --setpc 4094 -o $(SANITY) samplesrc/sanity.a
 
+$(LZ4): libsrc/lz4.pla $(PLVM02) $(PLASM)
+	./$(PLASM) -AMOW < libsrc/lz4.pla > libsrc/lz4.a
+	acme --setpc 4094 -o $(LZ4) libsrc/lz4.a
+
+$(LZ4CAT): samplesrc/lz4cat.pla inc/lz4.plh $(PLVM02) $(PLASM)
+	./$(PLASM) -AMOW < samplesrc/lz4cat.pla > samplesrc/lz4cat.a
+	acme --setpc 4094 -o $(LZ4CAT) samplesrc/lz4cat.a
+
 $(RPNCALC): samplesrc/rpncalc.pla libsrc/fpu.pla inc/fpu.plh libsrc/fpstr.pla inc/fpstr.plh inc/conio.plh $(PLVM02) $(PLASM)
 	./$(PLASM) -AMOW < samplesrc/rpncalc.pla > samplesrc/rpncalc.a
 	acme --setpc 4094 -o $(RPNCALC) samplesrc/rpncalc.a
@@ -274,6 +286,14 @@ $(DHCP): libsrc/dhcp.pla $(PLVM02) $(PLASM)
 $(HTTPD): samplesrc/httpd.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AMOW < samplesrc/httpd.pla > samplesrc/httpd.a
 	acme --setpc 4094 -o $(HTTPD) samplesrc/httpd.a
+
+$(TFTPD): samplesrc/tftpd.pla $(PLVM02) $(PLASM)
+	./$(PLASM) -AMOW < samplesrc/tftpd.pla > samplesrc/tftpd.a
+	acme --setpc 4094 -o $(TFTPD) samplesrc/tftpd.a
+
+$(MOUSE): libsrc/apple/mouse.pla $(PLVM02) $(PLASM)
+	./$(PLASM) -AMOW < libsrc/apple/mouse.pla > libsrc/apple/mouse.a
+	acme --setpc 4094 -o $(MOUSE) libsrc/apple/mouse.a
 
 $(UTHERNET): libsrc/apple/uthernet.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AMOW < libsrc/apple/uthernet.pla > libsrc/apple/uthernet.a
@@ -364,19 +384,19 @@ $(MON): samplesrc/mon.pla $(PLVM02) $(PLASM)
 	acme --setpc 4094 -o $(MON) samplesrc/mon.a
 
 $(SOS): libsrc/apple/sos.pla $(PLVM03) $(PLASM)
-	./$(PLASM) -AMO < libsrc/apple/sos.pla > libsrc/apple/sos.a
+	./$(PLASM) -AMOW < libsrc/apple/sos.pla > libsrc/apple/sos.a
 	acme --setpc 4094 -o $(SOS) libsrc/apple/sos.a
 
 $(JIT): libsrc/apple/jit.pla libsrc/jitcore.pla $(PLVMJIT) $(PLASM)
-	./$(PLASM) -AMO < libsrc/apple/jit.pla > libsrc/apple/jit.a
+	./$(PLASM) -AMOW < libsrc/apple/jit.pla > libsrc/apple/jit.a
 	acme --setpc 4094 -o $(JIT) libsrc/apple/jit.a
 
 $(JIT16): libsrc/apple/jit16.pla libsrc/jit16core.pla $(PLVMJIT) $(PLASM)
-	./$(PLASM) -AMO < libsrc/apple/jit16.pla > libsrc/apple/jit16.a
+	./$(PLASM) -AMOW < libsrc/apple/jit16.pla > libsrc/apple/jit16.a
 	acme --setpc 4094 -o $(JIT16) libsrc/apple/jit16.a
 
 $(JITUNE): libsrc/apple/jitune.pla $(PLVMJIT) $(PLASM)
-	./$(PLASM) -AMO < libsrc/apple/jitune.pla > libsrc/apple/jitune.a
+	./$(PLASM) -AMOW < libsrc/apple/jitune.pla > libsrc/apple/jitune.a
 	acme --setpc 4094 -o $(JITUNE) libsrc/apple/jitune.a
 
 

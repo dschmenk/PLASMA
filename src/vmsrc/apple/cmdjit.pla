@@ -1,6 +1,5 @@
 const MACHID      = $BF98
 const iobuffer    = $0800
-const databuff    = $2000
 const RELADDR     = $1000
 const symtbl      = $0C00
 const freemem     = $0006
@@ -146,13 +145,6 @@ word lastsym     = symtbl
 //
 //asm equates included from cmdstub.s
 //
-//asm saveX#0
-//        STX     XREG+1
-//end
-//asm restoreX#0
-//XREG    LDX     #$00
-//        RTS
-//end
 // CALL PRODOS
 // SYSCALL(CMD, PARAMS)
 //
@@ -220,14 +212,6 @@ end
 asm exec()#0
         BIT     ROMEN
         JMP     $2000
-end
-//
-// EXIT
-//
-asm reboot()#0
-        BIT     ROMEN
-        DEC     $03F4       ; INVALIDATE POWER-UP BYTE
-        JMP     ($FFFC)     ; RESET
 end
 //
 // SET MEMORY TO VALUE
@@ -1027,7 +1011,7 @@ def adddef(isfirst, addr, deflast)#1
     if not isfirst
         preventry = defentry - t_defentry
         defsize   = addr - preventry=>bytecodeaddr
-        if defsize <= jitsize // and *jitcomp
+        if defsize <= jitsize
             preventry=>interpaddr   = $03D6    // JSR $03D6 (JIT INTERP)
             preventry->callcount    = jitcount // Set JIT countdown
             preventry->bytecodesize = defsize  // Set size
@@ -1036,12 +1020,11 @@ def adddef(isfirst, addr, deflast)#1
     defentry->interpjsr    = $20
     defentry=>interpaddr   = $03DC // JSR $03DC (BYTECODE INTERP)
     defentry=>bytecodeaddr = addr
-    //defentry=>5 = 0 // Clear count and size
-    defentry->t_defentry = 0 // NULL out next entry
+    defentry->t_defentry   = 0 // NULL out next entry
     return defentry
 end
 def loadmod(mod)#1
-    word rdlen, modsize, bytecode, codefix, defofst, defcnt, init, fixup
+    word rdlen[], bytecode, modsize, codefix, defofst, defcnt, init, initcode[], fixup
     word addr, defaddr, modaddr, modfix, modofst, modend
     word deftbl, deflast
     word moddep, rld, esd, sym
@@ -1052,7 +1035,7 @@ def loadmod(mod)#1
     //
     dcitos(mod, @filename)
     refnum = open(@filename)
-    if !refnum
+    if !refnum and filename < 16
         //
         // Try system path
         //
@@ -1203,29 +1186,29 @@ def loadmod(mod)#1
         return -perr
     fin
     //
-    // Free up rld+esd (and bytecode on 128K) in main memory.
+    // Free up rld+esd+bytecode in main memory.
     //
     releaseheap(modend)
     //
     // Call init routine if it exists.
     //
-    fixup = 0 // This is repurposed for the return code
+    initcode = 0
     if init
-        init  = init + defofst
-        fixup = adddef(deffirst, init, @deflast)()
-        if fixup < modinitkeep
+        init     = init + defofst
+        initcode = adddef(deffirst, init, @deflast)()
+        if initcode < modinitkeep
             //
             // Free init routine unless initkeep
             //
             xheap = init
-            if fixup < 0
-                perr = -fixup
+            if initcode < 0
+                perr = -initcode
             fin
         else
-            fixup = fixup & ~modinitkeep
+            initcode = initcode & ~modinitkeep
         fin
     fin
-    return fixup
+    return initcode
 end
 //
 // Command mode
@@ -1237,9 +1220,9 @@ def volumes()#0
 
     params.0 = 2
     params.1 = 0
-    params:2 = databuff
+    params:2 = heap
     perr     = syscall($C5, @params)
-    strbuf   = databuff
+    strbuf   = heap
     for i = 0 to 15
         ^strbuf = ^strbuf & $0F
         if ^strbuf
@@ -1264,12 +1247,12 @@ def catalog(path)#0
     fin
     firstblk = 1
     repeat
-        if read(refnum, databuff, 512) == 512
-            entry = databuff + 4
+        if read(refnum, heap, 512) == 512
+            entry = heap + 4
             if firstblk
-                entrylen   = databuff.$23
-                entriesblk = databuff.$24
-                filecnt    = databuff:$25
+                entrylen   = heap->$23
+                entriesblk = heap->$24
+                filecnt    = heap=>$25
                 entry      = entry + entrylen
             fin
             for i = firstblk to entriesblk
@@ -1346,10 +1329,13 @@ def parsecmd(strptr)#1
     return cmd
 end
 def resetmemfiles()#0
+    byte terr
+
+    terr = perr // Save perr
     //
     // Close all files
     //
-    ^$BFD8 = 0
+    ^$BF94 = 0
     close(0)
     //
     // Set memory bitmap
@@ -1357,6 +1343,7 @@ def resetmemfiles()#0
     memset($BF58, 0, 24)
     ^$BF58 = $CF
     ^$BF6F = $01
+    perr = terr // Restore perr
 end
 def execsys(sysfile)#0
     byte refnum
@@ -1367,7 +1354,7 @@ def execsys(sysfile)#0
         striptrail(sysfile)
         refnum = open(sysfile)
         if refnum
-            len = read(refnum, databuff, $FFFF)
+            len = read(refnum, $2000, $FFFF)
             resetmemfiles()
             if len
                 strcpy(sysfile, $280)
@@ -1406,13 +1393,71 @@ def execmod(modfile)#1
     return -perr
 end
 //
+// Command line processor
+//
+def docmds#0
+    loadmod(jitmod)  // Cannot do this in init code - it will overwrite it!
+    xheap    = $0400 // Reset heap to point at low memory
+    xheaptop = $A000 // Top below JITC
+    while 1
+        if ^getlnbuf
+            strcpy(@cmdln, getlnbuf)
+            when toupper(parsecmd(getlnbuf))
+                is 'C'
+                    catalog(getlnbuf)
+                    break
+                is 'P'
+                    pfxop(getlnbuf, SET_PFX)
+                    break
+                is '/'
+                    repeat
+                        prefix--
+                    until prefix[prefix] == '/'
+                    if prefix > 1
+                        pfxop(@prefix, SET_PFX)
+                    fin
+                    break
+                is 'V'
+                    volumes()
+                    break
+                is '-'
+                    execsys(getlnbuf)
+                    break
+                is '+'
+                    execmod(striptrail(getlnbuf))
+                    //
+                    // Clean up
+                    //
+                    resetmemfiles
+                    break
+                otherwise
+                    cout('?')
+            wend
+            if perr
+                prstr("ERR:$")
+                prbyte(perr)
+            else
+                prstr("OK")
+            fin
+            crout()
+        fin
+        prstr(pfxop(@prefix, GET_PFX))
+        rdstr($BA)
+    loop
+end
+//
+// Dummy definition to get free heap
+//
+def lastdef#0
+end
+//
 // Get heap start.
 //
-heap = *freemem
+heap = @lastdef
 //
 // Print PLASMA version
 //
-prstr("PLASMA JITC 2.0 Dev\n")//; prbyte(version.1); cout('.'); prbyte(version.0); crout
+prstr("PLASMA 2.0 Dev 128K\n")//; prbyte(version.1); cout('.'); prbyte(version.0); crout
 //
 // Init symbol table.
 //
@@ -1427,15 +1472,12 @@ loop
 strcat(strcpy(@sysmods, $280), "SYS/")) // This is the path to CMD
 syspath  = @sysmods // Update external interface table
 syscmdln = @cmdln
-loadmod(jitmod)
-xheap    = $0800 // Reset heap to point at low memory
-xheaptop = $A000 // Top where JIT loaded
 //
 // Try to load autorun.
 //
 autorun = open(@autorun)
-if autorun > 0
-    cmdln = read(autorun, @autorun, 128)
+if autorun
+    ^getlnbuf = read(autorun, getlnbuf + 1, 128)
     close(0)
 else
     //
@@ -1444,54 +1486,5 @@ else
     prstr("MEM FREE:$"); prword(availheap); crout
 fin
 perr = 0
-while 1
-    if ^getlnbuf
-        when toupper(parsecmd(getlnbuf))
-            is 'Q'
-                reboot()
-                break
-            is 'C'
-                catalog(getlnbuf)
-                break
-            is 'P'
-                pfxop(getlnbuf, SET_PFX)
-                break
-            is '/'
-                repeat
-                    prefix--
-                until prefix[prefix] == '/'
-                if prefix > 1
-                    pfxop(@prefix, SET_PFX)
-                fin
-                break
-            is 'V'
-                volumes()
-                break
-            is '-'
-                execsys(getlnbuf)
-                break
-            is '+'
-                //saveX
-                execmod(striptrail(getlnbuf))
-                //
-                // Clean up
-                //
-                //restoreX
-                resetmemfiles
-                break
-            otherwise
-                cout('?')
-        wend
-        if perr
-            prstr("ERR:$")
-            prbyte(perr)
-            perr = 0
-        else
-            prstr("OK")
-        fin
-        crout()
-    fin
-    prstr(pfxop(@prefix, GET_PFX))
-    strcpy(@cmdln, rdstr($BA))
-loop
+docmds
 done

@@ -1,0 +1,572 @@
+include "inc/cmdsys.plh"
+//
+// Mouse driver interface
+//
+predef chkVbl, chkMouse, readMouse#3, setMouse(mode), clearMouse, posMouse(x, y), clampMouse(xMin, xMax, yMin, yMax), homeMouse, detachMouse
+word = @chkVbl, @chkMouse, @readMouse, @setMouse, @clearMouse, @posMouse, @clampMouse, @homeMouse, @detachMouse
+word rom
+byte params[]
+byte slot, index, page
+word setMouseFW
+byte vblDiv, vblInt, mouInt, bttnPrev
+asm equates
+    !SOURCE "vmsrc/plvmzp.inc"
+end
+//
+// Serve Mouse/VBL IRQ
+//
+asm serviceMouse#0
+VBLINT  =       $400            ; DUMMY VALUES TO BE FIXED-UP
+MOUINT  =       $401
+LASTBTTN=       $402
+        CLD
+        JSR     $C400
+        BCC     +
+        RTS                     ; NOT MOUSE INT
++       LDY     $0778+4         ; CHECK MOUSE INT CAUSE
+        TYA                     ; WAS IT VBL?
+        AND     #$08
+        BEQ     +               ; NOPE, MOVE OR BUTTON
+end
+asm vblEvent
+        INC     VBLINT          ; INC VBL EVENT
++       TYA                     ; MOUSE MOVE OR BUTTON ACTIVE
+        AND     #$82
+end
+asm bttnEvent
+        EOR     LASTBTTN
+        BEQ     +
+end
+asm mouseEvent
+        INC     MOUINT          ; INC MOUSE EVENT
++       TYA
+        AND     #$80
+end
+asm updateBttn
+        STA     LASTBTTN
+end
+asm updateMouse
+        LDX     #$C4
+        LDY     #$40
+        JMP     $C400           ; IIGS REQUIRES THIS HAPPEN IN IRQ
+end
+//
+// Check for VBL (timer) and Mouse events (atomic read and reset)
+//
+asm chkEvt(addr)
+        LDA     ESTKL,X
+        STA     ESTKH-1,X
+        SEI
+        LDA     (ESTKH-1,X)     ; READ INT COUNT
+        TAY
+        LDA     #$00
+        STA     (ESTKH-1,X)     ; CLEAR INT COUNT
+        CLI
+        STY     ESTKL,X         ; RETURN INT COUNT
+        STA     ESTKH,X
+        RTS
+end
+asm readMouse#3
+        LDY     #$04
+        DEX
+        DEX
+        DEX
+        PHP
+        SEI
+        LDA     $0478,Y
+        STA     ESTKL+2,X
+        LDA     $0578,Y
+        STA     ESTKH+2,X
+        LDA     $04F8,Y
+        STA     ESTKL+1,X
+        LDA     $05F8,Y
+        STA     ESTKH+1,X
+        LDA     $0778,Y
+        STA     ESTKL,X
+        LDA     #$00
+        STA     ESTKH,X
+        PLP
+        RTS
+end
+//
+// Convert VBL interrupts into millisecond timer increment
+//
+def chkVblTimer
+    byte count
+    word msec
+
+    msec  = 0
+    count = chkEvt(@vblInt)
+    while count
+        if vblDiv & 2
+            msec   = msec + 16
+            vblDiv = 0
+        else
+            msec = msec + 17
+            vblDiv++
+        fin
+        count--
+    loop
+    return msec
+end
+//
+// Check for VBL/Mouse interrupt events
+//
+def chkVbl
+    return chkEvt(@vblInt)
+end
+def chkMouse
+    return chkEvt(@mouInt)
+end
+//
+// Mouse routines
+//
+def setMouse(mode)
+    return call(setMouseFW, mode, slot, page, $04)
+end
+def clearMouse
+    return call(rom + rom->$15, $00, slot, page, $04) // clearMouseFW
+end
+def posMouse(x, y)
+    //
+    // Fill screen holes
+    //
+    ^($0478 + index) = x
+    ^($0578 + index) = x >> 8
+    ^($04F8 + index) = y
+    ^($05F8 + index) = y >> 8
+    return call(rom + rom->$16, $00, slot, page, $04) // posMouseFW
+end
+def clampMouse(xMin, xMax, yMin, yMax)
+    ^$0478 = xMin
+    ^$0578 = xMin >> 8
+    ^$04F8 = xMax
+    ^$05F8 = xMax >> 8
+    call(rom + rom->$17, $00, slot, page, $04) // clampMouseFW
+    ^$0478 = yMin
+    ^$0578 = yMin >> 8
+    ^$04F8 = yMax
+    ^$05F8 = yMax >> 8
+    return call(rom + rom->$17, $01, slot, page, $04)) // clampMouseFW
+end
+def homeMouse
+    return call(rom + rom->$18, $00, slot, page, $04) // homeMouseFW
+end
+//
+// Detach mouse from interrupts
+//
+def detachMouse
+    setMouse(0)
+    params.0 = 1
+    params.1 = 0
+    return syscall($41, @params)
+end
+//
+// Identify Mouse card/slot and initialize
+//
+for rom = $C100 to $C700 step $0100
+    if rom->5 == $38 and rom->7 == $18 and rom->11 == $01 and rom->12 == $20
+        puts("Found Mouse in slot #"); putc('0' + ((rom >> 8) & $07)); putln
+        //
+        // Hook mouse IRQ handler into ProDOS IRQ chain
+        //
+        params.0 = 2
+        params.1 = 0
+        params:2 = @serviceMouse
+        syscall($40, @params)
+        //
+        // Set values
+        //
+        slot           = rom >> 8
+        index          = slot & $07
+        page           = index << 4
+        setMouseFW     = rom + rom->$12
+        //
+        // Fix-up IRQ routine
+        //
+        serviceMouse:2 = rom + rom->$13 // serveMouseFW
+        serviceMouse:8 = $0778+index
+        vblEvent:1     = @vblInt
+        bttnEvent:1    = @bttnPrev
+        mouseEvent:1   = @mouInt
+        updateBttn:1   = @bttnPrev
+        updateMouse.1  = slot
+        updateMouse.3  = page
+        updateMouse:5  = rom + rom->$14 // readMouseFW
+        readMouse.1    = index
+        call(rom + rom->$19, $00, slot, page, $04) // initMouseFW
+        return modkeep
+    fin
+next
+//
+// Not found
+//
+return -1
+done
+
+What follows is the relevant parts to the mouse driver for VM02
+
+CHKMOUSE:   LDX #$20        ; LOOK FOR MOUSE
+    LDA #$01
+    JSR SCAN_SLOTS
+    BCS NOMOUSE
+    PHA         ; SAVE SLOT
+    LDY #$13
+    LDA (TMPTR),Y
+    STA SERVEMOUSE+1        ; FIXUP IRQ HANDLER
+    STX SERVEMOUSE+2
+    LDY #$14
+    LDA (TMPTR),Y
+    STA READMOUSE+1     ; FIXUP IRQ HANDLER
+    STX READMOUSE+2
+    TXA
+    AND #$07
+    STA MOUSE_SLOT
+    TAY
+    JSR MOUSE_INIT      ; MAKE SURE MOUSE IS OFF, INTS OFF
+    LDA WARM_INIT
+    BNE :+
+    JSR PUTS
+    .ASCIIZ "Mouse in slot #"
+    LDA MOUSE_SLOT
+    JSR PRBYTE
+    JSR CROUT
+:   PLA
+    TAY
+    LDA #<MOUSE_DRIVER      ; LOAD MOUSE DRIVER
+    LDX #>MOUSE_DRIVER
+    JSR LOAD_DRIVER
+;
+; SCAN SLOTS FOR MATCHING CARD ID
+; ENTRY: A = START SLOT SCAN
+;        X = CARD ID
+; EXIT:  A = SLOT # :: C = 0
+;        X = SLOT PAGE
+;
+SCAN_SLOTS: ORA #$C0
+    STA TMPTR+1
+    LDA #$00
+    STA TMPTR
+CHKSIG: LDY #$05
+    LDA (TMPTR),Y
+    CMP #$38        ; LOOK FOR PASCAL COMPAT SIG
+    BNE :+
+    LDY #$07
+    LDA (TMPTR),Y
+    CMP #$18
+    BNE :+
+    LDY #$0B
+    LDA (TMPTR),Y
+    CMP #$01
+    BNE :+
+    LDY #$0C
+    TXA         ; LOOK FOR MATCHING ID
+    CMP (TMPTR),Y
+    BNE :+
+    LDA TMPTR+1
+    TAX
+    AND #$07
+    CLC
+    RTS
+:   INC TMPTR+1
+    LDA TMPTR+1
+    CMP #$C8
+    BCC CHKSIG
+    SEC
+    RTS
+
+;*
+;* TURN VBL INTS ON AFTER INIT
+;*
+VBL_INIT:   LDA MOUSE_SLOT
+    BEQ NOVBL
+    ASL
+    TAX
+    LSR
+    ORA #MOUSECTL_CALLFW
+    TAY
+    SEI         ; TURN OFF INTERRUPTS
+    LDA LINK_DEVCTRL,X
+    STA CALLVBLPROC+1
+    LDA LINK_DEVCTRL+1,X
+    STA CALLVBLPROC+2
+    LDA #$08        ; TURN MOUSE OFF, LEAVE VBL ON
+    LDX #$12
+CALLVBLPROC:    JSR $0000
+    CLI         ; BACK ON
+    LDA WARM_INIT
+    BNE NOVBL
+    JSR PUTSLN
+    .ASCIIZ "VBlank timer active"
+NOVBL:  RTS
+
+    JSR PRODOS
+    .BYTE   $40     ; ALLOC INTERRUPT
+    .ADDR   ALLOCINTPARMS
+.IFDEF  DEBUG
+    BCC :+
+    JSR PUTSLN
+    .ASCIIZ "FAILED TO ALLOCATE INTERRUPT"
+:
+.ENDIF
+    RTS
+ALLOCINTPARMS:  .BYTE   $02
+    .BYTE   $00     ; INT NUM
+    .ADDR   IO_INTERRUPT        ; INT CODE
+
+;*
+;* I/O INTERRUPT ROUTINE
+;*
+IO_INTERRUPT:   CLD
+    LDY #$02        ; SLOT #1 * 2
+FNDIRQPROC: LDA LINK_DEVIRQ+1,Y
+    BEQ NXTIRQPROC
+    STA CALLIRQPROC+2
+    LDA LINK_DEVIRQ,Y
+    STA CALLIRQPROC+1
+    TYA
+    LSR
+    PHA
+CALLIRQPROC:    JSR $0000
+    BCS :+
+    PLA
+    TAY
+    PHA
+    JSR THREAD_NOTIFYIO
+:   PLA
+    ASL
+    TAY
+NXTIRQPROC: INY
+    INY
+    CPY #$10
+    BCC FNDIRQPROC
+    CLC
+    RTS
+
+;*
+;* MOUSE DEVICE DRIVER
+;*
+MOUSE_INIT: ORA #$C0
+    STA XREGMOUSE1+1
+    STA XREGMOUSE2+1
+    ASL
+    ASL
+    ASL
+    ASL
+    STA YREGMOUSE1+1
+    STA YREGMOUSE2+1
+    LDA #$00
+    PHA         ; DISABLE ALL MOUSE INTS
+    LDX #$12        ; FW INDEX FOR SETMOUSE
+    BNE CALLMOUSEFW
+MOUSE_DRIVER:
+MOUSE_DRVR_SZ:  .WORD   MOUSE_DRVR_END - MOUSE_DRVR_START
+MOUSE_READ_OFS: .WORD   MOUSE_READ     - MOUSE_DRVR_START
+MOUSE_WRITE_OFS: .WORD  MOUSE_WRITE    - MOUSE_DRVR_START
+MOUSE_CTRL_OFS: .WORD   MOUSE_CTRL     - MOUSE_DRVR_START
+MOUSE_IRQ_OFS:  .WORD   MOUSE_IRQ      - MOUSE_DRVR_START
+MOUSE_DRVR_START:
+MOUSE_READ:
+MOUSE_WRITE:    SEC
+    RTS
+MOUSE_X:    .WORD   $0000
+MOUSE_Y:    .WORD   $0000
+MOUSE_STATUS:   .BYTE   $00
+MOUSE_CTRL: PHA
+    TYA
+    AND #$F8        ; MASK OFF SLOT #
+    CMP #MOUSECTL_CALLFW
+    BNE :+
+CALLMOUSEFW:    STX OPADDR
+XREGMOUSE2: LDX #$C4
+    STX OPADDR+1
+    LDY #$00
+    LDA (OPADDR),Y      ; GET ENTRYPOINT OFFSET
+    STA OPADDR
+YREGMOUSE2: LDY #$40
+    PLA
+    SEI
+    JMP (OPADDR)        ; CALL FIXED UP FUNCTION POINTER
+:   CMP #MOUSECTL_READMOUSE ; COPY MOUSE STATUS/POSITION INTO EASILY ACCESSIBLE MEMORY
+    BNE :+
+    PLA
+    TYA
+    AND #$07
+    TAX         ; SAVE MOUSE PARAMETERS
+    ASL
+    TAY
+    LDA LINK_DEVREAD,Y
+    STA TMPTR
+    LDA LINK_DEVREAD+1,Y
+    STA TMPTR+1
+    SEI
+    LDY #$02
+    LDA $0478,X
+    STA (TMPTR),Y
+    PHA
+    INY
+    LDA $0578,X
+    STA (TMPTR),Y
+    INY
+    LDA $04F8,X
+    STA (TMPTR),Y
+    PHA
+    INY
+    LDA $05F8,X
+    STA (TMPTR),Y
+    INY
+    LDA $0778,X
+    STA (TMPTR),Y
+    STA TMP
+    PLA
+    TAY
+    PLA
+    TAX
+    LDA TMP
+    RTS
+:   CMP #MOUSECTL_CLAMPX
+    BEQ :+
+    CMP #MOUSECTL_CLAMPY
+    BNE :++
+:   PLA
+    STA $04F8
+    STX $05F8
+    LDA #$00
+    STA $0478
+    STA $0578
+    TYA
+    LSR
+    LSR
+    LSR
+    AND #$01
+    PHA
+    LDX #$17        ; FW INDEX FOR CLAMPMOUSE
+    BNE CALLMOUSEFW
+SETMOUSE:   PHA
+    LDX #$12        ; FW INDEX FOR SETMOUSE
+    BNE CALLMOUSEFW
+:   PLA
+    TYA
+    AND #$F8        ; MASK OFF SLOT #
+    CMP #IOCTL_OPEN
+    BNE :+
+    LDA #<THREAD_YIELD      ; REMOVE SOFTWARE TIMER
+    STA LINK_YIELD
+    LDA #>THREAD_YIELD
+    STA LINK_YIELD+1
+    LDA #$0F        ; TURN MOUSE INTS ON
+    BNE SETMOUSE
+:   CMP #IOCTL_CLOSE
+    BNE :+
+    LDA #$08        ; TURN MOUSE OFF
+    BNE SETMOUSE
+:   CMP #IOCTL_DEACTIVATE
+    BNE :+
+    LDA #MOUSECTL_NOIRQ
+:   CMP #MOUSECTL_NOIRQ     ; UNINSTALL IRQ HANDLER
+    BNE :+
+    SEI
+    LDA #<SW_TIMER      ; RE-INSTALL SW TIMER
+    STA LINK_YIELD
+    LDA #>SW_TIMER
+    STA LINK_YIELD+1
+    BNE SETMOUSE
+:   CMP #IOCTL_ID
+    BEQ :+
+    SEC
+    RTS
+:   LDA #$20        ; MOUSE ID
+    CLC
+    RTS
+;
+; VBLANK TIMER AND MOUSE IRQ
+;
+MOUSE_IRQ:  STA TMP
+SERVEMOUSE: JSR $C400
+    BCS VBLEXIT     ; NOT MOUSE INT
+    LDY TMP     ; CHECK MOUSE INT CAUSE
+    LDA $0778,Y
+    PHA
+    AND #$08        ; WAS IT VLB?
+    BEQ MOUSEEXIT       ; NOPE, MOVE OR BUTTON
+VBLTIC: LDX #$00
+    LDA #$11        ; 17 MSEC (2/3 OF THE TIME)
+    DEC TIMERADJUST
+    BNE :+
+    LDA #$02
+    STA TIMERADJUST
+    LDA #$10        ; 16 MSEC (1/3 OF THE TIME)
+:   JSR SYSTEM_TIC
+MOUSEEXIT:  PLA
+    AND #$86        ; MOUSE MOVE OR BUTTON ACTIVE
+    BEQ VBLEXIT
+XREGMOUSE1: LDX #$C4
+YREGMOUSE1: LDY #$40
+READMOUSE:  JSR $C400       ; IIGS REQUIRES THIS HAPPEN IN IRQ
+    CLC
+    RTS
+VBLEXIT:    SEC
+    RTS
+MOUSE_DRVR_END  EQU *
+
+package apple2;
+/*
+ * This class interfaces directly with the mouse device driver.
+ */
+public class Mouse
+{
+    static private int slot, mouseSlot, mouseCtrl, ctrlRead, addrXPos, addrYPos;
+    static public  int xPos, yPos, status;
+
+    public static boolean enable()
+    {
+        //
+        // Search for mouse card and disable VBL interrupts
+        //
+        for (slot = 1; slot < 8; slot++)
+        {
+            int mouse = vm02.call((1 << 19), 0x90 + (slot << 1)); // ID device
+            if ((mouse & 0x010000FF) == 0x20) // CARRY clear == valid device IOCTL, 0x20 == mouse card ID
+            {
+                mouseCtrl  = 0x90 + (slot << 1);
+                mouseSlot  = slot << 16;
+                ctrlRead   = mouseSlot | 0x801400;
+                addrXPos   = vm02.peekWord(0x0370 + (slot << 1)) + 2;
+                addrYPos   = addrXPos + 2;
+                return (vm02.call(mouseSlot | (3 << 19), mouseCtrl) & 0x01000000) == 0; // open port
+            }
+        }
+        slot = 0;
+        return false;
+    }
+    public static void disable()
+    {
+        vm02.call(mouseSlot | (4<<19), mouseCtrl); // close port
+    }
+    public static void disableIRQ()
+    {
+        int vblSlot, vbl;
+        //
+        // Search for mouse card and disable/remove interrupts
+        //
+        for (vblSlot = 1; vblSlot < 8; vblSlot++)
+        {
+            vbl = vm02.call((1 << 19), 0x90 + (vblSlot << 1)); // ID device
+            if ((vbl & 0x010000FF) == 0x20) // CARRY clear == valid device IOCTL, 0x20 == mouse card ID
+            {
+                vm02.call((vblSlot << 16) | (17 << 19), 0x90 + (vblSlot << 1)); // MOUSECTL_UNVBL
+                break;
+            }
+        }
+    }
+    public static int slotMask()
+    {
+        return (1 << slot);
+    }
+    public static void update()
+    {
+        status = vm02.call(ctrlRead, mouseCtrl) & 0xFF; // CALL_FW ReadMouse
+        xPos   = vm02.peekWord(addrXPos);
+        yPos   = vm02.peekWord(addrYPos);
+    }
+}

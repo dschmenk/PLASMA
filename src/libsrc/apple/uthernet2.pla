@@ -71,10 +71,11 @@ const WIZ_RXMEM3 = $7800
 //
 // Wiznet indirect registers
 //
-byte slot
-word saveidx
-byte regidx
-byte regdata
+word[] rom
+word   saveidx
+byte   regidx
+byte   regdata
+byte[] slot
 //
 // Wiznet MAC address
 //
@@ -137,7 +138,6 @@ word bcast = IP_BROADCAST, IP_BROADCAST
 //
 // ICMP type/codes
 //
-const IP_PROTO_ICMP   = 1
 const ICMP_ECHO_REQST = 8
 const ICMP_ECHO_REPLY = 0
 //
@@ -180,12 +180,12 @@ end
 //
 // Local network parameters
 //
-const MAX_WIZ_CHANNELS  = 4
+const MAX_WIZ_CHANNELS = 4
 //
 // Channel protocols
 //
-const WIZ_PROTO_CLOSED     = 0
-const WIZ_PROTO_TCP        = 1
+const WIZ_PROTO_CLOSED = 0
+const WIZ_PROTO_TCP    = 1
 const WIZ_PROTO_UDP    = 2
 const WIZ_PROTO_IP     = 3
 const WIZ_PROTO_RAW    = 4
@@ -212,7 +212,7 @@ struc t_channel
     word    channel_recv_func
     word    channel_recv_parm
 end
-byte[t_channel * MAX_WIZ_CHANNELS] wizChannel
+byte[t_channel] wizChannel[MAX_WIZ_CHANNELS]
 //
 // Service ICMP hook
 //
@@ -227,11 +227,11 @@ end
 // Swap bytes in word
 //
 asm swab(val)
-    LDA ESTKL,X
-    LDY ESTKH,X
-    STA ESTKH,X
-    STY ESTKL,X
-    RTS
+        LDA     ESTKL,X
+        LDY     ESTKH,X
+        STA     ESTKH,X
+        STY     ESTKL,X
+        RTS
 end
 //
 // Wiznet I/O functions
@@ -239,118 +239,122 @@ end
 // POKE WORD TO I/O SPACE
 // Note: Big Endian format
 //
-asm _pokeiow(val)
-    LDA ESTKH,X
+asm _pokeiow(val)#0
+        LDA     ESTKH,X
 end
 asm _pokeiowl
-    STA $C000
-    LDA ESTKL,X
+        STA     $C000
+        LDA     ESTKL,X
 end
 asm _pokeiowh
-    STA $C000
-    RTS
+        STA     $C000
+        INX
+        RTS
 end
 //
 // POKE BYTE TO I/O SPACE
 //
-asm _pokeio(val)
-    LDA ESTKL,X
+asm _pokeio(val)#0
+        LDA     ESTKL,X
 end
 asm _pokeiol
-    STA $C000
-    RTS
+        STA     $C000
+        INX
+        RTS
 end
 //
 // PEEK BYTE FROM I/O SPACE
 //
 asm _peekio
-    DEX
+        DEX
 end
 asm _peekiol
-    LDA $C000
-    STA ESTKL,X
-    LDA #$00
-    STA ESTKH,X
-    RTS
+        LDA     $C000
+        STA     ESTKL,X
+        LDA     #$00
+        STA     ESTKH,X
+        RTS
 end
 //
 // PEEK WORD FROM I/O SPACE
 // Note: Big Endian format
 //
 asm _peekiow
-    DEX
+        DEX
 end
 asm _peekiowl
-    LDA $C000
-    STA ESTKH,X
+        LDA     $C000
+        STA     ESTKH,X
 end
 asm _peekiowh
-    LDA $C000
-    STA ESTKL,X
-    RTS
+        LDA     $C000
+        STA     ESTKL,X
+        RTS
 end
 //
 // WRITE DATA INTO I/O SPACE
 // pokedata(BUF, LEN)
 //
-asm pokedata(buf, len)
-    LDA ESTKL+1,X
-    STA SRCL
-    LDA ESTKH+1,X
-    STA SRCH
-    LDY     ESTKL,X
-    BEQ POKELP
-    LDY #$00
-    INC     ESTKH,X
-POKELP  LDA (SRC),Y
+asm pokedata(buf, len)#0
+        LDA     ESTKL+1,X
+        STA     SRCL
+        LDA     ESTKH+1,X
+        STA     SRCH
+        LDY     ESTKL,X
+        BEQ     POKELP
+        LDY     #$00
+        INC     ESTKH,X
+POKELP  LDA     (SRC),Y
 end
 asm _pokedata
-    STA $C000
-    INY
-    BNE +
-        INC SRCH
-+   DEC ESTKL,X
-    BNE POKELP
-    DEC ESTKH,X
-    BNE POKELP
-    INX
-    RTS
+        STA     $C000
+        INY
+        BNE     +
+        INC     SRCH
++       DEC     ESTKL,X
+        BNE     POKELP
+        DEC     ESTKH,X
+        BNE     POKELP
+        INX
+        INX
+        RTS
 end
 //
 // READ DATA FROM I/O SPACE
 // peekdata(BUF, LEN)
 //
-asm peekdata(buf, len)
-    LDA ESTKL+1,X
-    STA DSTL
-    LDA ESTKH+1,X
-    STA DSTH
-    LDY ESTKL,X
-    BEQ PEEKLP
-    LDY #$00
-    INC     ESTKH,X
+asm peekdata(buf, len)#0
+        LDA     ESTKL+1,X
+        STA     DSTL
+        LDA     ESTKH+1,X
+        STA     DSTH
+        LDY     ESTKL,X
+        BEQ     PEEKLP
+        LDY     #$00
+        INC     ESTKH,X
 end
 asm _peekdata
-PEEKLP  LDA $C000
-    STA (DST),Y
-    INY
-    BNE +
-        INC DSTH
-+   DEC ESTKL,X
-    BNE PEEKLP
-    DEC ESTKH,X
-    BNE PEEKLP
-    INX
-    RTS
+PEEKLP  LDA     $C000
+        STA     (DST),Y
+        INY
+        BNE     +
+        INC     DSTH
++       DEC     ESTKL,X
+        BNE     PEEKLP
+        DEC     ESTKH,X
+        BNE     PEEKLP
+        INX
+        INX
+        RTS
 end
-def pokeiow(io, data)
+def pokeiow(io, data)#0
     _pokeiowl.1 = io
     _pokeiowh.1 = io+1
-    return _pokeiow(data)
+    _pokeiow(data)
 end
-def pokeio(io, data)
+def pokeio(io, data)#0
     _pokeiol.1 = io
-    return _pokeio(data)
+    _pokeio(data)
 end
 def peekio(io)
     _peekiol.1 = io
@@ -361,26 +365,26 @@ def peekiow(io)
     _peekiowh.1 = io+1
     return _peekiow()
 end
-def pokereg(reg, data)
+def pokereg(reg, data)#0
     _pokeiow(reg)
-    return _pokeio(data)
+    _pokeio(data)
 end
 def peekreg(reg)
     _pokeiow(reg)
     return _peekio()
 end
-def pokeregs(reg, buf, len)
+def pokeregs(reg, buf, len)#0
     _pokeiow(reg)
-    return pokedata(buf, len)
+    pokedata(buf, len)
 end
-def peekregs(reg, buf, len)
+def peekregs(reg, buf, len)#0
     _pokeiow(reg)
-    return peekdata(buf, len)
+    peekdata(buf, len)
 end
-def pokeregw(reg, dataw)
+def pokeregw(reg, dataw)#0
     _pokeiow(reg)
     _pokeio(dataw.1)
-    return _pokeio(dataw.0)
+    _pokeio(dataw.0)
 end
 def peekregw(reg)
     word dataw
@@ -415,7 +419,7 @@ def wizSendUDP(wiz, ipdst, portdst, data, len)
         splitlen = WIZ_TXSIZE - txrr
         pokeregs(wizdata + txrr, data,            splitlen)
         pokeregs(wizdata,        data + splitlen, len - splitlen)
-     else
+    else
         pokeregs(wizdata + txrr, data, len)
     fin
     //
@@ -480,14 +484,14 @@ end
 //
 def wizCloseUDP(wiz)
     if isuge(wiz, @wizChannel) and isult(wiz, @wizChannel + MAX_WIZ_CHANNELS * t_channel)
-    //
-    // Clear notiications on this port
-    //
+        //
+        // Clear notiications on this port
+        //
         if wiz->channel_proto == WIZ_PROTO_UDP
             wiz->channel_proto = WIZ_PROTO_CLOSED
             pokereg(wiz=>channel_regs + WIZ_SnCR, $10) // CLOSE
-        return 0
-    fin
+            return 0
+        fin
     fin
     //
     // Invalid port
@@ -508,8 +512,8 @@ def wizListenTCP(lclport, callback, param)
     for i = 1 to MAX_WIZ_CHANNELS
         if wiz->channel_proto == WIZ_PROTO_TCP and wiz->channel_state == TCP_STATE_LISTEN and wiz=>channel_lclport == lclport
             break
-    fin
-    wiz = wiz + t_channel
+        fin
+        wiz = wiz + t_channel
     next
     if i > MAX_WIZ_CHANNELS
         //
@@ -519,8 +523,8 @@ def wizListenTCP(lclport, callback, param)
         for i = 1 to MAX_WIZ_CHANNELS
             if !wiz->channel_proto
                 break
-        fin
-        wiz = wiz + t_channel
+            fin
+            wiz = wiz + t_channel
         next
         if i > MAX_WIZ_CHANNELS
             return 0
@@ -670,10 +674,10 @@ end
 def wizSetParam(wiz, param)
     if wiz->channel_proto == WIZ_PROTO_UDP or wiz->channel_proto == WIZ_PROTO_TCP
         //
-    // Update param on this port
-    //
-    wiz=>channel_recv_parm = param
-    return 0
+        // Update param on this port
+        //
+        wiz=>channel_recv_parm = param
+        return 0
     fin
     //
     // Invalid port
@@ -787,11 +791,11 @@ def wizServiceIP
             fin
             wiz = wiz + t_channel
         next
-    if ir & $80
+        if ir & $80
             //
-        // IP conflict
-        //
-        pokereg(WIZ_IR, $80)
+            // IP conflict
+            //
+            pokereg(WIZ_IR, $80)
         fin
         if ir & $40
             //
@@ -839,71 +843,74 @@ end
 // Identify Uthernet II card and initialize
 //
 for slot = $90 to $F0 step $10
-    regdata = peekio(slot)
-    if (regdata & $E4) == $00
-        pokeio(slot, $03) // Try setting auto-increment indirect I/F
-        if peekio(slot) == $03
-            saveidx = peekiow(slot + 1)
-            peekio(slot + 3) // Dummy read to data register should increment index
-            if peekiow(slot + 1) == saveidx + 1
-                //
-                // Good chance this is it
-                //
-                pokeio(slot, $80) // RESET
-                regidx      = slot + 1
-                regdata     = slot + 3
-                _pokedata.1 = regdata
-                _peekdata.1 = regdata
-                pokeio(slot, $03) // Auto-increment indirect I/F + enable ping
-                //
-                // The following looks redundant, but it sets up the peek/poke locations
-                // for peekreg(s)/pokereg(s)
-                //
-                pokeiow(regidx, WIZ_MR)
-                pokeio(regdata, $03) // Auto-increment indirect I/F + enable ping
-                peekio(regdata)
-                //
-                // Initialize common registers
-                //
-                pokeregs(WIZ_SHAR, @wizMAC, 6) // MAC addr
-                pokeregw(WIZ_RTR, 5000)        // Timeout period to 500ms
-                pokereg(WIZ_RMSR, $55)         // 2K Rx memory/channel
-                pokereg(WIZ_TMSR, $55)         // 2K Tx memory/channel
-                //
-                // Print settings
-                //
-                puts("Found Uthernet II in slot #")
-                putc('0' + ((slot - $80) >> 4))
-                putln
-                //
-                // Fill channel structure
-                //
-                saveidx = @wizChannel
-                for slot = 0 to 3
-                    saveidx=>channel_regs  = WIZ_SREGS + (WIZ_SSIZE  * slot)
-                    saveidx=>channel_txmem = WIZ_TXMEM + (WIZ_TXSIZE * slot)
-                    saveidx=>channel_rxmem = WIZ_RXMEM + (WIZ_RXSIZE * slot)
-                    saveidx = saveidx + t_channel
-                next
-                //
-                // Fill in Net class
-                //
-                iNet:serviceIP      = @wizServiceIP
-                iNet:openUDP        = @wizOpenUDP
-                iNet:sendUDP        = @wizSendUDP
-                iNet:closeUDP       = @wizCloseUDP
-                iNet:listenTCP      = @wizListenTCP
-                iNet:connectTCP     = @wizConnectTCP
-                iNet:sendTCP        = @wizSendTCP
-                iNet:closeTCP       = @wizCloseTCP
-                iNet:setInterfaceIP = @setWizIP
-                iNet:getInterfaceHA = @getWizHA
-                iNet:setCallback    = @wizSetCallback
-                iNet:setParam       = @wizSetParam
-                return modkeep
+    rom = ((slot & $70) << 4) | $C000
+    if rom=>$06 <> $3C86 or (slot == $0B or (rom->$05 <> $38 and rom->$07 <> $18)) // Skip slots with signature
+        regdata = peekio(slot)
+        if (regdata & $E4) == $00
+            pokeio(slot, $03) // Try setting auto-increment indirect I/F
+            if peekio(slot) == $03
+                saveidx = peekiow(slot + 1)
+                peekio(slot + 3) // Dummy read to data register should increment index
+                if peekiow(slot + 1) == saveidx + 1
+                    //
+                    // Good chance this is it
+                    //
+                    pokeio(slot, $80) // RESET
+                    regidx      = slot + 1
+                    regdata     = slot + 3
+                    _pokedata.1 = regdata
+                    _peekdata.1 = regdata
+                    pokeio(slot, $03) // Auto-increment indirect I/F + enable ping
+                    //
+                    // The following looks redundant, but it sets up the peek/poke locations
+                    // for peekreg(s)/pokereg(s)
+                    //
+                    pokeiow(regidx, WIZ_MR)
+                    pokeio(regdata, $03) // Auto-increment indirect I/F + enable ping
+                    peekio(regdata)
+                    //
+                    // Initialize common registers
+                    //
+                    pokeregs(WIZ_SHAR, @wizMAC, 6) // MAC addr
+                    pokeregw(WIZ_RTR, 5000)        // Timeout period to 500ms
+                    pokereg(WIZ_RMSR, $55)         // 2K Rx memory/channel
+                    pokereg(WIZ_TMSR, $55)         // 2K Tx memory/channel
+                    //
+                    // Print settings
+                    //
+                    puts("Found Uthernet II in slot #")
+                    putc('0' + ((slot - $80) >> 4))
+                    putln
+                    //
+                    // Fill channel structure
+                    //
+                    saveidx = @wizChannel
+                    for slot = 0 to 3
+                        saveidx=>channel_regs  = WIZ_SREGS + (WIZ_SSIZE  * slot)
+                        saveidx=>channel_txmem = WIZ_TXMEM + (WIZ_TXSIZE * slot)
+                        saveidx=>channel_rxmem = WIZ_RXMEM + (WIZ_RXSIZE * slot)
+                        saveidx = saveidx + t_channel
+                    next
+                    //
+                    // Fill in Net class
+                    //
+                    iNet:serviceIP      = @wizServiceIP
+                    iNet:openUDP        = @wizOpenUDP
+                    iNet:sendUDP        = @wizSendUDP
+                    iNet:closeUDP       = @wizCloseUDP
+                    iNet:listenTCP      = @wizListenTCP
+                    iNet:connectTCP     = @wizConnectTCP
+                    iNet:sendTCP        = @wizSendTCP
+                    iNet:closeTCP       = @wizCloseTCP
+                    iNet:setInterfaceIP = @setWizIP
+                    iNet:getInterfaceHA = @getWizHA
+                    iNet:setCallback    = @wizSetCallback
+                    iNet:setParam       = @wizSetParam
+                    return modkeep
+                fin
             fin
+            pokeio(slot, regdata) // Restore register
         fin
-        pokeio(slot, regdata) // Restore register
     fin
 next
 //

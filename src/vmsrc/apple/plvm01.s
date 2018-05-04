@@ -121,6 +121,7 @@ OPTBL   !WORD   CN,CN,CN,CN,CN,CN,CN,CN                                 ; 00 02 
         !WORD   NEG,COMP,BAND,IOR,XOR,SHL,SHR,IDXW                      ; 90 92 94 96 98 9A 9C 9E
         !WORD   BRGT,BRLT,INCBRLE,ADDBRLE,DECBRGE,SUBBRGE,BRAND,BROR    ; A0 A2 A4 A6 A8 AA AC AE
         !WORD   ADDLB,ADDLW,ADDAB,ADDAW,IDXLB,IDXLW,IDXAB,IDXAW         ; B0 B2 B4 B6 B8 BA BC BE
+        !WORD   NATV                                                    ; C0
 ;*
 ;* DIV TOS-1 BY TOS
 ;*
@@ -932,20 +933,16 @@ BRGT    LDA     ESTKL+1,X
         SBC     ESTKH,X
         BVS     +
         BPL     NOBRNCH
--       INX                     ; DROP FOR VALUES
-        INX
-        BNE     BRNCH           ; BMI     BRNCH
+        BMI     BRNCH
 BRLT    LDA     ESTKL,X
         CMP     ESTKL+1,X
         LDA     ESTKH,X
         SBC     ESTKH+1,X
         BVS     +
         BPL     NOBRNCH
-        INX                     ; DROP FOR VALUES
-        INX
-        BNE     BRNCH           ; BMI     BRNCH
+        BMI     BRNCH
 +       BMI     NOBRNCH
-        BPL     -
+        BPL     BRNCH
 DECBRGE DEC     ESTKL,X
         LDA     ESTKL,X
         CMP     #$FF
@@ -957,9 +954,7 @@ _BRGE   LDA     ESTKL,X
         SBC     ESTKH+1,X
         BVS     +
         BPL     BRNCH
--       INX                     ; DROP FOR VALUES
-        INX
-        BNE     NOBRNCH         ; BMI     NOBRNCH
+        BMI     NOBRNCH
 INCBRLE INC     ESTKL,X
         BNE     _BRLE
         INC     ESTKH,X
@@ -969,11 +964,9 @@ _BRLE   LDA     ESTKL+1,X
         SBC     ESTKH,X
         BVS     +
         BPL     BRNCH
-        INX                     ; DROP FOR VALUES
-        INX
-        BNE     NOBRNCH         ; BMI     NOBRNCH
+        BMI     NOBRNCH
 +       BMI     BRNCH
-        BPL     -
+        BPL     NOBRNCH
 SUBBRGE LDA     ESTKL+1,X
         SEC
         SBC     ESTKL,X
@@ -1066,6 +1059,17 @@ LEAVE   INY                     ;+INC_IP
         RTS
 +       INC     IFPH
 RET     RTS
+;*
+;* RETURN TO NATIVE CODE
+;*
+NATV    TYA                     ; FLATTEN IP
+        SEC
+        ADC     IPL
+        STA     IPL
+        BCS     +
+        JMP     (IP)
++       INC     IPH
+        JMP     (IP)
 A1CMD   !SOURCE "vmsrc/apple/a1cmd.a"
 SEGEND  =       *
 VMINIT  LDY     #$10        ; INSTALL PAGE 0 FETCHOP ROUTINE

@@ -89,6 +89,16 @@ int idconst_add(char *name, int len, int value)
         printf("Constant count overflow\n");
         return (0);
     }
+    if (idconst_lookup(name, len) > 0)
+    {
+        parse_error("const/global name conflict\n");
+        return (0);
+    }
+    if (idglobal_lookup(name, len) > 0)
+    {
+        parse_error("global label already defined\n");
+        return (0);
+    }
     name[len] = '\0';
     emit_idconst(name, value);
     name[len] = c;
@@ -865,7 +875,7 @@ void emit_select(int tag)
 void emit_caseblock(int casecnt, int *caseof, int *casetag)
 {
     int i;
-    
+
     if (casecnt < 1 || casecnt > 256)
         parse_error("Switch count under/overflow\n");
     emit_pending_seq();
@@ -1372,7 +1382,7 @@ int crunch_seq(t_opseq **seq, int pass)
                                 case BINARY_CODE(LE_TOKEN):
                                     op->val = op->val <= opnext->val ? 1 : 0;
                                     freeops  = 2;
-                                    break;                                    
+                                    break;
                             }
                         // End of collapse constant operation
                         if ((pass > 0) && (freeops == 0) && (op->val != 0))

@@ -8,7 +8,7 @@
 
 int parse_mods(void);
 
-int infunc = 0, break_tag = 0, cont_tag = 0, stack_loop = 0, infor = 0;
+int infunc = 0, break_tag = 0, cont_tag = 0, stack_loop = 0;
 long infuncvals = 0;
 t_token prevstmnt;
 static int      lambda_num = 0;
@@ -831,7 +831,7 @@ t_opseq *parse_set(t_opseq *codeseq)
 int parse_stmnt(void)
 {
     int tag_prevbrk, tag_prevcnt, tag_else, tag_endif, tag_while, tag_wend, tag_repeat, tag_for, tag_choice, tag_of;
-    int type, addr, step, cfnvals, prev_for, constsize, casecnt, i;
+    int type, addr, step, cfnvals, constsize, casecnt, i;
     int *caseval, *casetag;
     long constval;
     char *idptr;
@@ -891,8 +891,6 @@ int parse_stmnt(void)
                 parse_error("Missing IF/FIN");
             break;
         case WHILE_TOKEN:
-            prev_for    = infor;
-            infor       = 0;
             tag_while   = tag_new(BRANCH_TYPE);
             tag_wend    = tag_new(BRANCH_TYPE);
             tag_prevcnt = cont_tag;
@@ -917,11 +915,8 @@ int parse_stmnt(void)
             emit_codetag(tag_wend);
             break_tag = tag_prevbrk;
             cont_tag  = tag_prevcnt;
-            infor     = prev_for;
             break;
         case REPEAT_TOKEN:
-            prev_for    = infor;
-            infor       = 0;
             tag_prevbrk = break_tag;
             break_tag   = tag_new(BRANCH_TYPE);
             tag_repeat  = tag_new(BRANCH_TYPE);
@@ -945,12 +940,9 @@ int parse_stmnt(void)
             emit_seq(seq);
             emit_codetag(break_tag);
             break_tag = tag_prevbrk;
-            infor     = prev_for;
             break;
         case FOR_TOKEN:
             stack_loop += 2;
-            prev_for    = infor;
-            infor       = 1;
             tag_prevbrk = break_tag;
             break_tag   = tag_new(BRANCH_TYPE);
             tag_for     = tag_new(BRANCH_TYPE);
@@ -1029,13 +1021,15 @@ int parse_stmnt(void)
                     emit_decbrge(tag_for);
             }
             emit_codetag(break_tag);
+            if (type & LOCAL_TYPE)
+                type & BYTE_TYPE ? emit_slb(addr) : emit_slw(addr);
+            else
+                type & BYTE_TYPE ? emit_sab(addr, 0, type) : emit_saw(addr, 0, type);
+            emit_drop();
             break_tag   = tag_prevbrk;
-            infor       = prev_for;
             stack_loop -= 2;
             break;
         case CASE_TOKEN:
-            prev_for    = infor;
-            infor       = 0;
             tag_prevbrk = break_tag;
             break_tag   = tag_new(BRANCH_TYPE);
             tag_choice  = tag_new(BRANCH_TYPE);
@@ -1111,15 +1105,10 @@ int parse_stmnt(void)
             free(casetag);
             emit_codetag(break_tag);
             break_tag = tag_prevbrk;
-            infor     = prev_for;
             break;
         case BREAK_TOKEN:
             if (break_tag)
-            {
-                if (infor)
-                    emit_drop2();
                 emit_brnch(break_tag);
-            }
             else
                 parse_error("BREAK without loop");
             break;
@@ -1130,19 +1119,19 @@ int parse_stmnt(void)
                 parse_error("CONTINUE without loop");
             break;
         case RETURN_TOKEN:
+            cfnvals = stack_loop;
+            while (cfnvals >= 2)
+            {
+                emit_drop2();
+                cfnvals -= 2;
+            }
+            if (cfnvals)
+            {
+                emit_drop();
+                cfnvals--;
+            }
             if (infunc)
             {
-                int i;
-
-                i = stack_loop;
-                while (i >= 2)
-                {
-                    emit_drop2();
-                    i -= 2;
-                }
-                if (i)
-                    emit_drop();
-                cfnvals = 0;
                 emit_seq(parse_list(NULL, &cfnvals));
                 if (cfnvals > infuncvals)
                     parse_error("Too many return values");
@@ -1699,6 +1688,7 @@ int parse_defs(void)
             next_line();
         } while (scantoken != END_TOKEN);
         scan();
+        infunc = 0;
         return (1);
     }
     return (scantoken == EOL_TOKEN);

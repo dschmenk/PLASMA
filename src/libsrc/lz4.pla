@@ -1,0 +1,91 @@
+include "inc/cmdsys.plh"
+asm incs
+        !SOURCE    "vmsrc/plvmzp.inc"
+end
+//
+// Always forward copy memory - important for overlapping match sequences
+//
+asm bcpy(dst, src, len)#0
+        INX
+        INX
+        INX
+        LDA     ESTKL-3,X
+        ORA     ESTKH-3,X
+        BEQ     CPYEX
+        LDA     ESTKL-1,X
+        STA     DSTL
+        LDA     ESTKH-1,X
+        STA     DSTH
+        LDA     ESTKL-2,X
+        STA     SRCL
+        LDA     ESTKH-2,X
+        STA     SRCH
+        LDY     ESTKL-3,X
+        BEQ     CPYLP
+        INC     ESTKH-3,X
+        LDY     #$00
+CPYLP   LDA     (SRC),Y
+        STA     (DST),Y
+        INY
+        BNE     +
+        INC     DSTH
+        INC     SRCH
++       DEC     ESTKL-3,X
+        BNE     CPYLP
+        DEC     ESTKH-3,X
+        BNE     CPYLP
+CPYEX   RTS
+end
+//
+// Unpack LZ4 sequence into buffer, return unpacked length
+//
+export def lz4Unpack(seq, seqend, buff, buffend)
+    word data, len, match, i
+    byte token
+
+    data = buff
+    while isult(seq, seqend)
+        token = ^seq
+        seq++
+        len = token >> 4
+        if len
+            //
+            // Literal sequence
+            //
+            if len == 15
+                while ^seq == 255
+                    len = len + 255
+                    seq++
+                loop
+                len = len + ^seq
+                seq++
+            fin
+            if isuge(data + len, buffend); return 0; fin
+            bcpy(data, seq, len)
+            data = data + len
+            seq  = seq  + len
+        fin
+        len = token & $0F
+        if len or isult(seq, seqend)
+            //
+            // Match sequence
+            //
+            match =  data - *seq
+            seq   = seq + 2
+            len   = len + 4
+            if len == 19 // $0F + 4
+                while ^seq == 255
+                    len = len + 255
+                    seq++
+                loop
+                len = len + ^seq
+                seq++
+            fin
+            if isuge(data + len, buffend); return 0; fin
+            bcpy(data, match, len)
+            data = data + len
+        fin
+    loop
+    return data - buff
+end
+done

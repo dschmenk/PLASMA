@@ -1047,7 +1047,7 @@ def adddef(isfirst, ext, addr, deflast)#1
     return defentry
 end
 def loadmod(mod)#1
-    word refnum[], deffirst, rdlen, modsize, bytecode, codefix, defofst, defcnt, init, fixup
+    word refnum[], deffirst, rdlen, modsize, bytecode, codefix, defofst, defcnt, init, initcode[], fixup
     word addr, defaddr, modaddr, modfix, modofst, modend
     word deftbl, deflast, codeseg
     word moddep, rld, esd, sym
@@ -1059,7 +1059,7 @@ def loadmod(mod)#1
     //
     dcitos(mod, @filename)
     refnum = open(@filename)
-    if !refnum
+    if !refnum and filename < 16
         //
         // Try system path
         //
@@ -1190,31 +1190,6 @@ def loadmod(mod)#1
                 *addr = ^rld & $10 ?? *addr + lookupextern(esd, rld->3) :: lookupdef(fixup + codefix, deftbl)
                 rld   = rld + 4
             fin
-            //addr = rld=>1 + modfix
-            //if uword_isge(addr, modaddr) // Skip fixups to header
-            //    if type & $80 // WORD sized fixup.
-            //        fixup = *addr
-            //    else          // BYTE sized fixup.
-            //        fixup = ^addr
-            //    fin
-            //    if ^rld & $10 // EXTERN reference.
-            //        fixup = fixup + lookupextern(esd, rld->3)
-            //    else          // INTERN fixup.
-            //        fixup = fixup + modofst
-            //        if uword_isge(fixup, bytecode)
-            //            //
-            //            // Bytecode address - replace with call def directory.
-            //            //
-            //            fixup = lookupdef(fixup + codefix, deftbl)
-            //        fin
-            //    fin
-            //    if type & $80 // WORD sized fixup.
-            //        *addr = fixup
-            //    else          // BYTE sized fixup.
-            //        ^addr = fixup
-            //    fin
-            //fin
-            //rld = rld + 4
         loop
         //
         // Run through the External/Entry Symbol Directory.
@@ -1256,14 +1231,14 @@ def loadmod(mod)#1
     //
     // Call init routine if it exists.
     //
-    fixup = 0
+    initcode = 0
     if init
-        fixup = adddef(deffirst, defext, init + defofst, @deflast)()
-        if fixup < 0
-            perr = -fixup
+        initcode = adddef(deffirst, defext, init + defofst, @deflast)()
+        if initcode < 0
+            perr = -initcode
         fin
     fin
-    return fixup
+    return initcode
 end
 def execmod(modfile)#1
     byte moddci[17]
@@ -1312,7 +1287,7 @@ cmdlnptr = @cmdln
 // Print PLASMA version
 //
 init_cons
-prstr("PLASMA JITC 2.0 Dev\n")//; putb(version.1); putc('.'); putb(version.0); putln
+prstr("PLASMA 2.0 Dev JITC\n")//; putb(version.1); putc('.'); putb(version.0); putln
 prstr("MEM:$"); prword(availheap); crout
 //
 // Exec command line parser
