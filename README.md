@@ -106,7 +106,7 @@ Different projects have led to the architecture of PLASMA, most notably Apple Pa
 
 ## PLASMA Cross-Compiler
 
-The first step in writing PLASMA code is to get a build environment working. If you have Unix-like environment, then this is a fairly easy exercise. Windows users may want to install the [Cygwin](https://www.cygwin.com/) environment to replicate a Unix-like environment under Windows. When installing Cygwin, make sure **gcc-core**, **make**, and **git** are installed under the **Devel** packages. Mac OS X users may have to install the **Xcode** from the App Store.
+The first step in writing PLASMA code is to get a build environment working. If you have Unix-like environment, then this is a fairly easy exercise. Windows users may want to install the [Linux Subsystem for Windows](https://docs.microsoft.com/en-us/windows/wsl/install-win10) or the [Cygwin](https://www.cygwin.com/) environment to replicate a Unix-like environment under Windows. When installing Cygwin, make sure **gcc-core**, **make**, and **git** are installed under the **Devel** packages. Mac OS X users may have to install the **Xcode** from the App Store. Linux users should make sure the development packages are installed.
 
 Launch the command-line/terminal application for your environment to download and build PLASMA. Create a source code directory and change the working directory to it, something like:
 
