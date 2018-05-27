@@ -38,7 +38,7 @@ IPL     =       IP
 IPH     =       IPL+1
 OPIDX   =       FETCHOP+6
 OPPAGE  =       OPIDX+1
-STRBUF  =       $0280
+STRBUF  =       $0300
 INTERP  =       $03D0
 ;******************************
 ;*                            *

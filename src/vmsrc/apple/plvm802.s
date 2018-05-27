@@ -63,8 +63,8 @@ OPPAGE  =       OPIDX+1
 ;
 ; BUFFER ADDRESSES
 ;
-STRBUF  =       $0280
-JITMOD  =       $02E0
+STRBUF  =       $0300
+JITMOD  =       $02F0
 INTERP  =       $03D0
 JITCOMP =       $03E2
 JITCODE =       $03E4
