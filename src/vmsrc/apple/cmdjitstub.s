@@ -8,10 +8,16 @@ LCBNK1  =       $08
 JITCOMP =       $03E2
 JITCODE =       $03E4
 !SOURCE "vmsrc/plvmzp.inc"
+        JMP     CMDMOVE
+_CMDBEGIN   =   *
+!PSEUDOPC   $1000 {
+!SOURCE "vmsrc/apple/cmdjit.a"
+_CMDEND     =   *
+}
 ;*
 ;* MOVE CMD DOWN TO $1000-$2000
 ;*
-        LDA     #<_CMDBEGIN
+CMDMOVE LDA     #<_CMDBEGIN
         STA     SRCL
         LDA     #>_CMDBEGIN
         STA     SRCH
@@ -19,6 +25,7 @@ JITCODE =       $03E4
         STY     DSTL
         LDX     #$10
         STX     DSTH
+        INX
 -       LDA     (SRC),Y
         STA     (DST),Y
         INY
@@ -44,8 +51,3 @@ JITCODE =       $03E4
         TXS
         LDX     #ESTKSZ/2   ; INIT EVAL STACK INDEX
         JMP     $1000
-_CMDBEGIN   =   *
-!PSEUDOPC   $1000 {
-!SOURCE "vmsrc/apple/cmdjit.a"
-_CMDEND     =   *
-}
