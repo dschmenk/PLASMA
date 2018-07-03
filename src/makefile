@@ -19,6 +19,7 @@ JITUNE     = rel/apple/JITUNE\#FE1000
 SOS        = rel/apple/SOS\#FE1000
 ROD        = rel/ROD\#FE1000
 SIEVE      = rel/SIEVE\#FE1000
+PRIMEGAP   = rel/PRIMEGAP\#FE1000
 ARGS       = rel/ARGS\#FE1000
 SPIPORT    = rel/apple/SPIPORT\#FE1000
 SDFAT      = rel/apple/SDFAT\#FE1000
@@ -85,7 +86,7 @@ TXTTYPE	= .TXT
 #SYSTYPE	= \#FF2000
 #TXTTYPE	= \#040000
 
-apple: $(PLVMZP_APL) $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVMJIT) $(PLVM802) $(PLVM03) $(CMD) $(CMDJIT) $(JIT) $(JIT16) $(JITUNE) $(SOSCMD) $(PLASMAPLASM) $(CODEOPT) $(ARGS) $(MEMMGR) $(MEMTEST) $(FIBER) $(FIBERTEST) $(LONGJMP) $(ED) $(MON) $(SOS) $(ROD) $(SIEVE) $(MOUSE) $(UTHERNET2) $(UTHERNET) $(ETHERIP) $(INET) $(DHCP) $(HTTPD) $(TFTPD) $(ROGUE) $(ROGUEMAP) $(ROGUECOMBAT) $(GRAFIX) $(GFXDEMO) $(DGR) $(DGRTEST) $(FILEIO_APL) $(CONIO_APL) $(JOYBUZZ) $(PORTIO) $(SPIPORT) $(SDFAT) $(FATCAT) $(FATGET) $(FATPUT) $(FATWDSK) $(FATRDSK) $(SANE) $(FPSTR) $(FPU) $(SANITY) $(LZ4) $(LZ4CAT) $(RPNCALC) $(SNDSEQ) $(PLAYSEQ)
+apple: $(PLVMZP_APL) $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVMJIT) $(PLVM802) $(PLVM03) $(CMD) $(CMDJIT) $(JIT) $(JIT16) $(JITUNE) $(SOSCMD) $(PLASMAPLASM) $(CODEOPT) $(ARGS) $(MEMMGR) $(MEMTEST) $(FIBER) $(FIBERTEST) $(LONGJMP) $(ED) $(MON) $(SOS) $(ROD) $(SIEVE) $(PRIMEGAP) $(MOUSE) $(UTHERNET2) $(UTHERNET) $(ETHERIP) $(INET) $(DHCP) $(HTTPD) $(TFTPD) $(ROGUE) $(ROGUEMAP) $(ROGUECOMBAT) $(GRAFIX) $(GFXDEMO) $(DGR) $(DGRTEST) $(FILEIO_APL) $(CONIO_APL) $(JOYBUZZ) $(PORTIO) $(SPIPORT) $(SDFAT) $(FATCAT) $(FATGET) $(FATPUT) $(FATWDSK) $(FATRDSK) $(SANE) $(FPSTR) $(FPU) $(SANITY) $(LZ4) $(LZ4CAT) $(RPNCALC) $(SNDSEQ) $(PLAYSEQ)
 	-rm vmsrc/plvmzp.inc
 
 c64: $(PLVMZP_C64) $(PLASM) $(PLVM) $(PLVMC64) 
@@ -242,6 +243,10 @@ $(ROD): samplesrc/rod.pla $(PLVM02) $(PLASM)
 $(SIEVE): samplesrc/sieve.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AMW < samplesrc/sieve.pla > samplesrc/sieve.a
 	acme --setpc 4094 -o $(SIEVE) samplesrc/sieve.a
+
+$(PRIMEGAP): samplesrc/primegap.pla $(PLVM02) $(PLASM)
+	./$(PLASM) -AMW < samplesrc/primegap.pla > samplesrc/primegap.a
+	acme --setpc 4094 -o $(PRIMEGAP) samplesrc/primegap.a
 
 $(SANE): libsrc/sane.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AMOW < libsrc/sane.pla > libsrc/sane.a
