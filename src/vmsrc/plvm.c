@@ -640,19 +640,23 @@ void interp(code *ip)
             case 0x36: // DIVMOD
                 break;
             case 0x38: // ADDI
-                PUSH(POP + BYTE_PTR(ip));
+                val = POP + BYTE_PTR(ip);
+                PUSH(val);
                 ip++;
                 break;
             case 0x3A: // SUBI
-                PUSH(POP - BYTE_PTR(ip));
+                val = POP - BYTE_PTR(ip);
+                PUSH(val);
                 ip++;
                 break;
             case 0x3C: // ANDI
-                PUSH(POP & BYTE_PTR(ip));
+                val = POP & BYTE_PTR(ip);
+                PUSH(val);
                 ip++;
                 break;
             case 0x3E: // ORI
-                PUSH(POP | BYTE_PTR(ip));
+                val = POP | BYTE_PTR(ip);
+                PUSH(val);
                 ip++;
                 break;
                 /*
