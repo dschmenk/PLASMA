@@ -509,6 +509,10 @@ void call(uword pc)
             mem_data[0x1FF] = i;
             PUSH(0x1FF);
             break;
+        case 10: // LIBRARY STDLIB::PUTH
+            i = UPOP;
+            printf("%04X", i);
+            break;
         case 24: // LIBRARY CMDSYS::DIVMOD
             a = POP;
             b = POP;
