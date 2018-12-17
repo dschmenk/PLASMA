@@ -502,7 +502,7 @@ void call(uword pc)
         case 8: // LIBRARY STDLIB::GETS
             c = POP;
             putchar(c);
-            gets(sz);
+            fgets(sz, 63, stdin);
             for (i = 0; sz[i]; i++)
                 mem_data[0x200 + i] = sz[i];
             mem_data[0x200 + i] = 0;
@@ -561,7 +561,7 @@ void interp(code *ip)
             while (dsp >= esp)
                 printf("$%04X ", (*dsp--) & 0xFFFF);
             printf("]\n");
-            gets(cmdline);
+            fgets(cmdline, 15, stdin);
         }
         previp = ip;
         switch (*ip++)
