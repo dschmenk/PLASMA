@@ -651,9 +651,13 @@ t_opseq *parse_value(t_opseq *codeseq, int rvalue, int *stackdepth)
             cfnparms = 0; cfnvals = 1;
             type &= ~FUNC_TYPE;
         }
-        else if (type & (BYTE_TYPE | BPTR_TYPE))
+        else if (type & (BPTR_TYPE)) // Prefer the pointer type.
             valseq = gen_lb(valseq);
-        else if (type & (WORD_TYPE | WPTR_TYPE))
+        else if (type & (WPTR_TYPE))
+            valseq = gen_lw(valseq);
+        else if (type & (BYTE_TYPE))
+            valseq = gen_lb(valseq);
+        else if (type & (WORD_TYPE))
             valseq = gen_lw(valseq);
         else
             parse_error("What are we dereferencing?");

@@ -50,7 +50,6 @@ t_token keywords[] = {
     BYTE_TOKEN,             'R', 'E', 'S',
     BYTE_TOKEN,             'B', 'Y', 'T', 'E',
     BYTE_TOKEN,             'C', 'H', 'A', 'R',
-    BYTE_TOKEN,             'R', 'E', 'S',
     WORD_TOKEN,             'W', 'O', 'R', 'D',
     WORD_TOKEN,             'V', 'A', 'R',
     CONST_TOKEN,            'C', 'O', 'N', 'S', 'T',

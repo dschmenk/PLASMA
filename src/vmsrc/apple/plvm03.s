@@ -126,7 +126,7 @@ PAGE0   =       *
 ;*
         INX                     ; DROP
         INY                     ; NEXTOP
-        LDA     $FFFF,Y         ; FETCHOP @ $F3, IP MAPS OVER $FFFF @ $F4
+        LDA     $FFFF,Y         ; FETCHOP @ $F1, IP MAPS OVER $FFFF @ $F2
         STA     OPIDX
         JMP     (OPTBL)
 }

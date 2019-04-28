@@ -38,7 +38,7 @@ IPL     =       IP
 IPH     =       IPL+1
 OPIDX   =       FETCHOP+6
 OPPAGE  =       OPIDX+1
-STRBUF  =       $0280
+STRBUF  =       $0300
 INTERP  =       $03D0
 ;******************************
 ;*                            *
@@ -285,7 +285,7 @@ PAGE0    =      *
         !PSEUDOPC       DROP {
         INX                     ; DROP @ $EF
         INY                     ; NEXTOP @ $F0
-        LDA     $FFFF,Y         ; FETCHOP @ $F3, IP MAPS OVER $FFFF @ $F4
+        LDA     $FFFF,Y         ; FETCHOP @ $F1, IP MAPS OVER $FFFF @ $F2
         STA     OPIDX
         JMP     (OPTBL)         ; OPIDX AND OPPAGE MAP OVER OPTBL
 }

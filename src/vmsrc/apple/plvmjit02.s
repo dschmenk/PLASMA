@@ -50,8 +50,8 @@ IPL     =       IP
 IPH     =       IPL+1
 OPIDX   =       FETCHOP+6
 OPPAGE  =       OPIDX+1
-STRBUF  =       $0280
-JITMOD  =       $02E0
+STRBUF  =       $0300
+JITMOD  =       $02F0
 INTERP  =       $03D0
 JITCOMP =       $03E2
 JITCODE =       $03E4
@@ -371,7 +371,7 @@ PAGE0    =      *
         !PSEUDOPC       DROP {
         INX                     ; DROP @ $EF
         INY                     ; NEXTOP @ $F0
-        LDA     $FFFF,Y         ; FETCHOP @ $F3, IP MAPS OVER $FFFF @ $F4
+        LDA     $FFFF,Y         ; FETCHOP @ $F1, IP MAPS OVER $FFFF @ $F2
         STA     OPIDX
         JMP     (OPTBL)         ; OPIDX AND OPPAGE MAP OVER OPTBL
 }

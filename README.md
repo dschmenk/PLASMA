@@ -106,7 +106,7 @@ Different projects have led to the architecture of PLASMA, most notably Apple Pa
 
 ## PLASMA Cross-Compiler
 
-The first step in writing PLASMA code is to get a build environment working. If you have Unix-like environment, then this is a fairly easy exercise. Windows users may want to install the [Cygwin](https://www.cygwin.com/) environment to replicate a Unix-like environment under Windows. When installing Cygwin, make sure **gcc-core**, **make**, and **git** are installed under the **Devel** packages. Mac OS X users may have to install the **Xcode** from the App Store.
+The first step in writing PLASMA code is to get a build environment working. If you have Unix-like environment, then this is a fairly easy exercise. Windows users may want to install the [Linux Subsystem for Windows](https://docs.microsoft.com/en-us/windows/wsl/install-win10) or the [Cygwin](https://www.cygwin.com/) environment to replicate a Unix-like environment under Windows. When installing Cygwin, make sure **gcc-core**, **make**, and **git** are installed under the **Devel** packages. Mac OS X users may have to install the **Xcode** from the App Store. Linux users should make sure the development packages are installed.
 
 Launch the command-line/terminal application for your environment to download and build PLASMA. Create a source code directory and change the working directory to it, something like:
 
@@ -518,7 +518,7 @@ else
 fin
 ```
 
-The `when`/`is`/`otherwise`/`wend` statement is similar to the `if`/`elsif`/`else`/`fin` construct except that it is more efficient.  It selects one path based on the evaluated expressions, then merges the code path back together at the end.  Only the `when` value is compared against a list of expressions.  The expressions do not need to be constants, they can be any valid expression.  The list of expressions is evaluated in order, so for efficiency sake, place the most common cases earlier in the list. Just as in C programs, a `break` statement is required to keep one clause from falling through to the next. Falling through from one clause to the next can have its uses, so this behavior has been added to PLASMA.
+The `when`/`is`/`otherwise`/`wend` statement is similar to the `if`/`elsif`/`else`/`fin` construct except that it is more efficient.  It selects one path based on the evaluated expressions, then merges the code path back together at the end.  Only the `when` value is compared against a list of constant.  Just as in C programs, a `break` statement is required to keep one clause from falling through to the next. Falling through from one clause to the next can have its uses, so this behavior has been added to PLASMA.
 
 ```
 when keypressed
@@ -1139,7 +1139,7 @@ The common `if` test can have optional `elsif` and/or `else` clauses. Any expres
 
 #### WHEN/IS/[OTHERWISE]/WEND
 
-The complex test case is handled with `when`. Basically an `if`, `elsif`, `else` list of comparisons, it is generally more efficient. The `is` value can be any expression. It is evaluated and tested for equality to the `when` value.
+The complex test case is handled with `when`. Basically an `if`, `elsif`, `else` list of comparisons, it is generally more efficient. The `is` value must be a constant.
 
 ```
 when key
@@ -1159,26 +1159,6 @@ when key
         break
     otherwise
         // Not a known key
-wend
-```
-
-With a little "Yoda-Speak", some fairly complex test can be made:
-
-```
-const FALSE = 0
-const TRUE  = NOT FALSE
-
-byte a
-
-when TRUE
-    is (a <= 10)
-        // 10 or less
-        break
-    is (a > 10) AND (a < 20)
-        // between 10 and 20
-        break
-    is (a >= 20)
-        // 20 or greater
 wend
 ```
 

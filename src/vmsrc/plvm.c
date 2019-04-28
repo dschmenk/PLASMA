@@ -502,12 +502,16 @@ void call(uword pc)
         case 8: // LIBRARY STDLIB::GETS
             c = POP;
             putchar(c);
-            gets(sz);
+            fgets(sz, 63, stdin);
             for (i = 0; sz[i]; i++)
                 mem_data[0x200 + i] = sz[i];
             mem_data[0x200 + i] = 0;
             mem_data[0x1FF] = i;
             PUSH(0x1FF);
+            break;
+        case 10: // LIBRARY STDLIB::PUTH
+            i = UPOP;
+            printf("%04X", i);
             break;
         case 24: // LIBRARY CMDSYS::DIVMOD
             a = POP;
@@ -557,7 +561,7 @@ void interp(code *ip)
             while (dsp >= esp)
                 printf("$%04X ", (*dsp--) & 0xFFFF);
             printf("]\n");
-            gets(cmdline);
+            fgets(cmdline, 15, stdin);
         }
         previp = ip;
         switch (*ip++)
@@ -640,19 +644,23 @@ void interp(code *ip)
             case 0x36: // DIVMOD
                 break;
             case 0x38: // ADDI
-                PUSH(POP + BYTE_PTR(ip));
+                val = POP + BYTE_PTR(ip);
+                PUSH(val);
                 ip++;
                 break;
             case 0x3A: // SUBI
-                PUSH(POP - BYTE_PTR(ip));
+                val = POP - BYTE_PTR(ip);
+                PUSH(val);
                 ip++;
                 break;
             case 0x3C: // ANDI
-                PUSH(POP & BYTE_PTR(ip));
+                val = POP & BYTE_PTR(ip);
+                PUSH(val);
                 ip++;
                 break;
             case 0x3E: // ORI
-                PUSH(POP | BYTE_PTR(ip));
+                val = POP | BYTE_PTR(ip);
+                PUSH(val);
                 ip++;
                 break;
                 /*
