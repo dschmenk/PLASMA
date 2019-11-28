@@ -283,17 +283,17 @@ DINTRP  PHP
         XCE
         +ACCMEM16               ; 16 BIT A/M
         PLA
-        INC
         STA     IP
         STX     ESP
         TSX
         STX     HWSP
         LDX     #>OPTBL
 !IF DEBUG {
+        INC     IP
         JMP     SETDBG
 } ELSE {
         STX     OPPAGE
-        LDY     #$00
+        LDY     #$01
         JMP     FETCHOP
 }
         !AS
