@@ -160,12 +160,14 @@ OPTBL   !WORD   CN,CN,CN,CN,CN,CN,CN,CN                                 ; 00 02 
 ;* SYSTEM INTERPRETER ENTRYPOINT
 ;*
 INTERP  PLA
+	CLC
+	ADC	#$01
         STA     IPL
         PLA
+        ADC	#$00
         STA     IPH
         LDY     #$00
         STY     IPX
-        INY
         JMP     FETCHOP
 ;*
 ;* ENTER INTO USER BYTECODE INTERPRETER

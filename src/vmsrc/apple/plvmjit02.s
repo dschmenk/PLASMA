@@ -223,10 +223,13 @@ OPTBL   !WORD   CN,CN,CN,CN,CN,CN,CN,CN                                 ; 00 02 
 ;* DIRECTLY ENTER INTO BYTECODE INTERPRETER
 ;*
 DINTRP  PLA
+        CLC
+        ADC     #$01
         STA     IPL
         PLA
+        ADC     #$00
         STA     IPH
-        LDY     #$01
+        LDY     #$00
         LDA     #>OPTBL
         STA     OPPAGE
         JMP     FETCHOP
