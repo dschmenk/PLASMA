@@ -27,10 +27,13 @@ SEGBEGIN JMP    VMINIT
 ;* SYSTEM INTERPRETER ENTRYPOINT
 ;*
 INTERP  PLA
+        CLC
+        ADC     #$01
         STA     IPL
         PLA
+        ADC     #$00
         STA     IPH
-        LDY     #$01
+        LDY     #$00
         JMP     FETCHOP
 ;*
 ;* ENTER INTO USER BYTECODE INTERPRETER
