@@ -35,19 +35,20 @@ struc t_fileio
     word create
     word destroy
     word newline
+    word online
     word readblock
     word writeblock
 end
 predef a2getpfx(path), a23setpfx(path), a2getfileinfo(path, fileinfo), a23geteof(refnum), a2iobufs(iobufs), a2open(path), a2close(refnum)
 predef a23read(refnum, buf, len), a2write(refnum, buf, len), a2create(path, type, aux), a23destroy(path)
-predef a2newline(refnum, emask, nlchar), a2readblock(unit, buf, block), a2writeblock(unit, buf, block)
+predef a2newline(refnum, emask, nlchar), a2online(unit, buf), a2readblock(unit, buf, block), a2writeblock(unit, buf, block)
 //
 // Exported function table.
 //
 word fileio[]
 word = @a2getpfx, @a23setpfx, @a2getfileinfo, @a23geteof, @a2iobufs, @a2open, @a2close
 word = @a23read, @a2write, @a2create, @a23destroy
-word = @a2newline, @a2readblock, @a2writeblock
+word = @a2newline, @a2online, @a2readblock, @a2writeblock
 //
 // SOS/ProDOS error code
 //
@@ -325,6 +326,57 @@ def a3newline(refnum, emask, nlchar)
     perr     = syscall($C9, @params)
     return perr
 end
+def a1online(unit, buf)
+    perr = $27 // IOERR
+    return perr
+end
+def a2online(unit, buf)
+    byte params[4]
+
+    params.0 = 2
+    params.1 = unit
+    params:2 = buf
+    perr     = syscall($C5, @params)
+    return perr
+end
+def a3volume(unit, volname)
+    byte devname[17]
+    byte info[11]
+    byte params[9]
+    
+    ^volname = 0
+    params.0 = 4
+    params.1 = unit
+    params:2 = @devname
+    params:4 = @info
+    params.6 = 11
+    if syscall($85, @params) == 0
+        params.0 = 4
+        params:1 = @devname
+        params:3 = volname
+        params:5 = 0
+        params:7 = 0
+        return syscall($C5, @params)
+    fin
+    return -1
+end
+def a3online(unit, buf)
+    byte info[11]
+    byte volname[17]
+    byte i
+
+    if unit == 0
+        for i = $01 to $0F
+            if a3volume(i, buf) == 0
+                ^buf = ^buf | (i << 4)
+            fin
+            buf = buf + 16
+        next
+    else
+        return a3volume(unit, buf)
+    fin
+    return 0
+end
 def a13readblock(unit, buf, block)
     perr = $27  // IOERR
     return perr
@@ -366,6 +418,7 @@ when MACHID & MACHID_MODEL
         fileio:write       = @a3write
         fileio:create      = @a3create
         fileio:newline     = @a3newline
+        fileio:online      = @a3online
         fileio:readblock   = @a13readblock
         fileio:writeblock  = @a13writeblock
         break
@@ -382,6 +435,7 @@ when MACHID & MACHID_MODEL
         fileio:create      = @a1create
         fileio:destroy     = @a1destroy
         fileio:newline     = @a1newline
+        fileio:online      = @a1online
         fileio:readblock   = @a13readblock
         fileio:writeblock  = @a13writeblock
         break
