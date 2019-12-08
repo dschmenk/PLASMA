@@ -108,7 +108,7 @@ There is a [YouTube playlist](https://www.youtube.com/playlist?list=PLlPKgUMQbJ7
 
 2. Just-In-Time Compiler for native code performance (6502 and 65816) for frequently called routines
 
-3. Automatically identify and run most opimal VM for configuration
+3. Automatically identify and run most optimal VM for configuration
 
 # Changes in PLASMA for 1.2
 
