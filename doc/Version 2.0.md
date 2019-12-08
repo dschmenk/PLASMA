@@ -12,7 +12,7 @@ Download the four disk images (three if you don't plan to boot an Apple ///):
 
 [PLASMA 2.0 DP Demos](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLASMA-DEM2.PO?raw=true)
 
-[PLASMA 2.0 DP Apple /// SOS Boot ](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLASMA-SOS2.PO?raw=true)
+[PLASMA 2.0 DP Apple /// SOS Boot and SANE floating point modules](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLASMA-SOS2.PO?raw=true)
 
 PLASMA can be run from floppies, System in Drive 1, and Build or Demos in Drive 2. Mass storage is the recommended installation that looks like (replacing HARDISK with your volume name of choice):
 
@@ -21,6 +21,8 @@ System Files => /HARDISK/PLASMA/
 Build Files => /HARDISK/PLASMA/BLD/
 
 Demo Files => /HARDISK/PLASMA/DEMOS/
+
+SANE files => /HARDISK/PLASMA/SYS
 
 Use the System Utilities to copy the floppy images into the above mentioned directories.
 
