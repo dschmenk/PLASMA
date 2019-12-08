@@ -94,7 +94,7 @@ There is a [YouTube playlist](https://www.youtube.com/playlist?list=PLlPKgUMQbJ7
 
 - All the modules and runtime are written mostly in PLASMA; the compiler and editor as well. This means that there may be some startup delay as the PLASMA module loader reads in the module dependencies and performs dynamic linking. But a 1 MHz, 8 bit CPU interpreting bytecodes is never going to match a modern computer. As noted earlier, an accelerator and mass storage are your (and PLASMA's) friend.
 
-- All the project modules are included. They have been tested, with the exception of the Uthernet2 driver. I seem to have misplaced mine. If someone can try the Web Server demo in /PLASMA.DEMOS/NET and leave feedback would be very appreciated.
+- All the project modules are included. They have been lightly tested.
 
 - The Apple /// may not always report errors properly or at all.
 
