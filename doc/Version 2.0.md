@@ -4,7 +4,7 @@ Welcome to PLASMA: the Grand Unifying Platform for the Apple 1, ][, and ///.
 
 Download the four disk images (three if you don't plan to boot an Apple ///):
 
-[PLASMA 2.0 DP 800K Full System](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLASMA.2mg?raw=true)
+[PLASMA 2.0 DP 800K Full System](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLASMA2.2mg?raw=true)
 
 [PLASMA 2.0 DP System and ProDOS Boot](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLASMA-SYS2.PO?raw=true)
 
