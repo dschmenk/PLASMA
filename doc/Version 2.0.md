@@ -34,7 +34,7 @@ To boot directly into PLASMA, you will need to put the system files in the root 
 
 #### 65802/65816 Support
 
-PLASMA can utilize the 16 bit features of the 65802 and 65816 processors to improve performance of the PLASMA VM operation. This is transparent to the programmer/user and doesn't make any additional memory or capabilities available to PLASMA. Launch `PLASMA16.SYSTEM` to use the 16 bit PLASMA VM. If you don't have the right CPU, it will print a message and restart.
+PLASMA can utilize the 16 bit features of the 65802 and 65816 processors to improve performance of the PLASMA VM operation. This is transparent to the programmer/user and doesn't make any additional memory or capabilities available to PLASMA. PLASMA will automatically run the most optimal VM for your configuration.
 
 ## Apple ///
 
@@ -105,6 +105,8 @@ There is a [YouTube playlist](https://www.youtube.com/playlist?list=PLlPKgUMQbJ7
 1. Expanded bytecode for more efficient size/performance of programs
 
 2. Just-In-Time Compiler for native code performance (6502 and 65816) for frequently called routines
+
+3. Automatically identify and run most opimal VM for configuration
 
 # Changes in PLASMA for 1.2
 
