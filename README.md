@@ -1,3 +1,6 @@
+# 12/7/2019 PLASMA 2.0 Developer Preview Available!
+[Download and read the Release Notes](https://github.com/dschmenk/PLASMA/blob/master/doc/Version%202.0.md)
+
 # 4/29/2018 PLASMA 1.2 Available!
 [Download and read the Release Notes](https://github.com/dschmenk/PLASMA/blob/master/doc/Version%201.2.md)
 
