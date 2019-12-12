@@ -1,4 +1,4 @@
-# PLASMA Version 2.0 Developer Preview
+# PLASMA Version 2.0 Developer Preview 1a
 
 Welcome to PLASMA: the Grand Unifying Platform for the Apple 1, ][, and ///.
 
@@ -102,7 +102,11 @@ There is a [YouTube playlist](https://www.youtube.com/playlist?list=PLlPKgUMQbJ7
 
 - The documentation is sparse and incomplete. Yep, could use your help...
 
-# Changed in PLASMA for 2.0 DP
+# Changed in PLASMA for 2.0 DP 1a
+
+1. Fix interaction with JIT compiler and module load/unload
+
+# Changes in PLASMA for 2.0 DP 1
 
 1. Expanded bytecode for more efficient size/performance of programs
 
