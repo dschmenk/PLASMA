@@ -196,16 +196,32 @@ def strpoolalloc(size)
     puts("OUT OF MEMORY!")
     return 0
 end
-
-def strstripcpy(dststr, srcstr)#0
+def striplead(strptr, chr)#0
+    byte striplen
+    
+    for striplen = 1 to ^strptr
+        if ^(strptr + striplen) <> chr
+            break
+        fin
+    next
+    if striplen > 1
+        ^strptr = ^strptr - (striplen - 1)
+        memcpy(strptr + 1, strptr + striplen, ^strptr)
+    fin
+end
+def striptail(strptr, chr)#0
     byte strlen
 
-    strlen = ^srcstr
-    while ^(srcstr + strlen) == $8D or ^(srcstr + strlen) == $A0
-        strlen--
-    loop
-    ^dststr = strlen
-    memcpy(dststr + 1, srcstr + 1, strlen)
+    for strlen = ^strptr downto 1
+        if ^(strptr + strlen) <> $8D and ^(strptr + strlen) <> chr
+            break
+        fin
+    next
+    ^strptr = strlen
+end
+def strstripcpy(dststr, srcstr)#0
+    memcpy(dststr, srcstr, ^srcstr + 1)
+    striptail(dststr, $80 | ' ')
 end
 def delstr(strptr)#0
     byte mask, ofst
@@ -799,13 +815,17 @@ def pasteline#0
     fin
 end
 def joinline#0
-    byte joinstr[80], joinlen
+    byte joinstr[80], joinlen, stripjoin[80]
 
     if cursrow < numlines - 1
         strstripcpy(@joinstr, strlinbuf=>[cursrow])
-        joinlen = joinstr + ^(strlinbuf=>[cursrow + 1])
+        joinstr++
+        joinstr[joinstr] = $80 | ' ' // add trailing space
+        memcpy(@stripjoin, strlinbuf=>[cursrow + 1], ^(strlinbuf=>[cursrow + 1]) + 1)
+        striplead(@stripjoin, $80 | ' ');
+        joinlen = joinstr + stripjoin
         if joinlen < 80
-            memcpy(@joinstr + joinstr + 1, strlinbuf=>[cursrow + 1] + 1, ^(strlinbuf=>[cursrow + 1]))
+            memcpy(@joinstr + joinstr + 1, @stripjoin + 1, stripjoin)
             joinstr = joinlen
             delstr(strlinbuf=>[cursrow])
             strlinbuf=>[cursrow] = newstr(@joinstr)
@@ -820,27 +840,57 @@ def joinline#0
     fin
 end
 def splitline#0
-    byte splitstr[80], splitlen
+    byte splitstr[80], splitlen, i
 
     if openline(cursrow + 1)
         if curscol
             splitlen = ^(strlinbuf=>[cursrow])
             if curscol < splitlen - 1
-                memcpy(@splitstr + 1, strlinbuf=>[cursrow] + curscol + 1, splitlen - curscol)
                 splitstr = splitlen - curscol
+                memcpy(@splitstr + 1, strlinbuf=>[cursrow] + curscol + 1, splitstr)
+                striplead(@splitstr, $80 | ' ')
+                for i = 1 to curscol - 1
+                    if ^(strlinbuf=>[cursrow] + i) <> $80 | ' '
+                        break
+                    fin
+                    memcpy(@splitstr + 2, @splitstr + 1, splitstr)
+                    splitstr[1] = $80 | ' '
+                    splitstr++
+                next            
                 strlinbuf=>[cursrow + 1] = newstr(@splitstr)
-                memcpy(@splitstr + 1, strlinbuf=>[cursrow] + 1, curscol)
                 splitstr = curscol
+                memcpy(@splitstr + 1, strlinbuf=>[cursrow] + 1, splitstr)
                 delstr(strlinbuf=>[cursrow])
                 strlinbuf=>[cursrow] = newstr(@splitstr)
+                curscol = i - 1
+                if curscol > 39
+                    cursx    = curscol - 39
+                    scrnleft = 39
+                else
+                    cursx    = curscol
+                    scrnleft = 0
+                fin
+            else
+                if splitlen > 0
+                    for curscol = 1 to splitlen - 1
+                        if ^(strlinbuf=>[cursrow] + curscol) <> $80 | ' '
+                            break
+                        fin
+                    next            
+                    curscol--
+                    if curscol > 39
+                        cursx    = curscol - 39
+                        scrnleft = 39
+                    else
+                        cursx    = curscol
+                        scrnleft = 0
+                    fin
+                fin
             fin
-        else
+         else
             strlinbuf=>[cursrow + 1] = strlinbuf=>[cursrow]
             strlinbuf=>[cursrow]     = @nullstr
         fin
-        curscol  = 0
-        cursx    = 0
-        scrnleft = 0
         redraw
         cursdown
     fin
@@ -1088,12 +1138,6 @@ def prfiles(optpath)
     heaprelease(databuff)
     putln
     return 0
-end
-def striplead(strptr, chr)#0
-    while ^strptr and ^(strptr + 1) == chr
-        memcpy(strptr + 1, strptr + 2, ^strptr)
-        ^strptr--
-    loop
 end
 def parsecmd(strptr)
     byte cmd
