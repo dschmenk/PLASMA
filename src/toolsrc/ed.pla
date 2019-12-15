@@ -72,6 +72,7 @@ const shiftlock     = 128
 // Text screen row address array
 //
 const scrnwidth   = 35
+const scrnheight  = 23
 word txtscrn      = $0404,$0484,$0504,$0584,$0604,$0684,$0704,$0784
 word              = $042C,$04AC,$052C,$05AC,$062C,$06AC,$072C,$07AC
 word              = $0454,$04D4,$0554,$05D4,$0654,$06D4,$0754,$07D4
@@ -89,7 +90,8 @@ word numcliplines  = 0
 word arg
 word strplsize     = MAXSTRPLSIZE
 word strpool, strplmapsize, txtlinbuf, cliplinbuf, strpoolmap
-byte cursx, cursy, scrnleft, curscol, underchr, curschr
+word cursx, cursy, scrnleft, curscol
+byte underchr, curschr
 word keyin, cursrow, selrow, scrntop, cursptr
 byte a3echo         = $80
 byte a3noecho       = $00
@@ -262,7 +264,7 @@ def striptail(strptr, chr)#0
 end
 def strstripcpy(dststr, srcstr)#0
     memcpy(dststr, srcstr, ^srcstr + 1)
-    striptail(dststr, $80 | ' ')
+    striptail(dststr, keyspace)
 end
 def delstr(strptr)#0
     byte mask, ofst
@@ -280,7 +282,7 @@ def newstr(strptr)
     word newptr
 
     strlen = ^strptr
-    while ^(strptr + strlen) == $8D or ^(strptr + strlen) == $A0
+    while ^(strptr + strlen) == keyenter or ^(strptr + strlen) == keyspace
         strlen--
     loop
     if strlen == 0
@@ -484,7 +486,8 @@ def drawgutter(scrnrow, ofst)#0
     //
     // Draw line numbers and gutter hilites
     //
-    ofstch = ofst ?? $80 | '<' :: $80 | ' '
+    //ofstch = ofst ?? $80 | '<' :: keyspace
+    ofstch = ofst ?? '<' :: ' '
     huns, tens = divmod(scrnrow + 1, 100)
     tens, ones = divmod(tens, 10)
     for row = 0 to 23
@@ -619,6 +622,44 @@ def redraw#0
     drawscrn(scrntop, scrnleft)
     curson
 end
+def curshpos(hpos)#1
+	byte needredraw
+	
+	needredraw = TRUE
+	if hpos < 0; hpos = 0; fin
+	if hpos > MAXLNLEN; hpos = MAXLNLEN; fin
+    curscol = hpos
+	cursx   = curscol - scrnleft
+	if cursx > scrnwidth
+		cursx      = scrnwidth
+		scrnleft   = curscol - scrnwidth
+	elsif cursx < 0
+        cursx      = 0
+        scrnleft   = curscol
+    else
+		needredraw = FALSE
+    fin
+    return needredraw
+end
+def cursvpos(vpos)#1
+	byte needredraw
+
+	needredraw = TRUE
+    if vpos < 0; vpos = 0; fin
+    if vpos > numlines - 1; vpos = numlines - 1; fin
+    cursrow = vpos
+    cursy   = cursrow - scrntop
+    if cursy > scrnheight
+		cursy = scrnheight
+		scrntop = cursrow - scrnheight
+	elsif cursy < 0
+        cursy    = 0
+        scrntop  = cursrow
+    else
+		needredraw = FALSE
+    fin
+    return needredraw
+end
 def curshome#0
     cursoff
     cursrow  = 0
@@ -664,11 +705,15 @@ def cursup#0
     fin
 end
 def pgup#0
-    byte i
-
-    for i = 0 to pgjmp
-        cursup
-    next
+	cursoff
+	if cursvpos(cursrow - pgjmp)
+		drawscrn(scrntop, scrnleft)
+	else
+		if flags & selection
+			drawgutter(scrntop, scrnleft)
+		fin
+	fin
+	curson
 end
 def cursdown#0
     if cursrow < numlines - 1
@@ -687,11 +732,15 @@ def cursdown#0
     fin
 end
 def pgdown#0
-    byte i
-
-    for i = 0 to pgjmp
-        cursdown
-    next
+	cursoff
+	if cursvpos(cursrow + pgjmp)
+		drawscrn(scrntop, scrnleft)
+	else
+		if flags & selection
+			drawgutter(scrntop, scrnleft)
+		fin
+	fin
+	curson
 end
 def cursleft#0
     if curscol > 0
@@ -707,11 +756,15 @@ def cursleft#0
     fin
 end
 def pgleft#0
-    byte i
-
-    for i = 0 to 7
-        cursleft
-    next
+	cursoff
+	if curshpos(curscol - 8)
+		drawscrn(scrntop, scrnleft)
+	else
+		if flags & selection
+			drawgutter(scrntop, scrnleft)
+		fin
+	fin
+	curson
 end
 def cursright#0
     if curscol < MAXLNLEN
@@ -727,43 +780,21 @@ def cursright#0
     fin
 end
 def pgright#0
-    byte i
-
-    for i = 0 to 7
-        cursright
-    next
-end
-def curshpos(hpos)#0
-    cursoff
-    curscol = hpos
-    if curscol > scrnwidth
-        cursx    = curscol - scrnwidth
-        scrnleft = scrnwidth
-    else
-        cursx    = curscol
-        scrnleft = 0
-    fin
-    curson
-end
-def cursvpos(vpos)#0
-    cursrow = vpos
-    if cursrow > numlines - 1
-        cursrow = numlines - 1
-    fin
-    if numlines > 23 and cursrow > 12
-        cursy    = 12
-        scrntop  = cursrow - 12
-    else
-        cursy    = cursrow
-        scrntop  = 0
-    fin
-    redraw
+	cursoff
+	if curshpos(curscol + 8)
+		drawscrn(scrntop, scrnleft)
+	else
+		if flags & selection
+			drawgutter(scrntop, scrnleft)
+		fin
+	fin
+	curson
 end
 //
 // Find string in text
 //
 def findline(strptr)#1
-    byte upstr[80], scan, i
+    byte upstr[MAXLNLEN+1], scan, i
     
     if ^strptr >= findstr
         lnupcpy(@upstr, strptr)
@@ -990,7 +1021,7 @@ end
 // Printer routines
 //
 def printtxt(slot)#0
-    byte txtbuf[80]
+    byte txtbuf[MAXLNLEN+1]
     word i, scrncsw
 
     scrncsw = *csw
@@ -1001,17 +1032,6 @@ def printtxt(slot)#0
         putln
     next
     *csw = scrncsw
-end
-def openline(row)
-    if numlines < MAXLINES
-        memcpy(@txtlinbuf=>[row + 1], @txtlinbuf=>[row], (numlines - row) * 2)
-        txtlinbuf=>[row] = @nullstr
-        numlines++
-        flags = flags | changed
-        return TRUE
-    fin
-    bell
-    return FALSE
 end
 def freesel#0
     word i
@@ -1097,7 +1117,7 @@ def pastesel#0
     fin
 end
 def indentsel#0
-    byte indentstr[80], l
+    byte indentstr[MAXLNLEN+1], l
     word firstsel, lastsel, i
     
     freesel
@@ -1107,8 +1127,8 @@ def indentsel#0
         if l < MAXLNLEN - 2
             memcpy(@indentstr + 3, txtlinbuf=>[i] + 1, l)
             indentstr[0] = l + 2
-            indentstr[1] = $A0
-            indentstr[2] = $A0
+            indentstr[1] = keyspace
+            indentstr[2] = keyspace
             delstr(txtlinbuf=>[i])
             txtlinbuf=>[i] = newstr(@indentstr)
             flags = flags | changed
@@ -1117,7 +1137,7 @@ def indentsel#0
     redraw
 end
 def undentsel#0
-    byte undentstr[80], l
+    byte undentstr[MAXLNLEN+1], l
     word firstsel, lastsel, i
     
     freesel
@@ -1126,10 +1146,10 @@ def undentsel#0
         l = ^(txtlinbuf=>[i])
         if l
             memcpy(@undentstr + 1, txtlinbuf=>[i] + 1, l)
-            if undentstr[1] == $A0
+            if undentstr[1] == keyspace
                 memcpy(@undentstr + 1, @undentstr + 2, l - 1)
                 l--
-                if l and undentstr[1] == $A0
+                if l and undentstr[1] == keyspace
                     memcpy(@undentstr + 1, @undentstr + 2, l - 1)
                     l--
                 fin
@@ -1142,15 +1162,36 @@ def undentsel#0
     next
     redraw
 end
+def autoindent(strptr)#0
+	byte i
+	
+	for i = 1 to ^strptr
+		if ^(strptr + i) <> keyspace
+			break
+        fin
+	next            
+    curshpos(i - 1)
+end
+def openline(row)
+    if numlines < MAXLINES
+        memcpy(@txtlinbuf=>[row + 1], @txtlinbuf=>[row], (numlines - row) * 2)
+        txtlinbuf=>[row] = @nullstr
+        numlines++
+        flags = flags | changed
+        return TRUE
+    fin
+    bell
+    return FALSE
+end
 def joinline#0
-    byte joinstr[80], joinlen, stripjoin[80]
+    byte joinstr[MAXLNLEN+1], joinlen, stripjoin[MAXLNLEN+1]
 
     if cursrow < numlines - 1
         strstripcpy(@joinstr, txtlinbuf=>[cursrow])
         memcpy(@stripjoin, txtlinbuf=>[cursrow + 1], ^(txtlinbuf=>[cursrow + 1]) + 1)
-        striplead(@stripjoin, $80 | ' ');
+        striplead(@stripjoin, keyspace);
         joinlen = joinstr + stripjoin
-        if joinlen < 80
+        if joinlen <= MAXLNLEN
             curshpos(joinstr)
             memcpy(@joinstr + joinstr + 1, @stripjoin + 1, stripjoin)
             joinstr = joinlen
@@ -1160,14 +1201,13 @@ def joinline#0
             numlines--
             memcpy(@txtlinbuf=>[cursrow + 1], @txtlinbuf=>[cursrow + 2], (numlines - cursrow) * 2)
             flags = flags | changed
-            redraw
-        else
-            bell
+            return
         fin
     fin
+    bell
 end
 def splitline#0
-    byte splitstr[80], splitlen, i
+    byte splitstr[MAXLNLEN+1], splitlen, i
 
     if openline(cursrow + 1)
         if curscol
@@ -1175,13 +1215,13 @@ def splitline#0
             if curscol < splitlen - 1
                 splitstr = splitlen - curscol
                 memcpy(@splitstr + 1, txtlinbuf=>[cursrow] + curscol + 1, splitstr)
-                striplead(@splitstr, $80 | ' ')
+                striplead(@splitstr, keyspace)
                 for i = 1 to curscol
-                    if ^(txtlinbuf=>[cursrow] + i) <> $80 | ' '
+                    if ^(txtlinbuf=>[cursrow] + i) <> keyspace
                         break
                     fin
                     memcpy(@splitstr + 2, @splitstr + 1, splitstr)
-                    splitstr[1] = $80 | ' '
+                    splitstr[1] = keyspace
                     splitstr++
                 next            
                 txtlinbuf=>[cursrow + 1] = newstr(@splitstr)
@@ -1193,7 +1233,7 @@ def splitline#0
             else
                 if splitlen > 0
                     for curscol = 1 to splitlen - 1
-                        if ^(txtlinbuf=>[cursrow] + curscol) <> $80 | ' '
+                        if ^(txtlinbuf=>[cursrow] + curscol) <> keyspace
                             break
                         fin
                     next
@@ -1204,8 +1244,6 @@ def splitline#0
             txtlinbuf=>[cursrow + 1] = txtlinbuf=>[cursrow]
             txtlinbuf=>[cursrow]     = @nullstr
         fin
-        redraw
-        cursdown
     fin
 end
 def editkey(key)
@@ -1215,12 +1253,13 @@ def editkey(key)
     return FALSE
 end
 def editline(key)
-    byte editstr[80]
+    byte editstr[MAXLNLEN+1], localchange, need
     word undoline
 
+	localchange = FALSE
     if (editkey(key))
-        flags = flags | changed
-        memset(@editstr, $A0A0, 80)
+        localchange = TRUE
+        memset(@editstr + 1, $A0A0, MAXLNLEN)
         strstripcpy(@editstr, txtlinbuf=>[cursrow])
         undoline = txtlinbuf=>[cursrow]
         txtlinbuf=>[cursrow] = @editstr
@@ -1232,13 +1271,18 @@ def editline(key)
                             memcpy(@editstr[curscol], @editstr[curscol + 1], editstr - curscol)
                             editstr--
                         fin
-                        curshpos(curscol - 1)
+						cursoff
+                        if curshpos(curscol - 1)
+							drawscrn(scrntop, scrnleft)
+						else
+							drawrow(cursy, scrnleft, @editstr)
+						fin
                         curson
                     fin
                 elsif curscol < MAXLNLEN
-                    curshpos(curscol + 1)
+					curscol++
                     if flags & insmode
-                        if editstr < MAXLNLEN or editstr.MAXLNLEN == $A0
+                        if editstr < MAXLNLEN or editstr.MAXLNLEN == keyspace
                             editstr++
                             if curscol >= editstr
                                 editstr = curscol
@@ -1246,7 +1290,7 @@ def editline(key)
                                 memcpy(@editstr[curscol + 1], @editstr[curscol], editstr - curscol)
                             fin
                         else
-                            curshpos(curscol - 1)
+                            curscol--
                             key = editstr[curscol]
                             bell
                         fin
@@ -1257,12 +1301,10 @@ def editline(key)
                     fin
                     editstr[curscol] = caseconv(key)
                     cursoff
-                    if cursx <= scrnwidth
-                        drawrow(cursy, scrnleft, @editstr)
-                    else
-                        scrnleft++
-                        cursx = scrnwidth
+                    if curshpos(curscol)
                         drawscrn(scrntop, scrnleft)
+                    else
+                        drawrow(cursy, scrnleft, @editstr)
                     fin
                     curson
                 else
@@ -1282,15 +1324,21 @@ def editline(key)
                 cursoff
                 drawrow(cursy, scrnleft, @editstr)
                 curson
+				localchange = FALSE
             fin
             key = keyin()
         until not editkey(key)
-        if editstr
-            txtlinbuf=>[cursrow] = newstr(@editstr)
-        else
-            txtlinbuf=>[cursrow] = @nullstr
-        fin
-        delstr(undoline)
+        if localchange
+			flags = flags | changed
+			delstr(undoline)
+			if editstr
+				txtlinbuf=>[cursrow] = newstr(@editstr)
+			else
+				txtlinbuf=>[cursrow] = @nullstr
+			fin
+		else
+			txtlinbuf=>[cursrow] = undoline
+		fin
     fin
     return key
 end
@@ -1343,6 +1391,11 @@ def editmode#0
                 cursdown
             is keyctrlo
                 openline(cursrow)
+                if cursrow
+					autoindent(txtlinbuf=>[cursrow - 1])
+				else
+					curshpos(0)
+				fin
                 redraw
                 break
             is keyenter
@@ -1350,12 +1403,15 @@ def editmode#0
                     splitline
                 else
                     openline(cursrow + 1)
-                    cursdown
-                    redraw
                 fin
+				autoindent(txtlinbuf=>[cursrow])
+                cursvpos(cursrow + 1)
+                redraw
                 break
             is keyctrlt
-                joinline; break
+                joinline
+                redraw
+                break
             is keyctrli
                 if flags & selection
                     if flags & insmode
