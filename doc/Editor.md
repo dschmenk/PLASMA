@@ -146,5 +146,8 @@ COMMAND MODE:
     P <PREFIX>   = SET PREFIX
     H [SLOT]     = HARDCOPY TO DEVICE IN SLOT (DEFAULT 1)
     N            = CLEAR TEXT IN MEMORY
+    T            = TOGGLE LOWER-CASE SUPPORT (APPLE ][)
+    G <LINE>     = GO TO LINE #
+    F [STRING]   = FIND STRING
     E            = EDIT MODE
     'RETURN'     = EDIT MODE
