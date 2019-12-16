@@ -83,7 +83,7 @@ EDIT COMMANDS:
   APPLE ][, UPPER AND LOWER CASE
   ENTRY WORKS AS EXPECTED.
 
-    ESC T        = FORCE LOWER-CASE CHARS
+    ESC T C      = FORCE LOWER-CASE CHARS
 
   If you have a lower-case character
   generator installed, you can force
@@ -98,11 +98,12 @@ EDIT COMMANDS:
   The 'SOLID-APPLE' key will modify
   theese keys:
 
-    SA-RETURN      = OPEN LINE
+    SA-RETURN      = OPEN FOLLOWING LINE
     SA-LEFT ARROW  = JUMP LEFT
     SA-RIGHT ARROW = JUMP RIGHT
     SA-UP ARROR    = JUMP UP
     SA-DOWN ARROW  = JUMP DOWN
+    SA-TAB         = DETAB
 
   Apple /// FEATURES:
   -------------------
@@ -111,11 +112,12 @@ EDIT COMMANDS:
   these keys:
 
     OA-\           = DELETE CHAR LEFT
-    OA-RETURN      = OPEN LINE
+    OA-RETURN      = OPEN FOLLOWING LINE
     OA-LEFT ARROW  = JUMP LEFT
     OA-RIGHT ARROW = JUMP RIGHT
     OA-UP ARROR    = JUMP UP
     OA-DOWN ARROW  = JUMP DOWN
+    OA-TAB         = DETAB
 
   On the keypad, 'OPEN-APPLE' allows
   the keys for navigation and misc:
@@ -129,9 +131,9 @@ EDIT COMMANDS:
     OA-7           = JUMP BEGIN
     OA-1           = JUMP END
     OA-5           = DELETE CHAR
-    OA--           = DELETE/CUT LI
-    OA-0           = COPY DELETED LINE
-    OA-ENTER       = OPEN NEW LINE
+    OA--           = CUT SELECTION INTO CLIPBOARD 
+    OA-0           = PASTE CLIPBOARD
+    OA-ENTER       = OPEN FOLLOWING LINE
     OA-.           = TOGGLE INSERT/OVERWRITE
 
 COMMAND MODE:
@@ -147,7 +149,8 @@ COMMAND MODE:
     P <PREFIX>   = SET PREFIX
     H [SLOT]     = HARDCOPY TO DEVICE IN SLOT (DEFAULT 1)
     N            = CLEAR TEXT IN MEMORY
-    T            = TOGGLE LOWER-CASE SUPPORT (APPLE ][)
+    T G          = TOGGLE GUTTER VIEW
+    T C          = TOGGLE LOWER-CASE SUPPORT (APPLE ][)
     G <LINE>     = GO TO LINE #
     F [STRING]   = FIND STRING
     E            = EDIT MODE

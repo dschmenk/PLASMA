@@ -1,4 +1,4 @@
-# PLASMA Version 2.0 Developer Preview 1ED
+# PLASMA Version 2.0 Developer Preview 1 E+C
 
 Welcome to PLASMA: the Grand Unifying Platform for the Apple 1, ][, and ///.
 
@@ -102,9 +102,9 @@ There is a [YouTube playlist](https://www.youtube.com/playlist?list=PLlPKgUMQbJ7
 
 - The documentation is sparse and incomplete. Yep, could use your help...
 
-# Changed in PLASMA for 2.0 DP 1ED
+# Changed in PLASMA for 2.0 DP 1 E+C
 
-1. Greatly improved code editor
+1. Greatly improved code editor and additional compiler stats
 
 # Changed in PLASMA for 2.0 DP 1a
 

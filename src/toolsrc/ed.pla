@@ -51,6 +51,8 @@ const keyctrlw      = $97
 const keyctrlx      = $98
 const keyctrly      = $99
 const keyctrlz      = $9A
+const keytab        = keyctrli
+const keydetab      = $9D
 const keydelete     = $FF
 //
 // Data and text buffer constants
@@ -64,18 +66,21 @@ const MAXSTRPLSIZE  = $8000
 const pgjmp         = 16
 const changed       = 1
 const insmode       = 2
-const showcurs      = 4
+const gutter        = 4
 const uppercase     = 8
 const selection     = 16
+const showcurs      = 32
 const shiftlock     = 128
 //
 // Text screen row address array
 //
-const scrnwidth   = 35
-const scrnheight  = 23
-word txtscrn      = $0404,$0484,$0504,$0584,$0604,$0684,$0704,$0784
-word              = $042C,$04AC,$052C,$05AC,$062C,$06AC,$072C,$07AC
-word              = $0454,$04D4,$0554,$05D4,$0654,$06D4,$0754,$07D4
+const scrnheight  = 24
+const scrnbottom  = 23
+word scrnwidth    = 36
+word scrnright    = 35
+word txtscrn      = $0400,$0480,$0500,$0580,$0600,$0680,$0700,$0780
+word              = $0428,$04A8,$0528,$05A8,$0628,$06A8,$0728,$07A8
+word              = $0450,$04D0,$0550,$05D0,$0650,$06D0,$0750,$07D0
 //
 // Editor variables
 //
@@ -466,16 +471,16 @@ def drawrow(row, ofst, strptr)#0
     byte numchars
     word scrnptr
 
-    scrnptr = txtscrn[row]
+    scrnptr = txtscrn[row] + (flags & gutter)
     if ofst >= ^strptr
         numchars = 0
     else
         numchars = ^strptr - ofst
     fin
-    if numchars >= 36
-        numchars = 36
+    if numchars >= scrnwidth
+        numchars = scrnwidth
     else
-        memset(scrnptr + numchars, $A0A0, 36 - numchars)
+        memset(scrnptr + numchars, $A0A0, scrnwidth - numchars)
     fin
     memcpy(scrnptr, strptr + ofst + 1, numchars)
 end
@@ -491,7 +496,7 @@ def drawgutter(scrnrow, ofst)#0
     huns, tens = divmod(scrnrow + 1, 100)
     tens, ones = divmod(tens, 10)
     for row = 0 to 23
-        scrnptr = txtscrn[row] - 4
+        scrnptr = txtscrn[row]
         if scrnrow < numlines
             if flags & selection and (scrnrow >= selrow and scrnrow <= cursrow) or (scrnrow >= cursrow and scrnrow <= selrow)
                 hilite = $00
@@ -545,38 +550,41 @@ def drawgutter(scrnrow, ofst)#0
     next
 end
 def drawscrn(toprow, ofst)#0
-    byte row, numchars
+    byte row, numchars, lofst
     word strptr, scrnptr
     
-    drawgutter(toprow, ofst)
+    lofst = flags & gutter
+    if lofst
+		drawgutter(toprow, ofst)
+	fin
     //
     // Draw text
     //
     if ofst
         for row = 0 to 23
             strptr   = txtlinbuf=>[toprow + row]
-            scrnptr  = txtscrn[row]
+            scrnptr  = txtscrn[row] + lofst
             if ofst >= ^strptr
                 numchars = 0
             else
                 numchars = ^strptr - ofst
             fin
-            if numchars >= 36
-                numchars = 36
+            if numchars >= scrnwidth
+                numchars = scrnwidth
             else
-                memset(scrnptr + numchars, $A0A0, 36 - numchars)
+                memset(scrnptr + numchars, $A0A0, scrnwidth - numchars)
             fin
             memcpy(scrnptr, strptr + ofst + 1, numchars)
         next
     else
         for row = 0 to 23
             strptr   = txtlinbuf=>[toprow + row]
-            scrnptr  = txtscrn[row]
+            scrnptr  = txtscrn[row] + lofst
             numchars = ^strptr
-            if numchars >= 36
-                numchars = 36
+            if numchars >= scrnwidth
+                numchars = scrnwidth
             else
-                memset(scrnptr + numchars, $A0A0, 36 - numchars)
+                memset(scrnptr + numchars, $A0A0, scrnwidth - numchars)
             fin
             memcpy(scrnptr, strptr + 1, numchars)
         next
@@ -587,23 +595,29 @@ def cursoff#0
     
     if flags & showcurs
         ^cursptr     = underchr
-        scrnptr      = txtscrn[cursy] - 4
-        *scrnptr     = *scrnptr     | $8080
-        ^(scrnptr+2) = ^(scrnptr+2) | $80
+        if flags & gutter
+	        scrnptr      = txtscrn[cursy]
+	        *scrnptr     = *scrnptr     | $8080
+	        ^(scrnptr+2) = ^(scrnptr+2) | $80
+	    fin
         flags = flags & ~showcurs
         
     fin
 end
 def curson#0
+	byte lofst
     word scrnptr
     
     if !(flags & showcurs)
-        cursptr  = txtscrn[cursy] + cursx
+		lofst = flags & gutter
+		if lofst
+	        scrnptr = txtscrn[cursy]
+	        *scrnptr     = *scrnptr     & $7F7F
+	        ^(scrnptr+2) = ^(scrnptr+2) & $7F
+	    fin
+        cursptr  = txtscrn[cursy] + lofst + cursx
         underchr = ^cursptr
         ^cursptr = curschr
-        scrnptr = txtscrn[cursy] - 4
-        *scrnptr     = *scrnptr     & $7F7F
-        ^(scrnptr+2) = ^(scrnptr+2) & $7F
         flags = flags | showcurs
     fin
 end
@@ -630,9 +644,9 @@ def curshpos(hpos)#1
 	if hpos > MAXLNLEN; hpos = MAXLNLEN; fin
     curscol = hpos
 	cursx   = curscol - scrnleft
-	if cursx > scrnwidth
-		cursx      = scrnwidth
-		scrnleft   = curscol - scrnwidth
+	if cursx > scrnright
+		cursx      = scrnright
+		scrnleft   = curscol - scrnright
 	elsif cursx < 0
         cursx      = 0
         scrnleft   = curscol
@@ -649,9 +663,9 @@ def cursvpos(vpos)#1
     if vpos > numlines - 1; vpos = numlines - 1; fin
     cursrow = vpos
     cursy   = cursrow - scrntop
-    if cursy > scrnheight
-		cursy = scrnheight
-		scrntop = cursrow - scrnheight
+    if cursy > scrnbottom
+		cursy = scrnbottom
+		scrntop = cursrow - scrnbottom
 	elsif cursy < 0
         cursy    = 0
         scrntop  = cursrow
@@ -770,10 +784,10 @@ def cursright#0
     if curscol < MAXLNLEN
         cursoff
         curscol++
-        if cursx < scrnwidth
+        if cursx < scrnright
             cursx++
         else
-            scrnleft = curscol - scrnwidth
+            scrnleft = curscol - scrnright
             drawscrn(scrntop, scrnleft)
         fin
         curson
@@ -793,12 +807,12 @@ end
 //
 // Find string in text
 //
-def findline(strptr)#1
+def findline(strptr, start)#1
     byte upstr[MAXLNLEN+1], scan, i
     
     if ^strptr >= findstr
         lnupcpy(@upstr, strptr)
-        for scan = 1 to upstr - findstr + 1
+        for scan = start to upstr - findstr + 1
             if upstr[scan] == findstr[1]
                 for i = 2 to findstr
                     if upstr[scan + i - 1] <> findstr[i]
@@ -820,8 +834,11 @@ def findtxt#0
     //
     // Search from current pos to end
     //
+    if findline(txtlinbuf=>[cursrow], curscol + 2)
+		return
+	fin
     for f = cursrow + 1 to numlines - 1
-        if findline(txtlinbuf=>[f])
+        if findline(txtlinbuf=>[f], 1)
             cursvpos(f)
             return
         fin
@@ -830,7 +847,7 @@ def findtxt#0
     // Search from beginning to current pos
     //
     for f = 0 to cursrow
-        if findline(txtlinbuf=>[f])
+        if findline(txtlinbuf=>[f], 1)
             cursvpos(f)
             return
         fin
@@ -891,7 +908,9 @@ def keyin3
                 key = keyctrlz; break
             is keyenter
                 key = keyctrlf; break
-            is $80 | '\\'
+             is keytab
+				key = keydetab; break
+           is $80 | '\\'
                 key = keydelete; break // Delete
             //
             // Map OA+keypad
@@ -943,6 +962,8 @@ def keyin2e
                 key = keyctrlz; break
             is keyenter
                 key = keyctrlf; break
+            is keytab
+				key = keydetab; break
         wend
     fin
     return key
@@ -981,6 +1002,11 @@ def keyin2
                 key = keydelete
             fin
             break
+        is keyarrowright
+            if ^pushbttn3 < 128
+                key = keytab
+            fin
+            break
         otherwise
             if key >= $C0 and flags < shiftlock
                 if ^pushbttn3 < 128
@@ -1013,9 +1039,6 @@ def setkeyin#0
         otherwise // ][ or ][+
             keyin = @keyin2
     wend
-end
-def tabkeyin
-    return curscol < MAXLNLEN and curscol & $01 ?? keyspace :: 0
 end
 //
 // Printer routines
@@ -1266,19 +1289,19 @@ def editline(key)
         repeat
             if key >= keyspace
                 if key == keydelete
-                    if curscol > 0
-                        if curscol <= editstr
-                            memcpy(@editstr[curscol], @editstr[curscol + 1], editstr - curscol)
-                            editstr--
-                        fin
+					if curscol > 0
+						if curscol <= editstr
+							memcpy(@editstr[curscol], @editstr[curscol + 1], editstr - curscol)
+							editstr--
+						fin
 						cursoff
-                        if curshpos(curscol - 1)
+						if curshpos(curscol - 1)
 							drawscrn(scrntop, scrnleft)
 						else
 							drawrow(cursy, scrnleft, @editstr)
 						fin
-                        curson
-                    fin
+						curson
+					fin
                 elsif curscol < MAXLNLEN
 					curscol++
                     if flags & insmode
@@ -1412,27 +1435,29 @@ def editmode#0
                 joinline
                 redraw
                 break
-            is keyctrli
-                if flags & selection
-                    if flags & insmode
-                        indentsel
-                    else
-                        undentsel
-                    fin
-                else
-                    keyin = @tabkeyin
-                    editline(keyspace)
-                    setkeyin
-                fin
+            is keytab
+				if flags & insmode
+					indentsel
+				else
+					undentsel
+				fin
+				if not (flags & selection)
+					cursoff
+					autoindent(txtlinbuf=>[cursrow])
+					curson
+				fin
+                break
+            is keydetab
+                undentsel
+				if not (flags & selection)
+					cursoff
+					autoindent(txtlinbuf=>[cursrow])
+					curson
+				fin
                 break
             is keyctrly
-                if flags & insmode
-                    flags = flags & ~insmode
-                    curschr = ' '
-                else
-                    flags = flags | insmode
-                    curschr = '+'
-                fin
+                flags   = flags ^ insmode
+                curschr = flags & insmode ?? '+' :: ' '
                 break
             is keyescape
                 if MACHID == $F2 // Apple 3
@@ -1552,11 +1577,27 @@ def cmdmode#0
                 findtxt
                 return
             is 'T' // Toggle upper/lower case display
-                if flags & uppercase
-                    txtlower
-                else
-                    txtupper
-                fin
+				if ^cmdptr
+					when toupper(^(cmdptr + 1))
+						is 'G' // Gutter view
+							flags = flags ^ gutter
+							if flags & gutter
+								scrnwidth    = 36
+								scrnright    = 35
+							else
+								scrnwidth    = 40
+								scrnright    = 39
+							fin
+							break
+						is 'C' // Lower case chip (Apple ][/][+ only)
+							if flags & uppercase
+								txtlower
+							else
+								txtupper
+							fin
+							break
+					wend
+				fin
                 return
             is 'G' // Goto line #
                 line = strtonum(cmdptr)
@@ -1640,7 +1681,7 @@ if ^arg
     readtxt(@filename, 0)
 fin
 curschr  = '+'
-flags    = flags | insmode
+flags    = flags | insmode | gutter
 drawscrn(scrntop, scrnleft)
 curson
 editmode
