@@ -1230,6 +1230,17 @@ int crunch_seq(t_opseq **seq, int pass)
                         freeops = 1;
                         break;
                     }
+                    if (opnext->code == BINARY_CODE(SHL_TOKEN))
+                    {
+                        op->code = DUP_CODE;
+                        opnext->code == BINARY_CODE(ADD_TOKEN);
+                        break;
+                    }
+                    if (opnext->code == BINARY_CODE(MUL_TOKEN) || opnext->code == BINARY_CODE(DIV_TOKEN))
+                    {
+                        freeops = -2;
+                        break;
+                    }
                 }
                 switch (opnext->code)
                 {
@@ -1441,13 +1452,27 @@ int crunch_seq(t_opseq **seq, int pass)
                         }
                         break;
                     case BINARY_CODE(MUL_TOKEN):
-                        for (shiftcnt = 0; shiftcnt < 16; shiftcnt++)
+                        if (op->val == 0)
                         {
-                            if (op->val == (1 << shiftcnt))
+                            op->code = DROP_CODE;
+                            opnext->code = CONST_CODE;
+                            opnext->val = 0;
+                        }
+                        else if (op->val == 2)
+                        {
+                            op->code = DUP_CODE;
+                            opnext->code = BINARY_CODE(ADD_TOKEN);
+                        }
+                        else
+                        {
+                            for (shiftcnt = 0; shiftcnt < 16; shiftcnt++)
                             {
-                                op->val = shiftcnt;
-                                opnext->code = BINARY_CODE(SHL_TOKEN);
-                                break;
+                                if (op->val == (1 << shiftcnt))
+                                {
+                                    op->val = shiftcnt;
+                                    opnext->code = BINARY_CODE(SHL_TOKEN);
+                                    break;
+                                }
                             }
                         }
                         break;
