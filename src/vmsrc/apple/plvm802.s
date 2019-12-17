@@ -258,7 +258,7 @@ VMCORE  =        *
 ;*              *
 ;****************
         !ALIGN  255,0
-OPTBL   !WORD   CN,CN,CN,CN,CN,CN,CN,CN                                 ; 00 02 04 06 08 0A 0C 0E
+OPTBL   !WORD   ZERO,CN,CN,CN,CN,CN,CN,CN                               ; 00 02 04 06 08 0A 0C 0E
         !WORD   CN,CN,CN,CN,CN,CN,CN,CN                                 ; 10 12 14 16 18 1A 1C 1E
         !WORD   MINUS1,BREQ,BRNE,LA,LLA,CB,CW,CS                        ; 20 22 24 26 28 2A 2C 2E
         !WORD   DROP,DROP2,DUP,DIVMOD,ADDI,SUBI,ANDI,ORI                ; 30 32 34 36 38 3A 3C 3E
@@ -491,7 +491,7 @@ LCDEFCMD =      *-28            ; DEFCMD IN LC MEMORY
 ;*               *
 ;*****************
         !ALIGN  255,0
-OPXTBL  !WORD   CN,CN,CN,CN,CN,CN,CN,CN                                 ; 00 02 04 06 08 0A 0C 0E
+OPXTBL  !WORD   ZERO,CN,CN,CN,CN,CN,CN,CN                               ; 00 02 04 06 08 0A 0C 0E
         !WORD   CN,CN,CN,CN,CN,CN,CN,CN                                 ; 10 12 14 16 18 1A 1C 1E
         !WORD   MINUS1,BREQ,BRNE,LA,LLA,CB,CW,CSX                       ; 20 22 24 26 28 2A 2C 2E
         !WORD   DROP,DROP2,DUP,DIVMOD,ADDI,SUBI,ANDI,ORI                ; 30 32 34 36 38 3A 3C 3E
@@ -849,13 +849,13 @@ ORI     INY                     ;+INC_IP
 ;* LOGICAL NOT
 ;*
 LNOT    PLA
-        BEQ     MINUS1
-        PEA     $0000
-        JMP     NEXTOP
+        BNE     ZERO
 ;*
-;* CONSTANT -1, NYBBLE, BYTE, $FF BYTE, WORD (BELOW)
+;* CONSTANT -1, ZERO, NYBBLE, BYTE, $FF BYTE, WORD (BELOW)
 ;*
 MINUS1  PEA     $FFFF
+        JMP     NEXTOP
+ZERO    PEA     $0000
         JMP     NEXTOP
 CN      TXA
         LSR                     ; A = CONST * 2

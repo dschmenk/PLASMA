@@ -1233,7 +1233,7 @@ int crunch_seq(t_opseq **seq, int pass)
                     if (opnext->code == BINARY_CODE(SHL_TOKEN))
                     {
                         op->code = DUP_CODE;
-                        opnext->code == BINARY_CODE(ADD_TOKEN);
+                        opnext->code = BINARY_CODE(ADD_TOKEN);
                         break;
                     }
                     if (opnext->code == BINARY_CODE(MUL_TOKEN) || opnext->code == BINARY_CODE(DIV_TOKEN))
@@ -1465,7 +1465,10 @@ int crunch_seq(t_opseq **seq, int pass)
                         }
                         else
                         {
-                            for (shiftcnt = 0; shiftcnt < 16; shiftcnt++)
+                            //
+                            // Constants 0, 1 and 2 handled above
+                            //
+                            for (shiftcnt = 2; shiftcnt < 16; shiftcnt++)
                             {
                                 if (op->val == (1 << shiftcnt))
                                 {
@@ -1477,7 +1480,10 @@ int crunch_seq(t_opseq **seq, int pass)
                         }
                         break;
                     case BINARY_CODE(DIV_TOKEN):
-                       for (shiftcnt = 0; shiftcnt < 16; shiftcnt++)
+                        //
+                        // Constant 1 handled above
+                        //
+                        for (shiftcnt = 1; shiftcnt < 16; shiftcnt++)
                         {
                             if (op->val == (1 << shiftcnt))
                             {
