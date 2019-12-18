@@ -1,4 +1,4 @@
-# PLASMA Version 2.0 Developer Preview 1 E+C
+# PLASMA Version 2.0 Developer Preview 1z
 
 Welcome to PLASMA: the Grand Unifying Platform for the Apple 1, ][, and ///.
 
@@ -101,6 +101,10 @@ There is a [YouTube playlist](https://www.youtube.com/playlist?list=PLlPKgUMQbJ7
 - The Apple /// may not always report errors properly or at all.
 
 - The documentation is sparse and incomplete. Yep, could use your help...
+
+# Changed in PLASMA for 2.0 DP 1z
+
+1. Many fixes for the value zero - especially in 65802/65816 divide routine
 
 # Changed in PLASMA for 2.0 DP 1 E+C
 
