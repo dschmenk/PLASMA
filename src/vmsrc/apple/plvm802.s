@@ -638,12 +638,12 @@ _DIV    STY     IPY
         LDY     #$11            ; #BITS+1
         LDX     #$00
         LDA     NOS+2,S         ; WE JSR'ED HERE SO OFFSET ACCORDINGLY
-        BEQ     _DIVEX
         BPL     +
         LDX     #$81
         EOR     #$FFFF
         INC
 +       STA     TMP             ; NOS,S
+        BEQ     _DIVEX
         LDA     TOS+2,S
         BPL     +
         INX
