@@ -2174,11 +2174,11 @@ CLLBXEND
         JSR     OPCPY
 CLAB    INY                     ;+INC_IP
         LDA     (IP),Y
-        STA     ESTKH-2,X
+        STA     TMPL
         INY                     ;+INC_IP
         LDA     (IP),Y
-        STA     ESTKH-1,X
-        LDA     (ESTKH-2,X)
+        STA     TMPH
+        LDA     (TMP)
         DEX
         STA     ESTKL,X
         STZ     ESTKH,X
@@ -2212,12 +2212,12 @@ CLAWEND
         JSR     OPCPY
 CLABX   INY                     ;+INC_IP
         LDA     (IP),Y
-        STA     ESTKH-2,X
+        STA     TMPL
         INY                     ;+INC_IP
         LDA     (IP),Y
-        STA     ESTKH-1,X
+        STA     TMPH
         STA     ALTRDOFF
-        LDA     (ESTKH-2,X)
+        LDA     (TMP)
         DEX
         STA     ESTKL,X
         STZ     ESTKH,X
