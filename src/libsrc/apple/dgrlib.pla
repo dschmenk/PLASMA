@@ -1,5 +1,4 @@
 include "inc/cmdsys.plh"
-sysflags restxt1|restxt2|resxtxt1|resxtxt2    // Reserve all text pages
 //
 // Apple II hardware constants.
 //
@@ -51,13 +50,13 @@ end
 //
 // Plot pixel
 //
-export asm dgrPlotBuf(bufptr, x, y)#0
-        ; GET BUFFER ADDRESS
-        STX     ESP
-        LDA     ESTKL+2,X
+export asm dgrPlot(x, y)#0
+        ; GET ROW BUFFER ADDRESSES
+		LDA     $3000
         STA     SRCL
-        LDA     ESTKH+2,X
-        STA     SRCH
+        LDA     $3001
+		STA		SRCH
+        STX     ESP
         LDA     ESTKL,X     ; Y COORD
         AND     #$FE
         TAY
@@ -78,29 +77,21 @@ asm _dgrPlotPix
         LDX     ESP
         INX
         INX
-        INX
         RTS
 end
 //
 // Plot horizontal row of pixels
 //
 export asm dgrHLin(x1, x2, y)#0
-	DEX
-	LDA	$3000
-	STA	ESTKL,X
-	LDA	$3001
-	STA	ESTKH,X
-end
-export asm dgrHLinBuf(x1, x2, y, bufptr)#0
-        ; GET BUFFER ADDRESS
-        STX     ESP
-        LDA     ESTKL,X
+        ; GET ROW BUFFER ADDRESSES
+		LDA     $3000
         STA     SRCL
-        LDA     ESTKH,X
-        STA     SRCH
-        LDA     ESTKL+2,X    ; X2 COORD
+        LDA     $3001
+		STA		SRCH
+        STX     ESP
+        LDA     ESTKL+1,X    ; X2 COORD
         STA     TMPH
-        LDA     ESTKL+1,X    ; Y COORD
+        LDA     ESTKL+0,X    ; Y COORD
         AND     #$FE
         TAY
         LDA     (SRC),Y
@@ -108,10 +99,10 @@ export asm dgrHLinBuf(x1, x2, y, bufptr)#0
         INY
         LDA     (SRC),Y
         STA     GBASH
-        LDY     ESTKL+3,X   ; X1 COORD
+        LDY     ESTKL+2,X   ; X1 COORD
         PHP
         SEI
--       LDA     ESTKL+1,X   ; Y COORD
+-       LDA     ESTKL+0,X   ; Y COORD
         LSR
         TYA
         LDX     GCLR        ; COLOR
@@ -119,13 +110,12 @@ end
 asm _dgrHLinPix
         JSR     $3000       ; _dgrSetPix
         LDX     ESP
-        INC     ESTKL+3,X   ; X1 COORD
-        LDY     ESTKL+3,X
+        INC     ESTKL+2,X   ; X1 COORD
+        LDY     ESTKL+2,X
         CPY     TMPH        ; X2 COORD
         BCC     -
         BEQ     -
         PLP
-        INX
         INX
         INX
         INX
@@ -135,20 +125,13 @@ end
 // Plot horizontal row of pixels
 //
 export asm dgrVLin(y1, y2, x)#0
-	DEX
-	LDA	$3000
-	STA	ESTKL,X
-	LDA	$3001
-	STA	ESTKH,X
-end
-export asm dgrVLinBuf(y1, y2, x, bufptr)#0
-    ; GET BUFFER ADDRESS
-        STX     ESP
-        LDA     ESTKL,X
+        ; GET ROW BUFFER ADDRESSES
+		LDA     $3000
         STA     SRCL
-        LDA     ESTKH,X
-        STA     SRCH
-        LDA     ESTKL+3,X   ; Y1 COORD
+        LDA     $3001
+		STA		SRCH
+        STX     ESP
+        LDA     ESTKL+2,X   ; Y1 COORD
         PHP
         SEI
 -       AND     #$FE
@@ -158,21 +141,20 @@ export asm dgrVLinBuf(y1, y2, x, bufptr)#0
         INY
         LDA     (SRC),Y
         STA     GBASH
-        LDA     ESTKL+3,X
+        LDA     ESTKL+2,X
         LSR
-        LDA     ESTKL+1,X   ; X COORD
+        LDA     ESTKL+0,X   ; X COORD
         LDX     GCLR        ; COLOR
 end
 asm _dgrVLinPix
         JSR     $3000       ; _dgrSetPix
         LDX     ESP
-        INC     ESTKL+3,X   ; Y1 COORD
-        LDA     ESTKL+3,X
-        CMP     ESTKL+2,X   ; Y2 COORD
+        INC     ESTKL+2,X   ; Y1 COORD
+        LDA     ESTKL+2,X
+        CMP     ESTKL+1,X   ; Y2 COORD
         BCC     -
         BEQ     -
         PLP
-        INX
         INX
         INX
         INX
@@ -181,15 +163,16 @@ end
 //
 // Draw sprite
 //
-export asm dgrBLTBuf(bufptr, x, y, width, height, src)#0
+export asm dgrBLT(x, y, width, height, src)#0
+        ; GET ROW BUFFER ADDRESSES
+		LDA     $3000
+        STA     DSTL
+        LDA     $3001
+		STA		DSTH
         LDA     ESTKL,X     ; SPRITE
         STA     SRCL
         LDA     ESTKH,X
         STA     SRCH
-        LDA     ESTKL+5,X
-        STA     DSTL
-        LDA     ESTKH+5,X
-        STA     DSTH
         LDA     ESTKL+4,X   ; X1 COORD
         CMP     #80
         BPL     ++++
@@ -257,7 +240,6 @@ asm _dgrBLTPix
         CMP     ESTKH+1,X   ; Y2 COORD
         BCC     -
 ++++    INX
-        INX
         INX
         INX
         INX
@@ -342,16 +324,17 @@ end
 //
 // Draw 8x8 tile (forced to 2x2 block address)
 //
-export asm dgrTileBuf(bufptr, x, y, src)#0
+export asm dgrTile(x, y, src)#0
+        ; GET ROW BUFFER ADDRESSES
+		LDA     $3000
+        STA     DSTL
+        LDA     $3001
+		STA		DSTH
         STX     ESP
         LDA     ESTKL,X       ; TILE
         STA     SRCL
         LDA     ESTKH,X
         STA     SRCH
-        LDA     ESTKL+3,X
-        STA     DSTL
-        LDA     ESTKH+3,X
-        STA     DSTH
         LDA     ESTKL+2,X   ; X1 COORD
         CMP     #80
         BPL     ++++
@@ -423,28 +406,22 @@ export asm dgrTileBuf(bufptr, x, y, src)#0
 ++++    INX
         INX
         INX
-        INX
         RTS
 end
 //
 // Draw a string of tiles
 //
-export asm dgrTileStrBuf(bufptr, x, y, tilestr, strlen, tilebuff)#0
+export asm dgrTileStr(x, y, tilestr, strlen, tilebuff)#0
 -       DEX
         DEX
         DEX
-        DEX
-        LDA     ESTKL+9,X   ; BUFF
-        STA     ESTKL+3,X
-        LDA     ESTKH+9,X
-        STA     ESTKH+3,X
-        LDA     ESTKL+8,X   ; X COORD
+        LDA     ESTKL+7,X   ; X COORD
         STA     ESTKL+2,X
-        LDA     ESTKL+7,X   ; Y COORD
+        LDA     ESTKL+6,X   ; Y COORD
         STA     ESTKL+1,X
-        LDA     ESTKL+4,X   ; TILE
+        LDA     ESTKL+3,X   ; TILE
         STA     ESTKL,X
-        LDA     ESTKH+4,X   ; TILE
+        LDA     ESTKH+3,X   ; TILE
         STA     ESTKH,X
 end
 asm _dgrTileTile
@@ -457,16 +434,17 @@ asm _dgrTileTile
         STA     ESTKL+4,X
         DEC     ESTKL+1,X   ; DEC STRLEN
         BNE     -
-+       TXA
-        CLC
-        ADC     #6
-        TAX
++       INX
+        INX
+        INX
+        INX
+        INX
         RTS
 end
 //
 // Fill a buffer with tiles
 //
-export asm dgrFillBuf(bufptr, x, y, tile)#0
+export asm dgrFill(x, y, tile)#0
         LDA     ESTKL+2,X
         AND     #$0F
         STA     ESTKL+2,X
@@ -485,18 +463,13 @@ export asm dgrFillBuf(bufptr, x, y, tile)#0
 -       DEX
         DEX
         DEX
-        DEX
-        LDA     ESTKL+7,X   ; BUFF
-        STA     ESTKL+3,X
-        LDA     ESTKH+7,X
-        STA     ESTKH+3,X
-        LDA     ESTKL+6,X   ; X COORD
+        LDA     ESTKL+5,X   ; X COORD
         STA     ESTKL+2,X
-        LDA     ESTKL+5,X   ; Y COORD
+        LDA     ESTKL+4,X   ; Y COORD
         STA     ESTKL+1,X
-        LDA     ESTKL+4,X   ; TILE
+        LDA     ESTKL+3,X   ; TILE
         STA     ESTKL,X
-        LDA     ESTKH+4,X   ; TILE
+        LDA     ESTKH+3,X   ; TILE
         STA     ESTKH,X
 end
 asm _dgrFillTile
@@ -518,7 +491,6 @@ asm _dgrFillTile
         INX
         INX
         INX
-        INX
         RTS
 end
 //
@@ -530,6 +502,16 @@ asm vlbWait#0
 -       LDA     $C019
         BPL     -
         RTS
+end
+//
+// Clear the buffer
+//
+export def dgrClear(clr)#0
+    byte[32] clrtile
+
+    clr = evnclr[clr&$0F] | (oddclr[clr&$0F] << 8)
+    memset(@clrtile, clr, 32)
+    dgrFill(0, 0, @clrtile)
 end
 //
 // Set double lores graphics, return draw buffer
@@ -582,41 +564,6 @@ export def dgrColor(clr)#0
     ^$30 = clr & $0F
 end
 //
-// Clear the buffer
-//
-export def dgrClearBuf(bufptr, clr)#0
-    byte[32] clrtile
-
-    clr = evnclr[clr&$0F] | (oddclr[clr&$0F] << 8)
-    memset(@clrtile, clr, 32)
-    dgrFillBuf(bufptr, 0, 0, @clrtile)
-end
-export def dgrClear(clr)#0
-    byte[32] clrtile
-
-    clr = evnclr[clr&$0F] | (oddclr[clr&$0F] << 8)
-    memset(@clrtile, clr, 32)
-    dgrFillBuf(drawbufptr, 0, 0, @clrtile)
-end
-//
-// Draw functions
-//
-export def dgrPlot(x, y)#0
-    dgrPlotBuf(drawbufptr, x, y)
-end
-export def dgrBLT(x, y, width, height, src)#0
-    dgrBLTBuf(drawbufptr, x, y, width, height, src)
-end
-export def dgrTile(x, y, src)#0
-    dgrTileBuf(drawbufptr, x, y, src)
-end
-export def dgrTileStr(x, y, tilestr, strlen, tilebuff)#0
-    dgrTileStrBuf(drawbufptr, x, y, tilestr, strlen, tilebuff)
-end
-export def dgrFill(x, y, tile)#0
-    dgrFillBuf(drawbufptr, x, y, tile)
-end
-//
 // Make sure we are a 128K //e or //c
 //
 if MACHID & $F0 <> $B0
@@ -632,8 +579,8 @@ _dgrPlotPix:1   = @_dgrSetPix
 _dgrHLinPix:1   = @_dgrSetPix
 _dgrVLinPix:1   = @_dgrSetPix
 _dgrBLTPix:1    = @_dgrSetPix
-_dgrTileTile:1  = @dgrTileBuf
-_dgrFillTile:1  = @dgrTileBuf
+_dgrTileTile:1  = @dgrTile
+_dgrFillTile:1  = @dgrTile
 _dgrSetEvnEvn:1 = @evnclr
 _dgrSetEvnOdd:1 = @oddclr
 _dgrSetOddEvn:1 = @evnclr
@@ -641,10 +588,16 @@ _dgrSetOddOdd:1 = @oddclr
 //
 // Fixups for drawbufptr
 //
-dgrHLin:2       = @drawbufptr
-dgrHLin:7       = @drawbufptr+1
-dgrVLin:2       = @drawbufptr
-dgrVLin:7       = @drawbufptr+1
+dgrPlot:1       = @drawbufptr
+dgrPlot:6       = @drawbufptr+1
+dgrHLin:1       = @drawbufptr
+dgrHLin:6       = @drawbufptr+1
+dgrVLin:1       = @drawbufptr
+dgrVLin:6       = @drawbufptr+1
+dgrBLT:1        = @drawbufptr
+dgrBLT:6        = @drawbufptr+1
+dgrTile:1       = @drawbufptr
+dgrTile:6       = @drawbufptr+1
 // Put read AUX mem routine in scary location
 memcpy($0100, @auxRead, 9)
 done
