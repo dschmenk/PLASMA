@@ -52,13 +52,58 @@ byte hrmask    = $81,$83,$87,$8F,$9F,$BF,$FF
 word curhclr
 word ball0[9] = $0000, $1800, $3C00, $7E00, $7E00, $3C00, $1800, $0000
 
-var err, dx2, dy2, sx, sy
+asm grInc(buff)
+!SOURCE    "vmsrc/plvmzp.inc"
+GBASL    =    $26
+GBASH    =    $27
+GBASE    =    GBASL
+GCLR     =    $30
+end
 
+asm divmod7(x)#2
+        LDA     ESTKL,X     ; X COORD LSB
+        LDY     ESTKH,X     ; X COORD MSB
+        BNE     +           ; MUST BE >= 140
+        CMP     #140
+        BCC     ++
++       SEC
+        SBC     #140
+        LDY     #20
+++      CMP     #70
+        BCC     +
+        SBC     #70
+        STA     ESTKL,X
+        TYA
+        ADC     #9
+        TAY
+        LDA     ESTKL,X
++       CMP     #35
+        BCC     +
+        SBC     #35
+        STA     ESTKL,X
+        TYA
+        ADC     #4
+        TAY
+        LDA     ESTKL,X
++
+-       CMP     #7
+        BCC     +
+        SBC     #7
+        INY
+        BNE     -
++       DEX
+        STA     ESTKL,X     ; REMAINDER
+        STY     ESTKL+1,X   ; QUOTIENT
+        LDA     #$00
+        STA     ESTKH,X
+        STA     ESTKH+1,X
+        RTS
+end    
 def hgrPlot(x, y)#0
     word pptr
     byte ofst, pixofst, pmask
     
-    ofst, pixofst = divmod(x, 7)
+    ofst, pixofst = divmod7(x)
     pptr = (hgrscan[y] | hgr1) + ofst
     pmask = hbmask[pixofst]
     ^pptr = (^pptr & ~pmask) | (curhclr.[ofst & 1] & pmask)
@@ -71,9 +116,9 @@ def hgrHlin(x1, x2, y)#0
     if x1 == x2
         hgrPlot(x1, y)
     else
-        lofst, lpixofst = divmod(x1, 7)
+        lofst, lpixofst = divmod7(x1)
         pptr = (hgrscan[y] | hgr1) + lofst
-        rofst, rpixofst = divmod(x2, 7)
+        rofst, rpixofst = divmod7(x2)
         lpmask = hlmask[lpixofst]
         rpmask = hrmask[rpixofst]
         if lofst == rofst
@@ -94,14 +139,18 @@ def hgrVlin(y1, y2, x)#0
     word pptr, y
     byte ofst, pixofst, pmask, cmask
     
-    ofst, pixofst = divmod(x, 7)
-    pmask = hbmask[pixofst]
-    cmask = curhclr.[ofst & 1] & pmask
-    pmask = ~pmask
-    for y = y1 to y2
-        pptr = (hgrscan[y] | hgr1) + ofst
-        ^pptr = (^pptr & pmask) | cmask
-    next
+    if y1 == y2
+        hgrPlot(x, y1)
+    else
+        ofst, pixofst = divmod7(x)
+        pmask = hbmask[pixofst]
+        cmask = curhclr.[ofst & 1] & pmask
+        pmask = ~pmask
+        for y = y1 to y2
+            pptr = (hgrscan[y] | hgr1) + ofst
+            ^pptr = (^pptr & pmask) | cmask
+        next
+    fin
 end
 def hgrColor(c)#0
     curhclr = hcolor[c & $07]
@@ -120,39 +169,11 @@ def hgrBLT(page, x, y, w, h, pSrc)#0
         h--
     until not h
 end
-def phline(x1, x2, y)#0
-    var x
-    
-    if sx < 0
-        sy = -sy; x1, x2 = x2, x1
-    fin
-    err = dy2 - dx2 / 2
-    for x = x1 to x2
-        hgrPlot(x, y)
-        if err >= 0
-            err = err - dx2
-            y  = y + sy
-        fin
-        err = err + dy2
-    next
-end
-def pvline(y1, y2, x)#0
-    var y
-    
-    if sy < 0
-        sx = -sx; y1, y2 = y2, y1
-    fin
-    err = dx2 - dy2 / 2
-    for y = y1 to y2
-        hgrPlot(x, y)
-        if err >= 0
-            err = err - dy2
-            x   = x + sx
-        fin
-        err = err + dx2
-    next
-end
 def simpleline(x1, y1, x2, y2)#0
+    var err, dx2, dy2, sx, sy, x, y
+    word pptr
+    byte ofst, pixofst, pmask, clr
+    
     sx = 1
     sy = 1
     dx2 = (x2 - x1) * 2
@@ -163,10 +184,65 @@ def simpleline(x1, y1, x2, y2)#0
     if dy2 < 0
         sy  = -1; dy2 = -dy2
     fin
+    
     if dx2 >= dy2
-        phline(x1, x2, y1)
-   else
-        pvline(y1, y2, x1)
+        if sx < 0
+            sy = -sy; x1, x2 = x2, x1
+        fin
+        err = dy2 - dx2 / 2
+        ofst, pixofst = divmod7(x1)
+        pptr = (hgrscan[y1] | hgr1) + ofst
+        clr   = curhclr.[ofst & 1]
+        for x = x1 to x2
+            pmask = hbmask[pixofst]
+            ^pptr = (^pptr & ~pmask) | (clr & pmask)
+            pixofst++
+            if pixofst > 7
+                pixofst = 0
+                pptr++
+                ofst++
+                clr = curhclr.[ofst & 1]
+            fin
+            if err >= 0
+                err = err - dx2
+                y1  = y1 + sy
+                pptr = (hgrscan[y1] | hgr1) + ofst
+            fin
+            err = err + dy2
+        next
+    else
+        if sy < 0
+            sx = -sx; y1, y2 = y2, y1
+        fin
+        err = dx2 - dy2 / 2
+        ofst, pixofst = divmod7(x1)
+        clr   = curhclr.[ofst & 1]
+        pmask = hbmask[pixofst]
+        for y = y1 to y2
+            pptr  = (hgrscan[y] | hgr1) + ofst
+            ^pptr = (^pptr & ~pmask) | (clr & pmask)
+            if err >= 0
+                err = err - dy2
+                if sx > 0
+                    pixofst++
+                    if pixofst > 7
+                        pixofst = 0
+                        ofst++
+                        clr = curhclr.[ofst & 1]
+                    fin
+                else
+                    if pixofst == 0
+                        pixofst = 7
+                        ofst--
+                        clr = curhclr.[ofst & 1]
+                    else
+                        pixofst--
+                    fin
+                fin
+                pmask = hbmask[pixofst]
+            fin
+            err = err + dx2
+        next
     fin
 end
 
@@ -175,10 +251,10 @@ def testline#0
     
     setlinespans(@hgrHlin, @hgrVlin)
     hgrColor(2)
-    for i = 0 to 191
-        simpleline(0, 0, i, 191)
-        simpleline(0, 0, 191, i)
-    next
+    //for i = 0 to 191
+    //    simpleline(0, 0, i, 191)
+    //    simpleline(0, 0, 191, i)
+    //next
     memset(hgr1, 0, $2000) // Clear HGR page 1
     hgrColor(1);
     for i = 0 to 191
