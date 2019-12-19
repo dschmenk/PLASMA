@@ -93,9 +93,140 @@ word           = $02D0,$06D0,$0AD0,$0ED0,$12D0,$16D0,$1AD0,$1ED0
 word           = $0350,$0750,$0B50,$0F50,$1350,$1750,$1B50,$1F50
 word           = $03D0,$07D0,$0BD0,$0FD0,$13D0,$17D0,$1BD0,$1FD0
 word hcolor[]  = $0000,$552A,$2A55,$7F7F,$8080,$D5AA,$AAD5,$FFFF
-
+word hmask     = $8081,$8082,$8084,$8088,$8090,$80A0,$80C0
+               = $8180,$8280,$8480,$8880,$9080,$A080,$C080
+word curhclr
 word ball0[9] = $0000, $1800, $3C00, $7E00, $7E00, $3C00, $1800, $0000
 
+var hspan, vspan
+export def spans(h, v)#0
+    hspan = h
+    vspan = v
+end
+export def line(x1, y1, x2, y2)#0
+    var dx2, dy2, err, sx, sy, ps
+    var shorterr, shortlen, longerr, longlen, halflen
+
+    sx = sy = 1
+    dx2 = (x2 - x1) * 2
+    if dx2 < 0
+        sx  = -1; dx2 = -dx2
+    fin
+    dy2 = (y2 - y1) * 2
+    if dy2 < 0
+        sy  = -1; dy2 = -dy2
+    fin
+    if dx2 >= dy2
+        if sx < 0
+            x1, x2 = x2, x1; sy = -sy
+        fin
+        if dy2 == 0
+            hspan(x1, x2, y1)#0; return
+        fin
+        ps  = x1
+        for err = dy2 - dx2 / 2 to 0 step dy2 // Find first half-span length and error
+            x1++
+        next
+        longlen = (x1 - ps + 1) * 2 // Long-span length = half-span length * 2
+        longerr = err * 2
+        if longerr >= dy2
+            longerr = longerr - dy2
+            longlen--
+        fin
+        shortlen = longlen - 1 // Short-span length = long-span length - 1
+        shorterr = longerr - dy2
+        err      = err + shorterr // Do a short-span step
+        while x1 < x2
+            hspan(ps, x1, y1)#0
+            y1 = y1 + sy     // Move to next span
+            ps = x1 + 1 // Start of next span = end of previous span + 1
+            if err >= 0 // Short span
+                err = err + shorterr
+                x1  = x1  + shortlen
+            else          // Long span
+                err = err + longerr
+                x1  = x1  + longlen
+            fin
+        loop
+        hspan(ps, x2, y2)#0 // Final span
+    else
+        if sy < 0
+            x1, x2 = x2, x1; sx = -sx
+        fin
+        if dx2 == 0
+            vspan(x1, y1, y2)#0; return
+        fin
+        ps  = y1
+        for err = dx2 - dy2 / 2 to 0 step dx2 // Find first half-span length and error
+            y1++
+        next
+        longlen = (y1 - ps + 1) * 2
+        longerr = err * 2
+        if longerr >= dx2
+            longerr -= longerr - dx2
+            longlen--
+        fin
+        shortlen = longlen - 1
+        shorterr = longerr - dx2
+        err      = err + shorterr
+        while y1 < y2
+            vspan(x1, ps, y1)#0
+            x1 = x1 + sx
+            ps  = y1 + 1
+            if err >= 0 // Short span
+                err = err + shorterr
+                y1  = y1  + shortlen
+            else          // Long span
+                err = err + longerr
+                y1  = y1  + longlen
+            fin
+        loop
+        vspan(x2, ps, y2)#0 // Final span
+    fin
+end
+def hgrPlot(x, y)#0
+    var pscan, bytofst, pixofst, pmask, pword
+    
+    pscan = hgrscan[y] | hgr1
+    wrdofst, pixofst = divmod(x, 14)
+    pmask = hmask[pixofst]
+    pword = pscan=>[wrdofst] & ~pmask
+    pscan=>[wrdofst] = pword | (curhclr & pmask)
+end
+def hgrHlin(x1, x2, y)#0
+    var pscan, bytofst, pixofst, pmask, pword
+    
+    pscan = hgrscan[y] | hgr1
+    wrdofst, pixofst = divmod(x1, 14)
+    repeat
+        pmask = hmask[pixofst]
+        pword = pscan=>[wrdofst] & ~pmask
+        pscan=>[wrdofst] = pword | (curhclr & pmask)
+        pixofst++
+        if pixofst > 13
+            pixofst = 0
+            wrdofst++
+        fin
+        x1++
+    until x1 > x2
+end
+def hgrVlin(x, y1, y2)#0
+    var pscan, bytofst, pixofst, pmask, pword, cmask
+    
+    wrdofst, pixofst = divmod(x, 14)
+    pmask = hmask[pixofst]
+    cmask = curhclr & pmask
+    pmask = ~pmask
+    repeat
+        pscan = hgrscan[y1] | hgr1
+        pword = pscan=>[wrdofst] & pmask
+        pscan=>[wrdofst] = pword | cmask
+        y1++
+    until y1 > y2
+end
+def hgrColor(c)#0
+    curhclr = hcolor[c & 0x07]
+end
 def hgrBLT(page, x, y, w, h, pSrc)#0
     word pDst
     byte i
@@ -110,11 +241,21 @@ def hgrBLT(page, x, y, w, h, pSrc)#0
         h--
     until not h
 end
+def testline
+    var i
+    
+    spans(@hgrHlin, @hgrVlin)
+    hgrColor(7)
+    for i = 0 to 100
+        hgrPlot(i, i)
+    next
+end
 memset(hgr1, 0, $2000) // Clear HGR page 1
 ^showpage1
 ^showfull
 ^showhires
 ^showgraphics
+testline
 hgrBlt(hgrpage[0], 20, 100, 2, 8, @ball0)
 getc
 ^showpage1

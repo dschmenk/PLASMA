@@ -1,0 +1,113 @@
+var hspan, vspan
+var err, shorterr, shortlen, longerr, longlen
+
+export def linespans(h, v)#0
+    hspan = h
+    vspan = v
+end
+def majorline(ps, major, majorend, minor, dir, majorspan)#0
+    //
+    // Initial half-span step
+    //
+    err = err + shorterr
+    repeat
+        majorspan(ps, major, minor)#0
+        minor = minor + dir     // Move to next span
+        ps    = major + 1       // Start of next span = end of previous + 1
+        if err >= 0             // Short span
+            err   = err   + shorterr
+            major = major + shortlen
+        else                    // Long span
+            err   = err   + longerr
+            major = major + longlen
+        fin
+    until major >= majorend
+    //
+    // Final half-span step
+    //
+    majorspan(ps, majorend, minor)#0
+end
+export def line(x1, y1, x2, y2)#0
+    var dx, dy, dx2, dy2, halflen, rem, sx, sy
+    
+    sx = 1
+    sy = 1
+    dx = x2 - x1
+    if dx < 0
+        sx  = -1; dx = -dx
+    fin
+    dy = y2 - y1
+    if dy < 0
+        sy  = -1; dy = -dy
+    fin
+    if dx >= dy
+        if sx < 0
+            x1, x2 = x2, x1; sy = -sy
+        fin
+        if dy == 0
+            hspan(x1, x2, y1)#0; return
+        fin
+        //
+        // Half-span length and error
+        //
+        dy2          = dy * 2
+        halflen, rem = divmod(dx, dy2)
+        err          = dy2 - rem
+        //
+        // Long-span length = half-span length * 2
+        //
+        longlen = (halflen + 1) * 2
+        longerr = err * 2
+        if longerr >= dy2
+            longerr = longerr - dy2
+            longlen--
+        fin
+        //
+        // Short-span length = long-span length - 1
+        //
+        shortlen = longlen - 1
+        shorterr = longerr - dy2
+        //
+        // Initial half-span step
+        //
+        err = err + shorterr
+        ps  = x1
+        x1  = x1 + halflen
+        //
+        // JIT optimize inner loop
+        //
+        majorline(x1, x1 + halflen, x2, y1, sy, hspan)
+        //
+        // Final half-span step
+        //
+        hspan(ps, x2, y2)#0
+    else
+        if sy < 0
+            x1, x2 = x2, x1; sx = -sx
+        fin
+        if dx == 0
+            vspan(y1, y2, x1)#0; return
+        fin
+        //
+        // Half-span length and error
+        //
+        dx2          = dx * 2
+        halflen, rem = divmod(dy, dx2)
+        err          = dx2 - rem
+        //
+        // Long-span length = half-span length * 2
+        //
+        longlen = (halflen + 1) * 2
+        longerr = err * 2
+        if longerr >= dx2
+            longerr = longerr - dx2
+            longlen--
+        fin
+        shortlen = longlen - 1
+        shorterr = longerr - dx2
+        //
+        // JIT optimize inner loop
+        //
+        majorline(y1, y1 + halflen, y2, x1, sx, vspan)
+    fin
+end
