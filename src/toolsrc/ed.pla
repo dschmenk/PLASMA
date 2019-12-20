@@ -1313,16 +1313,16 @@ def editkey(key)
 end
 def editline(key)
     word undoline
-    byte localchange, editstr[], editlen, editchars[MAXLNLEN+1]
+    byte undopos, localchange, editstr[], editlen, editchars[MAXLNLEN+1]
 
-    localchange = FALSE
     if (editkey(key))
-        localchange = TRUE
+        undopos  = curscol
         undoline = txtlinbuf=>[cursrow]
+        editlen = MAXLNLEN
         memset(@editchars, $A0A0, MAXLNLEN)
         memcpy(@editchars, undoline + 1, ^undoline)
-        editlen = MAXLNLEN
         txtlinbuf=>[cursrow] = @editstr
+        localchange = FALSE
         repeat
             when key
                 is keyctrld
@@ -1331,27 +1331,32 @@ def editline(key)
                     cursoff
                     drawrow(cursy, scrnleft, @editstr)
                     curson
+                    localchange = TRUE
                     break
                 is keyctrlr
                     memset(@editchars, $A0A0, MAXLNLEN)
                     memcpy(@editchars, undoline + 1, ^undoline)
                     cursoff
-                    drawrow(cursy, scrnleft, @editstr)
+                    if curshpos(undopos)
+                        drawscrn(scrntop, scrnleft)
+                    else
+                        drawrow(cursy, scrnleft, @editstr)
+                    fin
                     curson
                     localchange = FALSE
                     break
                 is keydelete
                     if curscol > 0
-                        curscol--
-                        memcpy(@editchars[curscol], @editchars[curscol + 1], MAXLNLEN - 1 - curscol)
+                        memcpy(@editchars[curscol - 1], @editchars[curscol], MAXLNLEN - curscol)
                         editchars[MAXLNLEN - 1] = keyspace
                         cursoff
-                        if curshpos(curscol)
+                        if curshpos(curscol - 1)
                             drawscrn(scrntop, scrnleft)
                         else
                             drawrow(cursy, scrnleft, @editstr)
                         fin
                         curson
+                        localchange = TRUE
                     fin
                     break
                 otherwise
@@ -1371,6 +1376,7 @@ def editline(key)
                         drawrow(cursy, scrnleft, @editstr)
                     fin
                     curson
+                    localchange = TRUE
                     break
             wend
             key = keyin()
