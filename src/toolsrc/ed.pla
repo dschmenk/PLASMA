@@ -142,9 +142,14 @@ asm lncpy(dststr, srcstr)#0
         INX
         LDY     #$00
         LDA     (SRC),Y
+        CMP     #80
+        BCC     +
+        LDA     #79
+        CLC
++       ADC     #$01    ; APPEND CR TO END OF STRING
+        STA     (DST),Y
         TAY
-        LDA     #$00
-        INY
+        LDA     #$0D
         STA     (DST),Y
         DEY
         BEQ     ++
@@ -156,9 +161,7 @@ CPLNLP  LDA     (SRC),Y
         STA     (DST),Y
         DEY
         BNE     CPLNLP
-        LDA     (SRC),Y
-++      STA     (DST),Y
-        RTS
+++      RTS
 end
 asm lnupcpy(dststr, srcstr)#0
         LDA     ESTKL,X
@@ -173,11 +176,11 @@ asm lnupcpy(dststr, srcstr)#0
         INX
         LDY     #$00
         LDA     (SRC),Y
+        CMP     #80
+        BCC     +
+        LDA     #79
++       STA     (DST),Y
         TAY
-        LDA     #$00
-        INY
-        STA     (DST),Y
-        DEY
         BEQ     +++
 CPUPLP  LDA     (SRC),Y
         CMP     #$20
@@ -193,9 +196,7 @@ CPUPLP  LDA     (SRC),Y
 ++      STA     (DST),Y
         DEY
         BNE     CPUPLP
-        LDA     (SRC),Y
-+++     STA     (DST),Y
-        RTS
++++     RTS
 end
 def bell#0
     putc($07)
@@ -433,9 +434,9 @@ def readtxt(filename, startline)#0
     putln
 end
 def writetxt(filename)#0
-    byte txtbuf[81], refnum
-    byte j, chr
     word i, strptr
+    byte refnum, j, chr
+    byte txtbuf[81]
 
     fileio:destroy(filename)
     fileio:create(filename, $04, $00) // full access, TXT file
@@ -452,7 +453,6 @@ def writetxt(filename)#0
     //
     for i = 0 to numlines - 1
         lncpy(@txtbuf, txtlinbuf=>[i])
-        txtbuf++; txtbuf[txtbuf] = $0D // Add CR to end of line
         fileio:write(refnum, @txtbuf + 1, txtbuf)
         if !(i & $0F); putc('.'); fin
     next
