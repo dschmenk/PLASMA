@@ -406,7 +406,7 @@ end
 // File routines
 //
 def readtxt(filename, startline)#0
-    byte txtbuf[81], refnum, i, j
+    byte refnum, i, j, txtbuf[MAXLNLEN+2]
 
     refnum = fileio:open(filename)
     if refnum
@@ -436,7 +436,7 @@ end
 def writetxt(filename)#0
     word i, strptr
     byte refnum, j, chr
-    byte txtbuf[81]
+    byte txtbuf[MAXLNLEN+2]
 
     fileio:destroy(filename)
     fileio:create(filename, $04, $00) // full access, TXT file
@@ -844,7 +844,7 @@ end
 // Find string in text
 //
 def findline(strptr, start)#1
-    byte upstr[MAXLNLEN+1], scan, i
+    byte scan, i, upstr[MAXLNLEN+1]
     
     if ^strptr >= findstr
         lnupcpy(@upstr, strptr)
@@ -1312,89 +1312,73 @@ def editkey(key)
     return FALSE
 end
 def editline(key)
-    byte editstr[MAXLNLEN+1], localchange, need
     word undoline
+    byte localchange, editstr[], editlen, editchars[MAXLNLEN+1]
 
     localchange = FALSE
     if (editkey(key))
         localchange = TRUE
-        memset(@editstr + 1, $A0A0, MAXLNLEN)
-        strstripcpy(@editstr, txtlinbuf=>[cursrow])
         undoline = txtlinbuf=>[cursrow]
+        memset(@editchars, $A0A0, MAXLNLEN)
+        memcpy(@editchars, undoline + 1, ^undoline)
+        editlen = MAXLNLEN
         txtlinbuf=>[cursrow] = @editstr
         repeat
-            if key >= keyspace
-                if key == keydelete
+            when key
+                is keyctrld
+                    memcpy(@editchars[curscol], @editchars[curscol + 1], MAXLNLEN - 1 - curscol)
+                    editchars[MAXLNLEN - 1] = keyspace
+                    cursoff
+                    drawrow(cursy, scrnleft, @editstr)
+                    curson
+                    break
+                is keyctrlr
+                    memset(@editchars, $A0A0, MAXLNLEN)
+                    memcpy(@editchars, undoline + 1, ^undoline)
+                    cursoff
+                    drawrow(cursy, scrnleft, @editstr)
+                    curson
+                    localchange = FALSE
+                    break
+                is keydelete
                     if curscol > 0
-                        if curscol <= editstr
-                            memcpy(@editstr[curscol], @editstr[curscol + 1], editstr - curscol)
-                            editstr--
-                        fin
+                        curscol--
+                        memcpy(@editchars[curscol], @editchars[curscol + 1], MAXLNLEN - 1 - curscol)
+                        editchars[MAXLNLEN - 1] = keyspace
                         cursoff
-                        if curshpos(curscol - 1)
+                        if curshpos(curscol)
                             drawscrn(scrntop, scrnleft)
                         else
                             drawrow(cursy, scrnleft, @editstr)
                         fin
                         curson
                     fin
-                elsif curscol < MAXLNLEN
-                    curscol++
+                    break
+                otherwise
                     if flags & insmode
-                        if editstr < MAXLNLEN or editstr.MAXLNLEN == keyspace
-                            editstr++
-                            if curscol >= editstr
-                                editstr = curscol
-                            else
-                                memcpy(@editstr[curscol + 1], @editstr[curscol], editstr - curscol)
-                            fin
+                        if editchars[MAXLNLEN - 1] == keyspace
+                            memcpy(@editchars[curscol+1], @editchars[curscol], MAXLNLEN - 1 - curscol)
                         else
-                            curscol--
-                            key = editstr[curscol]
                             bell
-                        fin
-                    else
-                        if curscol > editstr
-                            editstr = curscol
+                            break
                         fin
                     fin
-                    editstr[curscol] = caseconv(key)
+                    editchars[curscol] = caseconv(key)
                     cursoff
-                    if curshpos(curscol)
+                    if curshpos(curscol + 1)
                         drawscrn(scrntop, scrnleft)
                     else
                         drawrow(cursy, scrnleft, @editstr)
                     fin
                     curson
-                else
-                    bell
-                fin
-            elsif key == keyctrld
-                if curscol < editstr
-                    strstripcpy(undoline, @editstr)
-                    memcpy(@editstr[curscol + 1], @editstr[curscol + 2], editstr - curscol)
-                    editstr--
-                    cursoff
-                    drawrow(cursy, scrnleft, @editstr)
-                    curson
-                fin
-            elsif key == keyctrlr
-                strstripcpy(@editstr, undoline)
-                cursoff
-                drawrow(cursy, scrnleft, @editstr)
-                curson
-                localchange = FALSE
-            fin
+                    break
+            wend
             key = keyin()
         until not editkey(key)
         if localchange
             flags = flags | changed
             delstr(undoline)
-            if editstr
-                txtlinbuf=>[cursrow] = newstr(@editstr)
-            else
-                txtlinbuf=>[cursrow] = @nullstr
-            fin
+            txtlinbuf=>[cursrow] = newstr(@editstr)
         else
             txtlinbuf=>[cursrow] = undoline
         fin
