@@ -18,12 +18,12 @@ JIT16      = rel/apple/JIT16\#FE1000
 JITUNE     = rel/apple/JITUNE\#FE1000
 SOS        = rel/apple/SOS\#FE1000
 ROD        = rel/apple/ROD\#FE1000
-COPY       = rel/COPY\#FE1000
-DEL        = rel/DEL\#FE1000
-REN        = rel/REN\#FE1000
-CAT        = rel/CAT\#FE1000
-NEWDIR     = rel/NEWDIR\#FE1000
-TYPE       = rel/TYPE\#FE1000
+COPY       = rel/apple/COPY\#FE1000
+DEL        = rel/apple/DEL\#FE1000
+REN        = rel/apple/REN\#FE1000
+CAT        = rel/apple/CAT\#FE1000
+NEWDIR     = rel/apple/NEWDIR\#FE1000
+TYPE       = rel/apple/TYPE\#FE1000
 SIEVE      = rel/SIEVE\#FE1000
 PRIMEGAP   = rel/PRIMEGAP\#FE1000
 ARGS       = rel/ARGS\#FE1000
@@ -118,7 +118,9 @@ clean:
 	-rm libsrc/*.o libsrc/*~ libsrc/*.a
 	-rm libsrc/apple/*.o libsrc/apple/*~ libsrc/apple/*.a
 	-rm libsrc/c64/*.o libsrc/c64/*~ libsrc/c64/*.a
-	-rm libsrc/*.o libsrc/*~ libsrc/*.a
+	-rm utilsrc/*.o utilsrc/*~ utilsrc/*.a
+	-rm utilsrc/apple/*.o utilsrc/apple/*~ utilsrc/apple/*.a
+	-rm utilsrc/c64/*.o utilsrc/c64/*~ utilsrc/c64/*.a
 
 #
 # PLASMA compiler: plasm
@@ -307,9 +309,9 @@ $(HTTPD): samplesrc/httpd.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AMOW < samplesrc/httpd.pla > samplesrc/httpd.a
 	acme --setpc 4094 -o $(HTTPD) samplesrc/httpd.a
 
-$(TFTPD): samplesrc/tftpd.pla $(PLVM02) $(PLASM)
-	./$(PLASM) -AMOW < samplesrc/tftpd.pla > samplesrc/tftpd.a
-	acme --setpc 4094 -o $(TFTPD) samplesrc/tftpd.a
+$(TFTPD): utilsrc/tftpd.pla $(PLVM02) $(PLASM)
+	./$(PLASM) -AMOW < utilsrc/tftpd.pla > utilsrc/tftpd.a
+	acme --setpc 4094 -o $(TFTPD) utilsrc/tftpd.a
 
 $(MOUSE): libsrc/apple/mouse.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AMOW < libsrc/apple/mouse.pla > libsrc/apple/mouse.a
@@ -411,37 +413,37 @@ $(HGRTEST): samplesrc/hgrtest.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AMOW < samplesrc/hgrtest.pla > samplesrc/hgrtest.a
 	acme --setpc 4094 -o $(HGRTEST) samplesrc/hgrtest.a
 
-$(MON): samplesrc/mon.pla $(PLVM02) $(PLASM)
-	./$(PLASM) -AMOW < samplesrc/mon.pla > samplesrc/mon.a
-	acme --setpc 4094 -o $(MON) samplesrc/mon.a
+$(MON): utilsrc/apple/mon.pla $(PLVM02) $(PLASM)
+	./$(PLASM) -AMOW < utilsrc/apple/mon.pla > utilsrc/apple/mon.a
+	acme --setpc 4094 -o $(MON) utilsrc/apple/mon.a
 
-$(COPY): libsrc/copy.pla $(PLVM03) $(PLASM)
-	./$(PLASM) -AMOW < libsrc/copy.pla > libsrc/copy.a
-	acme --setpc 4094 -o $(COPY) libsrc/copy.a
+$(COPY): utilsrc/apple/copy.pla $(PLVM03) $(PLASM)
+	./$(PLASM) -AMOW < utilsrc/apple/copy.pla > utilsrc/apple/copy.a
+	acme --setpc 4094 -o $(COPY) utilsrc/apple/copy.a
 
-$(DEL): libsrc/del.pla $(PLVM03) $(PLASM)
-	./$(PLASM) -AMOW < libsrc/del.pla > libsrc/del.a
-	acme --setpc 4094 -o $(DEL) libsrc/del.a
+$(DEL): utilsrc/apple/del.pla $(PLVM03) $(PLASM)
+	./$(PLASM) -AMOW < utilsrc/apple/del.pla > utilsrc/apple/del.a
+	acme --setpc 4094 -o $(DEL) utilsrc/apple/del.a
 
-$(REN): libsrc/ren.pla $(PLVM03) $(PLASM)
-	./$(PLASM) -AMOW < libsrc/ren.pla > libsrc/ren.a
-	acme --setpc 4094 -o $(REN) libsrc/ren.a
+$(REN): utilsrc/apple/ren.pla $(PLVM03) $(PLASM)
+	./$(PLASM) -AMOW < utilsrc/apple/ren.pla > utilsrc/apple/ren.a
+	acme --setpc 4094 -o $(REN) utilsrc/apple/ren.a
 
-$(CAT): libsrc/cat.pla $(PLVM03) $(PLASM)
-	./$(PLASM) -AMOW < libsrc/cat.pla > libsrc/cat.a
-	acme --setpc 4094 -o $(CAT) libsrc/cat.a
+$(CAT): utilsrc/apple/cat.pla $(PLVM03) $(PLASM)
+	./$(PLASM) -AMOW < utilsrc/apple/cat.pla > utilsrc/apple/cat.a
+	acme --setpc 4094 -o $(CAT) utilsrc/apple/cat.a
 
-$(NEWDIR): libsrc/newdir.pla $(PLVM03) $(PLASM)
-	./$(PLASM) -AMOW < libsrc/newdir.pla > libsrc/newdir.a
-	acme --setpc 4094 -o $(NEWDIR) libsrc/newdir.a
+$(NEWDIR): utilsrc/apple/newdir.pla $(PLVM03) $(PLASM)
+	./$(PLASM) -AMOW < utilsrc/apple/newdir.pla > utilsrc/apple/newdir.a
+	acme --setpc 4094 -o $(NEWDIR) utilsrc/apple/newdir.a
 
-$(TYPE): libsrc/type.pla $(PLVM03) $(PLASM)
-	./$(PLASM) -AMOW < libsrc/type.pla > libsrc/type.a
-	acme --setpc 4094 -o $(TYPE) libsrc/type.a
+$(TYPE): utilsrc/apple/type.pla $(PLVM03) $(PLASM)
+	./$(PLASM) -AMOW < utilsrc/apple/type.pla > utilsrc/apple/type.a
+	acme --setpc 4094 -o $(TYPE) utilsrc/apple/type.a
 
-$(SOS): libsrc/apple/sos.pla $(PLVM03) $(PLASM)
-	./$(PLASM) -AMOW < libsrc/apple/sos.pla > libsrc/apple/sos.a
-	acme --setpc 4094 -o $(SOS) libsrc/apple/sos.a
+$(SOS): utilsrc/apple/sos.pla $(PLVM03) $(PLASM)
+	./$(PLASM) -AMOW < utilsrc/apple/sos.pla > utilsrc/apple/sos.a
+	acme --setpc 4094 -o $(SOS) utilsrc/apple/sos.a
 
 $(JIT): libsrc/apple/jit.pla libsrc/jitcore.pla $(PLVMJIT) $(PLASM)
 	./$(PLASM) -AMOW < libsrc/apple/jit.pla > libsrc/apple/jit.a
@@ -451,8 +453,8 @@ $(JIT16): libsrc/apple/jit16.pla libsrc/jit16core.pla $(PLVMJIT) $(PLASM)
 	./$(PLASM) -AMOW < libsrc/apple/jit16.pla > libsrc/apple/jit16.a
 	acme --setpc 4094 -o $(JIT16) libsrc/apple/jit16.a
 
-$(JITUNE): libsrc/apple/jitune.pla $(PLVMJIT) $(PLASM)
-	./$(PLASM) -AMOW < libsrc/apple/jitune.pla > libsrc/apple/jitune.a
-	acme --setpc 4094 -o $(JITUNE) libsrc/apple/jitune.a
+$(JITUNE): utilsrc/apple/jitune.pla $(PLVMJIT) $(PLASM)
+	./$(PLASM) -AMOW < utilsrc/apple/jitune.pla > utilsrc/apple/jitune.a
+	acme --setpc 4094 -o $(JITUNE) utilsrc/apple/jitune.a
 
 
