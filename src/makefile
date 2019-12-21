@@ -23,6 +23,7 @@ DEL        = rel/DEL\#FE1000
 REN        = rel/REN\#FE1000
 CAT        = rel/CAT\#FE1000
 NEWDIR     = rel/NEWDIR\#FE1000
+TYPE       = rel/TYPE\#FE1000
 SIEVE      = rel/SIEVE\#FE1000
 PRIMEGAP   = rel/PRIMEGAP\#FE1000
 ARGS       = rel/ARGS\#FE1000
@@ -95,7 +96,7 @@ TXTTYPE	= .TXT
 #SYSTYPE	= \#FF2000
 #TXTTYPE	= \#040000
 
-apple: $(PLVMZP_APL) $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVMJIT) $(PLVM802) $(PLVM03) $(CMD) $(CMDJIT) $(JIT) $(JIT16) $(JITUNE) $(SOSCMD) $(PLASMAPLASM) $(CODEOPT) $(ARGS) $(MEMMGR) $(MEMTEST) $(FIBER) $(FIBERTEST) $(LONGJMP) $(ED) $(MON) $(COPY) $(DEL) $(REN) $(CAT) $(NEWDIR) $(SOS) $(ROD) $(SIEVE) $(PRIMEGAP) $(MOUSE) $(UTHERNET2) $(UTHERNET) $(ETHERIP) $(INET) $(DHCP) $(HTTPD) $(TFTPD) $(ROGUE) $(ROGUEMAP) $(ROGUECOMBAT) $(GRAFIX) $(GFXDEMO) $(LINESPANS) $(GRLIB) $(DGRLIB) $(GRTEST) $(DGRTEST) $(HGRTEST) $(FILEIO_APL) $(CONIO_APL) $(JOYBUZZ) $(PORTIO) $(SPIPORT) $(SDFAT) $(FATCAT) $(FATGET) $(FATPUT) $(FATWDSK) $(FATRDSK) $(SANE) $(FPSTR) $(FPU) $(SANITY) $(LZ4) $(LZ4CAT) $(RPNCALC) $(SNDSEQ) $(PLAYSEQ)
+apple: $(PLVMZP_APL) $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVMJIT) $(PLVM802) $(PLVM03) $(CMD) $(CMDJIT) $(JIT) $(JIT16) $(JITUNE) $(SOSCMD) $(PLASMAPLASM) $(CODEOPT) $(ARGS) $(MEMMGR) $(MEMTEST) $(FIBER) $(FIBERTEST) $(LONGJMP) $(ED) $(MON) $(COPY) $(DEL) $(REN) $(CAT) $(NEWDIR) $(TYPE) $(SOS) $(ROD) $(SIEVE) $(PRIMEGAP) $(MOUSE) $(UTHERNET2) $(UTHERNET) $(ETHERIP) $(INET) $(DHCP) $(HTTPD) $(TFTPD) $(ROGUE) $(ROGUEMAP) $(ROGUECOMBAT) $(GRAFIX) $(GFXDEMO) $(LINESPANS) $(GRLIB) $(DGRLIB) $(GRTEST) $(DGRTEST) $(HGRTEST) $(FILEIO_APL) $(CONIO_APL) $(JOYBUZZ) $(PORTIO) $(SPIPORT) $(SDFAT) $(FATCAT) $(FATGET) $(FATPUT) $(FATWDSK) $(FATRDSK) $(SANE) $(FPSTR) $(FPU) $(SANITY) $(LZ4) $(LZ4CAT) $(RPNCALC) $(SNDSEQ) $(PLAYSEQ)
 
 	-rm vmsrc/plvmzp.inc
 
@@ -433,6 +434,10 @@ $(CAT): libsrc/cat.pla $(PLVM03) $(PLASM)
 $(NEWDIR): libsrc/newdir.pla $(PLVM03) $(PLASM)
 	./$(PLASM) -AMOW < libsrc/newdir.pla > libsrc/newdir.a
 	acme --setpc 4094 -o $(NEWDIR) libsrc/newdir.a
+
+$(TYPE): libsrc/type.pla $(PLVM03) $(PLASM)
+	./$(PLASM) -AMOW < libsrc/type.pla > libsrc/type.a
+	acme --setpc 4094 -o $(TYPE) libsrc/type.a
 
 $(SOS): libsrc/apple/sos.pla $(PLVM03) $(PLASM)
 	./$(PLASM) -AMOW < libsrc/apple/sos.pla > libsrc/apple/sos.a
