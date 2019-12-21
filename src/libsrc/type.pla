@@ -1,0 +1,83 @@
+include "inc/cmdsys.plh"
+include "inc/args.plh"
+include "inc/fileio.plh"
+
+char[64] filename
+var arg
+//
+// Convert byte to two hex chars
+//
+def btoh(cptr, b)#0
+    byte h
+
+    h = ((b >> 4) & $0F) + '0'
+    if h > '9'
+        h = h + 7
+    fin
+    ^cptr = h
+    cptr++
+    h = (b & $0F) + '0'
+    if h > '9'
+        h = h + 7
+    fin
+    ^cptr = h
+end
+//
+// Check filename
+//
+def checkfile
+    var refnum, dirbuf
+    res[t_fileinfo] fileinfo
+
+    //
+    // Check if file exists
+    //
+    if fileio:getfileinfo(@filename, @fileinfo) == FILE_ERR_OK
+        //
+        // Check if deleting a directory
+        //
+        if fileinfo.file_type == $0F
+            refnum = fileio:open(@filename)
+            if refnum
+                //
+                // Check for files inside directory
+                //
+                dirbuf = heapalloc(512)
+                if fileio:read(refnum, dirbuf, 512) == 512
+                    fileio:close(refnum)
+                    if dirbuf=>$25 // File count in directory
+                        puts("Directory not empty: "); puts(@filename); putln
+                        return FALSE
+                    fin
+                fin
+            fin
+        fin
+        return TRUE
+    fin
+    puts("File not found: "); puts(@filename); putln
+    return FALSE
+end
+//
+// Check arguments and file types
+//
+arg = argNext(argFirst)
+if ^arg
+    strcpy(@filename, arg)
+    //
+    // Check if file exists
+    //
+    if fileio:getfileinfo(@filename, @fileinfo) == FILE_ERR_OK
+        //
+        // Check if re-typing a directory
+        //
+        if fileinfo.file_type <> $0F
+        fin
+    fin
+    //
+    // Close all files
+    //
+    fileio:close(0)
+    return
+fin
+puts("Usage: +TYPE FILE [HEXTYPE [HEXAUX]]\n")
+done

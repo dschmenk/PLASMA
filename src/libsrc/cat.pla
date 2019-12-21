@@ -1,0 +1,93 @@
+include "inc/cmdsys.plh"
+include "inc/args.plh"
+include "inc/fileio.plh"
+
+var arg, refnum, dirbuf
+var page, firstblk, entrylen, entriesblk, i, entry, filecnt
+
+char[64] path
+res[t_fileinfo] fileinfo
+//
+// Print out a directory entry
+//
+def printentry()#0
+    byte type, len
+     
+    type = ^entry
+    len = type & $0F
+    ^entry = len
+    puts(entry)
+    type = ' '
+    when entry->$10
+        is $0F // Is it a directory?
+            type = '/'
+            break
+        is $FF // SYSTEM file
+            type = '-'
+            break
+        is $FE // REL file
+            type = '+'
+    wend
+    putc(type)
+    for len = 16 - len downto 0
+        putc(' ')
+    next
+    putc('$'); puth(entry->$10)
+    putln
+end
+//
+// Check arguments and file types
+//
+arg = argNext(argFirst)
+if ^arg
+    strcpy(@path, arg)
+else
+    fileio:getpfx(@path)
+fin
+refnum = fileio:open(@path)
+if refnum
+    page     = 0
+    filecnt  = 0
+    firstblk = 1
+    dirbuf   = heapallocalign(512, 8, 0)
+    repeat
+        if fileio:read(refnum, dirbuf, 512) == 512
+            //
+            // Skip block pointers
+            //
+            entry = dirbuf + 4
+            if firstblk
+                //
+                // Pull out revelant details from the first block
+                //
+                entrylen   = dirbuf->$23
+                entriesblk = dirbuf->$24
+                filecnt    = dirbuf=>$25
+                entry      = entry + entrylen
+            fin
+            for i = firstblk to entriesblk
+                //
+                // Print directory entry details
+                //
+                if ^entry
+                    printentry()
+                    filecnt--
+                fin
+                entry = entry + entrylen
+                //
+                // Pause display every screenfull
+                //
+                page++
+                if page == 23
+                    getc
+                    page = 0
+                fin
+            next
+            firstblk = 0
+        fin
+    until filecnt == 0
+    fileio:close(0)
+else
+    puts("Unable to open: "); puts(@path); putln
+fin
+done

@@ -18,6 +18,11 @@ JIT16      = rel/apple/JIT16\#FE1000
 JITUNE     = rel/apple/JITUNE\#FE1000
 SOS        = rel/apple/SOS\#FE1000
 ROD        = rel/apple/ROD\#FE1000
+COPY       = rel/COPY\#FE1000
+DEL        = rel/DEL\#FE1000
+REN        = rel/REN\#FE1000
+CAT        = rel/CAT\#FE1000
+NEWDIR     = rel/NEWDIR\#FE1000
 SIEVE      = rel/SIEVE\#FE1000
 PRIMEGAP   = rel/PRIMEGAP\#FE1000
 ARGS       = rel/ARGS\#FE1000
@@ -90,7 +95,7 @@ TXTTYPE	= .TXT
 #SYSTYPE	= \#FF2000
 #TXTTYPE	= \#040000
 
-apple: $(PLVMZP_APL) $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVMJIT) $(PLVM802) $(PLVM03) $(CMD) $(CMDJIT) $(JIT) $(JIT16) $(JITUNE) $(SOSCMD) $(PLASMAPLASM) $(CODEOPT) $(ARGS) $(MEMMGR) $(MEMTEST) $(FIBER) $(FIBERTEST) $(LONGJMP) $(ED) $(MON) $(SOS) $(ROD) $(SIEVE) $(PRIMEGAP) $(MOUSE) $(UTHERNET2) $(UTHERNET) $(ETHERIP) $(INET) $(DHCP) $(HTTPD) $(TFTPD) $(ROGUE) $(ROGUEMAP) $(ROGUECOMBAT) $(GRAFIX) $(GFXDEMO) $(LINESPANS) $(GRLIB) $(DGRLIB) $(GRTEST) $(DGRTEST) $(HGRTEST) $(FILEIO_APL) $(CONIO_APL) $(JOYBUZZ) $(PORTIO) $(SPIPORT) $(SDFAT) $(FATCAT) $(FATGET) $(FATPUT) $(FATWDSK) $(FATRDSK) $(SANE) $(FPSTR) $(FPU) $(SANITY) $(LZ4) $(LZ4CAT) $(RPNCALC) $(SNDSEQ) $(PLAYSEQ)
+apple: $(PLVMZP_APL) $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVMJIT) $(PLVM802) $(PLVM03) $(CMD) $(CMDJIT) $(JIT) $(JIT16) $(JITUNE) $(SOSCMD) $(PLASMAPLASM) $(CODEOPT) $(ARGS) $(MEMMGR) $(MEMTEST) $(FIBER) $(FIBERTEST) $(LONGJMP) $(ED) $(MON) $(COPY) $(DEL) $(REN) $(CAT) $(NEWDIR) $(SOS) $(ROD) $(SIEVE) $(PRIMEGAP) $(MOUSE) $(UTHERNET2) $(UTHERNET) $(ETHERIP) $(INET) $(DHCP) $(HTTPD) $(TFTPD) $(ROGUE) $(ROGUEMAP) $(ROGUECOMBAT) $(GRAFIX) $(GFXDEMO) $(LINESPANS) $(GRLIB) $(DGRLIB) $(GRTEST) $(DGRTEST) $(HGRTEST) $(FILEIO_APL) $(CONIO_APL) $(JOYBUZZ) $(PORTIO) $(SPIPORT) $(SDFAT) $(FATCAT) $(FATGET) $(FATPUT) $(FATWDSK) $(FATRDSK) $(SANE) $(FPSTR) $(FPU) $(SANITY) $(LZ4) $(LZ4CAT) $(RPNCALC) $(SNDSEQ) $(PLAYSEQ)
 
 	-rm vmsrc/plvmzp.inc
 
@@ -408,6 +413,26 @@ $(HGRTEST): samplesrc/hgrtest.pla $(PLVM02) $(PLASM)
 $(MON): samplesrc/mon.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AMOW < samplesrc/mon.pla > samplesrc/mon.a
 	acme --setpc 4094 -o $(MON) samplesrc/mon.a
+
+$(COPY): libsrc/copy.pla $(PLVM03) $(PLASM)
+	./$(PLASM) -AMOW < libsrc/copy.pla > libsrc/copy.a
+	acme --setpc 4094 -o $(COPY) libsrc/copy.a
+
+$(DEL): libsrc/del.pla $(PLVM03) $(PLASM)
+	./$(PLASM) -AMOW < libsrc/del.pla > libsrc/del.a
+	acme --setpc 4094 -o $(DEL) libsrc/del.a
+
+$(REN): libsrc/ren.pla $(PLVM03) $(PLASM)
+	./$(PLASM) -AMOW < libsrc/ren.pla > libsrc/ren.a
+	acme --setpc 4094 -o $(REN) libsrc/ren.a
+
+$(CAT): libsrc/cat.pla $(PLVM03) $(PLASM)
+	./$(PLASM) -AMOW < libsrc/cat.pla > libsrc/cat.a
+	acme --setpc 4094 -o $(CAT) libsrc/cat.a
+
+$(NEWDIR): libsrc/newdir.pla $(PLVM03) $(PLASM)
+	./$(PLASM) -AMOW < libsrc/newdir.pla > libsrc/newdir.a
+	acme --setpc 4094 -o $(NEWDIR) libsrc/newdir.a
 
 $(SOS): libsrc/apple/sos.pla $(PLVM03) $(PLASM)
 	./$(PLASM) -AMOW < libsrc/apple/sos.pla > libsrc/apple/sos.a
