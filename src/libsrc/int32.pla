@@ -47,9 +47,9 @@ export asm accum32loadi(imm16)#0
         RTS
 end
 export asm accum32load(i32ptr)#0
-        LDA     ESTKL+0,X    ; i32PTR
+        LDA     ESTKL+0,X   ; I32PTR
         STA     SRCL
-        LDA     ESTKH+0,X    ; I32PTR
+        LDA     ESTKH+0,X   ; I32PTR
         STA     SRCL
         LDY     #$00
         LDA     (SRC),Y
@@ -67,9 +67,9 @@ export asm accum32load(i32ptr)#0
         RTS
 end
 export asm accum32store(i32ptr)#0
-        LDA     ESTKL+0,X    ; i32PTR
+        LDA     ESTKL+0,X   ; I32PTR
         STA     DSTL
-        LDA     ESTKH+0,X    ; I32PTR
+        LDA     ESTKH+0,X   ; I32PTR
         STA     DSTL
         LDY     #$00
         LDA     ACCUM32+0
@@ -87,11 +87,11 @@ export asm accum32store(i32ptr)#0
 end
 export asm accum32addi(imm16)#0
         LDY     #$00
-        LDA     ESTKL+0,X    ; IMM16
+        LDA     ESTKL+0,X   ; IMM16
         CLC
         ADC     ACCUM32+0
         STA     ACCUM32+0
-        LDA     ESTKH+0,X    ; IMM16
+        LDA     ESTKH+0,X   ; IMM16
         BPL     +
         DEY
 +       ADC     ACCUM32+1
@@ -106,9 +106,9 @@ export asm accum32addi(imm16)#0
         RTS
 end
 export asm accum32add(i32ptr)#0
-        LDA     ESTKL+0,X    ; I32PTR
+        LDA     ESTKL+0,X   ; I32PTR
         STA     SRCL
-        LDA     ESTKH+0,X    ; I32PTR
+        LDA     ESTKH+0,X   ; I32PTR
         STA     SRCL
         LDY     #$00
         LDA     (SRC),Y
@@ -129,11 +129,11 @@ export asm accum32add(i32ptr)#0
 end
 export asm accum32subi(imm16)#0
         LDY     #$00
-        LDA     ESTKL+0,X    ; IMM16
+        LDA     ESTKL+0,X   ; IMM16
         SEC
         SBC     ACCUM32+0
         STA     ACCUM32+0
-        LDA     ESTKH+0,X    ; IMM16
+        LDA     ESTKH+0,X   ; IMM16
         BPL     +
         DEY
 +       SBC     ACCUM32+1
@@ -148,9 +148,9 @@ export asm accum32subi(imm16)#0
         RTS
 end
 export asm accum32sub(i32ptr)#0
-        LDA     ESTKL+0,X    ; I32PTR
+        LDA     ESTKL+0,X   ; I32PTR
         STA     SRCL
-        LDA     ESTKH+0,X    ; I32PTR
+        LDA     ESTKH+0,X   ; I32PTR
         STA     SRCL
         LDY     #$00
         LDA     (SRC),Y
@@ -169,63 +169,193 @@ export asm accum32sub(i32ptr)#0
         INX
         RTS
 end
-export asm accum32mul(i32ptr)#0
-        LDA     ESTKL+1,X    ; I32PTR
-        STA     SRCL
-        LDA     ESTKH+1,X    ; I32PTR
-        STA     SRCH
-        STX     ESP
-        LDX     #$00
-        LDY     #$03
-        STY     IPY
-        LDA     #$80
-_MULLP  PHA
-        LDY     IPY
-        AND     (TMP),Y
+export asm accum32shl(imm8)#0
+        LDA     ESTKL+0,X   ; IMM8
+        AND     #$01F
         BEQ     +
-        LDY     #$00
-        CLC
-        LDA     (SRC),Y
-        ADC     (DST),Y
-        STA     (DST),Y
-        INY
-        LDA     (SRC),Y
-        ADC     (DST),Y
-        STA     (DST),Y
-        INY
-        LDA     (SRC),Y
-        ADC     (DST),Y
-        STA     (DST),Y
-        INY
-        LDA     (SRC),Y
-        ADC     (DST),Y
-        STA     (DST),Y
-+       DEX
-        BEQ     ++
-        LDY     #$00
-        ASL     (DST),Y
-        INY
-        ROL     (DST),Y
-        INY
-        ROL     (DST),Y
-        INY
-        ROL     (DST),Y
-        PLA
-        LSR
-        BNE     _MULLP
+        TAY
+-       ASL     ACCUM32+0
+        ROL     ACCUM32+1
+        ROL     ACCUM32+2
+        ROL     ACCUM32+3
+        DEY
+        BNE     -
+        INX
+        RTS
+end
+export asm accum32shr(imm8)#0
+        LDA     ESTKL+0,X   ; IMM8
+        AND     #$01F
+        BEQ     +
+        TAY
         LDA     #$80
-        DEC     IPY
-        
-_SHLPRD LDY
-       ASL     ESTKL,X         ; MULTPLNDL
-        ROL     ESTKH,X         ; MULTPLNDH
-        DEX
+-       CMP     ACCUM32
+        ROR     ACCUM32+3
+        ROR     ACCUM32+2
+        ROR     ACCUM32+1
+        ROR     ACCUM32+0
+        DEY
+        BNE     -
+        INX
+        RTS
+end
+export asm accum32muli(imm16)#0
+        LDY     #$00
+        LDA     ESTKL+0,X   ; IMM16
+        STA     SRC+0
+        LDA     ESTKH+0,X   ; IMM16
+        STA     SRC+1
+        BPL     +           ; SIGN EXTENR
+        DEY
++       STY     SRC+2
+        STY     SRC+3
+end
+export asm accum32mul(i32ptr)#0
+        LDA     ESTKL+0,X   ; I32PTR
+        STA     TMPL
+        LDA     ESTKH+0,X   ; I32PTR
+        STA     TMPH
+        LDY     #$03
+-       LDA     (TMP),Y
+        STA     SRC,Y
+        DEY
+        BPL     -
+        LDA     ACCUM32+0
+        STA     ESTKL-1,X
+        LDA     ACCUM32+1
+        STA     ESTKH-1,X
+        LDA     ACCUM32+2
+        STA     ESTKL+0,X
+        LDA     ACCUM32+3
+        STA     ESTKH+0,X
+        LDA     #$00
+        STA     ACCUM32+0
+        STA     ACCUM32+1
+        STA     ACCUM32+2
+        STA     ACCUM32+3
+        LDY     #$03
+        LDA     #$80
+        STA     TMPL
+_MULLP  AND     SRC,Y
+        BEQ     +
+        CLC
+        LDA     ESTKL-1,X
+        ADC     ACCUM32+0
+        STA     ACCUM32+0
+        LDA     ESTKH-1,X
+        ADC     ACCUM32+1
+        STA     ACCUM32+1
+        LDA     ESTKL+0,X
+        ADC     ACCUM32+2
+        STA     ACCUM32+2
+        LDA     ESTKH+0,X
+        ADC     ACCUM32+3
+        STA     ACCUM32+3
++       LSR     TMPL
+        BCC     +
+        DEY
+        BMI     ++
+        ROR     TMPL
++       ASL     ACCUM32+0
+        ROL     ACCUM32+1
+        ROL     ACCUM32+2
+        ROL     ACCUM32+3
+        LDA     TMPL
         BNE     _MULLP
-        STA     ESTKH+1,X       ; PRODH
+++      INX
+        RTS
+end
+export asm accum32div(i32ptr)#0
+        LDA     ESTKL+0,X   ; I32PTR
+        STA     TMPL
+        LDA     ESTKH+0,X   ; I32PTR
+        STA     TMPH
+        LDY     #$03
+-       LDA     (TMP),Y
+        STA     SRC,Y
+        DEY
+        BPL     -
+        LDA     ACCUM32+3
+        BMI     +
+        STA     ESTKH+0,X
+        LDA     ACCUM32+2
+        STA     ESTKL+0,X
+        LDA     ACCUM32+1
+        STA     ESTKH-1,X
+        LDA     ACCUM32+0
+        STA     ESTKL-1,X
 
-        LDX     ESP
+        SEC
+        LDA     #$00
+        SBC     ACCUM32+0
+        STA     ESTKL-1,X
+        LDA     #$00
+        SBC     ACCUM32+1
+        STA     ESTKH-1,X
+        LDA     #$00
+        SBC     ACCUM32+2
+        STA     ESTKL+0,X
+        LDA     #$00
+        SBC     ACCUM32+3
+        STA     ESTKH+0,X
+
+        
+        LDA     #$00
+        STA     ACCUM32+0
+        STA     ACCUM32+1
+        STA     ACCUM32+2
+        STA     ACCUM32+3
+        LDY     #$03
+
+
+_NEG    LDA     #$00
+        SEC
+        SBC     ESTKL,X
+        STA     ESTKL,X
+        LDA     #$00
+        SBC     ESTKH,X
+        STA     ESTKH,X
+        RTS
+_DIV    STY     IPY
+        LDY     #$11            ; #BITS+1
+        LDA     #$00
+        STA     TMPL            ; REMNDRL
+        STA     TMPH            ; REMNDRH
+        STA     DVSIGN
+        LDA     ESTKH+1,X
+        BPL     +
         INX
-        INX
-        INX
+        JSR     _NEG
+        DEX
+        LDA     #$81
+        STA     DVSIGN
++       ORA     ESTKL+1,X         ; DVDNDL
+        BEQ     _DIVEX
+        LDA     ESTKH,X
+        BPL     _DIV1
+        JSR     _NEG
+        INC     DVSIGN
+_DIV1   ASL     ESTKL+1,X       ; DVDNDL
+        ROL     ESTKH+1,X       ; DVDNDH
+        DEY
+        BCC     _DIV1
+_DIVLP  ROL     TMPL            ; REMNDRL
+        ROL     TMPH            ; REMNDRH
+        LDA     TMPL            ; REMNDRL
+        CMP     ESTKL,X         ; DVSRL
+        LDA     TMPH            ; REMNDRH
+        SBC     ESTKH,X         ; DVSRH
+        BCC     +
+        STA     TMPH            ; REMNDRH
+        LDA     TMPL            ; REMNDRL
+        SBC     ESTKL,X         ; DVSRL
+        STA     TMPL            ; REMNDRL
+        SEC
++       ROL     ESTKL+1,X       ; DVDNDL
+        ROL     ESTKH+1,X       ; DVDNDH
+        DEY
+        BNE     _DIVLP
+_DIVEX  INX
+        LDY     IPY
         RTS
 end
