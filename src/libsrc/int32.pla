@@ -2,12 +2,14 @@
 // 32 bit integer math routines
 //
 include "inc/cmdsys.plh"
+const t_i32 = 4
 //
 // Include zero page definitions
 //
 asm int32Inc
     !SOURCE "vmsrc/plvmzp.inc"
-ACCUM32 =   DSTH+1
+ACCUM32 =       DSTH+1
+DVSIGN  =       TMP+3
 end
 export asm zero32#0
         LDA     #$00
@@ -41,20 +43,20 @@ export asm neg32#0
 end
 export asm load32(i32ptr)#0
         LDA     ESTKL+0,X       ; I32PTR
-        STA     SRCL
+        STA     TMPL
         LDA     ESTKH+0,X       ; I32PTR
-        STA     SRCL
+        STA     TMPH
         LDY     #$00
-        LDA     (SRC),Y
+        LDA     (TMP),Y
         STA     ACCUM32+0
         INY
-        LDA     (SRC),Y
+        LDA     (TMP),Y
         STA     ACCUM32+1
         INY
-        LDA     (SRC),Y
+        LDA     (TMP),Y
         STA     ACCUM32+2
         INY
-        LDA     (SRC),Y
+        LDA     (TMP),Y
         STA     ACCUM32+3
         INX
         RTS
@@ -64,53 +66,54 @@ export asm loadi16(imm16)#0
         LDA     ESTKL+0,X       ; IMM16L
         STA     ACCUM32+0
         LDA     ESTKH+0,X       ; IMM16H
+        STA     ACCUM32+1
         BPL     +               ; SIGN EXTEND
         DEY
-+       STA     ACCUM32+1
-        STY     ACCUM32+2
++       STY     ACCUM32+2
         STY     ACCUM32+3
         INX
         RTS
 end
 export asm store32(i32ptr)#0
         LDA     ESTKL+0,X       ; I32PTR
-        STA     DSTL
+        STA     TMPL
         LDA     ESTKH+0,X       ; I32PTR
-        STA     DSTL
+        STA     TMPH
         LDY     #$00
         LDA     ACCUM32+0
-        STA     (DST),Y
+        STA     (TMP),Y
         INY
         LDA     ACCUM32+1
-        STA     (DST),Y
+        STA     (TMP),Y
         INY
         LDA     ACCUM32+2
-        STA     (DST),Y
+        STA     (TMP),Y
         INY
         LDA     ACCUM32+3
-        STA     (DST),Y
+        STA     (TMP),Y
+        INX
         RTS
 end
 export asm add32(i32ptr)#0
         LDA     ESTKL+0,X       ; I32PTR
-        STA     SRCL
+        STA     TMPL
         LDA     ESTKH+0,X       ; I32PTR
-        STA     SRCL
+        STA     TMPH
         LDY     #$00
-        LDA     (SRC),Y
+        LDA     (TMP),Y
         CLC
         ADC     ACCUM32+0
         STA     ACCUM32+0
         INY
-        LDA     (SRC),Y
+        LDA     (TMP),Y
         ADC     ACCUM32+1
         STA     ACCUM32+1
         INY
-        LDA     (SRC),Y
+        LDA     (TMP),Y
         ADC     ACCUM32+2
         STA     ACCUM32+2
         INY
-        LDA     (SRC),Y
+        LDA     (TMP),Y
         ADC     ACCUM32+3
         STA     ACCUM32+3
         INX
@@ -138,52 +141,45 @@ export asm addi16(imm16)#0
 end
 export asm sub32(i32ptr)#0
         LDA     ESTKL+0,X       ; I32PTR
-        STA     SRCL
+        STA     TMPL
         LDA     ESTKH+0,X       ; I32PTR
-        STA     SRCL
-        LDY     #$00
-        LDA     (SRC),Y
-        SEC
-        SBC     ACCUM32+0
-        STA     ACCUM32+0
-        INY
-        LDA     (SRC),Y
-        SBC     ACCUM32+1
-        STA     ACCUM32+1
-        INY
-        LDA     (SRC),Y
-        SBC     ACCUM32+2
-        STA     ACCUM32+2
-        INY
-        LDA     (SRC),Y
-        SBC     ACCUM32+3
-        STA     ACCUM32+3
-        INX
-        RTS
+        STA     TMPH
+        LDY     #$03
+-       LDA     (TMP),Y
+        STA     SRC,Y
+        DEY
+        BPL     -
+        BMI     _SUB
 end
 export asm subi16(imm16)#0
         LDY     #$00
         LDA     ESTKL+0,X       ; IMM16L
-        SEC
-        SBC     ACCUM32+0
-        STA     ACCUM32+0
+        STA     SRC+0
         LDA     ESTKH+0,X       ; IMM16H
-        BPL     +
+        STA     SRC+1
+        BPL     +               ; SIGN EXTEND
         DEY
-+       SBC     ACCUM32+1
++       STY     SRC+2
+        STY     SRC+3
+_SUB    LDA     ACCUM32+0
+        SEC
+        SBC     SRC+0
+        STA     ACCUM32+0
+        LDA     ACCUM32+1
+        SBC     SRC+1
         STA     ACCUM32+1
-        TYA
-        SBC     ACCUM32+2
+        LDA     ACCUM32+2
+        SBC     SRC+2
         STA     ACCUM32+2
-        TYA
-        SBC     ACCUM32+3
+        LDA     ACCUM32+3
+        SBC     SRC+3
         STA     ACCUM32+3
         INX
         RTS
 end
 export asm shl32(imm8)#0
         LDA     ESTKL+0,X       ; IMM8
-        AND     #$01F
+        AND     #$1F
         CMP     #16
         BCC     +
         LDY     ACCUM32+1
@@ -218,7 +214,7 @@ export asm shl32(imm8)#0
 end
 export asm shr32(imm8)#0
         LDA     ESTKL+0,X       ; IMM8
-        AND     #$01F
+        AND     #$1F
         BEQ     +
         TAY
         LDA     #$80
@@ -343,7 +339,7 @@ export asm divi16(imm16)#2
 +       STA     SRC+1
         LDA     ESTKL+0,X       ; IMM16L
         STA     SRC+0
-_DIV    STY     DIVSGN          ; LSB = SIGN OF DVSR
+_DIV    STY     DVSIGN          ; LSB = SIGN OF DVSR
         DEX                     ; REMNDR = ESTK..ESTK+1
         LDY     #$00
         STY     ESTKL+0,X
@@ -369,8 +365,8 @@ _DIV    STY     DIVSGN          ; LSB = SIGN OF DVSR
         BPL     +
         LDA     #$81            ; DVDND IS NEG
         CLC
-        ADC     DIVSGN
-        STA     DIVSGN
+        ADC     DVSIGN
+        STA     DVSIGN
         TYA
         SEC
         SBC     ACCUM32+0
@@ -407,7 +403,7 @@ _DIV    STY     DIVSGN          ; LSB = SIGN OF DVSR
         STA     ESTKH+1,X
         LDA     ESTKL+0,X       ; REMNDR
         SBC     SRC+0           ; DVSR
-        STA     ESTKL+0         ; SUBTRACT
+        STA     ESTKL+0,X       ; SUBTRACT
         LDA     ESTKH+0,X
         SBC     SRC+1
         STA     ESTKH+0,X
@@ -421,7 +417,7 @@ _DIV    STY     DIVSGN          ; LSB = SIGN OF DVSR
         ROL     ACCUM32+3
         DEY
         BNE     -
-        LDA     DIVSGN
+        LDA     DVSIGN          ; SET SIGNS OF RESULTS
         BPL     +
         TYA
         SEC
@@ -436,11 +432,10 @@ _DIV    STY     DIVSGN          ; LSB = SIGN OF DVSR
         TYA
         SBC     ESTKH+1,X
         STA     ESTKH+1,X
-        LDA     DIVSGN
+        LDA     DVSIGN
 +       LSR
         BCC     +
         TYA
-        SEC
         SBC     ACCUM32+0
         STA     ACCUM32+0
         TYA
@@ -454,7 +449,6 @@ _DIV    STY     DIVSGN          ; LSB = SIGN OF DVSR
         STA     ACCUM32+3
 +       RTS
 end
-
 export asm iseq32(i32ptr)#1
         LDA     ESTKL+0,X       ; I32PTR
         STA     TMPL
@@ -535,7 +529,7 @@ _ISGE   LDA     ACCUM32+0
 +       STY     ESTKL+0,X
         STY     ESTKH+0,X
         RTS
-done
+end
 export asm isle32(i32ptr)#1
         LDA     ESTKL+0,X       ; I32PTR
         STA     TMPL
@@ -575,32 +569,93 @@ _ISLE   LDA     SRC+0
 +       STY     ESTKL+0,X
         STY     ESTKH+0,X
         RTS
-done
-ISGT    LDA     ESTKL,X
-        CMP     ESTKL+1,X
-        LDA     ESTKH,X
-        SBC     ESTKH+1,X
-        BVS     +
-        BMI     ISTRU
-        BPL     ISFLS
-+
--       BMI     ISFLS
-        BPL     ISTRU
-ISLT    LDA     ESTKL+1,X
-        CMP     ESTKL,X
-        LDA     ESTKH+1,X
-        SBC     ESTKH,X
-        BVS     -
-        BMI     ISTRU
-        BPL     ISFLS
-done
-def puti32(i32ptr)#0
+end
+export asm isgt32(i32ptr)#1
+        LDA     ESTKL+0,X       ; I32PTR
+        STA     TMPL
+        LDA     ESTKH+0,X       ; I32PTR
+        STA     TMPH
+        LDY     #$03
+-       LDA     (TMP),Y
+        STA     SRC,Y
+        DEY
+        BPL     -
+        INY
+        BEQ     _ISGT
+end
+export asm isgti16(imm16)#1
+        LDY     #$00
+        LDA     ESTKL+0,X       ; IMM16L
+        STA     SRC+0
+        LDA     ESTKH+0,X       ; IMM16H
+        STA     SRC+1
+        BPL     +               ; SIGN EXTEND
+        DEY
++       STY     SRC+2
+        STY     SRC+3
+        LDY     #$00
+_ISGT   LDA     SRC+0
+        CMP     ACCUM32+0
+        LDA     SRC+1
+        SBC     ACCUM32+1
+        LDA     SRC+2
+        SBC     ACCUM32+2
+        LDA     SRC+3
+        SBC     ACCUM32+3
+        BVC     +
+        EOR     #$80
++       BPL     +
+        DEY
++       STY     ESTKL+0,X
+        STY     ESTKH+0,X
+        RTS
+end
+export asm islt32(i32ptr)#1
+        LDA     ESTKL+0,X       ; I32PTR
+        STA     TMPL
+        LDA     ESTKH+0,X       ; I32PTR
+        STA     TMPH
+        LDY     #$03
+-       LDA     (TMP),Y
+        STA     SRC,Y
+        DEY
+        BPL     -
+        INY
+        BEQ     _ISLT
+end
+export asm islti16(imm16)#1
+        LDY     #$00
+        LDA     ESTKL+0,X       ; IMM16L
+        STA     SRC+0
+        LDA     ESTKH+0,X       ; IMM16H
+        STA     SRC+1
+        BPL     +               ; SIGN EXTEND
+        DEY
++       STY     SRC+2
+        STY     SRC+3
+        LDY     #$00
+_ISLT   LDA     ACCUM32+0
+        CMP     SRC+0
+        LDA     ACCUM32+1
+        SBC     SRC+1
+        LDA     ACCUM32+2
+        SBC     SRC+2
+        LDA     ACCUM32+3
+        SBC     SRC+3
+        BVC     +
+        EOR     #$80
++       BPL     +
+        DEY
++       STY     ESTKL+0,X
+        STY     ESTKH+0,X
+        RTS
+end
+export def i32tos(i32ptr, strptr)#1
     res[t_i32] save
-    var iptr, rem
+    word iptr, rem
     char[12] istr
     
     iptr = @istr.11
-    
     store32(@save)
     load32(i32ptr)
     if i32ptr->3 & $80
@@ -608,11 +663,20 @@ def puti32(i32ptr)#0
         putc('-')
     fin
     repeat
-        rem = divi16(10)
+        drop, rem = divi16(10) // Only care about LSW of remainder
         ^iptr = rem + '0'
         iptr--
-    until isgti16(0)
+    until iseqi16(0)
     ^iptr = @istr.11 - iptr
-    puts(iptr)
+    strcpy(strptr, iptr)
     load32(@save)
+    return strptr
+end
+export def puti32(i32ptr)#0
+    char[12] i32str
+        
+    puts(i32tos(i32ptr, @i32str))
+end
+
 done
+

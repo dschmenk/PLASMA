@@ -1,24 +1,61 @@
 include "inc/cmdsys.plh"
 include "inc/args.plh"
 include "inc/fileio.plh"
+include "inc/int32.plh"
 
 var arg, refnum, dirbuf
 var page, firstblk, entrylen, entriesblk, i, entry, filecnt
-
-char[64] path
+char[64] path, filename
 res[t_fileinfo] fileinfo
+res[t_fileentry] fileentry
+//
+// Convert byte to two hex chars
+//
+def putb(b)#0
+    char h
+    
+    h = ((b >> 4) & $0F) + '0'
+    if h > '9'
+        h = h + 7
+    fin
+    putc(h)
+    h = (b & $0F) + '0'
+    if h > '9'
+        h = h + 7
+    fin
+    putc(h)
+end
+def strupper(strptr)#0
+    byte i, chr
+
+    if ^strptr
+        for i = 1 to ^strptr
+            chr = strptr->[i]
+            if chr >= 'a' and chr <= 'z'
+                strptr->[i] = chr - 'a' + 'A'
+            fin
+        next
+    fin
+end
+def filefrompath(filestr, pathstr)#0
+    byte i
+    
+    for i = ^pathstr downto 1
+        if pathstr->[i] == '/'
+            break
+        fin
+    next
+    ^filestr = ^pathstr - i
+    memcpy(filestr + 1, pathstr + 1 + i, ^filestr)
+end
 //
 // Print out a directory entry
 //
-def printentry()#0
-    byte type, len
+def printentry(entryptr)#0
+    char type, pad, eofstr[12]
      
-    type = ^entry
-    len = type & $0F
-    ^entry = len
-    puts(entry)
-    type = ' '
-    when entry->$10
+    puts(entryptr)
+    when entryptr->entry_type
         is $0F // Is it a directory?
             type = '/'
             break
@@ -27,12 +64,22 @@ def printentry()#0
             break
         is $FE // REL file
             type = '+'
+            break
+        otherwise
+            type = ' '
     wend
     putc(type)
-    for len = 16 - len downto 0
+    for pad = ^entryptr to 14
         putc(' ')
     next
-    putc('$'); puth(entry->$10)
+    putc('$');  putb(entryptr->entry_type)
+    puts("  $"); puth(entryptr=>entry_aux)
+    entryptr->entry_EOFH.1 = 0
+    i32tos(entryptr+entry_EOFL, @eofstr)
+    for pad = eofstr to 9
+        putc(' ')
+    next
+    puts(@eofstr)    
     putln
 end
 //
@@ -41,51 +88,83 @@ end
 arg = argNext(argFirst)
 if ^arg
     strcpy(@path, arg)
+    strupper(@path)
 else
     fileio:getpfx(@path)
 fin
-refnum = fileio:open(@path)
-if refnum
-    page     = 0
-    filecnt  = 0
-    firstblk = 1
-    dirbuf   = heapallocalign(512, 8, 0)
-    repeat
-        if fileio:read(refnum, dirbuf, 512) == 512
-            //
-            // Skip block pointers
-            //
-            entry = dirbuf + 4
-            if firstblk
-                //
-                // Pull out revelant details from the first block
-                //
-                entrylen   = dirbuf->$23
-                entriesblk = dirbuf->$24
-                filecnt    = dirbuf=>$25
-                entry      = entry + entrylen
-            fin
-            for i = firstblk to entriesblk
-                //
-                // Print directory entry details
-                //
-                if ^entry
-                    printentry()
-                    filecnt--
-                    //
-                    // Pause display every screenfull
-                    //
-                    page++
-                    if page == 23
-                        getc
-                        page = 0
-                    fin
-                fin
-                entry = entry + entrylen
-            next
-            firstblk = 0
+//
+// Check if file exists
+//
+if fileio:getfileinfo(@path, @fileinfo) == FILE_ERR_OK
+    puts("=NAME==========TYPE===AUX====LENGTH=\n")
+    //
+    // Check if cataloging a directory
+    //
+    if fileinfo.file_type == $0F
+        fileio:iobufalloc(2) // Reserve two I/O buffers
+        if path[path] <> '/' // Make sure path ends with a '/'
+            path++
+            path[path] = '/'
         fin
-    until filecnt == 0
+        page     = 21
+        filecnt  = 0
+        firstblk = 1
+        dirbuf   = heapallocalign(512, 8, 0)
+        refnum   = fileio:open(@path)
+        repeat
+            if fileio:read(refnum, dirbuf, 512) == 512
+                //
+                // Skip block pointers
+                //
+                entry = dirbuf + 4
+                if firstblk
+                    //
+                    // Pull out revelant details from the first block
+                    //
+                    entrylen   = dirbuf->$23
+                    entriesblk = dirbuf->$24
+                    filecnt    = dirbuf=>$25
+                    entry      = entry + entrylen
+                fin
+                for i = firstblk to entriesblk
+                    //
+                    // Print directory entry details
+                    //
+                    ^entry = ^entry & $0F
+                    if ^entry
+                        printentry(entry)
+                        filecnt--
+                        //
+                        // Pause display every screenfull
+                        //
+                        if not page
+                            getc
+                            page = 22
+                        else
+                            page--
+                        fin
+                    fin
+                    entry = entry + entrylen
+                next
+                firstblk = 0
+            fin
+        until filecnt == 0
+    else
+        //
+        // Create file entry from file info
+        //
+        filefrompath(@fileentry, @path)
+        fileentry.entry_access   = fileinfo.file_access
+        fileentry.entry_type     = fileinfo.file_type
+        fileentry:entry_create:0 = fileinfo:create_date
+        fileentry:entry_create:2 = fileinfo:create_time
+        fileentry:entry_aux      = fileinfo:aux_type
+        fileentry:entry_mod:0    = fileinfo:mod_date
+        fileentry:entry_mod:2    = fileinfo:mod_time
+        refnum = fileio:open(@path)
+        fileentry:entry_EOFL, fileentry.entry_EOFH = fileio:geteof(refnum)#2
+        printentry(@fileentry)
+    fin
     fileio:close(0)
 else
     puts("Unable to open: "); puts(@path); putln

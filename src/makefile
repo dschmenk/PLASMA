@@ -36,6 +36,8 @@ FATWDSK    = rel/apple/FATWRITEDSK\#FE1000
 FATRDSK    = rel/apple/FATREADDSK\#FE1000
 FILEIO_APL = rel/apple/FILEIO\#FE1000
 CONIO_APL  = rel/apple/CONIO\#FE1000
+INT32      = rel/INT32\#FE1000
+INT32TEST  = rel/INT32TEST\#FE1000
 SANE       = rel/SANE\#FE1000
 FPSTR      = rel/FPSTR\#FE1000
 FPU        = rel/FPU\#FE1000
@@ -96,7 +98,7 @@ TXTTYPE	= .TXT
 #SYSTYPE	= \#FF2000
 #TXTTYPE	= \#040000
 
-apple: $(PLVMZP_APL) $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVMJIT) $(PLVM802) $(PLVM03) $(CMD) $(CMDJIT) $(JIT) $(JIT16) $(JITUNE) $(SOSCMD) $(PLASMAPLASM) $(CODEOPT) $(ARGS) $(MEMMGR) $(MEMTEST) $(FIBER) $(FIBERTEST) $(LONGJMP) $(ED) $(MON) $(COPY) $(DEL) $(REN) $(CAT) $(NEWDIR) $(TYPE) $(SOS) $(ROD) $(SIEVE) $(PRIMEGAP) $(MOUSE) $(UTHERNET2) $(UTHERNET) $(ETHERIP) $(INET) $(DHCP) $(HTTPD) $(TFTPD) $(ROGUE) $(ROGUEMAP) $(ROGUECOMBAT) $(GRAFIX) $(GFXDEMO) $(LINESPANS) $(GRLIB) $(DGRLIB) $(GRTEST) $(DGRTEST) $(HGRTEST) $(FILEIO_APL) $(CONIO_APL) $(JOYBUZZ) $(PORTIO) $(SPIPORT) $(SDFAT) $(FATCAT) $(FATGET) $(FATPUT) $(FATWDSK) $(FATRDSK) $(SANE) $(FPSTR) $(FPU) $(SANITY) $(LZ4) $(LZ4CAT) $(RPNCALC) $(SNDSEQ) $(PLAYSEQ)
+apple: $(PLVMZP_APL) $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVMJIT) $(PLVM802) $(PLVM03) $(CMD) $(CMDJIT) $(JIT) $(JIT16) $(JITUNE) $(SOSCMD) $(PLASMAPLASM) $(CODEOPT) $(ARGS) $(MEMMGR) $(MEMTEST) $(FIBER) $(FIBERTEST) $(LONGJMP) $(ED) $(MON) $(COPY) $(DEL) $(REN) $(CAT) $(NEWDIR) $(TYPE) $(SOS) $(ROD) $(SIEVE) $(PRIMEGAP) $(MOUSE) $(UTHERNET2) $(UTHERNET) $(ETHERIP) $(INET) $(DHCP) $(HTTPD) $(TFTPD) $(ROGUE) $(ROGUEMAP) $(ROGUECOMBAT) $(GRAFIX) $(GFXDEMO) $(LINESPANS) $(GRLIB) $(DGRLIB) $(GRTEST) $(DGRTEST) $(HGRTEST) $(FILEIO_APL) $(CONIO_APL) $(JOYBUZZ) $(PORTIO) $(SPIPORT) $(SDFAT) $(FATCAT) $(FATGET) $(FATPUT) $(FATWDSK) $(FATRDSK) $(INT32) $(INT32TEST) $(SANE) $(FPSTR) $(FPU) $(SANITY) $(LZ4) $(LZ4CAT) $(RPNCALC) $(SNDSEQ) $(PLAYSEQ)
 
 	-rm vmsrc/plvmzp.inc
 
@@ -264,6 +266,14 @@ $(SIEVE): samplesrc/sieve.pla $(PLVM02) $(PLASM)
 $(PRIMEGAP): samplesrc/primegap.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AMW < samplesrc/primegap.pla > samplesrc/primegap.a
 	acme --setpc 4094 -o $(PRIMEGAP) samplesrc/primegap.a
+
+$(INT32): libsrc/int32.pla $(PLVM02) $(PLASM)
+	./$(PLASM) -AMOW < libsrc/int32.pla > libsrc/int32.a
+	acme --setpc 4094 -o $(INT32) libsrc/int32.a
+
+$(INT32TEST): samplesrc/int32test.pla $(PLVM02) $(PLASM)
+	./$(PLASM) -AMOW < samplesrc/int32test.pla > samplesrc/int32test.a
+	acme --setpc 4094 -o $(INT32TEST) samplesrc/int32test.a
 
 $(SANE): libsrc/sane.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AMOW < libsrc/sane.pla > libsrc/sane.a

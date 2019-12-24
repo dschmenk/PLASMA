@@ -28,6 +28,7 @@ struc t_fileio
     word getfileinfo
     word setfileinfo
     word geteof
+    word seteof
     word iobufalloc
     word open
     word close
@@ -41,14 +42,14 @@ struc t_fileio
     word readblock
     word writeblock
 end
-predef a2getpfx(path), a23setpfx(path), a2getfileinfo(path, fileinfo), a2setfileinfo(path, fileinfo), a23geteof(refnum), a2iobufs(iobufs), a2open(path), a2close(refnum)
+predef a2getpfx(path), a23setpfx(path), a2getfileinfo(path, fileinfo), a2setfileinfo(path, fileinfo), a23geteof(refnum)#2, a23seteof(refnum, eofl, eofh), a2iobufs(iobufs), a2open(path), a2close(refnum)
 predef a23read(refnum, buf, len), a2write(refnum, buf, len), a2create(path, type, aux), a23destroy(path), a23rename(path, newpath)
 predef a2newline(refnum, emask, nlchar), a2online(unit, buf), a2readblock(unit, buf, block), a2writeblock(unit, buf, block)
 //
 // Exported function table.
 //
 word fileio[]
-word = @a2getpfx, @a23setpfx, @a2getfileinfo, @a2setfileinfo, @a23geteof, @a2iobufs, @a2open, @a2close
+word = @a2getpfx, @a23setpfx, @a2getfileinfo, @a2setfileinfo, @a23geteof, @a23seteof, @a2iobufs, @a2open, @a2close
 word = @a23read, @a2write, @a2create, @a23destroy, @a23rename
 word = @a2newline, @a2online, @a2readblock, @a2writeblock
 //
@@ -143,17 +144,30 @@ def a3setfileinfo(path, fileinfo)
     perr     = syscall($C3, @params)
     return perr
 end
-def a1geteof(refnum)
-    return 0
+def a1geteof(refnum)#2
+    return 0, 0
 end
-def a23geteof(refnum)
-    byte params[6]
+def a23geteof(refnum)#2
+    byte params[5]
 
     params.0 = 2
     params.1 = refnum
     params:2 = 0
-    params:4 = 0
+    params.4 = 0
     syscall($D1, @params)
+    return params:2, params.4
+end
+def a1seteof(refnum, eofl, eofh)
+    return 0
+end
+def a23seteof(refnum, eofl, eofh)
+    byte params[5]
+
+    params.0 = 2
+    params.1 = refnum
+    params:2 = eofl
+    params.4 = eofh
+    syscall($D0, @params)
     return params:2
 end
 def a1open(path)
@@ -468,6 +482,7 @@ when MACHID & MACHID_MODEL
         fileio:getfileinfo = @a1getfileinfo
         fileio:setfileinfo = @a1setfileinfo
         fileio:geteof      = @a1geteof
+        fileio:seteof      = @a1seteof
         fileio:iobufalloc  = @a13iobufs
         fileio:open        = @a1open
         fileio:close       = @a1close
