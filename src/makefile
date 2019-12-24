@@ -55,6 +55,7 @@ INET       = rel/INET\#FE1000
 DHCP       = rel/DHCP\#FE1000
 HTTPD      = rel/HTTPD\#FE1000
 TFTPD      = rel/TFTPD\#FE1000
+HGRLIB     = rel/apple/HGRLIB\#FE1000
 GRLIB      = rel/apple/GRLIB\#FE1000
 DGRLIB     = rel/apple/DGRLIB\#FE1000
 LINESPANS  = rel/apple/LINESPANS\#FE1000
@@ -66,6 +67,7 @@ ROGUE      = rel/ROGUE\#FE1000
 ROGUEMAP   = rel/ROGUEMAP\#FE1000
 ROGUECOMBAT= rel/ROGUECOMBAT\#FE1000
 MON        = rel/apple/MON\#FE1000
+HGRTEST    = rel/apple/HGRTEST\#FE1000
 GRTEST     = rel/apple/GRTEST\#FE1000
 DGRTEST    = rel/apple/DGRTEST\#FE1000
 HGRTEST    = rel/apple/HGRTEST\#FE1000
@@ -98,7 +100,7 @@ TXTTYPE	= .TXT
 #SYSTYPE	= \#FF2000
 #TXTTYPE	= \#040000
 
-apple: $(PLVMZP_APL) $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVMJIT) $(PLVM802) $(PLVM03) $(CMD) $(CMDJIT) $(JIT) $(JIT16) $(JITUNE) $(SOSCMD) $(PLASMAPLASM) $(CODEOPT) $(ARGS) $(MEMMGR) $(MEMTEST) $(FIBER) $(FIBERTEST) $(LONGJMP) $(ED) $(MON) $(COPY) $(DEL) $(REN) $(CAT) $(NEWDIR) $(TYPE) $(SOS) $(ROD) $(SIEVE) $(PRIMEGAP) $(MOUSE) $(UTHERNET2) $(UTHERNET) $(ETHERIP) $(INET) $(DHCP) $(HTTPD) $(TFTPD) $(ROGUE) $(ROGUEMAP) $(ROGUECOMBAT) $(GRAFIX) $(GFXDEMO) $(LINESPANS) $(GRLIB) $(DGRLIB) $(GRTEST) $(DGRTEST) $(HGRTEST) $(FILEIO_APL) $(CONIO_APL) $(JOYBUZZ) $(PORTIO) $(SPIPORT) $(SDFAT) $(FATCAT) $(FATGET) $(FATPUT) $(FATWDSK) $(FATRDSK) $(INT32) $(INT32TEST) $(SANE) $(FPSTR) $(FPU) $(SANITY) $(LZ4) $(LZ4CAT) $(RPNCALC) $(SNDSEQ) $(PLAYSEQ)
+apple: $(PLVMZP_APL) $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVMJIT) $(PLVM802) $(PLVM03) $(CMD) $(CMDJIT) $(JIT) $(JIT16) $(JITUNE) $(SOSCMD) $(PLASMAPLASM) $(CODEOPT) $(ARGS) $(MEMMGR) $(MEMTEST) $(FIBER) $(FIBERTEST) $(LONGJMP) $(ED) $(MON) $(COPY) $(DEL) $(REN) $(CAT) $(NEWDIR) $(TYPE) $(SOS) $(ROD) $(SIEVE) $(PRIMEGAP) $(MOUSE) $(UTHERNET2) $(UTHERNET) $(ETHERIP) $(INET) $(DHCP) $(HTTPD) $(TFTPD) $(ROGUE) $(ROGUEMAP) $(ROGUECOMBAT) $(GRAFIX) $(GFXDEMO) $(LINESPANS) $(HGRLIB) $(HGRTEST) $(GRLIB) $(DGRLIB) $(GRTEST) $(DGRTEST) $(HGRTEST) $(FILEIO_APL) $(CONIO_APL) $(JOYBUZZ) $(PORTIO) $(SPIPORT) $(SDFAT) $(FATCAT) $(FATGET) $(FATPUT) $(FATWDSK) $(FATRDSK) $(INT32) $(INT32TEST) $(SANE) $(FPSTR) $(FPU) $(SANITY) $(LZ4) $(LZ4CAT) $(RPNCALC) $(SNDSEQ) $(PLAYSEQ)
 
 	-rm vmsrc/plvmzp.inc
 
@@ -403,6 +405,10 @@ $(PORTIO): libsrc/apple/portio.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AMOW < libsrc/apple/portio.pla > libsrc/apple/portio.a
 	acme --setpc 4094 -o $(PORTIO) libsrc/apple/portio.a
 
+$(HGRLIB): libsrc/apple/hgrlib.pla $(PLVM02) $(PLASM)
+	./$(PLASM) -AMOW < libsrc/apple/hgrlib.pla > libsrc/apple/hgrlib.a
+	acme --setpc 4094 -o $(HGRLIB) libsrc/apple/hgrlib.a
+
 $(GRLIB): libsrc/apple/grlib.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AMOW < libsrc/apple/grlib.pla > libsrc/apple/grlib.a
 	acme --setpc 4094 -o $(GRLIB) libsrc/apple/grlib.a
@@ -410,6 +416,10 @@ $(GRLIB): libsrc/apple/grlib.pla $(PLVM02) $(PLASM)
 $(DGRLIB): libsrc/apple/dgrlib.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AMOW < libsrc/apple/dgrlib.pla > libsrc/apple/dgrlib.a
 	acme --setpc 4094 -o $(DGRLIB) libsrc/apple/dgrlib.a
+
+$(HGRTEST): samplesrc/hgrtest.pla $(PLVM02) $(PLASM)
+	./$(PLASM) -AMOW < samplesrc/hgrtest.pla > samplesrc/hgrtest.a
+	acme --setpc 4094 -o $(HGRTEST) samplesrc/hgrtest.a
 
 $(GRTEST): samplesrc/grtest.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AMOW < samplesrc/grtest.pla > samplesrc/grtest.a

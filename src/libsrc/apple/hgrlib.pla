@@ -1,0 +1,284 @@
+include "inc/cmdsys.plh"
+//
+// Hardware addresses
+//
+const showgraphics = $C050
+const showtext     = $C051
+const showfull     = $C052
+const showmix      = $C053
+const showpage1    = $C054
+const showpage2    = $C055
+const showlores    = $C056
+const showhires    = $C057
+const keyboard     = $C000
+const keystrobe    = $C010
+const hgr1         = $2000
+const hgr2         = $4000
+const page1        = 0
+const page2        = 1
+word hgrbuff[] = hgr1, hgr2
+word hgrscan[] = $0000,$0400,$0800,$0C00,$1000,$1400,$1800,$1C00
+word           = $0080,$0480,$0880,$0C80,$1080,$1480,$1880,$1C80
+word           = $0100,$0500,$0900,$0D00,$1100,$1500,$1900,$1D00
+word           = $0180,$0580,$0980,$0D80,$1180,$1580,$1980,$1D80
+word           = $0200,$0600,$0A00,$0E00,$1200,$1600,$1A00,$1E00
+word           = $0280,$0680,$0A80,$0E80,$1280,$1680,$1A80,$1E80
+word           = $0300,$0700,$0B00,$0F00,$1300,$1700,$1B00,$1F00
+word           = $0380,$0780,$0B80,$0F80,$1380,$1780,$1B80,$1F80
+word           = $0028,$0428,$0828,$0C28,$1028,$1428,$1828,$1C28
+word           = $00A8,$04A8,$08A8,$0CA8,$10A8,$14A8,$18A8,$1CA8
+word           = $0128,$0528,$0928,$0D28,$1128,$1528,$1928,$1D28
+word           = $01A8,$05A8,$09A8,$0DA8,$11A8,$15A8,$19A8,$1DA8
+word           = $0228,$0628,$0A28,$0E28,$1228,$1628,$1A28,$1E28
+word           = $02A8,$06A8,$0AA8,$0EA8,$12A8,$16A8,$1AA8,$1EA8
+word           = $0328,$0728,$0B28,$0F28,$1328,$1728,$1B28,$1F28
+word           = $03A8,$07A8,$0BA8,$0FA8,$13A8,$17A8,$1BA8,$1FA8
+word           = $0050,$0450,$0850,$0C50,$1050,$1450,$1850,$1C50
+word           = $00D0,$04D0,$08D0,$0CD0,$10D0,$14D0,$18D0,$1CD0
+word           = $0150,$0550,$0950,$0D50,$1150,$1550,$1950,$1D50
+word           = $01D0,$05D0,$09D0,$0DD0,$11D0,$15D0,$19D0,$1DD0
+word           = $0250,$0650,$0A50,$0E50,$1250,$1650,$1A50,$1E50
+word           = $02D0,$06D0,$0AD0,$0ED0,$12D0,$16D0,$1AD0,$1ED0
+word           = $0350,$0750,$0B50,$0F50,$1350,$1750,$1B50,$1F50
+word           = $03D0,$07D0,$0BD0,$0FD0,$13D0,$17D0,$1BD0,$1FD0
+word hcolor[]  = $0000,$552A,$2A55,$7F7F,$8080,$D5AA,$AAD5,$FFFF
+word hmask     = $8081,$8082,$8084,$8088,$8090,$80A0,$80C0
+word           = $8180,$8280,$8480,$8880,$9080,$A080,$C080
+byte hbmask    = $81,$82,$84,$88,$90,$A0,$C0
+byte hlmask    = $FF,$FE,$FC,$F8,$F0,$E0,$C0
+byte hrmask    = $81,$83,$87,$8F,$9F,$BF,$FF
+word curhclr
+byte drawpage  = 1
+word drawbuff  = hgr2
+
+byte ball      = $88, $8F, $FF, $F8, $88
+byte           = $88, $FF, $FF, $FF, $88
+byte           = $8F, $FF, $FF, $FF, $F8
+byte           = $FF, $FF, $FF, $FF, $FF
+byte           = $FF, $FF, $FF, $FF, $FF
+byte           = $FF, $FF, $FF, $FF, $FF
+byte           = $FF, $FF, $FF, $FF, $FF
+byte           = $8F, $FF, $FF, $FF, $F8
+byte           = $88, $FF, $FF, $FF, $88
+byte           = $88, $8F, $FF, $F8, $88
+
+asm grInc(buff)
+!SOURCE    "vmsrc/plvmzp.inc"
+GBASL    =    $26
+GBASH    =    $27
+GBASE    =    GBASL
+GCLR     =    $30
+end
+
+asm divmod7(x)#2
+        LDA     ESTKL,X     ; X COORD LSB
+        LDY     ESTKH,X     ; X COORD MSB
+        BNE     +           ; MUST BE >= 140
+        CMP     #140
+        BCC     ++
++       SEC
+        SBC     #140
+        LDY     #20
+++      CMP     #70
+        BCC     +
+        SBC     #70
+        STA     ESTKL,X
+        TYA
+        ADC     #9
+        TAY
+        LDA     ESTKL,X
++       CMP     #35
+        BCC     +
+        SBC     #35
+        STA     ESTKL,X
+        TYA
+        ADC     #4
+        TAY
+        LDA     ESTKL,X
++
+-       CMP     #7
+        BCC     +
+        SBC     #7
+        INY
+        BNE     -
++       DEX
+        STA     ESTKL,X     ; REMAINDER
+        STY     ESTKL+1,X   ; QUOTIENT
+        LDA     #$00
+        STA     ESTKH,X
+        STA     ESTKH+1,X
+        RTS
+end    
+export def hgrColor(c)#0
+    curhclr = hcolor[c & $07]
+end
+export def hgrPlot(x, y)#0
+    word pixptr
+    byte ofst, pixofst, pmask
+    
+    ofst, pixofst = divmod7(x)
+    pixptr = hgrscan[y] + drawbuff + ofst
+    pmask = hbmask[pixofst]
+    ^pixptr = (^pixptr & ~pmask) | (curhclr.[ofst & 1] & pmask)
+end
+export def hgrXorPlot(x, y)#0
+    word pixptr
+    byte ofst, pixofst, pmask
+    
+    ofst, pixofst = divmod7(x)
+    pixptr = hgrscan[y] + drawbuff + ofst
+    pmask = hbmask[pixofst]
+    ^pixptr = ^pixptr ^ (curhclr.[ofst & 1] & pmask)
+end
+export def hgrHlin(x1, x2, y)#0
+    word pixptr, x
+    byte lofst, lpixofst, lpmask, clr
+    byte rofst, rpixofst, rpmask
+    
+    if x1 == x2
+        hgrPlot(x1, y)
+    else
+        lofst, lpixofst = divmod7(x1)
+        pixptr = hgrscan[y] + drawbuff + lofst
+        rofst, rpixofst = divmod7(x2)
+        lpmask = hlmask[lpixofst]
+        rpmask = hrmask[rpixofst]
+        if lofst == rofst
+            lpmask = lpmask & rpmask
+            ^pixptr = (^pixptr & ~lpmask) | (curhclr.[pixptr.0 & 1] & lpmask)
+        else
+            ^pixptr = (^pixptr & ~lpmask) | (curhclr.[pixptr.0 & 1] & lpmask)
+            pixptr++
+            for x = lofst + 1 to rofst - 1
+                ^pixptr = curhclr.[pixptr.0 & 1]
+                pixptr++
+            next
+            ^pixptr = (^pixptr & ~rpmask) | (curhclr.[pixptr.0 & 1] & rpmask)
+        fin
+    fin
+end
+export def hgrVlin(y1, y2, x)#0
+    word pixptr, y, ofst
+    byte pixofst, pmask, cmask
+    
+    if y1 == y2
+        hgrPlot(x, y1)
+    else
+        ofst, pixofst = divmod7(x)
+        ofst  = ofst + drawbuff
+        pmask = hbmask[pixofst]
+        cmask = curhclr.[ofst & 1] & pmask
+        pmask = ~pmask
+        for y = y1 to y2
+            pixptr = hgrscan[y] + ofst
+            ^pixptr = (^pixptr & pmask) | cmask
+        next
+    fin
+end
+export def hgrCopySrc(ofst, y, w, h, srcptr)#0
+    word j, dstptr
+
+    ofst = ofst + drawbuff
+    for j = y to y + h - 1
+        dstptr = hgrscan[j] + ofst
+        memcpy(dstptr, srcptr, w)
+        srcptr = srcptr + w
+    next
+end
+export def hgrAndSrc(ofst, y, w, h, srcptr)#0
+    word j, dstptr
+    byte i
+
+    ofst = ofst + drawbuff
+    for j = y to y + h - 1
+        dstptr = hgrscan[j] + ofst
+        for i = 0 to w - 1
+            dstptr->[i] = dstptr->[i] & srcptr->[i]
+        next
+        srcptr = srcptr + w
+    next
+end
+export def hgrXorSrc(ofst, y, w, h, srcptr)#0
+    word j, dstptr
+    byte i
+
+    ofst = ofst + drawbuff
+    for j = y to y + h - 1
+        dstptr = hgrscan[j] + ofst
+        for i = 0 to w - 1
+            dstptr->[i] = dstptr->[i] ^ srcptr->[i]
+        next
+        srcptr = srcptr + w
+    next
+end
+export def hgrCopyDst(ofst, y, w, h, dstptr)#0
+    word j, srcptr
+
+    ofst = ofst + drawbuff
+    for j = y to y + h - 1
+        srcptr = hgrscan[j] + ofst
+        memcpy(dstptr, srcptr, w)
+        dstptr = dstptr + w
+    next
+end
+export def hgrBLT(x, y, w, h, srcptr)#0
+    word i, j
+    word saveclr
+    byte c
+    
+    saveclr = curhclr
+    for j = y to y + h - 1
+        for i = 0 to w - 1
+            c = srcptr->[i >> 1]
+            if i & 1
+                curhclr = hcolor[(c >> 4) & $07]
+                if c & $80
+                    hgrXorPlot(x + i, j)
+                else
+                    hgrPlot(x + i, j)
+                fin
+            else
+                curhclr = hcolor[c & $07]
+                if c & $08
+                    hgrXorPlot(x + i, j)
+                else
+                    hgrPlot(x + i, j)
+                fin
+            fin
+        next
+        srcptr = srcptr + (w + 1) / 2
+    next
+    curhclr = saveclr
+end
+export def hgrMode#1
+    memset(hgr1, 0, $2000) // Clear HGR page 1
+    ^showpage1
+    ^showfull
+    ^showhires
+    ^showgraphics
+    drawpage = 1
+    drawbuff = hgrbuff[1]
+    return 1
+end
+export def txtMode#0
+    ^showpage1
+    ^showtext
+end
+//
+// Set display page, return other page
+//
+export def hgrShow(page)#1
+    page = page & 1
+    ^(showpage1 + page)
+    return page ^ 1
+end
+export def hgrSwap#0
+    ^(showpage1 + drawpage)
+    drawpage = drawpage ^ 1
+    drawbuff = hgrbuff[drawpage]
+end
+export def hgrDrawBuf(page)#0
+    drawpage = page & 1
+    drawbuff = hgrbuff[drawpage]
+end
+done
