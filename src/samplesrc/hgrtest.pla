@@ -4,17 +4,20 @@ include "inc/linespans.plh"
 sysflags reshgr1|reshgr2 // Reserve HGR page 1 and 2
 
 struc t_sprite
+    var  s_xpos
+    var  s_ypos
     byte s_underofst[2]
     var  s_undery[2]
     var  s_width
     var  s_height
     var  s_pitch
-    var s_size
+    var  s_size
     var  s_mask[14]
     var  s_map[14]
     var  s_under[14]
 end
 
+var spriteList[16]
 byte ball      = $88, $83, $33, $38, $88
 byte           = $88, $33, $11, $33, $88
 byte           = $83, $31, $11, $13, $38
@@ -38,9 +41,9 @@ export def spriteBLTMask(x, y, w, h, srcptr)#0
         for i = 0 to w - 1
             c = srcptr->[i >> 1]
             if i & 1
-                hgrColor(c & $08 ?? 7 :: 0)
+                hgrColor(c & $08 ?? 3 :: 0)
             else
-                hgrColor(c & $80 ?? 7 :: 0)
+                hgrColor(c & $80 ?? 3 :: 0)
             fin
             hgrPlot(x + i, j)
         next
@@ -63,11 +66,11 @@ def spriteCompile(w, h, srcptr)
         sprtptr=>s_map[i]  = heapalloc(spritesize)
         sprtptr=>s_mask[i] = heapalloc(spritesize)
         hgrColor(0)
-        hgrRect(0, i + w + 14, 0, h - 1)
+        hgrRect(0, w + 21, 0, h - 1)
         hgrBLT(i, 0, w, h, srcptr)
         hgrCopyDst(i > 6 ?? 1 :: 0, 0, bytewidth, h, sprtptr=>s_map[i])
-        hgrColor(7)
-        hgrRect(0, i + w + 14, h, h * 2 - 1)
+        hgrColor(3)
+        hgrRect(0, w + 21, h, h * 2 - 1)
         spriteBLTMask(i,  h, w, h, srcptr)
         hgrCopyDst(i > 6 ?? 1 :: 0, h, bytewidth, h, sprtptr=>s_mask[i])
     next
@@ -75,11 +78,32 @@ def spriteCompile(w, h, srcptr)
     sprtptr->s_underofst[1] = 255
     return sprtptr
 end
-def spriteDraw(page, x, y, sprtptr)#0
-    byte ofst, map
+def spriteDup(sprtsrc)
+    var sprtdup, spritesize
+    byte i
+    
+    sprtdup             = heapalloc(t_sprite)
+    spritesize          = sprtsrc=>s_size
+    sprtdup=>s_size     = spritesize
+    sprtdup=>s_pitch    = sprtsrc=>s_pitch 
+    sprtdup=>s_width    = sprtsrc=>s_width
+    sprtdup=>s_height   = sprtsrc=>s_height
+    sprtdup=>s_under[0] = heapalloc(spritesize)
+    sprtdup=>s_under[1] = heapalloc(spritesize)
+    for i = 0 to 13
+        sprtdup=>s_map[i]  = sprtsrc=>s_map[i]
+        sprtdup=>s_mask[i] = sprtsrc=>s_mask[i]
+    next
+    sprtdup->s_underofst[0] = 255 // Mark as under not valid
+    sprtdup->s_underofst[1] = 255
+    return sprtdup
+end
+def spriteDraw(page, sprtptr)#0
+    byte ofst, map, y
     var width, height
     
-    ofst, map = divmod7(x)
+    y = sprtptr->s_ypos
+    ofst, map = divmod7(sprtptr=>s_xpos)
     if ofst & 1
         map = map + 7
     fin
@@ -91,10 +115,54 @@ def spriteDraw(page, x, y, sprtptr)#0
     hgrAndSrc( ofst, y, width, height, sprtptr=>s_mask[map])
     hgrXorSrc( ofst, y, width, height, sprtptr=>s_map[map])
 end
+def spritePos(x, y, sprtptr)#0
+    sprtptr=>s_ypos = y
+    sprtptr=>s_xpos = x
+end
+def spritePosIndex(x, y, i)#0
+    i = i & 15
+    if spriteList[i]
+        spriteList[i]=>s_ypos = y
+        spriteList[i]=>s_xpos = x
+    fin
+end
 def spriteUnDraw(page, sprtptr)#0
     if sprtptr->s_underofst[page] < 40
         hgrCopySrc(sprtptr->s_underofst[page], sprtptr->s_undery[page], sprtptr=>s_pitch, sprtptr=>s_height, sprtptr=>s_under[page])
     fin
+end
+def spriteDrawList#0
+    byte i
+    
+    for i = 15 downto 0
+        if spriteList[i]
+            spriteUnDraw(drawpage, spriteList[i])
+        fin
+    next
+    for i = 0 to 15
+        if spriteList[i]
+            spriteDraw(drawpage, spriteList[i])
+        fin
+    next
+end
+def spriteAdd(i, sprtptr)
+    var sprtprev
+    
+    i = i & 15
+    sprtprev = spriteList[i]
+    spriteList[i] = sprtptr
+    return sprtprev
+end
+def spriteDel(i)
+    var sprtprev
+    
+    i = i & 15
+    sprtprev = spriteList[i]
+    spriteList[i] = 0
+    return sprtprev
+end
+def spriteDrawPage(page)#0
+    drawpage = page & 1
 end
 def testline#0
     var i
@@ -108,25 +176,37 @@ def testline#0
         linetospans(0, 0, i, 191)
     next
 end
-def testblt(sprtptr)#0
-    var i, j, ii, jj
+def testblt(sprtnum)#0
+    var[16] i, j, ii, jj
+    byte k
     
-    i = 100
-    ii = 1
-    j = 80
-    jj = 1
+    sprtnum = sprtnum - 1
+    i[0] = 100
+    ii[0] = 1
+    j[0] = 80
+    jj[0] = -1
+    if sprtnum
+        for k = 1 to sprtnum
+            i[k] = ((i[k - 1] ^ 37) + 97) % 270
+            ii[k] = -ii[k - 1]
+            j[k] = ((j[k - 1] ^ 29) + 53) % 180
+            jj[k] = -jj[k - 1]
+        next
+    fin
     while ^$C000 < 128
-        spriteUnDraw(drawpage, sprtptr)
-        i = i + ii
-        if i < 1 or i > 269
-            ii = -ii
-        fin
-        j = j + jj
-        if j < 1 or j > 181
-            jj = -jj
-        fin
-        spriteDraw(drawpage, i, j, sprtptr)
-        drawpage = hgrSwap()
+        for k = 0 to sprtnum
+            i[k] = i[k] + ii[k]
+            if i[k] < 1 or i[k] > 269
+                ii[k] = -ii[k]
+            fin
+            j[k] = j[k] + jj[k]
+            if j[k] < 1 or j[k] > 181
+                jj[k] = -jj[k]
+            fin
+            spritePosIndex(i[k], j[k], k)
+        next
+        spriteDrawList()
+        spriteDrawPage(hgrSwap())
     loop
 end
 drawpage = hgrMode
@@ -137,7 +217,15 @@ hgrClear()
 testline
 memcpy($4000, $2000, $2000) // Copy to both buffers
 hgrDrawbuf(drawpage)
-testblt(sprtBall)
+spriteAdd(0, sprtBall)
+spriteAdd(1, spriteDup(sprtBall))
+spriteAdd(2, spriteDup(sprtBall))
+spriteAdd(3, spriteDup(sprtBall))
+spriteAdd(4, spriteDup(sprtBall))
+spriteAdd(5, spriteDup(sprtBall))
+spriteAdd(6, spriteDup(sprtBall))
+spriteAdd(7, spriteDup(sprtBall))
+testblt(8)
 getc
 txtMode
 done
