@@ -1,46 +1,143 @@
 include "inc/cmdsys.plh"
-include "inc/linespans.plh"
 include "inc/hgrlib.plh"
-sysflags reshgr1 | reshgr2 // Reserve HGR page 1 and 2
+include "inc/linespans.plh"
+sysflags reshgr1|reshgr2 // Reserve HGR page 1 and 2
 
-byte ball      = $88, $8F, $FF, $F8, $88
-byte           = $88, $FF, $FF, $FF, $88
-byte           = $8F, $FF, $FF, $FF, $F8
-byte           = $FF, $FF, $FF, $FF, $FF
-byte           = $FF, $FF, $FF, $FF, $FF
-byte           = $FF, $FF, $FF, $FF, $FF
-byte           = $FF, $FF, $FF, $FF, $FF
-byte           = $8F, $FF, $FF, $FF, $F8
-byte           = $88, $FF, $FF, $FF, $88
-byte           = $88, $8F, $FF, $F8, $88
+struc t_sprite
+    byte s_underofst[2]
+    var  s_undery[2]
+    var  s_width
+    var  s_height
+    var  s_pitch
+    var s_size
+    var  s_mask[14]
+    var  s_map[14]
+    var  s_under[14]
+end
+
+byte ball      = $88, $83, $33, $38, $88
+byte           = $88, $33, $11, $33, $88
+byte           = $83, $31, $11, $13, $38
+byte           = $33, $11, $11, $11, $33
+byte           = $33, $11, $11, $11, $33
+byte           = $33, $11, $11, $11, $33
+byte           = $33, $11, $11, $11, $33
+byte           = $83, $31, $11, $13, $38
+byte           = $88, $33, $11, $33, $88
+byte           = $88, $83, $33, $38, $88
+var sprtBall
+byte drawpage
 //
 // Sprite routines
 //
-def spriteCompile(spriteprt)
-    return 0
+export def spriteBLTMask(x, y, w, h, srcptr)#0
+    word i, j
+    byte c
+    
+    for j = y to y + h - 1
+        for i = 0 to w - 1
+            c = srcptr->[i >> 1]
+            if i & 1
+                hgrColor(c & $08 ?? 7 :: 0)
+            else
+                hgrColor(c & $80 ?? 7 :: 0)
+            fin
+            hgrPlot(x + i, j)
+        next
+        srcptr = srcptr + (w + 1) / 2
+    next
+end
+def spriteCompile(w, h, srcptr)
+    var sprtptr, bytewidth, spritesize, i
+    
+    sprtptr             = heapalloc(t_sprite)
+    bytewidth           = (w + 7) / 7 + 1
+    sprtptr=>s_pitch    = bytewidth
+    spritesize          = bytewidth * h
+    sprtptr=>s_size     = spritesize
+    sprtptr=>s_width    = w
+    sprtptr=>s_height   = h
+    sprtptr=>s_under[0] = heapalloc(spritesize)
+    sprtptr=>s_under[1] = heapalloc(spritesize)
+    for i = 0 to 13
+        sprtptr=>s_map[i]  = heapalloc(spritesize)
+        sprtptr=>s_mask[i] = heapalloc(spritesize)
+        hgrColor(0)
+        hgrRect(0, i + w + 14, 0, h - 1)
+        hgrBLT(i, 0, w, h, srcptr)
+        hgrCopyDst(i > 6 ?? 1 :: 0, 0, bytewidth, h, sprtptr=>s_map[i])
+        hgrColor(7)
+        hgrRect(0, i + w + 14, h, h * 2 - 1)
+        spriteBLTMask(i,  h, w, h, srcptr)
+        hgrCopyDst(i > 6 ?? 1 :: 0, h, bytewidth, h, sprtptr=>s_mask[i])
+    next
+    sprtptr->s_underofst[0] = 255 // Mark as under not valid
+    sprtptr->s_underofst[1] = 255
+    return sprtptr
+end
+def spriteDraw(page, x, y, sprtptr)#0
+    byte ofst, map
+    var width, height
+    
+    ofst, map = divmod7(x)
+    if ofst & 1
+        map = map + 7
+    fin
+    sprtptr->s_underofst[page] = ofst
+    sprtptr->s_undery[page]    = y
+    width  = sprtptr=>s_pitch
+    height = sprtptr=>s_height
+    hgrCopyDst(ofst, y, width, height, sprtptr=>s_under[page])
+    hgrAndSrc( ofst, y, width, height, sprtptr=>s_mask[map])
+    hgrXorSrc( ofst, y, width, height, sprtptr=>s_map[map])
+end
+def spriteUnDraw(page, sprtptr)#0
+    if sprtptr->s_underofst[page] < 40
+        hgrCopySrc(sprtptr->s_underofst[page], sprtptr->s_undery[page], sprtptr=>s_pitch, sprtptr=>s_height, sprtptr=>s_under[page])
+    fin
 end
 def testline#0
     var i
     
     setlinespans(@hgrHlin, @hgrVlin)
-    hgrColor(3)
-    for i = 0 to 191 step 4
+    hgrColor(7)
+    for i = 0 to 191 step 24
+        linetospans(0, 0, 279, i)
+    next
+    for i = 0 to 279 step 24
         linetospans(0, 0, i, 191)
-        linetospans(0, 0, 191, i)
     next
 end
-def testblt#0
-    var i
+def testblt(sprtptr)#0
+    var i, j, ii, jj
     
-    for i = 0 to 200 step 3
-        hgrBlt(i, 50, 10, 10, @ball)
-        hgrBlt(i, 50, 10, 10, @ball)
-    next
+    i = 100
+    ii = 1
+    j = 80
+    jj = 1
+    while ^$C000 < 128
+        spriteUnDraw(drawpage, sprtptr)
+        i = i + ii
+        if i < 1 or i > 269
+            ii = -ii
+        fin
+        j = j + jj
+        if j < 1 or j > 181
+            jj = -jj
+        fin
+        spriteDraw(drawpage, i, j, sprtptr)
+        drawpage = hgrSwap()
+    loop
 end
-hgrMode
-hgrDrawBuf(0)
+drawpage = hgrMode
+hgrDrawBuf(0) // So we can see the compile process
+sprtBall = spriteCompile(10, 10, @ball)
+hgrColor(0)
+hgrClear()
 testline
-testblt
+memcpy($4000, $2000, $2000) // Copy to both buffers
+hgrDrawbuf(drawpage)
+testblt(sprtBall)
 getc
 txtMode
 done

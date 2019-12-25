@@ -108,7 +108,7 @@ export asm divmod7(x)#2
         STA     ESTKH,X
         STA     ESTKH+1,X
         RTS
-end    
+end      
 export def hgrColor(c)#0
     curhclr = hcolor[c & $07]
 end
@@ -132,7 +132,7 @@ export def hgrXorPlot(x, y)#0
 end
 export def hgrHlin(x1, x2, y)#0
     word pixptr, x
-    byte lofst, lpixofst, lpmask, clr
+    byte lofst, lpixofst, lpmask
     byte rofst, rpixofst, rpmask
     
     if x1 == x2
@@ -175,6 +175,52 @@ export def hgrVlin(y1, y2, x)#0
         next
     fin
 end
+export def hgrRect(x1, x2, y1, y2)#0
+    word pixptr, x, y, lofst, rofst
+    byte lpixofst, lpmask, cmask
+    byte rpixofst, rpmask
+    
+    if x1 == x2
+        hgrVLin(y1, y2, x1)
+    else
+        lofst, lpixofst = divmod7(x1)
+        rofst, rpixofst = divmod7(x2)
+        lofst  = lofst + drawbuff
+        rofst  = rofst + drawbuff
+        lpmask = hlmask[lpixofst]
+        rpmask = hrmask[rpixofst]
+        if lofst == rofst
+            lpmask = lpmask & rpmask
+            cmask  = curhclr.[pixptr.0 & 1] & lpmask
+            lpmask = ~lpmask
+            for y = y1 to y2
+                pixptr  = hgrscan[y] + lofst
+                ^pixptr = (^pixptr & lpmask) | cmask
+            next
+        else
+            for y = y1 to y2
+                pixptr  = hgrscan[y] + lofst
+                ^pixptr = (^pixptr & ~lpmask) | (curhclr.[pixptr.0 & 1] & lpmask)
+                pixptr++
+                for x = lofst + 1 to rofst - 1
+                    ^pixptr = curhclr.[pixptr.0 & 1]
+                    pixptr++
+                next
+                ^pixptr = (^pixptr & ~rpmask) | (curhclr.[pixptr.0 & 1] & rpmask)
+            next
+        fin
+    fin
+end
+export def hgrCopyDst(ofst, y, w, h, dstptr)#0
+    word j, srcptr
+
+    ofst = ofst + drawbuff
+    for j = y to y + h - 1
+        srcptr = hgrscan[j] + ofst
+        memcpy(dstptr, srcptr, w)
+        dstptr = dstptr + w
+    next
+end
 export def hgrCopySrc(ofst, y, w, h, srcptr)#0
     word j, dstptr
 
@@ -211,16 +257,6 @@ export def hgrXorSrc(ofst, y, w, h, srcptr)#0
         srcptr = srcptr + w
     next
 end
-export def hgrCopyDst(ofst, y, w, h, dstptr)#0
-    word j, srcptr
-
-    ofst = ofst + drawbuff
-    for j = y to y + h - 1
-        srcptr = hgrscan[j] + ofst
-        memcpy(dstptr, srcptr, w)
-        dstptr = dstptr + w
-    next
-end
 export def hgrBLT(x, y, w, h, srcptr)#0
     word i, j
     word saveclr
@@ -231,15 +267,15 @@ export def hgrBLT(x, y, w, h, srcptr)#0
         for i = 0 to w - 1
             c = srcptr->[i >> 1]
             if i & 1
-                curhclr = hcolor[(c >> 4) & $07]
-                if c & $80
+                curhclr = hcolor[c & $07]
+                if c & $08
                     hgrXorPlot(x + i, j)
                 else
                     hgrPlot(x + i, j)
                 fin
             else
-                curhclr = hcolor[c & $07]
-                if c & $08
+                curhclr = hcolor[(c >> 4) & $07]
+                if c & $80
                     hgrXorPlot(x + i, j)
                 else
                     hgrPlot(x + i, j)
@@ -264,6 +300,9 @@ export def txtMode#0
     ^showpage1
     ^showtext
 end
+export def hgrClear#0
+    memset(drawbuff, curhclr, $2000) // Clear HGR page 1
+end
 //
 // Set display page, return other page
 //
@@ -272,10 +311,11 @@ export def hgrShow(page)#1
     ^(showpage1 + page)
     return page ^ 1
 end
-export def hgrSwap#0
+export def hgrSwap#1
     ^(showpage1 + drawpage)
     drawpage = drawpage ^ 1
     drawbuff = hgrbuff[drawpage]
+    return drawpage
 end
 export def hgrDrawBuf(page)#0
     drawpage = page & 1
