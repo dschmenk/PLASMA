@@ -17,6 +17,54 @@ const hgr2         = $4000
 const page1        = 0
 const page2        = 1
 word hgrbuff[] = hgr1, hgr2
+byte hgrscanl[]= $00,$00,$00,$00,$00,$00,$00,$00
+byte           = $80,$80,$80,$80,$80,$80,$80,$80
+byte           = $00,$00,$00,$00,$00,$00,$00,$00
+byte           = $80,$80,$80,$80,$80,$80,$80,$80
+byte           = $00,$00,$00,$00,$00,$00,$00,$00
+byte           = $80,$80,$80,$80,$80,$80,$80,$80
+byte           = $00,$00,$00,$00,$00,$00,$00,$00
+byte           = $80,$80,$80,$80,$80,$80,$80,$80
+byte           = $28,$28,$28,$28,$28,$28,$28,$28
+byte           = $A8,$A8,$A8,$A8,$A8,$A8,$A8,$A8
+byte           = $28,$28,$28,$28,$28,$28,$28,$28
+byte           = $A8,$A8,$A8,$A8,$A8,$A8,$A8,$A8
+byte           = $28,$28,$28,$28,$28,$28,$28,$28
+byte           = $A8,$A8,$A8,$A8,$A8,$A8,$A8,$A8
+byte           = $28,$28,$28,$28,$28,$28,$28,$28
+byte           = $A8,$A8,$A8,$A8,$A8,$A8,$A8,$A8
+byte           = $50,$50,$50,$50,$50,$50,$50,$50
+byte           = $D0,$D0,$D0,$D0,$D0,$D0,$D0,$D0
+byte           = $50,$50,$50,$50,$50,$50,$50,$50
+byte           = $D0,$D0,$D0,$D0,$D0,$D0,$D0,$D0
+byte           = $50,$50,$50,$50,$50,$50,$50,$50
+byte           = $D0,$D0,$D0,$D0,$D0,$D0,$D0,$D0
+byte           = $50,$50,$50,$50,$50,$50,$50,$50
+byte           = $D0,$D0,$D0,$D0,$D0,$D0,$D0,$D0
+byte hgrscanh[]= $00,$04,$08,$0C,$10,$14,$18,$1C
+byte           = $00,$04,$08,$0C,$10,$14,$18,$1C
+byte           = $01,$05,$09,$0D,$11,$15,$19,$1D
+byte           = $01,$05,$09,$0D,$11,$15,$19,$1D
+byte           = $02,$06,$0A,$0E,$12,$16,$1A,$1E
+byte           = $02,$06,$0A,$0E,$12,$16,$1A,$1E
+byte           = $03,$07,$0B,$0F,$13,$17,$1B,$1F
+byte           = $03,$07,$0B,$0F,$13,$17,$1B,$1F
+byte           = $00,$04,$08,$0C,$10,$14,$18,$1C
+byte           = $00,$04,$08,$0C,$10,$14,$18,$1C
+byte           = $01,$05,$09,$0D,$11,$15,$19,$1D
+byte           = $01,$05,$09,$0D,$11,$15,$19,$1D
+byte           = $02,$06,$0A,$0E,$12,$16,$1A,$1E
+byte           = $02,$06,$0A,$0E,$12,$16,$1A,$1E
+byte           = $03,$07,$0B,$0F,$13,$17,$1B,$1F
+byte           = $03,$07,$0B,$0F,$13,$17,$1B,$1F
+byte           = $00,$04,$08,$0C,$10,$14,$18,$1C
+byte           = $00,$04,$08,$0C,$10,$14,$18,$1C
+byte           = $01,$05,$09,$0D,$11,$15,$19,$1D
+byte           = $01,$05,$09,$0D,$11,$15,$19,$1D
+byte           = $02,$06,$0A,$0E,$12,$16,$1A,$1E
+byte           = $02,$06,$0A,$0E,$12,$16,$1A,$1E
+byte           = $03,$07,$0B,$0F,$13,$17,$1B,$1F
+byte           = $03,$07,$0B,$0F,$13,$17,$1B,$1F
 word hgrscan[] = $0000,$0400,$0800,$0C00,$1000,$1400,$1800,$1C00
 word           = $0080,$0480,$0880,$0C80,$1080,$1480,$1880,$1C80
 word           = $0100,$0500,$0900,$0D00,$1100,$1500,$1900,$1D00
@@ -109,17 +157,307 @@ export asm divmod7(x)#2
         STA     ESTKH+1,X
         RTS
 end      
-export def hgrColor(c)#0
-    curhclr = hcolor[c & $07]
+//export def hgrCopyDst(ofst, y, w, h, dstptr)#0
+//    word j, srcptr
+//
+//    ofst = ofst + drawbuff
+//    for j = y to y + h - 1
+//        srcptr = hgrscan[j] + ofst
+//        memcpy(dstptr, srcptr, w)
+//        dstptr = dstptr + w
+//    next
+//end
+export asm hgrCopyDst(ofst, y, w, h, dstptr)#0
+        LDA     ESTKL+0,X   ; DST PTR
+        STA     DSTL
+        LDA     ESTKH+0,X
+        STA     DSTH
+--      LDY     ESTKL+3,X   ; Y COORD
+        CPY     #192
+        BCS     +
+        LDA     ESTKL+4,X   ; HORIZ OFFSET
 end
-export def hgrPlot(x, y)#0
-    word pixptr
-    byte ofst, pixofst, pmask
-    
-    ofst, pixofst = divmod7(x)
-    pixptr = hgrscan[y] + drawbuff + ofst
-    pmask = hbmask[pixofst]
-    ^pixptr = (^pixptr & ~pmask) | (curhclr.[ofst & 1] & pmask)
+asm     _hgrCopyDst
+        ADC     $8000,Y     ; HGRSCANL
+        STA     SRCL
+        LDA     $1000       ; DRAWBUFFH
+        ADC     $9000,Y     ; HGRSCANH
+        STA     SRCH
+        LDY     ESTKL+2,X   ; WIDTH
+        DEY
+-       LDA     (SRC),Y
+        STA     (DST),Y
+        DEY
+        BPL     -
++       LDA     DSTL
+        CLC
+        ADC     ESTKL+2,X   ; WIDTH
+        STA     DSTL
+        BCC     +
+        INC     DSTH
++       INC     ESTKL+3,X   ; Y COORD
+        DEC     ESTKL+1,X   ; HEIGHT
+        BNE     --
+        INX
+        INX
+        INX
+        INX
+        INX
+        RTS
+end
+//export def hgrCopySrc(ofst, y, w, h, srcptr)#0
+//    word j, dstptr
+//
+//    ofst = ofst + drawbuff
+//    for j = y to y + h - 1
+//        dstptr = hgrscan[j] + ofst
+//        memcpy(dstptr, srcptr, w)
+//        srcptr = srcptr + w
+//    next
+//end
+export asm hgrCopySrc(ofst, y, w, h, srcptr)#0
+        LDA     ESTKL+0,X   ; SRC PTR
+        STA     SRCL
+        LDA     ESTKH+0,X
+        STA     SRCH        
+--      LDY     ESTKL+3,X   ; Y COORD
+        CPY     #192
+        BCS     +
+        LDA     ESTKL+4,X   ; HORIZ OFFSET
+end
+asm     _hgrCopySrc
+        ADC     $8000,Y     ; HGRSCANL
+        STA     DSTL
+        LDA     $1000       ; DRAWBUFFH
+        ADC     $9000,Y     ; HGRSCANH
+        STA     DSTH
+        LDY     ESTKL+2,X   ; WIDTH
+        DEY
+-       LDA     (SRC),Y
+        STA     (DST),Y
+        DEY
+        BPL     -
++       LDA     SRCL
+        CLC
+        ADC     ESTKL+2,X   ; WIDTH
+        STA     SRCL
+        BCC     +
+        INC     SRCH
++       INC     ESTKL+3,X   ; Y COORD
+        DEC     ESTKL+1,X   ; HEIGHT
+        BNE     --
+        INX
+        INX
+        INX
+        INX
+        INX
+        RTS
+end
+//export def hgrAndSrc(ofst, y, w, h, srcptr)#0
+//    word j, dstptr
+//    byte i
+//
+//    ofst = ofst + drawbuff
+//    for j = y to y + h - 1
+//        dstptr = hgrscan[j] + ofst
+//        for i = 0 to w - 1
+//            dstptr->[i] = dstptr->[i] & srcptr->[i]
+//        next
+//        srcptr = srcptr + w
+//    next
+//end
+export asm hgrAndSrc(ofst, y, w, h, srcptr)#0
+        LDA     ESTKL+0,X   ; SRC PTR
+        STA     SRCL
+        LDA     ESTKH+0,X
+        STA     SRCH        
+--      LDY     ESTKL+3,X   ; Y COORD
+        CPY     #192
+        BCS     +
+        LDA     ESTKL+4,X   ; HORIZ OFFSET
+end
+asm     _hgrAndSrc
+        ADC     $8000,Y     ; HGRSCANL
+        STA     DSTL
+        LDA     $1000       ; DRAWBUFFH
+        ADC     $9000,Y     ; HGRSCANH
+        STA     DSTH
+        LDY     ESTKL+2,X   ; WIDTH
+        DEY
+-       LDA     (SRC),Y
+        AND     (DST),Y
+        STA     (DST),Y
+        DEY
+        BPL     -
++       LDA     SRCL
+        CLC
+        ADC     ESTKL+2,X   ; WIDTH
+        STA     SRCL
+        BCC     +
+        INC     SRCH
++       INC     ESTKL+3,X   ; Y COORD
+        DEC     ESTKL+1,X   ; HEIGHT
+        BNE     --
+        INX
+        INX
+        INX
+        INX
+        INX
+        RTS
+end
+//export def hgrXorSrc(ofst, y, w, h, srcptr)#0
+//    word j, dstptr
+//    byte i
+//
+//    ofst = ofst + drawbuff
+//    for j = y to y + h - 1
+//        dstptr = hgrscan[j] + ofst
+//        for i = 0 to w - 1
+//            dstptr->[i] = dstptr->[i] ^ srcptr->[i]
+//        next
+//        srcptr = srcptr + w
+//    next
+//end
+export asm hgrXorSrc(ofst, y, w, h, srcptr)#0
+        LDA     ESTKL+0,X   ; SRC PTR
+        STA     SRCL
+        LDA     ESTKH+0,X
+        STA     SRCH        
+--      LDY     ESTKL+3,X   ; Y COORD
+        CPY     #192
+        BCS     +
+        LDA     ESTKL+4,X   ; HORIZ OFFSET
+end
+asm     _hgrXorSrc
+        ADC     $8000,Y     ; HGRSCANL
+        STA     DSTL
+        LDA     $1000       ; DRAWBUFFH
+        ADC     $9000,Y     ; HGRSCANH
+        STA     DSTH
+        LDY     ESTKL+2,X   ; WIDTH
+        DEY
+-       LDA     (SRC),Y
+        EOR     (DST),Y
+        STA     (DST),Y
+        DEY
+        BPL     -
++       LDA     SRCL
+        CLC
+        ADC     ESTKL+2,X   ; WIDTH
+        STA     SRCL
+        BCC     +
+        INC     SRCH
++       INC     ESTKL+3,X   ; Y COORD
+        DEC     ESTKL+1,X   ; HEIGHT
+        BNE     --
+        INX
+        INX
+        INX
+        INX
+        INX
+        RTS
+end
+//export def hgrOrSrc(ofst, y, w, h, srcptr)#0
+//    word j, dstptr
+//    byte i
+//
+//    ofst = ofst + drawbuff
+//    for j = y to y + h - 1
+//        dstptr = hgrscan[j] + ofst
+//        for i = 0 to w - 1
+//            dstptr->[i] = dstptr->[i] ^ srcptr->[i]
+//        next
+//        srcptr = srcptr + w
+//    next
+//end
+export asm hgrOrSrc(ofst, y, w, h, srcptr)#0
+        LDA     ESTKL+0,X   ; SRC PTR
+        STA     SRCL
+        LDA     ESTKH+0,X
+        STA     SRCH        
+--      LDY     ESTKL+3,X   ; Y COORD
+        CPY     #192
+        BCS     +
+        LDA     ESTKL+4,X   ; HORIZ OFFSET
+end
+asm     _hgrOrSrc
+        ADC     $8000,Y     ; HGRSCANL
+        STA     DSTL
+        LDA     $1000       ; DRAWBUFFH
+        ADC     $9000,Y     ; HGRSCANH
+        STA     DSTH
+        LDY     ESTKL+2,X   ; WIDTH
+        DEY
+-       LDA     (SRC),Y
+        ORA     (DST),Y
+        STA     (DST),Y
+        DEY
+        BPL     -
++       LDA     SRCL
+        CLC
+        ADC     ESTKL+2,X   ; WIDTH
+        STA     SRCL
+        BCC     +
+        INC     SRCH
++       INC     ESTKL+3,X   ; Y COORD
+        DEC     ESTKL+1,X   ; HEIGHT
+        BNE     --
+        INX
+        INX
+        INX
+        INX
+        INX
+        RTS
+end
+//export def hgrPlot(x, y)#0
+//    word pixptr
+//    byte ofst, pixofst, pmask
+//    
+//    ofst, pixofst = divmod7(x)
+//    pixptr = hgrscan[y] + drawbuff + ofst
+//    pmask = hbmask[pixofst]
+//    ^pixptr = (^pixptr & ~pmask) | (curhclr.[ofst & 1] & pmask)
+//end
+export asm hgrPlot(x, y)#0
+        LDY     ESTKL+0,X   ; Y COORD
+        CPY     #192
+        BCS     +
+end
+asm     _hgrPlotA
+        LDA     $8000,Y     ; HGRSCANL
+        STA     DSTL
+        LDA     $1000       ; DRAWBUFFH
+        ORA     $9000,Y     ; HGRSCANH
+        STA     DSTH
+        INX
+end
+asm     _hgrPlotB
+        JSR     1000        ; DIVMOD7
+        LDY     ESTKL+0,X   ; PIXEL OFFSET
+end
+asm     _hgrPlotC
+        LDA     $1000,Y     ; HBMASK
+        STA     TMPL
+        EOR     #$FF
+        STA     TMPH
+        LDA     ESTKL+1,X   ; HORIZ OFFSET
+        CMP     #40
+        BCS     +
+        AND     #$01
+        TAY
+end
+asm     _hgrPlotD
+        LDA     $2000,Y     ; CURHCLR
+        AND     TMPL
+        STA     TMPL
+        LDY     ESTKL+1,X   ; HORIZ OFFSET
+        LDA     (DST),Y
+        AND     TMPH
+        ORA     TMPL
+        STA     (DST),Y
++       INX
+        INX
+        RTS
 end
 export def hgrXorPlot(x, y)#0
     word pixptr
@@ -211,65 +549,6 @@ export def hgrRect(x1, x2, y1, y2)#0
         fin
     fin
 end
-export def hgrCopyDst(ofst, y, w, h, dstptr)#0
-    word j, srcptr
-
-    ofst = ofst + drawbuff
-    for j = y to y + h - 1
-        srcptr = hgrscan[j] + ofst
-        memcpy(dstptr, srcptr, w)
-        dstptr = dstptr + w
-    next
-end
-export def hgrCopySrc(ofst, y, w, h, srcptr)#0
-    word j, dstptr
-
-    ofst = ofst + drawbuff
-    for j = y to y + h - 1
-        dstptr = hgrscan[j] + ofst
-        memcpy(dstptr, srcptr, w)
-        srcptr = srcptr + w
-    next
-end
-export def hgrAndSrc(ofst, y, w, h, srcptr)#0
-    word j, dstptr
-    byte i
-
-    ofst = ofst + drawbuff
-    for j = y to y + h - 1
-        dstptr = hgrscan[j] + ofst
-        for i = 0 to w - 1
-            dstptr->[i] = dstptr->[i] & srcptr->[i]
-        next
-        srcptr = srcptr + w
-    next
-end
-export def hgrXorSrc(ofst, y, w, h, srcptr)#0
-    word j, dstptr
-    byte i
-
-    ofst = ofst + drawbuff
-    for j = y to y + h - 1
-        dstptr = hgrscan[j] + ofst
-        for i = 0 to w - 1
-            dstptr->[i] = dstptr->[i] ^ srcptr->[i]
-        next
-        srcptr = srcptr + w
-    next
-end
-export def hgrOrSrc(ofst, y, w, h, srcptr)#0
-    word j, dstptr
-    byte i
-
-    ofst = ofst + drawbuff
-    for j = y to y + h - 1
-        dstptr = hgrscan[j] + ofst
-        for i = 0 to w - 1
-            dstptr->[i] = dstptr->[i] ^ srcptr->[i]
-        next
-        srcptr = srcptr + w
-    next
-end
 export def hgrBLT(x, y, w, h, srcptr)#0
     word i, j
     word saveclr
@@ -298,6 +577,9 @@ export def hgrBLT(x, y, w, h, srcptr)#0
         srcptr = srcptr + (w + 1) / 2
     next
     curhclr = saveclr
+end
+export def hgrColor(c)#0
+    curhclr = hcolor[c & $07]
 end
 export def hgrMode#1
     memset(hgr1, 0, $2000) // Clear HGR page 1
@@ -334,4 +616,29 @@ export def hgrDrawBuf(page)#0
     drawpage = page & 1
     drawbuff = hgrbuff[drawpage]
 end
+//
+// Assembly fixups
+//
+_hgrCopyDst:1 = @hgrscanl
+_hgrCopyDst:6 = @drawbuff.1
+_hgrCopyDst:9 = @hgrscanh
+_hgrCopySrc:1 = @hgrscanl
+_hgrCopySrc:6 = @drawbuff.1
+_hgrCopySrc:9 = @hgrscanh
+_hgrAndSrc:1  = @hgrscanl
+_hgrAndSrc:6  = @drawbuff.1
+_hgrAndSrc:9  = @hgrscanh
+_hgrXorSrc:1  = @hgrscanl
+_hgrXorSrc:6  = @drawbuff.1
+_hgrXorSrc:9  = @hgrscanh
+_hgrOrSrc:1   = @hgrscanl
+_hgrOrSrc:6   = @drawbuff.1
+_hgrOrSrc:9   = @hgrscanh
+_hgrPlotA:1   = @hgrscanl
+_hgrPlotA:6   = @drawbuff.1
+_hgrPlotA:9   = @hgrscanh
+_hgrPlotB:1   = @divmod7
+_hgrPlotC:1   = @hbmask
+_hgrPlotD:1   = @curhclr
+
 done
