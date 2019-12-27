@@ -1,5 +1,6 @@
 include "inc/cmdsys.plh"
 include "inc/hgrlib.plh"
+include "inc/fileio.plh"
 
 struc t_sprite
     var  s_xpos
@@ -8,7 +9,6 @@ struc t_sprite
     byte s_underofst[2]
     byte s_undery[2]
     byte s_pitch
-//    var  s_width
     var  s_height
     var  s_size
     var  s_mask[14]
@@ -46,7 +46,6 @@ export def spriteCompile(w, h, srcptr)#1
     sprtptr->s_pitch    = bytewidth
     spritesize          = bytewidth * h
     sprtptr=>s_size     = spritesize
-//    sprtptr=>s_width    = w
     sprtptr=>s_height   = h
     sprtptr=>s_under[0] = heapalloc(spritesize)
     sprtptr=>s_under[1] = heapalloc(spritesize)
@@ -74,7 +73,6 @@ export def spriteDup(sprtsrc)#1
     spritesize          = sprtsrc=>s_size
     sprtdup=>s_size     = spritesize
     sprtdup->s_pitch    = sprtsrc->s_pitch 
-//    sprtdup=>s_width    = sprtsrc=>s_width
     sprtdup=>s_height   = sprtsrc=>s_height
     sprtdup=>s_under[0] = heapalloc(spritesize)
     sprtdup=>s_under[1] = heapalloc(spritesize)
@@ -86,6 +84,56 @@ export def spriteDup(sprtsrc)#1
     sprtdup->s_underofst[1] = 255
     return sprtdup
 end
+export def spriteRead(filestr)#1
+    var sprtptr, spritesize
+    byte refnum, i
+    
+    sprtptr = 0
+    refnum  = fileio:open(@filestr)
+    if refnum
+	sprtptr = heapalloc(t_sprite)
+	if fileio:read(refnum, sprtptr, t_sprite) == t_sprite
+	    spritesize          = sprtptr=>s_size
+	    sprtptr=>s_under[0] = heapalloc(spritesize)
+	    sprtptr=>s_under[1] = heapalloc(spritesize)
+	    for i = 0 to 13
+		sprtptr=>s_map[i]  = heapalloc(spritesize)
+		sprtptr=>s_mask[i] = heapalloc(spritesize)
+		fileio:read(refnum, sprtptr=>s_map[i], spritesize)
+		fileio:read(refnum, sprtptr=>s_mask[i], spritesize)
+	    next
+            sprtptr->s_underofst[0] = 255 // Mark as under not valid
+            sprtptr->s_underofst[1] = 255
+        else
+	    heaprelease(sprtptr)
+	    sprtptr = 0
+	fin
+	fileio:close(refnum)
+    fin
+    return sprtptr
+end
+export def spriteSave(filestr, sprtptr)#1
+    var spritesize
+    byte refnum, i
+
+    fileio:destroy(@filestr)
+    if fileio:create(@filestr, $06, $0000) == FILE_ERR_OK
+        refnum = fileio:open(@filestr)
+        if refnum
+	    if fileio:write(refnum, sprtptr, t_sprite) == t_sprite
+	        spritesize = sprtptr=>s_size
+	        for i = 0 to 13
+		    fileio:write(refnum, sprtptr=>s_map[i], spritesize)
+		    fileio:write(refnum, sprtptr=>s_mask[i], spritesize)
+	        next
+	    fin
+	    fileio:close(refnum)
+	    return 0
+	fin
+    fin
+    return -1
+end
+
 export def spriteDraw(sprtptr)#0
     byte ofst, map, y
     var width, height
