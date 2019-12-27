@@ -157,6 +157,21 @@ export asm divmod7(x)#2
         STA     ESTKH+1,X
         RTS
 end      
+//export def hgrColor(c)#0
+//    curhclr = hcolor[c & $07]
+//end
+export asm hgrColor(c)#0
+        LDA     ESTKL+0,X   ; COLOR
+        AND     #$07
+        ASL
+        TAY
+        LDA     $1000,Y     ; HCOLORL
+        STA     $2000       ; CURHCLRL
+        LDA     $1001,Y     ; HCOLORH
+        STA     $2001       ; CRHCLRH
+        INX
+        RTS
+end
 //export def hgrCopyDst(ofst, y, w, h, dstptr)#0
 //    word j, srcptr
 //
@@ -459,94 +474,256 @@ asm     _hgrPlotD
         INX
         RTS
 end
-export def hgrXorPlot(x, y)#0
-    word pixptr
-    byte ofst, pixofst, pmask
-    
-    ofst, pixofst = divmod7(x)
-    pixptr = hgrscan[y] + drawbuff + ofst
-    pmask = hbmask[pixofst]
-    ^pixptr = ^pixptr ^ (curhclr.[ofst & 1] & pmask)
+//export def hgrXorPlot(x, y)#0
+//    word pixptr
+//    byte ofst, pixofst, pmask
+//    
+//    ofst, pixofst = divmod7(x)
+//    pixptr = hgrscan[y] + drawbuff + ofst
+//    pmask = hbmask[pixofst]
+//    ^pixptr = ^pixptr ^ (curhclr.[ofst & 1] & pmask)
+//end
+export asm hgrXorPlot(x, y)#0
+        LDY     ESTKL+0,X   ; Y COORD
+        CPY     #192
+        BCS     +
 end
-export def hgrHlin(x1, x2, y)#0
-    word pixptr, x
-    byte lofst, lpixofst, lpmask
-    byte rofst, rpixofst, rpmask
-    
-    if x1 == x2
-        hgrPlot(x1, y)
-    else
-        lofst, lpixofst = divmod7(x1)
-        pixptr = hgrscan[y] + drawbuff + lofst
-        rofst, rpixofst = divmod7(x2)
-        lpmask = hlmask[lpixofst]
-        rpmask = hrmask[rpixofst]
-        if lofst == rofst
-            lpmask = lpmask & rpmask
-            ^pixptr = (^pixptr & ~lpmask) | (curhclr.[pixptr.0 & 1] & lpmask)
-        else
-            ^pixptr = (^pixptr & ~lpmask) | (curhclr.[pixptr.0 & 1] & lpmask)
-            pixptr++
-            for x = lofst + 1 to rofst - 1
-                ^pixptr = curhclr.[pixptr.0 & 1]
-                pixptr++
-            next
-            ^pixptr = (^pixptr & ~rpmask) | (curhclr.[pixptr.0 & 1] & rpmask)
-        fin
-    fin
+asm     _hgrXorPlotA
+        LDA     $8000,Y     ; HGRSCANL
+        STA     DSTL
+        LDA     $1000       ; DRAWBUFFH
+        ORA     $9000,Y     ; HGRSCANH
+        STA     DSTH
+        INX
 end
-export def hgrVlin(y1, y2, x)#0
-    word pixptr, y, ofst
-    byte pixofst, pmask, cmask
-    
-    if y1 == y2
-        hgrPlot(x, y1)
-    else
-        ofst, pixofst = divmod7(x)
-        ofst  = ofst + drawbuff
-        pmask = hbmask[pixofst]
-        cmask = curhclr.[ofst & 1] & pmask
-        pmask = ~pmask
-        for y = y1 to y2
-            pixptr = hgrscan[y] + ofst
-            ^pixptr = (^pixptr & pmask) | cmask
-        next
-    fin
+asm     _hgrXorPlotB
+        JSR     1000        ; DIVMOD7
+        LDY     ESTKL+0,X   ; PIXEL OFFSET
+end
+asm     _hgrXorPlotC
+        LDA     $1000,Y     ; HBMASK
+        STA     TMPL
+        LDA     ESTKL+1,X   ; HORIZ OFFSET
+        CMP     #40
+        BCS     +
+        AND     #$01
+        TAY
+end
+asm     _hgrXorPlotD
+        LDA     $2000,Y     ; CURHCLR
+        AND     TMPL
+        LDY     ESTKL+1,X   ; HORIZ OFFSET
+        EOR     (DST),Y
+        STA     (DST),Y
++       INX
+        INX
+        RTS
+end
+//export def hgrHLin(x1, x2, y)#0
+//    word pixptr, x
+//    byte lofst, lpixofst, lpmask
+//    byte rofst, rpixofst, rpmask
+//    
+//    if x1 == x2
+//        hgrPlot(x1, y)
+//    else
+//        lofst, lpixofst = divmod7(x1)
+//        pixptr = hgrscan[y] + drawbuff + lofst
+//        rofst, rpixofst = divmod7(x2)
+//        lpmask = hlmask[lpixofst]
+//        rpmask = hrmask[rpixofst]
+//        if lofst == rofst
+//            lpmask = lpmask & rpmask
+//            ^pixptr = (^pixptr & ~lpmask) | (curhclr.[pixptr.0 & 1] & lpmask)
+//        else
+//            ^pixptr = (^pixptr & ~lpmask) | (curhclr.[pixptr.0 & 1] & lpmask)
+//            pixptr++
+//            for x = lofst + 1 to rofst - 1
+//                ^pixptr = curhclr.[pixptr.0 & 1]
+//                pixptr++
+//            next
+//            ^pixptr = (^pixptr & ~rpmask) | (curhclr.[pixptr.0 & 1] & rpmask)
+//        fin
+//    fin
+//end
+export asm hgrHLin(x1, x2, y)#0
+        LDA     ESTKL+1
+        CMP     ESTKL+2
+        BNE     +
+        LDA     ESTKH+1
+        CMP     ESTKH+2
+        BNE     +
+        LDA     ESTKL+0
+        STA     ESTKL+1
+        LDA     ESTKH+0
+        STA     ESTKH+1
+        INX
+end
+asm     _hgrHLinA
+        JMP     $F000
++       LDY     ESTKL+0,X   ; Y COORD
+        CPY     #192
+        BCS     +
+end
+asm     _hgrHLinB
+        LDA     $8000,Y     ; HGRSCANL
+        STA     DSTL
+        LDA     $1000       ; DRAWBUFFH
+        ORA     $9000,Y     ; HGRSCANH
+        STA     DSTH
+        LDA     ESTKL+1,X
+        STA     ESTKL+0,X
+        LDA     ESTKH+1,X
+        STA     ESTKH+0,X
+end
+asm     _hgrHLinC
+        JSR     1000        ; DIVMOD7
+        LDY     ESTKL+0,X   ; RIGHT PIXEL OFFSET
+end
+asm     _hgrHLinD
+        LDA     $1000,Y     ; HRMASK
+        STA     TMPH
+        INX
+        INX
+        INX
+end
+asm     _hgrHLinE
+        JSR     1000        ; DIVMOD7
+        LDY     ESTKL+0,X   ; LEFT PIXEL OFFSET
+end
+asm     _hgrHLinF
+        LDA     $1000,Y     ; HLMASK
+        STA     TMPL
+        LDA     ESTKL+1,X   ; LEFT HORIZ OFFSET
+        TAY
+        LSR
+        BCS     +
+end
+asm     _hgrHLinG
+        LDA     $2000       ; CURHCLRL
+        STA     SRCL
+        LDA     $2001       ; CURHCLRH
+        STA     SRCH
+        BCC     ++
++       LDA     $2000       ; CURHCLRL
+        STA     SRCH
+        LDA     $2001       ; CURHCLRH
+        STA     SRCL
+++      TYA
+        CMP     ESTKL-1,X   ; RIGHT HORIZ OFFSET
+        BNE     +
+        LDA     TMPL
+        AND     TMPH
+        STA     TMPL
+        AND     SRCL
+        STA     TMPH
+        LDA     TMPL
+        EOR     #$FF
+        AND     (DST),Y
+        ORA     TMPH
+        STA     (DST),Y
+        INX
+        INX
+        RTS
++       LDA     SRCL        ; CURHCLR
+        AND     TMPL
+        STA     ESTKL+0,X
+        LDA     TMPL
+        EOR     #$FF
+        AND     (DST),Y
+        ORA     ESTKL+0,X
+-       STA     (DST),Y
+        INY
+        TYA
+        CMP     ESTKL-1,X   ; RIGHT HORIZ OFFSET
+        LDA     SRCH
+        BCS     +
+        STA     (DST),Y
+        INY
+        TYA
+        CMP     ESTKL-1,X   ; RIGHT HORIZ OFFSET
+        LDA     SRCL
+        BCC     -
++       AND     TMPH
+        STA     ESTKL+0,X
+        LDA     TMPH
+        EOR     #$FF
+        AND     (DST),Y
+        ORA     ESTKL+0,X
+        STA     (DST),Y
+        INX
+        INX
+        RTS
+end
+//export def hgrVlin(y1, y2, x)#0
+//    word pixptr, y, ofst
+//    byte pixofst, pmask, cmask
+//    
+//    if y1 == y2
+//        hgrPlot(x, y1)
+//    else
+//        ofst, pixofst = divmod7(x)
+//        ofst  = ofst + drawbuff
+//        pmask = hbmask[pixofst]
+//        cmask = curhclr.[ofst & 1] & pmask
+//        pmask = ~pmask
+//        for y = y1 to y2
+//            pixptr = hgrscan[y] + ofst
+//            ^pixptr = (^pixptr & pmask) | cmask
+//        next
+//    fin
+//end
+export asm hgrVlin(y1, y2, x)#0
+        JSR     1000        ; DIVMOD7
+        LDY     ESTKL+0,X   ; PIXEL OFFSET
+end
+asm     _hgrVLinA
+        LDA     $1000,Y     ; HBMASK
+        STA     TMPL
+        EOR     #$FF
+        STA     TMPH
+        LDA     ESTKL+1,X   ; HORIZ OFFSET
+        AND     #$01
+        TAY
+end
+asm     _hgrVLinB
+        LDA     $2000,Y     ; CURHCLR
+        AND     TMPL
+        STA     TMPL        
+        LDY     ESTKL+3,X   ; Y1 COORD
+end
+asm     _hgrVLinC
+-       LDA     $8000,Y     ; HGRSCANL
+        STA     DSTL
+        LDA     $1000       ; DRAWBUFFH
+        ORA     $9000,Y     ; HGRSCANH
+        STA     DSTH
+        LDY     ESTKL+1,X   ; HORIZ OFFSET
+        LDA     (DST),Y
+        AND     TMPH
+        ORA     TMPL
+        STA     (DST),Y
+        LDY     ESTKL+3,X   ; Y1 COORD
+        TYA
+        INY
+        STY     ESTKL+3,X   ; Y1 COORD
+        CMP     ESTKL+2,X   ; Y2 COORD
+        BNE     -
+        INX
+        INX
+        INX
+        INX
+        RTS
 end
 export def hgrRect(x1, x2, y1, y2)#0
-    word pixptr, x, y, lofst, rofst
-    byte lpixofst, lpmask, cmask
-    byte rpixofst, rpmask
+    word y
     
     if x1 == x2
         hgrVLin(y1, y2, x1)
     else
-        lofst, lpixofst = divmod7(x1)
-        rofst, rpixofst = divmod7(x2)
-        lofst  = lofst + drawbuff
-        rofst  = rofst + drawbuff
-        lpmask = hlmask[lpixofst]
-        rpmask = hrmask[rpixofst]
-        if lofst == rofst
-            lpmask = lpmask & rpmask
-            cmask  = curhclr.[pixptr.0 & 1] & lpmask
-            lpmask = ~lpmask
-            for y = y1 to y2
-                pixptr  = hgrscan[y] + lofst
-                ^pixptr = (^pixptr & lpmask) | cmask
-            next
-        else
-            for y = y1 to y2
-                pixptr  = hgrscan[y] + lofst
-                ^pixptr = (^pixptr & ~lpmask) | (curhclr.[pixptr.0 & 1] & lpmask)
-                pixptr++
-                for x = lofst + 1 to rofst - 1
-                    ^pixptr = curhclr.[pixptr.0 & 1]
-                    pixptr++
-                next
-                ^pixptr = (^pixptr & ~rpmask) | (curhclr.[pixptr.0 & 1] & rpmask)
-            next
-        fin
+        for y = y1 to y2
+            hgrHLin(x1, x2, y)
+        next
     fin
 end
 export def hgrBLT(x, y, w, h, srcptr)#0
@@ -559,14 +736,14 @@ export def hgrBLT(x, y, w, h, srcptr)#0
         for i = 0 to w - 1
             c = srcptr->[i >> 1]
             if i & 1
-                curhclr = hcolor[c & $07]
+                hgrColor(c)
                 if c & $08
                     hgrXorPlot(x + i, j)
                 else
                     hgrPlot(x + i, j)
                 fin
             else
-                curhclr = hcolor[(c >> 4) & $07]
+                hgrColor(c >> 4)
                 if c & $80
                     hgrXorPlot(x + i, j)
                 else
@@ -577,9 +754,6 @@ export def hgrBLT(x, y, w, h, srcptr)#0
         srcptr = srcptr + (w + 1) / 2
     next
     curhclr = saveclr
-end
-export def hgrColor(c)#0
-    curhclr = hcolor[c & $07]
 end
 export def hgrMode#1
     memset(hgr1, 0, $2000) // Clear HGR page 1
@@ -619,26 +793,53 @@ end
 //
 // Assembly fixups
 //
-_hgrCopyDst:1 = @hgrscanl
-_hgrCopyDst:6 = @drawbuff.1
-_hgrCopyDst:9 = @hgrscanh
-_hgrCopySrc:1 = @hgrscanl
-_hgrCopySrc:6 = @drawbuff.1
-_hgrCopySrc:9 = @hgrscanh
-_hgrAndSrc:1  = @hgrscanl
-_hgrAndSrc:6  = @drawbuff.1
-_hgrAndSrc:9  = @hgrscanh
-_hgrXorSrc:1  = @hgrscanl
-_hgrXorSrc:6  = @drawbuff.1
-_hgrXorSrc:9  = @hgrscanh
-_hgrOrSrc:1   = @hgrscanl
-_hgrOrSrc:6   = @drawbuff.1
-_hgrOrSrc:9   = @hgrscanh
-_hgrPlotA:1   = @hgrscanl
-_hgrPlotA:6   = @drawbuff.1
-_hgrPlotA:9   = @hgrscanh
-_hgrPlotB:1   = @divmod7
-_hgrPlotC:1   = @hbmask
-_hgrPlotD:1   = @curhclr
-
+_hgrCopyDst:1  = @hgrscanl
+_hgrCopyDst:6  = @drawbuff.1
+_hgrCopyDst:9  = @hgrscanh
+_hgrCopySrc:1  = @hgrscanl
+_hgrCopySrc:6  = @drawbuff.1
+_hgrCopySrc:9  = @hgrscanh
+_hgrAndSrc:1   = @hgrscanl
+_hgrAndSrc:6   = @drawbuff.1
+_hgrAndSrc:9   = @hgrscanh
+_hgrXorSrc:1   = @hgrscanl
+_hgrXorSrc:6   = @drawbuff.1
+_hgrXorSrc:9   = @hgrscanh
+_hgrOrSrc:1    = @hgrscanl
+_hgrOrSrc:6    = @drawbuff.1
+_hgrOrSrc:9    = @hgrscanh
+_hgrPlotA:1    = @hgrscanl
+_hgrPlotA:6    = @drawbuff.1
+_hgrPlotA:9    = @hgrscanh
+_hgrPlotB:1    = @divmod7
+_hgrPlotC:1    = @hbmask
+_hgrPlotD:1    = @curhclr
+_hgrXorPlotA:1 = @hgrscanl
+_hgrXorPlotA:6 = @drawbuff.1
+_hgrXorPlotA:9 = @hgrscanh
+_hgrXorPlotB:1 = @divmod7
+_hgrXorPlotC:1 = @hbmask
+_hgrXorPlotD:1 = @curhclr
+_hgrHLinA:1    = @hgrPlot
+_hgrHLinB:1    = @hgrscanl
+_hgrHLinB:6    = @drawbuff.1
+_hgrHLinB:9    = @hgrscanh
+_hgrHLinC:1    = @divmod7
+_hgrHLinD:1    = @hrmask
+_hgrHLinE:1    = @divmod7
+_hgrHLinF:1    = @hlmask
+_hgrHLinG:1    = @curhclr
+_hgrHLinG:6    = @curhclr.1
+_hgrHLinG:13   = @curhclr.1
+_hgrHLinG:18   = @curhclr
+hgrVLin:1      = @divmod7
+_hgrVLinA:1    = @hbmask
+_hgrVLinB:1    = @curhclr
+_hgrVLinC:1    = @hgrscanl
+_hgrVLinC:6    = @drawbuff.1
+_hgrVLinC:9    = @hgrscanh
+hgrColor:7     = @hcolor
+hgrColor:10    = @curhclr
+hgrColor:13    = @hcolor.1
+hgrColor:16    = @curhclr.1
 done

@@ -70,7 +70,6 @@ MON        = rel/apple/MON\#FE1000
 HGRTEST    = rel/apple/HGRTEST\#FE1000
 GRTEST     = rel/apple/GRTEST\#FE1000
 DGRTEST    = rel/apple/DGRTEST\#FE1000
-HGRTEST    = rel/apple/HGRTEST\#FE1000
 MEMMGR     = rel/MEMMGR\#FE1000
 MEMTEST    = rel/MEMTEST\#FE1000
 FIBERTEST  = rel/FIBERTEST\#FE1000
@@ -428,10 +427,6 @@ $(GRTEST): samplesrc/grtest.pla $(PLVM02) $(PLASM)
 $(DGRTEST): samplesrc/dgrtest.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AMOW < samplesrc/dgrtest.pla > samplesrc/dgrtest.a
 	acme --setpc 4094 -o $(DGRTEST) samplesrc/dgrtest.a
-
-$(HGRTEST): samplesrc/hgrtest.pla $(PLVM02) $(PLASM)
-	./$(PLASM) -AMOW < samplesrc/hgrtest.pla > samplesrc/hgrtest.a
-	acme --setpc 4094 -o $(HGRTEST) samplesrc/hgrtest.a
 
 $(MON): utilsrc/apple/mon.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AMOW < utilsrc/apple/mon.pla > utilsrc/apple/mon.a
