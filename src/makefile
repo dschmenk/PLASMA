@@ -59,7 +59,7 @@ HGRLIB     = rel/apple/HGRLIB\#FE1000
 GRLIB      = rel/apple/GRLIB\#FE1000
 DGRLIB     = rel/apple/DGRLIB\#FE1000
 SPRITE     = rel/apple/SPRITE\#FE1000
-LINE       = rel/apple/LINE\#FE1000
+LINES      = rel/apple/LINES\#FE1000
 GRAFIX     = rel/apple/GRAFIX\#FE1000
 GFXDEMO    = rel/apple/GFXDEMO\#FE1000
 JOYBUZZ    = rel/apple/JOYBUZZ\#FE1000
@@ -100,7 +100,7 @@ TXTTYPE	= .TXT
 #SYSTYPE	= \#FF2000
 #TXTTYPE	= \#040000
 
-apple: $(PLVMZP_APL) $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVMJIT) $(PLVM802) $(PLVM03) $(CMD) $(CMDJIT) $(JIT) $(JIT16) $(JITUNE) $(SOSCMD) $(PLASMAPLASM) $(CODEOPT) $(ARGS) $(MEMMGR) $(MEMTEST) $(FIBER) $(FIBERTEST) $(LONGJMP) $(ED) $(MON) $(COPY) $(DEL) $(REN) $(CAT) $(NEWDIR) $(TYPE) $(SOS) $(ROD) $(SIEVE) $(PRIMEGAP) $(MOUSE) $(UTHERNET2) $(UTHERNET) $(ETHERIP) $(INET) $(DHCP) $(HTTPD) $(TFTPD) $(ROGUE) $(ROGUEMAP) $(ROGUECOMBAT) $(GRAFIX) $(GFXDEMO) $(LINE) $(SPRITE) $(HGRLIB) $(HGRTEST) $(GRLIB) $(DGRLIB) $(GRTEST) $(DGRTEST) $(HGRTEST) $(FILEIO_APL) $(CONIO_APL) $(JOYBUZZ) $(PORTIO) $(SPIPORT) $(SDFAT) $(FATCAT) $(FATGET) $(FATPUT) $(FATWDSK) $(FATRDSK) $(INT32) $(INT32TEST) $(SANE) $(FPSTR) $(FPU) $(SANITY) $(LZ4) $(LZ4CAT) $(RPNCALC) $(SNDSEQ) $(PLAYSEQ)
+apple: $(PLVMZP_APL) $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVMJIT) $(PLVM802) $(PLVM03) $(CMD) $(CMDJIT) $(JIT) $(JIT16) $(JITUNE) $(SOSCMD) $(PLASMAPLASM) $(CODEOPT) $(ARGS) $(MEMMGR) $(MEMTEST) $(FIBER) $(FIBERTEST) $(LONGJMP) $(ED) $(MON) $(COPY) $(DEL) $(REN) $(CAT) $(NEWDIR) $(TYPE) $(SOS) $(ROD) $(SIEVE) $(PRIMEGAP) $(MOUSE) $(UTHERNET2) $(UTHERNET) $(ETHERIP) $(INET) $(DHCP) $(HTTPD) $(TFTPD) $(ROGUE) $(ROGUEMAP) $(ROGUECOMBAT) $(GRAFIX) $(GFXDEMO) $(LINES) $(SPRITE) $(HGRLIB) $(HGRTEST) $(GRLIB) $(DGRLIB) $(GRTEST) $(DGRTEST) $(HGRTEST) $(FILEIO_APL) $(CONIO_APL) $(JOYBUZZ) $(PORTIO) $(SPIPORT) $(SDFAT) $(FATCAT) $(FATGET) $(FATPUT) $(FATWDSK) $(FATRDSK) $(INT32) $(INT32TEST) $(SANE) $(FPSTR) $(FPU) $(SANITY) $(LZ4) $(LZ4CAT) $(RPNCALC) $(SNDSEQ) $(PLAYSEQ)
 
 	-rm vmsrc/plvmzp.inc
 
@@ -229,9 +229,9 @@ $(FIBER): libsrc/fiber.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AMOW < libsrc/fiber.pla > libsrc/fiber.a
 	acme --setpc 4094 -o $(FIBER) libsrc/fiber.a
 
-$(LINE): libsrc/line.pla $(PLVM02) $(PLASM)
-	./$(PLASM) -AMOW < libsrc/line.pla > libsrc/line.a
-	acme --setpc 4094 -o $(LINE) libsrc/line.a
+$(LINES): libsrc/lines.pla $(PLVM02) $(PLASM)
+	./$(PLASM) -AMOW < libsrc/lines.pla > libsrc/lines.a
+	acme --setpc 4094 -o $(LINES) libsrc/lines.a
 
 $(FIBERTEST): samplesrc/fibertest.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AMOW < samplesrc/fibertest.pla > samplesrc/fibertest.a
