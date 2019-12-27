@@ -5,33 +5,157 @@ var hspan = @nopLin
 var vspan = @nopLin
 var err, shorterr, shortlen, longerr, longlen
 
-def nopLin(a, b, c)#0
+//def nopLin(a, b, c)#0
+//end
+//def majorline(majorstart, major, majorend, minor, dir, majorspan)#0
+//    //
+//    // Initial half-span step
+//    //
+//    err = err + shorterr
+//    repeat
+//        majorspan(majorstart, major, minor)#0
+//        minor      = minor + dir     // Move to next span
+//        majorstart = major + 1       // Start of next span = end of previous + 1
+//        if err >= 0             // Short span
+//            err   = err   + shorterr
+//            major = major + shortlen
+//        else                    // Long span
+//            err   = err   + longerr
+//            major = major + longlen
+//        fin
+//    until major >= majorend
+//    //
+//    // Final half-span step
+//    //
+//    majorspan(majorstart, majorend, minor)#0
+//end
+asm majorline(majorstart, major, majorend, minor, dir, majorspan)#0
+!SOURCE    "vmsrc/plvmzp.inc"
+        LDA     $1000       ; ERRL
+        CLC
+        ADC     $2000       ; SHORTERRL
+        STA     $1000       ; ERRL
+        LDA     $1001       ; ERRH
+        ADC     $2001       ; SHORTERRH
+        STA     $1001       ; ERRH
+end
+asm     _majorlineA
+-       DEX
+        DEX
+        DEX
+        LDA     ESTKL+8,X   ; MAJORSTARTL
+        STA     ESTKL+2,X
+        LDA     ESTKH+8,X   ; MAJORSTARTH
+        STA     ESTKH+2,X
+        LDA     ESTKL+7,X   ; MAJORL
+        STA     ESTKL+1,X
+        LDA     ESTKH+7,X   ; MAJORH
+        STA     ESTKH+1,X
+        LDA     ESTKL+5,X   ; MINORL
+        STA     ESTKL+0,X
+        LDA     ESTKH+5,X   ; MINORH
+        STA     ESTKH+0,X
+        LDA     ESTKL+3,X   ; MAJORSPANL
+        STA     TMPL
+        LDA     ESTKH+3,X   ; MAJORSPANH
+        STA     TMPH
+        JSR     JMPTMP
+
+        LDA     ESTKL+2,X   ; MINORL
+        CLC
+        ADC     ESTKL+1,X   ; DIRL
+        STA     ESTKL+2,X
+        LDA     ESTKH+2,X   ; MINORH
+        ADC     ESTKH+1,X   ; DIRH
+        STA     ESTKH+2,X
+
+        LDA     ESTKL+4,X   ; MAJORL
+        CLC
+        ADC     #$01
+        STA     ESTKL+5,X   ; MAJORSTARTL
+        LDA     ESTKH+4,X   ; MAJORH
+        ADC     #$00
+        STA     ESTKH+5,X   ; MAJORSTARTH
+end
+asm     _majorlineB
+        LDA     $1001       ; ERRH
+        BMI     +
+end
+asm     _majorlineC
+        LDA     $1000       ; ERRL
+        CLC
+        ADC     $2000       ; SHORTERRL
+        STA     $1000       ; ERRL
+        LDA     $1001       ; ERRH
+        ADC     $2001       ; SHORTERRH
+        STA     $1001       ; ERRH
+        LDA     ESTKL+4,X   ; MAJORL
+        CLC
+        ADC     $3000       ; SHORTLENL
+        STA     ESTKL+4,X
+        LDA     ESTKH+4,X   ; MAJORH
+        ADC     $3001       ; SHORTLENH
+        STA     ESTKH+4,X
+        BCC     ++
+        BCS     ++
+end
+asm     _majorlineD
++       LDA     $1000       ; ERRL
+        CLC
+        ADC     $4000       ; LONGERRL
+        STA     $1000       ; ERRL
+        LDA     $1001       ; ERRH
+        ADC     $4001       ; LONGERRL
+        STA     $1001       ; ERRH
+        LDA     ESTKL+4,X   ; MAJORL
+        CLC
+        ADC     $5000       ; LONGLENL
+        STA     ESTKL+4,X
+        LDA     ESTKH+4,X   ; MAJORH
+        ADC     $5001       ; LONGLENH
+        STA     ESTKH+4,X
+
+++      LDA     ESTKL+4,X   ; MAJORL
+        CMP     ESTKL+3,X   ; MAJORENDL
+        LDA     ESTKH+4,X   ; MAJORH
+        SBC     ESTKH+3,X   ; MAJORENDH
+        BCS     +
+end
+asm     _majorlineE
+        JMP     $6000
++       DEX
+        DEX
+        DEX
+        LDA     ESTKL+8,X   ; MAJORSTARTL
+        STA     ESTKL+2,X
+        LDA     ESTKH+8,X   ; MAJORSTARTH
+        STA     ESTKH+2,X
+        LDA     ESTKL+6,X   ; MAJORENDL
+        STA     ESTKL+1,X
+        LDA     ESTKH+6,X   ; MAJORENDH
+        STA     ESTKH+1,X
+        LDA     ESTKL+5,X   ; MINORL
+        STA     ESTKL+0,X
+        LDA     ESTKH+5,X   ; MINORH
+        STA     ESTKH+0,X
+        LDA     ESTKL+3,X   ; MAJORSPANL
+        STA     TMPL
+        LDA     ESTKH+3,X   ; MAJORSPANH
+        STA     TMPH
+        JSR     JMPTMP
+        INX
+        INX
+        INX
+end
+asm nopLin(a, b, c)#0
+        INX
+        INX
+        INX
+        RTS
 end
 export def setlinespans(h, v)#0
     hspan = h
     vspan = v
-end
-def majorline(majorstart, major, majorend, minor, dir, majorspan)#0
-    //
-    // Initial half-span step
-    //
-    err = err + shorterr
-    repeat
-        majorspan(majorstart, major, minor)#0
-        minor      = minor + dir     // Move to next span
-        majorstart = major + 1       // Start of next span = end of previous + 1
-        if err >= 0             // Short span
-            err   = err   + shorterr
-            major = major + shortlen
-        else                    // Long span
-            err   = err   + longerr
-            major = major + longlen
-        fin
-    until major >= majorend
-    //
-    // Final half-span step
-    //
-    majorspan(majorstart, majorend, minor)#0
 end
 export def linetospans(x1, y1, x2, y2)#0
     var dx, dy, dx2, dy2, halflen, rem, sx, sy
@@ -107,3 +231,31 @@ export def linetospans(x1, y1, x2, y2)#0
         majorline(y1, y1 + halflen, y2, x1, sx, vspan)
     fin
 end
+//
+// Assembly fixups
+//
+majorline:1    = @err
+majorline:5    = @shorterr
+majorline:8    = @err
+majorline:11   = @err.1
+majorline:14   = @shorterr.1
+majorline:17   = @err.1
+_majorlineB:1  = @err.1
+_majorlineC:1  = @err
+_majorlineC:5  = @shorterr
+_majorlineC:8  = @err
+_majorlineC:11 = @err.1
+_majorlineC:14 = @shorterr.1
+_majorlineC:17 = @err.1
+_majorlineC:23 = @shortlen
+_majorlineC:30 = @shortlen.1
+_majorlineD:1  = @err
+_majorlineD:5  = @longerr
+_majorlineD:8  = @err
+_majorlineD:11 = @err.1
+_majorlineD:14 = @longerr.1
+_majorlineD:17 = @err.1
+_majorlineD:23 = @longlen
+_majorlineD:30 = @longlen.1
+_majorlineE:1  = @_majorlineA
+done
