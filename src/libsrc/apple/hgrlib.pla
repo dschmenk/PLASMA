@@ -110,49 +110,153 @@ byte           = $8F, $FF, $FF, $FF, $F8
 byte           = $88, $FF, $FF, $FF, $88
 byte           = $88, $8F, $FF, $F8, $88
 
-asm grInc(buff)
-!SOURCE    "vmsrc/plvmzp.inc"
-end
-
 export asm divmod7(x)#2
-        LDA     ESTKL,X     ; X COORD LSB
-        LDY     ESTKH,X     ; X COORD MSB
-        BNE     +           ; MUST BE >= 140
-        CMP     #140
-        BCC     ++
-+       SEC
+!SOURCE    "vmsrc/plvmzp.inc"
+        LDY     ESTKH+0,X   ; X COORDH
+        BPL     +
+        LDA     #$00
+        SEC
+        SBC     ESTKL+0,X
+        STA     ESTKL+0,X
+        LDA     #$00
+        SBC     ESTKH+0,X
+        TAY
++       LDA     ESTKL+0,X   ; X COORDL
+        CPY     #$01
+        BEQ     ++          ; MUST BE >= 140
+        BCC     +
+        LDY     #40         ; > 512 SO CLIP AT MAX
+        LDA     #00
+        BEQ     +++     
++       CMP     #140
+        BCC     +
+++      SEC
         SBC     #140
         LDY     #20
-++      CMP     #70
++       CMP     #70
         BCC     +
         SBC     #70
-        STA     ESTKL,X
+        STA     ESTKL+0,X
         TYA
         ADC     #9
         TAY
-        LDA     ESTKL,X
+        LDA     ESTKL+0,X
 +       CMP     #35
         BCC     +
         SBC     #35
-        STA     ESTKL,X
+        STA     ESTKL+0,X
         TYA
         ADC     #4
         TAY
-        LDA     ESTKL,X
+        LDA     ESTKL+0,X
 +
 -       CMP     #7
-        BCC     +
+        BCC     +++
         SBC     #7
         INY
         BNE     -
-+       DEX
-        STA     ESTKL,X     ; REMAINDER
-        STY     ESTKL+1,X   ; QUOTIENT
++++     DEX
+        ASL     ESTKH+1,X   ; CHECK SIGN OF XCOORD
+        BCS     +
+        STA     ESTKL+0,X   ; REMAINDERL
         LDA     #$00
-        STA     ESTKH,X
+        STA     ESTKH+0,X
+        STY     ESTKL+1,X   ; QUOTIENTL
         STA     ESTKH+1,X
         RTS
-end      
++       EOR     #$07
+        STA     ESTKL+0,X   ; REMAINDERL
+        LDA     #$00
+        STA     ESTKH+0,X
+        TYA
+        EOR     #$FF
+        STA     ESTKL+1,X   ; QUOTIENTL
+        LDA     #$FF
+        STA     ESTKH+1,X
+        RTS
+end
+asm clipsrc(ofst, y, w, h, srcptr)#0
+        LDA     ESTKL+0,X   ; SRC PTR
+        STA     SRCL
+        LDA     ESTKH+0,X
+        STA     SRCH
+        LDA     ESTKL+2,X   ; WIDTH (SRC PITCH)
+        STA     TMPH        ; WIDTH (DRAW WIDTH)
+; CLPTOP
+        LDY     ESTKH+3,X   ; Y COORDH
+        BPL     CLPBOTM
+        INY
+;        STY     ESTKH+3,X   ; Y COORDH
+        BNE     CLPPED
+        LDY     ESTKL+3,X   ; Y COORDL
+-       LDA     SRCL
+        CLC
+        ADC     ESTKL+2,X   ; PITCH
+        STA     SRCL
+        BCC     +
+        INC     SRCH
++       DEC     ESTKL+1,X   ; HEIGHT
+        BEQ     CLPPED
+        INY                 ; Y COORDL
+        BNE     -
+        STY     ESTKL+3,X   ; Y COORDL
+        BEQ     CLPLEFT     ; BETTER BE ZERO
+CLPBOTM BNE     CLPPED
+        LDA     ESTKL+3,X   ; YCOORDL
+        CMP     #192
+        BCS     CLPPED
+;        CLC
+        ADC     ESTKL+1,X   ; HEIGHT
+        SBC     #191
+        BCC     CLPLEFT
+        STA     TMPL
+        LDA     ESTKL+1,X   ; HEIGHT
+        SBC     TMPL
+        STA     ESTKL+1,X   ; HEIGHT
+        BEQ     CLPPED
+CLPLEFT LDY     ESTKH+4,X   ; HORIZ OFFSETH
+        BPL     CLPRGHT
+        INY
+;        STY     ESTKH+4,X
+        BNE     CLPPED
+        LDY     ESTKL+4,X   ; HORIZ OFFSETL
+-       INC     SRCL
+        BNE     +
+        INC     SRCH
++       DEC     TMPH        ; WIDTH
+        BEQ     CLPPED
+        INY                 ; HORIZ OFFSETL
+        BNE     -
+        STY     ESTKL+4,X   ; HORIZ OFFSETL
+        BEQ     CLPDONE     ; BETTER BE ZERO
+CLPRGHT BNE     CLPPED
+        LDA     ESTKL+4,X   ; HORIZ OFFSETL
+        CMP     #40
+        BCS     CLPPED
+;        CLC
+        ADC     TMPH         ; WIDTH
+        SBC     #39
+        BCC     CLPDONE
+        STA     TMPL
+        LDA     TMPH        ; WIDTH
+        SBC     TMPL
+        STA     TMPH        ; WIDTH
+CLPDONE LDA     TMPH
+        STA     ESTKH+2,X   ; WIDTH (DRAW WIDTH)
+;        LDA     SRCL
+;        STA     ESTKL+0,X   ; SRC PTR
+;        LDA     SRCH
+;        STA     ESTKH+0,X
+        RTS
+CLPPED  INX
+        INX
+        INX
+        INX
+        INX
+        PLA
+        PLA
+        RTS
+end
 //export def hgrColor(c)#0
 //    curhclr = hcolor[c & $07]
 //end
@@ -179,14 +283,16 @@ end
 //    next
 //end
 export asm hgrCopyDst(ofst, y, w, h, dstptr)#0
-        LDA     ESTKL+0,X   ; DST PTR
+        JSR     $C000       ; CLIPSRC
+;        LDA     ESTKL+0,X   ; DST PTR
+        LDA     SRCL
         STA     DSTL
-        LDA     ESTKH+0,X
+;        LDA     ESTKH+0,X
+        LDA     SRCH
         STA     DSTH
 --      LDY     ESTKL+3,X   ; Y COORD
-        CPY     #192
-        BCS     +
         LDA     ESTKL+4,X   ; HORIZ OFFSET
+        CLC
 end
 asm     _hgrCopyDst
         ADC     $8000,Y     ; HGRSCANL
@@ -194,15 +300,15 @@ asm     _hgrCopyDst
         LDA     $1000       ; DRAWBUFFH
         ADC     $9000,Y     ; HGRSCANH
         STA     SRCH
-        LDY     ESTKL+2,X   ; WIDTH
+        LDY     ESTKH+2,X   ; WIDTH
         DEY
 -       LDA     (SRC),Y
         STA     (DST),Y
         DEY
         BPL     -
-+       LDA     DSTL
+        LDA     DSTL
         CLC
-        ADC     ESTKL+2,X   ; WIDTH
+        ADC     ESTKL+2,X   ; PITCH
         STA     DSTL
         BCC     +
         INC     DSTH
@@ -227,14 +333,14 @@ end
 //    next
 //end
 export asm hgrCopySrc(ofst, y, w, h, srcptr)#0
-        LDA     ESTKL+0,X   ; SRC PTR
-        STA     SRCL
-        LDA     ESTKH+0,X
-        STA     SRCH        
+        JSR     $C000       ; CLIPSRC
+;        LDA     ESTKL+0,X   ; SRC PTR
+;        STA     SRCL
+;        LDA     ESTKH+0,X
+;        STA     SRCH        
 --      LDY     ESTKL+3,X   ; Y COORD
-        CPY     #192
-        BCS     +
         LDA     ESTKL+4,X   ; HORIZ OFFSET
+        CLC
 end
 asm     _hgrCopySrc
         ADC     $8000,Y     ; HGRSCANL
@@ -242,15 +348,15 @@ asm     _hgrCopySrc
         LDA     $1000       ; DRAWBUFFH
         ADC     $9000,Y     ; HGRSCANH
         STA     DSTH
-        LDY     ESTKL+2,X   ; WIDTH
+        LDY     ESTKH+2,X   ; WIDTH
         DEY
 -       LDA     (SRC),Y
         STA     (DST),Y
         DEY
         BPL     -
-+       LDA     SRCL
+        LDA     SRCL
         CLC
-        ADC     ESTKL+2,X   ; WIDTH
+        ADC     ESTKL+2,X   ; PITCH
         STA     SRCL
         BCC     +
         INC     SRCH
@@ -278,14 +384,14 @@ end
 //    next
 //end
 export asm hgrAndSrc(ofst, y, w, h, srcptr)#0
-        LDA     ESTKL+0,X   ; SRC PTR
-        STA     SRCL
-        LDA     ESTKH+0,X
-        STA     SRCH        
+        JSR     $C000       ; CLIPSRC
+;        LDA     ESTKL+0,X   ; SRC PTR
+;        STA     SRCL
+;        LDA     ESTKH+0,X
+;        STA     SRCH        
 --      LDY     ESTKL+3,X   ; Y COORD
-        CPY     #192
-        BCS     +
         LDA     ESTKL+4,X   ; HORIZ OFFSET
+        CLC
 end
 asm     _hgrAndSrc
         ADC     $8000,Y     ; HGRSCANL
@@ -293,16 +399,16 @@ asm     _hgrAndSrc
         LDA     $1000       ; DRAWBUFFH
         ADC     $9000,Y     ; HGRSCANH
         STA     DSTH
-        LDY     ESTKL+2,X   ; WIDTH
+        LDY     ESTKH+2,X   ; WIDTH
         DEY
 -       LDA     (SRC),Y
         AND     (DST),Y
         STA     (DST),Y
         DEY
         BPL     -
-+       LDA     SRCL
+        LDA     SRCL
         CLC
-        ADC     ESTKL+2,X   ; WIDTH
+        ADC     ESTKL+2,X   ; PITCH
         STA     SRCL
         BCC     +
         INC     SRCH
@@ -330,14 +436,14 @@ end
 //    next
 //end
 export asm hgrXorSrc(ofst, y, w, h, srcptr)#0
-        LDA     ESTKL+0,X   ; SRC PTR
-        STA     SRCL
-        LDA     ESTKH+0,X
-        STA     SRCH        
+        JSR     $C000       ; CLIPSRC
+;        LDA     ESTKL+0,X   ; SRC PTR
+;        STA     SRCL
+;        LDA     ESTKH+0,X
+;        STA     SRCH        
 --      LDY     ESTKL+3,X   ; Y COORD
-        CPY     #192
-        BCS     +
         LDA     ESTKL+4,X   ; HORIZ OFFSET
+        CLC
 end
 asm     _hgrXorSrc
         ADC     $8000,Y     ; HGRSCANL
@@ -345,16 +451,16 @@ asm     _hgrXorSrc
         LDA     $1000       ; DRAWBUFFH
         ADC     $9000,Y     ; HGRSCANH
         STA     DSTH
-        LDY     ESTKL+2,X   ; WIDTH
+        LDY     ESTKH+2,X   ; WIDTH
         DEY
 -       LDA     (SRC),Y
         EOR     (DST),Y
         STA     (DST),Y
         DEY
         BPL     -
-+       LDA     SRCL
+        LDA     SRCL
         CLC
-        ADC     ESTKL+2,X   ; WIDTH
+        ADC     ESTKL+2,X   ; PITCH
         STA     SRCL
         BCC     +
         INC     SRCH
@@ -382,14 +488,14 @@ end
 //    next
 //end
 export asm hgrOrSrc(ofst, y, w, h, srcptr)#0
-        LDA     ESTKL+0,X   ; SRC PTR
-        STA     SRCL
-        LDA     ESTKH+0,X
-        STA     SRCH        
+        JSR     $C000       ; CLIPSRC
+;        LDA     ESTKL+0,X   ; SRC PTR
+;        STA     SRCL
+;        LDA     ESTKH+0,X
+;        STA     SRCH        
 --      LDY     ESTKL+3,X   ; Y COORD
-        CPY     #192
-        BCS     +
         LDA     ESTKL+4,X   ; HORIZ OFFSET
+        CLC
 end
 asm     _hgrOrSrc
         ADC     $8000,Y     ; HGRSCANL
@@ -397,16 +503,16 @@ asm     _hgrOrSrc
         LDA     $1000       ; DRAWBUFFH
         ADC     $9000,Y     ; HGRSCANH
         STA     DSTH
-        LDY     ESTKL+2,X   ; WIDTH
+        LDY     ESTKH+2,X   ; WIDTH
         DEY
 -       LDA     (SRC),Y
         ORA     (DST),Y
         STA     (DST),Y
         DEY
         BPL     -
-+       LDA     SRCL
+        LDA     SRCL
         CLC
-        ADC     ESTKL+2,X   ; WIDTH
+        ADC     ESTKL+2,X   ; PITCH
         STA     SRCL
         BCC     +
         INC     SRCH
@@ -711,6 +817,99 @@ asm     _hgrVLinC
         INX
         RTS
 end
+//
+// BLT scanline of pixmap
+//
+asm scanBLT(x, y, w, srcptr)#0
+        LDA     ESTKL+0,X   ; SRC PTR
+        STA     SRCL
+        LDA     ESTKH+0,X
+        STA     SRCH
+        LDA     #$00
+-       PHA
+        LSR
+        TAY
+        LDA     (SRC),Y
+        LSR
+        LSR
+        LSR
+        LSR
+        PHA
+        DEX
+        STA     ESTKL+0,X
+end
+asm     _scanBLTA
+        JSR     $C000       ; HCOLOR
+        DEX
+        DEX
+        LDA     ESTKL+5,X   ; X COORDL
+        STA     ESTKL+1,X     
+        LDA     ESTKH+5,X   ; X COORDH
+        STA     ESTKH+1,X     
+        LDA     ESTKL+4,X   ; Y COORDL
+        STA     ESTKL+0,X     
+        LDA     ESTKH+4,X   ; Y COORDH
+        STA     ESTKH+0,X     
+        PLA
+        AND     #$08
+        BEQ     +
+end
+asm     _scanBLTB
+        JSR     $D000       ; HPLOT
+        BEQ     ++
+        BNE     ++
++       JSR     $E000       ; HPLOTX
+++      INC     ESTKL+3,X   ; X COORDL
+        BNE     +
+        INC     ESTKH+3,X   ; X COORDH
++       PLA
+        CLC
+        ADC     #$01
+        CMP     ESTKL+1,X   ; WIDTH
+        BEQ     BLTDONE
+        PHA
+        LSR
+        TAY
+        LDA     (SRC),Y
+        PHA
+        DEX
+        STA     ESTKL+0,X
+end
+asm     _scanBLTC
+        JSR     $C000       ; HCOLOR
+        DEX
+        DEX
+        LDA     ESTKL+5,X   ; X COORDL
+        STA     ESTKL+1,X     
+        LDA     ESTKH+5,X   ; X COORDH
+        STA     ESTKH+1,X     
+        LDA     ESTKL+4,X   ; Y COORDL
+        STA     ESTKL+0,X     
+        LDA     ESTKH+4,X   ; Y COORDH
+        STA     ESTKH+0,X     
+        PLA
+        AND     #$08
+        BEQ     +
+end
+asm     _scanBLTD
+        JSR     $D000       ; HPLOT
+        BEQ     ++
+        BNE     ++
++       JSR     $E000       ; HPLOTX
+++      INC     ESTKL+3,X   ; X COORDL
+        BNE     +
+        INC     ESTKH+3,X   ; X COORDH
++       PLA
+        CLC
+        ADC     #$01
+        CMP     ESTKL+1,X   ; WIDTH
+        BNE     -
+BLTDONE INX
+        INX
+        INX
+        INX
+        RTS
+end
 export def hgrRect(x1, x2, y1, y2)#0
     word y
     
@@ -729,24 +928,25 @@ export def hgrBLT(x, y, w, h, srcptr)#0
     
     saveclr = curhclr
     for j = y to y + h - 1
-        for i = 0 to w - 1
-            c = srcptr->[i >> 1]
-            if i & 1
-                hgrColor(c)
-                if c & $08
-                    hgrXorPlot(x + i, j)
-                else
-                    hgrPlot(x + i, j)
-                fin
-            else
-                hgrColor(c >> 4)
-                if c & $80
-                    hgrXorPlot(x + i, j)
-                else
-                    hgrPlot(x + i, j)
-                fin
-            fin
-        next
+    scanBLT(x, j, w, srcptr)
+//        for i = 0 to w - 1
+//            c = srcptr->[i >> 1]
+//            if i & 1
+//                hgrColor(c)
+//                if c & $08
+//                    hgrXorPlot(x + i, j)
+//                else
+//                    hgrPlot(x + i, j)
+//                fin
+//            else
+//                hgrColor(c >> 4)
+//                if c & $80
+//                    hgrXorPlot(x + i, j)
+//                else
+//                    hgrPlot(x + i, j)
+//                fin
+//            fin
+//        next
         srcptr = srcptr + (w + 1) / 2
     next
     curhclr = saveclr
@@ -790,18 +990,23 @@ end
 //
 // Assembly fixups
 //
+hgrCopyDst:1   = @clipsrc
 _hgrCopyDst:1  = @hgrscanl
 _hgrCopyDst:6  = @drawbuff.1
 _hgrCopyDst:9  = @hgrscanh
+hgrCopySrc:1   = @clipsrc
 _hgrCopySrc:1  = @hgrscanl
 _hgrCopySrc:6  = @drawbuff.1
 _hgrCopySrc:9  = @hgrscanh
+hgrAndSrc:1    = @clipsrc
 _hgrAndSrc:1   = @hgrscanl
 _hgrAndSrc:6   = @drawbuff.1
 _hgrAndSrc:9   = @hgrscanh
+hgrXorSrc:1    = @clipsrc
 _hgrXorSrc:1   = @hgrscanl
 _hgrXorSrc:6   = @drawbuff.1
 _hgrXorSrc:9   = @hgrscanh
+hgrOrSrc:1     = @clipsrc
 _hgrOrSrc:1    = @hgrscanl
 _hgrOrSrc:6    = @drawbuff.1
 _hgrOrSrc:9    = @hgrscanh
@@ -839,4 +1044,10 @@ hgrColor:7     = @hcolor
 hgrColor:10    = @curhclr
 hgrColor:13    = @hcolor.1
 hgrColor:16    = @curhclr.1
+_scanBLTA:1    = @hgrColor
+_scanBLTB:1    = @hgrPlot
+_scanBLTB:8    = @hgrXorPlot
+_scanBLTC:1    = @hgrColor
+_scanBLTD:1    = @hgrPlot
+_scanBLTD:8    = @hgrXorPlot
 done

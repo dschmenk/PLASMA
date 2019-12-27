@@ -5,36 +5,119 @@ include "inc/fileio.plh"
 struc t_sprite
     var  s_xpos
     var  s_ypos
+    var  s_undery[2]
+    var  s_underofst[2]
     byte s_undermap[2]
-    byte s_underofst[2]
-    byte s_undery[2]
     byte s_pitch
-    var  s_height
+    byte s_height
     var  s_size
     var  s_mask[14]
     var  s_map[14]
     var  s_under[14]
 end
 
-var spriteList[16]
+var drawList[16]
+var undrawList0[16]
+var undrawList1[16]
+var undrawList[2] = @undrawList0, @undrawList1
 byte drawpage
 //
 // Sprite routines
 //
+asm scanMask(x, y, w, srcptr)#0
+!SOURCE    "vmsrc/plvmzp.inc"
+        LDA     ESTKL+0,X   ; SRC PTR
+        STA     SRCL
+        LDA     ESTKH+0,X
+        STA     SRCH
+        LDA     #$00
+-       PHA
+        LSR
+        TAY
+        LDA     (SRC),Y
+        AND     #$80
+        BEQ     +
+        LDA     #$03
++       DEX
+        STA     ESTKL+0,X
+end
+asm     _scanMaskA
+        JSR     $C000       ; HCOLOR
+        DEX
+        DEX
+        LDA     ESTKL+5,X   ; X COORDL
+        STA     ESTKL+1,X     
+        LDA     ESTKH+5,X   ; X COORDH
+        STA     ESTKH+1,X     
+        LDA     ESTKL+4,X   ; Y COORDL
+        STA     ESTKL+0,X     
+        LDA     ESTKH+4,X   ; Y COORDH
+        STA     ESTKH+0,X     
+end
+asm     _scanMaskB
+        JSR     $D000       ; HPLOT
+        INC     ESTKL+3,X   ; X COORDL
+        BNE     +
+        INC     ESTKH+3,X   ; X COORDH
++       PLA
+        CLC
+        ADC     #$01
+        CMP     ESTKL+1,X   ; WIDTH
+        BEQ     BLTDONE
+        PHA
+        LSR
+        TAY
+        LDA     (SRC),Y
+        AND     #$08
+        BEQ     +
+        LDA     #$03
++       DEX
+        STA     ESTKL+0,X
+end
+asm     _scanMaskC
+        JSR     $C000       ; HCOLOR
+        DEX
+        DEX
+        LDA     ESTKL+5,X   ; X COORDL
+        STA     ESTKL+1,X     
+        LDA     ESTKH+5,X   ; X COORDH
+        STA     ESTKH+1,X     
+        LDA     ESTKL+4,X   ; Y COORDL
+        STA     ESTKL+0,X     
+        LDA     ESTKH+4,X   ; Y COORDH
+        STA     ESTKH+0,X     
+end
+asm     _scanMaskD
+        JSR     $D000       ; HPLOT
+        INC     ESTKL+3,X   ; X COORDL
+        BNE     +
+        INC     ESTKH+3,X   ; X COORDH
++       PLA
+        CLC
+        ADC     #$01
+        CMP     ESTKL+1,X   ; WIDTH
+        BNE     -
+BLTDONE INX
+        INX
+        INX
+        INX
+        RTS
+end
 def spriteBLTMask(x, y, w, h, srcptr)#0
     word i, j
     byte c
     
     for j = y to y + h - 1
-        for i = 0 to w - 1
-            c = srcptr->[i >> 1]
-            if i & 1
-                hgrColor(c & $08 ?? 3 :: 0)
-            else
-                hgrColor(c & $80 ?? 3 :: 0)
-            fin
-            hgrPlot(x + i, j)
-        next
+        scanMask(x, j, w, srcptr)
+//        for i = 0 to w - 1
+//            c = srcptr->[i >> 1]
+//            if i & 1
+//                hgrColor(c & $08 ?? 3 :: 0)
+//            else
+//                hgrColor(c & $80 ?? 3 :: 0)
+//            fin
+//            hgrPlot(x + i, j)
+//        next
         srcptr = srcptr + (w + 1) / 2
     next
 end
@@ -46,7 +129,7 @@ export def spriteCompile(w, h, srcptr)#1
     sprtptr->s_pitch    = bytewidth
     spritesize          = bytewidth * h
     sprtptr=>s_size     = spritesize
-    sprtptr=>s_height   = h
+    sprtptr->s_height   = h
     sprtptr=>s_under[0] = heapalloc(spritesize)
     sprtptr=>s_under[1] = heapalloc(spritesize)
     for i = 0 to 13
@@ -61,8 +144,6 @@ export def spriteCompile(w, h, srcptr)#1
         spriteBLTMask(i,  h, w, h, srcptr)
         hgrCopyDst(i > 6 ?? 1 :: 0, h, bytewidth, h, sprtptr=>s_mask[i])
     next
-    sprtptr->s_underofst[0] = 255 // Mark as under not valid
-    sprtptr->s_underofst[1] = 255
     return sprtptr
 end
 export def spriteDup(sprtsrc)#1
@@ -73,15 +154,13 @@ export def spriteDup(sprtsrc)#1
     spritesize          = sprtsrc=>s_size
     sprtdup=>s_size     = spritesize
     sprtdup->s_pitch    = sprtsrc->s_pitch 
-    sprtdup=>s_height   = sprtsrc=>s_height
+    sprtdup->s_height   = sprtsrc->s_height
     sprtdup=>s_under[0] = heapalloc(spritesize)
     sprtdup=>s_under[1] = heapalloc(spritesize)
     for i = 0 to 13
         sprtdup=>s_map[i]  = sprtsrc=>s_map[i]
         sprtdup=>s_mask[i] = sprtsrc=>s_mask[i]
     next
-    sprtdup->s_underofst[0] = 255 // Mark as under not valid
-    sprtdup->s_underofst[1] = 255
     return sprtdup
 end
 export def spriteRead(filestr)#1
@@ -91,24 +170,22 @@ export def spriteRead(filestr)#1
     sprtptr = 0
     refnum  = fileio:open(@filestr)
     if refnum
-	sprtptr = heapalloc(t_sprite)
-	if fileio:read(refnum, sprtptr, t_sprite) == t_sprite
-	    spritesize          = sprtptr=>s_size
-	    sprtptr=>s_under[0] = heapalloc(spritesize)
-	    sprtptr=>s_under[1] = heapalloc(spritesize)
-	    for i = 0 to 13
-		sprtptr=>s_map[i]  = heapalloc(spritesize)
-		sprtptr=>s_mask[i] = heapalloc(spritesize)
-		fileio:read(refnum, sprtptr=>s_map[i], spritesize)
-		fileio:read(refnum, sprtptr=>s_mask[i], spritesize)
-	    next
-            sprtptr->s_underofst[0] = 255 // Mark as under not valid
-            sprtptr->s_underofst[1] = 255
+        sprtptr = heapalloc(t_sprite)
+        if fileio:read(refnum, sprtptr, t_sprite) == t_sprite
+            spritesize          = sprtptr=>s_size
+            sprtptr=>s_under[0] = heapalloc(spritesize)
+            sprtptr=>s_under[1] = heapalloc(spritesize)
+            for i = 0 to 13
+                sprtptr=>s_map[i]  = heapalloc(spritesize)
+                sprtptr=>s_mask[i] = heapalloc(spritesize)
+                fileio:read(refnum, sprtptr=>s_map[i], spritesize)
+                fileio:read(refnum, sprtptr=>s_mask[i], spritesize)
+            next
         else
-	    heaprelease(sprtptr)
-	    sprtptr = 0
-	fin
-	fileio:close(refnum)
+            heaprelease(sprtptr)
+            sprtptr = 0
+        fin
+        fileio:close(refnum)
     fin
     return sprtptr
 end
@@ -120,62 +197,57 @@ export def spriteSave(filestr, sprtptr)#1
     if fileio:create(@filestr, $06, $0000) == FILE_ERR_OK
         refnum = fileio:open(@filestr)
         if refnum
-	    if fileio:write(refnum, sprtptr, t_sprite) == t_sprite
-	        spritesize = sprtptr=>s_size
-	        for i = 0 to 13
-		    fileio:write(refnum, sprtptr=>s_map[i], spritesize)
-		    fileio:write(refnum, sprtptr=>s_mask[i], spritesize)
-	        next
-	    fin
-	    fileio:close(refnum)
-	    return 0
-	fin
+            if fileio:write(refnum, sprtptr, t_sprite) == t_sprite
+                spritesize = sprtptr=>s_size
+                for i = 0 to 13
+                    fileio:write(refnum, sprtptr=>s_map[i], spritesize)
+                    fileio:write(refnum, sprtptr=>s_mask[i], spritesize)
+                next
+            fin
+            fileio:close(refnum)
+            return 0
+        fin
     fin
     return -1
 end
-
 export def spriteDraw(sprtptr)#0
-    byte ofst, map, y
-    var width, height
+    byte map, pitch, height
+    var ofst, y
     
-    y = sprtptr->s_ypos
+    y = sprtptr=>s_ypos
     ofst, map = divmod7(sprtptr=>s_xpos)
     if ofst & 1
         map = map + 7
     fin
-    sprtptr->s_underofst[drawpage] = ofst
-    sprtptr->s_undery[drawpage]    = y
-    width  = sprtptr->s_pitch
-    height = sprtptr=>s_height
-    hgrCopyDst(ofst, y, width, height, sprtptr=>s_under[drawpage])
-    hgrAndSrc( ofst, y, width, height, sprtptr=>s_mask[map])
-    hgrXorSrc( ofst, y, width, height, sprtptr=>s_map[map])
+    sprtptr=>s_underofst[drawpage] = ofst
+    sprtptr=>s_undery[drawpage]    = y
+    pitch  = sprtptr->s_pitch
+    height = sprtptr->s_height
+    hgrCopyDst(ofst, y, pitch, height, sprtptr=>s_under[drawpage])
+    hgrAndSrc( ofst, y, pitch, height, sprtptr=>s_mask[map])
+    hgrXorSrc( ofst, y, pitch, height, sprtptr=>s_map[map])
 end
 export def spriteUnDraw(sprtptr)#0
-    if sprtptr->s_underofst[drawpage] < 40
-        hgrCopySrc(sprtptr->s_underofst[drawpage], sprtptr->s_undery[drawpage], sprtptr->s_pitch, sprtptr=>s_height, sprtptr=>s_under[drawpage])
-    fin
+    hgrCopySrc(sprtptr=>s_underofst[drawpage], sprtptr=>s_undery[drawpage], sprtptr->s_pitch, sprtptr->s_height, sprtptr=>s_under[drawpage])
 end
 export def spriteDrawXor(sprtptr)#0
-    byte ofst, map, y
-    var width, height
+    byte map, pitch, height
+    var ofst, y
     
-    y = sprtptr->s_ypos
+    y = sprtptr=>s_ypos
     ofst, map = divmod7(sprtptr=>s_xpos)
     if ofst & 1
         map = map + 7
     fin
     sprtptr->s_undermap[drawpage]  = map
-    sprtptr->s_underofst[drawpage] = ofst
-    sprtptr->s_undery[drawpage]    = y
-    width  = sprtptr->s_pitch
-    height = sprtptr=>s_height
-    hgrXorSrc( ofst, y, width, height, sprtptr=>s_map[map])
+    sprtptr=>s_underofst[drawpage] = ofst
+    sprtptr=>s_undery[drawpage]    = y
+    pitch  = sprtptr->s_pitch
+    height = sprtptr->s_height
+    hgrXorSrc( ofst, y, pitch, height, sprtptr=>s_map[map])
 end
 export def spriteUnDrawXor(sprtptr)#0
-    if sprtptr->s_underofst[drawpage] < 40
-        hgrXorSrc(sprtptr->s_underofst[drawpage], sprtptr->s_undery[drawpage], sprtptr->s_pitch, sprtptr=>s_height, sprtptr=>s_map[sprtptr->s_undermap[drawpage]])
-    fin
+    hgrXorSrc(sprtptr=>s_underofst[drawpage], sprtptr=>s_undery[drawpage], sprtptr->s_pitch, sprtptr->s_height, sprtptr=>s_map[sprtptr->s_undermap[drawpage]])
 end
 export def spritePos(x, y, sprtptr)#0
     sprtptr=>s_ypos = y
@@ -183,51 +255,67 @@ export def spritePos(x, y, sprtptr)#0
 end
 export def spritePosIndex(x, y, i)#0
     i = i & 15
-    if spriteList[i]
-        spriteList[i]=>s_ypos = y
-        spriteList[i]=>s_xpos = x
+    if drawList[i]
+        drawList[i]=>s_ypos = y
+        drawList[i]=>s_xpos = x
     fin
 end
 export def spriteDrawList#0
     byte i
+    var undrawptr
     
+    undrawptr = undrawList[drawpage]
     for i = 15 downto 0
-        if spriteList[i]
-            spriteUnDraw(spriteList[i])
+        if undrawptr=>[i]
+            spriteUnDraw(undrawptr=>[i])
         fin
     next
     for i = 0 to 15
-        if spriteList[i]
-            spriteDraw(spriteList[i])
+        if drawList[i]
+            spriteDraw(drawList[i])
         fin
     next
+    memcpy(undrawptr, @drawList, 16*2)
 end
 export def spriteDrawXorList#0
     byte i
+    var undrawptr
+    
+    undrawptr = undrawList[drawpage]
     for i = 0 to 15
-        if spriteList[i]
-            spriteUnDrawXor(spriteList[i])
-            spriteDrawXor(spriteList[i])
+        if undrawptr=>[i]
+            spriteUnDrawXor(undrawptr=>[i])
+        fin
+        if drawList[i]
+            spriteDrawXor(drawList[i])
         fin
     next
+    memcpy(undrawptr, @drawList, 16*2)
 end
 export def spriteAdd(i, sprtptr)#1
     var sprtprev
     
     i = i & 15
-    sprtprev = spriteList[i]
-    spriteList[i] = sprtptr
+    sprtprev = drawList[i]
+    drawList[i] = sprtptr
     return sprtprev
 end
 export def spriteDel(i)#1
     var sprtprev
     
     i = i & 15
-    sprtprev = spriteList[i]
-    spriteList[i] = 0
+    sprtprev = drawList[i]
+    drawList[i] = 0
     return sprtprev
 end
 export def spriteDrawBuf(page)#0
     drawpage = page & 1
 end
+//
+// Assembly fixups
+//
+_scanMaskA:1    = @hgrColor
+_scanMaskB:1    = @hgrPlot
+_scanMaskC:1    = @hgrColor
+_scanMaskD:1    = @hgrPlot
 done
