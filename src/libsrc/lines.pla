@@ -2,9 +2,10 @@ include "inc/cmdsys.plh"
 predef nopLin(a, b, c)#0
 predef nopPix(a, b)#0
 
-var hspan = @nopLin
-var vspan = @nopLin
-var plot  = @nopPix
+byte jmpplot = $4C // Sneaky!
+var plot     = @nopPix
+var hspan    = @nopLin
+var vspan    = @nopLin
 var err, shorterr, shortlen, longerr, longlen
 
 //def nopLin(a, b, c)#0
@@ -82,7 +83,7 @@ asm     _majorlineA
         STA     ESTKH+5,X   ; MAJORSTARTH
 end
 asm     _majorlineB
-        LDA     $1001       ; ERRH
+        LDY     $1001       ; ERRH
         BMI     +
 end
 asm     _majorlineC
@@ -90,7 +91,7 @@ asm     _majorlineC
         CLC
         ADC     $2000       ; SHORTERRL
         STA     $1000       ; ERRL
-        LDA     $1001       ; ERRH
+        TYA                 ; ERRH
         ADC     $2001       ; SHORTERRH
         STA     $1001       ; ERRH
         LDA     ESTKL+4,X   ; MAJORL
@@ -108,7 +109,7 @@ asm     _majorlineD
         CLC
         ADC     $4000       ; LONGERRL
         STA     $1000       ; ERRL
-        LDA     $1001       ; ERRH
+        TYA                 ; ERRH
         ADC     $4001       ; LONGERRL
         STA     $1001       ; ERRH
         LDA     ESTKL+4,X   ; MAJORL
@@ -143,9 +144,11 @@ asm     _majorlineE
         LDA     ESTKH+5,X   ; MINORH
         STA     ESTKH+0,X
         JSR     $B000
-        INX
-        INX
-        INX
+        TXA
+        CLC
+        ADC     #$06
+        TAX
+        RTS
 end
 asm nopLin(a, b, c)#0
         INX
@@ -155,6 +158,179 @@ asm nopPix(a, b)#0
         INX
         RTS
 end
+//def hline(x1, x2, dx2, y, dy2, sy)#0
+//    var dyx2, x
+//
+//    err  = dy2 - dx2 / 2
+//    dyx2 = dy2 - dx2
+//    for x = x1 to x2
+//        plot(x, y)#0
+//        if err >= 0
+//            y   = y + sy
+//            err = err + dyx2
+//        else
+//            err = err + dy2
+//        fin
+//    next
+//end
+asm hline(x1, x2, dx2, y, dy2, sy)#0
+        LDA     ESTKH+3,X   ; DX2H
+        LSR
+        STA     TMPH
+        LDA     ESTKL+3,X   ; DX2L
+        ROR
+        STA     TMPL
+        LDA     ESTKL+1,X   ; DY2L
+        SEC
+        SBC     TMPL
+        STA     $1000       ; ERRL
+        LDA     ESTKH+1,X   ; DY2H
+        SBC     TMPH
+        STA     $1001       ; ERRH
+        LDA     ESTKL+1,X   ; DY2L
+        SEC
+        SBC     ESTKL+3,X   ; DX2L
+        STA     ESTKL+3,X   ; DYX2L
+        LDA     ESTKH+1,X   ; DY2H
+        SBC     ESTKH+3,X   ; DX2H
+        STA     ESTKH+3,X   ; DYX2H
+-       DEX
+        DEX
+        LDA     ESTKL+7,X   ; XL
+        STA     ESTKL+1,X
+        LDA     ESTKH+7,X   ; XH
+        STA     ESTKH+1,X
+        LDA     ESTKL+4,X   ; YL
+        STA     ESTKL+0,X
+        LDA     ESTKH+4,X   ; YH
+        STA     ESTKH+0,X
+end
+asm     _hlineA
+        JSR     $2000       ; PLOT
+        LDA     $1001       ; ERRH
+        BMI     +
+        LDA     ESTKL+2,X   ; YL
+        CLC
+        ADC     ESTKL+0,X   ; SYL
+        STA     ESTKL+2,X
+        LDA     ESTKH+2,X   ; YH
+        ADC     ESTKH+0,X   ; SYH
+        STA     ESTKH+2,X
+        LDA     ESTKL+3,X   ; DYX2L
+        LDY     ESTKH+3,X   ; DYX2H
+        BEQ     ++
+        BNE     ++
+end
+asm     _hlineB
++       LDA     ESTKL+1,X   ; DY2L
+        LDY     ESTKH+1,X   ; DY2H
+++      CLC
+        ADC     $1000       ; ERRL
+        STA     $1000       ; ERRL
+        TYA
+        ADC     $1001       ; ERRH
+        STA     $1001       ; ERRH
+        LDA     ESTKL+5,X   ; X1L
+        CMP     ESTKL+4,X   ; X2L
+        LDA     ESTKH+5,X
+        SBC     ESTKH+4,X
+        BCS     +
+        INC     ESTKL+5,X   ; XL
+        BNE     -
+        INC     ESTKH+5,X   ; XH
+        BCC     -
++       TXA
+        ADC     #$05
+        TAX
+        RTS
+end
+//def vline(y1, y2, dy2, x, dx2, sx)#0
+//    var dxy2, y
+//    
+//    err  = dx2 - dy2 / 2
+//    dxy2 = dx2 - dy2
+//    for y = y1 to y2
+//        plot(x, y)#0
+//        if err >= 0
+//            x   = x + sx
+//            err = err + dxy2
+//        else
+//            err = err + dx2
+//        fin
+//    next
+//end
+asm vline(y1, y2, dy2, x, dx2, sx)#0
+        LDA     ESTKH+3,X   ; DY2H
+        LSR
+        STA     TMPH
+        LDA     ESTKL+3,X   ; DY2L
+        ROR
+        STA     TMPL
+        LDA     ESTKL+1,X   ; DX2L
+        SEC
+        SBC     TMPL
+        STA     $1000       ; ERRL
+        LDA     ESTKH+1,X   ; DX2H
+        SBC     TMPH
+        STA     $1001       ; ERRH
+        LDA     ESTKL+1,X   ; DX2L
+        SEC
+        SBC     ESTKL+3,X   ; DX2L
+        STA     ESTKL+3,X   ; DXY2L
+        LDA     ESTKH+1,X   ; DX2H
+        SBC     ESTKH+3,X   ; DY2H
+        STA     ESTKH+3,X   ; DXY2H
+-       DEX
+        DEX
+        LDA     ESTKL+4,X   ; XL
+        STA     ESTKL+1,X
+        LDA     ESTKH+4,X   ; XH
+        STA     ESTKH+1,X
+        LDA     ESTKL+7,X   ; YL
+        STA     ESTKL+0,X
+        LDA     ESTKH+7,X   ; YH
+        STA     ESTKH+0,X
+end
+asm     _vlineA
+        JSR     $2000       ; PLOT
+        LDA     $1001       ; ERRH
+        BMI     +
+        LDA     ESTKL+2,X   ; XL
+        CLC
+        ADC     ESTKL+0,X   ; SXL
+        STA     ESTKL+2,X
+        LDA     ESTKH+2,X   ; XH
+        ADC     ESTKH+0,X   ; SXH
+        STA     ESTKH+2,X
+        LDA     ESTKL+3,X   ; DXY2L
+        LDY     ESTKH+3,X   ; DXY2H
+        BEQ     ++
+        BNE     ++
+end
+asm     _vlineB
++       LDA     ESTKL+1,X   ; DX2L
+        LDY     ESTKH+1,X   ; DX2H
+++      CLC
+        ADC     $1000       ; ERRL
+        STA     $1000       ; ERRL
+        TYA
+        ADC     $1001       ; ERRH
+        STA     $1001       ; ERRH
+        LDA     ESTKL+5,X   ; Y1L
+        CMP     ESTKL+4,X   ; Y2L
+        LDA     ESTKH+5,X
+        SBC     ESTKH+4,X
+        BCS     +
+        INC     ESTKL+5,X   ; YL
+        BNE     -
+        INC     ESTKH+5,X   ; YH
+        BCC     -
++       TXA
+        ADC     #$05
+        TAX
+        RTS
+end
+
 export def setlinespans(h, v)#0
     hspan = h
     vspan = v
@@ -241,17 +417,17 @@ export def setlineplot(p)#0
     plot = p
 end
 export def line(x1, y1, x2, y2)#0
-    var sx, sy, dx2, dy2, x, y
+    var sx, sy, dx2, dy2
     
     sx = 1
     sy = 1
     dx2 = (x2 - x1) * 2
     if dx2 < 0
-        sx  = -1; dx2 = -dx2
+        sx = -1; dx2 = -dx2
     fin
     dy2 = (y2 - y1) * 2
     if dy2 < 0
-        sy  = -1; dy2 = -dy2
+        sy = -1; dy2 = -dy2
     fin
     if dx2 >= dy2
         if sx < 0
@@ -259,30 +435,14 @@ export def line(x1, y1, x2, y2)#0
             y1, y2 = y2, y1
             sy = -sy
         fin
-        err = dy2 - dx2 / 2
-        for x = x1 to x2
-            plot(x, y1)#0
-            if err >= 0
-                err = err - dx2
-                y1  = y1 + sy
-            fin
-            err = err + dy2
-        next
+        hline(x1, x2, dx2, y1, dy2, sy)
     else
         if sy < 0
             y1, y2 = y2, y1
             x1, x2 = x2, x1
             sx = -sx
         fin
-        err = dx2 - dy2 / 2
-        for y = y1 to y2
-            plot(x1, y)#0
-            if err >= 0
-                err = err - dy2
-                x1  = x1 + sx
-            fin
-            err = err + dx2
-        next
+        vline(y1, y2, dy2, x1, dx2, sx)
     fin
  end
 
@@ -303,18 +463,32 @@ _majorlineB:1  = @err.1
 _majorlineC:1  = @err
 _majorlineC:5  = @shorterr
 _majorlineC:8  = @err
-_majorlineC:11 = @err.1
-_majorlineC:14 = @shorterr.1
-_majorlineC:17 = @err.1
-_majorlineC:23 = @shortlen
-_majorlineC:30 = @shortlen.1
+_majorlineC:12 = @shorterr.1
+_majorlineC:15 = @err.1
+_majorlineC:21 = @shortlen
+_majorlineC:28 = @shortlen.1
 _majorlineD:1  = @err
 _majorlineD:5  = @longerr
 _majorlineD:8  = @err
-_majorlineD:11 = @err.1
-_majorlineD:14 = @longerr.1
-_majorlineD:17 = @err.1
-_majorlineD:23 = @longlen
-_majorlineD:30 = @longlen.1
+_majorlineD:12 = @longerr.1
+_majorlineD:15 = @err.1
+_majorlineD:21 = @longlen
+_majorlineD:28 = @longlen.1
 _majorlineE:1  = @_majorlineA
+hline:16       = @err
+hline:23       = @err.1
+_hlineA:1      = @jmpplot
+_hlineA:4      = @err.1
+_hlineB:6      = @err
+_hlineB:9      = @err
+_hlineB:13     = @err.1
+_hlineB:16     = @err.1
+vline:16       = @err
+vline:23       = @err.1
+_vlineA:1      = @jmpplot
+_vlineA:4      = @err.1
+_vlineB:6      = @err
+_vlineB:9      = @err
+_vlineB:13     = @err.1
+_vlineB:16     = @err.1
 done

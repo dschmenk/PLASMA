@@ -58,8 +58,8 @@ TFTPD      = rel/TFTPD\#FE1000
 HGRLIB     = rel/apple/HGRLIB\#FE1000
 GRLIB      = rel/apple/GRLIB\#FE1000
 DGRLIB     = rel/apple/DGRLIB\#FE1000
-SPRITE     = rel/apple/SPRITE\#FE1000
-LINES      = rel/apple/LINES\#FE1000
+HGRSPRITE  = rel/apple/HGRSPRITE\#FE1000
+LINES      = rel/LINES\#FE1000
 GRAFIX     = rel/apple/GRAFIX\#FE1000
 GFXDEMO    = rel/apple/GFXDEMO\#FE1000
 JOYBUZZ    = rel/apple/JOYBUZZ\#FE1000
@@ -100,7 +100,7 @@ TXTTYPE	= .TXT
 #SYSTYPE	= \#FF2000
 #TXTTYPE	= \#040000
 
-apple: $(PLVMZP_APL) $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVMJIT) $(PLVM802) $(PLVM03) $(CMD) $(CMDJIT) $(JIT) $(JIT16) $(JITUNE) $(SOSCMD) $(PLASMAPLASM) $(CODEOPT) $(ARGS) $(MEMMGR) $(MEMTEST) $(FIBER) $(FIBERTEST) $(LONGJMP) $(ED) $(MON) $(COPY) $(DEL) $(REN) $(CAT) $(NEWDIR) $(TYPE) $(SOS) $(ROD) $(SIEVE) $(PRIMEGAP) $(MOUSE) $(UTHERNET2) $(UTHERNET) $(ETHERIP) $(INET) $(DHCP) $(HTTPD) $(TFTPD) $(ROGUE) $(ROGUEMAP) $(ROGUECOMBAT) $(GRAFIX) $(GFXDEMO) $(LINES) $(SPRITE) $(HGRLIB) $(HGRTEST) $(GRLIB) $(DGRLIB) $(GRTEST) $(DGRTEST) $(HGRTEST) $(FILEIO_APL) $(CONIO_APL) $(JOYBUZZ) $(PORTIO) $(SPIPORT) $(SDFAT) $(FATCAT) $(FATGET) $(FATPUT) $(FATWDSK) $(FATRDSK) $(INT32) $(INT32TEST) $(SANE) $(FPSTR) $(FPU) $(SANITY) $(LZ4) $(LZ4CAT) $(RPNCALC) $(SNDSEQ) $(PLAYSEQ)
+apple: $(PLVMZP_APL) $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVMJIT) $(PLVM802) $(PLVM03) $(CMD) $(CMDJIT) $(JIT) $(JIT16) $(JITUNE) $(SOSCMD) $(PLASMAPLASM) $(CODEOPT) $(ARGS) $(MEMMGR) $(MEMTEST) $(FIBER) $(FIBERTEST) $(LONGJMP) $(ED) $(MON) $(COPY) $(DEL) $(REN) $(CAT) $(NEWDIR) $(TYPE) $(SOS) $(ROD) $(SIEVE) $(PRIMEGAP) $(MOUSE) $(UTHERNET2) $(UTHERNET) $(ETHERIP) $(INET) $(DHCP) $(HTTPD) $(TFTPD) $(ROGUE) $(ROGUEMAP) $(ROGUECOMBAT) $(GRAFIX) $(GFXDEMO) $(LINES) $(HGRSPRITE) $(HGRLIB) $(HGRTEST) $(GRLIB) $(DGRLIB) $(GRTEST) $(DGRTEST) $(HGRTEST) $(FILEIO_APL) $(CONIO_APL) $(JOYBUZZ) $(PORTIO) $(SPIPORT) $(SDFAT) $(FATCAT) $(FATGET) $(FATPUT) $(FATWDSK) $(FATRDSK) $(INT32) $(INT32TEST) $(SANE) $(FPSTR) $(FPU) $(SANITY) $(LZ4) $(LZ4CAT) $(RPNCALC) $(SNDSEQ) $(PLAYSEQ)
 
 	-rm vmsrc/plvmzp.inc
 
@@ -417,9 +417,9 @@ $(DGRLIB): libsrc/apple/dgrlib.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AMOW < libsrc/apple/dgrlib.pla > libsrc/apple/dgrlib.a
 	acme --setpc 4094 -o $(DGRLIB) libsrc/apple/dgrlib.a
 
-$(SPRITE): libsrc/apple/sprite.pla $(PLVM02) $(PLASM)
-	./$(PLASM) -AMOW < libsrc/apple/sprite.pla > libsrc/apple/sprite.a
-	acme --setpc 4094 -o $(SPRITE) libsrc/apple/sprite.a
+$(HGRSPRITE): libsrc/apple/hgrsprite.pla $(PLVM02) $(PLASM)
+	./$(PLASM) -AMOW < libsrc/apple/hgrsprite.pla > libsrc/apple/hgrsprite.a
+	acme --setpc 4094 -o $(HGRSPRITE) libsrc/apple/hgrsprite.a
 
 $(HGRTEST): samplesrc/hgrtest.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AMOW < samplesrc/hgrtest.pla > samplesrc/hgrtest.a
