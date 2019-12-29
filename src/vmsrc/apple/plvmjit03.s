@@ -81,9 +81,13 @@ SEGSTART        =       $2000
         CMP     #$B8
         BNE     -
         LDA     #$00            ; INIT JIT, FRAME & POOL POINTERS
+        STA     JITCOMP
+        STA     JITCOMP+1
+        STA     JITCODE
         STA     PPL
         STA     IFPL
-        LDA     #$A0            ; TOP OF RAM FOR FRAME POINER
+        LDA     #$90            ; RESERVE 4K FOR JITCODE
+        STA     JITCODE+1
         STA     PPH
         STA     IFPH
         LDX     #$FF            ; INIT STACK POINTER
@@ -1426,7 +1430,7 @@ NATV    TYA                     ; FLATTEN IP
 +       INC     IPH
         JMP     (IP)
 SOSCMD  =       *
-        !SOURCE "vmsrc/apple/sossys.a"
+        !SOURCE "vmsrc/apple/sossysjit.a"
 
 }
 SEGEND  =       *

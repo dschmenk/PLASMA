@@ -7,7 +7,9 @@ PLVM02	   = rel/apple/PLASMA.SYSTEM\#FF2000
 PLVMJIT    = rel/apple/PLVM.128\#FF2000
 PLVM802	   = rel/apple/PLVM16\#FF2000
 PLVM03	   = rel/apple/SOS.INTERP\#050000
+PLVMJIT03  = rel/apple/SOS.INTERPJIT\#050000
 SOSCMD     = rel/apple/SOS.CMD\#FE1000
+SOSCMDJIT  = rel/apple/SOS.CMDJIT\#FE1000
 CMD        = rel/apple/CMD\#061000
 CMDJIT     = rel/apple/CMD128\#061000
 PLVMZP_C64 = vmsrc/c64/plvmzp.inc
@@ -100,7 +102,7 @@ TXTTYPE	= .TXT
 #SYSTYPE	= \#FF2000
 #TXTTYPE	= \#040000
 
-apple: $(PLVMZP_APL) $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVMJIT) $(PLVM802) $(PLVM03) $(CMD) $(CMDJIT) $(JIT) $(JIT16) $(JITUNE) $(SOSCMD) $(PLASMAPLASM) $(CODEOPT) $(ARGS) $(MEMMGR) $(MEMTEST) $(FIBER) $(FIBERTEST) $(LONGJMP) $(ED) $(MON) $(COPY) $(DEL) $(REN) $(CAT) $(NEWDIR) $(TYPE) $(SOS) $(ROD) $(SIEVE) $(PRIMEGAP) $(MOUSE) $(UTHERNET2) $(UTHERNET) $(ETHERIP) $(INET) $(DHCP) $(HTTPD) $(TFTPD) $(ROGUE) $(ROGUEMAP) $(ROGUECOMBAT) $(GRAFIX) $(GFXDEMO) $(LINES) $(HGRSPRITE) $(HGRLIB) $(HGRTEST) $(GRLIB) $(DGRLIB) $(GRTEST) $(DGRTEST) $(HGRTEST) $(FILEIO_APL) $(CONIO_APL) $(JOYBUZZ) $(PORTIO) $(SPIPORT) $(SDFAT) $(FATCAT) $(FATGET) $(FATPUT) $(FATWDSK) $(FATRDSK) $(INT32) $(INT32TEST) $(SANE) $(FPSTR) $(FPU) $(SANITY) $(LZ4) $(LZ4CAT) $(RPNCALC) $(SNDSEQ) $(PLAYSEQ)
+apple: $(PLVMZP_APL) $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVMJIT) $(PLVM802) $(PLVM03) $(PLVMJIT03) $(CMD) $(CMDJIT) $(JIT) $(JIT17) $(JITUNE) $(SOSCMD) $(SOSCMDJIT) $(PLASMAPLASM) $(CODEOPT) $(ARGS) $(MEMMGR) $(MEMTEST) $(FIBER) $(FIBERTEST) $(LONGJMP) $(ED) $(MON) $(COPY) $(DEL) $(REN) $(CAT) $(NEWDIR) $(TYPE) $(SOS) $(ROD) $(SIEVE) $(PRIMEGAP) $(MOUSE) $(UTHERNET2) $(UTHERNET) $(ETHERIP) $(INET) $(DHCP) $(HTTPD) $(TFTPD) $(ROGUE) $(ROGUEMAP) $(ROGUECOMBAT) $(GRAFIX) $(GFXDEMO) $(LINES) $(HGRSPRITE) $(HGRLIB) $(HGRTEST) $(GRLIB) $(DGRLIB) $(GRTEST) $(DGRTEST) $(HGRTEST) $(FILEIO_APL) $(CONIO_APL) $(JOYBUZZ) $(PORTIO) $(SPIPORT) $(SDFAT) $(FATCAT) $(FATGET) $(FATPUT) $(FATWDSK) $(FATRDSK) $(INT32) $(INT32TEST) $(SANE) $(FPSTR) $(FPU) $(SANITY) $(LZ4) $(LZ4CAT) $(RPNCALC) $(SNDSEQ) $(PLAYSEQ)
 
 	-rm vmsrc/plvmzp.inc
 
@@ -180,9 +182,13 @@ $(CMDJIT): vmsrc/apple/cmdjit.pla vmsrc/apple/cmdjitstub.s $(PLVMJIT) $(PLASM)
 	./$(PLASM) -AOW < vmsrc/apple/cmdjit.pla > vmsrc/apple/cmdjit.a
 	acme --setpc 8192 -o $(CMDJIT) vmsrc/apple/cmdjitstub.s
 
-$(SOSCMD): vmsrc/apple/soscmd.pla libsrc/jitcore.pla $(PLVM03) $(PLASM)
+$(SOSCMD): vmsrc/apple/soscmd.pla $(PLVM03) $(PLASM)
 	./$(PLASM) -AMOW < vmsrc/apple/soscmd.pla > vmsrc/apple/soscmd.a
 	acme --setpc 4094 -o $(SOSCMD) vmsrc/apple/soscmd.a
+
+$(SOSCMDJIT): vmsrc/apple/soscmdjit.pla libsrc/jitcore.pla $(PLVMJIT03) $(PLASM)
+	./$(PLASM) -AMOW < vmsrc/apple/soscmdjit.pla > vmsrc/apple/soscmdjit.a
+	acme --setpc 4094 -o $(SOSCMDJIT) vmsrc/apple/soscmdjit.a
 
 $(PLVM02): vmsrc/apple/plvm02.s
 	acme -o $(PLVM02) -l vmsrc/apple/plvm02.sym vmsrc/apple/plvm02.s
@@ -199,6 +205,11 @@ vmsrc/apple/sossys.a: vmsrc/apple/sossys.pla $(PLASM)
 $(PLVM03): vmsrc/apple/plvm03.s vmsrc/apple/sossys.a
 	acme -o $(PLVM03) -l vmsrc/apple/plvm03.sym vmsrc/apple/plvm03.s
 
+vmsrc/apple/sossysjit.a: vmsrc/apple/sossysjit.pla $(PLASM)
+	./$(PLASM) -AOW < vmsrc/apple/sossysjit.pla > vmsrc/apple/sossysjit.a
+
+$(PLVMJIT03): vmsrc/apple/plvmjit03.s vmsrc/apple/sossysjit.a
+	acme -o $(PLVMJIT03) -l vmsrc/apple/plvmjit03.sym vmsrc/apple/plvmjit03.s
 #
 # Sample code
 #
