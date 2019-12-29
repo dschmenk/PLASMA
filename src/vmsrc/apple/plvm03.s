@@ -134,7 +134,6 @@ JITCOMP !WORD   0               ; $A0F2
 JITCODE !WORD   0               ; $A0F4
 SENTRY  !WORD   INTERP          ; $A0F6
 XENTRY  !WORD   XINTERP         ; $A0F8
-JENTRY  !WORD   JITINTRP        ; $A0FA
 ;*
 ;* OPCODE TABLE
 ;*
@@ -156,11 +155,11 @@ OPTBL   !WORD   ZERO,CN,CN,CN,CN,CN,CN,CN                               ; 00 02 
 ;* SYSTEM INTERPRETER ENTRYPOINT
 ;*
 INTERP  PLA
-	CLC
-	ADC	#$01
+        CLC
+        ADC	    #$01
         STA     IPL
         PLA
-        ADC	#$00
+        ADC	    #$00
         STA     IPH
         LDY     #$00
         STY     IPX
@@ -183,49 +182,6 @@ XINTERP PLA
         STA     IPL
         DEY
         JMP     FETCHOP
-;*
-;* JIT PROFILING ENTRY INTO INTERPRETER
-;*
-JITINTRP PLA
-        STA     TMPL
-        PLA
-        STA     TMPH
-        LDY     #$04
-        LDA     (TMP),Y         ; DEC JIT COUNT
-        SEC
-        SBC     #$01
-        STA     (TMP),Y
-        BNE     -               ; INTERP BYTECODE
-        LDA     JITCOMP         ; CALL JIT COMPILER
-        STA     SRCL
-        LDA     JITCOMP+1
-        STA     SRCH
-        INY                     ; LDY     #$05
-        LDA     (SRC),Y
-        STA     IPX
-        DEY
-        LDA     (SRC),Y
-        STA     IPH
-        DEY
-        LDA     (SRC),Y
-        STA     IPL
-        DEX                     ; ADD PARAMETER TO DEF ENTRY
-        LDA     TMPL
-        SEC
-        SBC     #$02            ; POINT TO DEF ENTRY
-        PHA                     ; AND SAVE IT FOR LATER
-        STA     ESTKL,X
-        LDA     TMPH
-        SBC     #$00
-        PHA
-        STA     ESTKH,X
-        LDY     #$00
-        JSR     FETCHOP         ; CALL JIT COMPILER
-        PLA
-        STA     TMPH
-        PLA
-        STA     TMPL
-        JMP     (TMP)           ; RE-CALL ORIGINAL DEF ENTRY
 ;*
 ;* INTERNAL DIVIDE ALGORITHM
 ;*
