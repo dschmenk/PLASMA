@@ -1,4 +1,4 @@
-# PLASMA Version 2.0 Developer Preview 1z
+# PLASMA Version 2.0 Developer Preview 2
 
 Welcome to PLASMA: the Grand Unifying Platform for the Apple 1, ][, and ///.
 
@@ -102,15 +102,31 @@ There is a [YouTube playlist](https://www.youtube.com/playlist?list=PLlPKgUMQbJ7
 
 - The documentation is sparse and incomplete. Yep, could use your help...
 
-# Changed in PLASMA for 2.0 DP 1z
+# Changes in PLASMA for 2.0 DP 2
+
+1. Many file manipulaition utilities (COPY, REName, NEWDIRectory, DELete, CATalog, TYPE)
+
+2. New and updated graphics libraries for lo-res. double lo-res and hi-res graphics
+
+3. Apple /// improvements to SOS.INTERP launching with SOS utility
+
+3. Editor improvements
+
+4. A couple small compiler optimizations
+
+5. Needed to break out TCP/IP modules into seperate floppy image
+
+6. Library changes require full install
+
+# Changes in PLASMA for 2.0 DP 1z
 
 1. Many fixes for the value zero - especially in 65802/65816 divide routine
 
-# Changed in PLASMA for 2.0 DP 1 E+C
+# Changes in PLASMA for 2.0 DP 1 E+C
 
 1. Greatly improved code editor and additional compiler stats
 
-# Changed in PLASMA for 2.0 DP 1a
+# Changes in PLASMA for 2.0 DP 1a
 
 1. Fix interaction with JIT compiler and module load/unload
 
