@@ -1,5 +1,5 @@
 # 12/28/2019 PLASMA 2.0 Developer Preview 2 Available!
-[Download and read the Release Notes](https://github.com/dschmenk/PLASMA/blob/master/doc/Version%202.0.md)
+[Download and read the Release Notes](https://github.com/dschmenk/PLASMA/releases)
 
 [Change List](https://github.com/dschmenk/PLASMA/blob/master/doc/Version%202.0.md#changes-in-plasma-for-20-dp-2)
 
