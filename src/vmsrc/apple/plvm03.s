@@ -80,7 +80,7 @@ SEGSTART        =       $2000
         LDA     DSTH
         CMP     #$B8
         BNE     -
-        LDA     #$00            ; INIT JIT, FRAME & POOL POINTERS
+        LDA     #$00            ; INIT FRAME & POOL POINTERS
         STA     PPL
         STA     IFPL
         LDA     #$A0            ; TOP OF RAM FOR FRAME POINER
