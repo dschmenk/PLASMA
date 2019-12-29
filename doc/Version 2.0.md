@@ -106,17 +106,21 @@ There is a [YouTube playlist](https://www.youtube.com/playlist?list=PLlPKgUMQbJ7
 
 1. Many file manipulaition utilities (COPY, REName, NEWDIRectory, DELete, CATalog, TYPE)
 
-2. New and updated graphics libraries for lo-res. double lo-res and hi-res graphics
+2. New and updated libraries for lo-res. double lo-res and hi-res graphics w/ sprites
 
-3. Apple /// improvements to SOS.INTERP launching with SOS utility
+3. 32 bit integer library for those times when 16 bits just isn't enough
 
-3. Editor improvements
+4. Apple /// improvements to other SOS.INTERP launching with SOS utility
 
-4. A couple small compiler optimizations
+5. Apple /// JIT VM for speed and non JIT version to free up global memory
 
-5. Needed to break out TCP/IP modules into seperate floppy image
+6. Editor improvements
 
-6. Library changes require full install
+7. A couple small compiler optimizations
+
+8. Needed to break out TCP/IP modules into seperate floppy image
+
+9. Library changes require full install
 
 # Changes in PLASMA for 2.0 DP 1z
 
