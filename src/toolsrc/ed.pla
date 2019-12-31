@@ -441,25 +441,35 @@ def writetxt(filename)#0
     word i
     byte refnum, txtbuf[MAXLNLEN+2]
 
-    fileio:destroy(filename)
-    fileio:create(filename, $04, $00) // full access, TXT file
-    refnum = fileio:open(filename)
-    if refnum == 0
-        return
-    fin
     //
     // Remove blank lines at end of text.
     //
     while numlines > 1 and txtlinbuf=>[numlines - 1] == @nullstr; numlines--; loop
     //
-    // Write all the text line to the file.
+    // Delete old file and re-create
+    //
+    fileio:destroy(filename)
+    fileio:create(filename, $04, $00) // full access, TXT file
+    refnum = fileio:open(filename)
+    if refnum == 0
+        puts("\nError $"); puth(perr); puts(" opening: "); puts(filename); putln
+        return
+    fin
+    //
+    // Write all the text lines to the file.
     //
     for i = 0 to numlines - 1
         lncpy(@txtbuf, txtlinbuf=>[i])
-        fileio:write(refnum, @txtbuf + 1, txtbuf)
+        if fileio:write(refnum, @txtbuf + 1, txtbuf) <> txtbuf
+            puts("\nError $"); puth(perr); puts(" writing: "); puts(filename); putln
+            fileio:close(refnum)
+            return
+        fin
         if !(i & $0F); putc('.'); fin
     next
-    fileio:close(refnum)
+    if fileio:close(refnum) <> FILE_ERR_OK
+        puts("\nError $"); puth(perr); puts(" closing: "); puts(filename)
+    fin
     putln
 end
 //
