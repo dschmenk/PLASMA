@@ -1,14 +1,31 @@
 include "inc/cmdsys.plh"
+include "inc/longjmp.plh"
 include "inc/args.plh"
 include "inc/fileio.plh"
+include "inc/matchfiles.plh"
 
 const MAXBUFSIZE = 16384
-var arg, srcref, dstref, copybuff, copysize, copyxfer
-char[64] srcfilename, dstfilename
+var arg, recurse, exit, srcfilelist, srcfileptr, srccnt
+char[64] dstpath
 res[t_fileinfo] srcfileinfo, dstfileinfo
 //
-// Handy string functions
+// Copy string with upper case conversion
 //
+def struprcpy(dst, src)#0
+    byte i, chr
+
+    if ^src
+        for i = 1 to ^src
+            chr = src->[i]
+            if chr >= 'a' and chr <= 'z'
+                dst->[i] =  chr - 'a' + 'A'
+            else
+                dst->[i] = chr
+            fin
+        next
+    fin
+    ^dst = ^src
+end
 def filefrompath(filestr, pathstr)#0
     byte i
     
@@ -21,126 +38,184 @@ def filefrompath(filestr, pathstr)#0
     memcpy(filestr + 1, pathstr + 1 + i, ^filestr)
 end
 //
-// Check destination filename
+// Check destination path
 //
-def checkdst
-    char[17] basefile
+def chkdstpath(dstfile)
     //
     // Check if destination exists
     //
-    if fileio:getfileinfo(@dstfilename, @dstfileinfo) == FILE_ERR_OK
+    if fileio:getfileinfo(dstfile, @dstfileinfo) == FILE_ERR_OK
         //
         // Check if copying into a directory
         //
         if dstfileinfo.file_type == $0F
-            if dstfilename[dstfilename] <> '/'
+            if dstfile->[^dstfile] <> '/'
                 //
                 // Add path seperator
                 //
-                dstfilename++
-                dstfilename[dstfilename] = '/'
+                ^dstfile++
+                dstfile->[^dstfile] = '/'
             fin
-            filefrompath(@basefile, @srcfilename)
-            strcat(@dstfilename, @basefile)
-            if fileio:getfileinfo(@dstfilename, @dstfileinfo) == FILE_ERR_OK
-                //
-                // Check if *that* is a directory
-                //
-                if dstfileinfo.file_type == $0F
-                    puts("Destination is a directory filename\n")
-                    return FALSE
+            return TRUE
+        fin
+    fin
+    return FALSE
+end
+def copyfiles(srcfile, dstfile)#0
+    var entrylist, entry, entrycnt, srcref, dstref, copybuff, copyrel, copysize, copyxfer
+    char[64] srcpath
+    char[64] srcfilepath
+    char[64] dstfilepath
+    char[16] wildname
+    
+    copysize = MAXBUFSIZE
+    while isult(heapavail, copysize + 512)
+        copysize = copysize / 2
+    loop
+    copyrel = heapalloc(copysize)
+    if copyrel
+        //
+        // Round buffer to page boundary for faster transfers
+        //
+        copybuff = (copyrel + $FF) & $FF00
+        //
+        // Check if copying a directory
+        //
+        strcpy(@srcpath, srcfile)
+        wildname = 0
+        if fileio:getfileinfo(@srcpath, @srcfileinfo) <> FILE_ERR_OK or srcfileinfo.file_type <> $0F
+            filefrompath(@wildname, @srcpath)
+            srcpath = srcpath - wildname
+        fin
+        entrylist, entrycnt = matchList(@srcpath, @wildname)
+        if not entrylist
+            //
+            // Unable to open source
+            //
+            puts("Unable to open: "); puts(@srcpath); putln
+            throw(exit, TRUE)
+        fin
+        entry = entrylist
+        while entrycnt
+            strcpy(@srcfilepath, @srcpath)
+            strcat(@srcfilepath, entry)
+            strcpy(@dstfilepath, dstfile)
+            if chkdstpath(@dstfilepath)
+                strcat(@dstfilepath, entry)
+            fin
+            puts(@srcfilepath); puts(" ==> "); puts(@dstfilepath); putln
+            //
+            // Check if source is a directory
+            //
+            if entry->entry_type == $0F
+                fileio:create(@dstfilepath, $0F, $0000)
+                if not chkdstpath(@dstfilepath)
+                    puts("Unable to create: "); puts(@dstfilepath); putln
+                    throw(exit, TRUE)
+                fin
+                if recurse
+                    copyfiles(@srcfilepath, @dstfilepath)
                 fin
             else
-                return TRUE
-            fin
-        fin
-        //
-        // Remove existing file
-        //
-        fileio:destroy(@dstfilename)
-    fin
-    return TRUE
-end
-//
-// Check arguments and file types
-//
-arg = argNext(argFirst)
-if ^arg
-    strcpy(@srcfilename, arg)
-    fileio:iobufalloc(2) // Reserve two I/O buffers
-    if fileio:getfileinfo(@srcfilename, @srcfileinfo) == FILE_ERR_OK
-        //
-        // Check that source isn't a directory - can't handle that yet
-        //
-        if srcfileinfo.file_type == $0F
-            puts("Can't copy directories (yet)\n")
-            return
-        fin
-    else
-        //
-        // File not found
-        //
-        puts("File not found: "); puts(@srcfilename); putln
-        return
-    fin
-    srcref = fileio:open(@srcfilename)
-    if srcref
-        arg = argNext(arg)
-        if ^arg
-            strcpy(@dstfilename, arg)
-            if checkdst()
+                //
+                // Check if destination exists
+                //
+                if fileio:getfileinfo(@dstfilepath, @dstfileinfo) == FILE_ERR_OK
+                    fileio:destroy(@dstfilepath)
+                fin
                 //
                 // Create the destination file and open for writing
                 //
-                if fileio:create(@dstfilename, srcfileinfo.file_type, srcfileinfo:aux_type) == FILE_ERR_OK
-                    dstref = fileio:open(@dstfilename)
+                if fileio:create(@dstfilepath, entry->entry_type, entry=>entry_aux) == FILE_ERR_OK
+                    srcref = fileio:open(@srcfilepath)
+                    dstref = fileio:open(@dstfilepath)
                     if dstref
                         //
                         // Let the copying begin
                         //
-                        copysize = MAXBUFSIZE
-                        while isult(heapavail, copysize + 512)
-                            copysize = copysize / 2
-                        loop
-                        copybuff = heapalloc(copysize)
-                        if copybuff
-                            //
-                            // Round buffer to page boundary for faster transfers
-                            //
-                            copybuff = (copybuff + $FF) & $FF00
+                        copyxfer = fileio:read(srcref, copybuff, copysize)
+                        while copyxfer
+                            if fileio:write(dstref, copybuff, copyxfer) <> copyxfer
+                                puts("Error writing: "); puts(@dstfilepath); putln
+                                throw(exit, TRUE)
+                            fin
                             copyxfer = fileio:read(srcref, copybuff, copysize)
-                            while copyxfer
-                                if fileio:write(dstref, copybuff, copyxfer) <> copyxfer
-                                    puts("Error writing: "); puts(@dstfilename); putln
-                                    break
-                                fin
-                                copyxfer = fileio:read(srcref, copybuff, copysize)
-                            loop
-                        else
-                            puts("No memory available!\n")
-                        fin
+                        loop
+                        fileio:close(dstref)
                     else
-                        puts("Unable to open: "); puts(@dstfilename); putln
+                        puts("Unable to open: "); puts(@dstfilepath); putln
+                        throw(exit, TRUE)
                     fin
+                    fileio:close(srcref)
                 else
-                    puts("Unable to create: "); puts(@dstfilename); putln
+                    puts("Unable to create: "); puts(@dstfilepath); putln
+                    throw(exit, TRUE)
                 fin
             fin
-            fileio:close(0)
+            entry = entry + t_fileentry
+            entrycnt--            
+        loop
+        heaprelease(entrylist)
+    else
+        puts("No memory available!\n")
+        throw(exit, TRUE)
+    fin
+    heaprelease(copyrel)
+end
+//
+// Install error exit
+//
+exit = heapalloc(t_except)
+if not except(exit)
+    //
+    // Check arguments and file types
+    //
+    arg = argNext(argFirst)
+    if ^arg and arg->[1] == '-'
+        if ^arg > 1 and toupper(arg->[2]) == 'R'
+            recurse = TRUE
+        fin
+        arg = argNext(arg)
+    fin
+    if ^arg
+        srcfilelist = heapalloc(^arg + 1)
+        struprcpy(srcfilelist, arg)
+        srccnt++
+        arg = argNext(arg)
+        if ^arg
+            struprcpy(@dstpath, arg)
+            arg = argNext(arg)
+            while ^arg
+                //
+                // Add to source list
+                //
+                srcfileptr = heapalloc(dstpath + 1)
+                strcpy(srcfileptr, @dstpath)
+                srccnt++
+                //
+                // Set new destination
+                //
+                struprcpy(@dstpath, arg)
+                arg = argNext(arg)
+            loop
+            if not chkdstpath(@dstpath) and (srccnt > 1 or isWildName(srcfilelist))
+                puts("Destination must be directory: "); puts(@dstpath); putln
+                throw(exit, TRUE)
+            fin
+            fileio:iobufalloc(2) // Reserve two I/O buffers
+            srcfileptr = srcfilelist
+            while srccnt
+                //
+                // Copy files in list
+                //
+                copyfiles(srcfileptr, @dstpath)
+                srcfileptr = srcfileptr + ^srcfileptr + 1
+                srccnt--
+            loop
             return
         fin
-    else
-        //
-        // Unable to open source
-        //
-        puts("Unable to open: "); puts(@srcfilename); putln
-        return
     fin
-    //
-    // Close all files
-    //
-    fileio:close(0)
-    return
+    puts("Usage: +COPY <SRCFILE>+ <DEST>\n")
 fin
-puts("Usage: +COPY SRCFILE DEST\n")
+fileio:close(0)
 done

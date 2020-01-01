@@ -29,7 +29,7 @@ TYPE       = rel/apple/TYPE\#FE1000
 SIEVE      = rel/SIEVE\#FE1000
 PRIMEGAP   = rel/PRIMEGAP\#FE1000
 ARGS       = rel/ARGS\#FE1000
-MATCH      = rel/MATCH\#FE1000
+MATCHFILES = rel/apple/MATCHFILES\#FE1000
 SPIPORT    = rel/apple/SPIPORT\#FE1000
 SDFAT      = rel/apple/SDFAT\#FE1000
 FATCAT     = rel/apple/FATCAT\#FE1000
@@ -103,7 +103,7 @@ TXTTYPE	= .TXT
 #SYSTYPE	= \#FF2000
 #TXTTYPE	= \#040000
 
-apple: $(PLVMZP_APL) $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVMJIT) $(PLVM802) $(PLVM03) $(PLVMJIT03) $(CMD) $(CMDJIT) $(JIT) $(JIT16) $(JITUNE) $(SOSCMD) $(SOSCMDJIT) $(PLASMAPLASM) $(CODEOPT) $(MATCH) $(ARGS) $(MEMMGR) $(MEMTEST) $(FIBER) $(FIBERTEST) $(LONGJMP) $(ED) $(MON) $(COPY) $(DEL) $(REN) $(CAT) $(NEWDIR) $(TYPE) $(SOS) $(ROD) $(SIEVE) $(PRIMEGAP) $(MOUSE) $(UTHERNET2) $(UTHERNET) $(ETHERIP) $(INET) $(DHCP) $(HTTPD) $(TFTPD) $(ROGUE) $(ROGUEMAP) $(ROGUECOMBAT) $(GRAFIX) $(GFXDEMO) $(LINES) $(HGRSPRITE) $(HGRLIB) $(HGRTEST) $(GRLIB) $(DGRLIB) $(GRTEST) $(DGRTEST) $(HGRTEST) $(FILEIO_APL) $(CONIO_APL) $(JOYBUZZ) $(PORTIO) $(SPIPORT) $(SDFAT) $(FATCAT) $(FATGET) $(FATPUT) $(FATWDSK) $(FATRDSK) $(INT32) $(INT32TEST) $(SANE) $(FPSTR) $(FPU) $(SANITY) $(LZ4) $(LZ4CAT) $(RPNCALC) $(SNDSEQ) $(PLAYSEQ)
+apple: $(PLVMZP_APL) $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVMJIT) $(PLVM802) $(PLVM03) $(PLVMJIT03) $(CMD) $(CMDJIT) $(JIT) $(JIT16) $(JITUNE) $(SOSCMD) $(SOSCMDJIT) $(PLASMAPLASM) $(CODEOPT) $(MATCHFILES) $(ARGS) $(MEMMGR) $(MEMTEST) $(FIBER) $(FIBERTEST) $(LONGJMP) $(ED) $(MON) $(COPY) $(DEL) $(REN) $(CAT) $(NEWDIR) $(TYPE) $(SOS) $(ROD) $(SIEVE) $(PRIMEGAP) $(MOUSE) $(UTHERNET2) $(UTHERNET) $(ETHERIP) $(INET) $(DHCP) $(HTTPD) $(TFTPD) $(ROGUE) $(ROGUEMAP) $(ROGUECOMBAT) $(GRAFIX) $(GFXDEMO) $(LINES) $(HGRSPRITE) $(HGRLIB) $(HGRTEST) $(GRLIB) $(DGRLIB) $(GRTEST) $(DGRTEST) $(HGRTEST) $(FILEIO_APL) $(CONIO_APL) $(JOYBUZZ) $(PORTIO) $(SPIPORT) $(SDFAT) $(FATCAT) $(FATGET) $(FATPUT) $(FATWDSK) $(FATRDSK) $(INT32) $(INT32TEST) $(SANE) $(FPSTR) $(FPU) $(SANITY) $(LZ4) $(LZ4CAT) $(RPNCALC) $(SNDSEQ) $(PLAYSEQ)
 
 	-rm vmsrc/plvmzp.inc
 
@@ -225,9 +225,9 @@ $(ED): toolsrc/ed.pla $(PLVM02) $(PLASM) toolsrc/ed.pla
 	./$(PLASM) -AMOW < toolsrc/ed.pla > toolsrc/ed.a
 	acme --setpc 4094 -o $(ED) toolsrc/ed.a
 
-$(MATCH): libsrc/match.pla $(PLVM02) $(PLASM)
-	./$(PLASM) -AMOW < libsrc/match.pla > libsrc/match.a
-	acme --setpc 4094 -o $(MATCH) libsrc/match.a
+$(MATCHFILES): libsrc/apple/matchfiles.pla $(PLVM02) $(PLASM)
+	./$(PLASM) -AMOW < libsrc/apple/matchfiles.pla > libsrc/apple/matchfiles.a
+	acme --setpc 4094 -o $(MATCHFILES) libsrc/apple/matchfiles.a
 
 $(ARGS): libsrc/args.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AMOW < libsrc/args.pla > libsrc/args.a
