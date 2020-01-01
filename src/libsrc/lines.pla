@@ -10,7 +10,7 @@ var err, shorterr, shortlen, longerr, longlen
 
 //def nopLin(a, b, c)#0
 //end
-//def majorline(majorstart, major, majorend, minor, dir, majorspan)#0
+//def majorspans(majorstart, major, majorend, minor, dir, majorspan)#0
 //    //
 //    // Initial half-span step
 //    //
@@ -32,7 +32,7 @@ var err, shorterr, shortlen, longerr, longlen
 //    //
 //    majorspan(majorstart, majorend, minor)#0
 //end
-asm majorline(majorstart, major, majorend, minor, dir, majorspan)#0
+asm majorspans(majorstart, major, majorend, minor, dir, majorspan)#0
 !SOURCE    "vmsrc/plvmzp.inc"
         LDA     $1000       ; ERRL
         CLC
@@ -48,7 +48,7 @@ asm majorline(majorstart, major, majorend, minor, dir, majorspan)#0
         STA     $A001
         STA     $B001
 end
-asm     _majorlineA
+asm     _majorspansA
 -       DEX
         DEX
         DEX
@@ -82,11 +82,11 @@ asm     _majorlineA
         ADC     #$00
         STA     ESTKH+5,X   ; MAJORSTARTH
 end
-asm     _majorlineB
+asm     _majorspansB
         LDY     $1001       ; ERRH
         BMI     +
 end
-asm     _majorlineC
+asm     _majorspansC
         LDA     $1000       ; ERRL
         CLC
         ADC     $2000       ; SHORTERRL
@@ -101,10 +101,14 @@ asm     _majorlineC
         LDA     ESTKH+4,X   ; MAJORH
         ADC     $3001       ; SHORTLENH
         STA     ESTKH+4,X
-        BCC     ++
+        LDA     ESTKL+4,X   ; MAJORL
+        CMP     ESTKL+3,X   ; MAJORENDL
+        LDA     ESTKH+4,X   ; MAJORH
+        SBC     ESTKH+3,X   ; MAJORENDH
+        BCC     -
         BCS     ++
 end
-asm     _majorlineD
+asm     _majorspansD
 +       LDA     $1000       ; ERRL
         CLC
         ADC     $4000       ; LONGERRL
@@ -119,16 +123,15 @@ asm     _majorlineD
         LDA     ESTKH+4,X   ; MAJORH
         ADC     $5001       ; LONGLENH
         STA     ESTKH+4,X
-
-++      LDA     ESTKL+4,X   ; MAJORL
+        LDA     ESTKL+4,X   ; MAJORL
         CMP     ESTKL+3,X   ; MAJORENDL
         LDA     ESTKH+4,X   ; MAJORH
         SBC     ESTKH+3,X   ; MAJORENDH
-        BCS     +
+        BCS     ++
 end
-asm     _majorlineE
+asm     _majorspansE
         JMP     $6000
-+       DEX
+++      DEX
         DEX
         DEX
         LDA     ESTKL+8,X   ; MAJORSTARTL
@@ -335,6 +338,52 @@ export def setlinespans(h, v)#0
     hspan = h
     vspan = v
 end
+def hmajorspans(x1, y1, x2, y2, dx, dy, sy)#0
+    var dy2, halflen, rem
+    //
+    // Half-span length and error
+    //
+    dy2          = dy * 2
+    halflen, rem = divmod(dx, dy2)
+    err          = dy2 - rem
+    //
+    // Long-span length = half-span length * 2
+    //
+    longlen = (halflen + 1) * 2
+    longerr = err * 2
+    if longerr >= dy2
+        longerr = longerr - dy2
+        longlen--
+    fin
+    //
+    // Short-span length = long-span length - 1
+    //
+    shortlen = longlen - 1
+    shorterr = longerr - dy2
+    majorspans(x1, x1 + halflen, x2, y1, sy, hspan)
+end
+def vmajorspans(x1, y1, x2, y2, dx, dy, sx)#0
+    var dx2, halflen, rem
+
+    //
+    // Half-span length and error
+    //
+    dx2          = dx * 2
+    halflen, rem = divmod(dy, dx2)
+    err          = dx2 - rem
+    //
+    // Long-span length = half-span length * 2
+    //
+    longlen = (halflen + 1) * 2
+    longerr = err * 2
+    if longerr >= dx2
+        longerr = longerr - dx2
+        longlen--
+    fin
+    shortlen = longlen - 1
+    shorterr = longerr - dx2
+    majorspans(y1, y1 + halflen, y2, x1, sx, vspan)
+end
 export def linespans(x1, y1, x2, y2)#0
     var dx, dy, dx2, dy2, halflen, rem, sx, sy
     
@@ -358,29 +407,9 @@ export def linespans(x1, y1, x2, y2)#0
             hspan(x1, x2, y1)#0; return
         fin
         //
-        // Half-span length and error
+        // JIT optimize setup
         //
-        dy2          = dy * 2
-        halflen, rem = divmod(dx, dy2)
-        err          = dy2 - rem
-        //
-        // Long-span length = half-span length * 2
-        //
-        longlen = (halflen + 1) * 2
-        longerr = err * 2
-        if longerr >= dy2
-            longerr = longerr - dy2
-            longlen--
-        fin
-        //
-        // Short-span length = long-span length - 1
-        //
-        shortlen = longlen - 1
-        shorterr = longerr - dy2
-        //
-        // JIT optimize inner loop
-        //
-        majorline(x1, x1 + halflen, x2, y1, sy, hspan)
+        hmajorspans(x1, y1, x2, y2, dx, dy, sy)
     else
         if sy < 0
             x1, x2 = x2, x1
@@ -391,26 +420,9 @@ export def linespans(x1, y1, x2, y2)#0
             vspan(y1, y2, x1)#0; return
         fin
         //
-        // Half-span length and error
+        // JIT optimize inner setup
         //
-        dx2          = dx * 2
-        halflen, rem = divmod(dy, dx2)
-        err          = dx2 - rem
-        //
-        // Long-span length = half-span length * 2
-        //
-        longlen = (halflen + 1) * 2
-        longerr = err * 2
-        if longerr >= dx2
-            longerr = longerr - dx2
-            longlen--
-        fin
-        shortlen = longlen - 1
-        shorterr = longerr - dx2
-        //
-        // JIT optimize inner loop
-        //
-        majorline(y1, y1 + halflen, y2, x1, sx, vspan)
+        vmajorspans(x1, y1, x2, y2, dx, dy, sx)
     fin
 end
 export def setlineplot(p)#0
@@ -449,46 +461,46 @@ export def line(x1, y1, x2, y2)#0
 //
 // Assembly fixups
 //
-majorline:1    = @err
-majorline:5    = @shorterr
-majorline:8    = @err
-majorline:11   = @err.1
-majorline:14   = @shorterr.1
-majorline:17   = @err.1
-majorline:22   = @_majorlineA.28
-majorline:25   = @_majorlineE.31
-majorline:30   = @_majorlineA.29
-majorline:33   = @_majorlineE.32
-_majorlineB:1  = @err.1
-_majorlineC:1  = @err
-_majorlineC:5  = @shorterr
-_majorlineC:8  = @err
-_majorlineC:12 = @shorterr.1
-_majorlineC:15 = @err.1
-_majorlineC:21 = @shortlen
-_majorlineC:28 = @shortlen.1
-_majorlineD:1  = @err
-_majorlineD:5  = @longerr
-_majorlineD:8  = @err
-_majorlineD:12 = @longerr.1
-_majorlineD:15 = @err.1
-_majorlineD:21 = @longlen
-_majorlineD:28 = @longlen.1
-_majorlineE:1  = @_majorlineA
-hline:16       = @err
-hline:23       = @err.1
-_hlineA:1      = @jmpplot
-_hlineA:4      = @err.1
-_hlineB:6      = @err
-_hlineB:9      = @err
-_hlineB:13     = @err.1
-_hlineB:16     = @err.1
-vline:16       = @err
-vline:23       = @err.1
-_vlineA:1      = @jmpplot
-_vlineA:4      = @err.1
-_vlineB:6      = @err
-_vlineB:9      = @err
-_vlineB:13     = @err.1
-_vlineB:16     = @err.1
+majorspans:1    = @err
+majorspans:5    = @shorterr
+majorspans:8    = @err
+majorspans:11   = @err.1
+majorspans:14   = @shorterr.1
+majorspans:17   = @err.1
+majorspans:22   = @_majorspansA.28
+majorspans:25   = @_majorspansE.31
+majorspans:30   = @_majorspansA.29
+majorspans:33   = @_majorspansE.32
+_majorspansB:1  = @err.1
+_majorspansC:1  = @err
+_majorspansC:5  = @shorterr
+_majorspansC:8  = @err
+_majorspansC:12 = @shorterr.1
+_majorspansC:15 = @err.1
+_majorspansC:21 = @shortlen
+_majorspansC:28 = @shortlen.1
+_majorspansD:1  = @err
+_majorspansD:5  = @longerr
+_majorspansD:8  = @err
+_majorspansD:12 = @longerr.1
+_majorspansD:15 = @err.1
+_majorspansD:21 = @longlen
+_majorspansD:28 = @longlen.1
+_majorspansE:1  = @_majorspansA
+hline:16        = @err
+hline:23        = @err.1
+_hlineA:1       = @jmpplot
+_hlineA:4       = @err.1
+_hlineB:6       = @err
+_hlineB:9       = @err
+_hlineB:13      = @err.1
+_hlineB:16      = @err.1
+vline:16        = @err
+vline:23        = @err.1
+_vlineA:1       = @jmpplot
+_vlineA:4       = @err.1
+_vlineB:6       = @err
+_vlineB:9       = @err
+_vlineB:13      = @err.1
+_vlineB:16      = @err.1
 done

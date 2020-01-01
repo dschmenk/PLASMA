@@ -1,11 +1,14 @@
 include "inc/cmdsys.plh"
+include "inc/longjmp.plh"
 include "inc/args.plh"
+include "inc/match.plh"
 include "inc/fileio.plh"
 include "inc/int32.plh"
 
-var arg, refnum, dirbuf
-var page, firstblk, entrylen, entriesblk, i, entry, filecnt
-char[64] path, filename
+predef catalog(pathstr)#0
+
+var arg, recurse, exit
+char[64] path, wildname
 res[t_fileinfo] fileinfo
 res[t_fileentry] fileentry
 //
@@ -82,91 +85,95 @@ def printentry(entryptr)#0
     puts(@eofstr)    
     putln
 end
-//
-// Check arguments and file types
-//
-arg = argNext(argFirst)
-if ^arg
-    strcpy(@path, arg)
-    strupper(@path)
-else
-    fileio:getpfx(@path)
-fin
-//
-// Check if file exists
-//
-if fileio:getfileinfo(@path, @fileinfo) == FILE_ERR_OK
+def printentries(pathstr, entries, num)#0
+    byte page
+    page      = 20
+    puts(pathstr); putln
     puts("=NAME==========TYPE===AUX====LENGTH=\n")
-    //
-    // Check if cataloging a directory
-    //
-    if fileinfo.file_type == $0F
-        fileio:iobufalloc(2) // Reserve two I/O buffers
-        if path[path] <> '/' // Make sure path ends with a '/'
-            path++
-            path[path] = '/'
-        fin
-        page     = 21
-        filecnt  = 0
-        firstblk = 1
-        dirbuf   = heapallocalign(512, 8, 0)
-        refnum   = fileio:open(@path)
-        repeat
-            if fileio:read(refnum, dirbuf, 512) == 512
-                //
-                // Skip block pointers
-                //
-                entry = dirbuf + 4
-                if firstblk
-                    //
-                    // Pull out revelant details from the first block
-                    //
-                    entrylen   = dirbuf->$23
-                    entriesblk = dirbuf->$24
-                    filecnt    = dirbuf=>$25
-                    entry      = entry + entrylen
-                fin
-                for i = firstblk to entriesblk
-                    //
-                    // Print directory entry details
-                    //
-                    ^entry = ^entry & $0F
-                    if ^entry
-                        printentry(entry)
-                        filecnt--
-                        //
-                        // Pause display every screenfull
-                        //
-                        if not page
-                            getc
-                            page = 22
-                        else
-                            page--
-                        fin
-                    fin
-                    entry = entry + entrylen
-                next
-                firstblk = 0
+    repeat
+        printentry(entries)
+        entries = entries + t_fileentry
+        //
+        // Pause display every screenfull
+        //
+        if not page
+            if toupper(getc()) == 'Q'
+                throw(exit, TRUE)
             fin
-        until filecnt == 0
-    else
-        //
-        // Create file entry from file info
-        //
-        filefrompath(@fileentry, @path)
-        fileentry.entry_access   = fileinfo.file_access
-        fileentry.entry_type     = fileinfo.file_type
-        fileentry:entry_create:0 = fileinfo:create_date
-        fileentry:entry_create:2 = fileinfo:create_time
-        fileentry:entry_aux      = fileinfo:aux_type
-        fileentry:entry_mod:0    = fileinfo:mod_date
-        fileentry:entry_mod:2    = fileinfo:mod_time
-        refnum = fileio:open(@path)
-        fileentry:entry_EOFL, fileentry.entry_EOFH = fileio:geteof(refnum)#2
-        printentry(@fileentry)
+            page = 22
+        else
+            page--
+        fin
+        num--
+    until not num
+end
+def catalog(pathstr)#0
+    char recursepath[64]
+    var entrylist, entryptr, entrycnt
+
+    entrylist, entrycnt = matchList(pathstr, @wildname)
+    if entrylist
+        printentries(pathstr, entrylist, entrycnt)
+        if recurse
+            entryptr = entrylist
+            repeat
+                if entryptr->entry_type == $0F
+                    //
+                    // A directory, so recurse
+                    //
+                    strcpy(@recursepath, pathstr)
+                    strcat(@recursepath, entryptr)
+                    recursepath++
+                    recursepath[recursepath] = '/'
+                    if toupper(getc()) == 'Q'
+                        throw(exit, TRUE)
+                    fin
+                    catalog(@recursepath)
+                fin
+                entryptr = entryptr + t_fileentry
+                entrycnt--
+            until not entrycnt
+        fin
+        heaprelease(entrylist)
     fin
-    fileio:close(0)
-else
-    puts("Unable to open: "); puts(@path); putln
+end
+//
+// Install error exit
+//
+exit = heapalloc(t_except)
+if not except(exit)
+    //
+    // Check arguments and file types
+    //
+    arg = argNext(argFirst)
+    if ^arg and arg->[1] == '-'
+        if ^arg > 1 and toupper(arg->[2]) == 'R'
+            recurse = TRUE
+        fin
+        arg = argNext(arg)
+    fin
+    recurse = TRUE
+    if ^arg
+        strcpy(@path, arg)
+        strupper(@path)
+        //
+        // Check if cataloging a directory
+        //
+        if fileio:getfileinfo(@path, @fileinfo) <> FILE_ERR_OK or fileinfo.file_type <> $0F
+            filefrompath(@wildname, @path)
+        fin
+        path = path - wildname
+    fin
+    if not path
+        fileio:getpfx(@path)
+    fin
+    //
+    // Check if directory exists
+    //
+    if fileio:getfileinfo(@path, @fileinfo) == FILE_ERR_OK
+        catalog(@path)
+    else
+        puts("Unable to open: "); puts(@path); putln
+    fin
 fin
 done
