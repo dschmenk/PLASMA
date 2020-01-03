@@ -8,14 +8,14 @@ const MAXBUFSIZE = 16384
 var arg, exit, srcfilelist, srcfileptr, srccnt
 var copybuff, copyrel, copysize
 byte recurse, dstlen
-char[64] dstpath
+char[64] curpath, dstpath
 res[t_fileinfo] srcfileinfo, dstfileinfo
 //
-// Copy string with upper case conversion
+// Copy path with upper case conversion
 //
-def struprcpy(dst, src)#0
+def pathcpy(dst, src)#0
     byte i, chr
-
+    
     if ^src
         for i = 1 to ^src
             chr = src->[i]
@@ -27,6 +27,44 @@ def struprcpy(dst, src)#0
         next
     fin
     ^dst = ^src
+end
+def abspath(abs, path)#0
+    if ^path == 0 or path->[1] <> '/'
+        //
+        // Append relative path to absolute path
+        //
+        strcpy(abs, @curpath)
+    else
+        //
+        // Absolute path
+        //
+        ^abs = 0
+    fin
+    strcat(abs, path)
+    //
+    // Strip trailing path seperator
+    //
+    if abs->[^abs] == '/'
+        ^abs--
+    fin
+end
+def pathdiff(path1, path2)#1
+    byte i, d
+    char[64] abs1, abs2
+    
+    abspath(@abs1, path1)
+    abspath(@abs2, path2)
+
+    if abs1 <> abs2
+        return TRUE
+    fin
+    for i = 1 to abs1
+        d = abs1[i] - abs2[i]
+        if d
+            return d
+        fin
+    next
+    return FALSE
 end
 def filefrompath(filestr, pathstr)#0
     byte i
@@ -80,13 +118,6 @@ def copyfiles(srcfile, dstfile)#0
         srcpath = srcpath - wildname
     fin
     entrylist, entrycnt = matchList(@srcpath, @wildname)
-//    if not entrylist
-        //
-        // Unable to open source
-        //
-//      puts("Unable to open: "); puts(wildname ?? @wildname :: @srcpath); putln
-//      throw(exit, TRUE)
-//    fin
     entry = entrylist
     while entrycnt
         strcpy(@srcfilepath, @srcpath)
@@ -95,18 +126,19 @@ def copyfiles(srcfile, dstfile)#0
         if chkdstpath(@dstfilepath)
             strcat(@dstfilepath, entry)
         fin
-        puts(@srcfilepath); puts(" ==> "); puts(@dstfilepath); putln
         if entry->entry_type == $0F
             //
-            // Source is a directory
+            // Source is a directory and not referencing the destination
             //
-            fileio:create(@dstfilepath, $0F, $0000)
-            if not chkdstpath(@dstfilepath)
-                puts("Unable to create directory: "); puts(@dstfilepath); putln
-                throw(exit, TRUE)
-            fin
-            if recurse
-                copyfiles(@srcfilepath, @dstfilepath)
+            if pathdiff(@srcfilepath, dstfile)
+                fileio:create(@dstfilepath, $0F, $0000)
+                if not chkdstpath(@dstfilepath)
+                    puts("Unable to create directory: "); puts(@dstfilepath); putln
+                    throw(exit, TRUE)
+                fin
+                if recurse
+                    copyfiles(@srcfilepath, @dstfilepath)
+                fin
             fin
         else
             //
@@ -146,6 +178,7 @@ def copyfiles(srcfile, dstfile)#0
             until copyxfer == 0
             fileio:close(dstref)
             fileio:close(srcref)
+            puts(@srcfilepath); puts(" ==> "); puts(@dstfilepath); putln
         fin
         entry = entry + t_fileentry
         entrycnt--            
@@ -157,6 +190,7 @@ end
 //
 exit = heapalloc(t_except)
 if not except(exit)
+    fileio:getpfx(@curpath)
     //
     // Check arguments and file types
     //
@@ -169,11 +203,11 @@ if not except(exit)
     fin
     if ^arg
         srcfilelist = heapalloc(^arg + 1)
-        struprcpy(srcfilelist, arg)
+        pathcpy(srcfilelist, arg)
         srccnt++
         arg = argNext(arg)
         if ^arg
-            struprcpy(@dstpath, arg)
+            pathcpy(@dstpath, arg)
             arg = argNext(arg)
             while ^arg
                 //
@@ -185,7 +219,7 @@ if not except(exit)
                 //
                 // Set new destination
                 //
-                struprcpy(@dstpath, arg)
+                pathcpy(@dstpath, arg)
                 arg = argNext(arg)
             loop
             if not chkdstpath(@dstpath) and (srccnt > 1 or isWildName(srcfilelist))
