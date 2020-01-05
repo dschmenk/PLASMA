@@ -100,17 +100,18 @@ def moire#0
 end
 def game(spdrcnt)#0
   var[14] xspdr, yspdr, ixspdr, iyspdr, hatch
-  var xship, xmissle
+  var xship, xmissle, attack
   byte yship, ymissle
   byte spdrnum, k, xdelta, ydelta, btn0, btn1
 
-  xship    = 140
-  ymissle  = 255
+  xship     = 140
+  ymissle   = 255
   xspdr[0]  = 100
   ixspdr[0] = 1
   yspdr[0]  = 60
   iyspdr[0] = -1
-  hatch[0] = 1
+  hatch[0]  = 1
+  attack    = -1
   spdrnum   = spdrcnt - 1
   for k = 1 to spdrnum
     spriteAdd(k + 8, spriteDup(sprtEgg))
@@ -123,23 +124,9 @@ def game(spdrcnt)#0
   repeat
     for k = 0 to spdrnum
       if yspdr[k] <> 255
-        //xspdr[k] = xspdr[k] + ixspdr[k]
-        if ixspdr[k] > 0
-          xspdr[k] = xspdr[k] + yspdr[k] / 8
-        else
-          xspdr[k] = xspdr[k] - yspdr[k] / 8
-        fin
-        if xspdr[k] < -5 or xspdr[k] > 284
-          ixspdr[k] = -ixspdr[k]
-          if xspdr[k] < -5
-            xspdr[k] = -5
-          else
-            xspdr[k] = 284
-          fin
-        fin
         yspdr[k] = yspdr[k] + iyspdr[k]
         if yspdr[k] < -5
-          iyspdr[k] = -iyspdr[k]
+          iyspdr[k] = 1
           if hatch[k]
             hatch[k]--
             if hatch[k] == 0
@@ -147,8 +134,48 @@ def game(spdrcnt)#0
             fin
           fin
         fin
-        if yspdr[k] > 64
-          iyspdr[k] = -iyspdr[k]
+        if yspdr[k] > 64 // Attack or not?
+          if hatch[k] == 0 and attack < 0
+            attack = k
+            iyspdr[k] = 8
+          fin
+          if attack == k
+            if yspdr[k] > 160
+              iyspdr[k] = -8 // Retreat
+            fin
+            if iyspdr[k] > 0 // Attacking
+              xspdr[k] = xspdr[k] + (xship - xspdr[k]) / 8
+            else // Retreating
+              if ixspdr[k] > 0
+                xspdr[k] = xspdr[k] + (160 - yspdr[k]) / 8
+              else
+                xspdr[k] = xspdr[k] - (160 - yspdr[k]) / 8
+              fin
+            fin
+          else
+            iyspdr[k] = -1
+          fin
+        else
+          if attack == k
+            attack    = -1 // Stop attack
+            iyspdr[k] = -1
+          fin
+        fin
+        if attack <> k
+          if ixspdr[k] > 0
+            xspdr[k] = xspdr[k] + yspdr[k] / 8
+          else
+            xspdr[k] = xspdr[k] - yspdr[k] / 8
+          fin
+          if xspdr[k] < -5 or xspdr[k] > 284
+            if xspdr[k] < -5
+              xspdr[k]  = -5
+              ixspdr[k] = 1
+            else
+              xspdr[k]  = 284
+              ixspdr[k] = -1
+            fin
+          fin
         fin
         spritePosIndex(xspdr[k], yspdr[k], k + 8)
       fin
@@ -160,7 +187,7 @@ def game(spdrcnt)#0
     if btn0 and ymissle == 255
       spriteAdd(1, sprtMissle)
       xmissle = xship
-      ymissle = 172
+      ymissle = 176
     fin
     if ymissle <> 255
       if ymissle < 8
@@ -172,10 +199,13 @@ def game(spdrcnt)#0
         for k = 0 to spdrnum
           if yspdr[k] <> 255
             if ymissle >= yspdr[k] - 7 and ymissle <= yspdr[k] + 6
-              if xmissle >= xspdr[k] - 10 and xmissle <= xspdr[k] + 9
+              if xmissle >= xspdr[k] - 10 and xmissle <= xspdr[k] + 10
                 //
                 // Hit
                 //
+                if attack == k // Was it attacking?
+                  attack = -1
+                fin
                 yspdr[k] = 255
                 ymissle = 255
                 spriteAdd(k + 8, spriteDup(sprtDummy))
@@ -195,7 +225,7 @@ def game(spdrcnt)#0
 //    spriteDrawList()
     spriteDrawXorList()
     spriteDrawBuf(hgrSwap())
-  until ^$C000 > 127
+  until ^$C000 == $9B
   getc
 end
 
@@ -209,7 +239,6 @@ sprtWeb1   = spriteCompile( 8,  8,  4,  0, @web1)
 sprtWeb2   = spriteCompile(12,  8,  6,  0, @web2)
 sprtWeb3   = spriteCompile(20,  8, 10,  0, @web3)
 sprtDummy  = spriteCompile( 7,  8,  0,  0, @dummy)
-//hgrColor(4)
 hgrColor(0)
 hgrClear()
 //moire
