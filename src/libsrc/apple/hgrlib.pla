@@ -543,8 +543,6 @@ end
 asm     _hgrPlotC
         LDA     $1000,Y     ; HBMASK
         STA     TMPL
-        EOR     #$FF
-        STA     TMPH
         LDA     ESTKL+1,X   ; HORIZ OFFSET
         CMP     #40
         BCS     +
@@ -553,12 +551,10 @@ asm     _hgrPlotC
 end
 asm     _hgrPlotD
         LDA     $2000,Y     ; CURHCLR
-        AND     TMPL
-        STA     TMPL
         LDY     ESTKL+1,X   ; HORIZ OFFSET
-        LDA     (DST),Y
-        AND     TMPH
-        ORA     TMPL
+        EOR     (DST),Y
+        AND     TMPL
+        EOR     (DST),Y
         STA     (DST),Y
 +       INX
         INX
@@ -601,8 +597,8 @@ asm     _hgrXorPlotC
 end
 asm     _hgrXorPlotD
         LDA     $2000,Y     ; CURHCLR
-        AND     TMPL
         LDY     ESTKL+1,X   ; HORIZ OFFSET
+        AND     TMPL
         EOR     (DST),Y
         STA     (DST),Y
 +       INX
@@ -646,8 +642,8 @@ asm     _hgrOrPlotC
 end
 asm     _hgrOrPlotD
         LDA     $2000,Y     ; CURHCLR
-        AND     TMPL
         LDY     ESTKL+1,X   ; HORIZ OFFSET
+        AND     TMPL
         ORA     (DST),Y
         STA     (DST),Y
 +       INX
@@ -713,6 +709,8 @@ end
 asm     _hgrHLinD
         LDA     $1000,Y     ; HRMASK
         STA     TMPH
+        LDA     ESTKL+1,X   ; RIGHT HORIZ OFFSET
+        STA     IPY         ; STEAL THIS ZP FOR A MOMENT
         INX
         INX
         INX
@@ -739,47 +737,151 @@ asm     _hgrHLinG
         STA     SRCH
         LDA     $2001       ; CURHCLRH
         STA     SRCL
-++      TYA
-        CMP     ESTKL-1,X   ; RIGHT HORIZ OFFSET
+++      CPY     IPY         ; RIGHT HORIZ OFFSET
         BNE     +
-        LDA     TMPL
+        LDA     SRCL
+        EOR     (DST),Y
+        AND     TMPL
         AND     TMPH
-        STA     TMPL
-        AND     SRCL
+        EOR     (DST),Y
+        STA     (DST),Y
+        INX
+        INX
+        RTS
++       LDA     SRCL        ; CURHCLR
+        EOR     (DST),Y
+        AND     TMPL
+        EOR     (DST),Y
+-       STA     (DST),Y
+        INY
+        CPY     IPY         ; RIGHT HORIZ OFFSET
+        LDA     SRCH
+        BCS     +
+        STA     (DST),Y
+        INY
+        CPY     IPY         ; RIGHT HORIZ OFFSET
+        LDA     SRCL
+        BCC     -
++       EOR     (DST),Y
+        AND     TMPH
+        EOR     (DST),Y
+        STA     (DST),Y
+        INX
+        INX
+        RTS
+end
+//export def hgrXorHLin(x1, x2, y)#0
+//    word pixptr, x
+//    byte lofst, lpixofst, lpmask
+//    byte rofst, rpixofst, rpmask
+//    
+//    if x1 == x2
+//        hgrPlot(x1, y)
+//    else
+//        lofst, lpixofst = divmod7(x1)
+//        pixptr = hgrscan[y] + drawbuff + lofst
+//        rofst, rpixofst = divmod7(x2)
+//        lpmask = hlmask[lpixofst]
+//        rpmask = hrmask[rpixofst]
+//        if lofst == rofst
+//            lpmask = lpmask & rpmask
+//            ^pixptr = ^pixptr ^ (curhclr.[pixptr.0 & 1] & lpmask)
+//        else
+//            ^pixptr = ^pixptr ^ (curhclr.[pixptr.0 & 1] & lpmask)
+//            pixptr++
+//            for x = lofst + 1 to rofst - 1
+//                ^pixptr = ^pixptr ^ curhclr.[pixptr.0 & 1]
+//                pixptr++
+//            next
+//            ^pixptr = ^pixptr ^ (curhclr.[pixptr.0 & 1] & rpmask)
+//        fin
+//    fin
+//end
+export asm hgrXorHLin(x1, x2, y)#0
+        LDA     ESTKL+1
+        CMP     ESTKL+2
+        BNE     +
+        LDA     ESTKH+1
+        CMP     ESTKH+2
+        BNE     +
+end
+asm     _hgrXHLinA
+        JSR     $F000
+        INX
+        RTS
++       LDY     ESTKL+0,X   ; Y COORD
+end
+asm     _hgrXHLinB
+        LDA     $8000,Y     ; HGRSCANL
+        STA     DSTL
+        LDA     $1000       ; DRAWBUFFH
+        ORA     $9000,Y     ; HGRSCANH
+        STA     DSTH
+        LDA     ESTKL+1,X
+        STA     ESTKL+0,X
+        LDA     ESTKH+1,X
+        STA     ESTKH+0,X
+end
+asm     _hgrXHLinC
+        JSR     1000        ; DIVMOD7
+        LDY     ESTKL+0,X   ; RIGHT PIXEL OFFSET
+end
+asm     _hgrXHLinD
+        LDA     $1000,Y     ; HRMASK
         STA     TMPH
-        LDA     TMPL
-        EOR     #$FF
-        AND     (DST),Y
-        ORA     TMPH
+        LDA     ESTKL+1,X   ; RIGHT HORIZ OFFSET
+        STA     IPY         ; STEAL THIS ZP FOR A MOMENT
+        INX
+        INX
+        INX
+end
+asm     _hgrXHLinE
+        JSR     1000        ; DIVMOD7
+        LDY     ESTKL+0,X   ; LEFT PIXEL OFFSET
+end
+asm     _hgrXHLinF
+        LDA     $1000,Y     ; HLMASK
+        STA     TMPL
+        LDA     ESTKL+1,X   ; LEFT HORIZ OFFSET
+        TAY
+        LSR
+        BCS     +
+end
+asm     _hgrXHLinG
+        LDA     $2000       ; CURHCLRL
+        STA     SRCL
+        LDA     $2001       ; CURHCLRH
+        STA     SRCH
+        BCC     ++
++       LDA     $2000       ; CURHCLRL
+        STA     SRCH
+        LDA     $2001       ; CURHCLRH
+        STA     SRCL
+++      CPY     IPY         ; RIGHT HORIZ OFFSET
+        BNE     +
+        LDA     SRCL
+        AND     TMPL
+        EOR     (DST),Y
         STA     (DST),Y
         INX
         INX
         RTS
 +       LDA     SRCL        ; CURHCLR
         AND     TMPL
-        STA     ESTKL+0,X
-        LDA     TMPL
-        EOR     #$FF
-        AND     (DST),Y
-        ORA     ESTKL+0,X
--       STA     (DST),Y
-        INY
-        TYA
-        CMP     ESTKL-1,X   ; RIGHT HORIZ OFFSET
-        LDA     SRCH
-        BCS     +
+-       EOR     (DST),Y
         STA     (DST),Y
         INY
-        TYA
-        CMP     ESTKL-1,X   ; RIGHT HORIZ OFFSET
+        CPY     IPY         ; RIGHT HORIZ OFFSET
+        LDA     SRCH
+        BCS     +
+        EOR     (DST),Y
+        STA     (DST),Y
+        INY
+        CPY     IPY         ; RIGHT HORIZ OFFSET
         LDA     SRCL
         BCC     -
 +       AND     TMPH
-        STA     ESTKL+0,X
-        LDA     TMPH
-        EOR     #$FF
-        AND     (DST),Y
-        ORA     ESTKL+0,X
+        EOR     (DST),Y
         STA     (DST),Y
         INX
         INX
@@ -832,6 +934,65 @@ asm     _hgrVLinC
         LDA     (DST),Y
         AND     TMPH
         ORA     TMPL
+        STA     (DST),Y
+        LDY     ESTKL+3,X   ; Y1 COORD
+        TYA
+        INY
+        STY     ESTKL+3,X   ; Y1 COORD
+        CMP     ESTKL+2,X   ; Y2 COORD
+        BNE     -
+        INX
+        INX
+        INX
+        INX
+        RTS
+end
+//export def hgrXVlin(y1, y2, x)#0
+//    word pixptr, y, ofst
+//    byte pixofst, pmask, cmask
+//    
+//    if y1 == y2
+//        hgrXorPlot(x, y1)
+//    else
+//        ofst, pixofst = divmod7(x)
+//        ofst  = ofst + drawbuff
+//        pmask = hbmask[pixofst]
+//        cmask = curhclr.[ofst & 1] & pmask
+//        pmask = ~pmask
+//        for y = y1 to y2
+//            pixptr = hgrscan[y] + ofst
+//            ^pixptr = ^pixptr ^ cmask
+//        next
+//    fin
+//end
+export asm hgrXorVlin(y1, y2, x)#0
+        JSR     1000        ; DIVMOD7
+        LDY     ESTKL+0,X   ; PIXEL OFFSET
+end
+asm     _hgrXVLinA
+        LDA     $1000,Y     ; HBMASK
+        STA     TMPL
+        EOR     #$FF
+        STA     TMPH
+        LDA     ESTKL+1,X   ; HORIZ OFFSET
+        AND     #$01
+        TAY
+end
+asm     _hgrXVLinB
+        LDA     $2000,Y     ; CURHCLR
+        AND     TMPL
+        STA     TMPL        
+        LDY     ESTKL+3,X   ; Y1 COORD
+end
+asm     _hgrXVLinC
+-       LDA     $8000,Y     ; HGRSCANL
+        STA     DSTL
+        LDA     $1000       ; DRAWBUFFH
+        ORA     $9000,Y     ; HGRSCANH
+        STA     DSTH
+        LDY     ESTKL+1,X   ; HORIZ OFFSET
+        LDA     TMPL
+        EOR     (DST),Y
         STA     (DST),Y
         LDY     ESTKL+3,X   ; Y1 COORD
         TYA
@@ -946,6 +1107,17 @@ export def hgrRect(x1, y1, x2, y2)#0
     else
         for y = y1 to y2
             hgrHLin(x1, x2, y)
+        next
+    fin
+end
+export def hgrXorRect(x1, y1, x2, y2)#0
+    word y
+    
+    if x1 == x2
+        hgrXorVLin(y1, y2, x1)
+    else
+        for y = y1 to y2
+            hgrXorHLin(x1, x2, y)
         next
     fin
 end
@@ -1068,12 +1240,30 @@ _hgrHLinG:1    = @curhclr
 _hgrHLinG:6    = @curhclr.1
 _hgrHLinG:13   = @curhclr.1
 _hgrHLinG:18   = @curhclr
+_hgrXHLinA:1   = @hgrXorPlot
+_hgrXHLinB:1   = @hgrscanl
+_hgrXHLinB:6   = @drawbuff.1
+_hgrXHLinB:9   = @hgrscanh
+_hgrXHLinC:1   = @divmod7
+_hgrXHLinD:1   = @hrmask
+_hgrXHLinE:1   = @divmod7
+_hgrXHLinF:1   = @hlmask
+_hgrXHLinG:1   = @curhclr
+_hgrXHLinG:6   = @curhclr.1
+_hgrXHLinG:13  = @curhclr.1
+_hgrXHLinG:18  = @curhclr
 hgrVLin:1      = @divmod7
 _hgrVLinA:1    = @hbmask
 _hgrVLinB:1    = @curhclr
 _hgrVLinC:1    = @hgrscanl
 _hgrVLinC:6    = @drawbuff.1
 _hgrVLinC:9    = @hgrscanh
+hgrXorVLin:1   = @divmod7
+_hgrXVLinA:1   = @hbmask
+_hgrXVLinB:1   = @curhclr
+_hgrXVLinC:1   = @hgrscanl
+_hgrXVLinC:6   = @drawbuff.1
+_hgrXVLinC:9   = @hgrscanh
 hgrColor:7     = @hcolor
 hgrColor:10    = @curhclr
 hgrColor:13    = @hcolor.1
