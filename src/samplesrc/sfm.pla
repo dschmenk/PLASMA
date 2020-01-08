@@ -30,7 +30,7 @@ var sprtEgg1, sprtEgg2, sprtEgg3, sprtEgg
 var sprtSpider1, sprtSpider2, sprtSpider3, sprtSpider
 var sprtSplat1, sprtSplat2
 var sprtWeb1, sprtWeb2, sprtWeb3
-var sprtShip, sprtMissle, sprtDummy
+var sprtShip, sprtMissle, sprtDummy, heapstart
 var[NUMSTARS]  xstar
 byte[NUMSTARS] ystar
 byte curstar, buzz
@@ -303,7 +303,7 @@ def game(spdrcnt)#1
     if misslecnt and missleloading
         missleloading--
     fin
-    if btn0 and not missleloading
+    if btn1 and not missleloading and ymissle == 255
       //
       // Fire missle
       //
@@ -375,7 +375,7 @@ def game(spdrcnt)#1
       hgrColor(1)
       hgrRect(81 - lasercharging*4, YSHIP+6, 84 - lasercharging*4, 188)
     fin
-    if btn1 and not lasercharging
+    if btn0 and not lasercharging
       //
       // Fire laser
       //
@@ -572,45 +572,66 @@ for curstar = 0 to 50
   spritePosIndex(0, 0, 0)
   spriteDrawXorList()
 next
-hgrMode
-spriteDrawBuf(hgrDrawBuf(0)) // Single buffered
-spriteAdd(SHIP_SPRTNUM, sprtShip)
-spriteAdd(SPIDER_SPRTEBASE, sprtEgg3)
-//
-// Init stars
-//
-xstar[0] = 99
-ystar[0] = 10
-hgrColor(3)
-hgrXorPlot(xstar[0], ystar[0])
-for curstar = 1 to NUMSTARS-1
+heapstart = heapmark()
+//puts("\nBeginning available memory: "); puti(heapavail()); putln
+repeat
+  hgrMode
+  spriteDrawBuf(hgrDrawBuf(0)) // Single buffered
+  spriteAdd(SHIP_SPRTNUM, sprtShip)
+  spriteAdd(SPIDER_SPRTEBASE, sprtEgg3)
+  //
+  // Init stars
+  //
+  xstar[0] = 99
+  ystar[0] = 10
+  hgrColor(3)
+  hgrXorPlot(xstar[0], ystar[0])
+  for curstar = 1 to NUMSTARS-1
     xstar[curstar] = (xstar[curstar - 1] + 97 - curstar) % 280
     ystar[curstar] = (ystar[curstar - 1] + 19 + curstar) % YSHIP
     hgrXorPlot(xstar[curstar], ystar[curstar])
-next
-curstar = 0
-if game(8)
+  next
+  curstar = 0
+  if game(8)
+    //
+    // Won
+    //
+    spriteDrawXorList()
+    (@_spkrTone)(100, 20)#0
+    (@_spkrTone)(75,  20)#0
+    (@_spkrTone)(15,  20)#0
+    (@_spkrTone)(25,  100)#0
+    puts("\nZiggy Stardust has saved Earth!\n")
+  else
+    //
+    // Lost
+    //
+    spriteDrawXorList()
+    (@_spkrTone)(100, 50)#0
+    spriteDrawXor(sprtShip)
+    (@_spkrTone)(150, 50)#0
+    spriteDrawXor(sprtShip)
+    (@_spkrTone)(100, 50)#0
+    spriteDrawXor(sprtShip)
+    (@_spkrTone)(150, 50)#0
+    puts("\nEarth has been overrun")
+    puts("\nby the Spiders from Mars\n")
+  fin
+  txtMode
   //
-  // Won
+  // Clear sprite lists
   //
+  for curstar = 0 to 15
+    spriteDel(curstar)
+  next
   spriteDrawXorList()
-  (@_spkrTone)(100, 20)#0
-  (@_spkrTone)(75,  20)#0
-  (@_spkrTone)(15,  20)#0
-  (@_spkrTone)(25,  100)#0
-else
-  //
-  // Lost
-  //
   spriteDrawXorList()
-  (@_spkrTone)(100, 50)#0
-  spriteDrawXor(sprtShip)
-  (@_spkrTone)(150, 50)#0
-  spriteDrawXor(sprtShip)
-  (@_spkrTone)(100, 50)#0
-  spriteDrawXor(sprtShip)
-  (@_spkrTone)(150, 50)#0
-fin
-txtMode
-puts("\nAvailable memory: "); puti(heapavail()); putln
+  //
+  // Reset heap
+  //
+  heaprelease(heapstart)
+  //puts("\nAvailable memory: "); puti(heapavail()); putln
+  puts("Play again (Y/N)?")
+until toupper(getc) <> 'Y'
+putln
 done
