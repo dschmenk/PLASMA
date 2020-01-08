@@ -63,6 +63,8 @@ HGRLIB     = rel/apple/HGRLIB\#FE1000
 GRLIB      = rel/apple/GRLIB\#FE1000
 DGRLIB     = rel/apple/DGRLIB\#FE1000
 HGRSPRITE  = rel/apple/HGRSPRITE\#FE1000
+HGRTILE    = rel/apple/HGRTILE\#FE1000
+HGRFONT    = rel/apple/HGRFONT\#FE1000
 LINES      = rel/LINES\#FE1000
 GRAFIX     = rel/apple/GRAFIX\#FE1000
 SFM        = rel/apple/SFM\#FE1000
@@ -74,6 +76,7 @@ ROGUE      = rel/ROGUE\#FE1000
 ROGUEMAP   = rel/ROGUEMAP\#FE1000
 ROGUECOMBAT= rel/ROGUECOMBAT\#FE1000
 MON        = rel/apple/MON\#FE1000
+TILETEST   = rel/apple/TILETEST\#FE1000
 HGRTEST    = rel/apple/HGRTEST\#FE1000
 GRTEST     = rel/apple/GRTEST\#FE1000
 DGRTEST    = rel/apple/DGRTEST\#FE1000
@@ -106,7 +109,7 @@ TXTTYPE	= .TXT
 #SYSTYPE	= \#FF2000
 #TXTTYPE	= \#040000
 
-apple: $(PLVMZP_APL) $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVMJIT) $(PLVM802) $(PLVM03) $(PLVMJIT03) $(CMD) $(CMDJIT) $(JIT) $(JIT16) $(JITUNE) $(SOSCMD) $(SOSCMDJIT) $(PLASMAPLASM) $(CODEOPT) $(ZIP) $(MATCHFILES) $(ARGS) $(MEMMGR) $(MEMTEST) $(FIBER) $(FIBERTEST) $(LONGJMP) $(ED) $(MON) $(COPY) $(DEL) $(REN) $(CAT) $(NEWDIR) $(TYPE) $(SOS) $(ROD) $(SIEVE) $(PRIMEGAP) $(MOUSE) $(UTHERNET2) $(UTHERNET) $(ETHERIP) $(INET) $(DHCP) $(HTTPD) $(TFTPD) $(ROGUE) $(ROGUEMAP) $(ROGUECOMBAT) $(SFM) $(SFMSPRT) $(GRAFIX) $(GFXDEMO) $(LINES) $(HGRSPRITE) $(HGRLIB) $(HGRTEST) $(GRLIB) $(DGRLIB) $(GRTEST) $(DGRTEST) $(HGRTEST) $(FILEIO_APL) $(CONIO_APL) $(JOYBUZZ) $(PORTIO) $(SPIPORT) $(SDFAT) $(FATCAT) $(FATGET) $(FATPUT) $(FATWDSK) $(FATRDSK) $(INT32) $(INT32TEST) $(SANE) $(FPSTR) $(FPU) $(SANITY) $(LZ4) $(LZ4CAT) $(RPNCALC) $(SNDSEQ) $(PLAYSEQ)
+apple: $(PLVMZP_APL) $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVMJIT) $(PLVM802) $(PLVM03) $(PLVMJIT03) $(CMD) $(CMDJIT) $(JIT) $(JIT16) $(JITUNE) $(SOSCMD) $(SOSCMDJIT) $(PLASMAPLASM) $(CODEOPT) $(ZIP) $(MATCHFILES) $(ARGS) $(MEMMGR) $(MEMTEST) $(FIBER) $(FIBERTEST) $(LONGJMP) $(ED) $(MON) $(COPY) $(DEL) $(REN) $(CAT) $(NEWDIR) $(TYPE) $(SOS) $(ROD) $(SIEVE) $(PRIMEGAP) $(MOUSE) $(UTHERNET2) $(UTHERNET) $(ETHERIP) $(INET) $(DHCP) $(HTTPD) $(TFTPD) $(ROGUE) $(ROGUEMAP) $(ROGUECOMBAT) $(SFM) $(SFMSPRT) $(GRAFIX) $(GFXDEMO) $(LINES) $(HGRTILE) $(HGRFONT) $(HGRSPRITE) $(HGRLIB) $(TILETEST) $(HGRTEST) $(GRLIB) $(DGRLIB) $(GRTEST) $(DGRTEST) $(HGRTEST) $(FILEIO_APL) $(CONIO_APL) $(JOYBUZZ) $(PORTIO) $(SPIPORT) $(SDFAT) $(FATCAT) $(FATGET) $(FATPUT) $(FATWDSK) $(FATRDSK) $(INT32) $(INT32TEST) $(SANE) $(FPSTR) $(FPU) $(SANITY) $(LZ4) $(LZ4CAT) $(RPNCALC) $(SNDSEQ) $(PLAYSEQ)
 
 	-rm vmsrc/plvmzp.inc
 
@@ -443,6 +446,18 @@ $(GRLIB): libsrc/apple/grlib.pla $(PLVM02) $(PLASM)
 $(DGRLIB): libsrc/apple/dgrlib.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AMOW < libsrc/apple/dgrlib.pla > libsrc/apple/dgrlib.a
 	acme --setpc 4094 -o $(DGRLIB) libsrc/apple/dgrlib.a
+
+$(TILETEST): samplesrc/tiletest.pla $(PLASM)
+	./$(PLASM) -AMOW < samplesrc/tiletest.pla > samplesrc/tiletest.a
+	acme --setpc 4094 -o $(TILETEST) samplesrc/tiletest.a
+
+$(HGRTILE): libsrc/apple/hgrtile.pla $(PLVM02) $(PLASM)
+	./$(PLASM) -AMOW < libsrc/apple/hgrtile.pla > libsrc/apple/hgrtile.a
+	acme --setpc 4094 -o $(HGRTILE) libsrc/apple/hgrtile.a
+
+$(HGRFONT): libsrc/apple/hgrfont.pla $(PLVM02) $(PLASM)
+	./$(PLASM) -AMOW < libsrc/apple/hgrfont.pla > libsrc/apple/hgrfont.a
+	acme --setpc 4094 -o $(HGRFONT) libsrc/apple/hgrfont.a
 
 $(HGRSPRITE): libsrc/apple/hgrsprite.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AMOW < libsrc/apple/hgrsprite.pla > libsrc/apple/hgrsprite.a
