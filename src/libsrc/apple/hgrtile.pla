@@ -24,9 +24,9 @@ word hgrbuff[] = hgr1, hgr2
 //
 // Screen tile scanline addresses.
 //
-word[] scanaddr = $0000,$0080,$0100,$0180,$0200,$0280,$0300,$0380
-word            = $0028,$00A8,$0128,$01A8,$0228,$02A8,$0328,$03A8
-word            = $0050,$00D0,$0150,$01D0,$0250,$02D0,$0350,$03D0
+word[] rowaddr   = $0000,$0080,$0100,$0180,$0200,$0280,$0300,$0380
+word             = $0028,$00A8,$0128,$01A8,$0228,$02A8,$0328,$03A8
+word             = $0050,$00D0,$0150,$01D0,$0250,$02D0,$0350,$03D0
 byte[] scanbttml = $00,$80,$00,$80,$00,$80,$00,$80
 byte             = $28,$A8,$28,$A8,$28,$A8,$28,$A8
 byte             = $50,$D0,$50,$D0,$50,$D0,$50,$D0
@@ -244,6 +244,8 @@ end
 //    loop
 //end
 export asm tileDrawStr(x, y, strptr, strlen, tileset)#0
+        DEC     ESTKL+1,X   ; STRLEN--
+        BMI     +
         LDA     ESTKL+2,X   ; STRPTRL
         STA     TMPL
         LDA     ESTKH+2,X   ; STRPTRH
@@ -251,6 +253,7 @@ export asm tileDrawStr(x, y, strptr, strlen, tileset)#0
         LDY     ESTKL+3,X   ; Y COORD
         LDA     ESTKL+4,X   ; X COORD
         CLC
+        ADC     ESTKL+1,X   ; STRLEN
 end
 asm     _tileDrawStr
         ADC     $1000,Y     ; SCANBTTML
@@ -258,11 +261,11 @@ asm     _tileDrawStr
         LDA     $3001       ; DRAWBUFFH
         ADC     $2000,Y     ; SCANBTTMH
         STA     ESTKL+3,X
-        LDA     #$00
-        STA     ESTKH+1,X   ; USE STRLENH AS COUNT
---      LDY     ESTKH+1,X
-        LDA     #$00
-        STA     SRCH
+        LDY     #$00
+;        STY     ESTKH+1,X   ; USE STRLENH AS COUNT
+--      STY     SRCH
+;        LDY     ESTKH+1,X
+        LDY     ESTKL+1,X   ; STRLEN
         LDA     (TMP),Y     ; TILE INDEX * 8
         ASL
         ROL     SRCH
@@ -270,7 +273,7 @@ asm     _tileDrawStr
         ROL     SRCH
         ASL
         ROL     SRCH
-        CLC
+;        CLC
         ADC     ESTKL+0,X   ; ADD TO TILESETPTR
         STA     SRCL
         LDA     SRCH
@@ -287,15 +290,17 @@ asm     _tileDrawStr
         BNE     -
         LDA     (SRC),Y
         STA     (ESTKL+2,X)
-        DEC     ESTKL+1,X   ; STRLEN
-        BEQ     +
-        INC     ESTKL+2,X   ; RESET SCREEN PTR TO NEXT TILE POS
+;        INC     ESTKL+2,X   ; RESET SCREEN PTR TO NEXT TILE POS
+        DEC     ESTKL+2,X   ; RESET SCREEN PTR TO NEXT TILE POS
         LDA     ESTKL+3,X
-        CLC
-        ADC     #$1C
+;        CLC
+;        ADC     #$1C
+        ADC     #$1B        ; CARRY STILL SET FROM ABOVE
         STA     ESTKL+3,X
-        INC     ESTKH+1,X   ; COUNT++
-        BNE     --
+;        INC     ESTKH+1,X   ; COUNT++
+;        BNE     --
+        DEC     ESTKL+1,X   ; STRLEN--
+        BPL     --
 +       INX
         INX
         INX
@@ -309,7 +314,7 @@ export def tileFromText(txtpage, tileset)#0
     
     txtptr = txtbuff[txtpage & 1]
     for y = 0 to 23
-        tileDrawStr(0, y, scanaddr[y] | txtptr, 40, tileset)
+        tileDrawStr(0, y, rowaddr[y] | txtptr, 40, tileset)
     next        
 end
 export def tileMode(mode)#1
