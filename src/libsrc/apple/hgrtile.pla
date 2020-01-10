@@ -244,8 +244,10 @@ end
 //    loop
 //end
 export asm tileDrawStr(x, y, strptr, strlen, tileset)#0
-        DEC     ESTKL+1,X   ; STRLEN--
-        BMI     +
+        LDA     ESTKL+0,X   ; TILESETPTRL
+        STA     DSTL
+        LDA     ESTKH+0,X   ; TILESETPTRH
+        STA     DSTH
         LDA     ESTKL+2,X   ; STRPTRL
         STA     TMPL
         LDA     ESTKH+2,X   ; STRPTRH
@@ -253,17 +255,46 @@ export asm tileDrawStr(x, y, strptr, strlen, tileset)#0
         LDY     ESTKL+3,X   ; Y COORD
         LDA     ESTKL+4,X   ; X COORD
         CLC
-        ADC     ESTKL+1,X   ; STRLEN
 end
-asm     _tileDrawStr
+asm     _tileDSa
         ADC     $1000,Y     ; SCANBTTML
-        STA     ESTKL+2,X   ; USE ESTK AS POINTER
+        STA     $D000       ; SELF MODIFY LOOP
+        STA     $D001
+        STA     $D002
+        STA     $D003
+        STA     $D004
+        STA     $D005
+        STA     $D006
+        STA     $D007
+end
+asm     _tileDSb
         LDA     $3001       ; DRAWBUFFH
         ADC     $2000,Y     ; SCANBTTMH
-        STA     ESTKL+3,X
+        STA     $D008       ; SELF MODIFY LOOP
+        SEC
+        SBC     #$04
+        STA     $D009
+        SBC     #$04
+        STA     $D00A
+        SBC     #$04
+        STA     $D00B
+        SBC     #$04
+        STA     $D00C
+        SBC     #$04
+        STA     $D00D
+        SBC     #$04
+        STA     $D00E
+        SBC     #$04
+        STA     $D00F
+        LDA     ESTKL+1,X   ; STRLEN
+        STX     IPY
+        TAX                 ; DRAW RIGHT TO LEFT
+        BEQ     +
+        DEX
         LDY     #$00
---      STY     SRCH
-        LDY     ESTKL+1,X   ; STRLEN
+-       STY     SRCH
+        TXA
+        TAY
         LDA     (TMP),Y     ; TILE INDEX * 8
         ASL
         ROL     SRCH
@@ -271,31 +302,41 @@ asm     _tileDrawStr
         ROL     SRCH
         ASL
         ROL     SRCH
-;        CLC                 ; CARRY IS CLEAR FROM ABOVE
-        ADC     ESTKL+0,X   ; ADD TO TILESETPTR
+;        CLC                ; CARRY IS CLEAR FROM ABOVE
+        ADC     DSTL        ; ADD TO TILESETPTR
         STA     SRCL
         LDA     SRCH
-        ADC     ESTKH+0,X
+        ADC     DSTH
         STA     SRCH
         LDY     #$07        ; DRAW BOTTOM UP
-        SEC
--       LDA     (SRC),Y
-        STA     (ESTKL+2,X)
-        LDA     ESTKL+3,X
-        SBC     #$04
-        STA     ESTKL+3,X
-        DEY
-        BNE     -
+end
+asm     _tileDSc
         LDA     (SRC),Y
-        STA     (ESTKL+2,X)
-        DEC     ESTKL+2,X   ; RESET SCREEN PTR TO NEXT TILE POS
-        LDA     ESTKL+3,X
-;        CLC
-;        ADC     #$1C
-        ADC     #$1B        ; CARRY STILL SET FROM ABOVE
-        STA     ESTKL+3,X
-        DEC     ESTKL+1,X   ; STRLEN--
-        BPL     --
+        STA     $4000,X
+        DEY
+        LDA     (SRC),Y
+        STA     $4000,X
+        DEY
+        LDA     (SRC),Y
+        STA     $4000,X
+        DEY
+        LDA     (SRC),Y
+        STA     $4000,X
+        DEY
+        LDA     (SRC),Y
+        STA     $4000,X
+        DEY
+        LDA     (SRC),Y
+        STA     $4000,X
+        DEY
+        LDA     (SRC),Y
+        STA     $4000,X
+        DEY
+        LDA     (SRC),Y
+        STA     $4000,X
+        DEX
+        BPL     -
+        LDX     IPY
 +       INX
         INX
         INX
@@ -358,20 +399,37 @@ end
 //
 // Assembly fixups
 //
-_tileDraw:1    = @scanbttml
-_tileDraw:6    = @drawbuff.1
-_tileDraw:9    = @scanbttmh
-_tileXDraw:1   = @scanbttml
-_tileXDraw:6   = @drawbuff.1
-_tileXDraw:9   = @scanbttmh
-_tileODraw:1   = @scanbttml
-_tileODraw:6   = @drawbuff.1
-_tileODraw:9   = @scanbttmh
-_tileADraw:1   = @scanbttml
-_tileADraw:6   = @drawbuff.1
-_tileADraw:9   = @scanbttmh
-_tileDrawStr:1 = @scanbttml
-_tileDrawStr:6 = @drawbuff.1
-_tileDrawStr:9 = @scanbttmh
+_tileDraw:1  = @scanbttml
+_tileDraw:6  = @drawbuff.1
+_tileDraw:9  = @scanbttmh
+_tileXDraw:1 = @scanbttml
+_tileXDraw:6 = @drawbuff.1
+_tileXDraw:9 = @scanbttmh
+_tileODraw:1 = @scanbttml
+_tileODraw:6 = @drawbuff.1
+_tileODraw:9 = @scanbttmh
+_tileADraw:1 = @scanbttml
+_tileADraw:6 = @drawbuff.1
+_tileADraw:9 = @scanbttmh
+_tileDSa:1   = @scanbttml
+_tileDSa:4   = @_tileDSc.3
+_tileDSa:7   = @_tileDSc.9
+_tileDSa:10  = @_tileDSc.15
+_tileDSa:13  = @_tileDSc.21
+_tileDSa:16  = @_tileDSc.27
+_tileDSa:19  = @_tileDSc.33
+_tileDSa:22  = @_tileDSc.39
+_tileDSa:25  = @_tileDSc.45
+_tileDSa:28  = @_tileDSc.51
+_tileDSb:1   = @drawbuff.1
+_tileDSb:4   = @scanbttmh
+_tileDSb:7   = @_tileDSc.4
+_tileDSb:13  = @_tileDSc.10
+_tileDSb:18  = @_tileDSc.16
+_tileDSb:23  = @_tileDSc.22
+_tileDSb:28  = @_tileDSc.28
+_tileDSb:33  = @_tileDSc.34
+_tileDSb:38  = @_tileDSc.40
+_tileDSb:43  = @_tileDSc.46
 done
 
