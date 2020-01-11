@@ -12,7 +12,7 @@ Download the four disk images (three if you don't plan to boot an Apple ///):
 
 [PLASMA 2.0 DP Demos](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLASMA2-DEM.PO?raw=true)
 
-[PLASMA 2.0 TCP/IP modules](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLASMA2-INET.PO?raw=true)
+[PLASMA 2.0 DP TCP/IP network modules](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLASMA2-INET.PO?raw=true)
 
 [PLASMA 2.0 DP Apple /// SOS Boot and SANE floating point modules](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLASMA2-FPSOS.PO?raw=true)
 
