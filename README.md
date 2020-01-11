@@ -1,4 +1,4 @@
-# 11/10/2020 PLASMA 2.0 Developer Preview 3 Available!
+# 1/10/2020 PLASMA 2.0 Developer Preview 3 Available!
 [Download and read the Release Notes](https://github.com/dschmenk/PLASMA/releases)
 
 [Change List](https://github.com/dschmenk/PLASMA/blob/master/doc/Version%202.0.md#changes-in-plasma-for-20-dp-3)
