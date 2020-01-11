@@ -82,6 +82,7 @@ The file manipulation utilities to copy, delete, rename, create directories, and
 +REN <FILENAME> <NEWNAME>
 +NEWDIR <NEWDIRECTORY>
 +TYPE <FILENAME> [NEWTYPE [NEWAUX]]
++CAT [-R] <FILEPATH]
 ```
 The ```-R``` option will operate on the directories recursively. Wildcard filenames can be specified with ```'*'``` matching zero or more characters, and ```'?'``` matching any character.
 
