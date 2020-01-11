@@ -1,4 +1,4 @@
-# PLASMA Version 2.0 Developer Preview 2
+# PLASMA Version 2.0 Developer Preview 3
 
 Welcome to PLASMA: the Grand Unifying Platform for the Apple 1, ][, and ///.
 
@@ -75,6 +75,15 @@ PLASMA comes with many library modules used by the tools, demos and sample code.
 ```
 +ED [TEXT FILE]
 ```
+The file manipulation utilities to copy, delete, rename, create directories, and change file type and aux type remove the need for external programs to do the same. PLASMA can now be installed with the tools included on the PLASMA2-SYS boot floppy. They are:
+```
++COPY [-R] <SRCPATH>+ <DSTPATH>
++DEL [-R] <FILEPATH>
++REN <FILENAME> <NEWNAME>
++NEWDIR <NEWDIRECTORY>
++TYPE <FILENAME> [NEWTYPE [NEWAUX]]
+```
+The ```-R``` option will operate on the directories recursively. Wildcard filenames can be specified with ```'*'``` matching zero or more characters, and ```'?'``` matching any character.
 
 ## Compiler Modules
 
@@ -86,7 +95,7 @@ Compiler warnings are enabled with `-W`. The optional optimizer is enabled with 
 
 ## Demos
 
-There are some demo programs included for your perusal. Check out `ROGUE` for some diversion. You can find the documentation here: https://github.com/dschmenk/PLASMA/blob/master/doc/Rogue%20Instructions.md. A music sequencer to play through a MockingBoard if it is detected, or the built-in speaker if not. A minimal Web server if you have an Uthernet2 card (required). Bug reports appreciated.
+There are some demo programs included for your perusal. Check out `ROGUE` for some diversion. You can find the documentation here: https://github.com/dschmenk/PLASMA/blob/master/doc/Rogue%20Instructions.md. A music sequencer to play through a MockingBoard if it is detected, or the built-in speaker if not. A minimal Web server if you have an Uthernet2 card (required). Try `SPIDERS`for some hires shoot'em-up action. Bug reports appreciated.
 
 ## Source Code
 
@@ -105,6 +114,14 @@ There is a [YouTube playlist](https://www.youtube.com/playlist?list=PLlPKgUMQbJ7
 - The Apple /// may not always report errors properly or at all.
 
 - The documentation is sparse and incomplete. Yep, could use your help...
+
+# Changes in PLASMA for 2.0 DP 3
+
+1. File manipulation utilities fixed for Apple /// SOS vs ProDOS differences
+
+2. More optimizations for HiRes graphics libraries
+
+3. Spiders From Mars hires demo game
 
 # Changes in PLASMA for 2.0 DP 2
 
