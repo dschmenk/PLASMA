@@ -80,14 +80,10 @@ SEGSTART        =       $2000
         LDA     DSTH
         CMP     #$B8
         BNE     -
-        LDA     #$00            ; INIT JIT, FRAME & POOL POINTERS
-        STA     JITCOMP
-        STA     JITCOMP+1
-        STA     JITCODE
+        LDA     #$00            ; INIT FRAME & POOL POINTERS
         STA     PPL
         STA     IFPL
-        LDA     #$90            ; RESERVE 4K FOR JITCODE
-        STA     JITCODE+1
+        LDA     #$A0            ; TOP OF RAM FOR FRAME POINER
         STA     PPH
         STA     IFPH
         LDX     #$FF            ; INIT STACK POINTER
@@ -138,12 +134,11 @@ JITCOMP !WORD   0               ; $A0F2
 JITCODE !WORD   0               ; $A0F4
 SENTRY  !WORD   INTERP          ; $A0F6
 XENTRY  !WORD   XINTERP         ; $A0F8
-JENTRY  !WORD   JITINTRP        ; $A0FA
 ;*
 ;* OPCODE TABLE
 ;*
         !ALIGN  255,0
-OPTBL   !WORD   CN,CN,CN,CN,CN,CN,CN,CN                                 ; 00 02 04 06 08 0A 0C 0E
+OPTBL   !WORD   ZERO,CN,CN,CN,CN,CN,CN,CN                               ; 00 02 04 06 08 0A 0C 0E
         !WORD   CN,CN,CN,CN,CN,CN,CN,CN                                 ; 10 12 14 16 18 1A 1C 1E
         !WORD   MINUS1,BREQ,BRNE,LA,LLA,CB,CW,CS                        ; 20 22 24 26 28 2A 2C 2E
         !WORD   DROP,DROP2,DUP,DIVMOD,ADDI,SUBI,ANDI,ORI                ; 30 32 34 36 38 3A 3C 3E
@@ -161,10 +156,10 @@ OPTBL   !WORD   CN,CN,CN,CN,CN,CN,CN,CN                                 ; 00 02 
 ;*
 INTERP  PLA
         CLC
-        ADC     #$01
+        ADC	    #$01
         STA     IPL
         PLA
-        ADC     #$00
+        ADC	    #$00
         STA     IPH
         LDY     #$00
         STY     IPX
@@ -187,49 +182,6 @@ XINTERP PLA
         STA     IPL
         DEY
         JMP     FETCHOP
-;*
-;* JIT PROFILING ENTRY INTO INTERPRETER
-;*
-JITINTRP PLA
-        STA     TMPL
-        PLA
-        STA     TMPH
-        LDY     #$04
-        LDA     (TMP),Y         ; DEC JIT COUNT
-        SEC
-        SBC     #$01
-        STA     (TMP),Y
-        BNE     -               ; INTERP BYTECODE
-        LDA     JITCOMP         ; CALL JIT COMPILER
-        STA     SRCL
-        LDA     JITCOMP+1
-        STA     SRCH
-        INY                     ; LDY     #$05
-        LDA     (SRC),Y
-        STA     IPX
-        DEY
-        LDA     (SRC),Y
-        STA     IPH
-        DEY
-        LDA     (SRC),Y
-        STA     IPL
-        DEX                     ; ADD PARAMETER TO DEF ENTRY
-        LDA     TMPL
-        SEC
-        SBC     #$02            ; POINT TO DEF ENTRY
-        PHA                     ; AND SAVE IT FOR LATER
-        STA     ESTKL,X
-        LDA     TMPH
-        SBC     #$00
-        PHA
-        STA     ESTKH,X
-        LDY     #$00
-        JSR     FETCHOP         ; CALL JIT COMPILER
-        PLA
-        STA     TMPH
-        PLA
-        STA     TMPL
-        JMP     (TMP)           ; RE-CALL ORIGINAL DEF ENTRY
 ;*
 ;* INTERNAL DIVIDE ALGORITHM
 ;*
@@ -551,10 +503,14 @@ LNOT    LDA     ESTKL,X
         STA     ESTKH,X
         JMP     NEXTOP
 ;*
-;* CONSTANT -1, NYBBLE, BYTE, $FF BYTE, WORD (BELOW)
+;* CONSTANT -1, ZERO, NYBBLE, BYTE, $FF BYTE, WORD (BELOW)
 ;*
 MINUS1  DEX
 +       LDA     #$FF
+        STA     ESTKL,X
+        STA     ESTKH,X
+        JMP     NEXTOP
+ZERO    DEX
         STA     ESTKL,X
         STA     ESTKH,X
         JMP     NEXTOP

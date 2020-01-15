@@ -1,0 +1,493 @@
+include "inc/cmdsys.plh"
+//
+// Apple II hardware constants.
+//
+const showgraphics = $C050
+const showtext     = $C051
+const showfull     = $C052
+const showmix      = $C053
+const showpage1    = $C054
+const showpage2    = $C055
+const showlores    = $C056
+const showhires    = $C057
+const show40       = $C00C
+const show80       = $C00D
+const mapmain      = $C000
+const mapaux       = $C001
+const an3on        = $C05E
+const an3off       = $C05F
+const ena80        = $C07E
+const dis80        = $C07F
+const page1        = 0
+const page2        = 1
+//
+// Screen row address arrays.
+//
+word[] gr1row = $0400,$0480,$0500,$0580,$0600,$0680,$0700,$0780
+word          = $0428,$04A8,$0528,$05A8,$0628,$06A8,$0728,$07A8
+word          = $0450,$04D0,$0550,$05D0,$0650,$06D0,$0750,$07D0
+word[] gr2row = $0800,$0880,$0900,$0980,$0A00,$0A80,$0B00,$0B80
+word          = $0828,$08A8,$0928,$09A8,$0A28,$0AA8,$0B28,$0BA8
+word          = $0850,$08D0,$0950,$09D0,$0A50,$0AD0,$0B50,$0BD0
+word[] grbuff = @gr1row, @gr2row
+word drawbuff
+byte drawpage
+
+asm grInc(buff)
+!SOURCE    "vmsrc/plvmzp.inc"
+GBASL    =    $26
+GBASH    =    $27
+GBASE    =    GBASL
+GCLR     =    $30
+end
+//
+// Plot pixel
+//
+export asm grPlot(x, y)#0
+        ; GET ROW BUFFER ADDRESSES
+		LDA     $3000
+        STA     SRCL
+        LDA     $3001
+		STA		SRCH
+        LDA     ESTKL,X     ; Y COORD
+        AND     #$FE
+        TAY
+        LDA     (SRC),Y
+        STA     GBASL
+        INY
+        LDA     (SRC),Y
+        STA     GBASH
+        LDY     ESTKL+1,X   ; X COORD
+        LSR     ESTKL,X
+        LDA     GCLR        ; COLOR
+        EOR     (GBASE),Y
+        BCS     +
+        ; EVEN ROW
+        AND     #$0F
+        BCC     ++
+        ; ODD ROW
++       AND     #$F0
+++      EOR     (GBASE),Y
+        STA     (GBASE),Y
+        INX
+        INX
+        RTS
+end
+//
+// Plot horizontal row of pixels
+//
+export asm grHLin(x1, x2, y)#0
+        ; GET ROW BUFFER ADDRESSES
+		LDA     $3000
+        STA     SRCL
+        LDA     $3001
+		STA		SRCH
+        LDA     ESTKL+1,X    ; X2 COORD
+        STA     TMPH
+        LDA     ESTKL+0,X    ; Y COORD
+        AND     #$FE
+        TAY
+        LDA     (SRC),Y
+        STA     GBASL
+        INY
+        LDA     (SRC),Y
+        STA     GBASH
+        LDY     ESTKL+2,X   ; X1 COORD
+-       LDA     ESTKL+0,X   ; Y COORD
+        LSR
+        LDA     GCLR        ; COLOR
+        ; EVEN ROW
+        EOR     (GBASE),Y
+        BCS     +
+        AND     #$0F
+        BCC     ++
+        ; ODD ROW
++       AND     #$F0
+++      EOR     (GBASE),Y
+        STA     (GBASE),Y
+        INC     ESTKL+2,X   ; X1 COORD
+        LDY     ESTKL+2,X
+        CPY     TMPH        ; X2 COORD
+        BCC     -
+        BEQ     -
+        INX
+        INX
+        INX
+        RTS
+end
+//
+// Plot horizontal row of pixels
+//
+export asm grVLin(y1, y2, x)#0
+        ; GET ROW BUFFER ADDRESSES
+		LDA     $3000
+        STA     SRCL
+        LDA     $3001
+		STA		SRCH
+        LDA     ESTKL+2,X   ; Y1 COORD
+-       AND     #$FE
+        TAY
+        LDA     (SRC),Y
+        STA     GBASL
+        INY
+        LDA     (SRC),Y
+        STA     GBASH
+        LDA     ESTKL+2,X
+        LSR
+        LDY     ESTKL+0,X   ; X COORD
+        LDA     GCLR        ; COLOR
+        ; EVEN ROW
+        EOR     (GBASE),Y
+        BCS     +
+        AND     #$0F
+        BCC     ++
+        ; ODD ROW
++       AND     #$F0
+++      EOR     (GBASE),Y
+        STA     (GBASE),Y
+        INC     ESTKL+2,X   ; Y1 COORD
+        LDA     ESTKL+2,X
+        CMP     ESTKL+1,X   ; Y2 COORD
+        BCC     -
+        BEQ     -
+        INX
+        INX
+        INX
+        RTS
+end
+//
+// Draw sprite
+//
+export asm grBLT(x, y, width, height, src)#0
+        ; GET ROW BUFFER ADDRESSES
+		LDA     $3000
+        STA     DSTL
+        LDA     $3001
+		STA		DSTH
+        LDA     ESTKL,X     ; SPRITE
+        STA     SRCL
+        LDA     ESTKH,X
+        STA     SRCH
+        LDA     ESTKL+4,X   ; X1 COORD
+        CMP     #40
+        BPL     ++++
+        CLC
+        ADC     ESTKL+2,X
+        BMI     ++++
+        STA     ESTKH+2,X   ; X2 COORD
+        LDA     ESTKL+3,X   ; Y1 COORD
+        CMP     #48
+        BPL     ++++
+        STA     ESTKH+3,X   ; Y COORD
+        CLC
+        ADC     ESTKL+1,X
+        BMI     ++++
+        STA     ESTKH+1,X   ; Y2 COORD
+        STX     ESP
+        LDA     ESTKH+3,X
+-       CMP     #48
+        BCC     +
+        LDA     SRCL        ; SKIP TO NEXT ROW
+        CLC
+        ADC     ESTKL+2,X   ; WIDTH
+        STA     SRCL
+        LDA     SRCH
+        ADC     #$00
+        STA     SRCH
+        BNE     +++
++       AND     #$FE
+        TAY
+        LDA     (DST),Y
+        STA     GBASL
+        INY
+        LDA     (DST),Y
+        STA     GBASH
+        LDA     ESTKL+4,X   ; X1 COORD
+        STA     ESTKH+4,X   ; X COORD
+--      CMP     #40
+        BCS     ++
+        STA     TMP
+        LDA     ESTKH+3,X   ; Y COORD
+        LSR
+        LDY     #$00
+        LDA     (SRC),Y
+        BMI     ++
+        LDY     TMP
+        BCS     oddBLT
+        ; EVEN ROW
+        EOR     (GBASE),Y
+        AND     #$0F
+        BCC     evnBLT
+       ; ODD ROW
+oddBLT  ASL
+        ASL
+        ASL
+        ASL
+        EOR     (GBASE),Y
+        AND     #$F0
+evnBLT  EOR     (GBASE),Y
+        STA     (GBASE),Y
+++      INC     SRCL
+        BNE     +
+        INC     SRCH
++       INC     ESTKH+4,X   ; X COORD
+        LDA     ESTKH+4,X
+        BMI     --
+        CMP     ESTKH+2,X   ; X2 COORD
+        BCC     --
++++     INC     ESTKH+3,X   ; Y COORD
+        LDA     ESTKH+3,X
+        BMI     -
+        CMP     ESTKH+1,X   ; Y2 COORD
+        BCC     -
+++++    INX
+        INX
+        INX
+        INX
+        INX
+        RTS
+end
+//
+// Draw 8x8 tile (forced to 1x2 block address)
+//
+export asm grTile(x, y, src)#0
+        ; GET ROW BUFFER ADDRESSES
+		LDA     $3000
+        STA     DSTL
+        LDA     $3001
+		STA		DSTH
+        STX     ESP
+        LDA     ESTKL,X     ; TILE
+        STA     SRCL
+        LDA     ESTKH,X
+        STA     SRCH
+        LDA     ESTKL+2,X   ; X1 COORD
+        CMP     #40
+        BPL     ++++
+        CLC
+        ADC     #$08
+        BMI     ++++
+        STA     ESTKH+2,X   ; X2 COORD
+        LDA     ESTKL+1,X   ; Y1 COORD
+        CMP     #48
+        BPL     ++++
+        STA     TMPL        ; Y COORD
+        CLC
+        ADC     #$08
+        BMI     ++++
+        STA     ESTKH+1,X   ; Y2 COORD
+        LDA     TMPL        ; Y COORD
+-       CMP     #48
+        BCC     +
+        LDA     SRCL        ; SKIP TO NEXT ROW
+        ADC     #$07        ; CARRY = 1
+        STA     SRCL
+        LDA     SRCH
+        ADC     #$00
+        STA     SRCH
+        BNE     +++
++       AND     #$FE
+        TAY
+        LDA     (DST),Y
+        STA     GBASL
+        INY
+        LDA     (DST),Y
+        STA     GBASH
+        LDA     ESTKL+2,X   ; X1 COORD
+        STA     TMPH        ; X COORD
+--      TAY
+        CMP     #40
+        LDX     #$00
+        LDA     (SRC,X)
+        INC     SRCL
+        BNE     +
+        INC     SRCH
++       BCS     ++
+        STA     (GBASE),Y
+++      INC     TMPH        ; X COORD
+        LDA     TMPH
+        BMI     --
+        LDX     ESP
+        CMP     ESTKH+2,X   ; X2 COORD
+        BCC     --
++++     INC     TMPL        ; Y COORD
+        INC     TMPL        ; Y COORD
+        LDA     TMPL
+        BMI     -
+        CMP     ESTKH+1,X   ; Y2 COORD
+        BCC     -
+++++    INX
+        INX
+        INX
+        RTS
+end
+//
+// Draw a string of tiles
+//
+export asm grTileStr(x, y, tilestr, strlen, tilebuff)#0
+-       DEX
+        DEX
+        DEX
+        LDA     ESTKL+7,X   ; X COORD
+        STA     ESTKL+2,X
+        LDA     ESTKL+6,X   ; Y COORD
+        STA     ESTKL+1,X
+        LDA     ESTKL+3,X   ; TILE
+        STA     ESTKL,X
+        LDA     ESTKH+3,X   ; TILE
+        STA     ESTKH,X
+end
+asm _grTileTile
+        JSR     $5000
+        LDA     ESTKL+4,X   ; UPDATE X COORD
+        CLC
+        ADC     #$08
+        CMP     #40         ; OFF RIGHT SIDE
+        BPL     +
+        STA     ESTKL+4,X
+        DEC     ESTKL+1,X   ; DEC STRLEN
+        BNE     -
++       INX
+        INX
+        INX
+        INX
+        INX
+        RTS
+end
+//
+// Fill a buffer with tiles
+//
+export asm grFill(x, y, tile)#0
+        LDA     ESTKL+2,X
+        AND     #$0F
+        STA     ESTKL+2,X
+        LDA     ESTKL+1,X
+        AND     #$0F
+        STA     ESTKL+1,X
+        LDA     #$00
+        SEC
+        SBC     ESTKL+2,X   ; ORIGINAL X
+        STA     ESTKL+2,X
+        STA     ESTKH+2,X
+        LDA     #$00
+        SEC
+        SBC     ESTKL+1,X
+        STA     ESTKL+1,X
+-       DEX
+        DEX
+        DEX
+        LDA     ESTKL+5,X   ; X COORD
+        STA     ESTKL+2,X
+        LDA     ESTKL+4,X   ; Y COORD
+        STA     ESTKL+1,X
+        LDA     ESTKL+3,X   ; TILE
+        STA     ESTKL,X
+        LDA     ESTKH+3,X   ; TILE
+        STA     ESTKH,X
+end
+asm _grFillTile
+        JSR     $5000
+        LDA     ESTKL+2,X   ; UPDATE X COORD
+        CLC
+        ADC     #$08
+        STA     ESTKL+2,X
+        CMP     #40         ; OFF RIGHT SIDE?
+        BMI     -
+        LDA     ESTKH+2,X   ; RESTORE X COORD
+        STA     ESTKL+2,X
+        LDA     ESTKL+1,X   ; UPDATE Y COORD
+        CLC
+        ADC     #$08
+        STA     ESTKL+1,X
+        CMP     #48         ; OFF BOTTOM?
+        BMI     -
+        INX
+        INX
+        INX
+        RTS
+end
+//
+// Clear the buffer
+//
+export def grClear(clr)#0
+    byte[32] clrtile
+
+    clr = (clr & $0F) | (clr << 4)
+    clr = (clr & $FF) | (clr << 8)
+    memset(@clrtile, clr, 32)
+    grFill(0, 0, @clrtile)
+end
+//
+// Set lores graphics, return draw buffer
+//
+export def grMode(mode)#1
+    if mode
+        //
+        // Set GR mode
+        //
+        ^showlores
+        ^showfull
+        ^showgraphics
+        ^showpage1
+        ^ena80   = 0
+        ^show40  = 0
+        ^mapmain = 0
+        ^an3off
+        drawpage = 1
+        drawbuff = grbuff[1]
+        return 1
+    fin
+    //
+    // Set text mode
+    //
+    ^showtext
+    ^showpage1
+    ^ena80   = 0
+    ^show40  = 0
+    ^mapmain = 0
+    ^an3off
+    call($FC58, 0, 0, 0, 0) // home()
+    return 0
+end
+//
+// Set display page, return other page
+//
+export def grShow(page)#1
+    page = page & 1
+    ^(showpage1 + page)
+    return page ^ 1
+end
+export def grSwap#0
+    ^(showpage1 + drawpage)
+    drawpage   = drawpage ^ 1
+    drawbuff = grbuff[drawpage]
+end
+export def grDrawBuf(page)#0
+    drawpage   = page
+    drawbuff = grbuff[drawpage]
+end
+//
+// Set color for clear & plot routines
+//
+export def grColor(clr)#0
+    ^$30 = (clr & $0F) | (clr << 4)
+end
+//
+// Assembly fixups
+//
+_grTileTile:1  = @grTile
+_grFillTile:1  = @grTile
+//
+// Fixups for drawbuff
+//
+grPlot:1       = @drawbuff
+grPlot:6       = @drawbuff+1
+grHLin:1       = @drawbuff
+grHLin:6       = @drawbuff+1
+grVLin:1       = @drawbuff
+grVLin:6       = @drawbuff+1
+grBLT:1        = @drawbuff
+grBLT:6        = @drawbuff+1
+grTile:1       = @drawbuff
+grTile:6       = @drawbuff+1
+done

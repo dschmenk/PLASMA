@@ -1,0 +1,329 @@
+include "inc/cmdsys.plh"
+sysflags nojitc // Keep JITC from compiling itself
+//
+// JIT compiler values
+//
+//
+// Indirect interpreter DEFinition entrypoint
+//
+struc t_defentry
+    byte interpjsr
+    word interpaddr
+    word bytecodeaddr
+    byte bytecodexbyte
+    byte callcount
+    byte bytecodesize
+end
+//
+// Private addresses
+//
+const jitcbuf     = $9000
+const codemax     = $A000
+const cmdparser   = $A0F0
+const jitcomp     = $A0F2
+const jitcodeptr  = $A0F4
+const sinterp     = $A0F6
+const xinterp     = $A0F8
+const jitinterp   = $A0FA
+const estkh8      = $C000
+const estkh       = $00C0
+const estkl8      = $D000
+const estkl       = $00D0
+const ifpl8       = $E000
+const ifph8       = $E100
+const jmptmp      = $00E6
+const tmpl8       = $E700
+const tmph8       = $E800
+word  directentry, indirectentry
+//
+// COPY FROM EXT MEM TO MAIN MEM.
+//
+asm defcpy(dst, defentry)#0
+        !SOURCE "vmsrc/plvmzp.inc"
+XPAGE   =       $1600
+SRCX    =       XPAGE+SRCH
+DSTX    =       XPAGE+DSTH
+
+        LDA     ESTKL+1,X
+        STA     DSTL
+        LDA     ESTKH+1,X
+        STA     DSTH
+        LDA     ESTKL,X
+        STA     TMPL
+        LDA     ESTKH,X
+        STA     TMPH
+        LDY     #$05
+        LDA     (TMP),Y
+        STA     SRCX
+        DEY
+        LDA     (TMP),Y
+        STA     SRCH
+        DEY
+        LDA     (TMP),Y
+        STA     SRCL
+        LDY     #$07
+        LDA     (TMP),Y
+        TAY
+        DEY
+        BEQ     +
+-       LDA     (SRC),Y
+        STA     (DST),Y
+        DEY
+        BNE     -
++       LDA     (SRC),Y
+        STA     (DST),Y
+        STY     SRCX
+        INX
+        INX
+        RTS
+end
+include "libsrc/jitcore.pla"
+//
+// SOS routines
+// FILE I/O
+//
+def getpfx(path)#1
+    byte params[4]
+
+    ^path    = 0
+    params.0 = 2
+    params:1 = path
+    params.3 = 128
+    syscall($C7, @params)
+    return path
+end
+def setpfx(path)#1
+    byte params[6]
+    byte fileinfo[2]
+
+    params.0 = 3
+    params:1 = path
+    params:3 = @fileinfo
+    params.5 = 2
+    if not syscall($C4, @params) and (fileinfo.1 == $00 or fileinfo.1 == $0F) // Make sure it's a directory
+        params.0 = 1
+        params:1 = path
+        syscall($C6, @params)
+    else
+        getpfx(path) // Get current path
+    fin
+    return path
+end
+def dev_info(devnum, name, list, listlen)#1
+    byte params[7]
+
+    params.0 = 4
+    params.1 = devnum
+    params:2 = name
+    params:4 = list
+    params.6 = listlen
+    return syscall($85, @params)
+end
+def volume(devname, volname)#1
+    byte params[9]
+
+    params.0 = 4
+    params:1 = devname
+    params:3 = volname
+    params:5 = 0
+    params:7 = 0
+    return syscall($C5, @params)
+end
+//
+// Command mode
+//
+def volumes()#0
+    byte info[11]
+    byte devname[17]
+    byte volname[17]
+    byte i
+
+    for i = $01 to $18
+        if dev_info(i, @devname, @info, 11) == 0
+            puts(@devname)
+            if volume(@devname, @volname) == 0
+                puts(" => /")
+                puts(@volname)
+                putc('/')
+            fin
+            putln
+        fin
+    next
+end
+def catalog(path)#0
+    byte refnum
+    byte firstblk
+    byte entrylen, entriesblk
+    byte i, type, len
+    word entry, filecnt, catptr
+
+    if !^path
+        getpfx(path)
+    fin
+    refnum = cmdsys:sysopen(path)
+    if not refnum
+        return
+    fin
+    catptr = heapmark
+    firstblk = 1
+    repeat
+        if cmdsys:sysread(refnum, catptr, 512) == 512
+            entry = catptr + 4
+            if firstblk
+                entrylen   = catptr->$23
+                entriesblk = catptr->$24
+                filecnt    = catptr=>$25
+                entry      = entry + entrylen
+            fin
+            for i = firstblk to entriesblk
+                if ^entry
+                    ^entry = ^entry & $0F
+                    puts(entry)
+                    type = ' '
+                    when entry->$10
+                        is $0F // Is it a directory?
+                            type = '/'
+                            break
+                        is $FF // SYSTEM file
+                            type = '-'
+                            break
+                        is $FE // REL file
+                            type = '+'
+                    wend
+                    putc(type)
+                    for len = ^entry to 18
+                        putc(' ')
+                    next
+                    filecnt--
+                fin
+                entry = entry + entrylen
+            next
+            firstblk = 0
+        else
+            filecnt = 0
+        fin
+    until filecnt == 0
+    cmdsys:sysclose(refnum)
+    putln()
+end
+def stripchars(strptr)#1
+    while ^strptr and ^(strptr + 1) > ' '
+        memcpy(strptr + 1, strptr + 2, ^strptr)
+        ^strptr--
+    loop
+    return ^strptr
+end
+def stripspaces(strptr)#0
+    while ^strptr and ^(strptr + ^strptr) <= ' '
+        ^strptr--
+    loop
+    while ^strptr and ^(strptr + 1) <= ' '
+        memcpy(strptr + 1, strptr + 2, ^strptr)
+        ^strptr--
+    loop
+end
+def striptrail(strptr)#1
+    byte i
+
+    for i = 1 to ^strptr
+        if ^(strptr + i) <= ' '
+            ^strptr = i - 1
+            break
+        fin
+    next
+    return strptr
+end
+def parsecmd(strptr)#1
+    byte cmd
+
+    cmd = 0
+    stripspaces(strptr)
+    if ^strptr
+        cmd = ^(strptr + 1)
+        memcpy(strptr + 1, strptr + 2, ^strptr)
+        ^strptr--
+    fin
+    stripspaces(strptr)
+    return cmd
+end
+//
+// Command line handler
+//
+def shell#1
+    byte textmode[3]
+    byte prefix[64]
+    byte err[]
+    word cmdptr
+    //
+    // Copy AUTORUN commmand line
+    //
+    cmdptr = strcpy(heapmark, cmdsys:cmdline)
+    //
+    // Handle commands.
+    //
+    repeat
+        if ^cmdptr
+            when toupper(parsecmd(cmdptr))
+                is 'C'
+                    catalog(cmdptr)
+                    break
+                is 'P'
+                    if ^cmdptr and ^(cmdptr + 1) <> '/'
+                        strcat(@prefix, cmdptr)
+                    else
+                        strcpy(@prefix, cmdptr)
+                    fin
+                    setpfx(@prefix)
+                    break
+                is '/'
+                    repeat
+                        prefix--
+                    until prefix[prefix] == '/'
+                    if prefix > 1
+                        setpfx(@prefix)
+                    fin
+                    break
+                is 'S'
+                    setpfx(cmdptr)
+                    strcat(getpfx(cmdsys:syspath), "SYS/"))
+                    break
+                is 'V'
+                    volumes
+                    break
+                is '+'
+					*jitcodeptr = jitcbuf
+                    //cmdsys:modexec(striptrail(cmdptr))
+                    return striptrail(cmdptr)
+                    //cmdsys:syswrite(cmdsys.refcons, @textmode, 3)
+                    break
+                otherwise
+                    puts("?\n")
+            wend
+            if cmdsys.syserr
+                err = cmdsys.syserr
+                puts("ERR:$")
+                putb(err)
+            else
+                puts("OK")
+            fin
+            putln
+        fin
+        puts(getpfx(@prefix))
+        cmdptr = gets($BA)
+        strcpy(cmdsys:cmdline, cmdptr)
+    until 0
+    return 0
+end
+//
+// Save pointer to command line handler
+//
+*cmdparser       = @shell
+//
+// Install JIT compiler
+//
+directentry     = *sinterp
+indirectentry   = *xinterp
+*jitcomp        = @compiler
+cmdsys.jitcount = 32
+cmdsys.jitsize  = 96
+done

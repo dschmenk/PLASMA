@@ -1,0 +1,637 @@
+//
+// Ziggy Stardust and the Spiders from Mars
+//
+include "inc/cmdsys.plh"
+include "inc/hgrlib.plh"
+include "inc/hgrsprite.plh"
+include "inc/joybuzz.plh"
+sysflags reshgr1 // Reserve HGR page 1
+
+const NUMSTARS         = 32
+const SHIP_SPRTNUM     = 0
+const MISSLE_SPRTNUM   = 1
+const WEB_SPRTBASE     = 2
+const SPIDER_SPRTEBASE = 8
+const LASER_RECHARGE   = 20
+const MISSLE_RELOAD    = 10
+const ATTACK_SPEED     = 12
+const SWARM_LIMIT      = 52
+const FASTMOVE_LIMIT   = 120
+const WEB_LIMIT        = 152
+const YSHIP            = 180
+const LASER_BUZZ       = 20
+const ATTACK_BUZZ      = 5
+const WEB1_BUZZ        = 10
+const WEB2_BUZZ        = 12
+const WEB3_BUZZ        = 14
+const SPLAT_BUZZ       = 40
+
+var sprtEgg1, sprtEgg2, sprtEgg3, sprtEgg
+var sprtSpider1, sprtSpider2, sprtSpider3, sprtSpider
+var sprtSplat1, sprtSplat2
+var sprtWeb1, sprtWeb2, sprtWeb3
+var sprtShip, sprtMissle, sprtDummy, heapstart
+var[NUMSTARS]  xstar
+byte[NUMSTARS] ystar
+byte curstar, buzz
+
+//
+// Apple II speaker tone generator routine
+//
+//asm spkrTone(pitch, duration)#0
+byte _spkrTone[]
+byte = $86, $E5         // STX ESP
+byte = $B4, $C0         // LDY ESTKH,X 
+byte = $B5, $D0         // LDA ESTKL,X
+byte = $F0, $01         // BEQ +1
+byte = $C8              // INY
+byte = $85, $08         // STA DSTL
+byte = $84, $09         // STY DSTH
+byte = $B4, $C1         // LDY ESTKL+1,X
+byte = $B5, $D1         // LDA ESTKL+1,X
+byte = $F0, $01         // BEQ +1
+byte = $C8              // INY
+byte = $85, $E7         // STA TMPL
+byte = $84, $E8         // STY TMPH
+byte = $AA              // TAX
+byte = $A9, $FF         // LDA #$FF
+byte = $08              // PHP
+byte = $78              // SEI
+byte = $EA              // NOP
+byte = $EA              // NOP
+byte = $B0, $00         // BCS +0
+byte = $38              // SEC
+byte = $CA              // DEX
+byte = $D0, $18         // BNE +18
+byte = $88              // DEY
+byte = $D0, $17         // BNE +17
+byte = $2C, $30, $C0    // BIT $C030
+byte = $A6, $E7         // LDX TMPL
+byte = $A4, $E8         // LDY TMPH
+byte = $E9, $01         // SBC #$01
+byte = $B0, $EA         // BCS -EA
+byte = $C6, $08         // DEC DSTL
+byte = $D0, $EA         // BNE -EA
+byte = $C6, $09         // DEC DSTH
+byte = $D0, $E6         // BNE -E6
+byte = $F0, $07         // BEQ +8
+byte = $EA              // NOP
+byte = $EA              // NOP
+byte = $EA, $EA         // BIT $C000 (nope)
+byte = $EA              // NOP
+byte = $D0, $EB         // BNE -EA
+byte = $28              // PLP
+byte = $A6, $E5         // LDX ESP
+byte = $E8              // INX
+byte = $E8              // INX
+byte = $60              // RTS
+
+def game(spdrcnt)#1
+  var[8] xspdr, yspdr, ixspdr, iyspdr, hatch
+  var xship, xmissle, leftxlaser, rightxlaser, attack
+  byte[8] life, death
+  byte lasercharging, missleloading, misslecnt, ymissle
+  byte leftylaser, rightylaser, lefthit, righthit, sprtnum[], width
+  byte spdrnum, k, xdelta, ydelta, btn0, btn1, webstate
+
+  xship         = 140
+  ymissle       = 255 // Not active value
+  misslecnt     = 6
+  missleloading = FALSE
+  lasercharging = FALSE
+  //
+  // Initialize the spiders (first is special)
+  //
+  xspdr[0]  = 100
+  ixspdr[0] = 1
+  yspdr[0]  = 60
+  iyspdr[0] = -1
+  hatch[0]  = 1
+  life[0]   = 3
+  death[0]  = 0
+  attack    = -1
+  webstate  = 0
+  //
+  // Initialize spiders
+  //
+  spdrnum   = spdrcnt - 1
+  for k = 1 to spdrnum
+    spriteAdd(k + SPIDER_SPRTEBASE, spriteDup(sprtEgg3))
+    xspdr[k]  = ((xspdr[k - 1] ^ 37) + 97) & 255
+    ixspdr[k] = -ixspdr[k - 1]
+    yspdr[k]  = ((yspdr[k - 1] ^ 29) + 53) & 63
+    iyspdr[k] = -iyspdr[k - 1]
+    hatch[k]  = k / 2 + 1//hatch[k - 1] + 1
+    life[k]   = 3
+    death[k]  = 0
+  next
+  //
+  // Initialize missle display
+  //
+  hgrColor(3)
+  hgrRect(0, YSHIP+3, 279, 191)
+  for k = 0 to misslecnt-1
+    spritePos(k * 16 + 160, 184, sprtMissle)
+    spriteDrawXor(sprtMissle)
+  next
+  hgrColor(1)
+  hgrRect(4, YSHIP+6, LASER_RECHARGE * 4 + 4, 188)
+  //
+  // Main game loop
+  //
+  repeat
+    //
+    // Move living spiders
+    //
+    for k = 0 to spdrnum
+      if life[k]
+        yspdr[k] = yspdr[k] + iyspdr[k]
+        if yspdr[k] < -5
+          //
+          // Above screen
+          //
+          iyspdr[k] = 1
+          if hatch[k]
+            hatch[k]--
+            if hatch[k] == 0
+              //
+              // Hatch this egg into a spider
+              //
+              life[k] = 3 // Reset life
+              spriteAdd(k + SPIDER_SPRTEBASE, spriteDup(sprtSpider3))
+            fin
+          fin
+        fin
+        if yspdr[k] > SWARM_LIMIT
+          //
+          // Attack or not?
+          //
+          if hatch[k] == 0 and attack < 0
+            attack = k
+            iyspdr[k] = ATTACK_SPEED
+          fin
+          if attack == k
+            //
+            // Attacking
+            //
+            if yspdr[k] > WEB_LIMIT
+              //
+              // Iterate through web sequence
+              //
+              when webstate
+                is 10
+                  iyspdr[k] = -8 // Retreat
+                  yspdr[k]  = WEB_LIMIT
+                  spriteDel(2)
+                  spriteDel(3)
+                  spriteDel(4)
+                  webstate = 0
+                  break
+                is 0
+                  iyspdr[k] = 0
+                  spriteAdd(2, sprtWeb1)
+                  spritePosIndex(xspdr[k], WEB_LIMIT+7, 2)
+                  buzz = WEB1_BUZZ
+                  webstate = 1
+                  break
+                is 1
+                  spriteAdd(3, sprtWeb2)
+                  spritePosIndex(xspdr[k], WEB_LIMIT+15, 3)
+                  buzz = WEB2_BUZZ
+                  webstate = 2
+                  break
+                is 2
+                  spriteAdd(4, sprtWeb3)
+                  spritePosIndex(xspdr[k], WEB_LIMIT+22, 4)
+                  webstate = 3
+                otherwise
+                  //
+                  // States 3..9 just repeat this
+                  //
+                  if xship >= xspdr[k] - 17 and xship <= xspdr[k] + 17
+                    //
+                    // Capture ship
+                    //
+                    return FALSE
+                  fin
+                  buzz = WEB3_BUZZ
+                  webstate++
+              wend
+            else
+              if iyspdr[k] > 0
+                //
+                // Move towards player during attack, but not too fast
+                //
+                xdelta   = yspdr[k] > FASTMOVE_LIMIT ?? 2 :: 4
+                xspdr[k] = xspdr[k] + (xship - xspdr[k]) / xdelta
+                buzz = ATTACK_BUZZ
+              else
+                //
+                // Retreat at a progressively faster rate
+                //
+                if ixspdr[k] > 0
+                  xspdr[k] = xspdr[k] + (WEB_LIMIT - yspdr[k]) / 8
+                else
+                  xspdr[k] = xspdr[k] - (WEB_LIMIT - yspdr[k]) / 8
+                fin
+              fin
+            fin
+          else
+            //
+            // Just reverse direction towards top of screen
+            //
+            iyspdr[k] = -1
+          fin
+        else
+          if attack == k
+            //
+            // Retreated back to swarm zone so stop attack
+            //
+            attack    = -1
+            iyspdr[k] = -1
+          fin
+          //
+          // Swarm movement
+          //
+          if ixspdr[k] > 0
+            xspdr[k] = xspdr[k] + yspdr[k] / 8
+          else
+            xspdr[k] = xspdr[k] - yspdr[k] / 8
+          fin
+          if xspdr[k] < -5 or xspdr[k] > 284
+            if xspdr[k] < -5
+              xspdr[k]  = -5
+              ixspdr[k] = 1
+            else
+              xspdr[k]  = 284
+              ixspdr[k] = -1
+            fin
+          fin
+        fin
+        spritePosIndex(xspdr[k], yspdr[k], k+SPIDER_SPRTEBASE)
+      elsif death[k]
+        //
+        // Splat sequence
+        //
+        death[k]--
+        if death[k]
+          spriteAdd(k+SPIDER_SPRTEBASE, spriteDup(sprtSplat2))
+          spritePosIndex(xspdr[k], yspdr[k], k+SPIDER_SPRTEBASE)
+        else
+          spriteAdd(k+SPIDER_SPRTEBASE, spriteDup(sprtDummy))
+          spritePosIndex(0, 0, k+SPIDER_SPRTEBASE)
+          spdrcnt--
+          if not spdrcnt
+             return TRUE
+          fin
+          buzz = SPLAT_BUZZ
+        fin
+      fin
+    next
+    //
+    // Move ship
+    //
+    xdelta, ydelta, btn0, btn1 = joypos(buzz)
+    buzz  = spdrcnt * 4
+    xship = xship + ((xdelta + 4) / 8 - 5)
+    if xship < 0;   xship = 0;   fin
+    if xship > 279; xship = 279; fin
+    spritePosIndex(xship, YSHIP, SHIP_SPRTNUM)
+    //
+    // Missle
+    //
+    if misslecnt and missleloading
+        missleloading--
+    fin
+    if btn1 and not missleloading and ymissle == 255
+      //
+      // Fire missle
+      //
+      xmissle       = xship
+      ymissle       = YSHIP-15
+      missleloading = MISSLE_RELOAD
+      misslecnt--
+      spritePos(misslecnt * 16 + 160, 184, sprtMissle) // Erase from armory
+      spriteDrawXor(sprtMissle)
+      spriteAdd(1, sprtMissle)
+    fin
+    if ymissle <> 255
+      if ymissle < 8
+        //
+        // Missle off top of screen
+        //
+        spriteDel(1)
+        ymissle = 255
+      else
+        ymissle = ymissle - 8
+        spritePosIndex(xmissle, ymissle, MISSLE_SPRTNUM)
+        for k = 0 to spdrnum
+          if life[k]
+            //
+            // Hit test will all living spiders
+            //
+            if ymissle >= yspdr[k] - 15 and ymissle <= yspdr[k] + 5
+              if hatch[k]
+                width = 7 // Egg width
+              else
+                width = 10 // Spider width
+              fin
+              if xmissle >= xspdr[k] - width and xmissle <= xspdr[k] + width
+                //
+                // Hit & kill spider
+                //
+                life[k]  = 0
+                death[k] = 2
+                spriteAdd(k+SPIDER_SPRTEBASE, spriteDup(sprtSplat1))
+                spritePosIndex(xspdr[k], yspdr[k], k+SPIDER_SPRTEBASE)
+                if attack == k // Was it attacking?
+                  attack = -1
+                  spriteDel(2)
+                  spriteDel(3)
+                  spriteDel(4)
+                  webstate = 0
+                fin
+                //
+                // Remove missle
+                //
+                spriteDel(MISSLE_SPRTNUM)
+                ymissle = 255
+              fin
+            fin
+          fin
+        next
+        buzz = ymissle/4
+      fin
+    fin
+    //
+    // Update sprites
+    //
+    spriteDrawXorList()
+    //
+    // Lasers
+    //
+    if lasercharging
+      lasercharging--
+      hgrColor(1)
+      hgrRect(81 - lasercharging*4, YSHIP+6, 84 - lasercharging*4, 188)
+    fin
+    if btn0 and not lasercharging
+      //
+      // Fire laser
+      //
+      hgrColor(0)
+      hgrRect(4, YSHIP+6, LASER_RECHARGE * 4 + 4, 188)
+      lasercharging = LASER_RECHARGE
+      leftxlaser    = xship - 7
+      rightxlaser   = xship + 7
+      leftylaser    = 0
+      rightylaser   = 0
+      lefthit       = 255
+      righthit      = 255
+      for k = 0 to spdrnum
+        if life[k]
+          //
+          // Hit test will all living spiders
+          //
+          if hatch[k]
+            width = 7 // Egg width
+          else
+            width = 10 // Spider width
+          fin
+          if leftxlaser >= xspdr[k]-width and leftxlaser <= xspdr[k]+width
+            if yspdr[k] + 5 > leftylaser
+              lefthit    = k
+              leftylaser = yspdr[k] + 5
+            fin
+          fin
+          if rightxlaser >= xspdr[k]-width and rightxlaser <= xspdr[k]+width
+            if yspdr[k] + 5 > rightylaser
+              righthit    = k
+              rightylaser = yspdr[k] + 5
+            fin
+          fin
+        fin
+      next
+      //
+      // Draw Laser beams
+      //
+      hgrColor(3)
+      if leftxlaser >= 0
+        hgrXorVLin(leftylaser,  YSHIP-8, leftxlaser)
+        hgrXorVLin(leftylaser,  YSHIP-8, leftxlaser+1)
+      fin
+      if rightxlaser < 280
+        hgrXorVLin(rightylaser,  YSHIP-8, rightxlaser)
+        hgrXorVLin(rightylaser,  YSHIP-8, rightxlaser-1)
+      fin
+      buzz = LASER_BUZZ
+      (@_spkrTone)(15, 1)#0
+      if lefthit <> 255
+        sprtnum = lefthit + SPIDER_SPRTEBASE
+        //
+        // Hit
+        //
+        life[lefthit]--
+        if not life[lefthit]
+          //
+          // Kill spider
+          //
+          death[lefthit] = 2
+          spriteAdd(sprtnum, spriteDup(sprtSplat1))
+          spritePosIndex(xspdr[lefthit], yspdr[lefthit], sprtnum)
+          if attack == lefthit // Was it attacking?
+            spriteDel(2)
+            spriteDel(3)
+            spriteDel(4)
+            webstate = 0
+            attack   = -1
+          fin
+        else
+          //
+          // Dim color to show life status
+          //
+          if hatch[lefthit]
+            sprtEgg = life[lefthit] == 2 ?? sprtEgg2 :: sprtEgg1
+            spriteAdd(sprtnum, spriteDup(sprtEgg))
+          else
+            sprtSpider = life[lefthit] == 2 ?? sprtSpider2 :: sprtSpider1
+            spriteAdd(sprtnum, spriteDup(sprtSpider))
+          fin
+          spritePosIndex(xspdr[lefthit], yspdr[lefthit], sprtnum)
+        fin
+      fin
+      if righthit <> 255 and life[righthit]
+        sprtnum = righthit + SPIDER_SPRTEBASE
+        //
+        // Hit
+        //
+        life[righthit]--
+        if not life[righthit]
+          //
+          // Kill spider
+          //
+          death[righthit] = 2
+          spriteAdd(sprtnum, spriteDup(sprtSplat1))
+          spritePosIndex(xspdr[righthit], yspdr[righthit], sprtnum)
+          if attack == righthit // Was it attacking?
+            spriteDel(2)
+            spriteDel(3)
+            spriteDel(4)
+            webstate = 0
+            attack   = -1
+          fin
+        else
+          //
+          // Dim color to show life status
+          //
+          if hatch[righthit]
+            sprtEgg = life[righthit] == 2 ?? sprtEgg2 :: sprtEgg1
+            spriteAdd(sprtnum, spriteDup(sprtEgg))
+          else
+            sprtSpider = life[righthit] == 2 ?? sprtSpider2 :: sprtSpider1
+            spriteAdd(sprtnum, spriteDup(sprtSpider))
+          fin
+          spritePosIndex(xspdr[righthit], yspdr[righthit], sprtnum)
+        fin
+      fin
+      //
+      // Undraw lasers
+      //
+      hgrColor(3)
+      if leftxlaser >= 0
+        hgrXorVLin(leftylaser,  YSHIP-8, leftxlaser)
+        hgrXorVLin(leftylaser,  YSHIP-8, leftxlaser+1)
+      fin
+      if rightxlaser < 280
+        hgrXorVLin(rightylaser,  YSHIP-8, rightxlaser)
+        hgrXorVLin(rightylaser,  YSHIP-8, rightxlaser-1)
+      fin
+    fin
+    //
+    // Update stars
+    //
+    hgrColor(3)
+    hgrXorPlot(xstar[curstar], ystar[curstar])
+    ystar[curstar]++
+    if ystar[curstar] > YSHIP
+        ystar[curstar] = 0
+    fin
+    hgrXorPlot(xstar[curstar], ystar[curstar])
+    curstar++
+    if curstar >= NUMSTARS; curstar = 0; fin
+  until ^$C000 == $9B // ESCape key pressed
+  getc
+  return FALSE
+end
+//
+// Initialization
+//
+puts("Loading");
+putc('.')
+sprtShip = spriteRead("SHIP")
+if not sprtShip
+  cmdsys:modexec("SFMSPRT")
+  sprtShip = spriteRead("SHIP")
+  if not sprtShip
+    puts("\nError: Unable to compile sprites.\n")
+    return -1
+  fin
+fin
+putc('.')
+sprtMissle = spriteRead("MISSLE")
+putc('.')
+sprtEgg3   = spriteRead("EGG3")
+putc('.')
+sprtEgg2   = spriteRead("EGG2")
+putc('.')
+sprtEgg1   = spriteRead("EGG1")
+putc('.')
+sprtSpider3= spriteRead("SPIDER3")
+putc('.')
+sprtSpider2= spriteRead("SPIDER2")
+putc('.')
+sprtSpider1= spriteRead("SPIDER1")
+putc('.')
+sprtWeb1   = spriteRead("WEB1")
+putc('.')
+sprtWeb2   = spriteRead("WEB2")
+putc('.')
+sprtWeb3   = spriteRead("WEB3")
+putc('.')
+sprtSplat1 = spriteRead("SPLAT1")
+putc('.')
+sprtSplat2 = spriteRead("SPLAT2")
+putc('.')
+sprtDummy  = spriteRead("DUMMY")
+//
+// Heat up JIT compiler
+//
+for curstar = 0 to 50
+  putc('.')
+  spriteAdd(0, sprtDummy)
+  spritePosIndex(0, 0, 0)
+  spriteDrawXorList()
+next
+heapstart = heapmark()
+//puts("\nBeginning available memory: "); puti(heapavail()); putln
+repeat
+  hgrMode(TRUE)
+  spriteDrawBuf(hgrDrawBuf(0)) // Single buffered
+  spriteAdd(SHIP_SPRTNUM, sprtShip)
+  spriteAdd(SPIDER_SPRTEBASE, sprtEgg3)
+  //
+  // Init stars
+  //
+  xstar[0] = 99
+  ystar[0] = 10
+  hgrColor(3)
+  hgrXorPlot(xstar[0], ystar[0])
+  for curstar = 1 to NUMSTARS-1
+    xstar[curstar] = (xstar[curstar - 1] + 97 - curstar) % 280
+    ystar[curstar] = (ystar[curstar - 1] + 19 + curstar) % YSHIP
+    hgrXorPlot(xstar[curstar], ystar[curstar])
+  next
+  curstar = 0
+  if game(8)
+    //
+    // Won
+    //
+    spriteDrawXorList()
+    (@_spkrTone)(100, 20)#0
+    (@_spkrTone)(75,  20)#0
+    (@_spkrTone)(15,  20)#0
+    (@_spkrTone)(25,  100)#0
+    puts("\nZiggy Stardust has saved Earth!\n")
+  else
+    //
+    // Lost
+    //
+    spriteDrawXorList()
+    (@_spkrTone)(100, 50)#0
+    spriteDrawXor(sprtShip)
+    (@_spkrTone)(150, 50)#0
+    spriteDrawXor(sprtShip)
+    (@_spkrTone)(100, 50)#0
+    spriteDrawXor(sprtShip)
+    (@_spkrTone)(150, 50)#0
+    puts("\nEarth has been overrun")
+    puts("\nby the Spiders from Mars\n")
+  fin
+  hgrMode(FALSE)
+  //
+  // Clear sprite lists
+  //
+  for curstar = 0 to 15
+    spriteDel(curstar)
+  next
+  spriteDrawXorList()
+  spriteDrawXorList()
+  //
+  // Reset heap
+  //
+  heaprelease(heapstart)
+  //puts("\nAvailable memory: "); puti(heapavail()); putln
+  puts("Play again (Y/N)?")
+until toupper(getc) <> 'Y'
+putln
+done

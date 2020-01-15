@@ -1,0 +1,435 @@
+include "inc/cmdsys.plh"
+//
+// Hardware addresses
+//
+const showgraphics = $C050
+const showtext     = $C051
+const showfull     = $C052
+const showmix      = $C053
+const showpage1    = $C054
+const showpage2    = $C055
+const showlores    = $C056
+const showhires    = $C057
+const keyboard     = $C000
+const keystrobe    = $C010
+const txt1         = $0400
+const txt2         = $0800
+const hgr1         = $2000
+const hgr2         = $4000
+const page1        = 0
+const page2        = 1
+
+word txtbuff[] = txt1, txt2
+word hgrbuff[] = hgr1, hgr2
+//
+// Screen tile scanline addresses.
+//
+word[] rowaddr   = $0000,$0080,$0100,$0180,$0200,$0280,$0300,$0380
+word             = $0028,$00A8,$0128,$01A8,$0228,$02A8,$0328,$03A8
+word             = $0050,$00D0,$0150,$01D0,$0250,$02D0,$0350,$03D0
+byte[] scanbttml = $00,$80,$00,$80,$00,$80,$00,$80
+byte             = $28,$A8,$28,$A8,$28,$A8,$28,$A8
+byte             = $50,$D0,$50,$D0,$50,$D0,$50,$D0
+byte[] scanbttmh = $1C,$1C,$1D,$1D,$1E,$1E,$1F,$1F
+byte             = $1C,$1C,$1D,$1D,$1E,$1E,$1F,$1F
+byte             = $1C,$1C,$1D,$1D,$1E,$1E,$1F,$1F
+
+byte hbmask    = $81,$82,$84,$88,$90,$A0,$C0
+word hcolor[]  = $0000,$552A,$2A55,$7F7F,$8080,$D5AA,$AAD5,$FFFF
+byte drawpage  = 0
+word drawbuff  = hgr1
+
+asm tileInc#0
+!SOURCE    "vmsrc/plvmzp.inc"
+CURSH   =   $24
+CURSV   =   $25
+GBASL   =   $26
+GBASH   =   $27
+GBASE   =   GBASL
+TBASL   =   $28
+TBASH   =   $29
+TBASE   =   TBASL
+TBAS2L  =   $2A
+TBAS2H  =   $2B
+TBAS2E  =   TBAS2L
+end
+//export def tileDraw(x, y, tileptr)#0
+//    var scrnptr
+//    
+//    scrnptr = (scanaddr[y] | drawbuff) + x
+//    scrnptr->[$1C00] = tileptr->[7]
+//    scrnptr->[$1800] = tileptr->[6]
+//    scrnptr->[$1400] = tileptr->[5]
+//    scrnptr->[$1000] = tileptr->[4]
+//    scrnptr->[$0C00] = tileptr->[3]
+//    scrnptr->[$0800] = tileptr->[2]
+//    scrnptr->[$0400] = tileptr->[1]
+//    scrnptr->[$0000] = tileptr->[0]
+//end
+export asm tileDraw(x, y, tileptr)#0
+        LDA     ESTKL+0,X   ; TILEPTRL
+        STA     SRCL
+        LDA     ESTKH+0,X   ; TILEPTRH
+        STA     SRCH
+        LDY     ESTKL+1,X   ; Y COORD
+        LDA     ESTKL+2,X   ; X COORD
+        CLC
+end
+asm     _tileDraw
+        ADC     $1000,Y     ; SCANBTTML
+        STA     ESTKL+0,X   ; USE ESTK AS POINTER
+        LDA     $3001       ; DRAWBUFFH
+        ADC     $2000,Y     ; SCANBTTMH
+        STA     ESTKL+1,X
+        LDY     #$07        ; DRAW BOTTOM UP
+        SEC
+-       LDA     (SRC),Y
+        STA     (ESTKL,X)
+        LDA     ESTKL+1,X
+        SBC     #$04
+        STA     ESTKL+1,X
+        DEY
+        BNE     -
+        LDA     (SRC),Y
+        STA     (ESTKL,X)
+        INX
+        INX
+        INX
+        RTS
+end
+//export def tileXorDraw(x, y, tileptr)#0
+//    var scrnptr
+//    
+//    scrnptr = (scanaddr[y] | drawbuff) + x
+//    scrnptr->[$1C00] = tileptr->[7]
+//    scrnptr->[$1800] = tileptr->[6]
+//    scrnptr->[$1400] = tileptr->[5]
+//    scrnptr->[$1000] = tileptr->[4]
+//    scrnptr->[$0C00] = tileptr->[3]
+//    scrnptr->[$0800] = tileptr->[2]
+//    scrnptr->[$0400] = tileptr->[1]
+//    scrnptr->[$0000] = tileptr->[0]
+//end
+export asm tileXorDraw(x, y, tileptr)#0
+        LDA     ESTKL+0,X   ; TILEPTRL
+        STA     SRCL
+        LDA     ESTKH+0,X   ; TILEPTRH
+        STA     SRCH
+        LDY     ESTKL+1,X   ; Y COORD
+        LDA     ESTKL+2,X   ; X COORD
+        CLC
+end
+asm     _tileXDraw
+        ADC     $1000,Y     ; SCANBTTML
+        STA     ESTKL+0,X   ; USE ESTK AS POINTER
+        LDA     $3001       ; DRAWBUFFH
+        ADC     $2000,Y     ; SCANBTTMH
+        STA     ESTKL+1,X
+        LDY     #$07        ; DRAW BOTTOM UP
+        SEC
+-       LDA     (SRC),Y
+        EOR     (ESTKL,X)
+        STA     (ESTKL,X)
+        LDA     ESTKL+1,X
+        SBC     #$04
+        STA     ESTKL+1,X
+        DEY
+        BNE     -
+        LDA     (SRC),Y
+        EOR     (ESTKL,X)
+        STA     (ESTKL,X)
+        INX
+        INX
+        INX
+        RTS
+end
+//export def tileOrDraw(x, y, tileptr)#0
+//    var scrnptr
+//    
+//    scrnptr = (scanaddr[y] | drawbuff) + x
+//    scrnptr->[$1C00] = tileptr->[7]
+//    scrnptr->[$1800] = tileptr->[6]
+//    scrnptr->[$1400] = tileptr->[5]
+//    scrnptr->[$1000] = tileptr->[4]
+//    scrnptr->[$0C00] = tileptr->[3]
+//    scrnptr->[$0800] = tileptr->[2]
+//    scrnptr->[$0400] = tileptr->[1]
+//    scrnptr->[$0000] = tileptr->[0]
+//end
+export asm tileOrDraw(x, y, tileptr)#0
+        LDA     ESTKL+0,X   ; TILEPTRL
+        STA     SRCL
+        LDA     ESTKH+0,X   ; TILEPTRH
+        STA     SRCH
+        LDY     ESTKL+1,X   ; Y COORD
+        LDA     ESTKL+2,X   ; X COORD
+        CLC
+end
+asm     _tileODraw
+        ADC     $1000,Y     ; SCANBTTML
+        STA     ESTKL+0,X   ; USE ESTK AS POINTER
+        LDA     $3001       ; DRAWBUFFH
+        ADC     $2000,Y     ; SCANBTTMH
+        STA     ESTKL+1,X
+        LDY     #$07        ; DRAW BOTTOM UP
+        SEC
+-       LDA     (SRC),Y
+        ORA     (ESTKL,X)
+        STA     (ESTKL,X)
+        LDA     ESTKL+1,X
+        SBC     #$04
+        STA     ESTKL+1,X
+        DEY
+        BNE     -
+        LDA     (SRC),Y
+        ORA     (ESTKL,X)
+        STA     (ESTKL,X)
+        INX
+        INX
+        INX
+        RTS
+end
+//export def tileAndDraw(x, y, tileptr)#0
+//    var scrnptr
+//    
+//    scrnptr = (scanaddr[y] | drawbuff) + x
+//    scrnptr->[$1C00] = tileptr->[7]
+//    scrnptr->[$1800] = tileptr->[6]
+//    scrnptr->[$1400] = tileptr->[5]
+//    scrnptr->[$1000] = tileptr->[4]
+//    scrnptr->[$0C00] = tileptr->[3]
+//    scrnptr->[$0800] = tileptr->[2]
+//    scrnptr->[$0400] = tileptr->[1]
+//    scrnptr->[$0000] = tileptr->[0]
+//end
+export asm tileAndDraw(x, y, tileptr)#0
+        LDA     ESTKL+0,X   ; TILEPTRL
+        STA     SRCL
+        LDA     ESTKH+0,X   ; TILEPTRH
+        STA     SRCH
+        LDY     ESTKL+1,X   ; Y COORD
+        LDA     ESTKL+2,X   ; X COORD
+        CLC
+end
+asm     _tileADraw
+        ADC     $1000,Y     ; SCANBTTML
+        STA     ESTKL+0,X   ; USE ESTK AS POINTER
+        LDA     $3001       ; DRAWBUFFH
+        ADC     $2000,Y     ; SCANBTTMH
+        STA     ESTKL+1,X
+        LDY     #$07        ; DRAW BOTTOM UP
+        SEC
+-       LDA     (SRC),Y
+        AND     (ESTKL,X)
+        STA     (ESTKL,X)
+        LDA     ESTKL+1,X
+        SBC     #$04
+        STA     ESTKL+1,X
+        DEY
+        BNE     -
+        LDA     (SRC),Y
+        AND     (ESTKL,X)
+        STA     (ESTKL,X)
+        INX
+        INX
+        INX
+        RTS
+end
+//export def tileDrawStr(x, y, strptr, strlen, tileset)#0
+//    while strlen
+//        tileDraw(x, y, tileset + ^strptr * 8)
+//        x++
+//        strptr++
+//        strlen--
+//    loop
+//end
+export asm tileDrawStr(x, y, strptr, strlen, tileset)#0
+        LDA     ESTKL+0,X   ; TILESETPTRL
+        STA     DSTL
+        LDA     ESTKH+0,X   ; TILESETPTRH
+        STA     DSTH
+        LDA     ESTKL+2,X   ; STRPTRL
+        STA     TMPL
+        LDA     ESTKH+2,X   ; STRPTRH
+        STA     TMPH
+        LDY     ESTKL+3,X   ; Y COORD
+        LDA     ESTKL+4,X   ; X COORD
+        CLC
+end
+asm     _tileDSa
+        ADC     $1000,Y     ; SCANBTTML
+        STA     $D000       ; SELF MODIFY LOOP
+        STA     $D001
+        STA     $D002
+        STA     $D003
+        STA     $D004
+        STA     $D005
+        STA     $D006
+        STA     $D007
+end
+asm     _tileDSb
+        LDA     $3001       ; DRAWBUFFH
+        ADC     $2000,Y     ; SCANBTTMH
+        STA     $D008       ; SELF MODIFY LOOP
+        SEC
+        SBC     #$04
+        STA     $D009
+        SBC     #$04
+        STA     $D00A
+        SBC     #$04
+        STA     $D00B
+        SBC     #$04
+        STA     $D00C
+        SBC     #$04
+        STA     $D00D
+        SBC     #$04
+        STA     $D00E
+        SBC     #$04
+        STA     $D00F
+        LDA     ESTKL+1,X   ; STRLEN
+        STX     IPY
+        TAX                 ; DRAW RIGHT TO LEFT
+        BEQ     +
+        DEX
+        LDY     #$00
+-       STY     SRCH
+        TXA
+        TAY
+        LDA     (TMP),Y     ; TILE INDEX * 8
+        ASL
+        ROL     SRCH
+        ASL
+        ROL     SRCH
+        ASL
+        ROL     SRCH
+;        CLC                ; CARRY IS CLEAR FROM ABOVE
+        ADC     DSTL        ; ADD TO TILESETPTR
+        STA     SRCL
+        LDA     SRCH
+        ADC     DSTH
+        STA     SRCH
+        LDY     #$07        ; DRAW BOTTOM UP
+end
+asm     _tileDSc
+        LDA     (SRC),Y
+        STA     $4000,X
+        DEY
+        LDA     (SRC),Y
+        STA     $4000,X
+        DEY
+        LDA     (SRC),Y
+        STA     $4000,X
+        DEY
+        LDA     (SRC),Y
+        STA     $4000,X
+        DEY
+        LDA     (SRC),Y
+        STA     $4000,X
+        DEY
+        LDA     (SRC),Y
+        STA     $4000,X
+        DEY
+        LDA     (SRC),Y
+        STA     $4000,X
+        DEY
+        LDA     (SRC),Y
+        STA     $4000,X
+        DEX
+        BPL     -
+        LDX     IPY
++       INX
+        INX
+        INX
+        INX
+        INX
+        RTS
+end
+export def tileFromText(txtpage, tileset)#0
+    byte y
+    word txtptr
+    
+    txtptr = txtbuff[txtpage & 1]
+    for y = 0 to 23
+        tileDrawStr(0, y, rowaddr[y] | txtptr, 40, tileset)
+    next        
+end
+export def tileMode(mode)#1
+    if mode
+        //
+        // Set HGR mode
+        //
+        memset(hgr1, 0, $2000) // Clear HGR page 1
+        ^showpage1
+        ^showfull
+        ^showhires
+        ^showgraphics
+        drawpage = 0
+        drawbuff = hgr1
+        return 0
+    fin
+    //
+    // Show text mode
+    //
+    ^showpage1
+    ^showtext
+    return 0
+end
+export def tileClear#0
+    memset(drawbuff, $0000, drawbuff) // Clear current HGR page
+end
+//
+// Set display page, return other page
+//
+export def tileShow(page)#1
+    page = page & 1
+    ^(showpage1 + page)
+    return page ^ 1
+end
+export def tileSwap#1
+    ^(showpage1 + drawpage)
+    drawpage = drawpage ^ 1
+    drawbuff = hgrbuff[drawpage]
+    return drawpage
+end
+export def tileDrawBuf(page)#1
+    drawpage = page & 1
+    drawbuff = hgrbuff[drawpage]
+    return drawpage
+end
+//
+// Assembly fixups
+//
+_tileDraw:1  = @scanbttml
+_tileDraw:6  = @drawbuff.1
+_tileDraw:9  = @scanbttmh
+_tileXDraw:1 = @scanbttml
+_tileXDraw:6 = @drawbuff.1
+_tileXDraw:9 = @scanbttmh
+_tileODraw:1 = @scanbttml
+_tileODraw:6 = @drawbuff.1
+_tileODraw:9 = @scanbttmh
+_tileADraw:1 = @scanbttml
+_tileADraw:6 = @drawbuff.1
+_tileADraw:9 = @scanbttmh
+_tileDSa:1   = @scanbttml
+_tileDSa:4   = @_tileDSc.3
+_tileDSa:7   = @_tileDSc.9
+_tileDSa:10  = @_tileDSc.15
+_tileDSa:13  = @_tileDSc.21
+_tileDSa:16  = @_tileDSc.27
+_tileDSa:19  = @_tileDSc.33
+_tileDSa:22  = @_tileDSc.39
+_tileDSa:25  = @_tileDSc.45
+_tileDSa:28  = @_tileDSc.51
+_tileDSb:1   = @drawbuff.1
+_tileDSb:4   = @scanbttmh
+_tileDSb:7   = @_tileDSc.4
+_tileDSb:13  = @_tileDSc.10
+_tileDSb:18  = @_tileDSc.16
+_tileDSb:23  = @_tileDSc.22
+_tileDSb:28  = @_tileDSc.28
+_tileDSb:33  = @_tileDSc.34
+_tileDSb:38  = @_tileDSc.40
+_tileDSb:43  = @_tileDSc.46
+done
+

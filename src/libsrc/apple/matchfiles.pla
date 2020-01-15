@@ -1,0 +1,122 @@
+include "inc/cmdsys.plh"
+include "inc/fileio.plh"
+
+var dirbuf
+//
+// Match next section of source and expression
+//
+def matchNext(src, srcofst, exp, expofst)
+    if ^exp >= expofst
+        when exp->[expofst]
+            is '*' // Multi-char wildcard
+                if matchNext(src, srcofst, exp, expofst + 1) // Match zero wild chars
+                    return TRUE
+                elsif ^src >= srcofst and matchNext(src, srcofst + 1, exp, expofst) // Match more wild chars
+                    return TRUE
+                fin
+            is '?' // Single char wildcard
+                if ^src >= srcofst 
+                    return matchNext(src, srcofst + 1, exp, expofst + 1)
+                fin
+                return FALSE
+            otherwise // verbatim match
+                if ^src >= srcofst and src->[srcofst] == exp->[expofst]
+                    return matchNext(src, srcofst + 1, exp, expofst + 1)
+                fin
+                return FALSE
+        wend
+    fin
+    return ^src < srcofst and ^exp < expofst // Return TRUE if at the end of both
+end
+//
+// Start off matching process
+//
+export def matchName(src, exp)#1
+    //
+    // Match on empty wildcard name (same as '*')
+    //
+    if not ^exp
+        return TRUE
+    fin
+    return matchNext(src, 1, exp, 1)
+end
+export def matchList(pathstr, exp)#2
+    byte refnum
+    char[64] curpath
+    var firstblk, entrylen, entriesblk, i, entry, filecnt, entrylist, entryptr, entrycnt
+
+    if not dirbuf
+        dirbuf = heapallocalign(512, 8, 0)
+    fin
+    if not ^pathstr
+        fileio:getpfx(@curpath)
+        pathstr = @curpath
+    fin
+    if pathstr->[^pathstr] <> '/' // Make sure path ends with a '/'
+        ^pathstr++
+        pathstr->[^pathstr] = '/'
+    fin
+    entrylist = 0
+    entrycnt  = 0
+    filecnt   = 0
+    firstblk  = 1
+    refnum    = fileio:open(pathstr)
+    repeat
+        if fileio:read(refnum, dirbuf, 512) == 512
+            //
+            // Skip block pointers
+            //
+            entry = dirbuf + 4
+            if firstblk
+                //
+                // Pull out revelant details from the first block
+                //
+                entrylen   = dirbuf->$23
+                entriesblk = dirbuf->$24
+                filecnt    = dirbuf=>$25
+                entry      = entry + entrylen
+            fin
+            for i = firstblk to entriesblk
+                //
+                // Copy directory entry details
+                //
+                ^entry = ^entry & $0F
+                if ^entry
+                    //
+                    // Match wildcard filename
+                    //
+                    if matchName(entry, exp)
+                        entryptr = heapalloc(t_fileentry)
+                        memcpy(entryptr, entry, t_fileentry)
+                        entrycnt++
+                        if not entrylist
+                            entrylist = entryptr
+                        fin
+                    fin
+                    filecnt--
+                fin
+                entry = entry + entrylen
+            next
+            firstblk = 0
+        fin
+    until filecnt == 0
+    fileio:close(refnum)
+    return entrylist, entrycnt
+end
+//
+// Is this a wildcard name?
+//
+export def isWildName(exp)#1
+    byte i
+    
+    if ^exp
+        for i = 1 to ^exp
+            if exp->[i] == '*' or exp->[i] == '?'
+                return TRUE
+            fin
+        next
+    fin
+    return FALSE
+end
+done
+                

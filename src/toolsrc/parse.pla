@@ -1211,9 +1211,8 @@ def parse_lambda
     return func_tag
 end
 def parse_defs
-    byte idlen, cfnparms, cfnvals
-    word type, idstr, func_tag, idptr
-
+    byte idlen, cfnparms, cfnvals, defstr[17]
+    word type, idstr, func_tag, idptr, defcodeptr
     type = FUNC_TYPE
     when token
         is CONST_TKN
@@ -1256,6 +1255,11 @@ def parse_defs
                 func_tag = new_tag(WORD_FIXUP)
                 new_idfunc(idstr, idlen, type, func_tag, cfnparms, infuncvals)
             fin
+            //
+            // Print def name
+            //
+            nametostr(idstr, idlen > 16 ?? 16 :: idlen, @defstr); puts(@defstr); putc(':')
+            defcodeptr = codeptr
             emit_tag(func_tag)
             new_dfd(func_tag)
             while parse_vars(LOCAL_TYPE); nextln; loop
@@ -1276,20 +1280,26 @@ def parse_defs
                 emit_lambdafunc(lambda_tag[cfnvals], lambda_cparms[cfnvals], lambda_seq[cfnvals])
                 new_dfd(lambda_tag[cfnvals])
             next
+            puti(codeptr - defcodeptr); puts(@bytesln)
+
     wend
     return token == EOL_TKN ?? TRUE :: FALSE
 end
 def parse_module#0
     init_idglobal
     init_idlocal
+    puts("Data+Code buffer size = "); puti(codebufsz); putln
     if nextln
         //
         // Compile module
         //
+        puts("\nDATA:");
         while parse_mods;              nextln; loop
         while parse_vars(GLOBAL_TYPE); nextln; loop
         emit_codeseg
+        puti(codeptr - codebuff); puts(@bytesln)
         while parse_defs;              nextln; loop
+        puts("INIT:")
         entrypoint = codeptr
         prevstmnt  = 0
         init_idlocal
@@ -1301,6 +1311,8 @@ def parse_module#0
             emit_const(0)
             emit_leave
         fin
+        puti(codeptr - entrypoint); puts(@bytesln)
+        puts("\nTotal bytes compiled: "); puti(codeptr - codebuff); putln
         if token <> DONE_TKN; parse_warn("Missing DONE\n"); fin
         //dumpsym(idglobal_tbl, globals)
     fin

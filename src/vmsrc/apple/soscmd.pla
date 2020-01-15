@@ -1,81 +1,8 @@
 include "inc/cmdsys.plh"
 //
-// JIT compiler values
-//
-//
-// Indirect interpreter DEFinition entrypoint
-//
-struc t_defentry
-    byte interpjsr
-    word interpaddr
-    word bytecodeaddr
-    byte bytecodexbyte
-    byte callcount
-    byte bytecodesize
-end
-//
 // Private addresses
 //
-const codemax     = $A000
 const cmdparser   = $A0F0
-const jitcomp     = $A0F2
-const jitcodeptr  = $A0F4
-const sinterp     = $A0F6
-const xinterp     = $A0F8
-const jitinterp   = $A0FA
-const estkh8      = $C000
-const estkh       = $00C0
-const estkl8      = $D000
-const estkl       = $00D0
-const ifpl8       = $E000
-const ifph8       = $E100
-const jmptmp      = $00E6
-const tmpl8       = $E700
-const tmph8       = $E800
-word  directentry, indirectentry
-//
-// COPY FROM EXT MEM TO MAIN MEM.
-//
-asm defcpy(dst, defentry)#0
-        !SOURCE "vmsrc/plvmzp.inc"
-XPAGE   =       $1600
-SRCX    =       XPAGE+SRCH
-DSTX    =       XPAGE+DSTH
-
-        LDA     ESTKL+1,X
-        STA     DSTL
-        LDA     ESTKH+1,X
-        STA     DSTH
-        LDA     ESTKL,X
-        STA     TMPL
-        LDA     ESTKH,X
-        STA     TMPH
-        LDY     #$05
-        LDA     (TMP),Y
-        STA     SRCX
-        DEY
-        LDA     (TMP),Y
-        STA     SRCH
-        DEY
-        LDA     (TMP),Y
-        STA     SRCL
-        LDY     #$07
-        LDA     (TMP),Y
-        TAY
-        DEY
-        BEQ     +
--       LDA     (SRC),Y
-        STA     (DST),Y
-        DEY
-        BNE     -
-+       LDA     (SRC),Y
-        STA     (DST),Y
-        STY     SRCX
-        INX
-        INX
-        RTS
-end
-include "libsrc/jitcore.pla"
 //
 // SOS routines
 // FILE I/O
@@ -174,10 +101,8 @@ def catalog(path)#0
                 entry      = entry + entrylen
             fin
             for i = firstblk to entriesblk
-                type = ^entry
-                if type
-                    len = type & $0F
-                    ^entry = len
+                if ^entry
+                    ^entry = ^entry & $0F
                     puts(entry)
                     type = ' '
                     when entry->$10
@@ -191,7 +116,7 @@ def catalog(path)#0
                             type = '+'
                     wend
                     putc(type)
-                    for len = 18 - len downto 0
+                    for len = ^entry to 18
                         putc(' ')
                     next
                     filecnt--
@@ -291,7 +216,7 @@ def shell#1
                     volumes
                     break
                 is '+'
-                    //cmdsys:modexec(striptrail(cmdptr))
+					//cmdsys:modexec(striptrail(cmdptr))
                     return striptrail(cmdptr)
                     //cmdsys:syswrite(cmdsys.refcons, @textmode, 3)
                     break
@@ -316,13 +241,5 @@ end
 //
 // Save pointer to command line handler
 //
-*cmdparser       = @shell
-//
-// Install JIT compiler
-//
-directentry     = *sinterp
-indirectentry   = *xinterp
-*jitcomp        = @compiler
-cmdsys.jitcount = 44
-cmdsys.jitsize  = 96
+*cmdparser = @shell
 done

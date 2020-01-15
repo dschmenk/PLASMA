@@ -1,0 +1,81 @@
+include "inc/cmdsys.plh"
+include "inc/hgrlib.plh"
+include "inc/hgrsprite.plh"
+include "inc/lines.plh"
+sysflags reshgr1|reshgr2 // Reserve HGR page 1 and 2
+
+byte ball = $88, $83, $33, $38, $88
+byte      = $88, $33, $11, $33, $88
+byte      = $83, $31, $11, $13, $38
+byte      = $33, $11, $11, $11, $33
+byte      = $33, $11, $11, $11, $33
+byte      = $33, $11, $11, $11, $33
+byte      = $33, $11, $11, $11, $33
+byte      = $83, $31, $11, $13, $38
+byte      = $88, $33, $11, $33, $88
+byte      = $88, $83, $33, $38, $88
+var sprtBall
+
+def testline#0
+  var i
+
+  setlinespans(@hgrHlin, @hgrVlin)
+  setlineplot(@hgrXorPlot)
+  hgrColor(7)
+  for i = 0 to 191 step 8
+    linespans(0, i, 279, 191 - i)
+    //line(0, i, 279, 191 - i)
+  next
+  for i = 0 to 279 step 9
+    linespans(i, 0, 279 - i, 191)
+    //line(i, 0, 279 - i, 191)
+  next
+end
+def testblt(sprtnum)#0
+  var[16] i, j, ii, jj
+  byte k
+
+  sprtnum = sprtnum - 1
+  i[0] = 100
+  ii[0] = 1
+  j[0] = 80
+  jj[0] = -1
+  if sprtnum
+    for k = 1 to sprtnum
+      spriteAdd(k, spriteDup(sprtBall))
+      i[k] = ((i[k - 1] ^ 37) + 97) % 270
+      ii[k] = -ii[k - 1]
+      j[k] = ((j[k - 1] ^ 29) + 53) % 180
+      jj[k] = -jj[k - 1]
+    next
+  fin
+  while ^$C000 < 128
+    for k = 0 to sprtnum
+      i[k] = i[k] + ii[k]
+      if i[k] < -5 or i[k] > 284
+        ii[k] = -ii[k]
+      fin
+      j[k] = j[k] + jj[k]
+      if j[k] < -5 or j[k] > 196
+        jj[k] = -jj[k]
+      fin
+      spritePosIndex(i[k], j[k], k)
+    next
+    spriteDrawList()
+    spriteDrawBuf(hgrSwap())
+  loop
+end
+
+hgrMode(TRUE)
+spriteDrawBuf(hgrDrawBuf(0)) // So we can see the compile process
+sprtBall = spriteCompile(10, 10, 5, 5, @ball)
+hgrColor(0)
+hgrClear()
+testline
+memcpy($4000, $2000, $2000) // Copy to both buffers
+spriteDrawBuf(hgrDrawBuf(1))
+spriteAdd(0, sprtBall)
+testblt(16)
+getc
+hgrMode(FALSE)
+done

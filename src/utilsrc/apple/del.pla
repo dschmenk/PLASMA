@@ -1,0 +1,168 @@
+include "inc/cmdsys.plh"
+include "inc/longjmp.plh"
+include "inc/args.plh"
+include "inc/fileio.plh"
+include "inc/matchfiles.plh"
+
+var arg, recurse, exit, filelist, fileptr, filecnt
+char[64] path
+res[t_fileinfo] fileinfo
+//
+// Copy string with upper case conversion
+//
+def struprcpy(dst, src)#0
+    byte i, chr
+
+    if ^src
+        for i = 1 to ^src
+            chr = src->[i]
+            if chr >= 'a' and chr <= 'z'
+                dst->[i] =  chr - 'a' + 'A'
+            else
+                dst->[i] = chr
+            fin
+        next
+    fin
+    ^dst = ^src
+end
+def filefrompath(filestr, pathstr)#0
+    byte i
+    
+    for i = ^pathstr downto 1
+        if pathstr->[i] == '/'
+            break
+        fin
+    next
+    ^filestr = ^pathstr - i
+    memcpy(filestr + 1, pathstr + 1 + i, ^filestr)
+end
+//
+// Check filename
+//
+def chkfile(file)#1
+    var refnum, dirbuf, filecnt
+
+    //
+    // Check if file exists
+    //
+    if fileio:getfileinfo(file, @fileinfo) == FILE_ERR_OK
+        //
+        // Check if deleting a directory
+        //
+        if fileinfo.file_type == $0F
+            refnum = fileio:open(file)
+            if refnum
+                //
+                // Check for files inside directory
+                //
+                filecnt = 0
+                dirbuf = heapalloc(512)
+                if fileio:read(refnum, dirbuf, 512) == 512
+                    fileio:close(refnum)
+                    filecnt = dirbuf=>$25 // File count in directory
+                fin
+                heaprelease(dirbuf)
+                if filecnt
+                    puts("Directory not empty: "); puts(file); putln
+                    return FALSE
+                fin
+            fin
+        fin
+        return TRUE
+    fin
+    puts("File not found: "); puts(file); putln
+    return FALSE
+end
+def delfiles(delfile)#0
+    var entrylist, entry, entrycnt
+    char[64] delpath
+    char[64] delfilepath
+    char[16] wildname
+
+    strcpy(@delpath, delfile)
+    wildname = 0
+    //if fileio:getfileinfo(@delpath, @fileinfo) <> FILE_ERR_OK or fileinfo.file_type <> $0F
+    if delpath[delpath] <> '/'
+        filefrompath(@wildname, @delpath)
+        delpath = delpath - wildname
+    fin
+    //
+    // Check arguments and file types
+    //
+    entrylist, entrycnt = matchList(@delpath, @wildname)
+    if entrylist
+        entry = entrylist
+        while entrycnt
+            strcpy(@delfilepath, @delpath)
+            strcat(@delfilepath, entry)
+            //
+            // Check if file is a directory
+            //
+            if entry->entry_type == $0F
+                if recurse
+                    strcat(@delfilepath, "/")
+                    strcat(@delfilepath, @wildname)
+                    delfiles(@delfilepath)
+                fin
+                strcpy(@delfilepath, @delpath)
+                strcat(@delfilepath, entry)
+                if chkfile(@delfilepath)
+                    puts("Removing: "); puts(@delfilepath); putln
+                    fileio:destroy(@delfilepath)
+                fin
+            else
+                puts("Removing: "); puts(@delfilepath); putln
+                fileio:destroy(@delfilepath)
+            fin
+            entry = entry + t_fileentry
+            entrycnt--            
+        loop
+    elsif not wildname
+        puts("Not found: "); puts(@delpath); puts("/"); puts(@wildname); putln
+    fin
+end
+//
+// Install error exit
+//
+exit = heapalloc(t_except)
+if not except(exit)
+    //
+    // Check arguments and file types
+    //
+    arg = argNext(argFirst)
+    if ^arg and arg->[1] == '-'
+        if ^arg > 1 and toupper(arg->[2]) == 'R'
+            recurse = TRUE
+        fin
+        arg = argNext(arg)
+    fin
+    if ^arg
+        filelist = heapmark()
+        while ^arg
+            //
+            // Add to file list
+            //
+            fileptr = heapalloc(^arg + 1)
+            struprcpy(fileptr, arg)
+            filecnt++
+            arg = argNext(arg)
+        loop
+        fileptr = filelist
+        while filecnt
+            //
+            // Delete files in list
+            //
+            if recurse and fileio:getfileinfo(fileptr, @fileinfo) == FILE_ERR_OK and (fileinfo.storage_type & $0D == $0D)
+                strcpy(@path,fileptr)
+                strcat(@path, "/")
+                delfiles(@path)
+            fin    
+            delfiles(fileptr)
+            fileptr = fileptr + ^fileptr + 1
+            filecnt--
+        loop
+    else
+        puts("Usage: +DEL <FILE>+\n")
+    fin
+fin
+done

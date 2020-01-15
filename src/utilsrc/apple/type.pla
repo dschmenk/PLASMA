@@ -1,0 +1,98 @@
+include "inc/cmdsys.plh"
+include "inc/args.plh"
+include "inc/fileio.plh"
+
+char[64] filename
+res[t_fileinfo] fileinfo
+var arg, type, aux
+//
+// Convert byte to two hex chars
+//
+def putb(b)#0
+    char h
+    
+    h = ((b >> 4) & $0F) + '0'
+    if h > '9'
+        h = h + 7
+    fin
+    putc(h)
+    h = (b & $0F) + '0'
+    if h > '9'
+        h = h + 7
+    fin
+    putc(h)
+end
+def htoi(hexptr)
+    var val, i, n
+    
+    val = 0
+    for i = 1 to ^hexptr
+        n = toupper(^(hexptr + i)) - '0'
+        if n > 9
+            n = n - 7
+        fin
+        if n > 15 or n < 0
+            return val
+        fin
+        val = (val << 4) + n
+    next
+    return val
+end
+//
+// Check arguments and file types
+//
+arg = argNext(argFirst)
+if ^arg
+    strcpy(@filename, arg)
+    //
+    // Check if file exists
+    //
+    if fileio:getfileinfo(@filename, @fileinfo) == FILE_ERR_OK
+        //
+        // Check if re-typing a directory
+        //
+        if fileinfo.file_type <> $0F
+            //
+            // Check for optional overrides
+            //
+            arg = argNext(arg)
+            if ^arg
+                type = htoi(arg)
+                if type > 255
+                    puts("TYPE value out of range\n")
+                    return
+                fin
+                //
+                // Can't change something into  directory
+                //
+                if type <> $0F
+                    fileinfo.file_type = type
+                    arg = argNext(arg)
+                    if ^arg
+                        aux = htoi(arg)
+                        fileinfo:aux_type = aux
+                    fin
+                    //
+                    // Update file type and aux values
+                    //
+                    if fileio:setfileinfo(@filename, @fileinfo) == FILE_ERR_OK
+                        if fileio:getfileinfo(@filename, @fileinfo) <> FILE_ERR_OK
+                            puts("Unable to reload file info: "); puts(@filename)
+                        fin
+                    else
+                        puts("Unable to change TYPE & AUX values: "); puts(@filename)
+                        return
+                    fin
+                fin
+            fin
+        else
+            puts("Unable to get file info: "); puts(@filename); putln
+        fin
+    fin
+    puts(@filename); putc(':')
+    putc('$'); putb(fileinfo.file_type); putc(' ')
+    putc('$'); puth(fileinfo:aux_type); putln
+    return
+fin
+puts("Usage: +TYPE FILE [HEXTYPE [HEXAUX]]\n")
+done

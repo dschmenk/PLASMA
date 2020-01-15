@@ -11,7 +11,6 @@ const reshgr1     = $0010
 const reshgr2     = $0020
 const resxhgr1    = $0040
 const resxhgr2    = $0080
-const nojitc      = $0100
 //
 // Module don't free memory
 //
@@ -23,7 +22,6 @@ const modinitkeep = $4000
 const instr       = $A020
 const cmdparser   = $A0F0
 const xinterp     = $A0F8
-const jitinterp   = $A0FA
 //
 // Indirect interpreter DEFinition entrypoint
 //
@@ -32,15 +30,7 @@ struc t_defentry
     word interpaddr
     word bytecodeaddr
     byte bytecodexbyte
-    byte callcount
-    byte bytecodesize
 end
-//
-// JIT compiler values
-//
-const jitcomp     = $A0F2
-const jitcodeptr  = $A0F4
-const codemax     = $A000
 //
 // Pedefined functions.
 //
@@ -59,7 +49,7 @@ word syspath
 word cmdlnptr
 word              = @execmod, @open, @close, @read, @write
 byte perr
-byte jitcount     = 0
+byte jitcount     = 0 // Keep these here for compatibility
 byte jitsize      = 0
 byte refcons      = 0
 byte devcons      = 0
@@ -701,7 +691,7 @@ asm lookupdef(addr, deftbl)#1
         LDA     SRCH
         STA     ESTKH,X
         RTS
-+       LDA     #$08            ; T_DEFENTRY
++       LDA     #$06            ; T_DEFENTRY
         CLC
         ADC     SRCL
         STA     SRCL
@@ -1026,19 +1016,10 @@ def lookupextern(esd, index)#1
     fin
     return 0
 end
-def adddef(isfirst, ext, addr, deflast)#1
+def adddef(ext, addr, deflast)#1
     word preventry, defentry, defsize
     defentry = *deflast
     *deflast = defentry + t_defentry
-    if not isfirst
-        preventry = defentry - t_defentry
-        defsize   = addr - preventry=>bytecodeaddr
-        if defsize <= jitsize
-            preventry=>interpaddr   = *jitinterp // JSR JITINTRP
-            preventry->callcount    = jitcount   // Set JIT countdown
-            preventry->bytecodesize = defsize    // Set size
-        fin
-    fin
     defentry->interpjsr     = $20      // JSR
     defentry=>interpaddr    = *xinterp // XINTERP
     defentry=>bytecodeaddr  = addr
@@ -1047,11 +1028,11 @@ def adddef(isfirst, ext, addr, deflast)#1
     return defentry
 end
 def loadmod(mod)#1
-    word refnum[], deffirst, rdlen, modsize, bytecode, codefix, defofst, defcnt, init, initcode[], fixup
+    word refnum, rdlen, modsize, bytecode, codefix, defofst, defcnt, init, initcode[], fixup
     word addr, defaddr, modaddr, modfix, modofst, modend
     word deftbl, deflast, codeseg
     word moddep, rld, esd, sym
-    byte lerr, defext, skipjit, fileinfo[], str[16], filename[33]
+    byte lerr, defext, fileinfo[], str[16], filename[33]
     byte header[128]
     lerr = 0
     //
@@ -1086,7 +1067,6 @@ def loadmod(mod)#1
             // This is an EXTended RELocatable (data+bytecode) module.
             //
             systemflags = header.4 | systemflags
-            skipjit     = header.5 & (nojitc >> 8)
             defofst     = header:6
             defcnt      = header:8
             init        = header:10
@@ -1172,14 +1152,12 @@ def loadmod(mod)#1
         //
         // Run through the DeFinition Dictionary.
         //
-        deffirst    = 1
         while ^rld == $02
             //
             // This is a bytcode def entry - add it to the def directory.
             //
-            adddef(deffirst, defext, rld=>1 + defofst, @deflast)
-            deffirst = skipjit // Calculate JIT potential or not
-            rld      = rld + 4
+            adddef(defext, rld=>1 + defofst, @deflast)
+            rld = rld + 4
         loop
         //
         // Run through the Re-Location Dictionary.
@@ -1233,7 +1211,7 @@ def loadmod(mod)#1
     //
     initcode = 0
     if init
-        initcode = adddef(deffirst, defext, init + defofst, @deflast)()
+        initcode = adddef(defext, init + defofst, @deflast)()
         if initcode < 0
             perr = -initcode
         fin
@@ -1242,18 +1220,16 @@ def loadmod(mod)#1
 end
 def execmod(modfile)#1
     byte moddci[17]
-    word saveheap, savesym, saveflags, savejit
+    word saveheap, savesym, saveflags
 
     perr = 1
     if stodci(modfile, @moddci)
         saveheap  = heap
         savesym   = lastsym
         saveflags = systemflags
-        savejit   = *jitcodeptr
         if loadmod(@moddci) < modkeep
             lastsym     = savesym
             heap        = saveheap
-            *jitcodeptr = savejit
             while modid
                 modid--
                 seg_release(modseg[modid])
@@ -1287,14 +1263,14 @@ cmdlnptr = @cmdln
 // Print PLASMA version
 //
 init_cons
-prstr("PLASMA 2.0 Dev JITC\n")//; putb(version.1); putc('.'); putb(version.0); putln
+prstr("PLASMA 2.0 DP3\n")//; putb(version.1); putc('.'); putb(version.0); putln
 prstr("MEM:$"); prword(availheap); crout
 //
 // Exec command line parser
 //
 loadmod(@soscmd)
-modid = 0
-autorun  = open("AUTORUN")
+modid   = 0
+autorun = open("AUTORUN")
 if autorun > 0
     cmdln = read(autorun, @cmdln.1, 64)
     close(autorun)

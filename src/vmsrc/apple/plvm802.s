@@ -258,7 +258,7 @@ VMCORE  =        *
 ;*              *
 ;****************
         !ALIGN  255,0
-OPTBL   !WORD   CN,CN,CN,CN,CN,CN,CN,CN                                 ; 00 02 04 06 08 0A 0C 0E
+OPTBL   !WORD   ZERO,CN,CN,CN,CN,CN,CN,CN                               ; 00 02 04 06 08 0A 0C 0E
         !WORD   CN,CN,CN,CN,CN,CN,CN,CN                                 ; 10 12 14 16 18 1A 1C 1E
         !WORD   MINUS1,BREQ,BRNE,LA,LLA,CB,CW,CS                        ; 20 22 24 26 28 2A 2C 2E
         !WORD   DROP,DROP2,DUP,DIVMOD,ADDI,SUBI,ANDI,ORI                ; 30 32 34 36 38 3A 3C 3E
@@ -290,7 +290,7 @@ DINTRP  PHP
         STX     HWSP
         LDX     #>OPTBL
 !IF DEBUG {
-        JMP     SETDBG
+        BRA     SETDBG
 } ELSE {
         STX     OPPAGE
         LDY     #$00
@@ -491,7 +491,7 @@ LCDEFCMD =      *-28            ; DEFCMD IN LC MEMORY
 ;*               *
 ;*****************
         !ALIGN  255,0
-OPXTBL  !WORD   CN,CN,CN,CN,CN,CN,CN,CN                                 ; 00 02 04 06 08 0A 0C 0E
+OPXTBL  !WORD   ZERO,CN,CN,CN,CN,CN,CN,CN                               ; 00 02 04 06 08 0A 0C 0E
         !WORD   CN,CN,CN,CN,CN,CN,CN,CN                                 ; 10 12 14 16 18 1A 1C 1E
         !WORD   MINUS1,BREQ,BRNE,LA,LLA,CB,CW,CSX                       ; 20 22 24 26 28 2A 2C 2E
         !WORD   DROP,DROP2,DUP,DIVMOD,ADDI,SUBI,ANDI,ORI                ; 30 32 34 36 38 3A 3C 3E
@@ -638,12 +638,12 @@ _DIV    STY     IPY
         LDY     #$11            ; #BITS+1
         LDX     #$00
         LDA     NOS+2,S         ; WE JSR'ED HERE SO OFFSET ACCORDINGLY
-        BEQ     _DIVEX
         BPL     +
         LDX     #$81
         EOR     #$FFFF
         INC
 +       STA     TMP             ; NOS,S
+        BEQ     _DIVEX
         LDA     TOS+2,S
         BPL     +
         INX
@@ -849,13 +849,13 @@ ORI     INY                     ;+INC_IP
 ;* LOGICAL NOT
 ;*
 LNOT    PLA
-        BEQ     MINUS1
-        PEA     $0000
-        JMP     NEXTOP
+        BNE     ZERO
 ;*
-;* CONSTANT -1, NYBBLE, BYTE, $FF BYTE, WORD (BELOW)
+;* CONSTANT -1, ZERO, NYBBLE, BYTE, $FF BYTE, WORD (BELOW)
 ;*
 MINUS1  PEA     $FFFF
+        JMP     NEXTOP
+ZERO    PEA     $0000
         JMP     NEXTOP
 CN      TXA
         LSR                     ; A = CONST * 2

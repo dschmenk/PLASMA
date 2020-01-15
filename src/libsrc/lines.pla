@@ -1,0 +1,506 @@
+include "inc/cmdsys.plh"
+predef nopLin(a, b, c)#0
+predef nopPix(a, b)#0
+
+byte jmpplot = $4C // Sneaky!
+var plot     = @nopPix
+var hspan    = @nopLin
+var vspan    = @nopLin
+var err, shorterr, shortlen, longerr, longlen
+
+//def nopLin(a, b, c)#0
+//end
+//def majorspans(majorstart, major, majorend, minor, dir, majorspan)#0
+//    //
+//    // Initial half-span step
+//    //
+//    err = err + shorterr
+//    repeat
+//        majorspan(majorstart, major, minor)#0
+//        minor      = minor + dir     // Move to next span
+//        majorstart = major + 1       // Start of next span = end of previous + 1
+//        if err >= 0             // Short span
+//            err   = err   + shorterr
+//            major = major + shortlen
+//        else                    // Long span
+//            err   = err   + longerr
+//            major = major + longlen
+//        fin
+//    until major >= majorend
+//    //
+//    // Final half-span step
+//    //
+//    majorspan(majorstart, majorend, minor)#0
+//end
+asm majorspans(majorstart, major, majorend, minor, dir, majorspan)#0
+!SOURCE    "vmsrc/plvmzp.inc"
+        LDA     $1000       ; ERRL
+        CLC
+        ADC     $2000       ; SHORTERRL
+        STA     $1000       ; ERRL
+        LDA     $1001       ; ERRH
+        ADC     $2001       ; SHORTERRH
+        STA     $1001       ; ERRH
+        LDA     ESTKL+0,X   ; MAJORSPANL
+        STA     $A000
+        STA     $B000
+        LDA     ESTKH+0,X   ; MAJORSPANH
+        STA     $A001
+        STA     $B001
+end
+asm     _majorspansA
+-       DEX
+        DEX
+        DEX
+        LDA     ESTKL+8,X   ; MAJORSTARTL
+        STA     ESTKL+2,X
+        LDA     ESTKH+8,X   ; MAJORSTARTH
+        STA     ESTKH+2,X
+        LDA     ESTKL+7,X   ; MAJORL
+        STA     ESTKL+1,X
+        LDA     ESTKH+7,X   ; MAJORH
+        STA     ESTKH+1,X
+        LDA     ESTKL+5,X   ; MINORL
+        STA     ESTKL+0,X
+        LDA     ESTKH+5,X   ; MINORH
+        STA     ESTKH+0,X
+        JSR     $A000
+
+        LDA     ESTKL+2,X   ; MINORL
+        CLC
+        ADC     ESTKL+1,X   ; DIRL
+        STA     ESTKL+2,X
+        LDA     ESTKH+2,X   ; MINORH
+        ADC     ESTKH+1,X   ; DIRH
+        STA     ESTKH+2,X
+
+        LDA     ESTKL+4,X   ; MAJORL
+        CLC
+        ADC     #$01
+        STA     ESTKL+5,X   ; MAJORSTARTL
+        LDA     ESTKH+4,X   ; MAJORH
+        ADC     #$00
+        STA     ESTKH+5,X   ; MAJORSTARTH
+end
+asm     _majorspansB
+        LDY     $1001       ; ERRH
+        BMI     +
+end
+asm     _majorspansC
+        LDA     $1000       ; ERRL
+        CLC
+        ADC     $2000       ; SHORTERRL
+        STA     $1000       ; ERRL
+        TYA                 ; ERRH
+        ADC     $2001       ; SHORTERRH
+        STA     $1001       ; ERRH
+        LDA     ESTKL+4,X   ; MAJORL
+        CLC
+        ADC     $3000       ; SHORTLENL
+        STA     ESTKL+4,X
+        LDA     ESTKH+4,X   ; MAJORH
+        ADC     $3001       ; SHORTLENH
+        STA     ESTKH+4,X
+        LDA     ESTKL+4,X   ; MAJORL
+        CMP     ESTKL+3,X   ; MAJORENDL
+        LDA     ESTKH+4,X   ; MAJORH
+        SBC     ESTKH+3,X   ; MAJORENDH
+        BCC     -
+        BCS     ++
+end
+asm     _majorspansD
++       LDA     $1000       ; ERRL
+        CLC
+        ADC     $4000       ; LONGERRL
+        STA     $1000       ; ERRL
+        TYA                 ; ERRH
+        ADC     $4001       ; LONGERRL
+        STA     $1001       ; ERRH
+        LDA     ESTKL+4,X   ; MAJORL
+        CLC
+        ADC     $5000       ; LONGLENL
+        STA     ESTKL+4,X
+        LDA     ESTKH+4,X   ; MAJORH
+        ADC     $5001       ; LONGLENH
+        STA     ESTKH+4,X
+        LDA     ESTKL+4,X   ; MAJORL
+        CMP     ESTKL+3,X   ; MAJORENDL
+        LDA     ESTKH+4,X   ; MAJORH
+        SBC     ESTKH+3,X   ; MAJORENDH
+        BCS     ++
+end
+asm     _majorspansE
+        JMP     $6000
+++      DEX
+        DEX
+        DEX
+        LDA     ESTKL+8,X   ; MAJORSTARTL
+        STA     ESTKL+2,X
+        LDA     ESTKH+8,X   ; MAJORSTARTH
+        STA     ESTKH+2,X
+        LDA     ESTKL+6,X   ; MAJORENDL
+        STA     ESTKL+1,X
+        LDA     ESTKH+6,X   ; MAJORENDH
+        STA     ESTKH+1,X
+        LDA     ESTKL+5,X   ; MINORL
+        STA     ESTKL+0,X
+        LDA     ESTKH+5,X   ; MINORH
+        STA     ESTKH+0,X
+        JSR     $B000
+        TXA
+        CLC
+        ADC     #$06
+        TAX
+        RTS
+end
+asm nopLin(a, b, c)#0
+        INX
+end
+asm nopPix(a, b)#0
+        INX
+        INX
+        RTS
+end
+//def hline(x1, x2, dx2, y, dy2, sy)#0
+//    var dyx2, x
+//
+//    err  = dy2 - dx2 / 2
+//    dyx2 = dy2 - dx2
+//    for x = x1 to x2
+//        plot(x, y)#0
+//        if err >= 0
+//            y   = y + sy
+//            err = err + dyx2
+//        else
+//            err = err + dy2
+//        fin
+//    next
+//end
+asm hline(x1, x2, dx2, y, dy2, sy)#0
+        LDA     ESTKH+3,X   ; DX2H
+        LSR
+        STA     TMPH
+        LDA     ESTKL+3,X   ; DX2L
+        ROR
+        STA     TMPL
+        LDA     ESTKL+1,X   ; DY2L
+        SEC
+        SBC     TMPL
+        STA     $1000       ; ERRL
+        LDA     ESTKH+1,X   ; DY2H
+        SBC     TMPH
+        STA     $1001       ; ERRH
+        LDA     ESTKL+1,X   ; DY2L
+        SEC
+        SBC     ESTKL+3,X   ; DX2L
+        STA     ESTKL+3,X   ; DYX2L
+        LDA     ESTKH+1,X   ; DY2H
+        SBC     ESTKH+3,X   ; DX2H
+        STA     ESTKH+3,X   ; DYX2H
+-       DEX
+        DEX
+        LDA     ESTKL+7,X   ; XL
+        STA     ESTKL+1,X
+        LDA     ESTKH+7,X   ; XH
+        STA     ESTKH+1,X
+        LDA     ESTKL+4,X   ; YL
+        STA     ESTKL+0,X
+        LDA     ESTKH+4,X   ; YH
+        STA     ESTKH+0,X
+end
+asm     _hlineA
+        JSR     $2000       ; PLOT
+        LDA     $1001       ; ERRH
+        BMI     +
+        LDA     ESTKL+2,X   ; YL
+        CLC
+        ADC     ESTKL+0,X   ; SYL
+        STA     ESTKL+2,X
+        LDA     ESTKH+2,X   ; YH
+        ADC     ESTKH+0,X   ; SYH
+        STA     ESTKH+2,X
+        LDA     ESTKL+3,X   ; DYX2L
+        LDY     ESTKH+3,X   ; DYX2H
+        BEQ     ++
+        BNE     ++
+end
+asm     _hlineB
++       LDA     ESTKL+1,X   ; DY2L
+        LDY     ESTKH+1,X   ; DY2H
+++      CLC
+        ADC     $1000       ; ERRL
+        STA     $1000       ; ERRL
+        TYA
+        ADC     $1001       ; ERRH
+        STA     $1001       ; ERRH
+        LDA     ESTKL+5,X   ; X1L
+        CMP     ESTKL+4,X   ; X2L
+        LDA     ESTKH+5,X
+        SBC     ESTKH+4,X
+        BCS     +
+        INC     ESTKL+5,X   ; XL
+        BNE     -
+        INC     ESTKH+5,X   ; XH
+        BCC     -
++       TXA
+        ADC     #$05
+        TAX
+        RTS
+end
+//def vline(y1, y2, dy2, x, dx2, sx)#0
+//    var dxy2, y
+//    
+//    err  = dx2 - dy2 / 2
+//    dxy2 = dx2 - dy2
+//    for y = y1 to y2
+//        plot(x, y)#0
+//        if err >= 0
+//            x   = x + sx
+//            err = err + dxy2
+//        else
+//            err = err + dx2
+//        fin
+//    next
+//end
+asm vline(y1, y2, dy2, x, dx2, sx)#0
+        LDA     ESTKH+3,X   ; DY2H
+        LSR
+        STA     TMPH
+        LDA     ESTKL+3,X   ; DY2L
+        ROR
+        STA     TMPL
+        LDA     ESTKL+1,X   ; DX2L
+        SEC
+        SBC     TMPL
+        STA     $1000       ; ERRL
+        LDA     ESTKH+1,X   ; DX2H
+        SBC     TMPH
+        STA     $1001       ; ERRH
+        LDA     ESTKL+1,X   ; DX2L
+        SEC
+        SBC     ESTKL+3,X   ; DX2L
+        STA     ESTKL+3,X   ; DXY2L
+        LDA     ESTKH+1,X   ; DX2H
+        SBC     ESTKH+3,X   ; DY2H
+        STA     ESTKH+3,X   ; DXY2H
+-       DEX
+        DEX
+        LDA     ESTKL+4,X   ; XL
+        STA     ESTKL+1,X
+        LDA     ESTKH+4,X   ; XH
+        STA     ESTKH+1,X
+        LDA     ESTKL+7,X   ; YL
+        STA     ESTKL+0,X
+        LDA     ESTKH+7,X   ; YH
+        STA     ESTKH+0,X
+end
+asm     _vlineA
+        JSR     $2000       ; PLOT
+        LDA     $1001       ; ERRH
+        BMI     +
+        LDA     ESTKL+2,X   ; XL
+        CLC
+        ADC     ESTKL+0,X   ; SXL
+        STA     ESTKL+2,X
+        LDA     ESTKH+2,X   ; XH
+        ADC     ESTKH+0,X   ; SXH
+        STA     ESTKH+2,X
+        LDA     ESTKL+3,X   ; DXY2L
+        LDY     ESTKH+3,X   ; DXY2H
+        BEQ     ++
+        BNE     ++
+end
+asm     _vlineB
++       LDA     ESTKL+1,X   ; DX2L
+        LDY     ESTKH+1,X   ; DX2H
+++      CLC
+        ADC     $1000       ; ERRL
+        STA     $1000       ; ERRL
+        TYA
+        ADC     $1001       ; ERRH
+        STA     $1001       ; ERRH
+        LDA     ESTKL+5,X   ; Y1L
+        CMP     ESTKL+4,X   ; Y2L
+        LDA     ESTKH+5,X
+        SBC     ESTKH+4,X
+        BCS     +
+        INC     ESTKL+5,X   ; YL
+        BNE     -
+        INC     ESTKH+5,X   ; YH
+        BCC     -
++       TXA
+        ADC     #$05
+        TAX
+        RTS
+end
+
+export def setlinespans(h, v)#0
+    hspan = h
+    vspan = v
+end
+def hmajorspans(x1, y1, x2, y2, dx, dy, sy)#0
+    var dy2, halflen, rem
+    //
+    // Half-span length and error
+    //
+    dy2          = dy * 2
+    halflen, rem = divmod(dx, dy2)
+    err          = dy2 - rem
+    //
+    // Long-span length = half-span length * 2
+    //
+    longlen = (halflen + 1) * 2
+    longerr = err * 2
+    if longerr >= dy2
+        longerr = longerr - dy2
+        longlen--
+    fin
+    //
+    // Short-span length = long-span length - 1
+    //
+    shortlen = longlen - 1
+    shorterr = longerr - dy2
+    majorspans(x1, x1 + halflen, x2, y1, sy, hspan)
+end
+def vmajorspans(x1, y1, x2, y2, dx, dy, sx)#0
+    var dx2, halflen, rem
+
+    //
+    // Half-span length and error
+    //
+    dx2          = dx * 2
+    halflen, rem = divmod(dy, dx2)
+    err          = dx2 - rem
+    //
+    // Long-span length = half-span length * 2
+    //
+    longlen = (halflen + 1) * 2
+    longerr = err * 2
+    if longerr >= dx2
+        longerr = longerr - dx2
+        longlen--
+    fin
+    shortlen = longlen - 1
+    shorterr = longerr - dx2
+    majorspans(y1, y1 + halflen, y2, x1, sx, vspan)
+end
+export def linespans(x1, y1, x2, y2)#0
+    var dx, dy, dx2, dy2, halflen, rem, sx, sy
+    
+    sx = 1
+    sy = 1
+    dx = x2 - x1
+    if dx < 0
+        sx  = -1; dx = -dx
+    fin
+    dy = y2 - y1
+    if dy < 0
+        sy  = -1; dy = -dy
+    fin
+    if dx >= dy
+        if sx < 0
+            y1, y2 = y2, y1
+            x1, x2 = x2, x1
+            sy = -sy
+        fin
+        if dy == 0
+            hspan(x1, x2, y1)#0; return
+        fin
+        //
+        // JIT optimize setup
+        //
+        hmajorspans(x1, y1, x2, y2, dx, dy, sy)
+    else
+        if sy < 0
+            x1, x2 = x2, x1
+            y1, y2 = y2, y1
+            sx = -sx
+        fin
+        if dx == 0
+            vspan(y1, y2, x1)#0; return
+        fin
+        //
+        // JIT optimize inner setup
+        //
+        vmajorspans(x1, y1, x2, y2, dx, dy, sx)
+    fin
+end
+export def setlineplot(p)#0
+    plot = p
+end
+export def line(x1, y1, x2, y2)#0
+    var sx, sy, dx2, dy2
+    
+    sx = 1
+    sy = 1
+    dx2 = (x2 - x1) * 2
+    if dx2 < 0
+        sx = -1; dx2 = -dx2
+    fin
+    dy2 = (y2 - y1) * 2
+    if dy2 < 0
+        sy = -1; dy2 = -dy2
+    fin
+    if dx2 >= dy2
+        if sx < 0
+            x1, x2 = x2, x1
+            y1, y2 = y2, y1
+            sy = -sy
+        fin
+        hline(x1, x2, dx2, y1, dy2, sy)
+    else
+        if sy < 0
+            y1, y2 = y2, y1
+            x1, x2 = x2, x1
+            sx = -sx
+        fin
+        vline(y1, y2, dy2, x1, dx2, sx)
+    fin
+ end
+
+//
+// Assembly fixups
+//
+majorspans:1    = @err
+majorspans:5    = @shorterr
+majorspans:8    = @err
+majorspans:11   = @err.1
+majorspans:14   = @shorterr.1
+majorspans:17   = @err.1
+majorspans:22   = @_majorspansA.28
+majorspans:25   = @_majorspansE.31
+majorspans:30   = @_majorspansA.29
+majorspans:33   = @_majorspansE.32
+_majorspansB:1  = @err.1
+_majorspansC:1  = @err
+_majorspansC:5  = @shorterr
+_majorspansC:8  = @err
+_majorspansC:12 = @shorterr.1
+_majorspansC:15 = @err.1
+_majorspansC:21 = @shortlen
+_majorspansC:28 = @shortlen.1
+_majorspansD:1  = @err
+_majorspansD:5  = @longerr
+_majorspansD:8  = @err
+_majorspansD:12 = @longerr.1
+_majorspansD:15 = @err.1
+_majorspansD:21 = @longlen
+_majorspansD:28 = @longlen.1
+_majorspansE:1  = @_majorspansA
+hline:16        = @err
+hline:23        = @err.1
+_hlineA:1       = @jmpplot
+_hlineA:4       = @err.1
+_hlineB:6       = @err
+_hlineB:9       = @err
+_hlineB:13      = @err.1
+_hlineB:16      = @err.1
+vline:16        = @err
+vline:23        = @err.1
+_vlineA:1       = @jmpplot
+_vlineA:4       = @err.1
+_vlineB:6       = @err
+_vlineB:9       = @err
+_vlineB:13      = @err.1
+_vlineB:16      = @err.1
+done

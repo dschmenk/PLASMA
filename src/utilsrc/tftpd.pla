@@ -260,6 +260,7 @@ def writeUDP(ipsrc, portsrc, data, len, param)
 end
 def servUDP(ipsrc, portsrc, data, len, param)
     byte info[24]
+    byte l, prefix[48]
 
     when *data
         is RRQ // Read request
@@ -317,6 +318,17 @@ def servUDP(ipsrc, portsrc, data, len, param)
             // Extract filename
             //
             netscii, type, aux = mkProName(data + 2, @filename)
+            //
+            // Scan filename prefix and create
+            //
+            prefix[1] = filename[1]
+            for l = 2 to filename[0]
+		if filename[l] == '/'
+		    prefix[0] = l-1
+		    fileio:create(@prefix, $0F, $0000)
+		fin
+		prefix[l] = filename[l]
+            next
             fileio:destroy(@filename)
             if fileio:create(@filename, type, aux)
                 puts("Create file error: "); putb(perr); putln
@@ -342,10 +354,26 @@ def servUDP(ipsrc, portsrc, data, len, param)
     return 0
 end
 
+def volumes#0
+    word strbuf
+    byte i
+    
+    strbuf   = heapmark()
+    fileio:online(0, strbuf)    
+    for i = 0 to 15
+        ^strbuf = ^strbuf & $0F
+        if ^strbuf
+            putc('/'); puts(strbuf); putln()
+        fin
+        strbuf = strbuf + 16
+    next
+end
+
+puts("TFTP Server Version 2.0 DP3\n")
 if !iNet:initIP()
     return -1
 fin
-puts("TFTP Server Version 2.0 Dev\n")
+puts("Online volumes:\n"); volumes()
 portTFTP = iNet:openUDP(TFTP_PORT, @servUDP, 0)
 //
 // Alloc aligned file/io buffers
@@ -358,6 +386,7 @@ buff=>datOp = $0300 // Data op
 repeat
     iNet:serviceIP()
 until conio:keypressed()
+getc // eat keypress
 done
 
 Experpts from: RFC 1350, TFTP Revision 2, July 1992

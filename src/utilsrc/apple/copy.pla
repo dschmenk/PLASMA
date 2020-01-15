@@ -1,0 +1,295 @@
+include "inc/cmdsys.plh"
+include "inc/longjmp.plh"
+include "inc/args.plh"
+include "inc/fileio.plh"
+include "inc/matchfiles.plh"
+
+const MAXBUFSIZE = 16384
+var arg, exit, srcfilelist, srcfileptr, srccnt
+var copybuff, copyrel, copysize
+byte recurse, dstlen
+char[64] curpath, dstpath
+char[16] srcdir
+res[t_fileinfo] srcfileinfo, dstfileinfo
+//
+// Copy path with upper case conversion
+//
+def pathcpy(dst, src)#0
+    byte i, chr
+    
+    if ^src
+        for i = 1 to ^src
+            chr = src->[i]
+            if chr >= 'a' and chr <= 'z'
+                dst->[i] =  chr - 'a' + 'A'
+            else
+                dst->[i] = chr
+            fin
+        next
+    fin
+    ^dst = ^src
+end
+def abspath(abs, path)#0
+    if ^path == 0 or path->[1] <> '/'
+        //
+        // Append relative path to absolute path
+        //
+        strcpy(abs, @curpath)
+    else
+        //
+        // Absolute path
+        //
+        ^abs = 0
+    fin
+    strcat(abs, path)
+    //
+    // Strip trailing path seperator
+    //
+    if abs->[^abs] == '/'
+        ^abs--
+    fin
+end
+def pathdiff(path1, path2)#1
+    byte i, d
+    char[64] abs1, abs2
+    
+    abspath(@abs1, path1)
+    abspath(@abs2, path2)
+
+    if abs1 <> abs2
+        return TRUE
+    fin
+    for i = 1 to abs1
+        d = abs1[i] - abs2[i]
+        if d
+            return d
+        fin
+    next
+    return FALSE
+end
+def filefrompath(filestr, pathstr)#0
+    byte i
+    
+    for i = ^pathstr + 1 downto 1
+        if pathstr->[i] == '/'
+            break
+        fin
+    next
+    ^filestr = ^pathstr - i
+    memcpy(filestr + 1, pathstr + 1 + i, ^filestr)
+end
+//
+// Check destination path
+//
+def chkdstpath(dstfile)
+    //
+    // Check if destination exists
+    //
+    if fileio:getfileinfo(dstfile, @dstfileinfo) == FILE_ERR_OK
+        //
+        // Check if copying into a directory
+        //
+        if dstfileinfo.storage_type & $0D == $0D
+            if dstfile->[^dstfile] <> '/'
+                //
+                // Add path seperator
+                //
+                ^dstfile++
+                dstfile->[^dstfile] = '/'
+            fin
+            return TRUE
+        fin
+    fin
+    return FALSE
+end
+def copyfiles(srcfile, dstfile)#0
+    var entrylist, entry, entrycnt, srcref, dstref, copyxfer
+    char[64] srcpath
+    char[64] srcfilepath
+    char[64] dstfilepath
+    char[16] wildname
+    
+    //
+    // Check if copying a directory
+    //
+    strcpy(@srcpath, srcfile)
+    wildname = 0
+    if fileio:getfileinfo(@srcpath, @srcfileinfo) <> FILE_ERR_OK or (srcfileinfo.storage_type & $0D <> $0D)
+        filefrompath(@wildname, @srcpath)
+        srcpath = srcpath - wildname
+    fin
+    entrylist, entrycnt = matchList(@srcpath, @wildname)
+    if not entrylist
+        puts(srcfile); puts(" ???\n")
+    else
+        entry = entrylist
+        while entrycnt
+            strcpy(@srcfilepath, @srcpath)
+            strcat(@srcfilepath, entry)
+            strcpy(@dstfilepath, dstfile)
+            if chkdstpath(@dstfilepath)
+                strcat(@dstfilepath, entry)
+            fin
+            if entry->entry_type == $0F
+                //
+                // Source is a directory and not referencing the destination
+                //
+                if pathdiff(@srcfilepath, dstfile)
+                    fileio:create(@dstfilepath, $0F, $0000)
+                    if not chkdstpath(@dstfilepath)
+                        puts("Unable to create directory: "); puts(@dstfilepath); putln
+                        throw(exit, TRUE)
+                    fin
+                    if recurse
+                        copyfiles(@srcfilepath, @dstfilepath)
+                    fin
+                fin
+            else
+                puts(@srcfilepath)
+                //
+                // Check if destination file exists
+                //
+                if fileio:getfileinfo(@dstfilepath, @dstfileinfo) == FILE_ERR_OK
+                    fileio:destroy(@dstfilepath)
+                fin
+                //
+                // Create the destination file and open for writing
+                //
+                if fileio:create(@dstfilepath, entry->entry_type, entry=>entry_aux) <> FILE_ERR_OK
+                    puts("\nUnable to create file: "); puts(@dstfilepath); putln
+                    throw(exit, TRUE)
+                fin
+                srcref = fileio:open(@srcfilepath)
+                if not srcref
+                    puts("\nUnable to open file: "); puts(@srcfilepath); putln
+                    throw(exit, TRUE)
+                fin
+                dstref = fileio:open(@dstfilepath)
+                if not dstref
+                    puts("\nUnable to open file: "); puts(@dstfilepath); putln
+                    throw(exit, TRUE)
+                fin
+                //
+                // Let the copying begin
+                //
+                repeat
+                    copyxfer = fileio:read(srcref, copybuff, copysize)
+                    if copyxfer
+                        if fileio:write(dstref, copybuff, copyxfer) <> copyxfer
+                            puts("\nError writing: "); puts(@dstfilepath); putln
+                            throw(exit, TRUE)
+                        fin
+                    fin
+                until copyxfer == 0
+                fileio:close(dstref)
+                fileio:close(srcref)
+                puts(" ==> "); puts(@dstfilepath); putln
+            fin
+            entry = entry + t_fileentry
+            entrycnt--            
+        loop
+        heaprelease(entrylist)
+    fin
+end
+//
+// Install error exit
+//
+exit = heapalloc(t_except)
+if not except(exit)
+    fileio:getpfx(@curpath)
+    //
+    // Check arguments and file types
+    //
+    arg = argNext(argFirst)
+    if ^arg and arg->[1] == '-'
+        if ^arg > 1 and toupper(arg->[2]) == 'R'
+            recurse = TRUE
+        fin
+        arg = argNext(arg)
+    fin
+    if ^arg
+        srcfilelist = heapalloc(^arg + 1)
+        pathcpy(srcfilelist, arg)
+        srccnt++
+        arg = argNext(arg)
+        if ^arg
+            pathcpy(@dstpath, arg)
+            arg = argNext(arg)
+            while ^arg
+                //
+                // Add to source list
+                //
+                srcfileptr = heapalloc(dstpath + 1)
+                strcpy(srcfileptr, @dstpath)
+                srccnt++
+                //
+                // Set new destination
+                //
+                pathcpy(@dstpath, arg)
+                arg = argNext(arg)
+            loop
+            if not chkdstpath(@dstpath) and (srccnt > 1 or isWildName(srcfilelist))
+                puts("Destination must be a directory: "); puts(@dstpath); putln
+                return
+            fin
+            fileio:iobufalloc(2) // Reserve two I/O buffers
+            copysize = MAXBUFSIZE
+            while isult(heapavail, copysize + 512)
+                copysize = copysize / 2
+            loop
+            copyrel = heapalloc(copysize)
+            if not copyrel
+                puts(" No available memory for copy buffer\n")
+                return
+            fin
+            //
+            // Round buffer to page boundary for faster transfers
+            //
+            copybuff = (copyrel + $FF) & $FF00
+            //
+            // Iterate through all sources
+            //
+            srcfileptr = srcfilelist
+            while srccnt
+                dstlen = dstpath
+                if fileio:getfileinfo(srcfileptr, @srcfileinfo) == FILE_ERR_OK and (srcfileinfo.storage_type & $0D == $0D)
+                    if recurse
+                        //
+                        // Copy directory
+                        //
+                        if dstpath[dstpath] <> '/'
+                            dstpath++
+                            dstpath[dstpath] = '/'
+                        fin
+                        filefrompath(@srcdir, srcfileptr)
+                        strcat(@dstpath, @srcdir)
+                        if fileio:getfileinfo(@dstpath, @dstfileinfo) <> FILE_ERR_OK
+                            fileio:create(@dstpath, $0F, $0000)
+                        fin
+                        if not chkdstpath(@dstpath)
+                            puts("Destination must be a directory: "); puts(@dstpath); putln
+                            return
+                        fin
+                    else
+                        puts("Omitting directory without -r: "); puts(srcfileptr); putln
+                        srcfileptr = srcfileptr + ^srcfileptr + 1
+                        srccnt--
+                        continue
+                    fin
+                fin
+                //
+                // Copy files
+                //
+                copyfiles(srcfileptr, @dstpath)
+                dstpath = dstlen
+                srcfileptr = srcfileptr + ^srcfileptr + 1
+                srccnt--
+            loop
+            heaprelease(copyrel)
+            return
+        fin
+    fin
+    puts("Usage: +COPY <SRCFILE>+ <DEST>\n")
+fin
+fileio:close(0)
+done

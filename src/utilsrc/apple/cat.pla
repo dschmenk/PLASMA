@@ -1,0 +1,184 @@
+include "inc/cmdsys.plh"
+include "inc/longjmp.plh"
+include "inc/args.plh"
+include "inc/matchfiles.plh"
+include "inc/fileio.plh"
+include "inc/int32.plh"
+
+predef catalog(pathstr)#0
+
+var arg, recurse, exit
+char[64] path, wildname
+res[t_fileinfo] fileinfo
+res[t_fileentry] fileentry
+//
+// Convert byte to two hex chars
+//
+def putb(b)#0
+    char h
+    
+    h = ((b >> 4) & $0F) + '0'
+    if h > '9'
+        h = h + 7
+    fin
+    putc(h)
+    h = (b & $0F) + '0'
+    if h > '9'
+        h = h + 7
+    fin
+    putc(h)
+end
+//
+// Copy string with upper case conversion
+//
+def struprcpy(dst, src)#0
+    byte i, chr
+
+    if ^src
+        for i = 1 to ^src
+            chr = src->[i]
+            if chr >= 'a' and chr <= 'z'
+                dst->[i] =  chr - 'a' + 'A'
+            else
+                dst->[i] = chr
+            fin
+        next
+    fin
+    ^dst = ^src
+end
+def filefrompath(filestr, pathstr)#0
+    byte i
+    
+    for i = ^pathstr downto 1
+        if pathstr->[i] == '/'
+            break
+        fin
+    next
+    ^filestr = ^pathstr - i
+    memcpy(filestr + 1, pathstr + 1 + i, ^filestr)
+end
+//
+// Print out a directory entry
+//
+def printentry(entryptr)#0
+    char type, pad, eofstr[12]
+     
+    puts(entryptr)
+    when entryptr->entry_type
+        is $0F // Is it a directory?
+            type = '/'
+            break
+        is $FF // SYSTEM file
+            type = '-'
+            break
+        is $FE // REL file
+            type = '+'
+            break
+        otherwise
+            type = ' '
+    wend
+    putc(type)
+    for pad = ^entryptr to 14
+        putc(' ')
+    next
+    putc('$');  putb(entryptr->entry_type)
+    puts("  $"); puth(entryptr=>entry_aux)
+    entryptr->entry_EOFH.1 = 0
+    i32tos(entryptr+entry_EOFL, @eofstr)
+    for pad = eofstr to 9
+        putc(' ')
+    next
+    puts(@eofstr)    
+    putln
+end
+def printentries(pathstr, entries, num)#0
+    byte page
+    
+    puts(pathstr); putln
+    puts("=NAME==========TYPE===AUX====LENGTH=\n")
+    page = 20
+    repeat
+        printentry(entries)
+        entries = entries + t_fileentry
+        //
+        // Pause display every screenfull
+        //
+        if not page
+            if toupper(getc()) == 'Q'
+                throw(exit, TRUE)
+            fin
+            page = 22
+        else
+            page--
+        fin
+        num--
+    until not num
+end
+def catalog(pathstr)#0
+    char recursepath[64]
+    var entrylist, entryptr, entrycnt
+
+    entrylist, entrycnt = matchList(pathstr, @wildname)
+    if entrylist
+        printentries(pathstr, entrylist, entrycnt)
+        if recurse
+            entryptr = entrylist
+            repeat
+                if entryptr->entry_type == $0F
+                    //
+                    // A directory, so recurse
+                    //
+                    strcpy(@recursepath, pathstr)
+                    strcat(@recursepath, entryptr)
+                    recursepath++
+                    recursepath[recursepath] = '/'
+                    if toupper(getc()) == 'Q'
+                        throw(exit, TRUE)
+                    fin
+                    catalog(@recursepath)
+                fin
+                entryptr = entryptr + t_fileentry
+                entrycnt--
+            until not entrycnt
+        fin
+        heaprelease(entrylist)
+    fin
+end
+//
+// Install error exit
+//
+exit = heapalloc(t_except)
+if not except(exit)
+    //
+    // Check arguments and file types
+    //
+    arg = argNext(argFirst)
+    if ^arg and arg->[1] == '-'
+        if ^arg > 1 and toupper(arg->[2]) == 'R'
+            recurse = TRUE
+        fin
+        arg = argNext(arg)
+    fin
+    if ^arg
+        struprcpy(@path, arg)
+        //
+        // Check if cataloging a directory or volume
+        //
+        if fileio:getfileinfo(@path, @fileinfo) <> FILE_ERR_OK or (fileinfo.storage_type & $0D <> $0D)
+            filefrompath(@wildname, @path)
+        fin
+        path = path - wildname
+    fin
+    if not path
+        fileio:getpfx(@path)
+    fin
+    //
+    // Check if directory exists
+    //
+    if fileio:getfileinfo(@path, @fileinfo) == FILE_ERR_OK
+        catalog(@path)
+    else
+        puts("Unable to open: "); puts(@path); putln
+    fin
+fin
+done

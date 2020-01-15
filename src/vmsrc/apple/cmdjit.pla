@@ -39,6 +39,7 @@ end
 //
 // JIT compiler constants
 //
+const jitcbuf     = $AF00
 const jitcomp     = $03E2
 const jitcodeptr  = $03E4
 const jitmod      = $02F0
@@ -1256,10 +1257,8 @@ def catalog(path)#0
                 entry      = entry + entrylen
             fin
             for i = firstblk to entriesblk
-                type = ^entry
-                if type
-                    len = type & $0F
-                    ^entry = len
+                if ^entry
+                    ^entry = ^entry & $0F
                     prstr(entry)
                     type = ' '
                     when entry->$10
@@ -1273,7 +1272,7 @@ def catalog(path)#0
                             type = '+'
                     wend
                     cout(type)
-                    for len = 18 - len downto 0
+                    for len = ^entry to 18
                         cout(' ')
                     next
                     filecnt--
@@ -1372,7 +1371,7 @@ def execsys(sysfile)#0
 end
 def execmod(modfile)#1
     byte moddci[17]
-    word saveheap, savexheap, savesym, saveflags, savejit
+    word saveheap, savexheap, savesym, saveflags
 
     perr = 1
     if stodci(modfile, @moddci)
@@ -1380,12 +1379,10 @@ def execmod(modfile)#1
         savexheap = xheap
         savesym   = lastsym
         saveflags = systemflags
-        savejit   = *jitcodeptr
         if loadmod(@moddci) < modkeep
             lastsym     = savesym
             xheap       = savexheap
             heap        = saveheap
-            *jitcodeptr = savejit
         fin
         ^lastsym    = 0
         systemflags = saveflags
@@ -1425,6 +1422,13 @@ def docmds#0
                     execsys(getlnbuf)
                     break
                 is '+'
+					//
+					// Set JIT code pointer
+					//
+					*jitcodeptr = jitcbuf
+					//
+					// Exec module
+					//
                     execmod(striptrail(getlnbuf))
                     //
                     // Clean up
@@ -1437,10 +1441,8 @@ def docmds#0
             if perr
                 prstr("ERR:$")
                 prbyte(perr)
-            else
-                prstr("OK")
+		crout()
             fin
-            crout()
         fin
         prstr(pfxop(@prefix, GET_PFX))
         rdstr($BA)
@@ -1458,7 +1460,7 @@ heap = @lastdef
 //
 // Print PLASMA version
 //
-prstr("PLASMA 2.0 Dev 128K\n")//; prbyte(version.1); cout('.'); prbyte(version.0); crout
+prstr("PLASMA 2.0 DP3 128K\n")//; prbyte(version.1); cout('.'); prbyte(version.0); crout
 //
 // Init symbol table.
 //
