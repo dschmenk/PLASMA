@@ -1,20 +1,20 @@
-# PLASMA Version 2.0 Developer Preview 3
+# PLASMA Version 2.0 Developer Preview 4
 
 Welcome to PLASMA: the Grand Unifying Platform for the Apple 1, ][, and ///.
 
 Download the five disk images:
 
-[PLASMA 2.0 DP3 800K Full System](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLASMA2.2mg?raw=true)
+[PLASMA 2.0 DP4 800K Full System](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLASMA2.2mg?raw=true)
 
-[PLASMA 2.0 DP3 System and ProDOS Boot](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLASMA2-SYS.PO?raw=true)
+[PLASMA 2.0 DP4 System and ProDOS Boot](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLASMA2-SYS.PO?raw=true)
 
-[PLASMA 2.0 D3P Build Tools](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLASMA2-BLD.PO?raw=true)
+[PLASMA 2.0 DP4 Build Tools](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLASMA2-BLD.PO?raw=true)
 
-[PLASMA 2.0 DP3 Demos](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLASMA2-DEM.PO?raw=true)
+[PLASMA 2.0 DP4 Demos](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLASMA2-DEM.PO?raw=true)
 
-[PLASMA 2.0 DP3 TCP/IP network modules](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLASMA2-INET.PO?raw=true)
+[PLASMA 2.0 DP4 TCP/IP network modules](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLASMA2-INET.PO?raw=true)
 
-[PLASMA 2.0 DP3 Apple /// SOS Boot and SANE floating point modules](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLASMA2-FPSOS.PO?raw=true)
+[PLASMA 2.0 DP4 Apple /// SOS Boot and SANE floating point modules](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLASMA2-FPSOS.PO?raw=true)
 
 PLASMA can be run from floppies, System in Drive 1, and Build or Demos in Drive 2. Mass storage is the recommended installation that looks like (replacing HARDISK with your volume name of choice):
 
@@ -115,6 +115,14 @@ There is a [YouTube playlist](https://www.youtube.com/playlist?list=PLlPKgUMQbJ7
 - The Apple /// may not always report errors properly or at all.
 
 - The documentation is sparse and incomplete. Yep, could use your help...
+
+# Changes in PLASMA for 2.0 DP 4
+
+1. Improved editor auto-indenting
+
+2. Compiler fix for terneray operator precedence
+
+3. Machine check for HGR library
 
 # Changes in PLASMA for 2.0 DP 3
 
