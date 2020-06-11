@@ -1947,15 +1947,14 @@ ENTER   LDA     IFPH
         PHA                     ; SAVE ON STACK FOR LEAVE
         LDA     IFPL
         PHA
+        LDA     PPL             ; ALLOCATE FRAME
         INY
-        LDA     (IP),Y
-        EOR     #$FF            ; ALLOCATE FRAME
         SEC
-        ADC     PPL
+        SBC     (IP),Y
         STA     PPL
         STA     IFPL
-        LDA     #$FF
-        ADC     PPH
+        LDA     PPH
+        SBC     #$00
         STA     PPH
         STA     IFPH
         INY
@@ -1976,13 +1975,13 @@ ENTER   LDA     IFPH
 ;*
 ;* LEAVE FUNCTION
 ;*
-LEAVEX  INY                     ;+INC_IP
-        LDA     (IP),Y
+LEAVEX  LDA     IFPL
+        INY                     ;+INC_IP
         CLC
-        ADC     IFPL
+        ADC     (IP),Y
         STA     PPL
-        LDA     #$00
-        ADC     IFPH
+        LDA     IFPH
+        ADC     #$00
         STA     PPH
         PLA                     ; RESTORE PREVIOUS FRAME
         STA     IFPL
@@ -1993,13 +1992,13 @@ RETX    STA     ALTRDOFF
         PHA
         PLP
         RTS
-LEAVE   INY                     ;+INC_IP
-        LDA     (IP),Y
+LEAVE   LDA     IFPL
+        INY                     ;+INC_IP
         CLC
-        ADC     IFPL
+        ADC     (IP),Y
         STA     PPL
-        LDA     #$00
-        ADC     IFPH
+        LDA     IFPH
+        ADC     #$00
         STA     PPH
         PLA                     ; RESTORE PREVIOUS FRAME
         STA     IFPL
