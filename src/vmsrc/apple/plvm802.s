@@ -6,7 +6,6 @@
 ;*
 ;**********************************************************
         !CPU    65816
-DEBUG   =       0
 ;*
 ;* THE DEFAULT CPU MODE FOR EXECUTING OPCODES IS:
 ;*   16 BIT A/M
@@ -289,13 +288,9 @@ DINTRP  PHP
         TSX
         STX     HWSP
         LDX     #>OPTBL
-!IF DEBUG {
-        BRA     SETDBG
-} ELSE {
         STX     OPPAGE
         LDY     #$00
         JMP     FETCHOP
-}
         !AS
 IINTRPX PHP
         PLA
@@ -314,14 +309,6 @@ IINTRPX PHP
         STX     HWSP
         STX     ALTRDON
         LDX     #>OPXTBL
-!IF DEBUG {
-SETDBG  LDY     LCRWEN+LCBNK2
-        LDY     LCRWEN+LCBNK2
-        STX     DBG_OP+2
-        LDY     LCRDEN+LCBNK2
-        LDX     #>DBGTBL
-        LDY     #$00
-}
         STX     OPPAGE
         JMP     FETCHOP
 ;************************************************************
@@ -356,10 +343,6 @@ CMDENTRY =      *
         BIT     $C051
         BIT     $C05F
         JSR     $FC58           ; HOME
-!IF     DEBUG {
-        LDA     #20             ; SET TEXT WINDOW ABOVE DEBUG OUTPUT
-        STA     $23
-}
 ;
 ; INSTALL PAGE 0 FETCHOP ROUTINE
 ;
@@ -473,18 +456,10 @@ PAGE3   =       *
         BIT     LCRDEN+LCBNK2   ; $03DC - INDIRECT INTERPX ENTRY
         JMP     IINTRPX
 }
-!IF     DEBUG {
-DEFCMD  !FILL   23
-} ELSE {
 DEFCMD  !FILL   28
-}
 ENDBYE  =       *
-}
-!IF     DEBUG {
-LCDEFCMD =      *-23 ;*-28      ; DEFCMD IN LC MEMORY
-} ELSE {
 LCDEFCMD =      *-28            ; DEFCMD IN LC MEMORY
-}
+
 ;*****************
 ;*               *
 ;* OPXCODE TABLE *
@@ -534,13 +509,6 @@ JITINTRPX PHP
         STX     HWSP
         STX     ALTRDON
         LDX     #>OPXTBL
-!IF DEBUG {
-        LDY     LCRWEN+LCBNK2
-        LDY     LCRWEN+LCBNK2
-        STX     DBG_OP+2
-        LDY     LCRDEN+LCBNK2
-        LDX     #>DBGTBL
-}
         STX     OPPAGE
         LDY     #$00
         JMP     FETCHOP
@@ -568,13 +536,6 @@ RUNJIT  DEX                     ; ADD PARAMETER TO DEF ENTRY
         STX     HWSP
         STX     ALTRDON
         LDX     #>OPXTBL
-!IF DEBUG {
-        LDY     LCRWEN+LCBNK2
-        LDY     LCRWEN+LCBNK2
-        STX     DBG_OP+2
-        LDY     LCRDEN+LCBNK2
-        LDX     #>DBGTBL
-}
         STX     OPPAGE
         LDY     #$00
         JSR     FETCHOP         ; CALL JIT COMPILER
@@ -1835,217 +1796,5 @@ NATV    TYA                     ; FLATTEN IP
         STA     IP
         +INDEX16                ; SET 16 BIT X/Y
         JMP     (IP)
-!IF     DEBUG {
-;*****************
-;*               *
-;*  DEBUG TABLE  *
-;*               *
-;*****************
-        !ALIGN  255,0
-DBGTBL  !WORD   STEP,STEP,STEP,STEP,STEP,STEP,STEP,STEP         ; 00 02 04 06 08 0A 0C 0E
-        !WORD   STEP,STEP,STEP,STEP,STEP,STEP,STEP,STEP         ; 10 12 14 16 18 1A 1C 1E
-        !WORD   STEP,STEP,STEP,STEP,STEP,STEP,STEP,STEP         ; 20 22 24 26 28 2A 2C 2E
-        !WORD   STEP,STEP,STEP,STEP,STEP,STEP,STEP,STEP         ; 30 32 34 36 38 3A 3C 3E
-        !WORD   STEP,STEP,STEP,STEP,STEP,STEP,STEP,STEP         ; 40 42 44 46 48 4A 4C 4E
-        !WORD   STEP,STEP,STEP,STEP,STEP,STEP,STEP,STEP         ; 50 52 54 56 58 5A 5C 5E
-        !WORD   STEP,STEP,STEP,STEP,STEP,STEP,STEP,STEP         ; 60 62 64 66 68 6A 6C 6E
-        !WORD   STEP,STEP,STEP,STEP,STEP,STEP,STEP,STEP         ; 70 72 74 76 78 7A 7C 7E
-        !WORD   STEP,STEP,STEP,STEP,STEP,STEP,STEP,STEP         ; 80 82 84 86 88 8A 8C 8E
-        !WORD   STEP,STEP,STEP,STEP,STEP,STEP,STEP,STEP         ; 90 92 94 96 98 9A 9C 9E
-        !WORD   STEP,STEP,STEP,STEP,STEP,STEP,STEP,STEP         ; A0 A2 A4 A6 A8 AA AC AE
-        !WORD   STEP,STEP,STEP,STEP,STEP,STEP,STEP,STEP         ; B0 B2 B4 B6 B8 BA BC BE
-        !WORD   STEP                                            ; C0
-;*
-;* DEBUG PRINT ROUTINES
-;*
-        !AS
-PRHEX   PHA
-        LSR
-        LSR
-        LSR
-        LSR
-        CLC
-        ADC     #'0'
-        CMP     #':'
-        BCC     +
-        ADC     #6
-+       ORA     #$80
-        STA     $7D0,X
-        INX
-        PLA
-        AND     #$0F
-        ADC     #'0'
-        CMP     #':'
-        BCC     +
-        ADC     #6
-+       ORA     #$80
-        STA     $7D0,X
-        INX
-        RTS
-PRCHR   ORA     #$80
-        STA     $7D0,X
-        INX
-        RTS
-PRBYTE  PHA
-        LDA     #'$'
-        JSR     PRCHR
-        PLA
-        JMP     PRHEX
-PRWORD  PHA
-        LDA     #'$'
-        JSR     PRCHR
-        XBA
-        JSR     PRHEX
-        PLA
-        JMP     PRHEX
-        !AL
-; MESSAGES
-BADEMU  !TEXT   "IN EMULATION MODE!", 0
-BADMODE !TEXT   "IN 8 BIT A/M MODE!", 0
-;*
-;* DEBUG STEP ROUTINE
-;*
-STEP    STX     TMPL
-        PHP                     ; VALIDATE MODES
-        SEC                     ; SWITCH TO EMULATED MODE
-        XCE
-        +ACCMEM8                ; 8 BIT A/M
-        BCC     +
-        LDX     #$00
---      LDA     BADEMU,X
--       BEQ     -
-        JSR     PRCHR
-        BRA     --
-+       XCE                     ; SWITCH BACK TO NATIVE MODE
-        PLX
-        TXA
-        AND     #$20
-        BEQ     ++
-        LDX     #$00
--       LDA     BADMODE,X
-        BNE     +
-        JMP     DBGKEY
-+       JSR     PRCHR
-        BRA     -
-++      LDX     $C013           ; SAVE RAMRD
-        STX     $C002
-        STX     TMPH
-        LDX     #39             ; SCROLL PREVIOUS LINES UP
--       LDA     $6D0,X
-        STA     $650,X
-        LDA     $750,X
-        STA     $6D0,X
-        LDA     $7D0,X
-        STA     $750,X
-        DEX
-        BPL     -
-        LDA     #' '
-        BIT     TMPH            ; RAMRD SET?
-        BPL     +
-        STX     $C003
-        LDA     #'X'
-+       LDX     #$00
-        JSR     PRCHR
-        +ACCMEM16               ; 16 BIT A/M
-        TYA
-        CLC
-        ADC     IP
-        +ACCMEM8                ; 8 BIT A/M
-        JSR     PRWORD
-        LDA     #':'
-        JSR     PRCHR
-        LDA     (IP),Y
-        JSR     PRBYTE
-        INX
-        +ACCMEM16               ; 16 BIT A/M
-        TSC
-        +ACCMEM8                ; 8 BIT A/M
-        JSR     PRWORD
-        LDA     #$80+'['
-        JSR     PRCHR
-        STX     TMPH
-        TSX
-        TXA
-        EOR     #$FF
-        SEC
-        ADC     HWSP
-        LSR
-        CLC
-        ADC     #$80+'0'
-        LDX     TMPH
-        JSR     PRCHR
-        LDA     #$80+']'
-        JSR     PRCHR
-        LDA     #':'
-        JSR     PRCHR
-        STX     TMPH
-        TSX
-        CPX     HWSP
-        BEQ     ++
-        BCC     +
-        LDX     TMPH
-        LDA     #' '
-        JSR     PRCHR
-        LDA     #'<'            ; STACK UNDERFLOW!
-        JSR     PRCHR
-        JSR     PRCHR
-        JSR     PRCHR
-        JSR     PRCHR
-        BRA     DBGKEY
-+       LDA     $102,X
-        XBA
-        LDA     $101,X
-        LDX     TMPH
-        JSR     PRWORD
-        BRA     +++
-++      LDX     TMPH
-        LDA     #' '
-        JSR     PRCHR
-        LDA     #'-'
-        JSR     PRCHR
-        JSR     PRCHR
-        JSR     PRCHR
-        JSR     PRCHR
-+++     LDA     #' '
--       JSR     PRCHR
-        CPX     #40
-        BNE     -
-        TSX
-        CMP     #$10
-        BCC     DBGKEY
-        LDX     TMPL
-;        CPX     #$00            ; FORCE PAUSE AT 'ZERO'
-;        BEQ     DBGKEY
--       LDX     $C000
-        CPX     #$9B
-        BNE     +
-DBGKEY  STX     $C010
--       LDX     $C000
-        BPL     -
-        CPX     #$9B
-        BEQ     +
-        STX     $C010
-        CPX     #$80+'Q'
-        BNE     +
-        SEC                     ; SWITCH TO EMU MODE
-        XCE
-        BIT     $C054           ; SET TEXT MODE
-        BIT     $C051
-        BIT     $C05F
-        LDA     #20             ; SET TEXT WINDOW ABOVE DEBUG OUTPUT
-        STA     $23
-        STZ     $20
-        STZ     $22
-        STZ     $24
-        STZ     $25
-        STZ     $28
-        LDA     #$04
-        STA     $29
-        BRK
-+       +ACCMEM16               ; 16 BIT A/M
-        LDX     TMPL
-DBG_OP  JMP     (OPTBL,X)
-}
-
 VMEND   =       *
 }
