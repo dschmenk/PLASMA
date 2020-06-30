@@ -458,6 +458,7 @@ PAGE3   =       *
 }
 DEFCMD  !FILL   28
 ENDBYE  =       *
+}
 LCDEFCMD =      *-28            ; DEFCMD IN LC MEMORY
 
 ;*****************
