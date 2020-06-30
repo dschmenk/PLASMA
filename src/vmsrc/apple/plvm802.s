@@ -98,24 +98,14 @@ NOS     =       $03             ; TOS-1
         !MACRO  STACKTOZP {
         +ACCMEM8                ; 8 BIT A/M
         TSC                     ; MOVE HW EVAL STACK TO ZP EVAL STACK
-        EOR     #$FF
         SEC
-        ADC     HWSP            ; STACK DEPTH = (HWSP - SP)/2
-        LSR
-!IF     DEBUG {
-        PHA
-        CLC
-        ADC     #$80+'0'
-        STA     $7D0+31
-        PLA
-}
-        EOR     #$FF
-        SEC
+        SBC     HWSP            ; STACK DEPTH = (HWSP - SP)/2
+        LSR                     ; CARRY BETTER BE CLEAR AFTER THIS
         ADC     ESP             ; ESP - STACK DEPTH
-        TAY
         TAX
         CPX     ESP
         BEQ     +
+        TAY
 -       PLA
         STA     ESTKL,Y
         PLA
@@ -1663,9 +1653,9 @@ EMUSTK  STA     TMP             ; CALL THROUGH JMPTMP LATER
         EOR     #$FF
         SEC
         ADC     ESP             ; ESP - STACK DEPTH
-        TAY
         TAX
-        CPX     ESP
+        TAY
+        CPY     ESP
         BEQ     +
 -       PLA
         STA     ESTKL,Y
@@ -1719,13 +1709,12 @@ EMUSTK  STA     TMP             ; CALL THROUGH JMPTMP LATER
         STX     HWSP
         CPY     TMPL
         BEQ     +
-        TYX
--       DEX
-        LDA     ESTKH,X
+-       DEY
+        LDA     ESTKH,Y
         PHA
-        LDA     ESTKL,X
+        LDA     ESTKL,Y
         PHA
-        CPX     TMPL
+        CPY     TMPL
         BNE     -
 +       LDX     #>OPTBL         ; MAKE SURE WE'RE INDEXING THE RIGHT TABLE
 !IF DEBUG {
@@ -1771,9 +1760,9 @@ EMUSTKX STA     TMP             ; CALL THROUGH JMPTMP LATER
         EOR     #$FF
         SEC
         ADC     ESP             ; ESP - STACK DEPTH
-        TAY
         TAX
-        CPX     ESP
+        TAY
+        CPY     ESP
         BEQ     +
 -       PLA
         STA     ESTKL,Y
@@ -1829,13 +1818,12 @@ EMUSTKX STA     TMP             ; CALL THROUGH JMPTMP LATER
         STX     HWSP
         CPY     TMPL
         BEQ     +
-        TYX
--       DEX
-        LDA     ESTKH,X
+-       DEY
+        LDA     ESTKH,Y
         PHA
-        LDA     ESTKL,X
+        LDA     ESTKL,Y
         PHA
-        CPX     TMPL
+        CPY     TMPL
         BNE     -
 +       LDX     #>OPXTBL        ; MAKE SURE WE'RE INDEXING THE RIGHT TABLE
 !IF DEBUG {
