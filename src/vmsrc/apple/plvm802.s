@@ -92,6 +92,54 @@ NOS     =       $03             ; TOS-1
         REP     #$10            ; 16 BIT X/Y
         !AL
         }
+;*
+;* HW STACK <-> ZP STACK COPIES
+;*
+        !MACRO  STACKTOZP {
+        +ACCMEM8                ; 8 BIT A/M
+        TSC                     ; MOVE HW EVAL STACK TO ZP EVAL STACK
+        EOR     #$FF
+        SEC
+        ADC     HWSP            ; STACK DEPTH = (HWSP - SP)/2
+        LSR
+!IF     DEBUG {
+        PHA
+        CLC
+        ADC     #$80+'0'
+        STA     $7D0+31
+        PLA
+}
+        EOR     #$FF
+        SEC
+        ADC     ESP             ; ESP - STACK DEPTH
+        TAY
+        TAX
+        CPX     ESP
+        BEQ     +
+-       PLA
+        STA     ESTKL,Y
+        PLA
+        STA     ESTKH,Y
+        INY
+        CPY     ESP
+        BNE     -
++
+        }
+        !MACRO  ZPTOSTACK {
+        TSX                     ; RESTORE BASELINE HWSP
+        STX     HWSP
+        CPY     TMPL
+        BEQ     +
+        TYX
+-       DEX
+        LDA     ESTKH,X
+        PHA
+        LDA     ESTKL,X
+        PHA
+        CPX     TMPL
+        BNE     -
++
+        }
 ;******************************
 ;*                            *
 ;* INTERPRETER INITIALIZATION *
@@ -1594,14 +1642,12 @@ ICAL    PLA
 CALL    INY                     ;+INC_IP
         LDA     (IP),Y
         INY
-EMUSTK  STA     TMP
+EMUSTK  STA     TMP             ; CALL THROUGH JMPTMP LATER
         TYA                     ; FLATTEN IP
         SEC
         ADC     IP
         STA     IP
-        SEC                     ; SWITCH TO EMULATED MODE
-        XCE
-        !AS
+        +ACCMEM8                ; 8 BIT A/M
         TSC                     ; MOVE HW EVAL STACK TO ZP EVAL STACK
         EOR     #$FF
         SEC
@@ -1622,11 +1668,11 @@ EMUSTK  STA     TMP
         CPX     ESP
         BEQ     +
 -       PLA
-        STA     ESTKL,X
+        STA     ESTKL,Y
         PLA
-        STA     ESTKH,X
-        INX
-        CPX     ESP
+        STA     ESTKH,Y
+        INY
+        CPY     ESP
         BNE     -
 +
 !IF     DEBUG {
@@ -1642,16 +1688,17 @@ EMUSTK  STA     TMP
 +       TAX
 }
         PEI     (IP)            ; SAVE INSTRUCTION POINTER
-        PHX                     ; SAVE BASELINE ESP
-        TYX
+        PHY                     ; SAVE BASELINE ESP
         LDA     PSR
         PHA
-        PLP
+        PLP                     ; CALL IN EMULATION MODE
         JSR     JMPTMP
         PHP
         PLA
         STA     PSR
         SEI
+        CLC                     ; SWITCH BACK TO NATIVE MODE
+        XCE
         PLY                     ; MOVE RETURN VALUES TO HW EVAL STACK
         STY     ESP             ; RESTORE BASELINE ESP
         PLA
@@ -1680,10 +1727,7 @@ EMUSTK  STA     TMP
         PHA
         CPX     TMPL
         BNE     -
-+       CLC                     ; SWITCH BACK TO NATIVE MODE
-        XCE
-        +ACCMEM16               ; 16 BIT A/M
-        LDX     #>OPTBL         ; MAKE SURE WE'RE INDEXING THE RIGHT TABLE
++       LDX     #>OPTBL         ; MAKE SURE WE'RE INDEXING THE RIGHT TABLE
 !IF DEBUG {
         LDY     LCRWEN+LCBNK2
         LDY     LCRWEN+LCBNK2
@@ -1693,6 +1737,7 @@ EMUSTK  STA     TMP
 }
         STX     OPPAGE
         LDY     #$00
+        +ACCMEM16               ; 16 BIT A/M
         JMP     FETCHOP
 ;*
 ;* INDIRECT CALL TO ADDRESS (NATIVE CODE)
@@ -1705,14 +1750,12 @@ ICALX   PLA
 CALLX   INY                     ;+INC_IP
         LDA     (IP),Y
         INY
-EMUSTKX STA     TMP
+EMUSTKX STA     TMP             ; CALL THROUGH JMPTMP LATER
         TYA                     ; FLATTEN IP
         SEC
         ADC     IP
         STA     IP
-        SEC                     ; SWITCH TO EMULATION MODE
-        XCE
-        !AS
+        +ACCMEM8                ; 8 BIT A/M
         TSC                     ; MOVE HW EVAL STACK TO ZP EVAL STACK
         EOR     #$FF
         SEC
@@ -1733,11 +1776,11 @@ EMUSTKX STA     TMP
         CPX     ESP
         BEQ     +
 -       PLA
-        STA     ESTKL,X
+        STA     ESTKL,Y
         PLA
-        STA     ESTKH,X
-        INX
-        CPX     ESP
+        STA     ESTKH,Y
+        INY
+        CPY     ESP
         BNE     -
 +
 !IF     DEBUG {
@@ -1753,18 +1796,19 @@ EMUSTKX STA     TMP
 +       TAX
 }
         PEI     (IP)            ; SAVE INSTRUCTION POINTER
-        PHX                     ; SAVE BASELINE ESP
-        TYX
+        PHY                     ; SAVE BASELINE ESP
         STX     ALTRDOFF
         LDA     PSR
         PHA
-        PLP
+        PLP                     ; CALL IN EMULATION MODE
         JSR     JMPTMP
         PHP
         PLA
         STA     PSR
         SEI
         STX     ALTRDON
+        CLC                     ; SWITCH BACK TO NATIVE MODE
+        XCE
         PLY                     ; MOVE RETURN VALUES TO HW EVAL STACK
         STY     ESP             ; RESTORE BASELINE ESP
         PLA
@@ -1793,10 +1837,7 @@ EMUSTKX STA     TMP
         PHA
         CPX     TMPL
         BNE     -
-+       CLC                     ; SWITCH BACK TO NATIVE MODE
-        XCE
-        +ACCMEM16               ; 16 BIT A/M
-        LDX     #>OPXTBL        ; MAKE SURE WE'RE INDEXING THE RIGHT TABLE
++       LDX     #>OPXTBL        ; MAKE SURE WE'RE INDEXING THE RIGHT TABLE
 !IF DEBUG {
         LDY     LCRWEN+LCBNK2
         LDY     LCRWEN+LCBNK2
@@ -1806,6 +1847,7 @@ EMUSTKX STA     TMP
 }
         STX     OPPAGE
         LDY     #$00
+        +ACCMEM16               ; 16 BIT A/M
         JMP     FETCHOP
 ;*
 ;* JUMP INDIRECT THROUGH TMP
@@ -1885,13 +1927,14 @@ LEAVEX  INY                     ;+INC_IP
         BEQ     ++
         TAY
 -       PLA
-        STA     ESTKL,X
+        STA     ESTKL,Y
         PLA
-        STA     ESTKH,X
-        INX
-        CPX     ESP
+        STA     ESTKH,Y
+        INY
+        CPY     ESP
         BNE     -
 !IF     DEBUG {
+        PHX
         TSX
         CPX     HWSP
         BEQ     +
@@ -1900,9 +1943,8 @@ LEAVEX  INY                     ;+INC_IP
 -       LDX     $C000
         BPL     -
         LDX     $C010
-+
++       PLX
 }
-        TYX                     ; RESTORE NEW ESP
 ++      +ACCMEM16               ; 16 BIT A/M
         LDY     TMPL            ; DEALLOCATE POOL + FRAME
         TYA
@@ -1911,19 +1953,12 @@ LEAVEX  INY                     ;+INC_IP
         STA     PP
         PLA                     ; RESTORE PREVIOUS FRAME
         STA     IFP
-        SEC                     ; SWITCH TO EMULATION MODE
-        XCE
-        !AS
-        LDA     PSR
-        PHA
-        PLP
+        LDY     PSR
+        PHY
+        PLP                     ; RETURN IN EMULATION MODE
         RTS
-        !AL
 RETX    STX     ALTRDOFF
-RET     SEC                     ; SWITCH TO EMULATION MODE
-        XCE
-        !AS
-        ;+ACCMEM8                ; 8 BIT A/M
+RET     +ACCMEM8                ; 8 BIT A/M
         TSC                     ; MOVE HW EVAL STACK TO ZP EVAL STACK
         EOR     #$FF
         SEC
@@ -1944,13 +1979,14 @@ RET     SEC                     ; SWITCH TO EMULATION MODE
         BEQ     ++
         TAY
 -       PLA
-        STA     ESTKL,X
+        STA     ESTKL,Y
         PLA
-        STA     ESTKH,X
-        INX
-        CPX     ESP
+        STA     ESTKH,Y
+        INY
+        CPY     ESP
         BNE     -
 !IF     DEBUG {
+        PHX
         TSX
         CPX     HWSP
         BEQ     +
@@ -1959,16 +1995,16 @@ RET     SEC                     ; SWITCH TO EMULATION MODE
 -       LDX     $C000
         BPL     -
         LDX     $C010
-+
++       PLX
 }
-        TYX
 ++      LDA     PSR
         PHA
-        PLP
+        PLP                     ; RETURN IN EMULATION MODE
         RTS
 ;*
 ;* RETURN TO NATIVE CODE
 ;*
+        !AL
 NATV    TYA                     ; FLATTEN IP
         SEC
         ADC     IP
