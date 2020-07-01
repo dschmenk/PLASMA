@@ -483,54 +483,49 @@ OPXTBL  !WORD   ZERO,CN,CN,CN,CN,CN,CN,CN                               ; 00 02 
 ;*
 ;* JIT PROFILING ENTRY INTO INTERPRETER
 ;*
+        !AS
 JITINTRPX PHP
         PLA
         STA     PSR
         SEI
-        PLA
-        SEC
-        SBC     #$02            ; POINT TO DEF ENTRY
-        STA     TMPL
-        PLA
-        SBC     #$00
-        STA     TMPH
-        LDY     #$05
-        LDA     (TMP),Y         ; DEC JIT COUNT
-        DEC
-        STA     (TMP),Y
-        BEQ     RUNJIT
         CLC                     ; SWITCH TO NATIVE MODE
         XCE
+        LDY     #$03            ; DEC JIT COUNT
+        LDA     (TOS,S),Y
+        DEC
+        STA     (TOS,S),Y
         +ACCMEM16               ; 16 BIT A/M
-        LDY     #$3             ; INTERP BYTECODE AS USUAL
-        LDA     (TMP),Y
+        BEQ     RUNJIT
+        LDY     #$01
+        LDA     (TOS,S),Y
+        DEY
         STA     IP
+        PLA
         STX     ESP
         TSX
         STX     HWSP
         STX     ALTRDON
         LDX     #>OPXTBL
         STX     OPPAGE
-        LDY     #$00
         JMP     FETCHOP
 ;
-        !AS
-RUNJIT  DEX                     ; ADD PARAMETER TO DEF ENTRY
-        LDA     TMPL
-        PHA                     ; AND SAVE IT FOR LATER
-        STA     ESTKL,X
-        LDA     TMPH
+        !AL
+RUNJIT  PLA                     ; BACK UP DEF ENTRY TO POINT TO JSR
+        SEC
+        SBC     #$0002
         PHA
+        +ACCMEM8                ; 8 BIT A/M
+        DEX                     ; ADD PARAMETER TO DEF ENTRY
+        STA     ESTKL,X
+        XBA
         STA     ESTKH,X
-        CLC                     ; SWITCH TO NATIVE MODE
-        XCE
+        STX     ESP
         +ACCMEM16               ; 16 BIT A/M
         LDA     JITCOMP
         STA     SRC
         LDY     #$03
         LDA     (SRC),Y
         STA     IP
-        STX     ESP
         TSX
         DEX                     ; TAKE INTO ACCOUNT JSR BELOW
         DEX
@@ -542,9 +537,9 @@ RUNJIT  DEX                     ; ADD PARAMETER TO DEF ENTRY
         JSR     FETCHOP         ; CALL JIT COMPILER
         !AS                     ; RETURN IN EMULATION MODE
         PLA
-        STA     TMPH
-        PLA
         STA     TMPL
+        PLA
+        STA     TMPH
         JMP     (TMP)           ; RE-CALL ORIGINAL DEF ENTRY
 ;*********************************************************************
 ;*
