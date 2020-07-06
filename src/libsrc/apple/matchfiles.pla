@@ -43,7 +43,7 @@ end
 export def matchList(pathstr, exp)#2
     byte refnum
     char[64] curpath
-    var firstblk, entrylen, entriesblk, i, entry, filecnt, entrylist, entryptr, entrycnt
+    var firstblk, entrylen, entriesblk, i, entry, entrylist, entryptr, entrycnt
 
     if not dirbuf
         dirbuf = heapallocalign(512, 8, 0)
@@ -58,48 +58,43 @@ export def matchList(pathstr, exp)#2
     fin
     entrylist = 0
     entrycnt  = 0
-    filecnt   = 0
     firstblk  = 1
     refnum    = fileio:open(pathstr)
-    repeat
-        if fileio:read(refnum, dirbuf, 512) == 512
+    while fileio:read(refnum, dirbuf, 512) == 512
+        //
+        // Skip block pointers
+        //
+        entry = dirbuf + 4
+        if firstblk
             //
-            // Skip block pointers
+            // Pull out revelant details from the first block
             //
-            entry = dirbuf + 4
-            if firstblk
-                //
-                // Pull out revelant details from the first block
-                //
-                entrylen   = dirbuf->$23
-                entriesblk = dirbuf->$24
-                filecnt    = dirbuf=>$25
-                entry      = entry + entrylen
-            fin
-            for i = firstblk to entriesblk
-                //
-                // Copy directory entry details
-                //
-                ^entry = ^entry & $0F
-                if ^entry
-                    //
-                    // Match wildcard filename
-                    //
-                    if matchName(entry, exp)
-                        entryptr = heapalloc(t_fileentry)
-                        memcpy(entryptr, entry, t_fileentry)
-                        entrycnt++
-                        if not entrylist
-                            entrylist = entryptr
-                        fin
-                    fin
-                    filecnt--
-                fin
-                entry = entry + entrylen
-            next
-            firstblk = 0
+            entrylen   = dirbuf->$23
+            entriesblk = dirbuf->$24 - 1
+            entry      = entry + entrylen
         fin
-    until filecnt == 0
+        for i = firstblk to entriesblk
+            //
+            // Copy directory entry details
+            //
+            ^entry = ^entry & $0F
+            if ^entry
+                //
+                // Match wildcard filename
+                //
+                if matchName(entry, exp)
+                    entryptr = heapalloc(t_fileentry)
+                    memcpy(entryptr, entry, t_fileentry)
+                    entrycnt++
+                    if not entrylist
+                        entrylist = entryptr
+                    fin
+                fin
+            fin
+            entry = entry + entrylen
+        next
+        firstblk = 0
+    loop
     fileio:close(refnum)
     return entrylist, entrycnt
 end

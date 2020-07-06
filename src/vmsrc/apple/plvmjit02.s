@@ -40,8 +40,7 @@ ALTRDON =       $C003
 ALTWROFF=       $C004
 ALTWRON =       $C005
         !SOURCE "vmsrc/plvmzp.inc"
-PSR     =       TMP+2
-DVSIGN  =       PSR+1
+DVSIGN  =       TMP+2
 DROP    =       $EF
 NEXTOP  =       $F0
 FETCHOP =       NEXTOP+1
@@ -236,11 +235,7 @@ DINTRP  PLA
 ;*
 ;* INDIRECTLY ENTER INTO BYTECODE INTERPRETER
 ;*
-IINTRPX PHP
-        PLA
-        STA     PSR
-        SEI
-        PLA
+IINTRPX PLA
         STA     TMPL
         PLA
         STA     TMPH
@@ -253,6 +248,8 @@ IINTRPX PHP
         DEY
         LDA     #>OPXTBL
         STA     OPPAGE
+        PHP                     ; SAVE PSR
+        SEI
         STA     ALTRDON
         JMP     FETCHOP
 ;************************************************************
@@ -402,7 +399,7 @@ OPXTBL  !WORD   ZERO,CN,CN,CN,CN,CN,CN,CN                               ; 00 02 
         !WORD   MINUS1,BREQ,BRNE,LA,LLA,CB,CW,CSX                       ; 20 22 24 26 28 2A 2C 2E
         !WORD   DROP,DROP2,DUP,DIVMOD,ADDI,SUBI,ANDI,ORI                ; 30 32 34 36 38 3A 3C 3E
         !WORD   ISEQ,ISNE,ISGT,ISLT,ISGE,ISLE,BRFLS,BRTRU               ; 40 42 44 46 48 4A 4C 4E
-        !WORD   BRNCH,SEL,CALLX,ICALX,ENTER,LEAVEX,RETX,CFFB            ; 50 52 54 56 58 5A 5C 5E
+        !WORD   BRNCH,SEL,CALLX,ICALX,ENTERX,LEAVEX,RETX,CFFB           ; 50 52 54 56 58 5A 5C 5E
         !WORD   LBX,LWX,LLBX,LLWX,LABX,LAWX,DLB,DLW                     ; 60 62 64 66 68 6A 6C 6E
         !WORD   SB,SW,SLB,SLW,SAB,SAW,DAB,DAW                           ; 70 72 74 76 78 7A 7C 7E
         !WORD   LNOT,ADD,SUB,MUL,DIV,MOD,INCR,DECR                      ; 80 82 84 86 88 8A 8C 8E
@@ -413,11 +410,7 @@ OPXTBL  !WORD   ZERO,CN,CN,CN,CN,CN,CN,CN                               ; 00 02 
 ;*
 ;* JIT PROFILING ENTRY INTO INTERPRETER
 ;*
-JITINTRPX PHP
-        PLA
-        STA     PSR
-        SEI
-        PLA
+JITINTRPX PLA
         SEC
         SBC     #$02            ; POINT TO DEF ENTRY
         STA     TMPL
@@ -439,6 +432,8 @@ JITINTRPX PHP
         LDY     #$00
         LDA     #>OPXTBL
         STA     OPPAGE
+        PHP
+        SEI
         STA     ALTRDON
         JMP     FETCHOP
 RUNJIT  LDA     JITCOMP
@@ -461,9 +456,15 @@ RUNJIT  LDA     JITCOMP
         LDY     #$00
         LDA     #>OPXTBL
         STA     OPPAGE
+        LDA     #>(RETJIT-1)
+        PHA
+        LDA     #<(RETJIT-1)
+        PHA
+        PHP
+        SEI
         STA     ALTRDON
-        JSR     FETCHOP         ; CALL JIT COMPILER
-        PLA
+        JMP     FETCHOP         ; CALL JIT COMPILER
+RETJIT  PLA
         STA     TMPH
         PLA
         STA     TMPL
@@ -1857,6 +1858,8 @@ CALLX   INY                     ;+INC_IP
         INY                     ;+INC_IP
         LDA     (IP),Y
         STA     TMPH
+        STA     ALTRDOFF
+        PLP                     ; RESTORE FLAGS
         TYA
         SEC
         ADC     IPL
@@ -1864,16 +1867,7 @@ CALLX   INY                     ;+INC_IP
         LDA     IPH
         ADC     #$00
         PHA
-        STA     ALTRDOFF
-        LDA     PSR
-        PHA
-        PLP
         JSR     JMPTMP
-        PHP
-        PLA
-        STA     PSR
-        SEI
-        STA     ALTRDON
         PLA
         STA     IPH
         PLA
@@ -1881,6 +1875,9 @@ CALLX   INY                     ;+INC_IP
         LDA     #>OPXTBL        ; MAKE SURE WE'RE INDEXING THE RIGHT TABLE
         STA     OPPAGE
         LDY     #$00
+        PHP
+        SEI
+        STA     ALTRDON
         JMP     FETCHOP
 ;*
 ;* INDIRECT CALL TO ADDRESS (NATIVE CODE)
@@ -1906,7 +1903,9 @@ ICAL    LDA     ESTKL,X
         STA     OPPAGE
         LDY     #$00
         JMP     FETCHOP
-ICALX   LDA     ESTKL,X
+ICALX   STA     ALTRDOFF
+        PLP                     ; RESTORE FLAGS
+        LDA     ESTKL,X
         STA     TMPL
         LDA     ESTKH,X
         STA     TMPH
@@ -1918,16 +1917,7 @@ ICALX   LDA     ESTKL,X
         LDA     IPH
         ADC     #$00
         PHA
-        STA     ALTRDOFF
-        LDA     PSR
-        PHA
-        PLP
         JSR     JMPTMP
-        PHP
-        PLA
-        STA     PSR
-        SEI
-        STA     ALTRDON
         PLA
         STA     IPH
         PLA
@@ -1935,6 +1925,9 @@ ICALX   LDA     ESTKL,X
         LDA     #>OPXTBL        ; MAKE SURE WE'RE INDEXING THE RIGHT TABLE
         STA     OPPAGE
         LDY     #$00
+        PHP
+        SEI
+        STA     ALTRDON
         JMP     FETCHOP
 ;*
 ;* JUMP INDIRECT TRHOUGH TMP
@@ -1943,19 +1936,51 @@ ICALX   LDA     ESTKL,X
 ;*
 ;* ENTER FUNCTION WITH FRAME SIZE AND PARAM COUNT
 ;*
+ENTERX  PLA                     ; KEEP PSR ON TOP OF STACK
+        TAY
+        LDA     IFPH
+        PHA                     ; SAVE ON STACK FOR LEAVE
+        LDA     IFPL
+        PHA
+        TYA
+        PHA
+        LDA     PPL             ; ALLOCATE FRAME
+        LDY     #$01
+        SEC
+        SBC     (IP),Y
+        STA     PPL
+        STA     IFPL
+        LDA     PPH
+        SBC     #$00
+        STA     PPH
+        STA     IFPH
+        INY
+        LDA     (IP),Y
+        BEQ     +
+        ASL
+        TAY
+-       LDA     ESTKH,X
+        DEY
+        STA     (IFP),Y
+        LDA     ESTKL,X
+        INX
+        DEY
+        STA     (IFP),Y
+        BNE     -
++       LDY     #$03
+        JMP     FETCHOP
 ENTER   LDA     IFPH
         PHA                     ; SAVE ON STACK FOR LEAVE
         LDA     IFPL
         PHA
+        LDA     PPL             ; ALLOCATE FRAME
         INY
-        LDA     (IP),Y
-        EOR     #$FF            ; ALLOCATE FRAME
         SEC
-        ADC     PPL
+        SBC     (IP),Y
         STA     PPL
         STA     IFPL
-        LDA     #$FF
-        ADC     PPH
+        LDA     PPH
+        SBC     #$00
         STA     PPH
         STA     IFPH
         INY
@@ -1976,30 +2001,31 @@ ENTER   LDA     IFPH
 ;*
 ;* LEAVE FUNCTION
 ;*
-LEAVEX  INY                     ;+INC_IP
-        LDA     (IP),Y
+LEAVEX  LDA     IFPL
+        INY                     ;+INC_IP
         CLC
-        ADC     IFPL
+        ADC     (IP),Y
         STA     PPL
-        LDA     #$00
-        ADC     IFPH
+        LDA     IFPH
+        ADC     #$00
         STA     PPH
+        STA     ALTRDOFF
+        PLP
         PLA                     ; RESTORE PREVIOUS FRAME
         STA     IFPL
         PLA
         STA     IFPH
+        RTS
 RETX    STA     ALTRDOFF
-        LDA     PSR
-        PHA
         PLP
         RTS
-LEAVE   INY                     ;+INC_IP
-        LDA     (IP),Y
+LEAVE   LDA     IFPL
+        INY                     ;+INC_IP
         CLC
-        ADC     IFPL
+        ADC     (IP),Y
         STA     PPL
-        LDA     #$00
-        ADC     IFPH
+        LDA     IFPH
+        ADC     #$00
         STA     PPH
         PLA                     ; RESTORE PREVIOUS FRAME
         STA     IFPL
@@ -2352,6 +2378,43 @@ CBRNCH  TYA                     ; FLATTEN IP
         DEY
         JMP     FETCHOP
 CBRNCHEND
+;
+        LDA     #<ENTERX
+        LDX     #>ENTERX
+        LDY     #(CENTERXEND-CENTERX)
+        JSR     OPCPY
+CENTERX PLY                     ; KEEP PSR ON TOP OF STACK
+        LDA     IFPH
+        PHA                     ; SAVE ON STACK FOR LEAVE
+        LDA     IFPL
+        PHA
+        PHY
+        LDA     PPL             ; ALLOCATE FRAME
+        LDY     #$01
+        SEC
+        SBC     (IP),Y
+        STA     PPL
+        STA     IFPL
+        LDA     PPH
+        SBC     #$00
+        STA     PPH
+        STA     IFPH
+        INY
+        LDA     (IP),Y
+        BEQ     +
+        ASL
+        TAY
+-       LDA     ESTKH,X
+        DEY
+        STA     (IFP),Y
+        LDA     ESTKL,X
+        INX
+        DEY
+        STA     (IFP),Y
+        BNE     -
++       LDY     #$03
+        JMP     FETCHOP
+CENTERXEND
 ;
         RTS
 ;*

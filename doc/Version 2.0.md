@@ -1,20 +1,22 @@
-# PLASMA Version 2.0 Developer Preview 3
+# PLASMA Version 2.0 Alpha 1
 
 Welcome to PLASMA: the Grand Unifying Platform for the Apple 1, ][, and ///.
 
 Download the five disk images:
 
-[PLASMA 2.0 DP3 800K Full System](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLASMA2.2mg?raw=true)
+[PLASMA 2.0 Alpha1 800K Full System](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLASMA2.2mg?raw=true)
 
-[PLASMA 2.0 DP3 System and ProDOS Boot](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLASMA2-SYS.PO?raw=true)
+[PLASMA 2.0 Alpha1 System and ProDOS Boot](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLASMA2-SYS.PO?raw=true)
 
-[PLASMA 2.0 D3P Build Tools](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLASMA2-BLD.PO?raw=true)
+[PLASMA 2.0 Alpha1 Build Tools](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLASMA2-BLD.PO?raw=true)
 
-[PLASMA 2.0 DP3 Demos](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLASMA2-DEM.PO?raw=true)
+[PLASMA 2.0 Alpha1 Demos](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLASMA2-DEM.PO?raw=true)
 
-[PLASMA 2.0 DP3 TCP/IP network modules](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLASMA2-INET.PO?raw=true)
+[PLASMA 2.0 Alpha1 TCP/IP network modules](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLASMA2-INET.PO?raw=true)
 
-[PLASMA 2.0 DP3 Apple /// SOS Boot and SANE floating point modules](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLASMA2-FPSOS.PO?raw=true)
+[PLASMA 2.0 Alpha1 Apple /// SOS Mame Boot and SANE floating point modules](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLASMA2-FPSOS.PO?raw=true)
+
+[PLASMA 2.0 Alpha1 Apple /// Mame hard disk image](https://github.com/dschmenk/PLASMA/blob/master/images/apple/apple3.hd?raw=true)
 
 PLASMA can be run from floppies, System in Drive 1, and Build or Demos in Drive 2. Mass storage is the recommended installation that looks like (replacing HARDISK with your volume name of choice):
 
@@ -44,7 +46,7 @@ PLASMA can utilize the 16 bit features of the 65802 and 65816 processors to impr
 
 ## Apple ///
 
-The Apple /// gets the environment it always wanted: The ability to navigate the filesystem with a command line interface. The Apple /// always boots from the floppy drive, even if a hard disk is installed. The PLASMA.SOS floppy should be updated with the SOS.DRIVER configured for your machine. Once booted, type `S /HARDISK/PLASMA` (or your install directory of choice) to change to, and set, the system directory. This can be automated by creating an `AUTORUN` file on the boot floppy with the above command in it.
+The Apple /// gets the environment it always wanted: The ability to navigate the filesystem with a command line interface. The Apple /// always boots from the floppy drive, even if a hard disk is installed. The PLASMA.SOS floppy should be updated with the SOS.DRIVER configured for your machine. It contains the SOS.DRIVER configured for the Apple 3 Ready-To-Run Mame environment. Once booted, type `S /HARDISK/PLASMA` (or your install directory of choice) to change to, and set, the system directory. This can be automated by creating an `AUTORUN` file on the boot floppy with the above command in it.
 
 ## PLASMA Command Line Shell
 
@@ -115,6 +117,22 @@ There is a [YouTube playlist](https://www.youtube.com/playlist?list=PLlPKgUMQbJ7
 - The Apple /// may not always report errors properly or at all.
 
 - The documentation is sparse and incomplete. Yep, could use your help...
+
+# Changes in PLASMA for 2.0 Alpha 1
+
+1. Improved entry/exit for 128K Apple IIe //c
+
+2. Improved entry for Apple ///
+
+3. Improved entry and function calls for 16 bit VM
+
+# Changes in PLASMA for 2.0 DP 4
+
+1. Improved editor auto-indenting
+
+2. Compiler fix for terneray operator precedence
+
+3. Machine check for HGR library
 
 # Changes in PLASMA for 2.0 DP 3
 

@@ -1172,7 +1172,7 @@ def catalog(path)#0
     byte firstblk
     byte entrylen, entriesblk
     byte i, type, len
-    word entry, filecnt
+    word entry
 
     if !^path
         path = @prefix
@@ -1182,43 +1182,37 @@ def catalog(path)#0
         return
     fin
     firstblk = 1
-    repeat
-        if read(refnum, heap, 512) == 512
-            entry = heap + 4
-            if firstblk
-                entrylen   = heap->$23
-                entriesblk = heap->$24
-                filecnt    = heap=>$25
-                entry      = entry + entrylen
-            fin
-            for i = firstblk to entriesblk
-                if ^entry
-                    ^entry = ^entry & $0F
-                    prstr(entry)
-                    type = ' '
-                    when entry->$10
-                        is $0F // Is it a directory?
-                            type = '/'
-                            break
-                        is $FF // SYSTEM file
-                            type = '-'
-                            break
-                        is $FE // REL file
-                            type = '+'
-                    wend
-                    cout(type)
-                    for len = ^entry to 18
-                        cout(' ')
-                    next
-                    filecnt--
-                fin
-                entry = entry + entrylen
-            next
-            firstblk = 0
-        else
-            filecnt = 0
+    while read(refnum, heap, 512) == 512
+        entry = heap + 4
+        if firstblk
+            entrylen   = heap->$23
+            entriesblk = heap->$24 - 1
+            entry      = entry + entrylen
         fin
-    until !filecnt
+        for i = firstblk to entriesblk
+            if ^entry
+                ^entry = ^entry & $0F
+                prstr(entry)
+                type = ' '
+                when entry->$10
+                    is $0F // Is it a directory?
+                        type = '/'
+                        break
+                    is $FF // SYSTEM file
+                        type = '-'
+                        break
+                    is $FE // REL file
+                        type = '+'
+                wend
+                cout(type)
+                for len = ^entry to 18
+                    cout(' ')
+                next
+            fin
+            entry = entry + entrylen
+        next
+        firstblk = 0
+    loop
     close(refnum)
     crout()
 end
@@ -1383,7 +1377,7 @@ heap = @lastdef
 //
 // Print PLASMA version
 //
-prstr("PLASMA 2.0 DP3 64K\n")//; prbyte(version.1); cout('.'); prbyte(version.0); crout
+prstr("PLASMA 2.0 ALPHA1 64K\n")//; prbyte(version.1); cout('.'); prbyte(version.0); crout
 //
 // Init symbol table.
 //

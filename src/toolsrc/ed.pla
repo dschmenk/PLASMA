@@ -1192,7 +1192,7 @@ def pastesel#0
     fin
 end
 def indentsel#0
-    byte indentstr[MAXLNLEN+1], l
+    byte indentstr[MAXLNLEN+1], j, l
     word firstsel, lastsel, i
 
     freesel
@@ -1204,6 +1204,18 @@ def indentsel#0
             indentstr[0] = l + 2
             indentstr[1] = keyspace
             indentstr[2] = keyspace
+            //
+            // Align indent
+            //
+            for j = 3 to indentstr[0]
+                if indentstr[j] <> keyspace
+                    if j & 1 == 0
+                        indentstr[0]--
+                        memcpy(@indentstr + 1, @indentstr + 2, indentstr[0])
+                    fin
+                    break
+                fin
+            next
             delstr(txtlinbuf=>[i])
             txtlinbuf=>[i] = newstr(@indentstr)
             flags = flags | changed
@@ -1527,7 +1539,7 @@ def prfiles(optpath)
     byte firstblk
     byte entrylen, entriesblk
     byte i, type, len
-    word databuff, entry, filecnt
+    word databuff, entry
 
     if ^optpath
         strstripcpy(@path, optpath)
@@ -1542,37 +1554,31 @@ def prfiles(optpath)
         return perr
     fin
     firstblk = 1
-    repeat
-        if fileio:read(refnum, databuff, 512) == 512
-            entry = databuff + 4
-            if firstblk
-                entrylen   = databuff->$23
-                entriesblk = databuff->$24
-                filecnt    = databuff=>$25
-                entry      = entry + entrylen
-            fin
-            for i = firstblk to entriesblk
-                type = ^entry
-                if type <> 0
-                    len = type & $0F
-                    ^entry = len
-                    puts(entry)
-                    if type & $F0 == $D0 // Is it a directory?
-                        putc('/')
-                        len++
-                    fin
-                    for len = 20 - len downto 1
-                        putc(' ')
-                    next
-                    filecnt--
-                fin
-                entry = entry + entrylen
-            next
-            firstblk = 0
-        else
-            filecnt = 0
+    while fileio:read(refnum, databuff, 512) == 512
+        entry = databuff + 4
+        if firstblk
+            entrylen   = databuff->$23
+            entriesblk = databuff->$24
+            entry      = entry + entrylen
         fin
-    until filecnt == 0
+        for i = firstblk to entriesblk
+            type = ^entry
+            if type <> 0
+                len = type & $0F
+                ^entry = len
+                puts(entry)
+                if type & $F0 == $D0 // Is it a directory?
+                    putc('/')
+                    len++
+                fin
+                for len = 20 - len downto 1
+                    putc(' ')
+                next
+            fin
+            entry = entry + entrylen
+        next
+        firstblk = 0
+    loop
     fileio:close(refnum)
     heaprelease(databuff)
     putln
@@ -1609,7 +1615,7 @@ def cmdmode#0
     word cmdptr, line
 
     clrscrn
-    puts("PLASMA Editor, Version 2.0 DP3\n")
+    puts("PLASMA Editor, Version 2.0 DALPHA1\n")
     while not exit
         puts(@filename)
         cmdptr = gets($BA)
