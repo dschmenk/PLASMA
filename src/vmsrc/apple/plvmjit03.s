@@ -160,11 +160,11 @@ OPTBL   !WORD   ZERO,CN,CN,CN,CN,CN,CN,CN                               ; 00 02 
 ;* SYSTEM INTERPRETER ENTRYPOINT
 ;*
 INTERP  PLA
-	CLC
-	ADC	#$01
+        CLC
+        ADC 	#$01
         STA     IPL
         PLA
-        ADC	#$00
+        ADC	    #$00
         STA     IPH
         LDY     #$00
         STY     IPX
@@ -1376,15 +1376,14 @@ ENTER   LDA     IFPH
         PHA                     ; SAVE ON STACK FOR LEAVE
         LDA     IFPL
         PHA
+        LDA     PPL             ; ALLOCATE FRAME
         INY
-        LDA     (IP),Y
-        EOR     #$FF
         SEC
-        ADC     PPL
+        SBC     (IP),Y
         STA     PPL
         STA     IFPL
-        LDA     #$FF
-        ADC     PPH
+        LDA     PPH
+        SBC     #$00
         STA     PPH
         STA     IFPH
         INY
@@ -1405,13 +1404,13 @@ ENTER   LDA     IFPH
 ;*
 ;* LEAVE FUNCTION
 ;*
-LEAVE   INY                     ;+INC_IP
-        LDA     (IP),Y
+LEAVE   LDA     IFPL
+        INY                     ;+INC_IP
         CLC
-        ADC     IFPL
+        ADC     (IP),Y
         STA     PPL
-        LDA     #$00
-        ADC     IFPH
+        LDA     IFPH
+        ADC     #$00
         STA     PPH
         PLA                     ; RESTORE PREVIOUS FRAME
         STA     IFPL

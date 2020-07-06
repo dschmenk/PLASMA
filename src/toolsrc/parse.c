@@ -685,7 +685,7 @@ t_opseq *parse_value(t_opseq *codeseq, int rvalue, int *stackdepth)
     }
     return (cat_seq(codeseq, valseq));
 }
-t_opseq *parse_expr(t_opseq *codeseq, int *stackdepth)
+t_opseq *parse_subexpr(t_opseq *codeseq, int *stackdepth)
 {
     int prevmatch;
     int matchop = 0;
@@ -744,7 +744,7 @@ t_opseq *parse_expr(t_opseq *codeseq, int *stackdepth)
             parse_error("AND must evaluate to single value");
         tag_and = tag_new(BRANCH_TYPE);
         codeseq = gen_brand(codeseq, tag_and);
-        codeseq = parse_expr(codeseq, &stackdepth1);
+        codeseq = parse_subexpr(codeseq, &stackdepth1);
         if (stackdepth1 != *stackdepth)
             parse_error("Inconsistent AND value counts");
         codeseq = gen_codetag(codeseq, tag_and);
@@ -761,12 +761,24 @@ t_opseq *parse_expr(t_opseq *codeseq, int *stackdepth)
             parse_error("OR must evaluate to single value");
         tag_or  = tag_new(BRANCH_TYPE);
         codeseq = gen_bror(codeseq, tag_or);
-        codeseq = parse_expr(codeseq, &stackdepth1);
+        codeseq = parse_subexpr(codeseq, &stackdepth1);
         if (stackdepth1 != *stackdepth)
             parse_error("Inconsistent AND value counts");
         codeseq = gen_codetag(codeseq, tag_or);
     }
-    else if (scantoken == TERNARY_TOKEN)
+    return (codeseq);
+}
+t_opseq *parse_expr(t_opseq *codeseq, int *stackdepth)
+{
+    int prevmatch;
+    int matchop = 0;
+    int optos = opsptr;
+    int i, valdepth;
+    int prevtype, type = 0;
+    t_opseq *valseq;
+
+    codeseq = parse_subexpr(codeseq, stackdepth);
+    if (scantoken == TERNARY_TOKEN)
     {
         int tag_else, tag_endtri;
         int stackdepth1;
@@ -790,8 +802,7 @@ t_opseq *parse_expr(t_opseq *codeseq, int *stackdepth)
         codeseq = gen_codetag(codeseq, tag_endtri);
     }
     return (codeseq);
-}
-t_opseq *parse_set(t_opseq *codeseq)
+}t_opseq *parse_set(t_opseq *codeseq)
 {
     char *setptr = tokenstr;
     int lparms = 0, rparms = 0;

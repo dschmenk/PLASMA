@@ -1028,11 +1028,10 @@ _CALL   TYA
 ;*
 ;* ENTER FUNCTION WITH FRAME SIZE AND PARAM COUNT
 ;*
-ENTER   INY
-        LDA     (IP),Y
-        EOR     #$FF
+ENTER   LDA     IFPL            ; ALLOCATE FRAME
+        INY
         SEC
-        ADC     IFPL
+        SBC     (IP),Y
         STA     IFPL
         BCS     +
         DEC     IFPH
@@ -1054,10 +1053,10 @@ ENTER   INY
 ;*
 ;* LEAVE FUNCTION
 ;*
-LEAVE   INY                     ;+INC_IP
-        LDA     (IP),Y
+LEAVE   LDA     IFPL
+        INY                     ;+INC_IP
         CLC
-        ADC     IFPL
+        ADC     (IP),Y
         STA     IFPL
         BCS     +
         RTS

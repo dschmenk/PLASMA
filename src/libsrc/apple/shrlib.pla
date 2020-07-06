@@ -1,0 +1,181 @@
+include "inc/cmdsys.plh"
+//
+// Apple II hardware constants.
+//
+const store80dis    = $C000
+const store80en     = $C001
+const vidctl        = $C029
+const showgraphics  = $C050
+const showtext      = $C051
+const showfull      = $C052
+const showmix       = $C053
+const showpage1     = $C054
+const showpage2     = $C055
+const showlores     = $C056
+const showhires     = $C057
+const show40        = $C00C
+const show80        = $C00D
+const mapmain       = $C000
+const mapaux        = $C001
+const an3on         = $C05E
+const an3off        = $C05F
+const ena80         = $C07E
+const dis80         = $C07F
+const pixbuf        = $2000
+const scbbuf        = $9D00
+const palbuf        = $9E00
+const scb640        = $80       // 640 PIXEL SUPER-HIRES
+const scb320        = $00       // 320 PIXEL SUPER-HIRES
+
+word palette = $0000, $0007, $0070, $0077, $0700, $0707, $0770, $0
+word         = $0CCC, $000F, $00F0, $00FF, $0F00, $0F0F, $0FF0, $0FFF
+
+
+asm shrInc(buff)
+!SOURCE    "vmsrc/plvmzp.inc"
+GBASL    =      $26
+GBASH    =      $27
+GBASE    =      GBASL
+GCLR     =      $30
+STORE80DIS =    $C000
+STORE80EN =	    $C001
+MAINWRT =       $C004
+AUXWRT  =       $C005
+VIDCTL  =       $C029
+SHADOW  =       $C035
+end
+//
+// This gets copied to $0100!!!
+//
+asm auxRead
+        STA     $C003       ; READ AUX MEM
+        LDA     (GBASE),Y
+        STA     $C002       ; READ MAIN MEM
+        RTS
+end
+//
+// Peek byte from SHR memory
+//
+asm shrPeek(addr)
+        LDA     ESTKL,X
+        STA     GBASL
+        LDA     ESTKH,X
+        STA     GBASH
+        LDY     #$00
+        STY     ESTKH,X
+        PHP
+        SEI
+        LDA     SHADOW
+        AND     #$F7
+        STA     SHADOW
+        JSR     $0100
+        STA     ESTKL,X
+        LDA     SHADOW
+        ORA     #$08
+        STA     SHADOW
+        PLP
+        RTS
+end
+//
+// Poke byte into SHR memory
+//
+asm shrPoke(addr, data)#0
+        LDA     ESTKL+1,X
+        STA     GBASL
+        LDA     ESTKH+1,X
+        STA     GBASH
+        LDY     #$00
+        PHP
+        SEI
+        LDA     SHADOW
+        AND     #$F7
+        STA     SHADOW
+        LDA     ESTKL+0,X
+        STA     AUXWRT
+        STA     (GBASE),Y
+        STA     MAINWRT
+        LDA     SHADOW
+        ORA     #$08
+        STA     SHADOW
+        PLP
+        INX
+        INX
+        RTS
+end
+//
+// Fill byte into SHR memory
+//
+asm shrFill(addr, data, len)#0
+        LDA     ESTKL+2,X
+        STA     GBASL
+        LDA     ESTKH+2,X
+        STA     GBASH
+        LDY     #$00
+        PHP
+        SEI
+        LDA     SHADOW
+        AND     #$F7
+        STA     SHADOW
+        LDA     ESTKL+1,X
+        STA     AUXWRT
+-       STA     (GBASE),Y
+        INY
+        BNE     +
+        INC     GBASH
++       DEC     ESTKL+0,X
+        BNE     -
+        DEC     ESTKH+0,X
+        BNE     -
+        STA     MAINWRT
+        LDA     SHADOW
+        ORA     #$08
+        STA     SHADOW
+        PLP
+        INX
+        INX
+        RTS
+end
+export def shrPalette(pal, rgbptr)#0
+    word palptr
+    byte i
+    
+    palptr = palbuf + pal * 32
+    for i = 0 to 31
+        shrPoke(palptr + i, ^(rgbptr + i))
+    next
+end
+export def shrMode(mode)#0
+    byte row, scb
+    if mode
+        //
+        // Set super hires graphics
+        //
+        if mode == 640
+            scb = scb640
+        else
+            scb = scb320
+        fin
+        for row = 0 to 199
+            shrPoke(scbbuf + row, scb)
+            shrRowPalette(row, palette)
+        next
+        ^store80dis = 0 // Turn off 80 column mode
+        ^vidctl = ^vidctl | $80 // Turn on SHR mode
+        return
+    fin
+    //
+    // Set text mode
+    //
+    ^vidctl = ^vidctl & $7F
+    ^showtext
+    ^showpage1
+    ^ena80   = 0
+    ^show40  = 0
+    ^mapmain = 0
+    ^an3off
+    call($FC58, 0, 0, 0, 0) // home()
+end
+
+// Put read AUX mem routine in scary location
+memcpy($0100, @auxRead, 9)
+done

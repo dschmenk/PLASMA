@@ -155,7 +155,7 @@ def catalog(path)#0
     byte firstblk
     byte entrylen, entriesblk
     byte i, type, len
-    word entry, filecnt, catptr
+    word entry, catptr
 
     if !^path
         getpfx(path)
@@ -166,43 +166,37 @@ def catalog(path)#0
     fin
     catptr = heapmark
     firstblk = 1
-    repeat
-        if cmdsys:sysread(refnum, catptr, 512) == 512
-            entry = catptr + 4
-            if firstblk
-                entrylen   = catptr->$23
-                entriesblk = catptr->$24
-                filecnt    = catptr=>$25
-                entry      = entry + entrylen
-            fin
-            for i = firstblk to entriesblk
-                if ^entry
-                    ^entry = ^entry & $0F
-                    puts(entry)
-                    type = ' '
-                    when entry->$10
-                        is $0F // Is it a directory?
-                            type = '/'
-                            break
-                        is $FF // SYSTEM file
-                            type = '-'
-                            break
-                        is $FE // REL file
-                            type = '+'
-                    wend
-                    putc(type)
-                    for len = ^entry to 18
-                        putc(' ')
-                    next
-                    filecnt--
-                fin
-                entry = entry + entrylen
-            next
-            firstblk = 0
-        else
-            filecnt = 0
+    while cmdsys:sysread(refnum, catptr, 512) == 512
+        entry = catptr + 4
+        if firstblk
+            entrylen   = catptr->$23
+            entriesblk = catptr->$24 - 1
+            entry      = entry + entrylen
         fin
-    until filecnt == 0
+        for i = firstblk to entriesblk
+            if ^entry
+                ^entry = ^entry & $0F
+                puts(entry)
+                type = ' '
+                when entry->$10
+                    is $0F // Is it a directory?
+                        type = '/'
+                        break
+                    is $FF // SYSTEM file
+                        type = '-'
+                        break
+                    is $FE // REL file
+                        type = '+'
+                wend
+                putc(type)
+                for len = ^entry to 18
+                    putc(' ')
+                next
+            fin
+            entry = entry + entrylen
+        next
+        firstblk = 0
+    loop
     cmdsys:sysclose(refnum)
     putln()
 end
