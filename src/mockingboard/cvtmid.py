@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 
 import sys
 #from mido import MidiFile
@@ -8,7 +8,7 @@ optarg     = 1
 timescale  = 16.0 # Scale time to 16th of a second
 extperchan = 9    # Default to standard MIDI channel  10 for extra percussion
 if len(sys.argv) == 1:
-    print 'Usage:', sys.argv[0], '[-p extra_percussion_channel] [-t timescale] MIDI_file'
+    print('Usage:', sys.argv[0], '[-p extra_percussion_channel] [-t timescale] MIDI_file')
     sys.exit(0)
 # Parse optional arguments
 while optarg < (len(sys.argv) - 1):
@@ -45,15 +45,15 @@ for msg in mid:
             # Percussion
             #
             if vol > 0:
-                print '\t!BYTE\t${0:02X}, ${1:02X}, ${2:02X}\t; Percussion {3:d} Chan {4:d} Dur {5:d}'.format(deltatime, msg.note ^ 0x40, (lrchan << 7) | vol, msg.note, msg.channel + 1, vol)
+                print('\t!BYTE\t${0:02X}, ${1:02X}, ${2:02X}\t; Percussion {3:d} Chan {4:d} Dur {5:d}'.format(deltatime, msg.note ^ 0x40, (lrchan << 7) | vol, msg.note, msg.channel + 1, vol))
                 if extperchan == 9: # Play percussion on both channels if no extended percussion
-                    print '\t!BYTE\t${0:02X}, ${1:02X}, ${2:02X}\t; Percussion {3:d} Chan {4:d} Dur {5:d}'.format(0, msg.note ^ 0x40, vol, msg.note, msg.channel + 1, vol)
+                    print('\t!BYTE\t${0:02X}, ${1:02X}, ${2:02X}\t; Percussion {3:d} Chan {4:d} Dur {5:d}'.format(0, msg.note ^ 0x40, vol, msg.note, msg.channel + 1, vol))
                 eventtime = 0.0
         else:
             #
             # Note
             #
-            print '\t!BYTE\t${0:02X}, ${1:02X}, ${2:02X}\t; Note {3:d} Chan {4:d} Vol {5:d}'.format(deltatime, 0x80 | (octave << 4) | onote, (lrchan << 7) | vol, msg.note, msg.channel + 1, vol)
+            print('\t!BYTE\t${0:02X}, ${1:02X}, ${2:02X}\t; Note {3:d} Chan {4:d} Vol {5:d}'.format(deltatime, 0x80 | (octave << 4) | onote, (lrchan << 7) | vol, msg.note, msg.channel + 1, vol))
             eventtime = 0.0
     elif msg.type == 'set_tempo':
         pass
@@ -65,4 +65,4 @@ for msg in mid:
         pass
     elif msg.type == 'program_change':
         pass
-print '\t!BYTE\t${0:02X}, $00, $00'.format(int(eventtime + 0.5))
+print('\t!BYTE\t${0:02X}, $00, $00'.format(int(eventtime + 0.5)))
