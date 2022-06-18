@@ -509,6 +509,10 @@ void call(uword pc)
             mem_data[0x1FF] = i;
             PUSH(0x1FF);
             break;
+        case 9: // LIBRARY STDLIB::PUTB
+            i = UPOP;
+            printf("%02X", i);
+            break;
         case 10: // LIBRARY STDLIB::PUTH
             i = UPOP;
             printf("%04X", i);
