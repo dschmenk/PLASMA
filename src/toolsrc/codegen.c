@@ -83,7 +83,7 @@ int idglobal_lookup(char *name, int len)
 }
 int idconst_add(char *name, int len, int value)
 {
-    char c = name[len];
+    char c;
     if (consts > 1024)
     {
         printf("Constant count overflow\n");
@@ -100,6 +100,7 @@ int idconst_add(char *name, int len, int value)
         return (0);
     }
     if (len > ID_LEN) len = ID_LEN;
+    c = name[len];
     name[len] = '\0';
     emit_idconst(name, value);
     name[len] = c;
@@ -112,7 +113,7 @@ int idconst_add(char *name, int len, int value)
 }
 int idlocal_add(char *name, int len, int type, int size)
 {
-    char c = name[len];
+    char c;
     if (localsize > 255)
     {
         printf("Local variable size overflow\n");
@@ -129,6 +130,7 @@ int idlocal_add(char *name, int len, int type, int size)
         return (0);
     }
     if (len > ID_LEN) len = ID_LEN;
+    char c = name[len];
     name[len] = '\0';
     emit_idlocal(name, localsize);
     name[len] = c;
@@ -143,7 +145,7 @@ int idlocal_add(char *name, int len, int type, int size)
 }
 int idglobal_add(char *name, int len, int type, int size)
 {
-    char c = name[len];
+    //char c;
     if (globals > 1024)
     {
         printf("Global variable count overflow\n");
@@ -160,6 +162,7 @@ int idglobal_add(char *name, int len, int type, int size)
         return (0);
     }
     if (len > ID_LEN) len = ID_LEN;
+    //c = name[len];
     //name[len] = '\0';
     //name[len] = c;
     idglobal_name[globals][0] = len;
