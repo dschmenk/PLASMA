@@ -130,7 +130,7 @@ int idlocal_add(char *name, int len, int type, int size)
         return (0);
     }
     if (len > ID_LEN) len = ID_LEN;
-    char c = name[len];
+    c = name[len];
     name[len] = '\0';
     emit_idlocal(name, localsize);
     name[len] = c;
