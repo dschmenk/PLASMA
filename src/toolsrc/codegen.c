@@ -43,7 +43,7 @@ int id_match(char *name, int len, char *id)
 {
     if (len == id[0])
     {
-        if (len > 16) len = 16;
+        if (len > ID_LEN) len = ID_LEN;
         while (len--)
         {
             if (toupper(name[len]) != id[1 + len])
@@ -99,11 +99,11 @@ int idconst_add(char *name, int len, int value)
         parse_error("global label already defined\n");
         return (0);
     }
+    if (len > ID_LEN) len = ID_LEN;
     name[len] = '\0';
     emit_idconst(name, value);
     name[len] = c;
     idconst_name[consts][0] = len;
-    if (len > ID_LEN) len = ID_LEN;
     while (len--)
         idconst_name[consts][1 + len] = toupper(name[len]);
     idconst_value[consts] = value;
@@ -128,11 +128,11 @@ int idlocal_add(char *name, int len, int type, int size)
         parse_error("local label already defined\n");
         return (0);
     }
+    if (len > ID_LEN) len = ID_LEN;
     name[len] = '\0';
     emit_idlocal(name, localsize);
     name[len] = c;
     idlocal_name[locals][0] = len;
-    if (len > ID_LEN) len = ID_LEN;
     while (len--)
         idlocal_name[locals][1 + len] = toupper(name[len]);
     idlocal_type[locals]   = type | LOCAL_TYPE;
@@ -159,10 +159,10 @@ int idglobal_add(char *name, int len, int type, int size)
         parse_error("global label already defined\n");
         return (0);
     }
-    name[len] = '\0';
-    name[len] = c;
-    idglobal_name[globals][0] = len;
     if (len > ID_LEN) len = ID_LEN;
+    //name[len] = '\0';
+    //name[len] = c;
+    idglobal_name[globals][0] = len;
     while (len--)
         idglobal_name[globals][1 + len] = toupper(name[len]);
     idglobal_type[globals] = type;
@@ -213,8 +213,8 @@ int idfunc_add(char *name, int len, int type, int tag)
         printf("Global variable count overflow\n");
         return (0);
     }
-    idglobal_name[globals][0] = len;
     if (len > ID_LEN) len = ID_LEN;
+    idglobal_name[globals][0] = len;
     while (len--)
         idglobal_name[globals][1 + len] = toupper(name[len]);
     idglobal_type[globals]  = type;
