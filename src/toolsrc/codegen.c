@@ -41,9 +41,9 @@ static t_opseq *pending_seq = 0;
 #define FIXUP_WORD    0x80
 int id_match(char *name, int len, char *id)
 {
+    if (len > ID_LEN) len = ID_LEN;
     if (len == id[0])
     {
-        if (len > ID_LEN) len = ID_LEN;
         while (len--)
         {
             if (toupper(name[len]) != id[1 + len])
