@@ -558,7 +558,7 @@ t_opseq *parse_value(t_opseq *codeseq, int rvalue, int *stackdepth)
                 parse_error("Using BYTE value as a pointer");
             else
                 deref++;
-            type = (type & PTR_TYPE) | (scantoken == PTRB_TOKEN) ? BYTE_TYPE : WORD_TYPE; // Type override
+            type = (type & PTR_TYPE) | ((scantoken == PTRB_TOKEN) ? BYTE_TYPE : WORD_TYPE); // Type override
             if (!parse_const(&const_offset))
             {
                 /*

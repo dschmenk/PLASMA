@@ -76,6 +76,7 @@ ROGUE      = rel/ROGUE\#FE1000
 ROGUEMAP   = rel/ROGUEMAP\#FE1000
 ROGUECOMBAT= rel/ROGUECOMBAT\#FE1000
 MON        = rel/apple/MON\#FE1000
+CONIOTST   = rel/apple/CONIOTST\#FE1000
 TILETEST   = rel/apple/TILETEST\#FE1000
 HGRTEST    = rel/apple/HGRTEST\#FE1000
 GRTEST     = rel/apple/GRTEST\#FE1000
@@ -109,11 +110,11 @@ TXTTYPE	= .TXT
 #SYSTYPE	= \#FF2000
 #TXTTYPE	= \#040000
 
-apple: $(PLVMZP_APL) $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVMJIT) $(PLVM802) $(PLVM03) $(PLVMJIT03) $(CMD) $(CMDJIT) $(JIT) $(JIT16) $(JITUNE) $(SOSCMD) $(SOSCMDJIT) $(PLASMAPLASM) $(CODEOPT) $(ZIPCHIP) $(MATCHFILES) $(ARGS) $(MEMMGR) $(MEMTEST) $(FIBER) $(FIBERTEST) $(LONGJMP) $(ED) $(MON) $(COPY) $(DEL) $(REN) $(CAT) $(NEWDIR) $(TYPE) $(SOS) $(ROD) $(SIEVE) $(PRIMEGAP) $(MOUSE) $(UTHERNET2) $(UTHERNET) $(ETHERIP) $(INET) $(DHCP) $(HTTPD) $(TFTPD) $(ROGUE) $(ROGUEMAP) $(ROGUECOMBAT) $(SFM) $(SFMSPRT) $(GRAFIX) $(GFXDEMO) $(LINES) $(HGRTILE) $(HGRFONT) $(HGRSPRITE) $(HGRLIB) $(TILETEST) $(HGRTEST) $(GRLIB) $(DGRLIB) $(GRTEST) $(DGRTEST) $(HGRTEST) $(FILEIO_APL) $(CONIO_APL) $(JOYBUZZ) $(PORTIO) $(SPIPORT) $(SDFAT) $(FATCAT) $(FATGET) $(FATPUT) $(FATWDSK) $(FATRDSK) $(INT32) $(INT32TEST) $(SANE) $(FPSTR) $(FPU) $(SANITY) $(LZ4) $(LZ4CAT) $(RPNCALC) $(SNDSEQ) $(PLAYSEQ)
+apple: $(PLVMZP_APL) $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVMJIT) $(PLVM802) $(PLVM03) $(PLVMJIT03) $(CMD) $(CMDJIT) $(JIT) $(JIT16) $(JITUNE) $(SOSCMD) $(SOSCMDJIT) $(PLASMAPLASM) $(CODEOPT) $(ZIPCHIP) $(MATCHFILES) $(ARGS) $(MEMMGR) $(MEMTEST) $(FIBER) $(FIBERTEST) $(LONGJMP) $(ED) $(MON) $(COPY) $(DEL) $(REN) $(CAT) $(NEWDIR) $(TYPE) $(SOS) $(ROD) $(SIEVE) $(PRIMEGAP) $(MOUSE) $(UTHERNET2) $(UTHERNET) $(ETHERIP) $(INET) $(DHCP) $(HTTPD) $(TFTPD) $(ROGUE) $(ROGUEMAP) $(ROGUECOMBAT) $(SFM) $(SFMSPRT) $(GRAFIX) $(GFXDEMO) $(LINES) $(HGRTILE) $(HGRFONT) $(HGRSPRITE) $(HGRLIB) $(TILETEST) $(HGRTEST) $(GRLIB) $(DGRLIB) $(GRTEST) $(DGRTEST) $(HGRTEST) $(FILEIO_APL) $(CONIO_APL) $(JOYBUZZ) $(PORTIO) $(SPIPORT) $(SDFAT) $(FATCAT) $(FATGET) $(FATPUT) $(FATWDSK) $(FATRDSK) $(INT32) $(INT32TEST) $(SANE) $(FPSTR) $(FPU) $(SANITY) $(LZ4) $(LZ4CAT) $(RPNCALC) $(SNDSEQ) $(PLAYSEQ) $(CONIOTST)
 
 	-rm vmsrc/plvmzp.inc
 
-c64: $(PLVMZP_C64) $(PLASM) $(PLVM) $(PLVMC64) 
+c64: $(PLVMZP_C64) $(PLASM) $(PLVM) $(PLVMC64)
 	-rm vmsrc/plvmzp.inc
 
 all: apple c64
@@ -287,6 +288,11 @@ hello:	samplesrc/hello.pla $(PLVM) $(PLASM)
 	./$(PLASM) -AMOW < samplesrc/hello.pla > samplesrc/hello.a
 	acme --setpc 4094 -o $(HELLO) samplesrc/hello.a
 	./$(PLVM) HELLO
+
+$(CONIOTST): samplesrc/coniotst.pla $(PLVM02) $(PLASM)
+	./$(PLASM) -AMOW < samplesrc/coniotst.pla > samplesrc/coniotst.a
+	acme --setpc 4094 -o $(CONIOTST) samplesrc/coniotst.a
+
 $(ROD): samplesrc/rod.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AMOW < samplesrc/rod.pla > samplesrc/rod.a
 	acme --setpc 4094 -o $(ROD) samplesrc/rod.a
@@ -522,5 +528,3 @@ $(JIT16): libsrc/apple/jit16.pla libsrc/jit16core.pla $(PLVMJIT) $(PLASM)
 $(JITUNE): utilsrc/apple/jitune.pla $(PLVMJIT) $(PLASM)
 	./$(PLASM) -AMOW < utilsrc/apple/jitune.pla > utilsrc/apple/jitune.a
 	acme --setpc 4094 -o $(JITUNE) utilsrc/apple/jitune.a
-
-
