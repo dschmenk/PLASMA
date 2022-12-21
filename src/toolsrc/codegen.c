@@ -145,7 +145,6 @@ int idlocal_add(char *name, int len, int type, int size)
 }
 int idglobal_add(char *name, int len, int type, int size)
 {
-    //char c;
     if (globals > 1024)
     {
         printf("Global variable count overflow\n");
@@ -162,9 +161,6 @@ int idglobal_add(char *name, int len, int type, int size)
         return (0);
     }
     if (len > ID_LEN) len = ID_LEN;
-    //c = name[len];
-    //name[len] = '\0';
-    //name[len] = c;
     idglobal_name[globals][0] = len;
     while (len--)
         idglobal_name[globals][1 + len] = toupper(name[len]);
@@ -882,10 +878,10 @@ void emit_caseblock(int casecnt, int *caseof, int *casetag)
     if (casecnt < 1 || casecnt > 256)
         parse_error("Switch count under/overflow\n");
     emit_pending_seq();
-    printf("\t%s\t$%02lX\t\t\t; CASEBLOCK\n", DB, casecnt & 0xFF);
+    printf("\t%s\t$%02X\t\t\t; CASEBLOCK\n", DB, casecnt & 0xFF);
     for (i = 0; i < casecnt; i++)
     {
-        printf("\t%s\t$%04lX\n", DW, caseof[i] & 0xFFFF);
+        printf("\t%s\t$%04X\n", DW, caseof[i] & 0xFFFF);
         printf("\t%s\t_B%03d-*\n", DW, casetag[i]);
     }
 }
