@@ -1,4 +1,6 @@
-# 1/1/2023 PLASMA 2.0 Alpha 2 Available! Let's start 2023 off with some critical bug fixes.
+# 1/1/2023 PLASMA 2.0 Alpha 2 Available!
+Let's start 2023 off with some critical bug fixes.
+
 [Download and read the Release Notes](https://github.com/dschmenk/PLASMA/releases)
 
 [Change List](https://github.com/dschmenk/PLASMA/blob/master/doc/Version%202.0.md#changes-in-plasma-for-20-alpha-2)
