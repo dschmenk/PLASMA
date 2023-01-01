@@ -485,11 +485,11 @@ $(MON): utilsrc/apple/mon.pla $(PLASM)
 	./$(PLASM) -AMOW < utilsrc/apple/mon.pla > utilsrc/apple/mon.a
 	acme --setpc 4094 -o $(MON) utilsrc/apple/mon.a
 
-$(COPY): utilsrc/apple/copy.pla $(PLASM)
+$(COPY): utilsrc/apple/copy.pla $(MATCHFILES) $(PLASM)
 	./$(PLASM) -AMOW < utilsrc/apple/copy.pla > utilsrc/apple/copy.a
 	acme --setpc 4094 -o $(COPY) utilsrc/apple/copy.a
 
-$(DEL): utilsrc/apple/del.pla $(PLASM)
+$(DEL): utilsrc/apple/del.pla $(MATCHFILES) $(PLASM)
 	./$(PLASM) -AMOW < utilsrc/apple/del.pla > utilsrc/apple/del.a
 	acme --setpc 4094 -o $(DEL) utilsrc/apple/del.a
 
@@ -497,7 +497,7 @@ $(REN): utilsrc/apple/ren.pla $(PLASM)
 	./$(PLASM) -AMOW < utilsrc/apple/ren.pla > utilsrc/apple/ren.a
 	acme --setpc 4094 -o $(REN) utilsrc/apple/ren.a
 
-$(CAT): utilsrc/apple/cat.pla $(PLASM)
+$(CAT): utilsrc/apple/cat.pla $(MATCHFILES) $(PLASM)
 	./$(PLASM) -AMOW < utilsrc/apple/cat.pla > utilsrc/apple/cat.a
 	acme --setpc 4094 -o $(CAT) utilsrc/apple/cat.a
 
