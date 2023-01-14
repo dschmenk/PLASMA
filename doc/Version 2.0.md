@@ -1,20 +1,20 @@
-# PLASMA Version 2.0 Alpha 1
+# PLASMA Version 2.0 Alpha 2
 
 Welcome to PLASMA: the Grand Unifying Platform for the Apple 1, ][, and ///.
 
 Download the five disk images:
 
-[PLASMA 2.0 Alpha1 800K Full System](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLASMA2.2mg?raw=true)
+[PLASMA 2.0 Alpha2 800K Full System](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLASMA2.2mg?raw=true)
 
-[PLASMA 2.0 Alpha1 System and ProDOS Boot](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLASMA2-SYS.PO?raw=true)
+[PLASMA 2.0 Alpha2 System and ProDOS Boot](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLASMA2-SYS.PO?raw=true)
 
-[PLASMA 2.0 Alpha1 Build Tools](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLASMA2-BLD.PO?raw=true)
+[PLASMA 2.0 Alpha2 Build Tools](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLASMA2-BLD.PO?raw=true)
 
-[PLASMA 2.0 Alpha1 Demos](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLASMA2-DEM.PO?raw=true)
+[PLASMA 2.0 Alpha2 Demos](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLASMA2-DEM.PO?raw=true)
 
-[PLASMA 2.0 Alpha1 TCP/IP network modules](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLASMA2-INET.PO?raw=true)
+[PLASMA 2.0 Alpha2 TCP/IP network modules](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLASMA2-INET.PO?raw=true)
 
-[PLASMA 2.0 Alpha1 Apple /// SOS Mame Boot and SANE floating point modules](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLASMA2-FPSOS.PO?raw=true)
+[PLASMA 2.0 Alpha2 Apple /// SOS Mame Boot and SANE floating point modules](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLASMA2-FPSOS.PO?raw=true)
 
 [PLASMA 2.0 Alpha1 Apple /// Mame hard disk image](https://github.com/dschmenk/PLASMA/blob/master/images/apple/apple3.hd?raw=true)
 
@@ -117,6 +117,14 @@ There is a [YouTube playlist](https://www.youtube.com/playlist?list=PLlPKgUMQbJ7
 - The Apple /// may not always report errors properly or at all.
 
 - The documentation is sparse and incomplete. Yep, could use your help...
+
+# Changes in PLASMA for 2.0 Alpha 2
+
+1. Self hosted compiler fixes for invalid array size constants
+
+2. Ensure IDs in self hosted compiler are 31 characters significant
+
+3. Fix bug COPY file parsing and move common routine into MATCHFILES
 
 # Changes in PLASMA for 2.0 Alpha 1
 

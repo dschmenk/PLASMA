@@ -9,8 +9,6 @@ char *statement, *tokenstr, *scanpos = "", *strpos = "";
 t_token scantoken = EOL_TOKEN, prevtoken;
 int tokenlen;
 long constval;
-FILE* inputfile;
-char *filename;
 int lineno = 0;
 FILE* outer_inputfile = NULL;
 char* outer_filename;
@@ -448,14 +446,6 @@ int next_line(void)
     t_token token;
     char* new_filename;
     strpos = conststr;
-    if (inputfile == NULL)
-    {
-        /*
-         * First-time init
-         */
-        inputfile = stdin;
-        filename = "<stdin>";
-    }
     if (*scanpos == ';')
     {
         statement = ++scanpos;
@@ -500,7 +490,7 @@ int next_line(void)
             inputline[len-1] = '\0';
         lineno++;
         scantoken = EOL_TOKEN;
-        printf("; %s: %04d: %s\n", filename, lineno, inputline);
+        fprintf(outputfile, "; %s: %04d: %s\n", filename, lineno, inputline);
     }
     token = scan();
     /*

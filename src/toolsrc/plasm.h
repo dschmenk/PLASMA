@@ -9,7 +9,11 @@
 #define SYSFLAGS        (1<<5)
 #define WARNINGS        (1<<6)
 #define NO_COMBINE      (1<<7)
+#define FALSE           0
+#define TRUE            (!FALSE)
 extern int outflags;
+extern FILE *inputfile, *outputfile;
+extern char *filename, modfile[17];
 #include "tokens.h"
 #include "lex.h"
 #include "symbols.h"
