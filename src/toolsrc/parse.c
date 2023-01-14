@@ -1,11 +1,13 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <ctype.h>
 #include "plasm.h"
 #define LVALUE      0
 #define RVALUE      1
 #define MAX_LAMBDA  64
 
+int id_match(char *name, int len, char *id);
 int parse_mods(void);
 
 int infunc = 0, break_tag = 0, cont_tag = 0, stack_loop = 0;
@@ -1221,7 +1223,7 @@ int parse_stmnt(void)
     }
     return (scan() == EOL_TOKEN);
 }
-int parse_var(int type, long basesize)
+int parse_var(int type, long basesize, int ignore_var)
 {
     char *idstr;
     long constval;
@@ -1267,7 +1269,7 @@ int parse_var(int type, long basesize)
         else
             parse_error("Bad variable initializer");
     }
-    else
+    else if (!ignore_var)
     {
         if (idlen)
             id_add(idstr, idlen, type, size);
@@ -1341,7 +1343,7 @@ int parse_struc(void)
     scan();
     return (1);
 }
-int parse_vars(int type)
+int parse_vars(int type, int ignore_vars)
 {
     long value;
     int idlen, size, cfnparms, emit = 0;
@@ -1406,7 +1408,7 @@ int parse_vars(int type)
                 scan_rewind(tokenstr);
             if (type & WORD_TYPE)
                 cfnvals *= 2;
-            do parse_var(type, cfnvals); while (scantoken == COMMA_TOKEN);
+            do parse_var(type, cfnvals, ignore_vars); while (scantoken == COMMA_TOKEN);
             emit = type == GLOBAL_TYPE;
             break;
         case PREDEF_TOKEN:
@@ -1463,13 +1465,18 @@ int parse_vars(int type)
 }
 int parse_mods(void)
 {
+    int i, ignore_emit;
+
     if (scantoken == IMPORT_TOKEN)
     {
         if (scan() != ID_TOKEN)
             parse_error("Bad import definition");
-        emit_moddep(tokenstr, tokenlen);
+        for (i = 0; i < tokenlen; i++)
+            tokenstr[i] = toupper(tokenstr[i]);
+        if (!(ignore_emit = id_match(tokenstr, tokenlen, modfile)))
+            emit_moddep(tokenstr, tokenlen);
         scan();
-        while (parse_vars(EXTERN_TYPE)) next_line();
+        while (parse_vars(EXTERN_TYPE, ignore_emit)) next_line();
         if (scantoken != END_TOKEN)
             parse_error("Missing END");
         scan();
@@ -1549,7 +1556,7 @@ int parse_defs(void)
     {
         case CONST_TOKEN:
         case STRUC_TOKEN:
-            return parse_vars(GLOBAL_TYPE);
+            return parse_vars(GLOBAL_TYPE, FALSE);
         case EXPORT_TOKEN:
             if (scan() != DEF_TOKEN && scantoken != ASM_TOKEN)
                 parse_error("Bad export definition");
@@ -1617,7 +1624,7 @@ int parse_defs(void)
         /*
          * Parse local vars
          */
-        while (parse_vars(LOCAL_TYPE)) next_line();
+        while (parse_vars(LOCAL_TYPE, FALSE)) next_line();
         emit_enter(cfnparms);
         prevstmnt = 0;
         while (parse_stmnt()) next_line();
@@ -1714,7 +1721,7 @@ int parse_module(void)
     if (next_line())
     {
         while (parse_mods())            next_line();
-        while (parse_vars(GLOBAL_TYPE)) next_line();
+        while (parse_vars(GLOBAL_TYPE, FALSE)) next_line();
         while (parse_defs())            next_line();
         emit_bytecode_seg();
         emit_start();

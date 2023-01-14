@@ -173,7 +173,7 @@ int idglobal_add(char *name, int len, int type, int size)
     }
     else
     {
-        printf("\t\t\t\t\t; %s -> X%03d\n", &idglobal_name[globals][1], externs);
+        fprintf(outputfile, "\t\t\t\t\t; %s -> X%03d\n", &idglobal_name[globals][1], externs);
         idglobal_tag[globals++] = externs++;
     }
     return (1);
@@ -219,7 +219,7 @@ int idfunc_add(char *name, int len, int type, int tag)
     idglobal_type[globals]  = type;
     idglobal_tag[globals++] = tag;
     if (type & EXTERN_TYPE)
-        printf("\t\t\t\t\t; %s -> X%03d\n", &idglobal_name[globals - 1][1], tag);
+        fprintf(outputfile, "\t\t\t\t\t; %s -> X%03d\n", &idglobal_name[globals - 1][1], tag);
     return (1);
 }
 int idfunc_set(char *name, int len, int type, int tag)
@@ -343,11 +343,11 @@ void emit_dci(char *str, int len)
 {
     if (len--)
     {
-        printf("\t; DCI STRING: %s\n", supper(str));
-        printf("\t%s\t$%02X", DB, toupper(*str++) | (len ? 0x80 : 0x00));
+        fprintf(outputfile, "\t; DCI STRING: %s\n", supper(str));
+        fprintf(outputfile, "\t%s\t$%02X", DB, toupper(*str++) | (len ? 0x80 : 0x00));
         while (len--)
-            printf(",$%02X", toupper(*str++) | (len ? 0x80 : 0x00));
-        printf("\n");
+            fprintf(outputfile, ",$%02X", toupper(*str++) | (len ? 0x80 : 0x00));
+        fprintf(outputfile, "\n");
     }
 }
 void emit_flags(int flags)
@@ -365,22 +365,22 @@ void emit_header(void)
     int i;
 
     if (outflags & ACME)
-        printf("; ACME COMPATIBLE OUTPUT\n");
+        fprintf(outputfile, "; ACME COMPATIBLE OUTPUT\n");
     else
-        printf("; CA65 COMPATIBLE OUTPUT\n");
+        fprintf(outputfile, "; CA65 COMPATIBLE OUTPUT\n");
     if (outflags & MODULE)
     {
-        printf("\t%s\t_SEGEND-_SEGBEGIN\t; LENGTH OF HEADER + CODE/DATA + BYTECODE SEGMENT\n", DW);
-        printf("_SEGBEGIN%c\n", LBL);
-        printf("\t%s\t$6502\t\t\t; MAGIC #\n", DW);
-        printf("\t%s\t_SYSFLAGS\t\t\t; SYSTEM FLAGS\n", DW);
-        printf("\t%s\t_SUBSEG\t\t\t; BYTECODE SUB-SEGMENT\n", DW);
-        printf("\t%s\t_DEFCNT\t\t\t; BYTECODE DEF COUNT\n", DW);
-        printf("\t%s\t_INIT\t\t\t; MODULE INITIALIZATION ROUTINE\n", DW);
+        fprintf(outputfile, "\t%s\t_SEGEND-_SEGBEGIN\t; LENGTH OF HEADER + CODE/DATA + BYTECODE SEGMENT\n", DW);
+        fprintf(outputfile, "_SEGBEGIN%c\n", LBL);
+        fprintf(outputfile, "\t%s\t$6502\t\t\t; MAGIC #\n", DW);
+        fprintf(outputfile, "\t%s\t_SYSFLAGS\t\t\t; SYSTEM FLAGS\n", DW);
+        fprintf(outputfile, "\t%s\t_SUBSEG\t\t\t; BYTECODE SUB-SEGMENT\n", DW);
+        fprintf(outputfile, "\t%s\t_DEFCNT\t\t\t; BYTECODE DEF COUNT\n", DW);
+        fprintf(outputfile, "\t%s\t_INIT\t\t\t; MODULE INITIALIZATION ROUTINE\n", DW);
     }
     else
     {
-        printf("\tJMP\t_INIT\t\t\t; MODULE INITIALIZATION ROUTINE\n");
+        fprintf(outputfile, "\tJMP\t_INIT\t\t\t; MODULE INITIALIZATION ROUTINE\n");
     }
     /*
      * Init free op sequence table
@@ -393,7 +393,7 @@ void emit_rld(void)
 {
     int i, j;
 
-    printf(";\n; RE-LOCATEABLE DICTIONARY\n;\n");
+    fprintf(outputfile, ";\n; RE-LOCATEABLE DICTIONARY\n;\n");
     /*
      * First emit the bytecode definition entrypoint information.
      */
@@ -409,9 +409,9 @@ void emit_rld(void)
     j = outflags & INIT ? defs - 1 : defs;
     for (i = 0; i < j; i++)
     {
-        printf("\t%s\t$02\t\t\t; CODE TABLE FIXUP\n", DB);
-        printf("\t%s\t_C%03d\t\t\n", DW, i);
-        printf("\t%s\t$00\n", DB);
+        fprintf(outputfile, "\t%s\t$02\t\t\t; CODE TABLE FIXUP\n", DB);
+        fprintf(outputfile, "\t%s\t_C%03d\t\t\n", DW, i);
+        fprintf(outputfile, "\t%s\t$00\n", DB);
     }
     /*
      * Now emit the fixup table.
@@ -420,53 +420,53 @@ void emit_rld(void)
     {
         if (fixup_type[i] & EXTERN_TYPE)
         {
-            printf("\t%s\t$%02X\t\t\t; EXTERNAL FIXUP\n", DB, 0x11 + fixup_size[i] & 0xFF);
-            printf("\t%s\t_F%03d-_SEGBEGIN\t\t\n", DW, i);
-            printf("\t%s\t%d\t\t\t; ESD INDEX\n", DB, fixup_tag[i]);
+            fprintf(outputfile, "\t%s\t$%02X\t\t\t; EXTERNAL FIXUP\n", DB, 0x11 + fixup_size[i] & 0xFF);
+            fprintf(outputfile, "\t%s\t_F%03d-_SEGBEGIN\t\t\n", DW, i);
+            fprintf(outputfile, "\t%s\t%d\t\t\t; ESD INDEX\n", DB, fixup_tag[i]);
         }
         else
         {
-            printf("\t%s\t$%02X\t\t\t; INTERNAL FIXUP\n", DB, 0x01 + fixup_size[i] & 0xFF);
-            printf("\t%s\t_F%03d-_SEGBEGIN\t\t\n", DW, i);
-            printf("\t%s\t$00\n", DB);
+            fprintf(outputfile, "\t%s\t$%02X\t\t\t; INTERNAL FIXUP\n", DB, 0x01 + fixup_size[i] & 0xFF);
+            fprintf(outputfile, "\t%s\t_F%03d-_SEGBEGIN\t\t\n", DW, i);
+            fprintf(outputfile, "\t%s\t$00\n", DB);
         }
     }
-    printf("\t%s\t$00\t\t\t; END OF RLD\n", DB);
+    fprintf(outputfile, "\t%s\t$00\t\t\t; END OF RLD\n", DB);
 }
 void emit_esd(void)
 {
     int i;
 
-    printf(";\n; EXTERNAL/ENTRY SYMBOL DICTIONARY\n;\n");
+    fprintf(outputfile, ";\n; EXTERNAL/ENTRY SYMBOL DICTIONARY\n;\n");
     for (i = 0; i < globals; i++)
     {
         if (idglobal_type[i] & ACCESSED_TYPE) // Only refer to accessed externals
         {
             emit_dci(&idglobal_name[i][1], idglobal_name[i][0]);
-            printf("\t%s\t$10\t\t\t; EXTERNAL SYMBOL FLAG\n", DB);
-            printf("\t%s\t%d\t\t\t; ESD INDEX\n", DW, idglobal_tag[i]);
+            fprintf(outputfile, "\t%s\t$10\t\t\t; EXTERNAL SYMBOL FLAG\n", DB);
+            fprintf(outputfile, "\t%s\t%d\t\t\t; ESD INDEX\n", DW, idglobal_tag[i]);
         }
         else if (idglobal_type[i] & EXPORT_TYPE)
         {
             emit_dci(&idglobal_name[i][1], idglobal_name[i][0]);
-            printf("\t%s\t$08\t\t\t; ENTRY SYMBOL FLAG\n", DB);
-            printf("\t%s\t%s\t\t\n", DW, tag_string(idglobal_tag[i], idglobal_type[i]));
+            fprintf(outputfile, "\t%s\t$08\t\t\t; ENTRY SYMBOL FLAG\n", DB);
+            fprintf(outputfile, "\t%s\t%s\t\t\n", DW, tag_string(idglobal_tag[i], idglobal_type[i]));
         }
     }
-    printf("\t%s\t$00\t\t\t; END OF ESD\n", DB);
+    fprintf(outputfile, "\t%s\t$00\t\t\t; END OF ESD\n", DB);
 }
 void emit_trailer(void)
 {
     if (!(outflags & BYTECODE_SEG))
         emit_bytecode_seg();
     if (!(outflags & INIT))
-        printf("_INIT\t=\t0\n");
+        fprintf(outputfile, "_INIT\t=\t0\n");
     if (!(outflags & SYSFLAGS))
-        printf("_SYSFLAGS\t=\t0\n");
+        fprintf(outputfile, "_SYSFLAGS\t=\t0\n");
     if (outflags & MODULE)
     {
-        printf("_DEFCNT\t=\t%d\n", defs);
-        printf("_SEGEND%c\n", LBL);
+        fprintf(outputfile, "_DEFCNT\t=\t%d\n", defs);
+        fprintf(outputfile, "_SEGEND%c\n", LBL);
         emit_rld();
         emit_esd();
     }
@@ -481,12 +481,12 @@ void emit_moddep(char *name, int len)
             idglobal_add(name, len, EXTERN_TYPE | WORD_TYPE, 2); // Add to symbol table
         }
         else
-            printf("\t%s\t$00\t\t\t; END OF MODULE DEPENDENCIES\n", DB);
+            fprintf(outputfile, "\t%s\t$00\t\t\t; END OF MODULE DEPENDENCIES\n", DB);
     }
 }
 void emit_sysflags(int val)
 {
-    printf("_SYSFLAGS\t=\t$%04X\t\t; SYSTEM FLAGS\n", val);
+    fprintf(outputfile, "_SYSFLAGS\t=\t$%04X\t\t; SYSTEM FLAGS\n", val);
     outflags |= SYSFLAGS;
 }
 void emit_bytecode_seg(void)
@@ -494,57 +494,57 @@ void emit_bytecode_seg(void)
     if ((outflags & MODULE) && !(outflags & BYTECODE_SEG))
     {
         if (lastglobalsize == 0) // Pad a byte if last label is at end of data segment
-            printf("\t%s\t$00\t\t\t; PAD BYTE\n", DB);
-        printf("_SUBSEG%c\t\t\t\t; BYTECODE STARTS\n", LBL);
+            fprintf(outputfile, "\t%s\t$00\t\t\t; PAD BYTE\n", DB);
+        fprintf(outputfile, "_SUBSEG%c\t\t\t\t; BYTECODE STARTS\n", LBL);
     }
     outflags |= BYTECODE_SEG;
 }
 void emit_comment(char *s)
 {
-    printf("\t\t\t\t\t; %s\n", s);
+    fprintf(outputfile, "\t\t\t\t\t; %s\n", s);
 }
 void emit_asm(char *s)
 {
-    printf("%s\n", s);
+    fprintf(outputfile, "%s\n", s);
 }
 void emit_idlocal(char *name, int value)
 {
-    printf("\t\t\t\t\t; %s -> [%d]\n", name, value);
+    fprintf(outputfile, "\t\t\t\t\t; %s -> [%d]\n", name, value);
 }
 void emit_idglobal(int tag, int size, char *name)
 {
     lastglobalsize = size;
     if (size == 0)
-        printf("_D%03d%c\t\t\t\t\t; %s\n", tag, LBL, name);
+        fprintf(outputfile, "_D%03d%c\t\t\t\t\t; %s\n", tag, LBL, name);
     else
-        printf("_D%03d%c\t%s\t%d\t\t\t; %s\n", tag, LBL, DS, size, name);
+        fprintf(outputfile, "_D%03d%c\t%s\t%d\t\t\t; %s\n", tag, LBL, DS, size, name);
 }
 void emit_idfunc(int tag, int type, char *name, int is_bytecode)
 {
     if (name)
-        printf("%s%c\t\t\t\t\t; %s()\n", tag_string(tag, type), LBL, name);
+        fprintf(outputfile, "%s%c\t\t\t\t\t; %s()\n", tag_string(tag, type), LBL, name);
     if (!(outflags & MODULE))
     {
-        //printf("%s%c\n", name, LBL);
+        //fprintf(outputfile, "%s%c\n", name, LBL);
         if (is_bytecode)
-            printf("\tJSR\tINTERP\n");
+            fprintf(outputfile, "\tJSR\tINTERP\n");
     }
 }
 void emit_lambdafunc(int tag, char *name, int cparams, t_opseq *lambda_seq)
 {
     emit_idfunc(tag, DEF_TYPE, name, 1);
     if (cparams)
-        printf("\t%s\t$58,$%02X,$%02X\t\t; ENTER\t%d,%d\n", DB, cparams*2, cparams, cparams*2, cparams);
+        fprintf(outputfile, "\t%s\t$58,$%02X,$%02X\t\t; ENTER\t%d,%d\n", DB, cparams*2, cparams, cparams*2, cparams);
     emit_seq(lambda_seq);
     emit_pending_seq();
     if (cparams)
-        printf("\t%s\t$5A,$%02X\t\t\t; LEAVE\t%d\n", DB, cparams*2, cparams*2);
+        fprintf(outputfile, "\t%s\t$5A,$%02X\t\t\t; LEAVE\t%d\n", DB, cparams*2, cparams*2);
     else
-        printf("\t%s\t$5C\t\t\t; RET\n", DB);
+        fprintf(outputfile, "\t%s\t$5C\t\t\t; RET\n", DB);
 }
 void emit_idconst(char *name, int value)
 {
-    printf("\t\t\t\t\t; %s = %d\n", name, value);
+    fprintf(outputfile, "\t\t\t\t\t; %s = %d\n", name, value);
 }
 int emit_data(int vartype, int consttype, long constval, int constsize)
 {
@@ -553,25 +553,25 @@ int emit_data(int vartype, int consttype, long constval, int constsize)
     if (consttype == 0)
     {
         datasize = constsize;
-        printf("\t%s\t$%02X\n", DS, constsize);
+        fprintf(outputfile, "\t%s\t$%02X\n", DS, constsize);
     }
     else if (consttype & STRING_TYPE)
     {
         str = (unsigned char *)constval;
         constsize = *str++;
         datasize = constsize + 1;
-        printf("\t%s\t$%02X\n", DB, constsize);
+        fprintf(outputfile, "\t%s\t$%02X\n", DB, constsize);
         while (constsize-- > 0)
         {
-            printf("\t%s\t$%02X", DB, *str++);
+            fprintf(outputfile, "\t%s\t$%02X", DB, *str++);
             for (i = 0; i < 7; i++)
             {
                 if (constsize-- > 0)
-                    printf(",$%02X", *str++);
+                    fprintf(outputfile, ",$%02X", *str++);
                 else
                     break;
             }
-            printf("\n");
+            fprintf(outputfile, "\n");
         }
     }
     else if (consttype & ADDR_TYPE)
@@ -581,18 +581,18 @@ int emit_data(int vartype, int consttype, long constval, int constsize)
             int fixup = fixup_new(constval, consttype, FIXUP_WORD);
             datasize = 2;
             if (consttype & EXTERN_TYPE)
-                printf("_F%03d%c\t%s\t0\t\t\t; %s\n", fixup, LBL, DW, tag_string(constval, consttype));
+                fprintf(outputfile, "_F%03d%c\t%s\t0\t\t\t; %s\n", fixup, LBL, DW, tag_string(constval, consttype));
             else
-                printf("_F%03d%c\t%s\t%s\n", fixup, LBL, DW, tag_string(constval, consttype));
+                fprintf(outputfile, "_F%03d%c\t%s\t%s\n", fixup, LBL, DW, tag_string(constval, consttype));
         }
         else
         {
             int fixup = fixup_new(constval, consttype, FIXUP_BYTE);
             datasize = 1;
             if (consttype & EXTERN_TYPE)
-                printf("_F%03d%c\t%s\t0\t\t\t; %s\n", fixup, LBL, DB, tag_string(constval, consttype));
+                fprintf(outputfile, "_F%03d%c\t%s\t0\t\t\t; %s\n", fixup, LBL, DB, tag_string(constval, consttype));
             else
-                printf("_F%03d%c\t%s\t%s\n", fixup, LBL, DB, tag_string(constval, consttype));
+                fprintf(outputfile, "_F%03d%c\t%s\t%s\n", fixup, LBL, DB, tag_string(constval, consttype));
         }
     }
     else
@@ -600,12 +600,12 @@ int emit_data(int vartype, int consttype, long constval, int constsize)
         if (vartype & WORD_TYPE)
         {
             datasize = 2;
-            printf("\t%s\t$%04lX\n", DW, constval & 0xFFFF);
+            fprintf(outputfile, "\t%s\t$%04lX\n", DW, constval & 0xFFFF);
         }
         else
         {
             datasize = 1;
-            printf("\t%s\t$%02lX\n", DB, constval & 0xFF);
+            fprintf(outputfile, "\t%s\t$%02lX\n", DB, constval & 0xFF);
         }
     }
     return (datasize);
@@ -613,78 +613,78 @@ int emit_data(int vartype, int consttype, long constval, int constsize)
 void emit_codetag(int tag)
 {
     emit_pending_seq();
-    printf("_B%03d%c\n", tag, LBL);
+    fprintf(outputfile, "_B%03d%c\n", tag, LBL);
 }
 void emit_const(int cval)
 {
     emit_pending_seq();
     if ((cval & 0xFFFF) == 0xFFFF)
-        printf("\t%s\t$20\t\t\t; MINUS ONE\n", DB);
+        fprintf(outputfile, "\t%s\t$20\t\t\t; MINUS ONE\n", DB);
     else if ((cval & 0xFFF0) == 0x0000)
-        printf("\t%s\t$%02X\t\t\t; CN\t%d\n", DB, cval*2, cval);
+        fprintf(outputfile, "\t%s\t$%02X\t\t\t; CN\t%d\n", DB, cval*2, cval);
     else if ((cval & 0xFF00) == 0x0000)
-        printf("\t%s\t$2A,$%02X\t\t\t; CB\t%d\n", DB, cval, cval);
+        fprintf(outputfile, "\t%s\t$2A,$%02X\t\t\t; CB\t%d\n", DB, cval, cval);
     else if ((cval & 0xFF00) == 0xFF00)
-        printf("\t%s\t$5E,$%02X\t\t\t; CFFB\t%d\n", DB, cval&0xFF, cval);
+        fprintf(outputfile, "\t%s\t$5E,$%02X\t\t\t; CFFB\t%d\n", DB, cval&0xFF, cval);
     else
-        printf("\t%s\t$2C,$%02X,$%02X\t\t; CW\t%d\n", DB, cval&0xFF,(cval>>8)&0xFF, cval);
+        fprintf(outputfile, "\t%s\t$2C,$%02X,$%02X\t\t; CW\t%d\n", DB, cval&0xFF,(cval>>8)&0xFF, cval);
 }
 void emit_conststr(long conststr)
 {
-    printf("\t%s\t$2E\t\t\t; CS\n", DB);
+    fprintf(outputfile, "\t%s\t$2E\t\t\t; CS\n", DB);
     emit_data(0, STRING_TYPE, conststr, 0);
 }
 void emit_addi(int cval)
 {
     emit_pending_seq();
-    printf("\t%s\t$38,$%02X\t\t\t; ADDI\t%d\n", DB, cval, cval);
+    fprintf(outputfile, "\t%s\t$38,$%02X\t\t\t; ADDI\t%d\n", DB, cval, cval);
 }
 void emit_subi(int cval)
 {
     emit_pending_seq();
-    printf("\t%s\t$3A,$%02X\t\t\t; SUBI\t%d\n", DB, cval, cval);
+    fprintf(outputfile, "\t%s\t$3A,$%02X\t\t\t; SUBI\t%d\n", DB, cval, cval);
 }
 void emit_andi(int cval)
 {
     emit_pending_seq();
-    printf("\t%s\t$3C,$%02X\t\t\t; ANDI\t%d\n", DB, cval, cval);
+    fprintf(outputfile, "\t%s\t$3C,$%02X\t\t\t; ANDI\t%d\n", DB, cval, cval);
 }
 void emit_ori(int cval)
 {
     emit_pending_seq();
-    printf("\t%s\t$3E,$%02X\t\t\t; ORI\t%d\n", DB, cval, cval);
+    fprintf(outputfile, "\t%s\t$3E,$%02X\t\t\t; ORI\t%d\n", DB, cval, cval);
 }
 void emit_lb(void)
 {
-    printf("\t%s\t$60\t\t\t; LB\n", DB);
+    fprintf(outputfile, "\t%s\t$60\t\t\t; LB\n", DB);
 }
 void emit_lw(void)
 {
-    printf("\t%s\t$62\t\t\t; LW\n", DB);
+    fprintf(outputfile, "\t%s\t$62\t\t\t; LW\n", DB);
 }
 void emit_llb(int index)
 {
-    printf("\t%s\t$64,$%02X\t\t\t; LLB\t[%d]\n", DB, index, index);
+    fprintf(outputfile, "\t%s\t$64,$%02X\t\t\t; LLB\t[%d]\n", DB, index, index);
 }
 void emit_llw(int index)
 {
-    printf("\t%s\t$66,$%02X\t\t\t; LLW\t[%d]\n", DB, index, index);
+    fprintf(outputfile, "\t%s\t$66,$%02X\t\t\t; LLW\t[%d]\n", DB, index, index);
 }
 void emit_addlb(int index)
 {
-    printf("\t%s\t$B0,$%02X\t\t\t; ADDLB\t[%d]\n", DB, index, index);
+    fprintf(outputfile, "\t%s\t$B0,$%02X\t\t\t; ADDLB\t[%d]\n", DB, index, index);
 }
 void emit_addlw(int index)
 {
-    printf("\t%s\t$B2,$%02X\t\t\t; ADDLW\t[%d]\n", DB, index, index);
+    fprintf(outputfile, "\t%s\t$B2,$%02X\t\t\t; ADDLW\t[%d]\n", DB, index, index);
 }
 void emit_idxlb(int index)
 {
-    printf("\t%s\t$B8,$%02X\t\t\t; IDXLB\t[%d]\n", DB, index, index);
+    fprintf(outputfile, "\t%s\t$B8,$%02X\t\t\t; IDXLB\t[%d]\n", DB, index, index);
 }
 void emit_idxlw(int index)
 {
-    printf("\t%s\t$BA,$%02X\t\t\t; IDXLW\t[%d]\n", DB, index, index);
+    fprintf(outputfile, "\t%s\t$BA,$%02X\t\t\t; IDXLW\t[%d]\n", DB, index, index);
 }
 void emit_lab(int tag, int offset, int type)
 {
@@ -692,12 +692,12 @@ void emit_lab(int tag, int offset, int type)
     {
         int fixup = fixup_new(tag, type, FIXUP_WORD);
         char *taglbl = tag_string(tag, type);
-        printf("\t%s\t$68\t\t\t; LAB\t%s+%d\n", DB, taglbl, offset);
-        printf("_F%03d%c\t%s\t%s+%d\t\t\n", fixup, LBL, DW, type & EXTERN_TYPE ? "0" : taglbl, offset);
+        fprintf(outputfile, "\t%s\t$68\t\t\t; LAB\t%s+%d\n", DB, taglbl, offset);
+        fprintf(outputfile, "_F%03d%c\t%s\t%s+%d\t\t\n", fixup, LBL, DW, type & EXTERN_TYPE ? "0" : taglbl, offset);
     }
     else
     {
-        printf("\t%s\t$68,$%02X,$%02X\t\t; LAB\t%d\n", DB, offset&0xFF,(offset>>8)&0xFF, offset);
+        fprintf(outputfile, "\t%s\t$68,$%02X,$%02X\t\t; LAB\t%d\n", DB, offset&0xFF,(offset>>8)&0xFF, offset);
     }
 }
 void emit_law(int tag, int offset, int type)
@@ -706,12 +706,12 @@ void emit_law(int tag, int offset, int type)
     {
         int fixup = fixup_new(tag, type, FIXUP_WORD);
         char *taglbl = tag_string(tag, type);
-        printf("\t%s\t$6A\t\t\t; LAW\t%s+%d\n", DB, taglbl, offset);
-        printf("_F%03d%c\t%s\t%s+%d\t\t\n", fixup, LBL, DW, type & EXTERN_TYPE ? "0" : taglbl, offset);
+        fprintf(outputfile, "\t%s\t$6A\t\t\t; LAW\t%s+%d\n", DB, taglbl, offset);
+        fprintf(outputfile, "_F%03d%c\t%s\t%s+%d\t\t\n", fixup, LBL, DW, type & EXTERN_TYPE ? "0" : taglbl, offset);
     }
     else
     {
-        printf("\t%s\t$6A,$%02X,$%02X\t\t; LAW\t%d\n", DB, offset&0xFF,(offset>>8)&0xFF, offset);
+        fprintf(outputfile, "\t%s\t$6A,$%02X,$%02X\t\t; LAW\t%d\n", DB, offset&0xFF,(offset>>8)&0xFF, offset);
     }
 }
 void emit_addab(int tag, int offset, int type)
@@ -720,12 +720,12 @@ void emit_addab(int tag, int offset, int type)
     {
         int fixup = fixup_new(tag, type, FIXUP_WORD);
         char *taglbl = tag_string(tag, type);
-        printf("\t%s\t$B4\t\t\t; ADDAB\t%s+%d\n", DB, taglbl, offset);
-        printf("_F%03d%c\t%s\t%s+%d\t\t\n", fixup, LBL, DW, type & EXTERN_TYPE ? "0" : taglbl, offset);
+        fprintf(outputfile, "\t%s\t$B4\t\t\t; ADDAB\t%s+%d\n", DB, taglbl, offset);
+        fprintf(outputfile, "_F%03d%c\t%s\t%s+%d\t\t\n", fixup, LBL, DW, type & EXTERN_TYPE ? "0" : taglbl, offset);
     }
     else
     {
-        printf("\t%s\t$B4,$%02X,$%02X\t\t; ADDAB\t%d\n", DB, offset&0xFF,(offset>>8)&0xFF, offset);
+        fprintf(outputfile, "\t%s\t$B4,$%02X,$%02X\t\t; ADDAB\t%d\n", DB, offset&0xFF,(offset>>8)&0xFF, offset);
     }
 }
 void emit_addaw(int tag, int offset, int type)
@@ -734,12 +734,12 @@ void emit_addaw(int tag, int offset, int type)
     {
         int fixup = fixup_new(tag, type, FIXUP_WORD);
         char *taglbl = tag_string(tag, type);
-        printf("\t%s\t$B6\t\t\t; ADDAW\t%s+%d\n", DB, taglbl, offset);
-        printf("_F%03d%c\t%s\t%s+%d\t\t\n", fixup, LBL, DW, type & EXTERN_TYPE ? "0" : taglbl, offset);
+        fprintf(outputfile, "\t%s\t$B6\t\t\t; ADDAW\t%s+%d\n", DB, taglbl, offset);
+        fprintf(outputfile, "_F%03d%c\t%s\t%s+%d\t\t\n", fixup, LBL, DW, type & EXTERN_TYPE ? "0" : taglbl, offset);
     }
     else
     {
-        printf("\t%s\t$B6,$%02X,$%02X\t\t; ADDAW\t%d\n", DB, offset&0xFF,(offset>>8)&0xFF, offset);
+        fprintf(outputfile, "\t%s\t$B6,$%02X,$%02X\t\t; ADDAW\t%d\n", DB, offset&0xFF,(offset>>8)&0xFF, offset);
     }
 }
 void emit_idxab(int tag, int offset, int type)
@@ -748,12 +748,12 @@ void emit_idxab(int tag, int offset, int type)
     {
         int fixup = fixup_new(tag, type, FIXUP_WORD);
         char *taglbl = tag_string(tag, type);
-        printf("\t%s\t$BC\t\t\t; IDXAB\t%s+%d\n", DB, taglbl, offset);
-        printf("_F%03d%c\t%s\t%s+%d\t\t\n", fixup, LBL, DW, type & EXTERN_TYPE ? "0" : taglbl, offset);
+        fprintf(outputfile, "\t%s\t$BC\t\t\t; IDXAB\t%s+%d\n", DB, taglbl, offset);
+        fprintf(outputfile, "_F%03d%c\t%s\t%s+%d\t\t\n", fixup, LBL, DW, type & EXTERN_TYPE ? "0" : taglbl, offset);
     }
     else
     {
-        printf("\t%s\t$BC,$%02X,$%02X\t\t; IDXAB\t%d\n", DB, offset&0xFF,(offset>>8)&0xFF, offset);
+        fprintf(outputfile, "\t%s\t$BC,$%02X,$%02X\t\t; IDXAB\t%d\n", DB, offset&0xFF,(offset>>8)&0xFF, offset);
     }
 }
 void emit_idxaw(int tag, int offset, int type)
@@ -762,37 +762,37 @@ void emit_idxaw(int tag, int offset, int type)
     {
         int fixup = fixup_new(tag, type, FIXUP_WORD);
         char *taglbl = tag_string(tag, type);
-        printf("\t%s\t$BE\t\t\t; IDXAW\t%s+%d\n", DB, taglbl, offset);
-        printf("_F%03d%c\t%s\t%s+%d\t\t\n", fixup, LBL, DW, type & EXTERN_TYPE ? "0" : taglbl, offset);
+        fprintf(outputfile, "\t%s\t$BE\t\t\t; IDXAW\t%s+%d\n", DB, taglbl, offset);
+        fprintf(outputfile, "_F%03d%c\t%s\t%s+%d\t\t\n", fixup, LBL, DW, type & EXTERN_TYPE ? "0" : taglbl, offset);
     }
     else
     {
-        printf("\t%s\t$BE,$%02X,$%02X\t\t; IDXAW\t%d\n", DB, offset&0xFF,(offset>>8)&0xFF, offset);
+        fprintf(outputfile, "\t%s\t$BE,$%02X,$%02X\t\t; IDXAW\t%d\n", DB, offset&0xFF,(offset>>8)&0xFF, offset);
     }
 }
 void emit_sb(void)
 {
-    printf("\t%s\t$70\t\t\t; SB\n", DB);
+    fprintf(outputfile, "\t%s\t$70\t\t\t; SB\n", DB);
 }
 void emit_sw(void)
 {
-    printf("\t%s\t$72\t\t\t; SW\n", DB);
+    fprintf(outputfile, "\t%s\t$72\t\t\t; SW\n", DB);
 }
 void emit_slb(int index)
 {
-    printf("\t%s\t$74,$%02X\t\t\t; SLB\t[%d]\n", DB, index, index);
+    fprintf(outputfile, "\t%s\t$74,$%02X\t\t\t; SLB\t[%d]\n", DB, index, index);
 }
 void emit_slw(int index)
 {
-    printf("\t%s\t$76,$%02X\t\t\t; SLW\t[%d]\n", DB, index, index);
+    fprintf(outputfile, "\t%s\t$76,$%02X\t\t\t; SLW\t[%d]\n", DB, index, index);
 }
 void emit_dlb(int index)
 {
-    printf("\t%s\t$6C,$%02X\t\t\t; DLB\t[%d]\n", DB, index, index);
+    fprintf(outputfile, "\t%s\t$6C,$%02X\t\t\t; DLB\t[%d]\n", DB, index, index);
 }
 void emit_dlw(int index)
 {
-    printf("\t%s\t$6E,$%02X\t\t\t; DLW\t[%d]\n", DB, index, index);
+    fprintf(outputfile, "\t%s\t$6E,$%02X\t\t\t; DLW\t[%d]\n", DB, index, index);
 }
 void emit_sab(int tag, int offset, int type)
 {
@@ -800,12 +800,12 @@ void emit_sab(int tag, int offset, int type)
     {
         int fixup = fixup_new(tag, type, FIXUP_WORD);
         char *taglbl = tag_string(tag, type);
-        printf("\t%s\t$78\t\t\t; SAB\t%s+%d\n", DB, taglbl, offset);
-        printf("_F%03d%c\t%s\t%s+%d\t\t\n", fixup, LBL, DW, type & EXTERN_TYPE ? "0" : taglbl, offset);
+        fprintf(outputfile, "\t%s\t$78\t\t\t; SAB\t%s+%d\n", DB, taglbl, offset);
+        fprintf(outputfile, "_F%03d%c\t%s\t%s+%d\t\t\n", fixup, LBL, DW, type & EXTERN_TYPE ? "0" : taglbl, offset);
     }
     else
     {
-        printf("\t%s\t$78,$%02X,$%02X\t\t; SAB\t%d\n", DB, offset&0xFF,(offset>>8)&0xFF, offset);
+        fprintf(outputfile, "\t%s\t$78,$%02X,$%02X\t\t; SAB\t%d\n", DB, offset&0xFF,(offset>>8)&0xFF, offset);
     }
 }
 void emit_saw(int tag, int offset, int type)
@@ -814,12 +814,12 @@ void emit_saw(int tag, int offset, int type)
     {
         int fixup = fixup_new(tag, type, FIXUP_WORD);
         char *taglbl = tag_string(tag, type);
-        printf("\t%s\t$7A\t\t\t; SAW\t%s+%d\n", DB, taglbl, offset);
-        printf("_F%03d%c\t%s\t%s+%d\t\t\n", fixup, LBL, DW, type & EXTERN_TYPE ? "0" : taglbl, offset);
+        fprintf(outputfile, "\t%s\t$7A\t\t\t; SAW\t%s+%d\n", DB, taglbl, offset);
+        fprintf(outputfile, "_F%03d%c\t%s\t%s+%d\t\t\n", fixup, LBL, DW, type & EXTERN_TYPE ? "0" : taglbl, offset);
     }
     else
     {
-        printf("\t%s\t$7A,$%02X,$%02X\t\t; SAW\t%d\n", DB, offset&0xFF,(offset>>8)&0xFF, offset);
+        fprintf(outputfile, "\t%s\t$7A,$%02X,$%02X\t\t; SAW\t%d\n", DB, offset&0xFF,(offset>>8)&0xFF, offset);
     }
 }
 void emit_dab(int tag, int offset, int type)
@@ -828,11 +828,11 @@ void emit_dab(int tag, int offset, int type)
     {
         int fixup = fixup_new(tag, type, FIXUP_WORD);
         char *taglbl = tag_string(tag, type);
-        printf("\t%s\t$7C\t\t\t; DAB\t%s+%d\n", DB, taglbl, offset);
-        printf("_F%03d%c\t%s\t%s+%d\t\t\n", fixup, LBL, DW, type & EXTERN_TYPE ? "0" : taglbl, offset);
+        fprintf(outputfile, "\t%s\t$7C\t\t\t; DAB\t%s+%d\n", DB, taglbl, offset);
+        fprintf(outputfile, "_F%03d%c\t%s\t%s+%d\t\t\n", fixup, LBL, DW, type & EXTERN_TYPE ? "0" : taglbl, offset);
     }
     else
-        printf("\t%s\t$7C,$%02X,$%02X\t\t; DAB\t%d\n", DB, offset&0xFF,(offset>>8)&0xFF, offset);
+        fprintf(outputfile, "\t%s\t$7C,$%02X,$%02X\t\t; DAB\t%d\n", DB, offset&0xFF,(offset>>8)&0xFF, offset);
 }
 void emit_daw(int tag, int offset, int type)
 {
@@ -840,36 +840,36 @@ void emit_daw(int tag, int offset, int type)
     {
         int fixup = fixup_new(tag, type, FIXUP_WORD);
         char *taglbl = tag_string(tag, type);
-        printf("\t%s\t$7E\t\t\t; DAW\t%s+%d\n", DB, taglbl, offset);
-        printf("_F%03d%c\t%s\t%s+%d\t\t\n", fixup, LBL, DW, type & EXTERN_TYPE ? "0" : taglbl, offset);
+        fprintf(outputfile, "\t%s\t$7E\t\t\t; DAW\t%s+%d\n", DB, taglbl, offset);
+        fprintf(outputfile, "_F%03d%c\t%s\t%s+%d\t\t\n", fixup, LBL, DW, type & EXTERN_TYPE ? "0" : taglbl, offset);
     }
     else
-        printf("\t%s\t$7E,$%02X,$%02X\t\t; DAW\t%d\n", DB, offset&0xFF,(offset>>8)&0xFF, offset);
+        fprintf(outputfile, "\t%s\t$7E,$%02X,$%02X\t\t; DAW\t%d\n", DB, offset&0xFF,(offset>>8)&0xFF, offset);
 }
 void emit_localaddr(int index)
 {
-    printf("\t%s\t$28,$%02X\t\t\t; LLA\t[%d]\n", DB, index, index);
+    fprintf(outputfile, "\t%s\t$28,$%02X\t\t\t; LLA\t[%d]\n", DB, index, index);
 }
 void emit_globaladdr(int tag, int offset, int type)
 {
     int fixup = fixup_new(tag, type, FIXUP_WORD);
     char *taglbl = tag_string(tag, type);
-    printf("\t%s\t$26\t\t\t; LA\t%s+%d\n", DB, taglbl, offset);
-    printf("_F%03d%c\t%s\t%s+%d\t\t\n", fixup, LBL, DW, type & EXTERN_TYPE ? "0" : taglbl, offset);
+    fprintf(outputfile, "\t%s\t$26\t\t\t; LA\t%s+%d\n", DB, taglbl, offset);
+    fprintf(outputfile, "_F%03d%c\t%s\t%s+%d\t\t\n", fixup, LBL, DW, type & EXTERN_TYPE ? "0" : taglbl, offset);
 }
 void emit_indexbyte(void)
 {
-    printf("\t%s\t$82\t\t\t; IDXB\n", DB);
+    fprintf(outputfile, "\t%s\t$82\t\t\t; IDXB\n", DB);
 }
 void emit_indexword(void)
 {
-    printf("\t%s\t$9E\t\t\t; IDXW\n", DB);
+    fprintf(outputfile, "\t%s\t$9E\t\t\t; IDXW\n", DB);
 }
 void emit_select(int tag)
 {
     emit_pending_seq();
-    printf("\t%s\t$52\t\t\t; SEL\n", DB);
-    printf("\t%s\t_B%03d-*\n", DW, tag);
+    fprintf(outputfile, "\t%s\t$52\t\t\t; SEL\n", DB);
+    fprintf(outputfile, "\t%s\t_B%03d-*\n", DW, tag);
 }
 void emit_caseblock(int casecnt, int *caseof, int *casetag)
 {
@@ -878,144 +878,144 @@ void emit_caseblock(int casecnt, int *caseof, int *casetag)
     if (casecnt < 1 || casecnt > 256)
         parse_error("Switch count under/overflow\n");
     emit_pending_seq();
-    printf("\t%s\t$%02X\t\t\t; CASEBLOCK\n", DB, casecnt & 0xFF);
+    fprintf(outputfile, "\t%s\t$%02X\t\t\t; CASEBLOCK\n", DB, casecnt & 0xFF);
     for (i = 0; i < casecnt; i++)
     {
-        printf("\t%s\t$%04X\n", DW, caseof[i] & 0xFFFF);
-        printf("\t%s\t_B%03d-*\n", DW, casetag[i]);
+        fprintf(outputfile, "\t%s\t$%04X\n", DW, caseof[i] & 0xFFFF);
+        fprintf(outputfile, "\t%s\t_B%03d-*\n", DW, casetag[i]);
     }
 }
 void emit_breq(int tag)
 {
-    printf("\t%s\t$22\t\t\t; BREQ\t_B%03d\n", DB, tag);
-    printf("\t%s\t_B%03d-*\n", DW, tag);
+    fprintf(outputfile, "\t%s\t$22\t\t\t; BREQ\t_B%03d\n", DB, tag);
+    fprintf(outputfile, "\t%s\t_B%03d-*\n", DW, tag);
 }
 void emit_brne(int tag)
 {
-    printf("\t%s\t$24\t\t\t; BRNE\t_B%03d\n", DB, tag);
-    printf("\t%s\t_B%03d-*\n", DW, tag);
+    fprintf(outputfile, "\t%s\t$24\t\t\t; BRNE\t_B%03d\n", DB, tag);
+    fprintf(outputfile, "\t%s\t_B%03d-*\n", DW, tag);
 }
 void emit_brfls(int tag)
 {
-    printf("\t%s\t$4C\t\t\t; BRFLS\t_B%03d\n", DB, tag);
-    printf("\t%s\t_B%03d-*\n", DW, tag);
+    fprintf(outputfile, "\t%s\t$4C\t\t\t; BRFLS\t_B%03d\n", DB, tag);
+    fprintf(outputfile, "\t%s\t_B%03d-*\n", DW, tag);
 }
 void emit_brtru(int tag)
 {
-    printf("\t%s\t$4E\t\t\t; BRTRU\t_B%03d\n", DB, tag);
-    printf("\t%s\t_B%03d-*\n", DW, tag);
+    fprintf(outputfile, "\t%s\t$4E\t\t\t; BRTRU\t_B%03d\n", DB, tag);
+    fprintf(outputfile, "\t%s\t_B%03d-*\n", DW, tag);
 }
 void emit_brnch(int tag)
 {
     emit_pending_seq();
-    printf("\t%s\t$50\t\t\t; BRNCH\t_B%03d\n", DB, tag);
-    printf("\t%s\t_B%03d-*\n", DW, tag);
+    fprintf(outputfile, "\t%s\t$50\t\t\t; BRNCH\t_B%03d\n", DB, tag);
+    fprintf(outputfile, "\t%s\t_B%03d-*\n", DW, tag);
 }
 void emit_brand(int tag)
 {
     emit_pending_seq();
-    printf("\t%s\t$AC\t\t\t; BRAND\t_B%03d\n", DB, tag);
-    printf("\t%s\t_B%03d-*\n", DW, tag);
+    fprintf(outputfile, "\t%s\t$AC\t\t\t; BRAND\t_B%03d\n", DB, tag);
+    fprintf(outputfile, "\t%s\t_B%03d-*\n", DW, tag);
 }
 void emit_bror(int tag)
 {
     emit_pending_seq();
-    printf("\t%s\t$AE\t\t\t; BROR\t_B%03d\n", DB, tag);
-    printf("\t%s\t_B%03d-*\n", DW, tag);
+    fprintf(outputfile, "\t%s\t$AE\t\t\t; BROR\t_B%03d\n", DB, tag);
+    fprintf(outputfile, "\t%s\t_B%03d-*\n", DW, tag);
 }
 void emit_brgt(int tag)
 {
     emit_pending_seq();
-    printf("\t%s\t$A0\t\t\t; BRGT\t_B%03d\n", DB, tag);
-    printf("\t%s\t_B%03d-*\n", DW, tag);
+    fprintf(outputfile, "\t%s\t$A0\t\t\t; BRGT\t_B%03d\n", DB, tag);
+    fprintf(outputfile, "\t%s\t_B%03d-*\n", DW, tag);
 }
 void emit_brlt(int tag)
 {
     emit_pending_seq();
-    printf("\t%s\t$A2\t\t\t; BRLT\t_B%03d\n", DB, tag);
-    printf("\t%s\t_B%03d-*\n", DW, tag);
+    fprintf(outputfile, "\t%s\t$A2\t\t\t; BRLT\t_B%03d\n", DB, tag);
+    fprintf(outputfile, "\t%s\t_B%03d-*\n", DW, tag);
 }
 void emit_incbrle(int tag)
 {
     emit_pending_seq();
-    printf("\t%s\t$A4\t\t\t; INCBRLE\t_B%03d\n", DB, tag);
-    printf("\t%s\t_B%03d-*\n", DW, tag);
+    fprintf(outputfile, "\t%s\t$A4\t\t\t; INCBRLE\t_B%03d\n", DB, tag);
+    fprintf(outputfile, "\t%s\t_B%03d-*\n", DW, tag);
 }
 void emit_addbrle(int tag)
 {
     emit_pending_seq();
-    printf("\t%s\t$A6\t\t\t; ADDBRLE\t_B%03d\n", DB, tag);
-    printf("\t%s\t_B%03d-*\n", DW, tag);
+    fprintf(outputfile, "\t%s\t$A6\t\t\t; ADDBRLE\t_B%03d\n", DB, tag);
+    fprintf(outputfile, "\t%s\t_B%03d-*\n", DW, tag);
 }
 void emit_decbrge(int tag)
 {
     emit_pending_seq();
-    printf("\t%s\t$A8\t\t\t; DECBRGE\t_B%03d\n", DB, tag);
-    printf("\t%s\t_B%03d-*\n", DW, tag);
+    fprintf(outputfile, "\t%s\t$A8\t\t\t; DECBRGE\t_B%03d\n", DB, tag);
+    fprintf(outputfile, "\t%s\t_B%03d-*\n", DW, tag);
 }
 void emit_subbrge(int tag)
 {
     emit_pending_seq();
-    printf("\t%s\t$AA\t\t\t; SUBBRGE\t_B%03d\n", DB, tag);
-    printf("\t%s\t_B%03d-*\n", DW, tag);
+    fprintf(outputfile, "\t%s\t$AA\t\t\t; SUBBRGE\t_B%03d\n", DB, tag);
+    fprintf(outputfile, "\t%s\t_B%03d-*\n", DW, tag);
 }
 void emit_call(int tag, int type)
 {
     if (type == CONST_TYPE)
     {
-        printf("\t%s\t$54\t\t\t; CALL\t%i\n", DB, tag);
-        printf("\t%s\t%i\t\t\n", DW, tag);
+        fprintf(outputfile, "\t%s\t$54\t\t\t; CALL\t%i\n", DB, tag);
+        fprintf(outputfile, "\t%s\t%i\t\t\n", DW, tag);
     }
     else
     {
         int fixup = fixup_new(tag, type, FIXUP_WORD);
         char *taglbl = tag_string(tag, type);
-        printf("\t%s\t$54\t\t\t; CALL\t%s\n", DB, taglbl);
-        printf("_F%03d%c\t%s\t%s\t\t\n", fixup, LBL, DW, type & EXTERN_TYPE ? "0" : taglbl);
+        fprintf(outputfile, "\t%s\t$54\t\t\t; CALL\t%s\n", DB, taglbl);
+        fprintf(outputfile, "_F%03d%c\t%s\t%s\t\t\n", fixup, LBL, DW, type & EXTERN_TYPE ? "0" : taglbl);
     }
 }
 void emit_ical(void)
 {
-    printf("\t%s\t$56\t\t\t; ICAL\n", DB);
+    fprintf(outputfile, "\t%s\t$56\t\t\t; ICAL\n", DB);
 }
 void emit_leave(void)
 {
     emit_pending_seq();
     if (localsize)
-        printf("\t%s\t$5A,$%02X\t\t\t; LEAVE\t%d\n", DB, localsize, localsize);
+        fprintf(outputfile, "\t%s\t$5A,$%02X\t\t\t; LEAVE\t%d\n", DB, localsize, localsize);
     else
-        printf("\t%s\t$5C\t\t\t; RET\n", DB);
+        fprintf(outputfile, "\t%s\t$5C\t\t\t; RET\n", DB);
 }
 void emit_ret(void)
 {
     emit_pending_seq();
-    printf("\t%s\t$5C\t\t\t; RET\n", DB);
+    fprintf(outputfile, "\t%s\t$5C\t\t\t; RET\n", DB);
 }
 void emit_enter(int cparams)
 {
     if (localsize)
-        printf("\t%s\t$58,$%02X,$%02X\t\t; ENTER\t%d,%d\n", DB, localsize, cparams, localsize, cparams);
+        fprintf(outputfile, "\t%s\t$58,$%02X,$%02X\t\t; ENTER\t%d,%d\n", DB, localsize, cparams, localsize, cparams);
 }
 void emit_start(void)
 {
-    printf("_INIT%c\n", LBL);
+    fprintf(outputfile, "_INIT%c\n", LBL);
     outflags |= INIT;
     defs++;
 }
 void emit_drop(void)
 {
     emit_pending_seq();
-    printf("\t%s\t$30\t\t\t; DROP \n", DB);
+    fprintf(outputfile, "\t%s\t$30\t\t\t; DROP \n", DB);
 }
 void emit_drop2(void)
 {
     emit_pending_seq();
-    printf("\t%s\t$32\t\t\t; DROP2\n", DB);
+    fprintf(outputfile, "\t%s\t$32\t\t\t; DROP2\n", DB);
 }
 void emit_dup(void)
 {
     emit_pending_seq();
-    printf("\t%s\t$34\t\t\t; DUP\n", DB);
+    fprintf(outputfile, "\t%s\t$34\t\t\t; DUP\n", DB);
 }
 int emit_unaryop(t_token op)
 {
@@ -1023,19 +1023,19 @@ int emit_unaryop(t_token op)
     switch (op)
     {
         case NEG_TOKEN:
-            printf("\t%s\t$90\t\t\t; NEG\n", DB);
+            fprintf(outputfile, "\t%s\t$90\t\t\t; NEG\n", DB);
             break;
         case COMP_TOKEN:
-            printf("\t%s\t$92\t\t\t; COMP\n", DB);
+            fprintf(outputfile, "\t%s\t$92\t\t\t; COMP\n", DB);
             break;
         case LOGIC_NOT_TOKEN:
-            printf("\t%s\t$80\t\t\t; NOT\n", DB);
+            fprintf(outputfile, "\t%s\t$80\t\t\t; NOT\n", DB);
             break;
         case INC_TOKEN:
-            printf("\t%s\t$8C\t\t\t; INCR\n", DB);
+            fprintf(outputfile, "\t%s\t$8C\t\t\t; INCR\n", DB);
             break;
         case DEC_TOKEN:
-            printf("\t%s\t$8E\t\t\t; DECR\n", DB);
+            fprintf(outputfile, "\t%s\t$8E\t\t\t; DECR\n", DB);
             break;
         case BPTR_TOKEN:
             emit_lb();
@@ -1055,52 +1055,52 @@ int emit_op(t_token op)
     switch (op)
     {
         case MUL_TOKEN:
-            printf("\t%s\t$86\t\t\t; MUL\n", DB);
+            fprintf(outputfile, "\t%s\t$86\t\t\t; MUL\n", DB);
             break;
         case DIV_TOKEN:
-            printf("\t%s\t$88\t\t\t; DIV\n", DB);
+            fprintf(outputfile, "\t%s\t$88\t\t\t; DIV\n", DB);
             break;
         case MOD_TOKEN:
-            printf("\t%s\t$8A\t\t\t; MOD\n", DB);
+            fprintf(outputfile, "\t%s\t$8A\t\t\t; MOD\n", DB);
             break;
         case ADD_TOKEN:
-            printf("\t%s\t$82\t\t\t; ADD \n", DB);
+            fprintf(outputfile, "\t%s\t$82\t\t\t; ADD \n", DB);
             break;
         case SUB_TOKEN:
-            printf("\t%s\t$84\t\t\t; SUB \n", DB);
+            fprintf(outputfile, "\t%s\t$84\t\t\t; SUB \n", DB);
             break;
         case SHL_TOKEN:
-            printf("\t%s\t$9A\t\t\t; SHL\n", DB);
+            fprintf(outputfile, "\t%s\t$9A\t\t\t; SHL\n", DB);
             break;
         case SHR_TOKEN:
-            printf("\t%s\t$9C\t\t\t; SHR\n", DB);
+            fprintf(outputfile, "\t%s\t$9C\t\t\t; SHR\n", DB);
             break;
         case AND_TOKEN:
-            printf("\t%s\t$94\t\t\t; AND \n", DB);
+            fprintf(outputfile, "\t%s\t$94\t\t\t; AND \n", DB);
             break;
         case OR_TOKEN:
-            printf("\t%s\t$96\t\t\t; OR \n", DB);
+            fprintf(outputfile, "\t%s\t$96\t\t\t; OR \n", DB);
             break;
         case EOR_TOKEN:
-            printf("\t%s\t$98\t\t\t; XOR\n", DB);
+            fprintf(outputfile, "\t%s\t$98\t\t\t; XOR\n", DB);
             break;
         case EQ_TOKEN:
-            printf("\t%s\t$40\t\t\t; ISEQ\n", DB);
+            fprintf(outputfile, "\t%s\t$40\t\t\t; ISEQ\n", DB);
             break;
         case NE_TOKEN:
-            printf("\t%s\t$42\t\t\t; ISNE\n", DB);
+            fprintf(outputfile, "\t%s\t$42\t\t\t; ISNE\n", DB);
             break;
         case GE_TOKEN:
-            printf("\t%s\t$48\t\t\t; ISGE\n", DB);
+            fprintf(outputfile, "\t%s\t$48\t\t\t; ISGE\n", DB);
             break;
         case LT_TOKEN:
-            printf("\t%s\t$46\t\t\t; ISLT\n", DB);
+            fprintf(outputfile, "\t%s\t$46\t\t\t; ISLT\n", DB);
             break;
         case GT_TOKEN:
-            printf("\t%s\t$44\t\t\t; ISGT\n", DB);
+            fprintf(outputfile, "\t%s\t$44\t\t\t; ISGT\n", DB);
             break;
         case LE_TOKEN:
-            printf("\t%s\t$4A\t\t\t; ISLE\n", DB);
+            fprintf(outputfile, "\t%s\t$4A\t\t\t; ISLE\n", DB);
             break;
         case COMMA_TOKEN:
             break;
@@ -2040,7 +2040,7 @@ int emit_pending_seq()
                 emit_brlt(op->tag);
                 break;
             case CODETAG_CODE:
-                printf("_B%03d%c\n", op->tag, LBL);
+                fprintf(outputfile, "_B%03d%c\n", op->tag, LBL);
                 break;
             case NOP_CODE:
                 break;
