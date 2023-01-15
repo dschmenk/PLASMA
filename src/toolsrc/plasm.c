@@ -34,6 +34,10 @@ int main(int argc, char **argv)
                         break;
                     case 'W':
                         outflags |= WARNINGS;
+                        break;
+                    case 'S':
+                        outflags |= STREAM;
+                        break;
                 }
             }
         }
@@ -56,11 +60,18 @@ int main(int argc, char **argv)
                     j--;
                 }
                 asmfile[j+1] = 'a';
-                outputfile = fopen(asmfile, "w");
-                if (!outputfile)
+                if (outflags & STREAM)
                 {
-                    printf("Error opening output file %s\n", asmfile);
-                    exit(1);
+                    outputfile = stdout;
+                }
+                else
+                {
+                    outputfile = fopen(asmfile, "w");
+                    if (!outputfile)
+                    {
+                        printf("Error opening output file %s\n", asmfile);
+                        exit(1);
+                    }
                 }
                 while (j && asmfile[j-1] != '/')
                     j--;
@@ -79,7 +90,7 @@ int main(int argc, char **argv)
     }
     if (inputfile == NULL)
     {
-        printf("Usage: %s [-AMONW] <inputfile>", argv[0]);
+        printf("Usage: %s [-AMONWS] <inputfile>\n", argv[0]);
         return (0);
     }
     emit_flags(outflags);

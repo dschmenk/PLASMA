@@ -9,6 +9,7 @@
 #define SYSFLAGS        (1<<5)
 #define WARNINGS        (1<<6)
 #define NO_COMBINE      (1<<7)
+#define STREAM          (1<<8)
 #define FALSE           0
 #define TRUE            (!FALSE)
 extern int outflags;
