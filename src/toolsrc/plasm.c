@@ -60,8 +60,16 @@ int main(int argc, char **argv)
                     j--;
                 }
                 asmfile[j+1] = 'a';
+                while (j && asmfile[j-1] != '/')
+                    j--;
+                k = 1;
+                while (asmfile[j] != '.')
+                    modfile[k++] = toupper(asmfile[j++]);
+                modfile[k] = '\0';
+                modfile[0] = k - 1;
                 if (outflags & STREAM)
                 {
+                    strcpy(asmfile, "STDOUT");
                     outputfile = stdout;
                 }
                 else
@@ -73,13 +81,6 @@ int main(int argc, char **argv)
                         exit(1);
                     }
                 }
-                while (j && asmfile[j-1] != '/')
-                    j--;
-                k = 1;
-                while (asmfile[j] != '.')
-                    modfile[k++] = toupper(asmfile[j++]);
-                modfile[k] = '\0';
-                modfile[0] = k - 1;
             }
             else
             {
