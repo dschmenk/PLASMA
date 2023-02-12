@@ -19,14 +19,13 @@ end
 // Parse string into decrecord, return SANE conversion output
 //
 export def str2ext(str, ext)
-    byte i, s, d
+    byte i, d
     byte decrec[t_decrecord]
     word sgnadj, expadj
 
     decrec:sgn  = 0
     decrec:exp  = 0
     decrec.sig  = 0
-    s           = 1
     i           = 1
     //
     // Skip whitespace
@@ -51,27 +50,34 @@ export def str2ext(str, ext)
     // Parse number
     //
     while i <= ^str
-        d = toupper(^(str+i))
+        d = ^(str+i)
         if d >= '0' and d <= '9'
             //
             // Parse digit
             //
-            decrec.sig[s] = ^(str+i)
             decrec:sig++
-            s++
+            decrec.sig[decrec.sig] = d
         elsif d == '.'
             //
             // Parse decimal point
             //
             i++
-            while i <= ^str
-                d = toupper(^(str+i))
-                if d >= '0' and d <= '9'
-                    decrec.sig[s] = ^(str+i)
-                    decrec.sig++
+            if !decrec:exp
+                //
+                // Skip leading zeros
+                //
+                while i <= ^str and ^(str+i) == '0'
                     decrec:exp--
-                    s++
-                elsif d == 'E'
+                    i++
+                loop
+            fin
+            while i <= ^str
+                d = ^(str+i)
+                if d >= '0' and d <= '9'
+                    decrec.sig++
+                    decrec.sig[decrec.sig] = d
+                    decrec:exp--
+                elsif d == 'E' or d == 'e'
                     i--
                     break
                 else
@@ -79,7 +85,7 @@ export def str2ext(str, ext)
                 fin
                 i++
             loop
-        elsif d == 'E'
+        elsif d == 'E' or d == 'e'
             //
             // Parse exponent
             //
@@ -108,21 +114,20 @@ export def str2ext(str, ext)
         i++
     loop
     //
-    // Strip leading zeros from sig
+    // Strip trailing zeros from sig
     //
-    while decrec.sig > 1 and decrec.sig.1 == '0'
+    while decrec.sig > 0 and decrec.sig[decrec.sig] == '0'
         decrec.sig--
-        if decrec:exp < 0
-            decrec:exp--
-        fin
-        memcpy(@decrec.sig.1, @decrec.sig.2, decrec.sig)
+        decrec:exp++
     loop
     //
     // Check for zero
     //
     if !decrec.sig
-        decrec.sig = 1
+        decrec.sig   = 1
         decrec.sig.1 = '0'
+        decrec:sgn   = 0
+        decrec:exp   = 0
     fin
     sane:saveZP()
     return sane:restoreZP(sane:op2FP(FFEXT|FOD2B, ext, @decrec))
