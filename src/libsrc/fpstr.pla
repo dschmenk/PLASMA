@@ -161,14 +161,18 @@ export def ext2str(ext, str, intdigits, fracdigits, format)
         ^str     = 4
         return str
     fin
+    dp = decrec.sig + decrec:exp
     if decrec.sig.1 == '0'
-        while decrec.sig < fracdigits
+        //
+        // Zero with significant fractional digits
+        //
+        while decrec.sig <= fracdigits
             decrec.sig++
             decrec.sig[decrec.sig] = '0'
         loop
-        decrec:exp = -decrec.sig
+        decrec:exp = 0
+        dp         = 1
     fin
-    dp = decrec.sig + decrec:exp
     sigdigits = decrec.sig
     if decrec:exp < 0 and format & $02
         //
@@ -186,6 +190,7 @@ export def ext2str(ext, str, intdigits, fracdigits, format)
         ^(str+2) = decrec.sig.1
         ^(str+3) = '.'
         i = 3
+        fracdigits = fracdigits - 5 // Replace last four fracdigits with exponent notation
         for d = 0 to fracdigits
             i++
             ^(str+i) = decrec.sig.2[d]
@@ -203,26 +208,23 @@ export def ext2str(ext, str, intdigits, fracdigits, format)
             dp = -dp
         else
             ^(str+i) = '+'
-            if dp == 0
-                i++
-                ^(str+i) = '0'
-            fin
         fin
         //
         // Pretty output the exponent (preceding zero for values less than 10)
         //
-        d    = 0
-        tens = 10000
-        while dp
-            d = d or tens <= 10
-            if dp >= tens or d
-                d = 1
-                i++
-                ^(str+i) = (dp / tens) + '0'
-            fin
+        if dp < 100
+            tens = 10
+        else
+            tens = 10000
+            while !(dp / tens)
+                tens = tens / 10
+            loop
+        fin
+        while tens
+            i++
+            ^(str+i) = (dp / tens) + '0'
             dp = dp % tens
             tens = tens / 10
-            if !tens; break; fin
         loop
     else
         //
