@@ -3,6 +3,7 @@
 //
 include "inc/cmdsys.plh"
 include "inc/sane.plh"
+include "inc/fpstr.plh"
 //
 // Structures for DEC2BIN, BIN2DEC
 //
@@ -136,14 +137,15 @@ end
 // Convert extended FP to string using , return string
 //
 export def ext2str(ext, str, intdigits, fracdigits, format)
-    byte d, i, sigdigits, numdigits
-    word dp, tens
+    byte d, numdigits
+    word istr, dp, tens
     byte decform[t_decformat]
     byte decrec[t_decrecord]
 
-    numdigits = intdigits + fracdigits
-    decform:style  = format & $01
+    numdigits      = intdigits + fracdigits
+    decform:style  = format & FPSTR_FIXED
     decform:digits = decform:style ?? fracdigits :: numdigits
+    decrec:exp     = 0
     sane:saveZP()
     sane:restoreZP(sane:op3FP(FFEXT|FOB2D, @decrec, ext, @decform))
     ^(str+1) = decrec.sgn ?? '-' :: ' '
@@ -162,94 +164,109 @@ export def ext2str(ext, str, intdigits, fracdigits, format)
         return str
     fin
     dp = decrec.sig + decrec:exp
-    if decrec.sig.1 == '0'
-        //
-        // Zero with significant fractional digits
-        //
-        while decrec.sig <= fracdigits
-            decrec.sig++
-            decrec.sig[decrec.sig] = '0'
-        loop
-        decrec:exp = 0
-        dp         = 1
-    fin
-    sigdigits = decrec.sig
-    if decrec:exp < 0 and format & $02
-        //
-        // Strip off trailing fractional zeros
-        //
-        while sigdigits > dp and decrec.sig[sigdigits] == '0'
-            sigdigits--
-            decrec:exp++
-        loop
-    fin
-    if -decrec:exp > numdigits or sigdigits + decrec:exp >= (decform:style ?? intdigits :: numdigits) or format & $04
-        //
-        // Convert to exponential format
-        //
-        ^(str+2) = decrec.sig.1
-        ^(str+3) = '.'
-        i = 3
-        fracdigits = fracdigits - 5 // Replace last four fracdigits with exponent notation
-        for d = 0 to fracdigits
-            i++
-            ^(str+i) = decrec.sig.2[d]
-        next
+    if format & FPSTR_EXP
+        if format & FPSTR_STRIP
+            //
+            // Strip off trailing fractional zeros
+            //
+            while decrec.sig > 1 and decrec.sig[decrec.sig] == '0'
+                decrec.sig--
+                decrec:exp++
+            loop
+        fin
         //
         // Copy over all significant digits
         //
-        if ^(str+i) == '.'; i--; fin
-        i++
-        ^(str+i) = 'E'
-        i++
+        ^(str+2) = decrec.sig.1
+        ^(str+3) = '.'
+        istr = str + 3
+        for d = 2 to decrec.sig
+            istr++
+            ^istr = decrec.sig[d]
+        next
+        if ^istr == '.'; istr--; fin
+        //
+        // Print exponent as 4 digits with leading zeros
+        //
+        istr++
+        ^istr = 'E'
+        istr++
         dp--
         if dp < 0
-            ^(str+i) = '-'
+            ^istr = '-'
             dp = -dp
         else
-            ^(str+i) = '+'
+            ^istr = '+'
         fin
-        //
-        // Pretty output the exponent (preceding zero for values less than 10)
-        //
-        if dp < 100
-            tens = 10
-        else
-            tens = 10000
-            while !(dp / tens)
-                tens = tens / 10
-            loop
-        fin
+        tens = 1000
         while tens
-            i++
-            ^(str+i) = (dp / tens) + '0'
+            istr++
+            ^istr = (dp / tens) + '0'
             dp = dp % tens
             tens = tens / 10
         loop
     else
+        if format & FPSTR_STRIP and decrec:exp < 0
+            //
+            // Strip off trailing fractional zeros
+            //
+            while decrec.sig > dp and decrec.sig[decrec.sig] == '0'
+                decrec.sig--
+                decrec:exp++
+            loop
+        fin
+        if decrec:sig == 1 | '0'<<8
+            //
+            // Case of zero or underflow
+            //
+            if decrec:exp == 0
+                //
+                // Zero
+                //
+                if format & FPSTR_FIXED
+                    //
+                    // Add trailing fractional zeros
+                    //
+                    dp = 1 - fracdigits
+                fin
+            elsif format & FPSTR_FLEX
+                //
+                // Underflow
+                //
+                dp = -fracdigits
+            fin
+        fin
+        if format & FPSTR_FLEX and (dp <= -fracdigits or dp >= (format & FPSTR_FIXED ?? intdigits :: numdigits))
+            //
+            // Print as exponent if over/underflow fixed digits
+            //
+            if numdigits < 8; numdigits = 8; fin
+            return ext2str(ext, str, 1, numdigits - 8, FPSTR_EXP | (format & FPSTR_STRIP))
+        fin
         //
         // Convert as floating point
         //
-        i = 1
         if dp <= 0
             *(str+2) = '0'|('.'<<8)
-            i = 3
+            istr = str + 3
             while dp < 0
                 dp++
-                i++
-                ^(str+i) = '0'
+                istr++
+                ^istr = '0'
             loop
+        else
+            istr = str + 1
         fin
-        for d = 1 to sigdigits
-            i++
-            ^(str+i) = decrec.sig[d]
+        for d = 1 to decrec.sig
+            istr++
+            ^istr = decrec.sig[d]
             if d == dp
-                i++
-                ^(str+i) = '.'
+                istr++
+                ^istr = '.'
             fin
         next
-        if ^(str+i) == '.'; i--; fin
+        if ^istr == '.'; istr--; fin
     fin
-    ^str = i
+    ^str = istr - str
     return str
 end
