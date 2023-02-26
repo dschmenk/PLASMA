@@ -1361,6 +1361,8 @@ int parse_vars(int type, int ignore_vars)
             emit_sysflags(value);
             break;
         case CONST_TOKEN:
+            if (type & LOCAL_TYPE)
+                parse_error("Cannot define local constant");
             if (scan() != ID_TOKEN)
                 parse_error("Missing variable");
             idstr = tokenstr;
