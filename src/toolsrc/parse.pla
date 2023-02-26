@@ -967,7 +967,7 @@ def parse_stmnt
     wend
     return scan == EOL_TKN
 end
-def parse_var(type, basesize)#0
+def parse_var(type, basesize, ignore_var)#0
     byte consttype, constsize, idlen
     word idptr, constval, arraysize, size
 
@@ -995,7 +995,7 @@ def parse_var(type, basesize)#0
             arraysize = arraysize + emit_data(type, consttype, constval, constsize)
         loop
         size_iddata(PTR_TYPE, size, arraysize)
-    else
+    elsif not ignore_var
         if idlen
             if infunc
                 new_idlocal(idptr, idlen, type, size)
@@ -1066,7 +1066,7 @@ def parse_struc#0
     if token <> END_TKN; exit_err(ERR_MISS|ERR_CLOSE|ERR_STATE); fin
     scan
 end
-def parse_vars(type)
+def parse_vars(type, ignore_vars)
     byte idlen, cfnparms, cfnvals
     word size, value, idptr
 
@@ -1107,7 +1107,7 @@ def parse_vars(type)
                 rewind(tknptr)
             fin
             if type & WORD_TYPE; size = size * 2; fin
-            repeat; parse_var(type, size); until token <> COMMA_TKN
+            repeat; parse_var(type, size, ignore_vars); until token <> COMMA_TKN
             break
         is PREDEF_TKN
             repeat
@@ -1149,11 +1149,23 @@ def parse_vars(type)
     return TRUE
 end
 def parse_mods
+    byte i, ignore_emit
+
     if token == IMPORT_TKN
         if scan <> ID_TKN; exit_err(ERR_MISS|ERR_ID); fin
-        new_moddep(tknptr, tknlen)
+        if tknlen == modfile
+            ignore_emit = TRUE
+            for i = 1 to tknlen
+                if toupper(tknptr->[i - 1]) <> modfile[i]; ignore_emit = FALSE; break; fin
+            next
+        else
+            ignore_emit = FALSE
+        fin
+        if not ignore_emit
+            new_moddep(tknptr, tknlen)
+        fin
         scan
-        while parse_vars(EXTERN_TYPE); nextln; loop
+        while parse_vars(EXTERN_TYPE, ignore_emit); nextln; loop
         if token <> END_TKN; exit_err(ERR_MISS|ERR_CLOSE|ERR_STATE); fin
         scan
     fin
@@ -1228,7 +1240,7 @@ def parse_defs
     when token
         is CONST_TKN
         is STRUC_TKN
-            return parse_vars(GLOBAL_TYPE)
+            return parse_vars(GLOBAL_TYPE, FALSE)
         is EXPORT_TKN
             if scan <> DEF_TKN; exit_err(ERR_INVAL|ERR_STATE); fin
             type = type | EXPORT_TYPE
@@ -1273,7 +1285,7 @@ def parse_defs
             defcodeptr = codeptr
             emit_tag(func_tag)
             new_dfd(func_tag)
-            while parse_vars(LOCAL_TYPE); nextln; loop
+            while parse_vars(LOCAL_TYPE, FALSE); nextln; loop
             emit_enter(cfnparms)
             prevstmnt = 0
             while parse_stmnt; nextln; loop
@@ -1300,14 +1312,14 @@ def parse_module#0
     init_idglobal
     init_idlocal
     puts("Data+Code buffer size = "); puti(codebufsz); putln; putln
-    puts(@relfile);
+    puts(@modfile);
     if nextln
         //
         // Compile module
         //
         puts("\nDATA:");
         while parse_mods;              nextln; loop
-        while parse_vars(GLOBAL_TYPE); nextln; loop
+        while parse_vars(GLOBAL_TYPE, FALSE); nextln; loop
         emit_codeseg
         puti(codeptr - codebuff); puts(@bytesln)
         while parse_defs;              nextln; loop

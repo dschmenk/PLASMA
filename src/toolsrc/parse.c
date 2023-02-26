@@ -804,7 +804,8 @@ t_opseq *parse_expr(t_opseq *codeseq, int *stackdepth)
         codeseq = gen_codetag(codeseq, tag_endtri);
     }
     return (codeseq);
-}t_opseq *parse_set(t_opseq *codeseq)
+}
+t_opseq *parse_set(t_opseq *codeseq)
 {
     char *setptr = tokenstr;
     int lparms = 0, rparms = 0;
