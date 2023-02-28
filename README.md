@@ -1,9 +1,9 @@
 # 2/28/2023 PLASMA 2.0 Beta Available!
 Hopefully close to a 2.0 Release.
 
-[Download and read the Release Notes](https://github.com/dschmenk/PLASMA/releases)
+[Download and read the Release Notes](https://github.com/dschmenk/PLASMA/blob/master/doc/Version%202.0.md)
 
-[Change List](https://github.com/dschmenk/PLASMA/blob/master/doc/Version%202.0.md#changes-in-plasma-for-20-alpha-2)
+[Change List](https://github.com/dschmenk/PLASMA/blob/master/doc/Version%202.0.md#changes-in-plasma-for-20-beta)
 
 # 4/29/2018 PLASMA 1.2 Available!
 [Download and read the Release Notes](https://github.com/dschmenk/PLASMA/blob/master/doc/Version%201.2.md)
