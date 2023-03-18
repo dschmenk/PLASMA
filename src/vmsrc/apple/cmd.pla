@@ -72,7 +72,6 @@ byte hpalignstr = "HEAPALLOCALIGN"
 byte hpallocstr = "HEAPALLOC"
 byte hprelstr   = "HEAPRELEASE"
 byte hpavlstr   = "HEAPAVAIL"
-byte sysmods[] // overlay with exported strings
 word memsetstr  = "MEMSET"
 byte memcpystr  = "MEMCPY"
 byte uisgtstr   = "ISUGT"
@@ -84,7 +83,6 @@ byte divmodstr  = "DIVMOD"
 byte machidstr  = "MACHID"
 byte sysstr     = "SYSCALL"
 byte callstr    = "CALL"
-byte prefix[] // overlay with exported symbols table
 word exports    = @sysmodstr, @version
 word            = @sysstr,    @syscall
 word            = @callstr,   @call
@@ -98,6 +96,7 @@ word            = @getcstr,   @cin
 word            = @getsstr,   @rdstr
 word            = @toupstr,   @toupper
 word            = @hpmarkstr, @markheap
+byte sysmods[] // overlay with exported strings
 word            = @hpallocstr,@allocheap
 word            = @hpalignstr,@allocalignheap
 word            = @hprelstr,  @releaseheap
@@ -1174,9 +1173,6 @@ def catalog(path)#0
     byte i, type, len
     word entry
 
-    if !^path
-        path = @prefix
-    fin
     refnum = open(path)
     if perr
         return
@@ -1320,23 +1316,26 @@ end
 // Command line processor
 //
 def docmds#0
-    strcpy(getlnbuf, @cmdln)
+    word prefix
+
+    prefix = allocheap(64)
+    pfxop(prefix, GET_PFX)
     while 1
         if ^getlnbuf
             strcpy(@cmdln, getlnbuf)
             when toupper(parsecmd(getlnbuf))
                 is 'C'
-                    catalog(getlnbuf)
+                    catalog(^getlnbuf ?? getlnbuf :: prefix)
                     break
                 is 'P'
                     pfxop(getlnbuf, SET_PFX)
                     break
                 is '/'
                     repeat
-                        prefix--
-                    until prefix[prefix] == '/'
-                    if prefix > 1
-                        pfxop(@prefix, SET_PFX)
+                        ^prefix--
+                    until prefix->[^prefix] == '/'
+                    if ^prefix > 1
+                        pfxop(prefix, SET_PFX)
                     fin
                     break
                 is 'V'
@@ -1346,11 +1345,16 @@ def docmds#0
                     execsys(getlnbuf)
                     break
                 is '+'
+                    releaseheap(prefix)
+                    //
+					// Exec module
+					//
                     execmod(striptrail(getlnbuf))
                     //
                     // Clean up
                     //
                     resetmemfiles
+                    prefix = allocheap(64)
                     break
                 otherwise
                     cout('?')
@@ -1361,7 +1365,7 @@ def docmds#0
 		crout()
             fin
         fin
-        prstr(pfxop(@prefix, GET_PFX))
+        prstr(pfxop(prefix, GET_PFX))
         rdstr($BA)
     loop
 end
@@ -1398,13 +1402,14 @@ syscmdln = @cmdln
 autorun = open(@autorun)
 if autorun
     cmdln = read(autorun, @cmdln+1, 81)
+    strcpy(getlnbuf, @cmdln)
     close(0)
 else
+    ^getlnbuf = 0
     //
     // Print some startup info.
     //
     prstr("MEM FREE:$"); prword(availheap); crout
 fin
-pfxop(@prefix, GET_PFX)
 docmds
 done
