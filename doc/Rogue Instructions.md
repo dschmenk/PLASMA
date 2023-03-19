@@ -81,13 +81,13 @@ If you should die, restart the game by typing:
 
 Level maps are up to 62x62 in size (plus a wall boundary for an effective 64x64 map size). They can be smaller than this. The game will end when it tries to load an non-existent level. Levels start at file name “LEVEL0“ and can go all the way to “LEVEL9“, but must be sequential.
 
-There are two levels included on the disk, and an empty level for you to use as a template. You can edit the map levels, and add your own. They are simple ASCII text files. The included sandbox editor can edit the maps right on the disk. type:
+There are two levels included on the disk, and an empty level for you to use as a template. You can edit the map levels, and add your own. They are simple ASCII text files. The included editor can edit the maps right on the disk. type:
 ```
--sandbox level.empty
++ed level.empty
 ```
 after exiting from ROGUE. Make your changes and save it as LEVEL0" to "LEVEL9". The next free level is currently "LEVEL2". You may also edit an existing level:
 ```
--sandbox level0
++ed level0
 ```
 for instance.
 
