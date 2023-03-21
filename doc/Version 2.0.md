@@ -75,7 +75,7 @@ The shell is very brief with error messages. It is meant solely as a way to run 
 
 PLASMA comes with many library modules used by the tools, demos and sample code. The PLASMA system volume must remain in place for the duration of PLASMAs run otherwise it won't be able to find CMD or the system libraries. Probably the most useful included module is the editor. It is used for editing PLASMA source file, assembly source files, or any text file. Execute it with:
 ```
-+ED [TEXT FILE]
++ED [TEXT FILE] [GOTO LINE NUMBER]
 ```
 The file manipulation utilities to copy, delete, rename, create directories, and change file type and aux type remove the need for external programs to do the same. PLASMA can now be installed with the tools included on the PLASMA2-SYS boot floppy. They are:
 ```
@@ -86,7 +86,7 @@ The file manipulation utilities to copy, delete, rename, create directories, and
 +TYPE <FILENAME> [NEWTYPE [NEWAUX]]
 +CAT [-R] <FILEPATH]
 ```
-The ```-R``` option will operate on the directories recursively. Wildcard filenames can be specified with ```'*'``` matching zero or more characters, and ```'?'``` matching any character.
+The ```-R``` option will operate on the directories recursively. Wildcard filenames can be specified with ```'*'``` matching zero or more characters, and ```'?'``` matching any character. When copying files to the current directory, ```=``` can be used as a shortcut.
 
 ## Compiler Modules
 
