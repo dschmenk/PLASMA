@@ -1,20 +1,20 @@
-# PLASMA Version 2.0 Beta
+# PLASMA Version 2.0
 
 Welcome to PLASMA: the Grand Unifying Platform for the Apple 1, ][, and ///.
 
 Download the five disk images:
 
-[PLASMA 2.0 Beta 800K Full System](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLASMA2.2mg?raw=true)
+[PLASMA 2.0 800K Full System](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLASMA2.2mg?raw=true)
 
-[PLASMA 2.0 Beta System and ProDOS Boot](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLASMA2-SYS.PO?raw=true)
+[PLASMA 2.0 System and ProDOS Boot](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLASMA2-SYS.PO?raw=true)
 
-[PLASMA 2.0 Beta Build Tools](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLASMA2-BLD.PO?raw=true)
+[PLASMA 2.0 Build Tools](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLASMA2-BLD.PO?raw=true)
 
-[PLASMA 2.0 Beta Demos](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLASMA2-DEM.PO?raw=true)
+[PLASMA 2.0 Demos](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLASMA2-DEM.PO?raw=true)
 
-[PLASMA 2.0 Beta TCP/IP network modules](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLASMA2-INET.PO?raw=true)
+[PLASMA 2.0 TCP/IP network modules](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLASMA2-INET.PO?raw=true)
 
-[PLASMA 2.0 Beta Apple /// SOS Mame Boot and SANE floating point modules](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLASMA2-FPSOS.PO?raw=true)
+[PLASMA 2.0 Apple /// SOS Mame Boot and SANE floating point modules](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLASMA2-FPSOS.PO?raw=true)
 
 [PLASMA 2.0 Alpha1 Apple /// Mame hard disk image](https://github.com/dschmenk/PLASMA/blob/master/images/apple/apple3.hd?raw=true)
 
@@ -117,6 +117,16 @@ There is a [YouTube playlist](https://www.youtube.com/playlist?list=PLlPKgUMQbJ7
 - The Apple /// may not always report errors properly or at all.
 
 - The documentation is sparse and incomplete. Yep, could use your help...
+
+# Changes in PLASMA for 2.0 Release
+
+1. Fix command line buffer overflow
+
+2. Use VBlank to blink editor cursor so not CPU speed dependent
+
+3. Add ```=``` for ```+COPY``` current destination
+
+4. Add //c support for DGRLIB and GRLIB wait-for-VBlank routines 
 
 # Changes in PLASMA for 2.0 Beta
 
