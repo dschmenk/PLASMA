@@ -46,7 +46,7 @@ PLASMA can utilize the 16 bit features of the 65802 and 65816 processors to impr
 
 ## Apple ///
 
-The Apple /// gets the environment it always wanted: The ability to navigate the filesystem with a command line interface. The Apple /// always boots from the floppy drive, even if a hard disk is installed. The PLASMA.SOS floppy should be updated with the SOS.DRIVER configured for your machine. It contains the SOS.DRIVER configured for the Apple 3 Ready-To-Run Mame environment. Once booted, type `S /HARDISK/PLASMA` (or your install directory of choice) to change to, and set, the system directory. This can be automated by creating an `AUTORUN` file on the boot floppy with the above command in it.
+The Apple /// gets the environment it always wanted: The ability to navigate the filesystem with a command line interface. The Apple /// always boots from the floppy drive, even if a hard disk is installed. `PLASMA2-FPSOS.PO` is an Apple 3 bootable disk containing the SOS.DRIVER configured for the [Apple 3 Ready-To-Run Mame environment](https://github.com/datajerk/apple3rtr). `apple3.hd` is the pre-installed PLASMA hard disk image set up for [Apple 3 Ready-to-Run](https://github.com/datajerk/apple3rtr). For a physical Apple 3, the PLASMA2-FPSOS.PO floppy should be updated with the SOS.DRIVER configured for the machine. Once booted, type `S /HARDISK/PLASMA` (or your install directory of choice) to change to, and set, the system directory. This can be automated by creating an `AUTORUN` file on the boot floppy with the above command in it.
 
 ## PLASMA Command Line Shell
 
