@@ -25,6 +25,12 @@ byte = ""
 word titlestr = @initstr
 
 //
+// Animated tile sequence
+//
+
+byte animseq = 0
+
+//
 // Octant beam parameters
 //
 
@@ -120,7 +126,8 @@ const mapsize  = maprows*mapcols
 
 const WALL_TILE   = '#'
 const FLOOR_TILE  = '.'
-const TORCH_TILE  = '*'
+const TORCH1_TILE = '*'
+const TORCH2_TILE = 'X'
 const PIT_TILE    = ' '
 const DOOR_TILE   = '+'
 const LOCKED_TILE = '%'
@@ -147,6 +154,12 @@ const scrnwidth  = 40
 const scrnheight = 22
 
 //
+// Screen buffer
+//
+
+byte[scrnheight * scrnwidth] screenbuffer
+
+//
 // Buffer to void checks in octant caster
 //
 
@@ -155,13 +168,19 @@ byte[scrnwidth] linebuffer
 word = @linebuffer, @linebuffer, @linebuffer, @linebuffer, @linebuffer
 word = @linebuffer, @linebuffer, @linebuffer, @linebuffer, @linebuffer
 
-word[] screen
-word = $400, $480, $500, $580, $600, $680, $700, $780
-word = $428, $4A8, $528, $5A8, $628, $6A8, $728, $7A8
-word = $450, $4D0, $550, $5D0, $650, $6D0, $750, @linebuffer // $7D0
+word[scrnheight] screen
 
 word = @linebuffer, @linebuffer, @linebuffer, @linebuffer, @linebuffer
 word = @linebuffer, @linebuffer, @linebuffer, @linebuffer, @linebuffer
+
+//
+// Visisble screen row addresses
+//
+
+word[] viscreen
+word = $400, $480, $500, $580, $600, $680, $700, $780
+word = $428, $4A8, $528, $5A8, $628, $6A8, $728, $7A8
+word = $450, $4D0, $550, $5D0, $650, $6D0, $750, @linebuffer // $7D0
 
 //
 // Load map - levels 0 to 9
@@ -234,17 +253,19 @@ end
 //
 
 export def lighttorches#0
-  word imap, tmap
+  word imap, tmap, rowmap
   byte xmap, ymap, xt, yt
 
   for ymap = 1 to maprows - 2
+    rowmap = map + (ymap << rowshift)
     for xmap = 1 to mapcols - 2
-      imap = (ymap << rowshift) + xmap
-      if ^(map + imap) & MAP_TILE == TORCH_TILE
+      imap = rowmap + xmap
+      if ^imap & MAP_TILE == TORCH1_TILE // or ^imap & MAP_TILE == TORCH2_TILE
         for yt = ymap - 1 to ymap + 1
+          imap = map + (yt << rowshift)
           for xt = xmap - 1 to xmap + 1
-            tmap = (yt << rowshift) + xt
-            ^(map + tmap) = ^(map + tmap) | LIT_TILE
+            tmap = imap + xt
+            ^tmap = ^tmap | LIT_TILE
           next
         next
       fin
@@ -253,6 +274,30 @@ export def lighttorches#0
       putc('.')
     fin
   next
+end
+
+//
+// Animate tiles in map
+//
+
+export def animate(tile)
+  if animseq
+    when tile & MAP_TILE
+      is TORCH1_TILE
+        tile = TORCH2_TILE
+        break
+      is TORCH2_TILE
+        tile = TORCH1_TILE
+        break
+      is WATER1_TILE
+        tile = WATER2_TILE
+        break         
+      is WATER2_TILE
+        tile = WATER1_TILE
+        break
+    wend
+  fin
+  return tile & INV_TILE
 end
 
 //
@@ -273,7 +318,7 @@ export def drawmap(xorg, yorg, viewfield, viewdir, lightdist, viewdist)
   //
   // Clear screen
   //
-  conio:home()
+  memset(@screenbuffer, $A0A0, scrnheight * scrnwidth)
   //
   // Draw background map if in light
   //
@@ -349,7 +394,7 @@ export def drawmap(xorg, yorg, viewfield, viewdir, lightdist, viewdist)
             //
             ^(viewmap + imap) =  tile | VIEWED_TILE
             if tile <> PIT_TILE
-              screen.[ycentr-ybeam[l], xcentr+xbeam[l]] = tile & INV_TILE
+              screen.[ycentr-ybeam[l], xcentr+xbeam[l]] = animate(tile)
             fin
           else
             vispix[l] = 0
@@ -382,7 +427,7 @@ export def drawmap(xorg, yorg, viewfield, viewdir, lightdist, viewdist)
             //
             if tile & LIT_TILE
               ^(viewmap + imap) =  tile | VIEWED_TILE
-              screen.[ycentr-ybeam[l], xcentr+xbeam[l]] = tile & INV_TILE
+              screen.[ycentr-ybeam[l], xcentr+xbeam[l]] = animate(tile)
               darkness = 0
             fin
           else
@@ -402,7 +447,7 @@ export def drawmap(xorg, yorg, viewfield, viewdir, lightdist, viewdist)
             // Update distance
             //
             occluded = 1
-            dist     = dist + 1
+            dist++
           fin
         next
         break
@@ -423,7 +468,7 @@ export def drawmap(xorg, yorg, viewfield, viewdir, lightdist, viewdist)
             fin
             ^(viewmap + imap) =  tile | VIEWED_TILE
             if tile <> PIT_TILE
-              screen.[ycentr-xbeam[l], xcentr+ybeam[l]] = tile & INV_TILE
+              screen.[ycentr-xbeam[l], xcentr+ybeam[l]] = animate(tile)
             fin
           else
             vispix[l] = 0
@@ -441,7 +486,7 @@ export def drawmap(xorg, yorg, viewfield, viewdir, lightdist, viewdist)
             fin
             if tile & LIT_TILE
               ^(viewmap + imap) =  tile | VIEWED_TILE
-              screen.[ycentr-xbeam[l], xcentr+ybeam[l]] = tile & INV_TILE
+              screen.[ycentr-xbeam[l], xcentr+ybeam[l]] = animate(tile)
               darkness = 0
             fin
           else
@@ -452,7 +497,7 @@ export def drawmap(xorg, yorg, viewfield, viewdir, lightdist, viewdist)
               break
             fin
             occluded = 1
-            dist     = dist + 1
+            dist++
           fin
         next
         break
@@ -473,7 +518,7 @@ export def drawmap(xorg, yorg, viewfield, viewdir, lightdist, viewdist)
             fin
             ^(viewmap + imap) =  tile | VIEWED_TILE
             if tile <> PIT_TILE
-              screen.[ycentr+xbeam[l], xcentr+ybeam[l]] = tile & INV_TILE
+              screen.[ycentr+xbeam[l], xcentr+ybeam[l]] = animate(tile)
             fin
           else
             vispix[l] = 0
@@ -491,7 +536,7 @@ export def drawmap(xorg, yorg, viewfield, viewdir, lightdist, viewdist)
             fin
             if tile & LIT_TILE
               ^(viewmap + imap) =  tile | VIEWED_TILE
-              screen.[ycentr+xbeam[l], xcentr+ybeam[l]] = tile & INV_TILE
+              screen.[ycentr+xbeam[l], xcentr+ybeam[l]] = animate(tile)
               darkness = 0
             fin
           else
@@ -502,7 +547,7 @@ export def drawmap(xorg, yorg, viewfield, viewdir, lightdist, viewdist)
               break
             fin
             occluded = 1
-            dist     = dist + 1
+            dist++
           fin
         next
         break
@@ -523,7 +568,7 @@ export def drawmap(xorg, yorg, viewfield, viewdir, lightdist, viewdist)
             fin
             ^(viewmap + imap) =  tile | VIEWED_TILE
             if tile <> PIT_TILE
-              screen.[ycentr+ybeam[l], xcentr+xbeam[l]] = tile & INV_TILE
+              screen.[ycentr+ybeam[l], xcentr+xbeam[l]] = animate(tile)
             fin
           else
             vispix[l] = 0
@@ -541,7 +586,7 @@ export def drawmap(xorg, yorg, viewfield, viewdir, lightdist, viewdist)
             fin
             if tile & LIT_TILE
               ^(viewmap + imap) =  tile | VIEWED_TILE
-              screen.[ycentr+ybeam[l], xcentr+xbeam[l]] = tile & INV_TILE
+              screen.[ycentr+ybeam[l], xcentr+xbeam[l]] = animate(tile)
               darkness = 0
             fin
           else
@@ -552,7 +597,7 @@ export def drawmap(xorg, yorg, viewfield, viewdir, lightdist, viewdist)
               break
             fin
             occluded = 1
-            dist     = dist + 1
+            dist++
           fin
         next
         break
@@ -573,7 +618,7 @@ export def drawmap(xorg, yorg, viewfield, viewdir, lightdist, viewdist)
             fin
             ^(viewmap + imap) =  tile | VIEWED_TILE
             if tile <> PIT_TILE
-              screen.[ycentr+ybeam[l], xcentr-xbeam[l]] = tile & INV_TILE
+              screen.[ycentr+ybeam[l], xcentr-xbeam[l]] = animate(tile)
             fin
           else
             vispix[l] = 0
@@ -591,7 +636,7 @@ export def drawmap(xorg, yorg, viewfield, viewdir, lightdist, viewdist)
             fin
             if tile & LIT_TILE
               ^(viewmap + imap) =  tile | VIEWED_TILE
-              screen.[ycentr+ybeam[l], xcentr-xbeam[l]] = tile & INV_TILE
+              screen.[ycentr+ybeam[l], xcentr-xbeam[l]] = animate(tile)
               darkness = 0
             fin
           else
@@ -602,7 +647,7 @@ export def drawmap(xorg, yorg, viewfield, viewdir, lightdist, viewdist)
               break
             fin
             occluded = 1
-            dist     = dist + 1
+            dist++
           fin
         next
         break
@@ -623,7 +668,7 @@ export def drawmap(xorg, yorg, viewfield, viewdir, lightdist, viewdist)
             fin
             ^(viewmap + imap) =  tile | VIEWED_TILE
             if tile <> PIT_TILE
-              screen.[ycentr+xbeam[l], xcentr-ybeam[l]] = tile & INV_TILE
+              screen.[ycentr+xbeam[l], xcentr-ybeam[l]] = animate(tile)
             fin
           else
             vispix[l] = 0
@@ -641,7 +686,7 @@ export def drawmap(xorg, yorg, viewfield, viewdir, lightdist, viewdist)
             fin
             if tile & LIT_TILE
               ^(viewmap + imap) =  tile | VIEWED_TILE
-              screen.[ycentr+xbeam[l], xcentr-ybeam[l]] = tile & INV_TILE
+              screen.[ycentr+xbeam[l], xcentr-ybeam[l]] = animate(tile)
               darkness = 0
             fin
           else
@@ -652,7 +697,7 @@ export def drawmap(xorg, yorg, viewfield, viewdir, lightdist, viewdist)
               break
             fin
             occluded = 1
-            dist     = dist + 1
+            dist++
           fin
         next
         break
@@ -673,7 +718,7 @@ export def drawmap(xorg, yorg, viewfield, viewdir, lightdist, viewdist)
             fin
             ^(viewmap + imap) =  tile | VIEWED_TILE
             if tile <> PIT_TILE
-              screen.[ycentr-xbeam[l], xcentr-ybeam[l]] = tile & INV_TILE
+              screen.[ycentr-xbeam[l], xcentr-ybeam[l]] = animate(tile)
             fin
           else
             vispix[l] = 0
@@ -691,7 +736,7 @@ export def drawmap(xorg, yorg, viewfield, viewdir, lightdist, viewdist)
             fin
             if tile & LIT_TILE
               ^(viewmap + imap) =  tile | VIEWED_TILE
-              screen.[ycentr-xbeam[l], xcentr-ybeam[l]] = tile & INV_TILE
+              screen.[ycentr-xbeam[l], xcentr-ybeam[l]] = animate(tile)
               darkness = 0
             fin
           else
@@ -702,7 +747,7 @@ export def drawmap(xorg, yorg, viewfield, viewdir, lightdist, viewdist)
               break
             fin
             occluded = 1
-            dist     = dist + 1
+            dist++
           fin
         next
         break
@@ -723,7 +768,7 @@ export def drawmap(xorg, yorg, viewfield, viewdir, lightdist, viewdist)
             fin
             ^(viewmap + imap) =  tile | VIEWED_TILE
             if tile <> PIT_TILE
-              screen.[ycentr-ybeam[l], xcentr-xbeam[l]] = tile & INV_TILE
+              screen.[ycentr-ybeam[l], xcentr-xbeam[l]] = animate(tile)
             fin
           else
             vispix[l] = 0
@@ -741,7 +786,7 @@ export def drawmap(xorg, yorg, viewfield, viewdir, lightdist, viewdist)
             fin
             if tile & LIT_TILE
               ^(viewmap + imap) =  tile | VIEWED_TILE
-              screen.[ycentr-ybeam[l], xcentr-xbeam[l]] = tile & INV_TILE
+              screen.[ycentr-ybeam[l], xcentr-xbeam[l]] = animate(tile)
               darkness = 0
             fin
           else
@@ -752,12 +797,13 @@ export def drawmap(xorg, yorg, viewfield, viewdir, lightdist, viewdist)
               break
             fin
             occluded = 1
-            dist     = dist + 1
+            dist++
           fin
         next
         break
     wend
   next
+  animseq = animseq ^ 1 // Update animation sequence
   return darkness
 end
 
@@ -771,6 +817,22 @@ export def drawvisentity(xofst, yofst, tile)#0
   fin
 end
 
+export def drawplayer(tile)#0
+  screen.[ycentr, xcentr] = tile | $80
+end
+
+//
+// Update visible screen with screen buffer
+//
+
+export def updatescreen#0
+  byte row
+
+  for row = 0 to scrnheight - 2
+    memcpy(viscreen[row], screen[row], 40)
+  next
+end
+
 //
 // Print title page
 //
@@ -780,5 +842,7 @@ while ^titlestr
   puts(titlestr)
   titlestr = titlestr + ^titlestr + 1
 loop
-
+for titlestr = 0 to scrnheight - 1
+  screen[titlestr] = @screenbuffer + titlestr * scrnwidth
+next
 done

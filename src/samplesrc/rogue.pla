@@ -12,7 +12,8 @@ import roguemap
 
   const FLOOR_TILE  = '.'
   const WALL_TILE   = '#'
-  const TORCH_TILE  = '*'
+  const TORCH1_TILE = '*'
+  const TORCH2_TILE = 'X'
   const PIT_TILE    = ' '
   const DOOR_TILE   = '+'
   const LOCKED_TILE = '%'
@@ -33,7 +34,8 @@ import roguemap
   predef loadmap(level), getmaptile(xmap, ymap), setmaptile(xmap, ymap, tile)#0
   predef updtmaptile(xmap, ymap, tile)#0, lighttorches#0
   predef drawmap(xorg, yorg, viewfield, viewdir, lightdist, viewdist)
-  predef drawvisentity(xofst, yofst, tile)#0
+  predef drawvisentity(xofst, yofst, tile)#0, drawplayer(tile)#0
+  predef updatescreen#0
 end
 
 import roguecombat
@@ -198,6 +200,7 @@ end
 //
 
 def status#0
+  memset($07D0, $A0A0, 40)
   conio:gotoxy(0, statusline)
   puts(@helthstr)
   puti(player.health)
@@ -248,7 +251,8 @@ def moveplayer(dir)#0
         break
       fin
     is FLOOR_TILE
-    is TORCH_TILE
+    is TORCH1_TILE
+    is TORCH2_TILE
     is KEY_TILE
     is RAFT_TILE
     is GOLD_TILE
@@ -423,7 +427,8 @@ def moveentities(playerisvis)#0
         fin
         when getmaptile(xmove, ymove) & MAP_TILE
           is FLOOR_TILE
-          is TORCH_TILE
+          is TORCH1_TILE
+          is TORCH2_TILE
           is KEY_TILE
           is GOLD_TILE
           is FOOD_TILE
@@ -450,8 +455,35 @@ def moveentities(playerisvis)#0
 end
 
 //
+// Draw entire map view
+//
+
+def drawview#0
+  totaldarkness = drawmap(player.xpos, player.ypos, player.fov, player.angle, player.lamp, maxview)
+  if not totaldarkness
+    drawentities
+    drawplayer(vplayer[player.angle])
+  fin
+  updatescreen
+end
+
+//
 // Read player input and do something
 //
+
+def waitkey
+  word delay
+
+  delay = 200
+  while not conio:keypressed()
+    delay--
+    if delay == 0
+      drawview
+      delay = 200
+    fin
+  loop
+  return toupper(conio:getkey())
+end
 
 def play
   byte xt, yt
@@ -460,7 +492,7 @@ def play
     return FALSE
   fin
   conio:gotoxy(xcentr, ycentr)
-  when toupper(conio:getkey())
+  when waitkey
     is 'I'
       if totaldarkness
         player.angle = conio:rnd() & 7
@@ -547,7 +579,8 @@ def play
           updtmaptile(player.xpos, player.ypos, FLOOR_TILE)
           gotit
           break
-        is TORCH_TILE
+        is TORCH1_TILE
+        is TORCH2_TILE
           if player.oil < 1000
             player:oil = player:oil + TORCH_OIL
             if player:oil > 1000
@@ -633,12 +666,7 @@ while loadmap(level)
   lighttorches
   repeat
     moveentities(player.lamp or getmaptile(player.xpos, player.ypos) & LIT_TILE))
-    totaldarkness = drawmap(player.xpos, player.ypos, player.fov, player.angle, player.lamp, maxview)
-    if not totaldarkness
-      drawentities
-      conio:gotoxy(xcentr, ycentr)
-      putc(vplayer[player.angle])
-    fin
+    drawview
     status
   until not play
   heaprelease(free_entities)
