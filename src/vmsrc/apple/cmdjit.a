@@ -1,0 +1,4201 @@
+; ACME COMPATIBLE OUTPUT
+	JMP	_INIT			; MODULE INITIALIZATION ROUTINE
+; vmsrc/apple/cmdjit.pla: 0001: const MACHID      = $BF98
+					; MACHID = 49048
+; vmsrc/apple/cmdjit.pla: 0002: const iobuffer    = $0800
+					; iobuffer = 2048
+; vmsrc/apple/cmdjit.pla: 0003: const RELADDR     = $1000
+					; RELADDR = 4096
+; vmsrc/apple/cmdjit.pla: 0004: const symtbl      = $0C00
+					; symtbl = 3072
+; vmsrc/apple/cmdjit.pla: 0005: const freemem     = $0006
+					; freemem = 6
+; vmsrc/apple/cmdjit.pla: 0006: const getlnbuf    = $01FF
+					; getlnbuf = 511
+; vmsrc/apple/cmdjit.pla: 0007: //
+; vmsrc/apple/cmdjit.pla: 0008: // System flags: memory allocator screen holes.
+; vmsrc/apple/cmdjit.pla: 0009: //
+; vmsrc/apple/cmdjit.pla: 0010: const restxt1     = $0001
+					; restxt1 = 1
+; vmsrc/apple/cmdjit.pla: 0011: const restxt2     = $0002
+					; restxt2 = 2
+; vmsrc/apple/cmdjit.pla: 0012: const resxtxt1    = $0004
+					; resxtxt1 = 4
+; vmsrc/apple/cmdjit.pla: 0013: const resxtxt2    = $0008
+					; resxtxt2 = 8
+; vmsrc/apple/cmdjit.pla: 0014: const reshgr1     = $0010
+					; reshgr1 = 16
+; vmsrc/apple/cmdjit.pla: 0015: const reshgr2     = $0020
+					; reshgr2 = 32
+; vmsrc/apple/cmdjit.pla: 0016: const resxhgr1    = $0040
+					; resxhgr1 = 64
+; vmsrc/apple/cmdjit.pla: 0017: const resxhgr2    = $0080
+					; resxhgr2 = 128
+; vmsrc/apple/cmdjit.pla: 0018: const nojitc      = $0100
+					; nojitc = 256
+; vmsrc/apple/cmdjit.pla: 0019: //
+; vmsrc/apple/cmdjit.pla: 0020: // Module don't free memory
+; vmsrc/apple/cmdjit.pla: 0021: //
+; vmsrc/apple/cmdjit.pla: 0022: const modkeep     = $2000
+					; modkeep = 8192
+; vmsrc/apple/cmdjit.pla: 0023: const modinitkeep = $4000
+					; modinitkeep = 16384
+; vmsrc/apple/cmdjit.pla: 0024: //
+; vmsrc/apple/cmdjit.pla: 0025: // Prefix commands
+; vmsrc/apple/cmdjit.pla: 0026: //
+; vmsrc/apple/cmdjit.pla: 0027: const GET_PFX     = $C7
+					; GET_PFX = 199
+; vmsrc/apple/cmdjit.pla: 0028: const SET_PFX     = $C6
+					; SET_PFX = 198
+; vmsrc/apple/cmdjit.pla: 0029: //
+; vmsrc/apple/cmdjit.pla: 0030: // Indirect interpreter DEFinition entrypoint
+; vmsrc/apple/cmdjit.pla: 0031: //
+; vmsrc/apple/cmdjit.pla: 0032: struc t_defentry
+; vmsrc/apple/cmdjit.pla: 0033:     byte interpjsr
+					; interpjsr = 0
+; vmsrc/apple/cmdjit.pla: 0034:     word interpaddr
+					; interpaddr = 1
+; vmsrc/apple/cmdjit.pla: 0035:     word bytecodeaddr
+					; bytecodeaddr = 3
+; vmsrc/apple/cmdjit.pla: 0036:     byte callcount
+					; callcount = 5
+; vmsrc/apple/cmdjit.pla: 0037:     byte bytecodesize
+					; bytecodesize = 6
+; vmsrc/apple/cmdjit.pla: 0038: end
+					; t_defentry = 7
+; vmsrc/apple/cmdjit.pla: 0039: //
+; vmsrc/apple/cmdjit.pla: 0040: // JIT compiler constants
+; vmsrc/apple/cmdjit.pla: 0041: //
+; vmsrc/apple/cmdjit.pla: 0042: const jitcbuf     = $AF00
+					; jitcbuf = 44800
+; vmsrc/apple/cmdjit.pla: 0043: const jitcomp     = $03E2
+					; jitcomp = 994
+; vmsrc/apple/cmdjit.pla: 0044: const jitcodeptr  = $03E4
+					; jitcodeptr = 996
+; vmsrc/apple/cmdjit.pla: 0045: const jitmod      = $02F0
+					; jitmod = 752
+; vmsrc/apple/cmdjit.pla: 0046: //
+; vmsrc/apple/cmdjit.pla: 0047: // Pedefined functions.
+; vmsrc/apple/cmdjit.pla: 0048: //
+; vmsrc/apple/cmdjit.pla: 0049: predef syscall(cmd,params)#1, call(addr,areg,xreg,yreg,status)#1
+; vmsrc/apple/cmdjit.pla: 0050: predef crout()#0, cout(c)#0, prstr(s)#0, prbyte(b)#0, prword(w)#0, print(i)#0, cin()#1, rdstr(p)#1, toupper(c)#1
+; vmsrc/apple/cmdjit.pla: 0051: predef markheap()#1, allocheap(size)#1, allocalignheap(size, pow2, freeaddr)#1, releaseheap(newheap)#1, availheap()#1
+; vmsrc/apple/cmdjit.pla: 0052: predef memset(addr,value,size)#0, memcpy(dst,src,size)#0, strcpy(dst,src)#1, strcat(dst,src)#1
+; vmsrc/apple/cmdjit.pla: 0053: predef uword_isgt(a,b)#1, uword_isge(a,b)#1, uword_islt(a,b)#1, uword_isle(a,b)#1, sext(a)#1, divmod(a,b)#2
+; vmsrc/apple/cmdjit.pla: 0054: predef execmod(modfile)#1, open(path)#1, close(refnum)#1, read(refnum, buf, len)#1
+; vmsrc/apple/cmdjit.pla: 0055: //
+; vmsrc/apple/cmdjit.pla: 0056: // Exported CMDSYS table
+; vmsrc/apple/cmdjit.pla: 0057: //
+; vmsrc/apple/cmdjit.pla: 0058: word version    = $0200 // 02.00 Dev
+_D030 					; version    = $0200 // 02.00 Dev
+	!WORD	$0200
+; vmsrc/apple/cmdjit.pla: 0059: word syspath
+_D031 	!FILL	2			; syspath
+; vmsrc/apple/cmdjit.pla: 0060: word syscmdln
+_D032 	!FILL	2			; syscmdln
+; vmsrc/apple/cmdjit.pla: 0061: word            = @execmod, @open, @close, @read, 0 // Mark write() as NULL
+_F000 	!WORD	_P026
+_F001 	!WORD	_P027
+_F002 	!WORD	_P028
+_F003 	!WORD	_P029
+	!WORD	$0000
+; vmsrc/apple/cmdjit.pla: 0062: byte perr
+_D033 	!FILL	1			; perr
+; vmsrc/apple/cmdjit.pla: 0063: byte jitcount   = 0
+_D034 					; jitcount   = 0
+	!BYTE	$00
+; vmsrc/apple/cmdjit.pla: 0064: byte jitsize    = 0
+_D035 					; jitsize    = 0
+	!BYTE	$00
+; vmsrc/apple/cmdjit.pla: 0065: //
+; vmsrc/apple/cmdjit.pla: 0066: // Working input buffer overlayed with strings table
+; vmsrc/apple/cmdjit.pla: 0067: //
+; vmsrc/apple/cmdjit.pla: 0068: byte cmdln      = ""
+_D036 					; cmdln      = ""
+	!BYTE	$00
+; vmsrc/apple/cmdjit.pla: 0069: //
+; vmsrc/apple/cmdjit.pla: 0070: // Name for auto-run file (must follow cmdln)
+; vmsrc/apple/cmdjit.pla: 0071: //
+; vmsrc/apple/cmdjit.pla: 0072: byte autorun    = "AUTORUN"
+_D037 					; autorun    = "AUTORUN"
+	!BYTE	$07
+	!BYTE	$41,$55,$54,$4F,$52,$55,$4E
+; vmsrc/apple/cmdjit.pla: 0073: //
+; vmsrc/apple/cmdjit.pla: 0074: // Standard Library exported functions.
+; vmsrc/apple/cmdjit.pla: 0075: //
+; vmsrc/apple/cmdjit.pla: 0076: byte sysmodstr  = "CMDSYS"
+_D038 					; sysmodstr  = "CMDSYS"
+	!BYTE	$06
+	!BYTE	$43,$4D,$44,$53,$59,$53
+; vmsrc/apple/cmdjit.pla: 0077: byte putsstr    = "PUTS"
+_D039 					; putsstr    = "PUTS"
+	!BYTE	$04
+	!BYTE	$50,$55,$54,$53
+; vmsrc/apple/cmdjit.pla: 0078: byte putistr    = "PUTI"
+_D040 					; putistr    = "PUTI"
+	!BYTE	$04
+	!BYTE	$50,$55,$54,$49
+; vmsrc/apple/cmdjit.pla: 0079: byte putcstr    = "PUTC"
+_D041 					; putcstr    = "PUTC"
+	!BYTE	$04
+	!BYTE	$50,$55,$54,$43
+; vmsrc/apple/cmdjit.pla: 0080: byte putlnstr   = "PUTLN"
+_D042 					; putlnstr   = "PUTLN"
+	!BYTE	$05
+	!BYTE	$50,$55,$54,$4C,$4E
+; vmsrc/apple/cmdjit.pla: 0081: byte putbstr    = "PUTB"
+_D043 					; putbstr    = "PUTB"
+	!BYTE	$04
+	!BYTE	$50,$55,$54,$42
+; vmsrc/apple/cmdjit.pla: 0082: byte putwstr    = "PUTH"
+_D044 					; putwstr    = "PUTH"
+	!BYTE	$04
+	!BYTE	$50,$55,$54,$48
+; vmsrc/apple/cmdjit.pla: 0083: byte getcstr    = "GETC"
+_D045 					; getcstr    = "GETC"
+	!BYTE	$04
+	!BYTE	$47,$45,$54,$43
+; vmsrc/apple/cmdjit.pla: 0084: byte getsstr    = "GETS"
+_D046 					; getsstr    = "GETS"
+	!BYTE	$04
+	!BYTE	$47,$45,$54,$53
+; vmsrc/apple/cmdjit.pla: 0085: byte toupstr    = "TOUPPER"
+_D047 					; toupstr    = "TOUPPER"
+	!BYTE	$07
+	!BYTE	$54,$4F,$55,$50,$50,$45,$52
+; vmsrc/apple/cmdjit.pla: 0086: byte strcpystr  = "STRCPY"
+_D048 					; strcpystr  = "STRCPY"
+	!BYTE	$06
+	!BYTE	$53,$54,$52,$43,$50,$59
+; vmsrc/apple/cmdjit.pla: 0087: byte strcatstr  = "STRCAT"
+_D049 					; strcatstr  = "STRCAT"
+	!BYTE	$06
+	!BYTE	$53,$54,$52,$43,$41,$54
+; vmsrc/apple/cmdjit.pla: 0088: byte hpmarkstr  = "HEAPMARK"
+_D050 					; hpmarkstr  = "HEAPMARK"
+	!BYTE	$08
+	!BYTE	$48,$45,$41,$50,$4D,$41,$52,$4B
+; vmsrc/apple/cmdjit.pla: 0089: byte hpalignstr = "HEAPALLOCALIGN"
+_D051 					; hpalignstr = "HEAPALLOCALIGN"
+	!BYTE	$0E
+	!BYTE	$48,$45,$41,$50,$41,$4C,$4C,$4F
+	!BYTE	$43,$41,$4C,$49,$47,$4E
+; vmsrc/apple/cmdjit.pla: 0090: byte hpallocstr = "HEAPALLOC"
+_D052 					; hpallocstr = "HEAPALLOC"
+	!BYTE	$09
+	!BYTE	$48,$45,$41,$50,$41,$4C,$4C,$4F
+	!BYTE	$43
+; vmsrc/apple/cmdjit.pla: 0091: byte hprelstr   = "HEAPRELEASE"
+_D053 					; hprelstr   = "HEAPRELEASE"
+	!BYTE	$0B
+	!BYTE	$48,$45,$41,$50,$52,$45,$4C,$45
+	!BYTE	$41,$53,$45
+; vmsrc/apple/cmdjit.pla: 0092: byte hpavlstr   = "HEAPAVAIL"
+_D054 					; hpavlstr   = "HEAPAVAIL"
+	!BYTE	$09
+	!BYTE	$48,$45,$41,$50,$41,$56,$41,$49
+	!BYTE	$4C
+; vmsrc/apple/cmdjit.pla: 0093: word memsetstr  = "MEMSET"
+_D055 					; memsetstr  = "MEMSET"
+	!BYTE	$06
+	!BYTE	$4D,$45,$4D,$53,$45,$54
+; vmsrc/apple/cmdjit.pla: 0094: byte memcpystr  = "MEMCPY"
+_D056 					; memcpystr  = "MEMCPY"
+	!BYTE	$06
+	!BYTE	$4D,$45,$4D,$43,$50,$59
+; vmsrc/apple/cmdjit.pla: 0095: byte uisgtstr   = "ISUGT"
+_D057 					; uisgtstr   = "ISUGT"
+	!BYTE	$05
+	!BYTE	$49,$53,$55,$47,$54
+; vmsrc/apple/cmdjit.pla: 0096: byte uisgestr   = "ISUGE"
+_D058 					; uisgestr   = "ISUGE"
+	!BYTE	$05
+	!BYTE	$49,$53,$55,$47,$45
+; vmsrc/apple/cmdjit.pla: 0097: byte uisltstr   = "ISULT"
+_D059 					; uisltstr   = "ISULT"
+	!BYTE	$05
+	!BYTE	$49,$53,$55,$4C,$54
+; vmsrc/apple/cmdjit.pla: 0098: byte uislestr   = "ISULE"
+_D060 					; uislestr   = "ISULE"
+	!BYTE	$05
+	!BYTE	$49,$53,$55,$4C,$45
+; vmsrc/apple/cmdjit.pla: 0099: byte sextstr    = "SEXT"
+_D061 					; sextstr    = "SEXT"
+	!BYTE	$04
+	!BYTE	$53,$45,$58,$54
+; vmsrc/apple/cmdjit.pla: 0100: byte divmodstr  = "DIVMOD"
+_D062 					; divmodstr  = "DIVMOD"
+	!BYTE	$06
+	!BYTE	$44,$49,$56,$4D,$4F,$44
+; vmsrc/apple/cmdjit.pla: 0101: byte machidstr  = "MACHID"
+_D063 					; machidstr  = "MACHID"
+	!BYTE	$06
+	!BYTE	$4D,$41,$43,$48,$49,$44
+; vmsrc/apple/cmdjit.pla: 0102: byte sysstr     = "SYSCALL"
+_D064 					; sysstr     = "SYSCALL"
+	!BYTE	$07
+	!BYTE	$53,$59,$53,$43,$41,$4C,$4C
+; vmsrc/apple/cmdjit.pla: 0103: byte callstr    = "CALL"
+_D065 					; callstr    = "CALL"
+	!BYTE	$04
+	!BYTE	$43,$41,$4C,$4C
+; vmsrc/apple/cmdjit.pla: 0104: word exports    = @sysmodstr, @version
+_D066 					; exports    = @sysmodstr, @version
+_F004 	!WORD	_D038
+_F005 	!WORD	_D030
+; vmsrc/apple/cmdjit.pla: 0105: word            = @sysstr,    @syscall
+_F006 	!WORD	_D064
+_F007 	!WORD	_P000
+; vmsrc/apple/cmdjit.pla: 0106: word            = @callstr,   @call
+_F008 	!WORD	_D065
+_F009 	!WORD	_P001
+; vmsrc/apple/cmdjit.pla: 0107: word            = @putcstr,   @cout
+_F010 	!WORD	_D041
+_F011 	!WORD	_P003
+; vmsrc/apple/cmdjit.pla: 0108: word            = @putlnstr,  @crout
+_F012 	!WORD	_D042
+_F013 	!WORD	_P002
+; vmsrc/apple/cmdjit.pla: 0109: word            = @putsstr,   @prstr
+_F014 	!WORD	_D039
+_F015 	!WORD	_P004
+; vmsrc/apple/cmdjit.pla: 0110: word            = @putbstr,   @prbyte
+_F016 	!WORD	_D043
+_F017 	!WORD	_P005
+; vmsrc/apple/cmdjit.pla: 0111: word            = @putwstr,   @prword
+_F018 	!WORD	_D044
+_F019 	!WORD	_P006
+; vmsrc/apple/cmdjit.pla: 0112: word            = @putistr,   @print
+_F020 	!WORD	_D040
+_F021 	!WORD	_P007
+; vmsrc/apple/cmdjit.pla: 0113: word            = @getcstr,   @cin
+_F022 	!WORD	_D045
+_F023 	!WORD	_P008
+; vmsrc/apple/cmdjit.pla: 0114: word            = @getsstr,   @rdstr
+_F024 	!WORD	_D046
+_F025 	!WORD	_P009
+; vmsrc/apple/cmdjit.pla: 0115: word            = @toupstr,   @toupper
+_F026 	!WORD	_D047
+_F027 	!WORD	_P010
+; vmsrc/apple/cmdjit.pla: 0116: word            = @hpmarkstr, @markheap
+_F028 	!WORD	_D050
+_F029 	!WORD	_P011
+; vmsrc/apple/cmdjit.pla: 0117: byte sysmods[] // overlay with exported strings
+_D067 					; sysmods[] // overlay with exported strings
+; vmsrc/apple/cmdjit.pla: 0118: word            = @hpallocstr,@allocheap
+_F030 	!WORD	_D052
+_F031 	!WORD	_P012
+; vmsrc/apple/cmdjit.pla: 0119: word            = @hpalignstr,@allocalignheap
+_F032 	!WORD	_D051
+_F033 	!WORD	_P013
+; vmsrc/apple/cmdjit.pla: 0120: word            = @hprelstr,  @releaseheap
+_F034 	!WORD	_D053
+_F035 	!WORD	_P014
+; vmsrc/apple/cmdjit.pla: 0121: word            = @hpavlstr,  @availheap
+_F036 	!WORD	_D054
+_F037 	!WORD	_P015
+; vmsrc/apple/cmdjit.pla: 0122: word            = @memsetstr, @memset
+_F038 	!WORD	_D055
+_F039 	!WORD	_P016
+; vmsrc/apple/cmdjit.pla: 0123: word            = @memcpystr, @memcpy
+_F040 	!WORD	_D056
+_F041 	!WORD	_P017
+; vmsrc/apple/cmdjit.pla: 0124: word            = @uisgtstr,  @uword_isgt
+_F042 	!WORD	_D057
+_F043 	!WORD	_P020
+; vmsrc/apple/cmdjit.pla: 0125: word            = @uisgestr,  @uword_isge
+_F044 	!WORD	_D058
+_F045 	!WORD	_P021
+; vmsrc/apple/cmdjit.pla: 0126: word            = @uisltstr,  @uword_islt
+_F046 	!WORD	_D059
+_F047 	!WORD	_P022
+; vmsrc/apple/cmdjit.pla: 0127: word            = @uislestr,  @uword_isle
+_F048 	!WORD	_D060
+_F049 	!WORD	_P023
+; vmsrc/apple/cmdjit.pla: 0128: word            = @strcpystr, @strcpy
+_F050 	!WORD	_D048
+_F051 	!WORD	_P018
+; vmsrc/apple/cmdjit.pla: 0129: word            = @strcatstr, @strcat
+_F052 	!WORD	_D049
+_F053 	!WORD	_P019
+; vmsrc/apple/cmdjit.pla: 0130: word            = @sextstr,   @sext
+_F054 	!WORD	_D061
+_F055 	!WORD	_P024
+; vmsrc/apple/cmdjit.pla: 0131: word            = @divmodstr, @divmod
+_F056 	!WORD	_D062
+_F057 	!WORD	_P025
+; vmsrc/apple/cmdjit.pla: 0132: word            = @machidstr, MACHID
+_F058 	!WORD	_D063
+	!WORD	$BF98
+; vmsrc/apple/cmdjit.pla: 0133: word            = 0
+	!WORD	$0000
+; vmsrc/apple/cmdjit.pla: 0134: word sysmodsym  = @exports
+_D068 					; sysmodsym  = @exports
+_F059 	!WORD	_D066
+; vmsrc/apple/cmdjit.pla: 0135: //
+; vmsrc/apple/cmdjit.pla: 0136: // System variable.
+; vmsrc/apple/cmdjit.pla: 0137: //
+; vmsrc/apple/cmdjit.pla: 0138: word systemflags = 0
+_D069 					; systemflags = 0
+	!WORD	$0000
+; vmsrc/apple/cmdjit.pla: 0139: word heap
+_D070 	!FILL	2			; heap
+; vmsrc/apple/cmdjit.pla: 0140: word xheap       = $A000 // Set load address for JIT compiler
+_D071 					; xheap       = $A000 // Set load address for JIT compiler
+	!WORD	$A000
+; vmsrc/apple/cmdjit.pla: 0141: word xheaptop    = $C000
+_D072 					; xheaptop    = $C000
+	!WORD	$C000
+; vmsrc/apple/cmdjit.pla: 0142: word lastsym     = symtbl
+_D073 					; lastsym     = symtbl
+	!WORD	$0C00
+; vmsrc/apple/cmdjit.pla: 0143: //
+; vmsrc/apple/cmdjit.pla: 0144: // Utility functions
+; vmsrc/apple/cmdjit.pla: 0145: //
+; vmsrc/apple/cmdjit.pla: 0146: //asm equates included from cmdstub.s
+; vmsrc/apple/cmdjit.pla: 0147: //
+; vmsrc/apple/cmdjit.pla: 0148: // CALL PRODOS
+; vmsrc/apple/cmdjit.pla: 0149: // SYSCALL(CMD, PARAMS)
+; vmsrc/apple/cmdjit.pla: 0150: //
+; vmsrc/apple/cmdjit.pla: 0151: asm syscall(cmd,params)#1
+_P000 					; syscall(cmd,params)#1()
+_A000 					; syscall()
+; vmsrc/apple/cmdjit.pla: 0152:         LDA     ESTKL,X
+        LDA     ESTKL,X
+; vmsrc/apple/cmdjit.pla: 0153:         LDY     ESTKH,X
+        LDY     ESTKH,X
+; vmsrc/apple/cmdjit.pla: 0154:         STA     PARAMS
+        STA     PARAMS
+; vmsrc/apple/cmdjit.pla: 0155:         STY     PARAMS+1
+        STY     PARAMS+1
+; vmsrc/apple/cmdjit.pla: 0156:         INX
+        INX
+; vmsrc/apple/cmdjit.pla: 0157:         LDA     ESTKL,X
+        LDA     ESTKL,X
+; vmsrc/apple/cmdjit.pla: 0158:         STA     CMD
+        STA     CMD
+; vmsrc/apple/cmdjit.pla: 0159:         JSR     $BF00
+        JSR     $BF00
+; vmsrc/apple/cmdjit.pla: 0160: CMD:    !BYTE   00
+CMD:    !BYTE   00
+; vmsrc/apple/cmdjit.pla: 0161: PARAMS: !WORD   0000
+PARAMS: !WORD   0000
+; vmsrc/apple/cmdjit.pla: 0162: ;        LDY     #$00
+;        LDY     #$00
+; vmsrc/apple/cmdjit.pla: 0163:         STA     ESTKL,X
+        STA     ESTKL,X
+; vmsrc/apple/cmdjit.pla: 0164: ;        STY     ESTKH,X
+;        STY     ESTKH,X
+; vmsrc/apple/cmdjit.pla: 0165:         RTS
+        RTS
+; vmsrc/apple/cmdjit.pla: 0166: end
+; vmsrc/apple/cmdjit.pla: 0167: //
+; vmsrc/apple/cmdjit.pla: 0168: // CALL 6502 ROUTINE
+; vmsrc/apple/cmdjit.pla: 0169: // CALL(ADDR, AREG, XREG, YREG, STATUS)
+; vmsrc/apple/cmdjit.pla: 0170: //
+; vmsrc/apple/cmdjit.pla: 0171: asm call(addr,areg,xreg,yreg,status)#1
+_P001 					; call(addr,areg,xreg,yreg,status)#1()
+_A001 					; call()
+; vmsrc/apple/cmdjit.pla: 0172: REGVALS =   SRC
+REGVALS =   SRC
+; vmsrc/apple/cmdjit.pla: 0173:         PHP
+        PHP
+; vmsrc/apple/cmdjit.pla: 0174:         LDA     ESTKL+4,X
+        LDA     ESTKL+4,X
+; vmsrc/apple/cmdjit.pla: 0175:         STA     TMPL
+        STA     TMPL
+; vmsrc/apple/cmdjit.pla: 0176:         LDA     ESTKH+4,X
+        LDA     ESTKH+4,X
+; vmsrc/apple/cmdjit.pla: 0177:         STA     TMPH
+        STA     TMPH
+; vmsrc/apple/cmdjit.pla: 0178:         LDA     ESTKL,X
+        LDA     ESTKL,X
+; vmsrc/apple/cmdjit.pla: 0179:         PHA
+        PHA
+; vmsrc/apple/cmdjit.pla: 0180:         LDY     ESTKL+1,X
+        LDY     ESTKL+1,X
+; vmsrc/apple/cmdjit.pla: 0181:         LDA     ESTKL+3,X
+        LDA     ESTKL+3,X
+; vmsrc/apple/cmdjit.pla: 0182:         PHA
+        PHA
+; vmsrc/apple/cmdjit.pla: 0183:         LDA     ESTKL+2,X
+        LDA     ESTKL+2,X
+; vmsrc/apple/cmdjit.pla: 0184:         INX
+        INX
+; vmsrc/apple/cmdjit.pla: 0185:         INX
+        INX
+; vmsrc/apple/cmdjit.pla: 0186:         INX
+        INX
+; vmsrc/apple/cmdjit.pla: 0187:         INX
+        INX
+; vmsrc/apple/cmdjit.pla: 0188:         STX     ESP
+        STX     ESP
+; vmsrc/apple/cmdjit.pla: 0189:         TAX
+        TAX
+; vmsrc/apple/cmdjit.pla: 0190:         PLA
+        PLA
+; vmsrc/apple/cmdjit.pla: 0191:         BIT     ROMEN
+        BIT     ROMEN
+; vmsrc/apple/cmdjit.pla: 0192:         PLP
+        PLP
+; vmsrc/apple/cmdjit.pla: 0193:         JSR     JMPTMP
+        JSR     JMPTMP
+; vmsrc/apple/cmdjit.pla: 0194:         PHP
+        PHP
+; vmsrc/apple/cmdjit.pla: 0195:         BIT     LCRDEN+LCBNK2
+        BIT     LCRDEN+LCBNK2
+; vmsrc/apple/cmdjit.pla: 0196:         STA     REGVALS+0
+        STA     REGVALS+0
+; vmsrc/apple/cmdjit.pla: 0197:         STX     REGVALS+1
+        STX     REGVALS+1
+; vmsrc/apple/cmdjit.pla: 0198:         STY     REGVALS+2
+        STY     REGVALS+2
+; vmsrc/apple/cmdjit.pla: 0199:         PLA
+        PLA
+; vmsrc/apple/cmdjit.pla: 0200:         STA     REGVALS+3
+        STA     REGVALS+3
+; vmsrc/apple/cmdjit.pla: 0201:         LDX     ESP
+        LDX     ESP
+; vmsrc/apple/cmdjit.pla: 0202:         LDA     #<REGVALS
+        LDA     #<REGVALS
+; vmsrc/apple/cmdjit.pla: 0203:         LDY     #>REGVALS
+        LDY     #>REGVALS
+; vmsrc/apple/cmdjit.pla: 0204:         STA     ESTKL,X
+        STA     ESTKL,X
+; vmsrc/apple/cmdjit.pla: 0205:         STY     ESTKH,X
+        STY     ESTKH,X
+; vmsrc/apple/cmdjit.pla: 0206:         PLP
+        PLP
+; vmsrc/apple/cmdjit.pla: 0207:         RTS
+        RTS
+; vmsrc/apple/cmdjit.pla: 0208: end
+; vmsrc/apple/cmdjit.pla: 0209: //
+; vmsrc/apple/cmdjit.pla: 0210: // CALL LOADED SYSTEM PROGRAM
+; vmsrc/apple/cmdjit.pla: 0211: //
+; vmsrc/apple/cmdjit.pla: 0212: asm exec()#0
+_A002 					; exec()
+; vmsrc/apple/cmdjit.pla: 0213:         BIT     ROMEN
+        BIT     ROMEN
+; vmsrc/apple/cmdjit.pla: 0214:         JMP     $2000
+        JMP     $2000
+; vmsrc/apple/cmdjit.pla: 0215: end
+; vmsrc/apple/cmdjit.pla: 0216: //
+; vmsrc/apple/cmdjit.pla: 0217: // SET MEMORY TO VALUE
+; vmsrc/apple/cmdjit.pla: 0218: // MEMSET(ADDR, VALUE, SIZE)
+; vmsrc/apple/cmdjit.pla: 0219: //   With optimizations from Peter Ferrie
+; vmsrc/apple/cmdjit.pla: 0220: //
+; vmsrc/apple/cmdjit.pla: 0221: asm memset(addr,value,size)#0
+_P016 					; memset(addr,value,size)#0()
+_A003 					; memset()
+; vmsrc/apple/cmdjit.pla: 0222:         LDA     ESTKL+2,X
+        LDA     ESTKL+2,X
+; vmsrc/apple/cmdjit.pla: 0223:         STA     DSTL
+        STA     DSTL
+; vmsrc/apple/cmdjit.pla: 0224:         LDA     ESTKH+2,X
+        LDA     ESTKH+2,X
+; vmsrc/apple/cmdjit.pla: 0225:         STA     DSTH
+        STA     DSTH
+; vmsrc/apple/cmdjit.pla: 0226:         LDY     ESTKL,X
+        LDY     ESTKL,X
+; vmsrc/apple/cmdjit.pla: 0227:         BEQ     +
+        BEQ     +
+; vmsrc/apple/cmdjit.pla: 0228:         INC     ESTKH,X
+        INC     ESTKH,X
+; vmsrc/apple/cmdjit.pla: 0229:         LDY     #$00
+        LDY     #$00
+; vmsrc/apple/cmdjit.pla: 0230: +       LDA     ESTKH,X
++       LDA     ESTKH,X
+; vmsrc/apple/cmdjit.pla: 0231:         BEQ     SETMEX
+        BEQ     SETMEX
+; vmsrc/apple/cmdjit.pla: 0232: SETMLPL CLC
+SETMLPL CLC
+; vmsrc/apple/cmdjit.pla: 0233:         LDA     ESTKL+1,X
+        LDA     ESTKL+1,X
+; vmsrc/apple/cmdjit.pla: 0234: SETMLPH STA     (DST),Y
+SETMLPH STA     (DST),Y
+; vmsrc/apple/cmdjit.pla: 0235:         DEC     ESTKL,X
+        DEC     ESTKL,X
+; vmsrc/apple/cmdjit.pla: 0236:         BEQ     ++
+        BEQ     ++
+; vmsrc/apple/cmdjit.pla: 0237: -       INY
+-       INY
+; vmsrc/apple/cmdjit.pla: 0238:         BEQ     +
+        BEQ     +
+; vmsrc/apple/cmdjit.pla: 0239: --      BCS     SETMLPL
+--      BCS     SETMLPL
+; vmsrc/apple/cmdjit.pla: 0240:         SEC
+        SEC
+; vmsrc/apple/cmdjit.pla: 0241:         LDA     ESTKH+1,X
+        LDA     ESTKH+1,X
+; vmsrc/apple/cmdjit.pla: 0242:         BCS     SETMLPH
+        BCS     SETMLPH
+; vmsrc/apple/cmdjit.pla: 0243: +       INC     DSTH
++       INC     DSTH
+; vmsrc/apple/cmdjit.pla: 0244:         BNE     --
+        BNE     --
+; vmsrc/apple/cmdjit.pla: 0245: ++      DEC     ESTKH,X
+++      DEC     ESTKH,X
+; vmsrc/apple/cmdjit.pla: 0246:         BNE     -
+        BNE     -
+; vmsrc/apple/cmdjit.pla: 0247: SETMEX  INX
+SETMEX  INX
+; vmsrc/apple/cmdjit.pla: 0248:         INX
+        INX
+; vmsrc/apple/cmdjit.pla: 0249:         INX
+        INX
+; vmsrc/apple/cmdjit.pla: 0250:         RTS
+        RTS
+; vmsrc/apple/cmdjit.pla: 0251: end
+; vmsrc/apple/cmdjit.pla: 0252: //
+; vmsrc/apple/cmdjit.pla: 0253: // COPY MEMORY
+; vmsrc/apple/cmdjit.pla: 0254: // MEMCPY(DSTADDR, SRCADDR, SIZE)
+; vmsrc/apple/cmdjit.pla: 0255: //
+; vmsrc/apple/cmdjit.pla: 0256: asm memcpy(dst,src,size)#0
+_P017 					; memcpy(dst,src,size)#0()
+_A004 					; memcpy()
+; vmsrc/apple/cmdjit.pla: 0257:         INX
+        INX
+; vmsrc/apple/cmdjit.pla: 0258:         INX
+        INX
+; vmsrc/apple/cmdjit.pla: 0259:         INX
+        INX
+; vmsrc/apple/cmdjit.pla: 0260:         LDA     ESTKL-3,X
+        LDA     ESTKL-3,X
+; vmsrc/apple/cmdjit.pla: 0261:         ORA     ESTKH-3,X
+        ORA     ESTKH-3,X
+; vmsrc/apple/cmdjit.pla: 0262:         BEQ     CPYMEX
+        BEQ     CPYMEX
+; vmsrc/apple/cmdjit.pla: 0263:         LDA     ESTKL-2,X
+        LDA     ESTKL-2,X
+; vmsrc/apple/cmdjit.pla: 0264:         CMP     ESTKL-1,X
+        CMP     ESTKL-1,X
+; vmsrc/apple/cmdjit.pla: 0265:         LDA     ESTKH-2,X
+        LDA     ESTKH-2,X
+; vmsrc/apple/cmdjit.pla: 0266:         SBC     ESTKH-1,X
+        SBC     ESTKH-1,X
+; vmsrc/apple/cmdjit.pla: 0267:         BCC     REVCPY
+        BCC     REVCPY
+; vmsrc/apple/cmdjit.pla: 0268: ;
+; vmsrc/apple/cmdjit.pla: 0269: ; FORWARD COPY
+; FORWARD COPY
+; vmsrc/apple/cmdjit.pla: 0270: ;
+; vmsrc/apple/cmdjit.pla: 0271:         LDA     ESTKL-1,X
+        LDA     ESTKL-1,X
+; vmsrc/apple/cmdjit.pla: 0272:         STA     DSTL
+        STA     DSTL
+; vmsrc/apple/cmdjit.pla: 0273:         LDA     ESTKH-1,X
+        LDA     ESTKH-1,X
+; vmsrc/apple/cmdjit.pla: 0274:         STA     DSTH
+        STA     DSTH
+; vmsrc/apple/cmdjit.pla: 0275:         LDA     ESTKL-2,X
+        LDA     ESTKL-2,X
+; vmsrc/apple/cmdjit.pla: 0276:         STA     SRCL
+        STA     SRCL
+; vmsrc/apple/cmdjit.pla: 0277:         LDA     ESTKH-2,X
+        LDA     ESTKH-2,X
+; vmsrc/apple/cmdjit.pla: 0278:         STA     SRCH
+        STA     SRCH
+; vmsrc/apple/cmdjit.pla: 0279:         LDY     ESTKL-3,X
+        LDY     ESTKL-3,X
+; vmsrc/apple/cmdjit.pla: 0280:         BEQ     FORCPYLP
+        BEQ     FORCPYLP
+; vmsrc/apple/cmdjit.pla: 0281:         INC     ESTKH-3,X
+        INC     ESTKH-3,X
+; vmsrc/apple/cmdjit.pla: 0282:         LDY     #$00
+        LDY     #$00
+; vmsrc/apple/cmdjit.pla: 0283: FORCPYLP LDA    (SRC),Y
+FORCPYLP LDA    (SRC),Y
+; vmsrc/apple/cmdjit.pla: 0284:         STA     (DST),Y
+        STA     (DST),Y
+; vmsrc/apple/cmdjit.pla: 0285:         INY
+        INY
+; vmsrc/apple/cmdjit.pla: 0286:         BNE     +
+        BNE     +
+; vmsrc/apple/cmdjit.pla: 0287:         INC     DSTH
+        INC     DSTH
+; vmsrc/apple/cmdjit.pla: 0288:         INC     SRCH
+        INC     SRCH
+; vmsrc/apple/cmdjit.pla: 0289: +       DEC     ESTKL-3,X
++       DEC     ESTKL-3,X
+; vmsrc/apple/cmdjit.pla: 0290:         BNE     FORCPYLP
+        BNE     FORCPYLP
+; vmsrc/apple/cmdjit.pla: 0291:         DEC     ESTKH-3,X
+        DEC     ESTKH-3,X
+; vmsrc/apple/cmdjit.pla: 0292:         BNE     FORCPYLP
+        BNE     FORCPYLP
+; vmsrc/apple/cmdjit.pla: 0293:         RTS
+        RTS
+; vmsrc/apple/cmdjit.pla: 0294: ;
+; vmsrc/apple/cmdjit.pla: 0295: ; REVERSE COPY
+; REVERSE COPY
+; vmsrc/apple/cmdjit.pla: 0296: ;
+; vmsrc/apple/cmdjit.pla: 0297: REVCPY  ;CLC
+REVCPY  ;CLC
+; vmsrc/apple/cmdjit.pla: 0298:         LDA     ESTKL-3,X
+        LDA     ESTKL-3,X
+; vmsrc/apple/cmdjit.pla: 0299:         ADC     ESTKL-1,X
+        ADC     ESTKL-1,X
+; vmsrc/apple/cmdjit.pla: 0300:         STA     DSTL
+        STA     DSTL
+; vmsrc/apple/cmdjit.pla: 0301:         LDA     ESTKH-3,X
+        LDA     ESTKH-3,X
+; vmsrc/apple/cmdjit.pla: 0302:         ADC     ESTKH-1,X
+        ADC     ESTKH-1,X
+; vmsrc/apple/cmdjit.pla: 0303:         STA     DSTH
+        STA     DSTH
+; vmsrc/apple/cmdjit.pla: 0304:         CLC
+        CLC
+; vmsrc/apple/cmdjit.pla: 0305:         LDA     ESTKL-3,X
+        LDA     ESTKL-3,X
+; vmsrc/apple/cmdjit.pla: 0306:         ADC     ESTKL-2,X
+        ADC     ESTKL-2,X
+; vmsrc/apple/cmdjit.pla: 0307:         STA     SRCL
+        STA     SRCL
+; vmsrc/apple/cmdjit.pla: 0308:         LDA     ESTKH-3,X
+        LDA     ESTKH-3,X
+; vmsrc/apple/cmdjit.pla: 0309:         ADC     ESTKH-2,X
+        ADC     ESTKH-2,X
+; vmsrc/apple/cmdjit.pla: 0310:         STA     SRCH
+        STA     SRCH
+; vmsrc/apple/cmdjit.pla: 0311:         DEC     DSTH
+        DEC     DSTH
+; vmsrc/apple/cmdjit.pla: 0312:         DEC     SRCH
+        DEC     SRCH
+; vmsrc/apple/cmdjit.pla: 0313:         LDY     #$FF
+        LDY     #$FF
+; vmsrc/apple/cmdjit.pla: 0314:         LDA     ESTKL-3,X
+        LDA     ESTKL-3,X
+; vmsrc/apple/cmdjit.pla: 0315:         BEQ     REVCPYLP
+        BEQ     REVCPYLP
+; vmsrc/apple/cmdjit.pla: 0316:         INC     ESTKH-3,X
+        INC     ESTKH-3,X
+; vmsrc/apple/cmdjit.pla: 0317: REVCPYLP LDA    (SRC),Y
+REVCPYLP LDA    (SRC),Y
+; vmsrc/apple/cmdjit.pla: 0318:         STA     (DST),Y
+        STA     (DST),Y
+; vmsrc/apple/cmdjit.pla: 0319:         DEY
+        DEY
+; vmsrc/apple/cmdjit.pla: 0320:         CPY     #$FF
+        CPY     #$FF
+; vmsrc/apple/cmdjit.pla: 0321:         BNE     +
+        BNE     +
+; vmsrc/apple/cmdjit.pla: 0322:         DEC     DSTH
+        DEC     DSTH
+; vmsrc/apple/cmdjit.pla: 0323:         DEC     SRCH
+        DEC     SRCH
+; vmsrc/apple/cmdjit.pla: 0324: +       DEC     ESTKL-3,X
++       DEC     ESTKL-3,X
+; vmsrc/apple/cmdjit.pla: 0325:         BNE     REVCPYLP
+        BNE     REVCPYLP
+; vmsrc/apple/cmdjit.pla: 0326:         DEC     ESTKH-3,X
+        DEC     ESTKH-3,X
+; vmsrc/apple/cmdjit.pla: 0327:         BNE     REVCPYLP
+        BNE     REVCPYLP
+; vmsrc/apple/cmdjit.pla: 0328: CPYMEX  RTS
+CPYMEX  RTS
+; vmsrc/apple/cmdjit.pla: 0329: end
+; vmsrc/apple/cmdjit.pla: 0330: asm crout()#0
+_P002 					; crout()#0()
+_A005 					; crout()
+; vmsrc/apple/cmdjit.pla: 0331:         LDA     #$8D
+        LDA     #$8D
+; vmsrc/apple/cmdjit.pla: 0332:         BNE     ++
+        BNE     ++
+; vmsrc/apple/cmdjit.pla: 0333: end
+; vmsrc/apple/cmdjit.pla: 0334: //
+; vmsrc/apple/cmdjit.pla: 0335: // CHAR OUT
+; vmsrc/apple/cmdjit.pla: 0336: // COUT(CHAR)
+; vmsrc/apple/cmdjit.pla: 0337: //
+; vmsrc/apple/cmdjit.pla: 0338: asm cout(c)#0
+_P003 					; cout(c)#0()
+_A006 					; cout()
+; vmsrc/apple/cmdjit.pla: 0339:         LDA     ESTKL,X
+        LDA     ESTKL,X
+; vmsrc/apple/cmdjit.pla: 0340:         BIT     $BF98
+        BIT     $BF98
+; vmsrc/apple/cmdjit.pla: 0341:         BMI     +
+        BMI     +
+; vmsrc/apple/cmdjit.pla: 0342:         JSR     TOUPR
+        JSR     TOUPR
+; vmsrc/apple/cmdjit.pla: 0343: +       ORA     #$80
++       ORA     #$80
+; vmsrc/apple/cmdjit.pla: 0344:         INX
+        INX
+; vmsrc/apple/cmdjit.pla: 0345: ++      BIT     ROMEN
+++      BIT     ROMEN
+; vmsrc/apple/cmdjit.pla: 0346:         JSR     $FDED
+        JSR     $FDED
+; vmsrc/apple/cmdjit.pla: 0347:         BIT     LCRDEN+LCBNK2
+        BIT     LCRDEN+LCBNK2
+; vmsrc/apple/cmdjit.pla: 0348:         RTS
+        RTS
+; vmsrc/apple/cmdjit.pla: 0349: end
+; vmsrc/apple/cmdjit.pla: 0350: //
+; vmsrc/apple/cmdjit.pla: 0351: // CHAR IN
+; vmsrc/apple/cmdjit.pla: 0352: // RDKEY()
+; vmsrc/apple/cmdjit.pla: 0353: //
+; vmsrc/apple/cmdjit.pla: 0354: asm cin()#1
+_P008 					; cin()#1()
+_A007 					; cin()
+; vmsrc/apple/cmdjit.pla: 0355:         BIT     ROMEN
+        BIT     ROMEN
+; vmsrc/apple/cmdjit.pla: 0356:         JSR     $FD0C
+        JSR     $FD0C
+; vmsrc/apple/cmdjit.pla: 0357:         BIT     LCRDEN+LCBNK2
+        BIT     LCRDEN+LCBNK2
+; vmsrc/apple/cmdjit.pla: 0358:         DEX
+        DEX
+; vmsrc/apple/cmdjit.pla: 0359:         LDY     #$00
+        LDY     #$00
+; vmsrc/apple/cmdjit.pla: 0360:         AND     #$7F
+        AND     #$7F
+; vmsrc/apple/cmdjit.pla: 0361:         STA     ESTKL,X
+        STA     ESTKL,X
+; vmsrc/apple/cmdjit.pla: 0362:         STY     ESTKH,X
+        STY     ESTKH,X
+; vmsrc/apple/cmdjit.pla: 0363:         RTS
+        RTS
+; vmsrc/apple/cmdjit.pla: 0364: end
+; vmsrc/apple/cmdjit.pla: 0365: //
+; vmsrc/apple/cmdjit.pla: 0366: // PRINT STRING
+; vmsrc/apple/cmdjit.pla: 0367: // PRSTR(STR)
+; vmsrc/apple/cmdjit.pla: 0368: //
+; vmsrc/apple/cmdjit.pla: 0369: asm prstr(s)#0
+_P004 					; prstr(s)#0()
+_A008 					; prstr()
+; vmsrc/apple/cmdjit.pla: 0370:         LDY     #$00
+        LDY     #$00
+; vmsrc/apple/cmdjit.pla: 0371:         LDA     ESTKL,X
+        LDA     ESTKL,X
+; vmsrc/apple/cmdjit.pla: 0372:         STA     SRCL
+        STA     SRCL
+; vmsrc/apple/cmdjit.pla: 0373:         LDA     ESTKH,X
+        LDA     ESTKH,X
+; vmsrc/apple/cmdjit.pla: 0374:         STA     SRCH
+        STA     SRCH
+; vmsrc/apple/cmdjit.pla: 0375:         LDA     (SRC),Y
+        LDA     (SRC),Y
+; vmsrc/apple/cmdjit.pla: 0376:         BEQ     ++
+        BEQ     ++
+; vmsrc/apple/cmdjit.pla: 0377:         STA     TMP
+        STA     TMP
+; vmsrc/apple/cmdjit.pla: 0378:         BIT     ROMEN
+        BIT     ROMEN
+; vmsrc/apple/cmdjit.pla: 0379: -       INY
+-       INY
+; vmsrc/apple/cmdjit.pla: 0380:         LDA     (SRC),Y
+        LDA     (SRC),Y
+; vmsrc/apple/cmdjit.pla: 0381:         BIT     $BF98
+        BIT     $BF98
+; vmsrc/apple/cmdjit.pla: 0382:         BMI     +
+        BMI     +
+; vmsrc/apple/cmdjit.pla: 0383:         JSR     TOUPR
+        JSR     TOUPR
+; vmsrc/apple/cmdjit.pla: 0384: +       ORA     #$80
++       ORA     #$80
+; vmsrc/apple/cmdjit.pla: 0385:         JSR     $FDED
+        JSR     $FDED
+; vmsrc/apple/cmdjit.pla: 0386:         CPY     TMP
+        CPY     TMP
+; vmsrc/apple/cmdjit.pla: 0387:         BNE     -
+        BNE     -
+; vmsrc/apple/cmdjit.pla: 0388:         BIT     LCRDEN+LCBNK2
+        BIT     LCRDEN+LCBNK2
+; vmsrc/apple/cmdjit.pla: 0389: ++      INX
+++      INX
+; vmsrc/apple/cmdjit.pla: 0390:         RTS
+        RTS
+; vmsrc/apple/cmdjit.pla: 0391: end
+; vmsrc/apple/cmdjit.pla: 0392: //
+; vmsrc/apple/cmdjit.pla: 0393: // PRINT WORD
+; vmsrc/apple/cmdjit.pla: 0394: //
+; vmsrc/apple/cmdjit.pla: 0395: asm prword(w)#0
+_P006 					; prword(w)#0()
+_A009 					; prword()
+; vmsrc/apple/cmdjit.pla: 0396:         LDA     ESTKH,X
+        LDA     ESTKH,X
+; vmsrc/apple/cmdjit.pla: 0397:         JSR     +
+        JSR     +
+; vmsrc/apple/cmdjit.pla: 0398:         DEX
+        DEX
+; vmsrc/apple/cmdjit.pla: 0399:         ; FALL THROUGH TO PRBYTE
+        ; FALL THROUGH TO PRBYTE
+; vmsrc/apple/cmdjit.pla: 0400: end
+; vmsrc/apple/cmdjit.pla: 0401: //
+; vmsrc/apple/cmdjit.pla: 0402: // PRINT BYTE
+; vmsrc/apple/cmdjit.pla: 0403: //
+; vmsrc/apple/cmdjit.pla: 0404: asm prbyte(b)#0
+_P005 					; prbyte(b)#0()
+_A010 					; prbyte()
+; vmsrc/apple/cmdjit.pla: 0405:         LDA     ESTKL,X
+        LDA     ESTKL,X
+; vmsrc/apple/cmdjit.pla: 0406: +       STX     ESP
++       STX     ESP
+; vmsrc/apple/cmdjit.pla: 0407:         BIT     ROMEN
+        BIT     ROMEN
+; vmsrc/apple/cmdjit.pla: 0408:         JSR     $FDDA
+        JSR     $FDDA
+; vmsrc/apple/cmdjit.pla: 0409:         LDX     ESP
+        LDX     ESP
+; vmsrc/apple/cmdjit.pla: 0410:         BIT     LCRDEN+LCBNK2
+        BIT     LCRDEN+LCBNK2
+; vmsrc/apple/cmdjit.pla: 0411:         INX
+        INX
+; vmsrc/apple/cmdjit.pla: 0412:         RTS
+        RTS
+; vmsrc/apple/cmdjit.pla: 0413: end
+; vmsrc/apple/cmdjit.pla: 0414: //
+; vmsrc/apple/cmdjit.pla: 0415: // READ STRING
+; vmsrc/apple/cmdjit.pla: 0416: // STR = RDSTR(PROMPTCHAR)
+; vmsrc/apple/cmdjit.pla: 0417: //
+; vmsrc/apple/cmdjit.pla: 0418: asm rdstr(p)#1
+_P009 					; rdstr(p)#1()
+_A011 					; rdstr()
+; vmsrc/apple/cmdjit.pla: 0419:         LDA     ESTKL,X
+        LDA     ESTKL,X
+; vmsrc/apple/cmdjit.pla: 0420:         STA     $33
+        STA     $33
+; vmsrc/apple/cmdjit.pla: 0421:         STX     ESP
+        STX     ESP
+; vmsrc/apple/cmdjit.pla: 0422:         BIT     ROMEN
+        BIT     ROMEN
+; vmsrc/apple/cmdjit.pla: 0423:         JSR     $FD6A
+        JSR     $FD6A
+; vmsrc/apple/cmdjit.pla: 0424:         STX     $01FF
+        STX     $01FF
+; vmsrc/apple/cmdjit.pla: 0425: -       LDA     $01FF,X
+-       LDA     $01FF,X
+; vmsrc/apple/cmdjit.pla: 0426:         AND     #$7F
+        AND     #$7F
+; vmsrc/apple/cmdjit.pla: 0427:         STA     $01FF,X
+        STA     $01FF,X
+; vmsrc/apple/cmdjit.pla: 0428:         DEX
+        DEX
+; vmsrc/apple/cmdjit.pla: 0429:         BPL     -
+        BPL     -
+; vmsrc/apple/cmdjit.pla: 0430:         TXA
+        TXA
+; vmsrc/apple/cmdjit.pla: 0431:         LDX     ESP
+        LDX     ESP
+; vmsrc/apple/cmdjit.pla: 0432:         STA     ESTKL,X
+        STA     ESTKL,X
+; vmsrc/apple/cmdjit.pla: 0433:         LDA     #$01
+        LDA     #$01
+; vmsrc/apple/cmdjit.pla: 0434:         STA     ESTKH,X
+        STA     ESTKH,X
+; vmsrc/apple/cmdjit.pla: 0435:         BIT     LCRDEN+LCBNK2
+        BIT     LCRDEN+LCBNK2
+; vmsrc/apple/cmdjit.pla: 0436:         RTS
+        RTS
+; vmsrc/apple/cmdjit.pla: 0437: end
+; vmsrc/apple/cmdjit.pla: 0438: asm uword_isge(a,b)#1
+_P021 					; uword_isge(a,b)#1()
+_A012 					; uword_isge()
+; vmsrc/apple/cmdjit.pla: 0439:         LDA     ESTKL+1,X
+        LDA     ESTKL+1,X
+; vmsrc/apple/cmdjit.pla: 0440:         CMP     ESTKL,X
+        CMP     ESTKL,X
+; vmsrc/apple/cmdjit.pla: 0441:         LDA     ESTKH+1,X
+        LDA     ESTKH+1,X
+; vmsrc/apple/cmdjit.pla: 0442:         SBC     ESTKH,X
+        SBC     ESTKH,X
+; vmsrc/apple/cmdjit.pla: 0443:         LDA     #$FF
+        LDA     #$FF
+; vmsrc/apple/cmdjit.pla: 0444:         ADC     #$00
+        ADC     #$00
+; vmsrc/apple/cmdjit.pla: 0445:         EOR     #$FF
+        EOR     #$FF
+; vmsrc/apple/cmdjit.pla: 0446:         STA     ESTKL+1,X
+        STA     ESTKL+1,X
+; vmsrc/apple/cmdjit.pla: 0447:         STA     ESTKH+1,X
+        STA     ESTKH+1,X
+; vmsrc/apple/cmdjit.pla: 0448:         INX
+        INX
+; vmsrc/apple/cmdjit.pla: 0449:         RTS
+        RTS
+; vmsrc/apple/cmdjit.pla: 0450: end
+; vmsrc/apple/cmdjit.pla: 0451: asm uword_isle(a,b)#1
+_P023 					; uword_isle(a,b)#1()
+_A013 					; uword_isle()
+; vmsrc/apple/cmdjit.pla: 0452:         LDA     ESTKL,X
+        LDA     ESTKL,X
+; vmsrc/apple/cmdjit.pla: 0453:         CMP     ESTKL+1,X
+        CMP     ESTKL+1,X
+; vmsrc/apple/cmdjit.pla: 0454:         LDA     ESTKH,X
+        LDA     ESTKH,X
+; vmsrc/apple/cmdjit.pla: 0455:         SBC     ESTKH+1,X
+        SBC     ESTKH+1,X
+; vmsrc/apple/cmdjit.pla: 0456:         LDA     #$FF
+        LDA     #$FF
+; vmsrc/apple/cmdjit.pla: 0457:         ADC     #$00
+        ADC     #$00
+; vmsrc/apple/cmdjit.pla: 0458:         EOR     #$FF
+        EOR     #$FF
+; vmsrc/apple/cmdjit.pla: 0459:         STA     ESTKL+1,X
+        STA     ESTKL+1,X
+; vmsrc/apple/cmdjit.pla: 0460:         STA     ESTKH+1,X
+        STA     ESTKH+1,X
+; vmsrc/apple/cmdjit.pla: 0461:         INX
+        INX
+; vmsrc/apple/cmdjit.pla: 0462:         RTS
+        RTS
+; vmsrc/apple/cmdjit.pla: 0463: end
+; vmsrc/apple/cmdjit.pla: 0464: asm uword_isgt(a,b)#1
+_P020 					; uword_isgt(a,b)#1()
+_A014 					; uword_isgt()
+; vmsrc/apple/cmdjit.pla: 0465:         LDA     ESTKL,X
+        LDA     ESTKL,X
+; vmsrc/apple/cmdjit.pla: 0466:         CMP     ESTKL+1,X
+        CMP     ESTKL+1,X
+; vmsrc/apple/cmdjit.pla: 0467:         LDA     ESTKH,X
+        LDA     ESTKH,X
+; vmsrc/apple/cmdjit.pla: 0468:         SBC     ESTKH+1,X
+        SBC     ESTKH+1,X
+; vmsrc/apple/cmdjit.pla: 0469:         LDA     #$FF
+        LDA     #$FF
+; vmsrc/apple/cmdjit.pla: 0470:         ADC     #$00
+        ADC     #$00
+; vmsrc/apple/cmdjit.pla: 0471:         STA     ESTKL+1,X
+        STA     ESTKL+1,X
+; vmsrc/apple/cmdjit.pla: 0472:         STA     ESTKH+1,X
+        STA     ESTKH+1,X
+; vmsrc/apple/cmdjit.pla: 0473:         INX
+        INX
+; vmsrc/apple/cmdjit.pla: 0474:         RTS
+        RTS
+; vmsrc/apple/cmdjit.pla: 0475: end
+; vmsrc/apple/cmdjit.pla: 0476: asm uword_islt(a,b)#1
+_P022 					; uword_islt(a,b)#1()
+_A015 					; uword_islt()
+; vmsrc/apple/cmdjit.pla: 0477:         LDA     ESTKL+1,X
+        LDA     ESTKL+1,X
+; vmsrc/apple/cmdjit.pla: 0478:         CMP     ESTKL,X
+        CMP     ESTKL,X
+; vmsrc/apple/cmdjit.pla: 0479:         LDA     ESTKH+1,X
+        LDA     ESTKH+1,X
+; vmsrc/apple/cmdjit.pla: 0480:         SBC     ESTKH,X
+        SBC     ESTKH,X
+; vmsrc/apple/cmdjit.pla: 0481:         LDA     #$FF
+        LDA     #$FF
+; vmsrc/apple/cmdjit.pla: 0482:         ADC     #$00
+        ADC     #$00
+; vmsrc/apple/cmdjit.pla: 0483:         STA     ESTKL+1,X
+        STA     ESTKL+1,X
+; vmsrc/apple/cmdjit.pla: 0484:         STA     ESTKH+1,X
+        STA     ESTKH+1,X
+; vmsrc/apple/cmdjit.pla: 0485:         INX
+        INX
+; vmsrc/apple/cmdjit.pla: 0486:         RTS
+        RTS
+; vmsrc/apple/cmdjit.pla: 0487: end
+; vmsrc/apple/cmdjit.pla: 0488: asm divmod(a,b)#2
+_P025 					; divmod(a,b)#2()
+_A016 					; divmod()
+; vmsrc/apple/cmdjit.pla: 0489:         JSR     INTERP          ; CALL INTERP
+        JSR     INTERP          ; CALL INTERP
+; vmsrc/apple/cmdjit.pla: 0490:         !BYTE   $36, $5C        ; DIVMOD, RET
+        !BYTE   $36, $5C        ; DIVMOD, RET
+; vmsrc/apple/cmdjit.pla: 0491: end
+; vmsrc/apple/cmdjit.pla: 0492: asm sext(a)#1
+_P024 					; sext(a)#1()
+_A017 					; sext()
+; vmsrc/apple/cmdjit.pla: 0493:         LDY     #$00
+        LDY     #$00
+; vmsrc/apple/cmdjit.pla: 0494:         LDA     ESTKL,X
+        LDA     ESTKL,X
+; vmsrc/apple/cmdjit.pla: 0495:         BPL     +
+        BPL     +
+; vmsrc/apple/cmdjit.pla: 0496:         DEY
+        DEY
+; vmsrc/apple/cmdjit.pla: 0497: +       STY     ESTKH,X
++       STY     ESTKH,X
+; vmsrc/apple/cmdjit.pla: 0498:         RTS
+        RTS
+; vmsrc/apple/cmdjit.pla: 0499: end
+; vmsrc/apple/cmdjit.pla: 0500: //
+; vmsrc/apple/cmdjit.pla: 0501: // Utility routines.
+; vmsrc/apple/cmdjit.pla: 0502: //
+; vmsrc/apple/cmdjit.pla: 0503: // A DCI string is one that has the high bit set for every character except the last.
+; vmsrc/apple/cmdjit.pla: 0504: // More efficient than C or Pascal strings.
+; vmsrc/apple/cmdjit.pla: 0505: //
+; vmsrc/apple/cmdjit.pla: 0506: //def dcitos(dci, str)
+; vmsrc/apple/cmdjit.pla: 0507: //    byte len, c
+; vmsrc/apple/cmdjit.pla: 0508: //    len = 0
+; vmsrc/apple/cmdjit.pla: 0509: //    repeat
+; vmsrc/apple/cmdjit.pla: 0510: //        c = (dci).[len]
+; vmsrc/apple/cmdjit.pla: 0511: //        len = len + 1
+; vmsrc/apple/cmdjit.pla: 0512: //        (str).[len] = c & $7F
+; vmsrc/apple/cmdjit.pla: 0513: //    until !(c & $80)
+; vmsrc/apple/cmdjit.pla: 0514: //    ^str = len
+; vmsrc/apple/cmdjit.pla: 0515: //    return len
+; vmsrc/apple/cmdjit.pla: 0516: //end
+; vmsrc/apple/cmdjit.pla: 0517: asm dcitos(dci, str)#1
+_A018 					; dcitos()
+; vmsrc/apple/cmdjit.pla: 0518:         LDA     ESTKL,X
+        LDA     ESTKL,X
+; vmsrc/apple/cmdjit.pla: 0519:         STA     DSTL
+        STA     DSTL
+; vmsrc/apple/cmdjit.pla: 0520:         LDA     ESTKH,X
+        LDA     ESTKH,X
+; vmsrc/apple/cmdjit.pla: 0521:         STA     DSTH
+        STA     DSTH
+; vmsrc/apple/cmdjit.pla: 0522:         LDA     ESTKL+1,X
+        LDA     ESTKL+1,X
+; vmsrc/apple/cmdjit.pla: 0523:         STA     SRCL
+        STA     SRCL
+; vmsrc/apple/cmdjit.pla: 0524:         LDA     ESTKH+1,X
+        LDA     ESTKH+1,X
+; vmsrc/apple/cmdjit.pla: 0525:         STA     SRCH
+        STA     SRCH
+; vmsrc/apple/cmdjit.pla: 0526:         LDY     #$00
+        LDY     #$00
+; vmsrc/apple/cmdjit.pla: 0527: -       LDA     (SRC),Y
+-       LDA     (SRC),Y
+; vmsrc/apple/cmdjit.pla: 0528:         CMP     #$80
+        CMP     #$80
+; vmsrc/apple/cmdjit.pla: 0529:         AND     #$7F
+        AND     #$7F
+; vmsrc/apple/cmdjit.pla: 0530:         INY
+        INY
+; vmsrc/apple/cmdjit.pla: 0531:         STA     (DST),Y
+        STA     (DST),Y
+; vmsrc/apple/cmdjit.pla: 0532:         BCS     -
+        BCS     -
+; vmsrc/apple/cmdjit.pla: 0533:         TYA
+        TYA
+; vmsrc/apple/cmdjit.pla: 0534:         LDY     #$00
+        LDY     #$00
+; vmsrc/apple/cmdjit.pla: 0535:         STA     (DST),Y
+        STA     (DST),Y
+; vmsrc/apple/cmdjit.pla: 0536:         INX
+        INX
+; vmsrc/apple/cmdjit.pla: 0537:         STA     ESTKL,X
+        STA     ESTKL,X
+; vmsrc/apple/cmdjit.pla: 0538:         STY     ESTKH,X
+        STY     ESTKH,X
+; vmsrc/apple/cmdjit.pla: 0539:         RTS
+        RTS
+; vmsrc/apple/cmdjit.pla: 0540: end
+; vmsrc/apple/cmdjit.pla: 0541: //def stodci(str, dci)
+; vmsrc/apple/cmdjit.pla: 0542: //    byte len, c
+; vmsrc/apple/cmdjit.pla: 0543: //    len = ^str
+; vmsrc/apple/cmdjit.pla: 0544: //    if len == 0
+; vmsrc/apple/cmdjit.pla: 0545: //        return
+; vmsrc/apple/cmdjit.pla: 0546: //    fin
+; vmsrc/apple/cmdjit.pla: 0547: //    c = toupper((str).[len]) & $7F
+; vmsrc/apple/cmdjit.pla: 0548: //    len = len - 1
+; vmsrc/apple/cmdjit.pla: 0549: //    (dci).[len] = c
+; vmsrc/apple/cmdjit.pla: 0550: //    while len
+; vmsrc/apple/cmdjit.pla: 0551: //      c = toupper((str).[len]) | $80
+; vmsrc/apple/cmdjit.pla: 0552: //      len = len - 1
+; vmsrc/apple/cmdjit.pla: 0553: //      (dci).[len] = c
+; vmsrc/apple/cmdjit.pla: 0554: //    loop
+; vmsrc/apple/cmdjit.pla: 0555: //    return ^str
+; vmsrc/apple/cmdjit.pla: 0556: //end
+; vmsrc/apple/cmdjit.pla: 0557: asm stodci(str,dci)#1
+_A019 					; stodci()
+; vmsrc/apple/cmdjit.pla: 0558:         LDA     ESTKL,X
+        LDA     ESTKL,X
+; vmsrc/apple/cmdjit.pla: 0559:         STA     DSTL
+        STA     DSTL
+; vmsrc/apple/cmdjit.pla: 0560:         LDA     ESTKH,X
+        LDA     ESTKH,X
+; vmsrc/apple/cmdjit.pla: 0561:         STA     DSTH
+        STA     DSTH
+; vmsrc/apple/cmdjit.pla: 0562:         LDA     ESTKL+1,X
+        LDA     ESTKL+1,X
+; vmsrc/apple/cmdjit.pla: 0563:         STA     SRCL
+        STA     SRCL
+; vmsrc/apple/cmdjit.pla: 0564:         LDA     ESTKH+1,X
+        LDA     ESTKH+1,X
+; vmsrc/apple/cmdjit.pla: 0565:         STA     SRCH
+        STA     SRCH
+; vmsrc/apple/cmdjit.pla: 0566:         INX
+        INX
+; vmsrc/apple/cmdjit.pla: 0567:         LDY     #$00
+        LDY     #$00
+; vmsrc/apple/cmdjit.pla: 0568:         LDA     (SRC),Y
+        LDA     (SRC),Y
+; vmsrc/apple/cmdjit.pla: 0569:         BEQ     ++
+        BEQ     ++
+; vmsrc/apple/cmdjit.pla: 0570:         TAY
+        TAY
+; vmsrc/apple/cmdjit.pla: 0571:         LDA     (SRC),Y
+        LDA     (SRC),Y
+; vmsrc/apple/cmdjit.pla: 0572:         JSR     TOUPR
+        JSR     TOUPR
+; vmsrc/apple/cmdjit.pla: 0573:         BNE     +
+        BNE     +
+; vmsrc/apple/cmdjit.pla: 0574: -       LDA     (SRC),Y
+-       LDA     (SRC),Y
+; vmsrc/apple/cmdjit.pla: 0575:         JSR     TOUPR
+        JSR     TOUPR
+; vmsrc/apple/cmdjit.pla: 0576:         ORA     #$80
+        ORA     #$80
+; vmsrc/apple/cmdjit.pla: 0577: +       DEY
++       DEY
+; vmsrc/apple/cmdjit.pla: 0578:         STA     (DST),Y
+        STA     (DST),Y
+; vmsrc/apple/cmdjit.pla: 0579:         BNE     -
+        BNE     -
+; vmsrc/apple/cmdjit.pla: 0580:         LDA     (SRC),Y
+        LDA     (SRC),Y
+; vmsrc/apple/cmdjit.pla: 0581: ++      STA     ESTKL,X
+++      STA     ESTKL,X
+; vmsrc/apple/cmdjit.pla: 0582:         STY     ESTKH,X
+        STY     ESTKH,X
+; vmsrc/apple/cmdjit.pla: 0583:         RTS
+        RTS
+; vmsrc/apple/cmdjit.pla: 0584: end
+; vmsrc/apple/cmdjit.pla: 0585: asm toupper(c)#1
+_P010 					; toupper(c)#1()
+_A020 					; toupper()
+; vmsrc/apple/cmdjit.pla: 0586:         LDA     ESTKL,X
+        LDA     ESTKL,X
+; vmsrc/apple/cmdjit.pla: 0587: TOUPR   AND     #$7F
+TOUPR   AND     #$7F
+; vmsrc/apple/cmdjit.pla: 0588:         CMP     #'a'
+        CMP     #'a'
+; vmsrc/apple/cmdjit.pla: 0589:         BCC     +
+        BCC     +
+; vmsrc/apple/cmdjit.pla: 0590:         CMP     #'z'+1
+        CMP     #'z'+1
+; vmsrc/apple/cmdjit.pla: 0591:         BCS     +
+        BCS     +
+; vmsrc/apple/cmdjit.pla: 0592:         SBC     #$1F
+        SBC     #$1F
+; vmsrc/apple/cmdjit.pla: 0593: +       STA     ESTKL,X
++       STA     ESTKL,X
+; vmsrc/apple/cmdjit.pla: 0594:         RTS
+        RTS
+; vmsrc/apple/cmdjit.pla: 0595: end
+; vmsrc/apple/cmdjit.pla: 0596: //
+; vmsrc/apple/cmdjit.pla: 0597: // Lookup routines.
+; vmsrc/apple/cmdjit.pla: 0598: //
+; vmsrc/apple/cmdjit.pla: 0599: //def lookuptbl(dci, tbl)
+; vmsrc/apple/cmdjit.pla: 0600: //    word match
+; vmsrc/apple/cmdjit.pla: 0601: //    while ^tbl
+; vmsrc/apple/cmdjit.pla: 0602: //        match = dci
+; vmsrc/apple/cmdjit.pla: 0603: //        while ^tbl == ^match
+; vmsrc/apple/cmdjit.pla: 0604: //            if !(^tbl & $80)
+; vmsrc/apple/cmdjit.pla: 0605: //                return (tbl):1
+; vmsrc/apple/cmdjit.pla: 0606: //            fin
+; vmsrc/apple/cmdjit.pla: 0607: //            tbl   = tbl   + 1
+; vmsrc/apple/cmdjit.pla: 0608: //            match = match + 1
+; vmsrc/apple/cmdjit.pla: 0609: //        loop
+; vmsrc/apple/cmdjit.pla: 0610: //        while (^tbl & $80)
+; vmsrc/apple/cmdjit.pla: 0611: //            tbl = tbl + 1
+; vmsrc/apple/cmdjit.pla: 0612: //        loop
+; vmsrc/apple/cmdjit.pla: 0613: //        tbl = tbl + 3
+; vmsrc/apple/cmdjit.pla: 0614: //    loop
+; vmsrc/apple/cmdjit.pla: 0615: //    return 0
+; vmsrc/apple/cmdjit.pla: 0616: asm lookuptbl(dci, tbl)#1
+_A021 					; lookuptbl()
+; vmsrc/apple/cmdjit.pla: 0617:         LDA     ESTKL,X
+        LDA     ESTKL,X
+; vmsrc/apple/cmdjit.pla: 0618:         STA     DSTL
+        STA     DSTL
+; vmsrc/apple/cmdjit.pla: 0619:         LDA     ESTKH,X
+        LDA     ESTKH,X
+; vmsrc/apple/cmdjit.pla: 0620:         STA     DSTH
+        STA     DSTH
+; vmsrc/apple/cmdjit.pla: 0621:         INX
+        INX
+; vmsrc/apple/cmdjit.pla: 0622:         LDA     ESTKL,X
+        LDA     ESTKL,X
+; vmsrc/apple/cmdjit.pla: 0623:         STA     SRCL
+        STA     SRCL
+; vmsrc/apple/cmdjit.pla: 0624:         LDA     ESTKH,X
+        LDA     ESTKH,X
+; vmsrc/apple/cmdjit.pla: 0625:         STA     SRCH
+        STA     SRCH
+; vmsrc/apple/cmdjit.pla: 0626: --      LDY     #$00
+--      LDY     #$00
+; vmsrc/apple/cmdjit.pla: 0627: -       LDA     (DST),Y
+-       LDA     (DST),Y
+; vmsrc/apple/cmdjit.pla: 0628:         BEQ     +
+        BEQ     +
+; vmsrc/apple/cmdjit.pla: 0629:         CMP     (SRC),Y
+        CMP     (SRC),Y
+; vmsrc/apple/cmdjit.pla: 0630:         BNE     ++
+        BNE     ++
+; vmsrc/apple/cmdjit.pla: 0631:         INY
+        INY
+; vmsrc/apple/cmdjit.pla: 0632:         ASL
+        ASL
+; vmsrc/apple/cmdjit.pla: 0633:         BCS     -
+        BCS     -
+; vmsrc/apple/cmdjit.pla: 0634:         LDA     (DST),Y
+        LDA     (DST),Y
+; vmsrc/apple/cmdjit.pla: 0635:         STA     ESTKL,X             ; MATCH
+        STA     ESTKL,X             ; MATCH
+; vmsrc/apple/cmdjit.pla: 0636:         INY
+        INY
+; vmsrc/apple/cmdjit.pla: 0637:         LDA     (DST),Y
+        LDA     (DST),Y
+; vmsrc/apple/cmdjit.pla: 0638:         STA     ESTKH,X
+        STA     ESTKH,X
+; vmsrc/apple/cmdjit.pla: 0639:         RTS
+        RTS
+; vmsrc/apple/cmdjit.pla: 0640: +       STA     ESTKL,X             ; NO MATCH
++       STA     ESTKL,X             ; NO MATCH
+; vmsrc/apple/cmdjit.pla: 0641:         STA     ESTKH,X
+        STA     ESTKH,X
+; vmsrc/apple/cmdjit.pla: 0642:         RTS
+        RTS
+; vmsrc/apple/cmdjit.pla: 0643: ++
+++
+; vmsrc/apple/cmdjit.pla: 0644: -       LDA     (DST),Y             ; NEXT ENTRY
+-       LDA     (DST),Y             ; NEXT ENTRY
+; vmsrc/apple/cmdjit.pla: 0645:         BPL     +
+        BPL     +
+; vmsrc/apple/cmdjit.pla: 0646:         INY
+        INY
+; vmsrc/apple/cmdjit.pla: 0647:         BNE     -
+        BNE     -
+; vmsrc/apple/cmdjit.pla: 0648: +       TYA
++       TYA
+; vmsrc/apple/cmdjit.pla: 0649:         CLC
+        CLC
+; vmsrc/apple/cmdjit.pla: 0650:         ADC     #$03
+        ADC     #$03
+; vmsrc/apple/cmdjit.pla: 0651:         ADC     DSTL
+        ADC     DSTL
+; vmsrc/apple/cmdjit.pla: 0652:         STA     DSTL
+        STA     DSTL
+; vmsrc/apple/cmdjit.pla: 0653:         BCC     --
+        BCC     --
+; vmsrc/apple/cmdjit.pla: 0654:         INC     DSTH
+        INC     DSTH
+; vmsrc/apple/cmdjit.pla: 0655:         BNE     --
+        BNE     --
+; vmsrc/apple/cmdjit.pla: 0656: end
+; vmsrc/apple/cmdjit.pla: 0657: // def lookupidx(esd, index)
+; vmsrc/apple/cmdjit.pla: 0658: //    word sym
+; vmsrc/apple/cmdjit.pla: 0659: //    while ^esd
+; vmsrc/apple/cmdjit.pla: 0660: //        sym = esd
+; vmsrc/apple/cmdjit.pla: 0661: //        esd = sym + dcitos(sym, @str)
+; vmsrc/apple/cmdjit.pla: 0662: //        if esd->0 & $10 and esd->1 == index
+; vmsrc/apple/cmdjit.pla: 0663: //            return sym
+; vmsrc/apple/cmdjit.pla: 0664: //        fin
+; vmsrc/apple/cmdjit.pla: 0665: //        esd = esd + 3
+; vmsrc/apple/cmdjit.pla: 0666: //    loop
+; vmsrc/apple/cmdjit.pla: 0667: //end
+; vmsrc/apple/cmdjit.pla: 0668: asm lookupidx(esd, index)#1
+_A022 					; lookupidx()
+; vmsrc/apple/cmdjit.pla: 0669:         LDA     ESTKL,X
+        LDA     ESTKL,X
+; vmsrc/apple/cmdjit.pla: 0670:         STA     TMPL
+        STA     TMPL
+; vmsrc/apple/cmdjit.pla: 0671:         INX
+        INX
+; vmsrc/apple/cmdjit.pla: 0672: ---     LDA     ESTKH,X
+---     LDA     ESTKH,X
+; vmsrc/apple/cmdjit.pla: 0673:         STA     SRCH
+        STA     SRCH
+; vmsrc/apple/cmdjit.pla: 0674:         LDA     ESTKL,X
+        LDA     ESTKL,X
+; vmsrc/apple/cmdjit.pla: 0675: --      STA     SRCL
+--      STA     SRCL
+; vmsrc/apple/cmdjit.pla: 0676:         LDY     #$00
+        LDY     #$00
+; vmsrc/apple/cmdjit.pla: 0677: -       LDA     (SRC),Y
+-       LDA     (SRC),Y
+; vmsrc/apple/cmdjit.pla: 0678:         BPL     +
+        BPL     +
+; vmsrc/apple/cmdjit.pla: 0679:         INY
+        INY
+; vmsrc/apple/cmdjit.pla: 0680:         BNE     -
+        BNE     -
+; vmsrc/apple/cmdjit.pla: 0681: +       BEQ     ++              ; END OF ESD
++       BEQ     ++              ; END OF ESD
+; vmsrc/apple/cmdjit.pla: 0682:         INY
+        INY
+; vmsrc/apple/cmdjit.pla: 0683:         LDA     (SRC),Y
+        LDA     (SRC),Y
+; vmsrc/apple/cmdjit.pla: 0684:         INY
+        INY
+; vmsrc/apple/cmdjit.pla: 0685:         AND     #$10            ; EXTERN FLAG?
+        AND     #$10            ; EXTERN FLAG?
+; vmsrc/apple/cmdjit.pla: 0686:         BEQ     +
+        BEQ     +
+; vmsrc/apple/cmdjit.pla: 0687:         LDA     (SRC),Y
+        LDA     (SRC),Y
+; vmsrc/apple/cmdjit.pla: 0688:         CMP     TMPL
+        CMP     TMPL
+; vmsrc/apple/cmdjit.pla: 0689:         BEQ     +++             ; MATCH
+        BEQ     +++             ; MATCH
+; vmsrc/apple/cmdjit.pla: 0690: +       INY
++       INY
+; vmsrc/apple/cmdjit.pla: 0691:         TYA
+        TYA
+; vmsrc/apple/cmdjit.pla: 0692:         SEC
+        SEC
+; vmsrc/apple/cmdjit.pla: 0693:         ADC     SRCL
+        ADC     SRCL
+; vmsrc/apple/cmdjit.pla: 0694:         STA     ESTKL,X         ; SYM PTRL
+        STA     ESTKL,X         ; SYM PTRL
+; vmsrc/apple/cmdjit.pla: 0695:         BCC     --
+        BCC     --
+; vmsrc/apple/cmdjit.pla: 0696:         INC     ESTKH,X         ; SYM PTRH
+        INC     ESTKH,X         ; SYM PTRH
+; vmsrc/apple/cmdjit.pla: 0697:         BNE     ---
+        BNE     ---
+; vmsrc/apple/cmdjit.pla: 0698: ++      STA     ESTKL,X         ; END OF ESD
+++      STA     ESTKL,X         ; END OF ESD
+; vmsrc/apple/cmdjit.pla: 0699:         STA     ESTKH,X
+        STA     ESTKH,X
+; vmsrc/apple/cmdjit.pla: 0700: +++     RTS
++++     RTS
+; vmsrc/apple/cmdjit.pla: 0701: end
+; vmsrc/apple/cmdjit.pla: 0702: //def lookupdef(addr, deftbl)#1
+; vmsrc/apple/cmdjit.pla: 0703: //    while deftbl->interpjsr == $20
+; vmsrc/apple/cmdjit.pla: 0704: //        if deftbl=>bytecodeaddr == addr
+; vmsrc/apple/cmdjit.pla: 0705: //            return deftbl
+; vmsrc/apple/cmdjit.pla: 0706: //        fin
+; vmsrc/apple/cmdjit.pla: 0707: //        deftbl = deftbl + t_defentry
+; vmsrc/apple/cmdjit.pla: 0708: //    loop
+; vmsrc/apple/cmdjit.pla: 0709: //    return 0
+; vmsrc/apple/cmdjit.pla: 0710: //end
+; vmsrc/apple/cmdjit.pla: 0711: asm lookupdef(addr, deftbl)#1
+_A023 					; lookupdef()
+; vmsrc/apple/cmdjit.pla: 0712:         LDA     ESTKH,X
+        LDA     ESTKH,X
+; vmsrc/apple/cmdjit.pla: 0713:         STA     SRCH
+        STA     SRCH
+; vmsrc/apple/cmdjit.pla: 0714:         LDA     ESTKL,X
+        LDA     ESTKL,X
+; vmsrc/apple/cmdjit.pla: 0715:         STA     SRCL
+        STA     SRCL
+; vmsrc/apple/cmdjit.pla: 0716:         INX
+        INX
+; vmsrc/apple/cmdjit.pla: 0717: -       LDY     #$00
+-       LDY     #$00
+; vmsrc/apple/cmdjit.pla: 0718:         LDA     (SRC),Y
+        LDA     (SRC),Y
+; vmsrc/apple/cmdjit.pla: 0719:         CMP     #$20            ; JSR OPCODE?
+        CMP     #$20            ; JSR OPCODE?
+; vmsrc/apple/cmdjit.pla: 0720:         BNE     ++
+        BNE     ++
+; vmsrc/apple/cmdjit.pla: 0721:         LDY     #$03
+        LDY     #$03
+; vmsrc/apple/cmdjit.pla: 0722:         LDA     (SRC),Y
+        LDA     (SRC),Y
+; vmsrc/apple/cmdjit.pla: 0723:         CMP     ESTKL,X
+        CMP     ESTKL,X
+; vmsrc/apple/cmdjit.pla: 0724:         BNE     +
+        BNE     +
+; vmsrc/apple/cmdjit.pla: 0725:         INY
+        INY
+; vmsrc/apple/cmdjit.pla: 0726:         LDA     (SRC),Y
+        LDA     (SRC),Y
+; vmsrc/apple/cmdjit.pla: 0727:         CMP     ESTKH,X
+        CMP     ESTKH,X
+; vmsrc/apple/cmdjit.pla: 0728:         BNE     +
+        BNE     +
+; vmsrc/apple/cmdjit.pla: 0729:         LDA     SRCL            ; MATCH
+        LDA     SRCL            ; MATCH
+; vmsrc/apple/cmdjit.pla: 0730:         STA     ESTKL,X
+        STA     ESTKL,X
+; vmsrc/apple/cmdjit.pla: 0731:         LDA     SRCH
+        LDA     SRCH
+; vmsrc/apple/cmdjit.pla: 0732:         STA     ESTKH,X
+        STA     ESTKH,X
+; vmsrc/apple/cmdjit.pla: 0733:         RTS
+        RTS
+; vmsrc/apple/cmdjit.pla: 0734: +       LDA     #$07            ; NEXT ENTRY
++       LDA     #$07            ; NEXT ENTRY
+; vmsrc/apple/cmdjit.pla: 0735:         CLC
+        CLC
+; vmsrc/apple/cmdjit.pla: 0736:         ADC     SRCL
+        ADC     SRCL
+; vmsrc/apple/cmdjit.pla: 0737:         STA     SRCL
+        STA     SRCL
+; vmsrc/apple/cmdjit.pla: 0738:         BCC     -
+        BCC     -
+; vmsrc/apple/cmdjit.pla: 0739:         INC     SRCH
+        INC     SRCH
+; vmsrc/apple/cmdjit.pla: 0740:         BNE     -
+        BNE     -
+; vmsrc/apple/cmdjit.pla: 0741: ++      STY     ESTKL,X
+++      STY     ESTKL,X
+; vmsrc/apple/cmdjit.pla: 0742:         STY     ESTKH,X
+        STY     ESTKH,X
+; vmsrc/apple/cmdjit.pla: 0743:         RTS
+        RTS
+; vmsrc/apple/cmdjit.pla: 0744: end
+; vmsrc/apple/cmdjit.pla: 0745: //
+; vmsrc/apple/cmdjit.pla: 0746: // Reloc internal data
+; vmsrc/apple/cmdjit.pla: 0747: //
+; vmsrc/apple/cmdjit.pla: 0748: //def reloc(modfix, modofst, bytecode, rld)#3
+; vmsrc/apple/cmdjit.pla: 0749: //    word addr, fixup
+; vmsrc/apple/cmdjit.pla: 0750: //    while ^rld
+; vmsrc/apple/cmdjit.pla: 0751: //        if ^rld & $10 // EXTERN reference.
+; vmsrc/apple/cmdjit.pla: 0752: //            return rld, addr, fixup
+; vmsrc/apple/cmdjit.pla: 0753: //        fin
+; vmsrc/apple/cmdjit.pla: 0754: //        addr = rld=>1 + modfix
+; vmsrc/apple/cmdjit.pla: 0755: //        fixup = *addr + modofst
+; vmsrc/apple/cmdjit.pla: 0756: //        if uword_isge(fixup, bytecode) // Bytecode address.
+; vmsrc/apple/cmdjit.pla: 0757: //            return rld, addr, fixup
+; vmsrc/apple/cmdjit.pla: 0758: //        fin
+; vmsrc/apple/cmdjit.pla: 0759: //        *addr = fixup
+; vmsrc/apple/cmdjit.pla: 0760: //        rld = rld + 4
+; vmsrc/apple/cmdjit.pla: 0761: //    loop
+; vmsrc/apple/cmdjit.pla: 0762: //    return rld, addr, fixup
+; vmsrc/apple/cmdjit.pla: 0763: //end
+; vmsrc/apple/cmdjit.pla: 0764: asm reloc(modfix, modofst, bytecode, rld)#3
+_A024 					; reloc()
+; vmsrc/apple/cmdjit.pla: 0765:         LDA     ESTKL,X
+        LDA     ESTKL,X
+; vmsrc/apple/cmdjit.pla: 0766:         STA     SRCL
+        STA     SRCL
+; vmsrc/apple/cmdjit.pla: 0767:         LDA     ESTKH,X
+        LDA     ESTKH,X
+; vmsrc/apple/cmdjit.pla: 0768:         STA     SRCH
+        STA     SRCH
+; vmsrc/apple/cmdjit.pla: 0769:         LDY     #$00
+        LDY     #$00
+; vmsrc/apple/cmdjit.pla: 0770: -       LDA     (SRC),Y
+-       LDA     (SRC),Y
+; vmsrc/apple/cmdjit.pla: 0771:         BEQ     RLDEX       ; END OF RLD
+        BEQ     RLDEX       ; END OF RLD
+; vmsrc/apple/cmdjit.pla: 0772:         PHA
+        PHA
+; vmsrc/apple/cmdjit.pla: 0773:         INY
+        INY
+; vmsrc/apple/cmdjit.pla: 0774:         LDA     (SRC),Y
+        LDA     (SRC),Y
+; vmsrc/apple/cmdjit.pla: 0775:         INY
+        INY
+; vmsrc/apple/cmdjit.pla: 0776:         CLC
+        CLC
+; vmsrc/apple/cmdjit.pla: 0777:         ADC     ESTKL+3,X   ; ADDR=ENTRY=>1+MODFIX
+        ADC     ESTKL+3,X   ; ADDR=ENTRY=>1+MODFIX
+; vmsrc/apple/cmdjit.pla: 0778:         STA     DSTL
+        STA     DSTL
+; vmsrc/apple/cmdjit.pla: 0779:         LDA     (SRC),Y
+        LDA     (SRC),Y
+; vmsrc/apple/cmdjit.pla: 0780:         ADC     ESTKH+3,X
+        ADC     ESTKH+3,X
+; vmsrc/apple/cmdjit.pla: 0781:         STA     DSTH
+        STA     DSTH
+; vmsrc/apple/cmdjit.pla: 0782:         PLA
+        PLA
+; vmsrc/apple/cmdjit.pla: 0783:         AND     #$10        ; EXTERN REF - EXIT
+        AND     #$10        ; EXTERN REF - EXIT
+; vmsrc/apple/cmdjit.pla: 0784:         BNE     RLDEX
+        BNE     RLDEX
+; vmsrc/apple/cmdjit.pla: 0785:         TAY                 ; FIXUP=*ADDR+MODOFST
+        TAY                 ; FIXUP=*ADDR+MODOFST
+; vmsrc/apple/cmdjit.pla: 0786:         LDA     (DST),Y
+        LDA     (DST),Y
+; vmsrc/apple/cmdjit.pla: 0787:         INY
+        INY
+; vmsrc/apple/cmdjit.pla: 0788:         CLC
+        CLC
+; vmsrc/apple/cmdjit.pla: 0789:         ADC     ESTKL+2,X
+        ADC     ESTKL+2,X
+; vmsrc/apple/cmdjit.pla: 0790:         STA     TMPL
+        STA     TMPL
+; vmsrc/apple/cmdjit.pla: 0791:         LDA     (DST),Y
+        LDA     (DST),Y
+; vmsrc/apple/cmdjit.pla: 0792:         ADC     ESTKH+2,X
+        ADC     ESTKH+2,X
+; vmsrc/apple/cmdjit.pla: 0793:         CMP     ESTKH+1,X   ; FIXUP >= BYTECODE?
+        CMP     ESTKH+1,X   ; FIXUP >= BYTECODE?
+; vmsrc/apple/cmdjit.pla: 0794:         BCC     +
+        BCC     +
+; vmsrc/apple/cmdjit.pla: 0795:         STA     TMPH
+        STA     TMPH
+; vmsrc/apple/cmdjit.pla: 0796:         BNE     RLDEX       ; YEP, EXIT
+        BNE     RLDEX       ; YEP, EXIT
+; vmsrc/apple/cmdjit.pla: 0797:         LDA     TMPL
+        LDA     TMPL
+; vmsrc/apple/cmdjit.pla: 0798:         CMP     ESTKL+1,X
+        CMP     ESTKL+1,X
+; vmsrc/apple/cmdjit.pla: 0799:         BCS     RLDEX       ; YEP, EXIT
+        BCS     RLDEX       ; YEP, EXIT
+; vmsrc/apple/cmdjit.pla: 0800:         LDA     TMPH
+        LDA     TMPH
+; vmsrc/apple/cmdjit.pla: 0801: +       STA     (DST),Y     ; *ADDR=FIXUP
++       STA     (DST),Y     ; *ADDR=FIXUP
+; vmsrc/apple/cmdjit.pla: 0802:         DEY
+        DEY
+; vmsrc/apple/cmdjit.pla: 0803:         LDA     TMPL
+        LDA     TMPL
+; vmsrc/apple/cmdjit.pla: 0804:         STA     (DST),Y
+        STA     (DST),Y
+; vmsrc/apple/cmdjit.pla: 0805:         LDA     SRCL        ; NEXT ENTRY
+        LDA     SRCL        ; NEXT ENTRY
+; vmsrc/apple/cmdjit.pla: 0806: ;       CLC
+;       CLC
+; vmsrc/apple/cmdjit.pla: 0807:         ADC     #$04
+        ADC     #$04
+; vmsrc/apple/cmdjit.pla: 0808:         STA     SRCL
+        STA     SRCL
+; vmsrc/apple/cmdjit.pla: 0809:         BCC     -
+        BCC     -
+; vmsrc/apple/cmdjit.pla: 0810:         INC     SRCH
+        INC     SRCH
+; vmsrc/apple/cmdjit.pla: 0811:         BNE     -
+        BNE     -
+; vmsrc/apple/cmdjit.pla: 0812: RLDEX   INX
+RLDEX   INX
+; vmsrc/apple/cmdjit.pla: 0813:         LDA     TMPL
+        LDA     TMPL
+; vmsrc/apple/cmdjit.pla: 0814:         STA     ESTKL,X
+        STA     ESTKL,X
+; vmsrc/apple/cmdjit.pla: 0815:         LDA     TMPH
+        LDA     TMPH
+; vmsrc/apple/cmdjit.pla: 0816:         STA     ESTKH,X
+        STA     ESTKH,X
+; vmsrc/apple/cmdjit.pla: 0817:         LDA     DSTL
+        LDA     DSTL
+; vmsrc/apple/cmdjit.pla: 0818:         STA     ESTKL+1,X
+        STA     ESTKL+1,X
+; vmsrc/apple/cmdjit.pla: 0819:         LDA     DSTH
+        LDA     DSTH
+; vmsrc/apple/cmdjit.pla: 0820:         STA     ESTKH+1,X
+        STA     ESTKH+1,X
+; vmsrc/apple/cmdjit.pla: 0821:         LDA     SRCL
+        LDA     SRCL
+; vmsrc/apple/cmdjit.pla: 0822:         STA     ESTKL+2,X
+        STA     ESTKL+2,X
+; vmsrc/apple/cmdjit.pla: 0823:         LDA     SRCH
+        LDA     SRCH
+; vmsrc/apple/cmdjit.pla: 0824:         STA     ESTKH+2,X
+        STA     ESTKH+2,X
+; vmsrc/apple/cmdjit.pla: 0825:         RTS
+        RTS
+; vmsrc/apple/cmdjit.pla: 0826: end
+; vmsrc/apple/cmdjit.pla: 0827: //
+; vmsrc/apple/cmdjit.pla: 0828: // Cheap and dirty print integer
+; vmsrc/apple/cmdjit.pla: 0829: //
+; vmsrc/apple/cmdjit.pla: 0830: def print(i)#0
+					; i -> [0]
+_P007 					; print(i)#0()
+_C000 					; print()
+	JSR	INTERP
+; vmsrc/apple/cmdjit.pla: 0831:     if i < 0; cout('-'); i = -i; fin
+	!BYTE	$58,$02,$01		; ENTER	2,1
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$00			; CN	0
+	!BYTE	$46			; ISLT
+	!BYTE	$4C			; BRFLS	_B001
+	!WORD	_B001-*
+	!BYTE	$2A,$2D			; CB	45
+	!BYTE	$54			; CALL	_A006
+_F060 	!WORD	_A006		
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$90			; NEG
+	!BYTE	$76,$00			; SLW	[0]
+_B001 
+_B002 
+; vmsrc/apple/cmdjit.pla: 0832:     if i >= 10; print(i / 10); fin
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$14			; CN	10
+	!BYTE	$48			; ISGE
+	!BYTE	$4C			; BRFLS	_B003
+	!WORD	_B003-*
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$14			; CN	10
+	!BYTE	$88			; DIV
+	!BYTE	$54			; CALL	_C000
+_F061 	!WORD	_C000		
+_B003 
+_B004 
+; vmsrc/apple/cmdjit.pla: 0833:     cout(i % 10 + '0')
+; vmsrc/apple/cmdjit.pla: 0834: end
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$14			; CN	10
+	!BYTE	$8A			; MOD
+	!BYTE	$38,$30			; ADDI	48
+	!BYTE	$54			; CALL	_A006
+_F062 	!WORD	_A006		
+	!BYTE	$5A,$02			; LEAVE	2
+; vmsrc/apple/cmdjit.pla: 0835: //
+; vmsrc/apple/cmdjit.pla: 0836: // ProDOS routines
+; vmsrc/apple/cmdjit.pla: 0837: //
+; vmsrc/apple/cmdjit.pla: 0838: def pfxop(path, op)#1
+					; path -> [0]
+					; op -> [2]
+_C001 					; pfxop()
+	JSR	INTERP
+; vmsrc/apple/cmdjit.pla: 0839:     byte params[3]
+					; params -> [4]
+; vmsrc/apple/cmdjit.pla: 0840: 
+; vmsrc/apple/cmdjit.pla: 0841:     params.0 = 1
+	!BYTE	$58,$07,$02		; ENTER	7,2
+; vmsrc/apple/cmdjit.pla: 0842:     params:1 = path
+; vmsrc/apple/cmdjit.pla: 0843:     perr     = syscall(op, @params)
+; vmsrc/apple/cmdjit.pla: 0844:     return path
+	!BYTE	$02			; CN	1
+	!BYTE	$74,$04			; SLB	[4]
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$76,$05			; SLW	[5]
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$28,$04			; LLA	[4]
+	!BYTE	$54			; CALL	_A000
+_F063 	!WORD	_A000		
+	!BYTE	$78			; SAB	_D033+0
+_F064 	!WORD	_D033+0		
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$5A,$07			; LEAVE	7
+; vmsrc/apple/cmdjit.pla: 0845: end
+; vmsrc/apple/cmdjit.pla: 0846: def open(path)#1
+					; path -> [0]
+_P027 					; open(path)#1()
+_C002 					; open()
+	JSR	INTERP
+; vmsrc/apple/cmdjit.pla: 0847:     byte params[6]
+					; params -> [2]
+; vmsrc/apple/cmdjit.pla: 0848: 
+; vmsrc/apple/cmdjit.pla: 0849:     params.0 = 3
+	!BYTE	$58,$08,$01		; ENTER	8,1
+; vmsrc/apple/cmdjit.pla: 0850:     params:1 = path
+; vmsrc/apple/cmdjit.pla: 0851:     params:3 = iobuffer
+; vmsrc/apple/cmdjit.pla: 0852:     params.5 = 0
+; vmsrc/apple/cmdjit.pla: 0853:     perr     = syscall($C8, @params)
+; vmsrc/apple/cmdjit.pla: 0854:     return params.5
+	!BYTE	$06			; CN	3
+	!BYTE	$74,$02			; SLB	[2]
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$76,$03			; SLW	[3]
+	!BYTE	$2C,$00,$08		; CW	2048
+	!BYTE	$76,$05			; SLW	[5]
+	!BYTE	$00			; CN	0
+	!BYTE	$74,$07			; SLB	[7]
+	!BYTE	$2A,$C8			; CB	200
+	!BYTE	$28,$02			; LLA	[2]
+	!BYTE	$54			; CALL	_A000
+_F065 	!WORD	_A000		
+	!BYTE	$78			; SAB	_D033+0
+_F066 	!WORD	_D033+0		
+	!BYTE	$64,$07			; LLB	[7]
+	!BYTE	$5A,$08			; LEAVE	8
+; vmsrc/apple/cmdjit.pla: 0855: end
+; vmsrc/apple/cmdjit.pla: 0856: def close(refnum)#1
+					; refnum -> [0]
+_P028 					; close(refnum)#1()
+_C003 					; close()
+	JSR	INTERP
+; vmsrc/apple/cmdjit.pla: 0857:     byte params[2]
+					; params -> [2]
+; vmsrc/apple/cmdjit.pla: 0858: 
+; vmsrc/apple/cmdjit.pla: 0859:     params.0 = 1
+	!BYTE	$58,$04,$01		; ENTER	4,1
+; vmsrc/apple/cmdjit.pla: 0860:     params.1 = refnum
+; vmsrc/apple/cmdjit.pla: 0861:     perr     = syscall($CC, @params)
+; vmsrc/apple/cmdjit.pla: 0862:     return perr
+	!BYTE	$02			; CN	1
+	!BYTE	$74,$02			; SLB	[2]
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$74,$03			; SLB	[3]
+	!BYTE	$2A,$CC			; CB	204
+	!BYTE	$28,$02			; LLA	[2]
+	!BYTE	$54			; CALL	_A000
+_F067 	!WORD	_A000		
+	!BYTE	$7C			; DAB	_D033+0
+_F068 	!WORD	_D033+0		
+	!BYTE	$5A,$04			; LEAVE	4
+; vmsrc/apple/cmdjit.pla: 0863: end
+; vmsrc/apple/cmdjit.pla: 0864: def read(refnum, buf, len)#1
+					; refnum -> [0]
+					; buf -> [2]
+					; len -> [4]
+_P029 					; read(refnum, buf, len)#1()
+_C004 					; read()
+	JSR	INTERP
+; vmsrc/apple/cmdjit.pla: 0865:     byte params[8]
+					; params -> [6]
+; vmsrc/apple/cmdjit.pla: 0866: 
+; vmsrc/apple/cmdjit.pla: 0867:     params.0 = 4
+	!BYTE	$58,$0E,$03		; ENTER	14,3
+; vmsrc/apple/cmdjit.pla: 0868:     params.1 = refnum
+; vmsrc/apple/cmdjit.pla: 0869:     params:2 = buf
+; vmsrc/apple/cmdjit.pla: 0870:     params:4 = len
+; vmsrc/apple/cmdjit.pla: 0871:     params:6 = 0
+; vmsrc/apple/cmdjit.pla: 0872:     perr     = syscall($CA, @params)
+; vmsrc/apple/cmdjit.pla: 0873:     return params:6
+	!BYTE	$08			; CN	4
+	!BYTE	$74,$06			; SLB	[6]
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$74,$07			; SLB	[7]
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$76,$08			; SLW	[8]
+	!BYTE	$66,$04			; LLW	[4]
+	!BYTE	$76,$0A			; SLW	[10]
+	!BYTE	$00			; CN	0
+	!BYTE	$76,$0C			; SLW	[12]
+	!BYTE	$2A,$CA			; CB	202
+	!BYTE	$28,$06			; LLA	[6]
+	!BYTE	$54			; CALL	_A000
+_F069 	!WORD	_A000		
+	!BYTE	$78			; SAB	_D033+0
+_F070 	!WORD	_D033+0		
+	!BYTE	$66,$0C			; LLW	[12]
+	!BYTE	$5A,$0E			; LEAVE	14
+; vmsrc/apple/cmdjit.pla: 0874: end
+; vmsrc/apple/cmdjit.pla: 0875: //
+; vmsrc/apple/cmdjit.pla: 0876: // Heap routines.
+; vmsrc/apple/cmdjit.pla: 0877: //
+; vmsrc/apple/cmdjit.pla: 0878: def availheap()#1
+_P015 					; availheap()#1()
+_C005 					; availheap()
+	JSR	INTERP
+; vmsrc/apple/cmdjit.pla: 0879:     byte fp
+					; fp -> [0]
+; vmsrc/apple/cmdjit.pla: 0880:     return @fp - heap
+	!BYTE	$58,$01,$00		; ENTER	1,0
+	!BYTE	$28,$00			; LLA	[0]
+	!BYTE	$6A			; LAW	_D070+0
+_F071 	!WORD	_D070+0		
+	!BYTE	$84			; SUB 
+	!BYTE	$5A,$01			; LEAVE	1
+; vmsrc/apple/cmdjit.pla: 0881: end
+; vmsrc/apple/cmdjit.pla: 0882: def allocheap(size)#1
+					; size -> [0]
+_P012 					; allocheap(size)#1()
+_C006 					; allocheap()
+	JSR	INTERP
+; vmsrc/apple/cmdjit.pla: 0883:     word oldheap, addr
+					; oldheap -> [2]
+					; addr -> [4]
+; vmsrc/apple/cmdjit.pla: 0884:     oldheap = heap
+	!BYTE	$58,$06,$01		; ENTER	6,1
+; vmsrc/apple/cmdjit.pla: 0885:     addr    = heap
+; vmsrc/apple/cmdjit.pla: 0886:     heap    = heap + size
+; vmsrc/apple/cmdjit.pla: 0887:     if systemflags & reshgr1
+; vmsrc/apple/cmdjit.pla: 0888:         if uword_islt(addr, $4000) and uword_isgt(heap, $2000)
+; vmsrc/apple/cmdjit.pla: 0889:             addr = $4000
+; vmsrc/apple/cmdjit.pla: 0890:             heap = addr + size
+; vmsrc/apple/cmdjit.pla: 0891:         fin
+	!BYTE	$6A			; LAW	_D070+0
+_F072 	!WORD	_D070+0		
+	!BYTE	$76,$02			; SLW	[2]
+	!BYTE	$6A			; LAW	_D070+0
+_F073 	!WORD	_D070+0		
+	!BYTE	$76,$04			; SLW	[4]
+	!BYTE	$6A			; LAW	_D070+0
+_F074 	!WORD	_D070+0		
+	!BYTE	$B2,$00			; ADDLW	[0]
+	!BYTE	$7A			; SAW	_D070+0
+_F075 	!WORD	_D070+0		
+	!BYTE	$6A			; LAW	_D069+0
+_F076 	!WORD	_D069+0		
+	!BYTE	$3C,$10			; ANDI	16
+	!BYTE	$4C			; BRFLS	_B005
+	!WORD	_B005-*
+	!BYTE	$66,$04			; LLW	[4]
+	!BYTE	$2C,$00,$40		; CW	16384
+	!BYTE	$54			; CALL	_A015
+_F077 	!WORD	_A015		
+	!BYTE	$AC			; BRAND	_B007
+	!WORD	_B007-*
+	!BYTE	$6A			; LAW	_D070+0
+_F078 	!WORD	_D070+0		
+	!BYTE	$2C,$00,$20		; CW	8192
+	!BYTE	$54			; CALL	_A014
+_F079 	!WORD	_A014		
+_B007 
+	!BYTE	$4C			; BRFLS	_B008
+	!WORD	_B008-*
+	!BYTE	$2C,$00,$40		; CW	16384
+	!BYTE	$6E,$04			; DLW	[4]
+	!BYTE	$B2,$00			; ADDLW	[0]
+	!BYTE	$7A			; SAW	_D070+0
+_F080 	!WORD	_D070+0		
+_B008 
+_B009 
+; vmsrc/apple/cmdjit.pla: 0892:     fin
+_B005 
+_B006 
+; vmsrc/apple/cmdjit.pla: 0893:     if systemflags & reshgr2
+; vmsrc/apple/cmdjit.pla: 0894:         if uword_islt(addr, $6000) and uword_isgt(heap, $4000)
+; vmsrc/apple/cmdjit.pla: 0895:             addr = $6000
+; vmsrc/apple/cmdjit.pla: 0896:             heap = addr + size
+; vmsrc/apple/cmdjit.pla: 0897:         fin
+	!BYTE	$6A			; LAW	_D069+0
+_F081 	!WORD	_D069+0		
+	!BYTE	$3C,$20			; ANDI	32
+	!BYTE	$4C			; BRFLS	_B010
+	!WORD	_B010-*
+	!BYTE	$66,$04			; LLW	[4]
+	!BYTE	$2C,$00,$60		; CW	24576
+	!BYTE	$54			; CALL	_A015
+_F082 	!WORD	_A015		
+	!BYTE	$AC			; BRAND	_B012
+	!WORD	_B012-*
+	!BYTE	$6A			; LAW	_D070+0
+_F083 	!WORD	_D070+0		
+	!BYTE	$2C,$00,$40		; CW	16384
+	!BYTE	$54			; CALL	_A014
+_F084 	!WORD	_A014		
+_B012 
+	!BYTE	$4C			; BRFLS	_B013
+	!WORD	_B013-*
+	!BYTE	$2C,$00,$60		; CW	24576
+	!BYTE	$6E,$04			; DLW	[4]
+	!BYTE	$B2,$00			; ADDLW	[0]
+	!BYTE	$7A			; SAW	_D070+0
+_F085 	!WORD	_D070+0		
+_B013 
+_B014 
+; vmsrc/apple/cmdjit.pla: 0898:     fin
+_B010 
+_B011 
+; vmsrc/apple/cmdjit.pla: 0899:     if uword_isge(heap, @addr)
+; vmsrc/apple/cmdjit.pla: 0900:         heap = oldheap
+; vmsrc/apple/cmdjit.pla: 0901:         return 0
+	!BYTE	$6A			; LAW	_D070+0
+_F086 	!WORD	_D070+0		
+	!BYTE	$28,$04			; LLA	[4]
+	!BYTE	$54			; CALL	_A012
+_F087 	!WORD	_A012		
+	!BYTE	$4C			; BRFLS	_B015
+	!WORD	_B015-*
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$7A			; SAW	_D070+0
+_F088 	!WORD	_D070+0		
+	!BYTE	$00			; CN	0
+	!BYTE	$5A,$06			; LEAVE	6
+; vmsrc/apple/cmdjit.pla: 0902:     fin
+_B015 
+_B016 
+; vmsrc/apple/cmdjit.pla: 0903:     return addr
+	!BYTE	$66,$04			; LLW	[4]
+	!BYTE	$5A,$06			; LEAVE	6
+; vmsrc/apple/cmdjit.pla: 0904: end
+; vmsrc/apple/cmdjit.pla: 0905: def allocalignheap(size, pow2, freeaddr)
+					; size -> [0]
+					; pow2 -> [2]
+					; freeaddr -> [4]
+_P013 					; allocalignheap(size, pow2, freeaddr)()
+_C007 					; allocalignheap()
+	JSR	INTERP
+; vmsrc/apple/cmdjit.pla: 0906:     word align, addr
+					; align -> [6]
+					; addr -> [8]
+; vmsrc/apple/cmdjit.pla: 0907:     if freeaddr
+	!BYTE	$58,$0A,$03		; ENTER	10,3
+; vmsrc/apple/cmdjit.pla: 0908:         *freeaddr = heap
+; vmsrc/apple/cmdjit.pla: 0909:     fin
+	!BYTE	$66,$04			; LLW	[4]
+	!BYTE	$4C			; BRFLS	_B017
+	!WORD	_B017-*
+	!BYTE	$6A			; LAW	_D070+0
+_F089 	!WORD	_D070+0		
+	!BYTE	$66,$04			; LLW	[4]
+	!BYTE	$72			; SW
+_B017 
+_B018 
+; vmsrc/apple/cmdjit.pla: 0910:     align = (1 << pow2) - 1
+; vmsrc/apple/cmdjit.pla: 0911:     addr  = (heap | align) + 1
+; vmsrc/apple/cmdjit.pla: 0912:     heap  = addr + size
+; vmsrc/apple/cmdjit.pla: 0913:     if uword_isge(heap, @addr)
+; vmsrc/apple/cmdjit.pla: 0914:         return 0
+	!BYTE	$02			; CN	1
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$9A			; SHL
+	!BYTE	$8E			; DECR
+	!BYTE	$76,$06			; SLW	[6]
+	!BYTE	$6A			; LAW	_D070+0
+_F090 	!WORD	_D070+0		
+	!BYTE	$66,$06			; LLW	[6]
+	!BYTE	$96			; OR 
+	!BYTE	$8C			; INCR
+	!BYTE	$6E,$08			; DLW	[8]
+	!BYTE	$B2,$00			; ADDLW	[0]
+	!BYTE	$7E			; DAW	_D070+0
+_F091 	!WORD	_D070+0		
+	!BYTE	$28,$08			; LLA	[8]
+	!BYTE	$54			; CALL	_A012
+_F092 	!WORD	_A012		
+	!BYTE	$4C			; BRFLS	_B019
+	!WORD	_B019-*
+	!BYTE	$00			; CN	0
+	!BYTE	$5A,$0A			; LEAVE	10
+; vmsrc/apple/cmdjit.pla: 0915:     fin
+_B019 
+_B020 
+; vmsrc/apple/cmdjit.pla: 0916:     return addr
+	!BYTE	$66,$08			; LLW	[8]
+	!BYTE	$5A,$0A			; LEAVE	10
+; vmsrc/apple/cmdjit.pla: 0917: end
+; vmsrc/apple/cmdjit.pla: 0918: def markheap()#1
+_P011 					; markheap()#1()
+_C008 					; markheap()
+	JSR	INTERP
+; vmsrc/apple/cmdjit.pla: 0919:     return heap
+	!BYTE	$6A			; LAW	_D070+0
+_F093 	!WORD	_D070+0		
+	!BYTE	$5C			; RET
+; vmsrc/apple/cmdjit.pla: 0920: end
+; vmsrc/apple/cmdjit.pla: 0921: def releaseheap(newheap)#1
+					; newheap -> [0]
+_P014 					; releaseheap(newheap)#1()
+_C009 					; releaseheap()
+	JSR	INTERP
+; vmsrc/apple/cmdjit.pla: 0922:     heap = newheap
+	!BYTE	$58,$02,$01		; ENTER	2,1
+; vmsrc/apple/cmdjit.pla: 0923:     return @newheap - heap
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$7A			; SAW	_D070+0
+_F094 	!WORD	_D070+0		
+	!BYTE	$28,$00			; LLA	[0]
+	!BYTE	$6A			; LAW	_D070+0
+_F095 	!WORD	_D070+0		
+	!BYTE	$84			; SUB 
+	!BYTE	$5A,$02			; LEAVE	2
+; vmsrc/apple/cmdjit.pla: 0924: end
+; vmsrc/apple/cmdjit.pla: 0925: def allocxheap(size)#1
+					; size -> [0]
+_C010 					; allocxheap()
+	JSR	INTERP
+; vmsrc/apple/cmdjit.pla: 0926:     word xaddr
+					; xaddr -> [2]
+; vmsrc/apple/cmdjit.pla: 0927:     xaddr = xheap
+	!BYTE	$58,$04,$01		; ENTER	4,1
+; vmsrc/apple/cmdjit.pla: 0928:     xheap = xheap + size
+; vmsrc/apple/cmdjit.pla: 0929:     if systemflags & restxt1
+; vmsrc/apple/cmdjit.pla: 0930:         if uword_isle(xaddr, $0800) and uword_isgt(xheap, $0400)
+; vmsrc/apple/cmdjit.pla: 0931:             xaddr = $0800
+; vmsrc/apple/cmdjit.pla: 0932:             xheap = xaddr + size
+; vmsrc/apple/cmdjit.pla: 0933:         fin
+	!BYTE	$6A			; LAW	_D071+0
+_F096 	!WORD	_D071+0		
+	!BYTE	$76,$02			; SLW	[2]
+	!BYTE	$6A			; LAW	_D071+0
+_F097 	!WORD	_D071+0		
+	!BYTE	$B2,$00			; ADDLW	[0]
+	!BYTE	$7A			; SAW	_D071+0
+_F098 	!WORD	_D071+0		
+	!BYTE	$6A			; LAW	_D069+0
+_F099 	!WORD	_D069+0		
+	!BYTE	$3C,$01			; ANDI	1
+	!BYTE	$4C			; BRFLS	_B021
+	!WORD	_B021-*
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$2C,$00,$08		; CW	2048
+	!BYTE	$54			; CALL	_A013
+_F100 	!WORD	_A013		
+	!BYTE	$AC			; BRAND	_B023
+	!WORD	_B023-*
+	!BYTE	$6A			; LAW	_D071+0
+_F101 	!WORD	_D071+0		
+	!BYTE	$2C,$00,$04		; CW	1024
+	!BYTE	$54			; CALL	_A014
+_F102 	!WORD	_A014		
+_B023 
+	!BYTE	$4C			; BRFLS	_B024
+	!WORD	_B024-*
+	!BYTE	$2C,$00,$08		; CW	2048
+	!BYTE	$6E,$02			; DLW	[2]
+	!BYTE	$B2,$00			; ADDLW	[0]
+	!BYTE	$7A			; SAW	_D071+0
+_F103 	!WORD	_D071+0		
+_B024 
+_B025 
+; vmsrc/apple/cmdjit.pla: 0934:     fin
+_B021 
+_B022 
+; vmsrc/apple/cmdjit.pla: 0935:     if systemflags & restxt2
+; vmsrc/apple/cmdjit.pla: 0936:         if uword_isle(xaddr, $0C00) and uword_isgt(xheap, $0800)
+; vmsrc/apple/cmdjit.pla: 0937:             xaddr = $0C00
+; vmsrc/apple/cmdjit.pla: 0938:             xheap = xaddr + size
+; vmsrc/apple/cmdjit.pla: 0939:         fin
+	!BYTE	$6A			; LAW	_D069+0
+_F104 	!WORD	_D069+0		
+	!BYTE	$3C,$02			; ANDI	2
+	!BYTE	$4C			; BRFLS	_B026
+	!WORD	_B026-*
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$2C,$00,$0C		; CW	3072
+	!BYTE	$54			; CALL	_A013
+_F105 	!WORD	_A013		
+	!BYTE	$AC			; BRAND	_B028
+	!WORD	_B028-*
+	!BYTE	$6A			; LAW	_D071+0
+_F106 	!WORD	_D071+0		
+	!BYTE	$2C,$00,$08		; CW	2048
+	!BYTE	$54			; CALL	_A014
+_F107 	!WORD	_A014		
+_B028 
+	!BYTE	$4C			; BRFLS	_B029
+	!WORD	_B029-*
+	!BYTE	$2C,$00,$0C		; CW	3072
+	!BYTE	$6E,$02			; DLW	[2]
+	!BYTE	$B2,$00			; ADDLW	[0]
+	!BYTE	$7A			; SAW	_D071+0
+_F108 	!WORD	_D071+0		
+_B029 
+_B030 
+; vmsrc/apple/cmdjit.pla: 0940:     fin
+_B026 
+_B027 
+; vmsrc/apple/cmdjit.pla: 0941:     if systemflags & resxhgr1
+; vmsrc/apple/cmdjit.pla: 0942:         if uword_isle(xaddr, $4000) and uword_isgt(xheap, $2000)
+; vmsrc/apple/cmdjit.pla: 0943:             xaddr = $4000
+; vmsrc/apple/cmdjit.pla: 0944:             xheap = xaddr + size
+; vmsrc/apple/cmdjit.pla: 0945:         fin
+	!BYTE	$6A			; LAW	_D069+0
+_F109 	!WORD	_D069+0		
+	!BYTE	$3C,$40			; ANDI	64
+	!BYTE	$4C			; BRFLS	_B031
+	!WORD	_B031-*
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$2C,$00,$40		; CW	16384
+	!BYTE	$54			; CALL	_A013
+_F110 	!WORD	_A013		
+	!BYTE	$AC			; BRAND	_B033
+	!WORD	_B033-*
+	!BYTE	$6A			; LAW	_D071+0
+_F111 	!WORD	_D071+0		
+	!BYTE	$2C,$00,$20		; CW	8192
+	!BYTE	$54			; CALL	_A014
+_F112 	!WORD	_A014		
+_B033 
+	!BYTE	$4C			; BRFLS	_B034
+	!WORD	_B034-*
+	!BYTE	$2C,$00,$40		; CW	16384
+	!BYTE	$6E,$02			; DLW	[2]
+	!BYTE	$B2,$00			; ADDLW	[0]
+	!BYTE	$7A			; SAW	_D071+0
+_F113 	!WORD	_D071+0		
+_B034 
+_B035 
+; vmsrc/apple/cmdjit.pla: 0946:     fin
+_B031 
+_B032 
+; vmsrc/apple/cmdjit.pla: 0947:     if systemflags & resxhgr2
+; vmsrc/apple/cmdjit.pla: 0948:         if uword_isle(xaddr, $6000) and uword_isgt(xheap, $4000)
+; vmsrc/apple/cmdjit.pla: 0949:             xaddr = $6000
+; vmsrc/apple/cmdjit.pla: 0950:             xheap = xaddr + size
+; vmsrc/apple/cmdjit.pla: 0951:         fin
+	!BYTE	$6A			; LAW	_D069+0
+_F114 	!WORD	_D069+0		
+	!BYTE	$3C,$80			; ANDI	128
+	!BYTE	$4C			; BRFLS	_B036
+	!WORD	_B036-*
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$2C,$00,$60		; CW	24576
+	!BYTE	$54			; CALL	_A013
+_F115 	!WORD	_A013		
+	!BYTE	$AC			; BRAND	_B038
+	!WORD	_B038-*
+	!BYTE	$6A			; LAW	_D071+0
+_F116 	!WORD	_D071+0		
+	!BYTE	$2C,$00,$40		; CW	16384
+	!BYTE	$54			; CALL	_A014
+_F117 	!WORD	_A014		
+_B038 
+	!BYTE	$4C			; BRFLS	_B039
+	!WORD	_B039-*
+	!BYTE	$2C,$00,$60		; CW	24576
+	!BYTE	$6E,$02			; DLW	[2]
+	!BYTE	$B2,$00			; ADDLW	[0]
+	!BYTE	$7A			; SAW	_D071+0
+_F118 	!WORD	_D071+0		
+_B039 
+_B040 
+; vmsrc/apple/cmdjit.pla: 0952:     fin
+_B036 
+_B037 
+; vmsrc/apple/cmdjit.pla: 0953:     if uword_isge(xheap, xheaptop)
+; vmsrc/apple/cmdjit.pla: 0954:         return 0
+	!BYTE	$6A			; LAW	_D071+0
+_F119 	!WORD	_D071+0		
+	!BYTE	$6A			; LAW	_D072+0
+_F120 	!WORD	_D072+0		
+	!BYTE	$54			; CALL	_A012
+_F121 	!WORD	_A012		
+	!BYTE	$4C			; BRFLS	_B041
+	!WORD	_B041-*
+	!BYTE	$00			; CN	0
+	!BYTE	$5A,$04			; LEAVE	4
+; vmsrc/apple/cmdjit.pla: 0955:     fin
+_B041 
+_B042 
+; vmsrc/apple/cmdjit.pla: 0956:     return xaddr
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$5A,$04			; LEAVE	4
+; vmsrc/apple/cmdjit.pla: 0957: end
+; vmsrc/apple/cmdjit.pla: 0958: //
+; vmsrc/apple/cmdjit.pla: 0959: // Symbol table routines.
+; vmsrc/apple/cmdjit.pla: 0960: //
+; vmsrc/apple/cmdjit.pla: 0961: def addsym(sym, addr)#0
+					; sym -> [0]
+					; addr -> [2]
+_C011 					; addsym()
+	JSR	INTERP
+; vmsrc/apple/cmdjit.pla: 0962:     while ^sym & $80
+	!BYTE	$58,$04,$02		; ENTER	4,2
+	!BYTE	$50			; BRNCH	_B045
+	!WORD	_B045-*
+_B043 
+; vmsrc/apple/cmdjit.pla: 0963:         ^lastsym = ^sym
+; vmsrc/apple/cmdjit.pla: 0964:         lastsym++
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$60			; LB
+	!BYTE	$6A			; LAW	_D073+0
+_F122 	!WORD	_D073+0		
+	!BYTE	$70			; SB
+	!BYTE	$6A			; LAW	_D073+0
+_F123 	!WORD	_D073+0		
+	!BYTE	$8C			; INCR
+; vmsrc/apple/cmdjit.pla: 0965:         sym++
+	!BYTE	$7A			; SAW	_D073+0
+_F124 	!WORD	_D073+0		
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$8C			; INCR
+; vmsrc/apple/cmdjit.pla: 0966:     loop
+	!BYTE	$76,$00			; SLW	[0]
+_B045 
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$60			; LB
+	!BYTE	$3C,$80			; ANDI	128
+	!BYTE	$4E			; BRTRU	_B043
+	!WORD	_B043-*
+_B044 
+; vmsrc/apple/cmdjit.pla: 0967:     lastsym->0 = ^sym
+; vmsrc/apple/cmdjit.pla: 0968:     lastsym=>1 = addr
+; vmsrc/apple/cmdjit.pla: 0969:     lastsym    = lastsym + 3
+; vmsrc/apple/cmdjit.pla: 0970:     ^lastsym   = 0
+; vmsrc/apple/cmdjit.pla: 0971: end
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$60			; LB
+	!BYTE	$6A			; LAW	_D073+0
+_F125 	!WORD	_D073+0		
+	!BYTE	$70			; SB
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$6A			; LAW	_D073+0
+_F126 	!WORD	_D073+0		
+	!BYTE	$8C			; INCR
+	!BYTE	$72			; SW
+	!BYTE	$6A			; LAW	_D073+0
+_F127 	!WORD	_D073+0		
+	!BYTE	$38,$03			; ADDI	3
+	!BYTE	$7A			; SAW	_D073+0
+_F128 	!WORD	_D073+0		
+	!BYTE	$00			; CN	0
+	!BYTE	$6A			; LAW	_D073+0
+_F129 	!WORD	_D073+0		
+	!BYTE	$70			; SB
+	!BYTE	$5A,$04			; LEAVE	4
+; vmsrc/apple/cmdjit.pla: 0972: //
+; vmsrc/apple/cmdjit.pla: 0973: // String routines.
+; vmsrc/apple/cmdjit.pla: 0974: //
+; vmsrc/apple/cmdjit.pla: 0975: def strcpy(dst, src)#1
+					; dst -> [0]
+					; src -> [2]
+_P018 					; strcpy(dst, src)#1()
+_C012 					; strcpy()
+	JSR	INTERP
+; vmsrc/apple/cmdjit.pla: 0976:     memcpy(dst+1, src+1, ^src)
+	!BYTE	$58,$04,$02		; ENTER	4,2
+; vmsrc/apple/cmdjit.pla: 0977:     ^dst = ^src
+; vmsrc/apple/cmdjit.pla: 0978:     return dst
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$8C			; INCR
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$60			; LB
+	!BYTE	$54			; CALL	_A004
+_F130 	!WORD	_A004		
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$60			; LB
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$70			; SB
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$5A,$04			; LEAVE	4
+; vmsrc/apple/cmdjit.pla: 0979: end
+; vmsrc/apple/cmdjit.pla: 0980: def strcat(dst, src)#1
+					; dst -> [0]
+					; src -> [2]
+_P019 					; strcat(dst, src)#1()
+_C013 					; strcat()
+	JSR	INTERP
+; vmsrc/apple/cmdjit.pla: 0981:     memcpy(dst + ^dst + 1, src + 1, ^src)
+	!BYTE	$58,$04,$02		; ENTER	4,2
+; vmsrc/apple/cmdjit.pla: 0982:     ^dst = ^dst + ^src
+; vmsrc/apple/cmdjit.pla: 0983:     return dst
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$34			; DUP
+	!BYTE	$60			; LB
+	!BYTE	$82			; ADD 
+	!BYTE	$8C			; INCR
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$60			; LB
+	!BYTE	$54			; CALL	_A004
+_F131 	!WORD	_A004		
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$60			; LB
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$60			; LB
+	!BYTE	$82			; ADD 
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$70			; SB
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$5A,$04			; LEAVE	4
+; vmsrc/apple/cmdjit.pla: 0984: end
+; vmsrc/apple/cmdjit.pla: 0985: //
+; vmsrc/apple/cmdjit.pla: 0986: // Module routines.
+; vmsrc/apple/cmdjit.pla: 0987: //
+; vmsrc/apple/cmdjit.pla: 0988: def lookupextern(esd, index)#1
+					; esd -> [0]
+					; index -> [2]
+_C014 					; lookupextern()
+	JSR	INTERP
+; vmsrc/apple/cmdjit.pla: 0989:     word sym, addr
+					; sym -> [4]
+					; addr -> [6]
+; vmsrc/apple/cmdjit.pla: 0990:     byte str[33]
+					; str -> [8]
+; vmsrc/apple/cmdjit.pla: 0991:     sym = lookupidx(esd, index)
+	!BYTE	$58,$29,$02		; ENTER	41,2
+; vmsrc/apple/cmdjit.pla: 0992:     if sym
+; vmsrc/apple/cmdjit.pla: 0993:         addr = lookuptbl(sym, symtbl)
+; vmsrc/apple/cmdjit.pla: 0994:         if !addr
+; vmsrc/apple/cmdjit.pla: 0995:             perr = $81
+; vmsrc/apple/cmdjit.pla: 0996:             dcitos(sym, @str)
+; vmsrc/apple/cmdjit.pla: 0997:             cout('?'); prstr(@str); crout
+; vmsrc/apple/cmdjit.pla: 0998:         fin
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$54			; CALL	_A022
+_F132 	!WORD	_A022		
+	!BYTE	$6E,$04			; DLW	[4]
+	!BYTE	$4C			; BRFLS	_B046
+	!WORD	_B046-*
+	!BYTE	$66,$04			; LLW	[4]
+	!BYTE	$2C,$00,$0C		; CW	3072
+	!BYTE	$54			; CALL	_A021
+_F133 	!WORD	_A021		
+	!BYTE	$6E,$06			; DLW	[6]
+	!BYTE	$4E			; BRTRU	_B048
+	!WORD	_B048-*
+	!BYTE	$2A,$81			; CB	129
+	!BYTE	$78			; SAB	_D033+0
+_F134 	!WORD	_D033+0		
+	!BYTE	$66,$04			; LLW	[4]
+	!BYTE	$28,$08			; LLA	[8]
+	!BYTE	$54			; CALL	_A018
+_F135 	!WORD	_A018		
+	!BYTE	$30			; DROP 
+	!BYTE	$2A,$3F			; CB	63
+	!BYTE	$54			; CALL	_A006
+_F136 	!WORD	_A006		
+	!BYTE	$28,$08			; LLA	[8]
+	!BYTE	$54			; CALL	_A008
+_F137 	!WORD	_A008		
+	!BYTE	$54			; CALL	_A005
+_F138 	!WORD	_A005		
+_B048 
+_B049 
+; vmsrc/apple/cmdjit.pla: 0999:         return addr
+	!BYTE	$66,$06			; LLW	[6]
+	!BYTE	$5A,$29			; LEAVE	41
+; vmsrc/apple/cmdjit.pla: 1000:     fin
+_B046 
+_B047 
+; vmsrc/apple/cmdjit.pla: 1001:     return 0
+	!BYTE	$00			; CN	0
+	!BYTE	$5A,$29			; LEAVE	41
+; vmsrc/apple/cmdjit.pla: 1002: end
+; vmsrc/apple/cmdjit.pla: 1003: //
+; vmsrc/apple/cmdjit.pla: 1004: // Indirect interpreter DEFinition entrypoint
+; vmsrc/apple/cmdjit.pla: 1005: //
+; vmsrc/apple/cmdjit.pla: 1006: def adddef(isfirst, addr, deflast)#1
+					; isfirst -> [0]
+					; addr -> [2]
+					; deflast -> [4]
+_C015 					; adddef()
+	JSR	INTERP
+; vmsrc/apple/cmdjit.pla: 1007:     word preventry, defentry, defsize
+					; preventry -> [6]
+					; defentry -> [8]
+					; defsize -> [10]
+; vmsrc/apple/cmdjit.pla: 1008: 
+; vmsrc/apple/cmdjit.pla: 1009:     defentry = *deflast
+	!BYTE	$58,$0C,$03		; ENTER	12,3
+; vmsrc/apple/cmdjit.pla: 1010:     *deflast = defentry + t_defentry
+; vmsrc/apple/cmdjit.pla: 1011:     if not isfirst
+; vmsrc/apple/cmdjit.pla: 1012:         preventry = defentry - t_defentry
+; vmsrc/apple/cmdjit.pla: 1013:         defsize   = addr - preventry=>bytecodeaddr
+; vmsrc/apple/cmdjit.pla: 1014:         if defsize <= jitsize
+; vmsrc/apple/cmdjit.pla: 1015:             preventry=>interpaddr   = $03D6    // JSR $03D6 (JIT INTERP)
+; vmsrc/apple/cmdjit.pla: 1016:             preventry->callcount    = jitcount // Set JIT countdown
+; vmsrc/apple/cmdjit.pla: 1017:             preventry->bytecodesize = defsize  // Set size
+; vmsrc/apple/cmdjit.pla: 1018:         fin
+	!BYTE	$66,$04			; LLW	[4]
+	!BYTE	$62			; LW
+	!BYTE	$6E,$08			; DLW	[8]
+	!BYTE	$38,$07			; ADDI	7
+	!BYTE	$66,$04			; LLW	[4]
+	!BYTE	$72			; SW
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$4E			; BRTRU	_B050
+	!WORD	_B050-*
+	!BYTE	$66,$08			; LLW	[8]
+	!BYTE	$3A,$07			; SUBI	7
+	!BYTE	$76,$06			; SLW	[6]
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$66,$06			; LLW	[6]
+	!BYTE	$38,$03			; ADDI	3
+	!BYTE	$62			; LW
+	!BYTE	$84			; SUB 
+	!BYTE	$6E,$0A			; DLW	[10]
+	!BYTE	$68			; LAB	_D035+0
+_F139 	!WORD	_D035+0		
+	!BYTE	$4A			; ISLE
+	!BYTE	$4C			; BRFLS	_B052
+	!WORD	_B052-*
+	!BYTE	$2C,$D6,$03		; CW	982
+	!BYTE	$66,$06			; LLW	[6]
+	!BYTE	$8C			; INCR
+	!BYTE	$72			; SW
+	!BYTE	$68			; LAB	_D034+0
+_F140 	!WORD	_D034+0		
+	!BYTE	$66,$06			; LLW	[6]
+	!BYTE	$38,$05			; ADDI	5
+	!BYTE	$70			; SB
+	!BYTE	$66,$0A			; LLW	[10]
+	!BYTE	$66,$06			; LLW	[6]
+	!BYTE	$38,$06			; ADDI	6
+	!BYTE	$70			; SB
+_B052 
+_B053 
+; vmsrc/apple/cmdjit.pla: 1019:     fin
+_B050 
+_B051 
+; vmsrc/apple/cmdjit.pla: 1020:     defentry->interpjsr    = $20
+; vmsrc/apple/cmdjit.pla: 1021:     defentry=>interpaddr   = $03DC // JSR $03DC (BYTECODE INTERP)
+; vmsrc/apple/cmdjit.pla: 1022:     defentry=>bytecodeaddr = addr
+; vmsrc/apple/cmdjit.pla: 1023:     defentry->t_defentry   = 0 // NULL out next entry
+; vmsrc/apple/cmdjit.pla: 1024:     return defentry
+	!BYTE	$2A,$20			; CB	32
+	!BYTE	$66,$08			; LLW	[8]
+	!BYTE	$70			; SB
+	!BYTE	$2C,$DC,$03		; CW	988
+	!BYTE	$66,$08			; LLW	[8]
+	!BYTE	$8C			; INCR
+	!BYTE	$72			; SW
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$66,$08			; LLW	[8]
+	!BYTE	$38,$03			; ADDI	3
+	!BYTE	$72			; SW
+	!BYTE	$00			; CN	0
+	!BYTE	$66,$08			; LLW	[8]
+	!BYTE	$38,$07			; ADDI	7
+	!BYTE	$70			; SB
+	!BYTE	$66,$08			; LLW	[8]
+	!BYTE	$5A,$0C			; LEAVE	12
+; vmsrc/apple/cmdjit.pla: 1025: end
+; vmsrc/apple/cmdjit.pla: 1026: def loadmod(mod)#1
+					; mod -> [0]
+_C016 					; loadmod()
+	JSR	INTERP
+; vmsrc/apple/cmdjit.pla: 1027:     word rdlen[], bytecode, modsize, codefix, defofst, defcnt, init, initcode[], fixup
+					; rdlen -> [2]
+					; bytecode -> [2]
+					; modsize -> [4]
+					; codefix -> [6]
+					; defofst -> [8]
+					; defcnt -> [10]
+					; init -> [12]
+					; initcode -> [14]
+					; fixup -> [14]
+; vmsrc/apple/cmdjit.pla: 1028:     word addr, defaddr, modaddr, modfix, modofst, modend
+					; addr -> [16]
+					; defaddr -> [18]
+					; modaddr -> [20]
+					; modfix -> [22]
+					; modofst -> [24]
+					; modend -> [26]
+; vmsrc/apple/cmdjit.pla: 1029:     word deftbl, deflast
+					; deftbl -> [28]
+					; deflast -> [30]
+; vmsrc/apple/cmdjit.pla: 1030:     word moddep, rld, esd, sym
+					; moddep -> [32]
+					; rld -> [34]
+					; esd -> [36]
+					; sym -> [38]
+; vmsrc/apple/cmdjit.pla: 1031:     byte refnum[], deffirst, skipjit, filename[64], str[]
+					; refnum -> [40]
+					; deffirst -> [40]
+					; skipjit -> [41]
+					; filename -> [42]
+					; str -> [106]
+; vmsrc/apple/cmdjit.pla: 1032:     byte header[128]
+					; header -> [106]
+; vmsrc/apple/cmdjit.pla: 1033:     //
+; vmsrc/apple/cmdjit.pla: 1034:     // Read the RELocatable module header (first 128 bytes)
+; vmsrc/apple/cmdjit.pla: 1035:     //
+; vmsrc/apple/cmdjit.pla: 1036:     dcitos(mod, @filename)
+	!BYTE	$58,$EA,$01		; ENTER	234,1
+; vmsrc/apple/cmdjit.pla: 1037:     refnum = open(@filename)
+; vmsrc/apple/cmdjit.pla: 1038:     if !refnum and filename < 16
+; vmsrc/apple/cmdjit.pla: 1039:         //
+; vmsrc/apple/cmdjit.pla: 1040:         // Try system path
+; vmsrc/apple/cmdjit.pla: 1041:         //
+; vmsrc/apple/cmdjit.pla: 1042:         refnum = open(strcpy(@filename,strcat(strcpy(@header, @sysmods), @filename)))
+; vmsrc/apple/cmdjit.pla: 1043:     fin
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$28,$2A			; LLA	[42]
+	!BYTE	$54			; CALL	_A018
+_F141 	!WORD	_A018		
+	!BYTE	$30			; DROP 
+	!BYTE	$28,$2A			; LLA	[42]
+	!BYTE	$54			; CALL	_C002
+_F142 	!WORD	_C002		
+	!BYTE	$6C,$28			; DLB	[40]
+	!BYTE	$80			; NOT
+	!BYTE	$AC			; BRAND	_B054
+	!WORD	_B054-*
+	!BYTE	$64,$2A			; LLB	[42]
+	!BYTE	$2A,$10			; CB	16
+	!BYTE	$46			; ISLT
+_B054 
+	!BYTE	$4C			; BRFLS	_B055
+	!WORD	_B055-*
+	!BYTE	$28,$2A			; LLA	[42]
+	!BYTE	$28,$6A			; LLA	[106]
+	!BYTE	$26			; LA	_D067+0
+_F143 	!WORD	_D067+0		
+	!BYTE	$54			; CALL	_C012
+_F144 	!WORD	_C012		
+	!BYTE	$28,$2A			; LLA	[42]
+	!BYTE	$54			; CALL	_C013
+_F145 	!WORD	_C013		
+	!BYTE	$54			; CALL	_C012
+_F146 	!WORD	_C012		
+	!BYTE	$54			; CALL	_C002
+_F147 	!WORD	_C002		
+	!BYTE	$74,$28			; SLB	[40]
+_B055 
+_B056 
+; vmsrc/apple/cmdjit.pla: 1044:     if refnum
+; vmsrc/apple/cmdjit.pla: 1045:         header.0 = $0A
+; vmsrc/apple/cmdjit.pla: 1046:         header:1 = @filename
+; vmsrc/apple/cmdjit.pla: 1047:         if not syscall($C4, @header) and header.4 <> $FE // Make sure it's a REL module
+; vmsrc/apple/cmdjit.pla: 1048:             close(refnum)
+; vmsrc/apple/cmdjit.pla: 1049:             perr = $4A // Incompatible type
+; vmsrc/apple/cmdjit.pla: 1050:             return -perr
+	!BYTE	$64,$28			; LLB	[40]
+	!BYTE	$4C			; BRFLS	_B057
+	!WORD	_B057-*
+	!BYTE	$14			; CN	10
+	!BYTE	$74,$6A			; SLB	[106]
+	!BYTE	$28,$2A			; LLA	[42]
+	!BYTE	$76,$6B			; SLW	[107]
+	!BYTE	$2A,$C4			; CB	196
+	!BYTE	$28,$6A			; LLA	[106]
+	!BYTE	$54			; CALL	_A000
+_F148 	!WORD	_A000		
+	!BYTE	$80			; NOT
+	!BYTE	$AC			; BRAND	_B059
+	!WORD	_B059-*
+	!BYTE	$64,$6E			; LLB	[110]
+	!BYTE	$2A,$FE			; CB	254
+	!BYTE	$42			; ISNE
+_B059 
+	!BYTE	$4C			; BRFLS	_B060
+	!WORD	_B060-*
+	!BYTE	$64,$28			; LLB	[40]
+	!BYTE	$54			; CALL	_C003
+_F149 	!WORD	_C003		
+	!BYTE	$30			; DROP 
+	!BYTE	$2A,$4A			; CB	74
+	!BYTE	$7C			; DAB	_D033+0
+_F150 	!WORD	_D033+0		
+	!BYTE	$90			; NEG
+	!BYTE	$5A,$EA			; LEAVE	234
+; vmsrc/apple/cmdjit.pla: 1051:         fin
+_B060 
+_B061 
+; vmsrc/apple/cmdjit.pla: 1052:         rdlen   = read(refnum, @header, 128)
+; vmsrc/apple/cmdjit.pla: 1053:         modsize = header:0
+; vmsrc/apple/cmdjit.pla: 1054:         moddep  = @header.1
+; vmsrc/apple/cmdjit.pla: 1055:         defofst = modsize + RELADDR
+; vmsrc/apple/cmdjit.pla: 1056:         init    = 0
+; vmsrc/apple/cmdjit.pla: 1057:         if rdlen > 4 and header:2 == $6502 // magic number
+; vmsrc/apple/cmdjit.pla: 1058:             //
+; vmsrc/apple/cmdjit.pla: 1059:             // This is an EXTended RELocatable (data+bytecode) module.
+; vmsrc/apple/cmdjit.pla: 1060:             //
+; vmsrc/apple/cmdjit.pla: 1061:             systemflags = header.4 | systemflags
+; vmsrc/apple/cmdjit.pla: 1062:             skipjit     = header.5 & (nojitc >> 8)
+; vmsrc/apple/cmdjit.pla: 1063:             defofst     = header:6
+; vmsrc/apple/cmdjit.pla: 1064:             defcnt      = header:8
+; vmsrc/apple/cmdjit.pla: 1065:             init        = header:10
+; vmsrc/apple/cmdjit.pla: 1066:             moddep      = @header.12
+; vmsrc/apple/cmdjit.pla: 1067:             //
+; vmsrc/apple/cmdjit.pla: 1068:             // Load module dependencies.
+; vmsrc/apple/cmdjit.pla: 1069:             //
+; vmsrc/apple/cmdjit.pla: 1070:             while ^moddep
+	!BYTE	$64,$28			; LLB	[40]
+	!BYTE	$28,$6A			; LLA	[106]
+	!BYTE	$2A,$80			; CB	128
+	!BYTE	$54			; CALL	_C004
+_F151 	!WORD	_C004		
+	!BYTE	$76,$02			; SLW	[2]
+	!BYTE	$66,$6A			; LLW	[106]
+	!BYTE	$76,$04			; SLW	[4]
+	!BYTE	$28,$6B			; LLA	[107]
+	!BYTE	$76,$20			; SLW	[32]
+	!BYTE	$66,$04			; LLW	[4]
+	!BYTE	$2C,$00,$10		; CW	4096
+	!BYTE	$82			; ADD 
+	!BYTE	$76,$08			; SLW	[8]
+	!BYTE	$00			; CN	0
+	!BYTE	$76,$0C			; SLW	[12]
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$08			; CN	4
+	!BYTE	$44			; ISGT
+	!BYTE	$AC			; BRAND	_B062
+	!WORD	_B062-*
+	!BYTE	$66,$6C			; LLW	[108]
+	!BYTE	$2C,$02,$65		; CW	25858
+	!BYTE	$40			; ISEQ
+_B062 
+	!BYTE	$4C			; BRFLS	_B063
+	!WORD	_B063-*
+	!BYTE	$64,$6E			; LLB	[110]
+	!BYTE	$6A			; LAW	_D069+0
+_F152 	!WORD	_D069+0		
+	!BYTE	$96			; OR 
+	!BYTE	$7A			; SAW	_D069+0
+_F153 	!WORD	_D069+0		
+	!BYTE	$64,$6F			; LLB	[111]
+	!BYTE	$3C,$01			; ANDI	1
+	!BYTE	$74,$29			; SLB	[41]
+	!BYTE	$66,$70			; LLW	[112]
+	!BYTE	$76,$08			; SLW	[8]
+	!BYTE	$66,$72			; LLW	[114]
+	!BYTE	$76,$0A			; SLW	[10]
+	!BYTE	$66,$74			; LLW	[116]
+	!BYTE	$76,$0C			; SLW	[12]
+	!BYTE	$28,$76			; LLA	[118]
+	!BYTE	$76,$20			; SLW	[32]
+	!BYTE	$50			; BRNCH	_B067
+	!WORD	_B067-*
+_B065 
+; vmsrc/apple/cmdjit.pla: 1071:                 if !lookuptbl(moddep, symtbl)
+; vmsrc/apple/cmdjit.pla: 1072:                     close(refnum)
+; vmsrc/apple/cmdjit.pla: 1073:                     refnum = 0
+; vmsrc/apple/cmdjit.pla: 1074:                     if loadmod(moddep) < 0
+; vmsrc/apple/cmdjit.pla: 1075:                         return -perr
+	!BYTE	$66,$20			; LLW	[32]
+	!BYTE	$2C,$00,$0C		; CW	3072
+	!BYTE	$54			; CALL	_A021
+_F154 	!WORD	_A021		
+	!BYTE	$4E			; BRTRU	_B068
+	!WORD	_B068-*
+	!BYTE	$64,$28			; LLB	[40]
+	!BYTE	$54			; CALL	_C003
+_F155 	!WORD	_C003		
+	!BYTE	$30			; DROP 
+	!BYTE	$00			; CN	0
+	!BYTE	$74,$28			; SLB	[40]
+	!BYTE	$66,$20			; LLW	[32]
+	!BYTE	$54			; CALL	_C016
+_F156 	!WORD	_C016		
+	!BYTE	$00			; CN	0
+	!BYTE	$46			; ISLT
+	!BYTE	$4C			; BRFLS	_B070
+	!WORD	_B070-*
+	!BYTE	$68			; LAB	_D033+0
+_F157 	!WORD	_D033+0		
+	!BYTE	$90			; NEG
+	!BYTE	$5A,$EA			; LEAVE	234
+; vmsrc/apple/cmdjit.pla: 1076:                     fin
+_B070 
+_B071 
+; vmsrc/apple/cmdjit.pla: 1077:                 fin
+_B068 
+_B069 
+; vmsrc/apple/cmdjit.pla: 1078:                 moddep = moddep + dcitos(moddep, @str)
+; vmsrc/apple/cmdjit.pla: 1079:             loop
+	!BYTE	$66,$20			; LLW	[32]
+	!BYTE	$34			; DUP
+	!BYTE	$28,$6A			; LLA	[106]
+	!BYTE	$54			; CALL	_A018
+_F158 	!WORD	_A018		
+	!BYTE	$82			; ADD 
+	!BYTE	$76,$20			; SLW	[32]
+_B067 
+	!BYTE	$66,$20			; LLW	[32]
+	!BYTE	$60			; LB
+	!BYTE	$4E			; BRTRU	_B065
+	!WORD	_B065-*
+_B066 
+; vmsrc/apple/cmdjit.pla: 1080:             //
+; vmsrc/apple/cmdjit.pla: 1081:             // Init def table.
+; vmsrc/apple/cmdjit.pla: 1082:             //
+; vmsrc/apple/cmdjit.pla: 1083:             deftbl   = allocheap(defcnt * t_defentry + 1)
+; vmsrc/apple/cmdjit.pla: 1084:             deflast  = deftbl
+; vmsrc/apple/cmdjit.pla: 1085:             if !refnum
+; vmsrc/apple/cmdjit.pla: 1086:                 //
+; vmsrc/apple/cmdjit.pla: 1087:                 // Reset read pointer.
+; vmsrc/apple/cmdjit.pla: 1088:                 //
+; vmsrc/apple/cmdjit.pla: 1089:                 refnum = open(@filename)
+; vmsrc/apple/cmdjit.pla: 1090:                 rdlen  = read(refnum, @header, 128)
+; vmsrc/apple/cmdjit.pla: 1091:             fin
+	!BYTE	$66,$0A			; LLW	[10]
+	!BYTE	$0E			; CN	7
+	!BYTE	$86			; MUL
+	!BYTE	$8C			; INCR
+	!BYTE	$54			; CALL	_C006
+_F159 	!WORD	_C006		
+	!BYTE	$6E,$1C			; DLW	[28]
+	!BYTE	$76,$1E			; SLW	[30]
+	!BYTE	$64,$28			; LLB	[40]
+	!BYTE	$4E			; BRTRU	_B072
+	!WORD	_B072-*
+	!BYTE	$28,$2A			; LLA	[42]
+	!BYTE	$54			; CALL	_C002
+_F160 	!WORD	_C002		
+	!BYTE	$6C,$28			; DLB	[40]
+	!BYTE	$28,$6A			; LLA	[106]
+	!BYTE	$2A,$80			; CB	128
+	!BYTE	$54			; CALL	_C004
+_F161 	!WORD	_C004		
+	!BYTE	$76,$02			; SLW	[2]
+_B072 
+_B073 
+; vmsrc/apple/cmdjit.pla: 1092:         fin
+_B063 
+_B064 
+; vmsrc/apple/cmdjit.pla: 1093:         //
+; vmsrc/apple/cmdjit.pla: 1094:         // Alloc heap space for relocated module (data + bytecode).
+; vmsrc/apple/cmdjit.pla: 1095:         //
+; vmsrc/apple/cmdjit.pla: 1096:         moddep  = moddep  + 1
+; vmsrc/apple/cmdjit.pla: 1097:         modfix  = moddep  - @header.2 // Adjust to skip header
+; vmsrc/apple/cmdjit.pla: 1098:         modsize = modsize - modfix
+; vmsrc/apple/cmdjit.pla: 1099:         rdlen   = rdlen   - modfix - 2
+; vmsrc/apple/cmdjit.pla: 1100:         modaddr = allocheap(modsize)
+; vmsrc/apple/cmdjit.pla: 1101:         memcpy(modaddr, moddep, rdlen)
+; vmsrc/apple/cmdjit.pla: 1102:         //
+; vmsrc/apple/cmdjit.pla: 1103:         // Read in remainder of module into memory for fixups.
+; vmsrc/apple/cmdjit.pla: 1104:         //
+; vmsrc/apple/cmdjit.pla: 1105:         addr = modaddr
+; vmsrc/apple/cmdjit.pla: 1106:         repeat
+	!BYTE	$66,$20			; LLW	[32]
+	!BYTE	$8C			; INCR
+	!BYTE	$6E,$20			; DLW	[32]
+	!BYTE	$28,$6C			; LLA	[108]
+	!BYTE	$84			; SUB 
+	!BYTE	$76,$16			; SLW	[22]
+	!BYTE	$66,$04			; LLW	[4]
+	!BYTE	$66,$16			; LLW	[22]
+	!BYTE	$84			; SUB 
+	!BYTE	$76,$04			; SLW	[4]
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$66,$16			; LLW	[22]
+	!BYTE	$84			; SUB 
+	!BYTE	$3A,$02			; SUBI	2
+	!BYTE	$76,$02			; SLW	[2]
+	!BYTE	$66,$04			; LLW	[4]
+	!BYTE	$54			; CALL	_C006
+_F162 	!WORD	_C006		
+	!BYTE	$6E,$14			; DLW	[20]
+	!BYTE	$66,$20			; LLW	[32]
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$54			; CALL	_A004
+_F163 	!WORD	_A004		
+	!BYTE	$66,$14			; LLW	[20]
+	!BYTE	$76,$10			; SLW	[16]
+_B075 
+; vmsrc/apple/cmdjit.pla: 1107:             addr  = addr + rdlen
+; vmsrc/apple/cmdjit.pla: 1108:             rdlen = read(refnum, addr, 4096)
+; vmsrc/apple/cmdjit.pla: 1109:         until rdlen <= 0
+	!BYTE	$66,$10			; LLW	[16]
+	!BYTE	$B2,$02			; ADDLW	[2]
+	!BYTE	$76,$10			; SLW	[16]
+	!BYTE	$64,$28			; LLB	[40]
+	!BYTE	$66,$10			; LLW	[16]
+	!BYTE	$2C,$00,$10		; CW	4096
+	!BYTE	$54			; CALL	_C004
+_F164 	!WORD	_C004		
+	!BYTE	$76,$02			; SLW	[2]
+_B076 
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$00			; CN	0
+	!BYTE	$4A			; ISLE
+	!BYTE	$4C			; BRFLS	_B075
+	!WORD	_B075-*
+_B074 
+; vmsrc/apple/cmdjit.pla: 1110:         close(refnum)
+; vmsrc/apple/cmdjit.pla: 1111:         //
+; vmsrc/apple/cmdjit.pla: 1112:         // Add module to symbol table.
+; vmsrc/apple/cmdjit.pla: 1113:         //
+; vmsrc/apple/cmdjit.pla: 1114:         addsym(mod, modaddr)
+; vmsrc/apple/cmdjit.pla: 1115:         //
+; vmsrc/apple/cmdjit.pla: 1116:         // Apply all fixups and symbol import/export.
+; vmsrc/apple/cmdjit.pla: 1117:         //
+; vmsrc/apple/cmdjit.pla: 1118:         modfix   = modaddr - modfix
+; vmsrc/apple/cmdjit.pla: 1119:         modofst  = modfix  - RELADDR
+; vmsrc/apple/cmdjit.pla: 1120:         modend   = modaddr + modsize
+; vmsrc/apple/cmdjit.pla: 1121:         bytecode = defofst + modofst
+; vmsrc/apple/cmdjit.pla: 1122:         rld      = modend  // Re-Locatable Directory
+; vmsrc/apple/cmdjit.pla: 1123:         esd      = rld     // Extern+Entry Symbol Directory
+; vmsrc/apple/cmdjit.pla: 1124:         while ^esd         // Scan to end of ESD
+	!BYTE	$64,$28			; LLB	[40]
+	!BYTE	$54			; CALL	_C003
+_F165 	!WORD	_C003		
+	!BYTE	$30			; DROP 
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$66,$14			; LLW	[20]
+	!BYTE	$54			; CALL	_C011
+_F166 	!WORD	_C011		
+	!BYTE	$66,$14			; LLW	[20]
+	!BYTE	$66,$16			; LLW	[22]
+	!BYTE	$84			; SUB 
+	!BYTE	$6E,$16			; DLW	[22]
+	!BYTE	$2C,$00,$10		; CW	4096
+	!BYTE	$84			; SUB 
+	!BYTE	$76,$18			; SLW	[24]
+	!BYTE	$66,$14			; LLW	[20]
+	!BYTE	$B2,$04			; ADDLW	[4]
+	!BYTE	$76,$1A			; SLW	[26]
+	!BYTE	$66,$08			; LLW	[8]
+	!BYTE	$B2,$18			; ADDLW	[24]
+	!BYTE	$76,$02			; SLW	[2]
+	!BYTE	$66,$1A			; LLW	[26]
+	!BYTE	$6E,$22			; DLW	[34]
+	!BYTE	$76,$24			; SLW	[36]
+	!BYTE	$50			; BRNCH	_B079
+	!WORD	_B079-*
+_B077 
+; vmsrc/apple/cmdjit.pla: 1125:             esd = esd + 4
+; vmsrc/apple/cmdjit.pla: 1126:         loop
+	!BYTE	$66,$24			; LLW	[36]
+	!BYTE	$38,$04			; ADDI	4
+	!BYTE	$76,$24			; SLW	[36]
+_B079 
+	!BYTE	$66,$24			; LLW	[36]
+	!BYTE	$60			; LB
+	!BYTE	$4E			; BRTRU	_B077
+	!WORD	_B077-*
+_B078 
+; vmsrc/apple/cmdjit.pla: 1127:         esd = esd + 1
+; vmsrc/apple/cmdjit.pla: 1128:         defaddr = allocxheap(rld - bytecode)
+; vmsrc/apple/cmdjit.pla: 1129:         modend  = bytecode
+; vmsrc/apple/cmdjit.pla: 1130:         codefix = defaddr - bytecode
+; vmsrc/apple/cmdjit.pla: 1131:         defofst = defaddr - defofst
+; vmsrc/apple/cmdjit.pla: 1132:         //
+; vmsrc/apple/cmdjit.pla: 1133:         // Run through the DeFinition Dictionary.
+; vmsrc/apple/cmdjit.pla: 1134:         //
+; vmsrc/apple/cmdjit.pla: 1135:         deffirst    = 1
+; vmsrc/apple/cmdjit.pla: 1136:         while ^rld == $02
+	!BYTE	$66,$24			; LLW	[36]
+	!BYTE	$8C			; INCR
+	!BYTE	$76,$24			; SLW	[36]
+	!BYTE	$66,$22			; LLW	[34]
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$84			; SUB 
+	!BYTE	$54			; CALL	_C010
+_F167 	!WORD	_C010		
+	!BYTE	$76,$12			; SLW	[18]
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$76,$1A			; SLW	[26]
+	!BYTE	$66,$12			; LLW	[18]
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$84			; SUB 
+	!BYTE	$76,$06			; SLW	[6]
+	!BYTE	$66,$12			; LLW	[18]
+	!BYTE	$66,$08			; LLW	[8]
+	!BYTE	$84			; SUB 
+	!BYTE	$76,$08			; SLW	[8]
+	!BYTE	$02			; CN	1
+	!BYTE	$74,$28			; SLB	[40]
+	!BYTE	$50			; BRNCH	_B082
+	!WORD	_B082-*
+_B080 
+; vmsrc/apple/cmdjit.pla: 1137:             //
+; vmsrc/apple/cmdjit.pla: 1138:             // This is a bytcode def entry - add it to the def directory.
+; vmsrc/apple/cmdjit.pla: 1139:             //
+; vmsrc/apple/cmdjit.pla: 1140:             adddef(deffirst, rld=>1 + defofst, @deflast)
+; vmsrc/apple/cmdjit.pla: 1141:             deffirst = skipjit // Calculate JIT potential or not
+; vmsrc/apple/cmdjit.pla: 1142:             rld      = rld + 4
+; vmsrc/apple/cmdjit.pla: 1143:         loop
+	!BYTE	$64,$28			; LLB	[40]
+	!BYTE	$66,$22			; LLW	[34]
+	!BYTE	$8C			; INCR
+	!BYTE	$62			; LW
+	!BYTE	$B2,$08			; ADDLW	[8]
+	!BYTE	$28,$1E			; LLA	[30]
+	!BYTE	$54			; CALL	_C015
+_F168 	!WORD	_C015		
+	!BYTE	$30			; DROP 
+	!BYTE	$64,$29			; LLB	[41]
+	!BYTE	$74,$28			; SLB	[40]
+	!BYTE	$66,$22			; LLW	[34]
+	!BYTE	$38,$04			; ADDI	4
+	!BYTE	$76,$22			; SLW	[34]
+_B082 
+	!BYTE	$66,$22			; LLW	[34]
+	!BYTE	$60			; LB
+	!BYTE	$04			; CN	2
+	!BYTE	$22			; BREQ	_B080
+	!WORD	_B080-*
+_B081 
+; vmsrc/apple/cmdjit.pla: 1144:         //
+; vmsrc/apple/cmdjit.pla: 1145:         // Run through the Re-Location Dictionary.
+; vmsrc/apple/cmdjit.pla: 1146:         //
+; vmsrc/apple/cmdjit.pla: 1147:         while ^rld
+	!BYTE	$50			; BRNCH	_B085
+	!WORD	_B085-*
+_B083 
+; vmsrc/apple/cmdjit.pla: 1148:             rld, addr, fixup = reloc(modfix, modofst, bytecode, rld)
+; vmsrc/apple/cmdjit.pla: 1149:             if ^rld
+; vmsrc/apple/cmdjit.pla: 1150:                 *addr = ^rld & $10 ?? *addr + lookupextern(esd, rld->3) :: lookupdef(fixup + codefix, deftbl)
+; vmsrc/apple/cmdjit.pla: 1151:                 rld   = rld + 4
+; vmsrc/apple/cmdjit.pla: 1152:             fin
+	!BYTE	$66,$16			; LLW	[22]
+	!BYTE	$66,$18			; LLW	[24]
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$66,$22			; LLW	[34]
+	!BYTE	$54			; CALL	_A024
+_F169 	!WORD	_A024		
+	!BYTE	$76,$0E			; SLW	[14]
+	!BYTE	$76,$10			; SLW	[16]
+	!BYTE	$6E,$22			; DLW	[34]
+	!BYTE	$60			; LB
+	!BYTE	$4C			; BRFLS	_B086
+	!WORD	_B086-*
+	!BYTE	$66,$22			; LLW	[34]
+	!BYTE	$60			; LB
+	!BYTE	$3C,$10			; ANDI	16
+	!BYTE	$4C			; BRFLS	_B088
+	!WORD	_B088-*
+	!BYTE	$66,$10			; LLW	[16]
+	!BYTE	$62			; LW
+	!BYTE	$66,$24			; LLW	[36]
+	!BYTE	$66,$22			; LLW	[34]
+	!BYTE	$38,$03			; ADDI	3
+	!BYTE	$60			; LB
+	!BYTE	$54			; CALL	_C014
+_F170 	!WORD	_C014		
+	!BYTE	$82			; ADD 
+	!BYTE	$50			; BRNCH	_B089
+	!WORD	_B089-*
+_B088 
+	!BYTE	$66,$0E			; LLW	[14]
+	!BYTE	$B2,$06			; ADDLW	[6]
+	!BYTE	$66,$1C			; LLW	[28]
+	!BYTE	$54			; CALL	_A023
+_F171 	!WORD	_A023		
+_B089 
+	!BYTE	$66,$10			; LLW	[16]
+	!BYTE	$72			; SW
+	!BYTE	$66,$22			; LLW	[34]
+	!BYTE	$38,$04			; ADDI	4
+	!BYTE	$76,$22			; SLW	[34]
+_B086 
+_B087 
+; vmsrc/apple/cmdjit.pla: 1153:         loop
+_B085 
+	!BYTE	$66,$22			; LLW	[34]
+	!BYTE	$60			; LB
+	!BYTE	$4E			; BRTRU	_B083
+	!WORD	_B083-*
+_B084 
+; vmsrc/apple/cmdjit.pla: 1154:         //
+; vmsrc/apple/cmdjit.pla: 1155:         // Run through the External/Entry Symbol Directory.
+; vmsrc/apple/cmdjit.pla: 1156:         //
+; vmsrc/apple/cmdjit.pla: 1157:         while ^esd
+	!BYTE	$50			; BRNCH	_B092
+	!WORD	_B092-*
+_B090 
+; vmsrc/apple/cmdjit.pla: 1158:             sym = esd
+; vmsrc/apple/cmdjit.pla: 1159:             esd = esd + dcitos(esd, @str)
+; vmsrc/apple/cmdjit.pla: 1160:             if ^esd & $08
+; vmsrc/apple/cmdjit.pla: 1161:                 //
+; vmsrc/apple/cmdjit.pla: 1162:                 // EXPORT symbol - add it to the global symbol table.
+; vmsrc/apple/cmdjit.pla: 1163:                 //
+; vmsrc/apple/cmdjit.pla: 1164:                 addr = esd=>1 + modofst
+; vmsrc/apple/cmdjit.pla: 1165:                 if uword_isge(addr, bytecode)
+; vmsrc/apple/cmdjit.pla: 1166:                     //
+; vmsrc/apple/cmdjit.pla: 1167:                     // Use the def directory address for bytecode.
+; vmsrc/apple/cmdjit.pla: 1168:                     //
+; vmsrc/apple/cmdjit.pla: 1169:                     addr = lookupdef(addr + codefix, deftbl)
+; vmsrc/apple/cmdjit.pla: 1170:                 fin
+	!BYTE	$66,$24			; LLW	[36]
+	!BYTE	$76,$26			; SLW	[38]
+	!BYTE	$66,$24			; LLW	[36]
+	!BYTE	$34			; DUP
+	!BYTE	$28,$6A			; LLA	[106]
+	!BYTE	$54			; CALL	_A018
+_F172 	!WORD	_A018		
+	!BYTE	$82			; ADD 
+	!BYTE	$6E,$24			; DLW	[36]
+	!BYTE	$60			; LB
+	!BYTE	$3C,$08			; ANDI	8
+	!BYTE	$4C			; BRFLS	_B093
+	!WORD	_B093-*
+	!BYTE	$66,$24			; LLW	[36]
+	!BYTE	$8C			; INCR
+	!BYTE	$62			; LW
+	!BYTE	$B2,$18			; ADDLW	[24]
+	!BYTE	$6E,$10			; DLW	[16]
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$54			; CALL	_A012
+_F173 	!WORD	_A012		
+	!BYTE	$4C			; BRFLS	_B095
+	!WORD	_B095-*
+	!BYTE	$66,$10			; LLW	[16]
+	!BYTE	$B2,$06			; ADDLW	[6]
+	!BYTE	$66,$1C			; LLW	[28]
+	!BYTE	$54			; CALL	_A023
+_F174 	!WORD	_A023		
+	!BYTE	$76,$10			; SLW	[16]
+_B095 
+_B096 
+; vmsrc/apple/cmdjit.pla: 1171:                 addsym(sym, addr)
+; vmsrc/apple/cmdjit.pla: 1172:             fin
+	!BYTE	$66,$26			; LLW	[38]
+	!BYTE	$66,$10			; LLW	[16]
+	!BYTE	$54			; CALL	_C011
+_F175 	!WORD	_C011		
+_B093 
+_B094 
+; vmsrc/apple/cmdjit.pla: 1173:             esd = esd + 3
+; vmsrc/apple/cmdjit.pla: 1174:         loop
+	!BYTE	$66,$24			; LLW	[36]
+	!BYTE	$38,$03			; ADDI	3
+	!BYTE	$76,$24			; SLW	[36]
+_B092 
+	!BYTE	$66,$24			; LLW	[36]
+	!BYTE	$60			; LB
+	!BYTE	$4E			; BRTRU	_B090
+	!WORD	_B090-*
+_B091 
+; vmsrc/apple/cmdjit.pla: 1175:         //
+; vmsrc/apple/cmdjit.pla: 1176:         // Move bytecode to AUX bank.
+; vmsrc/apple/cmdjit.pla: 1177:         //
+; vmsrc/apple/cmdjit.pla: 1178:         *$003C   = bytecode
+; vmsrc/apple/cmdjit.pla: 1179:         *$003E   = modaddr + modsize
+; vmsrc/apple/cmdjit.pla: 1180:         *$0042   = defaddr
+; vmsrc/apple/cmdjit.pla: 1181:         call($C311, 0, 0, 0, $05) // CALL XMOVE with carry set (MAIN->AUX) and ints disabled
+; vmsrc/apple/cmdjit.pla: 1182:     else
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$7A,$3C,$00		; SAW	60
+	!BYTE	$66,$14			; LLW	[20]
+	!BYTE	$B2,$04			; ADDLW	[4]
+	!BYTE	$7A,$3E,$00		; SAW	62
+	!BYTE	$66,$12			; LLW	[18]
+	!BYTE	$7A,$42,$00		; SAW	66
+	!BYTE	$2C,$11,$C3		; CW	49937
+	!BYTE	$00			; CN	0
+	!BYTE	$00			; CN	0
+	!BYTE	$00			; CN	0
+	!BYTE	$0A			; CN	5
+	!BYTE	$54			; CALL	_A001
+_F176 	!WORD	_A001		
+	!BYTE	$30			; DROP 
+	!BYTE	$50			; BRNCH	_B058
+	!WORD	_B058-*
+_B057 
+; vmsrc/apple/cmdjit.pla: 1183:         perr = $46
+; vmsrc/apple/cmdjit.pla: 1184:     fin
+	!BYTE	$2A,$46			; CB	70
+	!BYTE	$78			; SAB	_D033+0
+_F177 	!WORD	_D033+0		
+_B058 
+; vmsrc/apple/cmdjit.pla: 1185:     if perr
+; vmsrc/apple/cmdjit.pla: 1186:         return -perr
+	!BYTE	$68			; LAB	_D033+0
+_F178 	!WORD	_D033+0		
+	!BYTE	$4C			; BRFLS	_B097
+	!WORD	_B097-*
+	!BYTE	$68			; LAB	_D033+0
+_F179 	!WORD	_D033+0		
+	!BYTE	$90			; NEG
+	!BYTE	$5A,$EA			; LEAVE	234
+; vmsrc/apple/cmdjit.pla: 1187:     fin
+_B097 
+_B098 
+; vmsrc/apple/cmdjit.pla: 1188:     //
+; vmsrc/apple/cmdjit.pla: 1189:     // Free up rld+esd+bytecode in main memory.
+; vmsrc/apple/cmdjit.pla: 1190:     //
+; vmsrc/apple/cmdjit.pla: 1191:     releaseheap(modend)
+; vmsrc/apple/cmdjit.pla: 1192:     //
+; vmsrc/apple/cmdjit.pla: 1193:     // Call init routine if it exists.
+; vmsrc/apple/cmdjit.pla: 1194:     //
+; vmsrc/apple/cmdjit.pla: 1195:     initcode = 0
+; vmsrc/apple/cmdjit.pla: 1196:     if init
+; vmsrc/apple/cmdjit.pla: 1197:         init     = init + defofst
+; vmsrc/apple/cmdjit.pla: 1198:         initcode = adddef(deffirst, init, @deflast)()
+; vmsrc/apple/cmdjit.pla: 1199:         if initcode < modinitkeep
+; vmsrc/apple/cmdjit.pla: 1200:             //
+; vmsrc/apple/cmdjit.pla: 1201:             // Free init routine unless initkeep
+; vmsrc/apple/cmdjit.pla: 1202:             //
+; vmsrc/apple/cmdjit.pla: 1203:             xheap = init
+; vmsrc/apple/cmdjit.pla: 1204:             if initcode < 0
+; vmsrc/apple/cmdjit.pla: 1205:                 perr = -initcode
+; vmsrc/apple/cmdjit.pla: 1206:             fin
+	!BYTE	$66,$1A			; LLW	[26]
+	!BYTE	$54			; CALL	_C009
+_F180 	!WORD	_C009		
+	!BYTE	$30			; DROP 
+	!BYTE	$00			; CN	0
+	!BYTE	$76,$0E			; SLW	[14]
+	!BYTE	$66,$0C			; LLW	[12]
+	!BYTE	$4C			; BRFLS	_B099
+	!WORD	_B099-*
+	!BYTE	$66,$0C			; LLW	[12]
+	!BYTE	$B2,$08			; ADDLW	[8]
+	!BYTE	$76,$0C			; SLW	[12]
+	!BYTE	$64,$28			; LLB	[40]
+	!BYTE	$66,$0C			; LLW	[12]
+	!BYTE	$28,$1E			; LLA	[30]
+	!BYTE	$54			; CALL	_C015
+_F181 	!WORD	_C015		
+	!BYTE	$56			; ICAL
+	!BYTE	$6E,$0E			; DLW	[14]
+	!BYTE	$2C,$00,$40		; CW	16384
+	!BYTE	$46			; ISLT
+	!BYTE	$4C			; BRFLS	_B101
+	!WORD	_B101-*
+	!BYTE	$66,$0C			; LLW	[12]
+	!BYTE	$7A			; SAW	_D071+0
+_F182 	!WORD	_D071+0		
+	!BYTE	$66,$0E			; LLW	[14]
+	!BYTE	$00			; CN	0
+	!BYTE	$46			; ISLT
+	!BYTE	$4C			; BRFLS	_B103
+	!WORD	_B103-*
+	!BYTE	$66,$0E			; LLW	[14]
+	!BYTE	$90			; NEG
+	!BYTE	$78			; SAB	_D033+0
+_F183 	!WORD	_D033+0		
+_B103 
+_B104 
+; vmsrc/apple/cmdjit.pla: 1207:         else
+	!BYTE	$50			; BRNCH	_B102
+	!WORD	_B102-*
+_B101 
+; vmsrc/apple/cmdjit.pla: 1208:             initcode = initcode & ~modinitkeep
+; vmsrc/apple/cmdjit.pla: 1209:         fin
+	!BYTE	$66,$0E			; LLW	[14]
+	!BYTE	$2C,$FF,$BF		; CW	-16385
+	!BYTE	$94			; AND 
+	!BYTE	$76,$0E			; SLW	[14]
+_B102 
+; vmsrc/apple/cmdjit.pla: 1210:     fin
+_B099 
+_B100 
+; vmsrc/apple/cmdjit.pla: 1211:     return initcode
+	!BYTE	$66,$0E			; LLW	[14]
+	!BYTE	$5A,$EA			; LEAVE	234
+; vmsrc/apple/cmdjit.pla: 1212: end
+; vmsrc/apple/cmdjit.pla: 1213: //
+; vmsrc/apple/cmdjit.pla: 1214: // Command mode
+; vmsrc/apple/cmdjit.pla: 1215: //
+; vmsrc/apple/cmdjit.pla: 1216: def volumes()#0
+_C017 					; volumes()
+	JSR	INTERP
+; vmsrc/apple/cmdjit.pla: 1217:     byte params[4]
+					; params -> [0]
+; vmsrc/apple/cmdjit.pla: 1218:     word strbuf
+					; strbuf -> [4]
+; vmsrc/apple/cmdjit.pla: 1219:     byte i
+					; i -> [6]
+; vmsrc/apple/cmdjit.pla: 1220: 
+; vmsrc/apple/cmdjit.pla: 1221:     params.0 = 2
+	!BYTE	$58,$07,$00		; ENTER	7,0
+; vmsrc/apple/cmdjit.pla: 1222:     params.1 = 0
+; vmsrc/apple/cmdjit.pla: 1223:     params:2 = heap
+; vmsrc/apple/cmdjit.pla: 1224:     perr     = syscall($C5, @params)
+; vmsrc/apple/cmdjit.pla: 1225:     strbuf   = heap
+; vmsrc/apple/cmdjit.pla: 1226:     for i = 0 to 15
+	!BYTE	$04			; CN	2
+	!BYTE	$74,$00			; SLB	[0]
+	!BYTE	$00			; CN	0
+	!BYTE	$74,$01			; SLB	[1]
+	!BYTE	$6A			; LAW	_D070+0
+_F184 	!WORD	_D070+0		
+	!BYTE	$76,$02			; SLW	[2]
+	!BYTE	$2A,$C5			; CB	197
+	!BYTE	$28,$00			; LLA	[0]
+	!BYTE	$54			; CALL	_A000
+_F185 	!WORD	_A000		
+	!BYTE	$78			; SAB	_D033+0
+_F186 	!WORD	_D033+0		
+	!BYTE	$6A			; LAW	_D070+0
+_F187 	!WORD	_D070+0		
+	!BYTE	$76,$04			; SLW	[4]
+	!BYTE	$1E			; CN	15
+	!BYTE	$00			; CN	0
+_B106 
+	!BYTE	$6C,$06			; DLB	[6]
+; vmsrc/apple/cmdjit.pla: 1227:         ^strbuf = ^strbuf & $0F
+; vmsrc/apple/cmdjit.pla: 1228:         if ^strbuf
+; vmsrc/apple/cmdjit.pla: 1229:             cout('/'); prstr(strbuf); crout()
+; vmsrc/apple/cmdjit.pla: 1230:         fin
+	!BYTE	$66,$04			; LLW	[4]
+	!BYTE	$60			; LB
+	!BYTE	$3C,$0F			; ANDI	15
+	!BYTE	$66,$04			; LLW	[4]
+	!BYTE	$70			; SB
+	!BYTE	$66,$04			; LLW	[4]
+	!BYTE	$60			; LB
+	!BYTE	$4C			; BRFLS	_B108
+	!WORD	_B108-*
+	!BYTE	$2A,$2F			; CB	47
+	!BYTE	$54			; CALL	_A006
+_F188 	!WORD	_A006		
+	!BYTE	$66,$04			; LLW	[4]
+	!BYTE	$54			; CALL	_A008
+_F189 	!WORD	_A008		
+	!BYTE	$54			; CALL	_A005
+_F190 	!WORD	_A005		
+_B108 
+_B109 
+; vmsrc/apple/cmdjit.pla: 1231:         strbuf = strbuf + 16
+; vmsrc/apple/cmdjit.pla: 1232:     next
+	!BYTE	$66,$04			; LLW	[4]
+	!BYTE	$38,$10			; ADDI	16
+	!BYTE	$76,$04			; SLW	[4]
+_B107 
+	!BYTE	$A4			; INCBRLE	_B106
+	!WORD	_B106-*
+_B105 
+	!BYTE	$74,$06			; SLB	[6]
+	!BYTE	$30			; DROP 
+; vmsrc/apple/cmdjit.pla: 1233: end
+	!BYTE	$5A,$07			; LEAVE	7
+; vmsrc/apple/cmdjit.pla: 1234: def catalog(path)#0
+					; path -> [0]
+_C018 					; catalog()
+	JSR	INTERP
+; vmsrc/apple/cmdjit.pla: 1235:     byte refnum
+					; refnum -> [2]
+; vmsrc/apple/cmdjit.pla: 1236:     byte firstblk
+					; firstblk -> [3]
+; vmsrc/apple/cmdjit.pla: 1237:     byte entrylen, entriesblk
+					; entrylen -> [4]
+					; entriesblk -> [5]
+; vmsrc/apple/cmdjit.pla: 1238:     byte i, type, len
+					; i -> [6]
+					; type -> [7]
+					; len -> [8]
+; vmsrc/apple/cmdjit.pla: 1239:     word entry
+					; entry -> [9]
+; vmsrc/apple/cmdjit.pla: 1240: 
+; vmsrc/apple/cmdjit.pla: 1241:     refnum = open(path)
+	!BYTE	$58,$0B,$01		; ENTER	11,1
+; vmsrc/apple/cmdjit.pla: 1242:     if perr
+; vmsrc/apple/cmdjit.pla: 1243:         return
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$54			; CALL	_C002
+_F191 	!WORD	_C002		
+	!BYTE	$74,$02			; SLB	[2]
+	!BYTE	$68			; LAB	_D033+0
+_F192 	!WORD	_D033+0		
+	!BYTE	$4C			; BRFLS	_B110
+	!WORD	_B110-*
+	!BYTE	$5A,$0B			; LEAVE	11
+; vmsrc/apple/cmdjit.pla: 1244:     fin
+_B110 
+_B111 
+; vmsrc/apple/cmdjit.pla: 1245:     firstblk = 1
+; vmsrc/apple/cmdjit.pla: 1246:     while read(refnum, heap, 512) == 512
+	!BYTE	$02			; CN	1
+	!BYTE	$74,$03			; SLB	[3]
+	!BYTE	$50			; BRNCH	_B114
+	!WORD	_B114-*
+_B112 
+; vmsrc/apple/cmdjit.pla: 1247:         entry = heap + 4
+; vmsrc/apple/cmdjit.pla: 1248:         if firstblk
+; vmsrc/apple/cmdjit.pla: 1249:             entrylen   = heap->$23
+; vmsrc/apple/cmdjit.pla: 1250:             entriesblk = heap->$24 - 1
+; vmsrc/apple/cmdjit.pla: 1251:             entry      = entry + entrylen
+; vmsrc/apple/cmdjit.pla: 1252:         fin
+	!BYTE	$6A			; LAW	_D070+0
+_F193 	!WORD	_D070+0		
+	!BYTE	$38,$04			; ADDI	4
+	!BYTE	$76,$09			; SLW	[9]
+	!BYTE	$64,$03			; LLB	[3]
+	!BYTE	$4C			; BRFLS	_B115
+	!WORD	_B115-*
+	!BYTE	$6A			; LAW	_D070+0
+_F194 	!WORD	_D070+0		
+	!BYTE	$38,$23			; ADDI	35
+	!BYTE	$60			; LB
+	!BYTE	$74,$04			; SLB	[4]
+	!BYTE	$6A			; LAW	_D070+0
+_F195 	!WORD	_D070+0		
+	!BYTE	$38,$24			; ADDI	36
+	!BYTE	$60			; LB
+	!BYTE	$8E			; DECR
+	!BYTE	$74,$05			; SLB	[5]
+	!BYTE	$66,$09			; LLW	[9]
+	!BYTE	$B0,$04			; ADDLB	[4]
+	!BYTE	$76,$09			; SLW	[9]
+_B115 
+_B116 
+; vmsrc/apple/cmdjit.pla: 1253:         for i = firstblk to entriesblk
+	!BYTE	$64,$05			; LLB	[5]
+	!BYTE	$64,$03			; LLB	[3]
+	!BYTE	$A0			; BRGT	_B117
+	!WORD	_B117-*
+_B118 
+	!BYTE	$6C,$06			; DLB	[6]
+; vmsrc/apple/cmdjit.pla: 1254:             if ^entry
+; vmsrc/apple/cmdjit.pla: 1255:                 ^entry = ^entry & $0F
+; vmsrc/apple/cmdjit.pla: 1256:                 prstr(entry)
+; vmsrc/apple/cmdjit.pla: 1257:                 type = ' '
+; vmsrc/apple/cmdjit.pla: 1258:                 when entry->$10
+	!BYTE	$66,$09			; LLW	[9]
+	!BYTE	$60			; LB
+	!BYTE	$4C			; BRFLS	_B120
+	!WORD	_B120-*
+	!BYTE	$66,$09			; LLW	[9]
+	!BYTE	$60			; LB
+	!BYTE	$3C,$0F			; ANDI	15
+	!BYTE	$66,$09			; LLW	[9]
+	!BYTE	$70			; SB
+	!BYTE	$66,$09			; LLW	[9]
+	!BYTE	$54			; CALL	_A008
+_F196 	!WORD	_A008		
+	!BYTE	$2A,$20			; CB	32
+	!BYTE	$74,$07			; SLB	[7]
+	!BYTE	$66,$09			; LLW	[9]
+	!BYTE	$38,$10			; ADDI	16
+	!BYTE	$60			; LB
+	!BYTE	$52			; SEL
+	!WORD	_B123-*
+; vmsrc/apple/cmdjit.pla: 1259:                     is $0F // Is it a directory?
+_B124 
+; vmsrc/apple/cmdjit.pla: 1260:                         type = '/'
+; vmsrc/apple/cmdjit.pla: 1261:                         break
+	!BYTE	$2A,$2F			; CB	47
+	!BYTE	$74,$07			; SLB	[7]
+	!BYTE	$50			; BRNCH	_B122
+	!WORD	_B122-*
+; vmsrc/apple/cmdjit.pla: 1262:                     is $FF // SYSTEM file
+_B125 
+; vmsrc/apple/cmdjit.pla: 1263:                         type = '-'
+; vmsrc/apple/cmdjit.pla: 1264:                         break
+	!BYTE	$2A,$2D			; CB	45
+	!BYTE	$74,$07			; SLB	[7]
+	!BYTE	$50			; BRNCH	_B122
+	!WORD	_B122-*
+; vmsrc/apple/cmdjit.pla: 1265:                     is $FE // REL file
+_B126 
+; vmsrc/apple/cmdjit.pla: 1266:                         type = '+'
+; vmsrc/apple/cmdjit.pla: 1267:                 wend
+	!BYTE	$2A,$2B			; CB	43
+	!BYTE	$74,$07			; SLB	[7]
+	!BYTE	$50			; BRNCH	_B122
+	!WORD	_B122-*
+_B123 
+	!BYTE	$03			; CASEBLOCK
+	!WORD	$000F
+	!WORD	_B124-*
+	!WORD	$00FE
+	!WORD	_B126-*
+	!WORD	$00FF
+	!WORD	_B125-*
+_B122 
+; vmsrc/apple/cmdjit.pla: 1268:                 cout(type)
+; vmsrc/apple/cmdjit.pla: 1269:                 for len = ^entry to 18
+	!BYTE	$64,$07			; LLB	[7]
+	!BYTE	$54			; CALL	_A006
+_F197 	!WORD	_A006		
+	!BYTE	$2A,$12			; CB	18
+	!BYTE	$66,$09			; LLW	[9]
+	!BYTE	$60			; LB
+	!BYTE	$A0			; BRGT	_B127
+	!WORD	_B127-*
+_B128 
+	!BYTE	$6C,$08			; DLB	[8]
+; vmsrc/apple/cmdjit.pla: 1270:                     cout(' ')
+; vmsrc/apple/cmdjit.pla: 1271:                 next
+	!BYTE	$2A,$20			; CB	32
+	!BYTE	$54			; CALL	_A006
+_F198 	!WORD	_A006		
+_B129 
+	!BYTE	$A4			; INCBRLE	_B128
+	!WORD	_B128-*
+_B127 
+	!BYTE	$74,$08			; SLB	[8]
+	!BYTE	$30			; DROP 
+; vmsrc/apple/cmdjit.pla: 1272:             fin
+_B120 
+_B121 
+; vmsrc/apple/cmdjit.pla: 1273:             entry = entry + entrylen
+; vmsrc/apple/cmdjit.pla: 1274:         next
+	!BYTE	$66,$09			; LLW	[9]
+	!BYTE	$B0,$04			; ADDLB	[4]
+	!BYTE	$76,$09			; SLW	[9]
+_B119 
+	!BYTE	$A4			; INCBRLE	_B118
+	!WORD	_B118-*
+_B117 
+	!BYTE	$74,$06			; SLB	[6]
+	!BYTE	$30			; DROP 
+; vmsrc/apple/cmdjit.pla: 1275:         firstblk = 0
+; vmsrc/apple/cmdjit.pla: 1276:     loop
+	!BYTE	$00			; CN	0
+	!BYTE	$74,$03			; SLB	[3]
+_B114 
+	!BYTE	$64,$02			; LLB	[2]
+	!BYTE	$6A			; LAW	_D070+0
+_F199 	!WORD	_D070+0		
+	!BYTE	$2C,$00,$02		; CW	512
+	!BYTE	$54			; CALL	_C004
+_F200 	!WORD	_C004		
+	!BYTE	$2C,$00,$02		; CW	512
+	!BYTE	$22			; BREQ	_B112
+	!WORD	_B112-*
+_B113 
+; vmsrc/apple/cmdjit.pla: 1277:     close(refnum)
+; vmsrc/apple/cmdjit.pla: 1278:     crout()
+; vmsrc/apple/cmdjit.pla: 1279: end
+	!BYTE	$64,$02			; LLB	[2]
+	!BYTE	$54			; CALL	_C003
+_F201 	!WORD	_C003		
+	!BYTE	$30			; DROP 
+	!BYTE	$54			; CALL	_A005
+_F202 	!WORD	_A005		
+	!BYTE	$5A,$0B			; LEAVE	11
+; vmsrc/apple/cmdjit.pla: 1280: def stripchars(strptr)#1
+					; strptr -> [0]
+_C019 					; stripchars()
+	JSR	INTERP
+; vmsrc/apple/cmdjit.pla: 1281:     while ^strptr and ^(strptr + 1) > ' '
+	!BYTE	$58,$02,$01		; ENTER	2,1
+	!BYTE	$50			; BRNCH	_B132
+	!WORD	_B132-*
+_B130 
+; vmsrc/apple/cmdjit.pla: 1282:         memcpy(strptr + 1, strptr + 2, ^strptr)
+; vmsrc/apple/cmdjit.pla: 1283:         ^strptr--
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$8C			; INCR
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$38,$02			; ADDI	2
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$60			; LB
+	!BYTE	$54			; CALL	_A004
+_F203 	!WORD	_A004		
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$60			; LB
+	!BYTE	$8E			; DECR
+; vmsrc/apple/cmdjit.pla: 1284:     loop
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$70			; SB
+_B132 
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$60			; LB
+	!BYTE	$AC			; BRAND	_B133
+	!WORD	_B133-*
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$8C			; INCR
+	!BYTE	$60			; LB
+	!BYTE	$2A,$20			; CB	32
+	!BYTE	$44			; ISGT
+_B133 
+	!BYTE	$4E			; BRTRU	_B130
+	!WORD	_B130-*
+_B131 
+; vmsrc/apple/cmdjit.pla: 1285:     return ^strptr
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$60			; LB
+	!BYTE	$5A,$02			; LEAVE	2
+; vmsrc/apple/cmdjit.pla: 1286: end
+; vmsrc/apple/cmdjit.pla: 1287: def stripspaces(strptr)#0
+					; strptr -> [0]
+_C020 					; stripspaces()
+	JSR	INTERP
+; vmsrc/apple/cmdjit.pla: 1288:     while ^strptr and ^(strptr + ^strptr) <= ' '
+	!BYTE	$58,$02,$01		; ENTER	2,1
+	!BYTE	$50			; BRNCH	_B136
+	!WORD	_B136-*
+_B134 
+; vmsrc/apple/cmdjit.pla: 1289:         ^strptr--
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$60			; LB
+	!BYTE	$8E			; DECR
+; vmsrc/apple/cmdjit.pla: 1290:     loop
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$70			; SB
+_B136 
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$60			; LB
+	!BYTE	$AC			; BRAND	_B137
+	!WORD	_B137-*
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$34			; DUP
+	!BYTE	$60			; LB
+	!BYTE	$82			; ADD 
+	!BYTE	$60			; LB
+	!BYTE	$2A,$20			; CB	32
+	!BYTE	$4A			; ISLE
+_B137 
+	!BYTE	$4E			; BRTRU	_B134
+	!WORD	_B134-*
+_B135 
+; vmsrc/apple/cmdjit.pla: 1291:     while ^strptr and ^(strptr + 1) <= ' '
+	!BYTE	$50			; BRNCH	_B140
+	!WORD	_B140-*
+_B138 
+; vmsrc/apple/cmdjit.pla: 1292:         memcpy(strptr + 1, strptr + 2, ^strptr)
+; vmsrc/apple/cmdjit.pla: 1293:         ^strptr--
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$8C			; INCR
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$38,$02			; ADDI	2
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$60			; LB
+	!BYTE	$54			; CALL	_A004
+_F204 	!WORD	_A004		
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$60			; LB
+	!BYTE	$8E			; DECR
+; vmsrc/apple/cmdjit.pla: 1294:     loop
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$70			; SB
+_B140 
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$60			; LB
+	!BYTE	$AC			; BRAND	_B141
+	!WORD	_B141-*
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$8C			; INCR
+	!BYTE	$60			; LB
+	!BYTE	$2A,$20			; CB	32
+	!BYTE	$4A			; ISLE
+_B141 
+	!BYTE	$4E			; BRTRU	_B138
+	!WORD	_B138-*
+_B139 
+; vmsrc/apple/cmdjit.pla: 1295: end
+	!BYTE	$5A,$02			; LEAVE	2
+; vmsrc/apple/cmdjit.pla: 1296: def striptrail(strptr)#1
+					; strptr -> [0]
+_C021 					; striptrail()
+	JSR	INTERP
+; vmsrc/apple/cmdjit.pla: 1297:     byte i
+					; i -> [2]
+; vmsrc/apple/cmdjit.pla: 1298: 
+; vmsrc/apple/cmdjit.pla: 1299:     for i = 1 to ^strptr
+	!BYTE	$58,$03,$01		; ENTER	3,1
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$60			; LB
+	!BYTE	$02			; CN	1
+	!BYTE	$A0			; BRGT	_B142
+	!WORD	_B142-*
+_B143 
+	!BYTE	$6C,$02			; DLB	[2]
+; vmsrc/apple/cmdjit.pla: 1300:         if ^(strptr + i) <= ' '
+; vmsrc/apple/cmdjit.pla: 1301:             ^strptr = i - 1
+; vmsrc/apple/cmdjit.pla: 1302:             break
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$B0,$02			; ADDLB	[2]
+	!BYTE	$60			; LB
+	!BYTE	$2A,$20			; CB	32
+	!BYTE	$4A			; ISLE
+	!BYTE	$4C			; BRFLS	_B145
+	!WORD	_B145-*
+	!BYTE	$64,$02			; LLB	[2]
+	!BYTE	$8E			; DECR
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$70			; SB
+	!BYTE	$50			; BRNCH	_B142
+	!WORD	_B142-*
+; vmsrc/apple/cmdjit.pla: 1303:         fin
+_B145 
+_B146 
+; vmsrc/apple/cmdjit.pla: 1304:     next
+_B144 
+	!BYTE	$A4			; INCBRLE	_B143
+	!WORD	_B143-*
+_B142 
+	!BYTE	$74,$02			; SLB	[2]
+	!BYTE	$30			; DROP 
+; vmsrc/apple/cmdjit.pla: 1305:     return strptr
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$5A,$03			; LEAVE	3
+; vmsrc/apple/cmdjit.pla: 1306: end
+; vmsrc/apple/cmdjit.pla: 1307: def parsecmd(strptr)#1
+					; strptr -> [0]
+_C022 					; parsecmd()
+	JSR	INTERP
+; vmsrc/apple/cmdjit.pla: 1308:     byte cmd
+					; cmd -> [2]
+; vmsrc/apple/cmdjit.pla: 1309: 
+; vmsrc/apple/cmdjit.pla: 1310:     cmd = 0
+	!BYTE	$58,$03,$01		; ENTER	3,1
+; vmsrc/apple/cmdjit.pla: 1311:     stripspaces(strptr)
+; vmsrc/apple/cmdjit.pla: 1312:     if ^strptr
+; vmsrc/apple/cmdjit.pla: 1313:         cmd = ^(strptr + 1)
+; vmsrc/apple/cmdjit.pla: 1314:         memcpy(strptr + 1, strptr + 2, ^strptr)
+; vmsrc/apple/cmdjit.pla: 1315:         ^strptr--
+	!BYTE	$00			; CN	0
+	!BYTE	$74,$02			; SLB	[2]
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$54			; CALL	_C020
+_F205 	!WORD	_C020		
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$60			; LB
+	!BYTE	$4C			; BRFLS	_B147
+	!WORD	_B147-*
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$8C			; INCR
+	!BYTE	$60			; LB
+	!BYTE	$74,$02			; SLB	[2]
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$8C			; INCR
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$38,$02			; ADDI	2
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$60			; LB
+	!BYTE	$54			; CALL	_A004
+_F206 	!WORD	_A004		
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$60			; LB
+	!BYTE	$8E			; DECR
+; vmsrc/apple/cmdjit.pla: 1316:     fin
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$70			; SB
+_B147 
+_B148 
+; vmsrc/apple/cmdjit.pla: 1317:     stripspaces(strptr)
+; vmsrc/apple/cmdjit.pla: 1318:     return cmd
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$54			; CALL	_C020
+_F207 	!WORD	_C020		
+	!BYTE	$64,$02			; LLB	[2]
+	!BYTE	$5A,$03			; LEAVE	3
+; vmsrc/apple/cmdjit.pla: 1319: end
+; vmsrc/apple/cmdjit.pla: 1320: def resetmemfiles()#0
+_C023 					; resetmemfiles()
+	JSR	INTERP
+; vmsrc/apple/cmdjit.pla: 1321:     byte terr
+					; terr -> [0]
+; vmsrc/apple/cmdjit.pla: 1322: 
+; vmsrc/apple/cmdjit.pla: 1323:     terr = perr // Save perr
+	!BYTE	$58,$01,$00		; ENTER	1,0
+; vmsrc/apple/cmdjit.pla: 1324:     //
+; vmsrc/apple/cmdjit.pla: 1325:     // Close all files
+; vmsrc/apple/cmdjit.pla: 1326:     //
+; vmsrc/apple/cmdjit.pla: 1327:     ^$BF94 = 0
+; vmsrc/apple/cmdjit.pla: 1328:     close(0)
+; vmsrc/apple/cmdjit.pla: 1329:     //
+; vmsrc/apple/cmdjit.pla: 1330:     // Set memory bitmap
+; vmsrc/apple/cmdjit.pla: 1331:     //
+; vmsrc/apple/cmdjit.pla: 1332:     memset($BF58, 0, 24)
+; vmsrc/apple/cmdjit.pla: 1333:     ^$BF58 = $CF
+; vmsrc/apple/cmdjit.pla: 1334:     ^$BF6F = $01
+; vmsrc/apple/cmdjit.pla: 1335:     perr = terr // Restore perr
+; vmsrc/apple/cmdjit.pla: 1336: end
+	!BYTE	$68			; LAB	_D033+0
+_F208 	!WORD	_D033+0		
+	!BYTE	$74,$00			; SLB	[0]
+	!BYTE	$00			; CN	0
+	!BYTE	$78,$94,$BF		; SAB	49044
+	!BYTE	$00			; CN	0
+	!BYTE	$54			; CALL	_C003
+_F209 	!WORD	_C003		
+	!BYTE	$30			; DROP 
+	!BYTE	$2C,$58,$BF		; CW	48984
+	!BYTE	$00			; CN	0
+	!BYTE	$2A,$18			; CB	24
+	!BYTE	$54			; CALL	_A003
+_F210 	!WORD	_A003		
+	!BYTE	$2A,$CF			; CB	207
+	!BYTE	$78,$58,$BF		; SAB	48984
+	!BYTE	$02			; CN	1
+	!BYTE	$78,$6F,$BF		; SAB	49007
+	!BYTE	$64,$00			; LLB	[0]
+	!BYTE	$78			; SAB	_D033+0
+_F211 	!WORD	_D033+0		
+	!BYTE	$5A,$01			; LEAVE	1
+; vmsrc/apple/cmdjit.pla: 1337: def execsys(sysfile)#0
+					; sysfile -> [0]
+_C024 					; execsys()
+	JSR	INTERP
+; vmsrc/apple/cmdjit.pla: 1338:     byte refnum
+					; refnum -> [2]
+; vmsrc/apple/cmdjit.pla: 1339:     word len
+					; len -> [3]
+; vmsrc/apple/cmdjit.pla: 1340: 
+; vmsrc/apple/cmdjit.pla: 1341:     if ^sysfile
+	!BYTE	$58,$05,$01		; ENTER	5,1
+; vmsrc/apple/cmdjit.pla: 1342:         strcpy($280, sysfile)
+; vmsrc/apple/cmdjit.pla: 1343:         striptrail(sysfile)
+; vmsrc/apple/cmdjit.pla: 1344:         refnum = open(sysfile)
+; vmsrc/apple/cmdjit.pla: 1345:         if refnum
+; vmsrc/apple/cmdjit.pla: 1346:             len = read(refnum, $2000, $FFFF)
+; vmsrc/apple/cmdjit.pla: 1347:             resetmemfiles()
+; vmsrc/apple/cmdjit.pla: 1348:             if len
+; vmsrc/apple/cmdjit.pla: 1349:                 strcpy(sysfile, $280)
+; vmsrc/apple/cmdjit.pla: 1350:                 if stripchars(sysfile) and ^$2000 == $4C and *$2003 == $EEEE
+; vmsrc/apple/cmdjit.pla: 1351:                     stripspaces(sysfile)
+; vmsrc/apple/cmdjit.pla: 1352:                     if ^$2005 >= ^sysfile + 1
+; vmsrc/apple/cmdjit.pla: 1353:                         strcpy($2006, sysfile)
+; vmsrc/apple/cmdjit.pla: 1354:                     fin
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$60			; LB
+	!BYTE	$4C			; BRFLS	_B149
+	!WORD	_B149-*
+	!BYTE	$2C,$80,$02		; CW	640
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$54			; CALL	_C012
+_F212 	!WORD	_C012		
+	!BYTE	$30			; DROP 
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$54			; CALL	_C021
+_F213 	!WORD	_C021		
+	!BYTE	$30			; DROP 
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$54			; CALL	_C002
+_F214 	!WORD	_C002		
+	!BYTE	$6C,$02			; DLB	[2]
+	!BYTE	$4C			; BRFLS	_B151
+	!WORD	_B151-*
+	!BYTE	$64,$02			; LLB	[2]
+	!BYTE	$2C,$00,$20		; CW	8192
+	!BYTE	$20			; MINUS ONE
+	!BYTE	$54			; CALL	_C004
+_F215 	!WORD	_C004		
+	!BYTE	$76,$03			; SLW	[3]
+	!BYTE	$54			; CALL	_C023
+_F216 	!WORD	_C023		
+	!BYTE	$66,$03			; LLW	[3]
+	!BYTE	$4C			; BRFLS	_B153
+	!WORD	_B153-*
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$2C,$80,$02		; CW	640
+	!BYTE	$54			; CALL	_C012
+_F217 	!WORD	_C012		
+	!BYTE	$30			; DROP 
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$54			; CALL	_C019
+_F218 	!WORD	_C019		
+	!BYTE	$AC			; BRAND	_B155
+	!WORD	_B155-*
+	!BYTE	$68,$00,$20		; LAB	8192
+	!BYTE	$2A,$4C			; CB	76
+	!BYTE	$40			; ISEQ
+	!BYTE	$AC			; BRAND	_B156
+	!WORD	_B156-*
+	!BYTE	$6A,$03,$20		; LAW	8195
+	!BYTE	$2C,$EE,$EE		; CW	61166
+	!BYTE	$40			; ISEQ
+_B156 
+_B155 
+	!BYTE	$4C			; BRFLS	_B157
+	!WORD	_B157-*
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$54			; CALL	_C020
+_F219 	!WORD	_C020		
+	!BYTE	$68,$05,$20		; LAB	8197
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$60			; LB
+	!BYTE	$8C			; INCR
+	!BYTE	$48			; ISGE
+	!BYTE	$4C			; BRFLS	_B159
+	!WORD	_B159-*
+	!BYTE	$2C,$06,$20		; CW	8198
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$54			; CALL	_C012
+_F220 	!WORD	_C012		
+	!BYTE	$30			; DROP 
+_B159 
+_B160 
+; vmsrc/apple/cmdjit.pla: 1355:                 fin
+_B157 
+_B158 
+; vmsrc/apple/cmdjit.pla: 1356:                 striptrail($280)
+; vmsrc/apple/cmdjit.pla: 1357:                 exec()
+; vmsrc/apple/cmdjit.pla: 1358:             fin
+	!BYTE	$2C,$80,$02		; CW	640
+	!BYTE	$54			; CALL	_C021
+_F221 	!WORD	_C021		
+	!BYTE	$30			; DROP 
+	!BYTE	$54			; CALL	_A002
+_F222 	!WORD	_A002		
+_B153 
+_B154 
+; vmsrc/apple/cmdjit.pla: 1359:         fin
+_B151 
+_B152 
+; vmsrc/apple/cmdjit.pla: 1360:     fin
+_B149 
+_B150 
+; vmsrc/apple/cmdjit.pla: 1361: end
+	!BYTE	$5A,$05			; LEAVE	5
+; vmsrc/apple/cmdjit.pla: 1362: def execmod(modfile)#1
+					; modfile -> [0]
+_P026 					; execmod(modfile)#1()
+_C025 					; execmod()
+	JSR	INTERP
+; vmsrc/apple/cmdjit.pla: 1363:     byte moddci[17]
+					; moddci -> [2]
+; vmsrc/apple/cmdjit.pla: 1364:     word saveheap, savexheap, savesym, saveflags
+					; saveheap -> [19]
+					; savexheap -> [21]
+					; savesym -> [23]
+					; saveflags -> [25]
+; vmsrc/apple/cmdjit.pla: 1365: 
+; vmsrc/apple/cmdjit.pla: 1366:     perr = 1
+	!BYTE	$58,$1B,$01		; ENTER	27,1
+; vmsrc/apple/cmdjit.pla: 1367:     if stodci(modfile, @moddci)
+; vmsrc/apple/cmdjit.pla: 1368:         saveheap  = heap
+; vmsrc/apple/cmdjit.pla: 1369:         savexheap = xheap
+; vmsrc/apple/cmdjit.pla: 1370:         savesym   = lastsym
+; vmsrc/apple/cmdjit.pla: 1371:         saveflags = systemflags
+; vmsrc/apple/cmdjit.pla: 1372:         if loadmod(@moddci) < modkeep
+; vmsrc/apple/cmdjit.pla: 1373:             lastsym     = savesym
+; vmsrc/apple/cmdjit.pla: 1374:             xheap       = savexheap
+; vmsrc/apple/cmdjit.pla: 1375:             heap        = saveheap
+; vmsrc/apple/cmdjit.pla: 1376:         fin
+	!BYTE	$02			; CN	1
+	!BYTE	$78			; SAB	_D033+0
+_F223 	!WORD	_D033+0		
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$28,$02			; LLA	[2]
+	!BYTE	$54			; CALL	_A019
+_F224 	!WORD	_A019		
+	!BYTE	$4C			; BRFLS	_B161
+	!WORD	_B161-*
+	!BYTE	$6A			; LAW	_D070+0
+_F225 	!WORD	_D070+0		
+	!BYTE	$76,$13			; SLW	[19]
+	!BYTE	$6A			; LAW	_D071+0
+_F226 	!WORD	_D071+0		
+	!BYTE	$76,$15			; SLW	[21]
+	!BYTE	$6A			; LAW	_D073+0
+_F227 	!WORD	_D073+0		
+	!BYTE	$76,$17			; SLW	[23]
+	!BYTE	$6A			; LAW	_D069+0
+_F228 	!WORD	_D069+0		
+	!BYTE	$76,$19			; SLW	[25]
+	!BYTE	$28,$02			; LLA	[2]
+	!BYTE	$54			; CALL	_C016
+_F229 	!WORD	_C016		
+	!BYTE	$2C,$00,$20		; CW	8192
+	!BYTE	$46			; ISLT
+	!BYTE	$4C			; BRFLS	_B163
+	!WORD	_B163-*
+	!BYTE	$66,$17			; LLW	[23]
+	!BYTE	$7A			; SAW	_D073+0
+_F230 	!WORD	_D073+0		
+	!BYTE	$66,$15			; LLW	[21]
+	!BYTE	$7A			; SAW	_D071+0
+_F231 	!WORD	_D071+0		
+	!BYTE	$66,$13			; LLW	[19]
+	!BYTE	$7A			; SAW	_D070+0
+_F232 	!WORD	_D070+0		
+_B163 
+_B164 
+; vmsrc/apple/cmdjit.pla: 1377:         ^lastsym    = 0
+; vmsrc/apple/cmdjit.pla: 1378:         systemflags = saveflags
+; vmsrc/apple/cmdjit.pla: 1379:     fin
+	!BYTE	$00			; CN	0
+	!BYTE	$6A			; LAW	_D073+0
+_F233 	!WORD	_D073+0		
+	!BYTE	$70			; SB
+	!BYTE	$66,$19			; LLW	[25]
+	!BYTE	$7A			; SAW	_D069+0
+_F234 	!WORD	_D069+0		
+_B161 
+_B162 
+; vmsrc/apple/cmdjit.pla: 1380:     return -perr
+	!BYTE	$68			; LAB	_D033+0
+_F235 	!WORD	_D033+0		
+	!BYTE	$90			; NEG
+	!BYTE	$5A,$1B			; LEAVE	27
+; vmsrc/apple/cmdjit.pla: 1381: end
+; vmsrc/apple/cmdjit.pla: 1382: //
+; vmsrc/apple/cmdjit.pla: 1383: // Command line processor
+; vmsrc/apple/cmdjit.pla: 1384: //
+; vmsrc/apple/cmdjit.pla: 1385: def docmds#0
+_C026 					; docmds()
+	JSR	INTERP
+; vmsrc/apple/cmdjit.pla: 1386:     word prefix
+					; prefix -> [0]
+; vmsrc/apple/cmdjit.pla: 1387: 
+; vmsrc/apple/cmdjit.pla: 1388:     loadmod(jitmod)  // Cannot do this in init code - it will overwrite it!
+	!BYTE	$58,$02,$00		; ENTER	2,0
+; vmsrc/apple/cmdjit.pla: 1389:     xheap    = $0400 // Reset heap to point at low memory
+; vmsrc/apple/cmdjit.pla: 1390:     xheaptop = $A000 // Top below JITC
+; vmsrc/apple/cmdjit.pla: 1391:     prefix   = pfxop(heap, GET_PFX)
+; vmsrc/apple/cmdjit.pla: 1392:     repeat
+	!BYTE	$2C,$F0,$02		; CW	752
+	!BYTE	$54			; CALL	_C016
+_F236 	!WORD	_C016		
+	!BYTE	$30			; DROP 
+	!BYTE	$2C,$00,$04		; CW	1024
+	!BYTE	$7A			; SAW	_D071+0
+_F237 	!WORD	_D071+0		
+	!BYTE	$2C,$00,$A0		; CW	40960
+	!BYTE	$7A			; SAW	_D072+0
+_F238 	!WORD	_D072+0		
+	!BYTE	$6A			; LAW	_D070+0
+_F239 	!WORD	_D070+0		
+	!BYTE	$2A,$C7			; CB	199
+	!BYTE	$54			; CALL	_C001
+_F240 	!WORD	_C001		
+	!BYTE	$76,$00			; SLW	[0]
+_B166 
+; vmsrc/apple/cmdjit.pla: 1393:         if ^getlnbuf
+; vmsrc/apple/cmdjit.pla: 1394:             strcpy(@cmdln, getlnbuf)
+; vmsrc/apple/cmdjit.pla: 1395:             when toupper(parsecmd(getlnbuf))
+	!BYTE	$68,$FF,$01		; LAB	511
+	!BYTE	$4C			; BRFLS	_B168
+	!WORD	_B168-*
+	!BYTE	$26			; LA	_D036+0
+_F241 	!WORD	_D036+0		
+	!BYTE	$2C,$FF,$01		; CW	511
+	!BYTE	$54			; CALL	_C012
+_F242 	!WORD	_C012		
+	!BYTE	$30			; DROP 
+	!BYTE	$2C,$FF,$01		; CW	511
+	!BYTE	$54			; CALL	_C022
+_F243 	!WORD	_C022		
+	!BYTE	$54			; CALL	_A020
+_F244 	!WORD	_A020		
+	!BYTE	$52			; SEL
+	!WORD	_B171-*
+; vmsrc/apple/cmdjit.pla: 1396:                 is 'C'
+_B172 
+; vmsrc/apple/cmdjit.pla: 1397:                     catalog(^getlnbuf ?? getlnbuf :: prefix)
+; vmsrc/apple/cmdjit.pla: 1398:                     break
+	!BYTE	$68,$FF,$01		; LAB	511
+	!BYTE	$4C			; BRFLS	_B175
+	!WORD	_B175-*
+	!BYTE	$2C,$FF,$01		; CW	511
+	!BYTE	$50			; BRNCH	_B176
+	!WORD	_B176-*
+_B175 
+	!BYTE	$66,$00			; LLW	[0]
+_B176 
+	!BYTE	$54			; CALL	_C018
+_F245 	!WORD	_C018		
+	!BYTE	$50			; BRNCH	_B170
+	!WORD	_B170-*
+; vmsrc/apple/cmdjit.pla: 1399:                 is 'P'
+_B177 
+; vmsrc/apple/cmdjit.pla: 1400:                     pfxop(getlnbuf, SET_PFX)
+; vmsrc/apple/cmdjit.pla: 1401:                     break
+	!BYTE	$2C,$FF,$01		; CW	511
+	!BYTE	$2A,$C6			; CB	198
+	!BYTE	$54			; CALL	_C001
+_F246 	!WORD	_C001		
+	!BYTE	$30			; DROP 
+	!BYTE	$50			; BRNCH	_B170
+	!WORD	_B170-*
+; vmsrc/apple/cmdjit.pla: 1402:                 is '/'
+_B178 
+; vmsrc/apple/cmdjit.pla: 1403:                     repeat
+_B180 
+; vmsrc/apple/cmdjit.pla: 1404:                         ^prefix--
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$60			; LB
+	!BYTE	$8E			; DECR
+; vmsrc/apple/cmdjit.pla: 1405:                     until ^(prefix + ^prefix) == '/'
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$70			; SB
+_B181 
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$34			; DUP
+	!BYTE	$60			; LB
+	!BYTE	$82			; ADD 
+	!BYTE	$60			; LB
+	!BYTE	$2A,$2F			; CB	47
+	!BYTE	$24			; BRNE	_B180
+	!WORD	_B180-*
+_B179 
+; vmsrc/apple/cmdjit.pla: 1406:                     if ^prefix > 1
+; vmsrc/apple/cmdjit.pla: 1407:                         pfxop(prefix, SET_PFX)
+; vmsrc/apple/cmdjit.pla: 1408:                     fin
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$60			; LB
+	!BYTE	$02			; CN	1
+	!BYTE	$44			; ISGT
+	!BYTE	$4C			; BRFLS	_B182
+	!WORD	_B182-*
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$2A,$C6			; CB	198
+	!BYTE	$54			; CALL	_C001
+_F247 	!WORD	_C001		
+	!BYTE	$30			; DROP 
+_B182 
+_B183 
+; vmsrc/apple/cmdjit.pla: 1409:                     break
+	!BYTE	$50			; BRNCH	_B170
+	!WORD	_B170-*
+; vmsrc/apple/cmdjit.pla: 1410:                 is 'V'
+_B184 
+; vmsrc/apple/cmdjit.pla: 1411:                     volumes()
+; vmsrc/apple/cmdjit.pla: 1412:                     break
+	!BYTE	$54			; CALL	_C017
+_F248 	!WORD	_C017		
+	!BYTE	$50			; BRNCH	_B170
+	!WORD	_B170-*
+; vmsrc/apple/cmdjit.pla: 1413:                 is '-'
+_B185 
+; vmsrc/apple/cmdjit.pla: 1414:                     execsys(getlnbuf)
+; vmsrc/apple/cmdjit.pla: 1415:                     break
+	!BYTE	$2C,$FF,$01		; CW	511
+	!BYTE	$54			; CALL	_C024
+_F249 	!WORD	_C024		
+	!BYTE	$50			; BRNCH	_B170
+	!WORD	_B170-*
+; vmsrc/apple/cmdjit.pla: 1416:                 is '+'
+_B186 
+; vmsrc/apple/cmdjit.pla: 1417: 					//
+; vmsrc/apple/cmdjit.pla: 1418: 					// Set JIT code pointer
+; vmsrc/apple/cmdjit.pla: 1419: 					//
+; vmsrc/apple/cmdjit.pla: 1420: 					*jitcodeptr = jitcbuf
+; vmsrc/apple/cmdjit.pla: 1421: 					//
+; vmsrc/apple/cmdjit.pla: 1422: 					// Exec module
+; vmsrc/apple/cmdjit.pla: 1423: 					//
+; vmsrc/apple/cmdjit.pla: 1424:                     execmod(striptrail(getlnbuf))
+; vmsrc/apple/cmdjit.pla: 1425:                     //
+; vmsrc/apple/cmdjit.pla: 1426:                     // Clean up
+; vmsrc/apple/cmdjit.pla: 1427:                     //
+; vmsrc/apple/cmdjit.pla: 1428:                     resetmemfiles
+; vmsrc/apple/cmdjit.pla: 1429:                     break
+	!BYTE	$2C,$00,$AF		; CW	44800
+	!BYTE	$7A,$E4,$03		; SAW	996
+	!BYTE	$2C,$FF,$01		; CW	511
+	!BYTE	$54			; CALL	_C021
+_F250 	!WORD	_C021		
+	!BYTE	$54			; CALL	_C025
+_F251 	!WORD	_C025		
+	!BYTE	$30			; DROP 
+	!BYTE	$54			; CALL	_C023
+_F252 	!WORD	_C023		
+	!BYTE	$50			; BRNCH	_B170
+	!WORD	_B170-*
+; vmsrc/apple/cmdjit.pla: 1430:                 otherwise
+_B171 
+	!BYTE	$06			; CASEBLOCK
+	!WORD	$002B
+	!WORD	_B186-*
+	!WORD	$002D
+	!WORD	_B185-*
+	!WORD	$002F
+	!WORD	_B178-*
+	!WORD	$0043
+	!WORD	_B172-*
+	!WORD	$0050
+	!WORD	_B177-*
+	!WORD	$0056
+	!WORD	_B184-*
+; vmsrc/apple/cmdjit.pla: 1431:                     cout('?')
+; vmsrc/apple/cmdjit.pla: 1432:             wend
+	!BYTE	$2A,$3F			; CB	63
+	!BYTE	$54			; CALL	_A006
+_F253 	!WORD	_A006		
+_B170 
+; vmsrc/apple/cmdjit.pla: 1433:             if perr
+; vmsrc/apple/cmdjit.pla: 1434:                 prstr("ERR:$")
+	!BYTE	$68			; LAB	_D033+0
+_F254 	!WORD	_D033+0		
+	!BYTE	$4C			; BRFLS	_B187
+	!WORD	_B187-*
+	!BYTE	$2E			; CS
+	!BYTE	$05
+	!BYTE	$45,$52,$52,$3A,$24
+	!BYTE	$54			; CALL	_A008
+_F255 	!WORD	_A008		
+; vmsrc/apple/cmdjit.pla: 1435:                 prbyte(perr)
+; vmsrc/apple/cmdjit.pla: 1436: 		crout()
+; vmsrc/apple/cmdjit.pla: 1437:             fin
+	!BYTE	$68			; LAB	_D033+0
+_F256 	!WORD	_D033+0		
+	!BYTE	$54			; CALL	_A010
+_F257 	!WORD	_A010		
+	!BYTE	$54			; CALL	_A005
+_F258 	!WORD	_A005		
+_B187 
+_B188 
+; vmsrc/apple/cmdjit.pla: 1438:         fin
+_B168 
+_B169 
+; vmsrc/apple/cmdjit.pla: 1439:         prstr(pfxop(prefix, GET_PFX))
+; vmsrc/apple/cmdjit.pla: 1440:         rdstr($BA)
+; vmsrc/apple/cmdjit.pla: 1441:     until 0
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$2A,$C7			; CB	199
+	!BYTE	$54			; CALL	_C001
+_F259 	!WORD	_C001		
+	!BYTE	$54			; CALL	_A008
+_F260 	!WORD	_A008		
+	!BYTE	$2A,$BA			; CB	186
+	!BYTE	$54			; CALL	_A011
+_F261 	!WORD	_A011		
+	!BYTE	$30			; DROP 
+_B167 
+	!BYTE	$50			; BRNCH	_B166
+	!WORD	_B166-*
+_B165 
+; vmsrc/apple/cmdjit.pla: 1442: end
+	!BYTE	$5A,$02			; LEAVE	2
+; vmsrc/apple/cmdjit.pla: 1443: //
+; vmsrc/apple/cmdjit.pla: 1444: // Dummy definition to get free heap
+; vmsrc/apple/cmdjit.pla: 1445: //
+; vmsrc/apple/cmdjit.pla: 1446: def lastdef#0
+_C027 					; lastdef()
+	JSR	INTERP
+; vmsrc/apple/cmdjit.pla: 1447: end
+	!BYTE	$5C			; RET
+; vmsrc/apple/cmdjit.pla: 1448: //
+; vmsrc/apple/cmdjit.pla: 1449: // Get heap start.
+; vmsrc/apple/cmdjit.pla: 1450: //
+; vmsrc/apple/cmdjit.pla: 1451: heap = @lastdef
+_INIT 
+	JSR	INTERP
+; vmsrc/apple/cmdjit.pla: 1452: //
+; vmsrc/apple/cmdjit.pla: 1453: // Print PLASMA version
+; vmsrc/apple/cmdjit.pla: 1454: //
+; vmsrc/apple/cmdjit.pla: 1455: prstr("PLASMA 2.0 128K\n")//; prbyte(version.1); cout('.'); prbyte(version.0); crout
+	!BYTE	$26			; LA	_C027+0
+_F262 	!WORD	_C027+0		
+	!BYTE	$7A			; SAW	_D070+0
+_F263 	!WORD	_D070+0		
+	!BYTE	$2E			; CS
+	!BYTE	$10
+	!BYTE	$50,$4C,$41,$53,$4D,$41,$20,$32
+	!BYTE	$2E,$30,$20,$31,$32,$38,$4B,$0D
+	!BYTE	$54			; CALL	_A008
+_F264 	!WORD	_A008		
+; vmsrc/apple/cmdjit.pla: 1456: //
+; vmsrc/apple/cmdjit.pla: 1457: // Init symbol table.
+; vmsrc/apple/cmdjit.pla: 1458: //
+; vmsrc/apple/cmdjit.pla: 1459: while *sysmodsym
+	!BYTE	$50			; BRNCH	_B191
+	!WORD	_B191-*
+_B189 
+; vmsrc/apple/cmdjit.pla: 1460:     stodci(sysmodsym=>0, heap)
+; vmsrc/apple/cmdjit.pla: 1461:     addsym(heap, sysmodsym=>2)
+; vmsrc/apple/cmdjit.pla: 1462:     sysmodsym = sysmodsym + 4
+; vmsrc/apple/cmdjit.pla: 1463: loop
+	!BYTE	$6A			; LAW	_D068+0
+_F265 	!WORD	_D068+0		
+	!BYTE	$62			; LW
+	!BYTE	$6A			; LAW	_D070+0
+_F266 	!WORD	_D070+0		
+	!BYTE	$54			; CALL	_A019
+_F267 	!WORD	_A019		
+	!BYTE	$30			; DROP 
+	!BYTE	$6A			; LAW	_D070+0
+_F268 	!WORD	_D070+0		
+	!BYTE	$6A			; LAW	_D068+0
+_F269 	!WORD	_D068+0		
+	!BYTE	$38,$02			; ADDI	2
+	!BYTE	$62			; LW
+	!BYTE	$54			; CALL	_C011
+_F270 	!WORD	_C011		
+	!BYTE	$6A			; LAW	_D068+0
+_F271 	!WORD	_D068+0		
+	!BYTE	$38,$04			; ADDI	4
+	!BYTE	$7A			; SAW	_D068+0
+_F272 	!WORD	_D068+0		
+_B191 
+	!BYTE	$6A			; LAW	_D068+0
+_F273 	!WORD	_D068+0		
+	!BYTE	$62			; LW
+	!BYTE	$4E			; BRTRU	_B189
+	!WORD	_B189-*
+_B190 
+; vmsrc/apple/cmdjit.pla: 1464: //
+; vmsrc/apple/cmdjit.pla: 1465: // Set system path
+; vmsrc/apple/cmdjit.pla: 1466: //
+; vmsrc/apple/cmdjit.pla: 1467: strcat(strcpy(@sysmods, $300), "SYS/")) // This is the path to CMD
+	!BYTE	$26			; LA	_D067+0
+_F274 	!WORD	_D067+0		
+	!BYTE	$2C,$00,$03		; CW	768
+	!BYTE	$54			; CALL	_C012
+_F275 	!WORD	_C012		
+	!BYTE	$2E			; CS
+	!BYTE	$04
+	!BYTE	$53,$59,$53,$2F
+	!BYTE	$54			; CALL	_C013
+_F276 	!WORD	_C013		
+	!BYTE	$30			; DROP 
+; vmsrc/apple/cmdjit.pla: 1468: syspath  = @sysmods // Update external interface table
+; vmsrc/apple/cmdjit.pla: 1469: syscmdln = @cmdln
+; vmsrc/apple/cmdjit.pla: 1470: //
+; vmsrc/apple/cmdjit.pla: 1471: // Try to load autorun.
+; vmsrc/apple/cmdjit.pla: 1472: //
+; vmsrc/apple/cmdjit.pla: 1473: autorun = open(@autorun)
+; vmsrc/apple/cmdjit.pla: 1474: if autorun
+; vmsrc/apple/cmdjit.pla: 1475:     cmdln = read(autorun, @cmdln+1, 81)
+; vmsrc/apple/cmdjit.pla: 1476:     strcpy(getlnbuf, @cmdln)
+; vmsrc/apple/cmdjit.pla: 1477:     close(0)
+; vmsrc/apple/cmdjit.pla: 1478: else
+	!BYTE	$26			; LA	_D067+0
+_F277 	!WORD	_D067+0		
+	!BYTE	$7A			; SAW	_D031+0
+_F278 	!WORD	_D031+0		
+	!BYTE	$26			; LA	_D036+0
+_F279 	!WORD	_D036+0		
+	!BYTE	$7A			; SAW	_D032+0
+_F280 	!WORD	_D032+0		
+	!BYTE	$26			; LA	_D037+0
+_F281 	!WORD	_D037+0		
+	!BYTE	$54			; CALL	_C002
+_F282 	!WORD	_C002		
+	!BYTE	$7C			; DAB	_D037+0
+_F283 	!WORD	_D037+0		
+	!BYTE	$4C			; BRFLS	_B192
+	!WORD	_B192-*
+	!BYTE	$68			; LAB	_D037+0
+_F284 	!WORD	_D037+0		
+	!BYTE	$26			; LA	_D036+1
+_F285 	!WORD	_D036+1		
+	!BYTE	$2A,$51			; CB	81
+	!BYTE	$54			; CALL	_C004
+_F286 	!WORD	_C004		
+	!BYTE	$78			; SAB	_D036+0
+_F287 	!WORD	_D036+0		
+	!BYTE	$2C,$FF,$01		; CW	511
+	!BYTE	$26			; LA	_D036+0
+_F288 	!WORD	_D036+0		
+	!BYTE	$54			; CALL	_C012
+_F289 	!WORD	_C012		
+	!BYTE	$30			; DROP 
+	!BYTE	$00			; CN	0
+	!BYTE	$54			; CALL	_C003
+_F290 	!WORD	_C003		
+	!BYTE	$30			; DROP 
+	!BYTE	$50			; BRNCH	_B193
+	!WORD	_B193-*
+_B192 
+; vmsrc/apple/cmdjit.pla: 1479:     ^getlnbuf = 0
+; vmsrc/apple/cmdjit.pla: 1480:     //
+; vmsrc/apple/cmdjit.pla: 1481:     // Print some startup info.
+; vmsrc/apple/cmdjit.pla: 1482:     //
+; vmsrc/apple/cmdjit.pla: 1483:     prstr("MEM FREE:$"); prword(availheap); crout
+	!BYTE	$00			; CN	0
+	!BYTE	$78,$FF,$01		; SAB	511
+	!BYTE	$2E			; CS
+	!BYTE	$0A
+	!BYTE	$4D,$45,$4D,$20,$46,$52,$45,$45
+	!BYTE	$3A,$24
+	!BYTE	$54			; CALL	_A008
+_F291 	!WORD	_A008		
+; vmsrc/apple/cmdjit.pla: 1484: fin
+	!BYTE	$54			; CALL	_C005
+_F292 	!WORD	_C005		
+	!BYTE	$54			; CALL	_A009
+_F293 	!WORD	_A009		
+	!BYTE	$54			; CALL	_A005
+_F294 	!WORD	_A005		
+_B193 
+; vmsrc/apple/cmdjit.pla: 1485: docmds
+; vmsrc/apple/cmdjit.pla: 1486: done
+	!BYTE	$54			; CALL	_C026
+_F295 	!WORD	_C026		
+	!BYTE	$00			; CN	0
+	!BYTE	$5C			; RET
+_SYSFLAGS	=	0

@@ -343,29 +343,49 @@ IDXW    LDA     ESTKL,X
 ;* MUL TOS-1 BY TOS
 ;*
 MUL     STY     IPY
-        LDY     #$10
+        LDA     ESTKH,X
+        CMP     ESTKH+1,X
+        BCS     +
+        TAY                     ; SWAP MULTIPLIER AND MULTIPLICAND
+        LDA     ESTKH+1,X       ; SO THAT MULTIPLIER IS SMALLER
+        STA     ESTKH,X
+        STY     ESTKH+1,X
+        LDY     ESTKL,X
         LDA     ESTKL+1,X
+        STA     ESTKL,X
+        STY     ESTKL+1,X
++       LDA     ESTKL+1,X
         EOR     #$FF
         STA     TMPL
-        LDA     ESTKH+1,X
-        EOR     #$FF
-        STA     TMPH
         LDA     #$00
         STA     ESTKL+1,X       ; PRODL
-;       STA     ESTKH+1,X       ; PRODH
-_MULLP  LSR     TMPH            ; MULTPLRH
-        ROR     TMPL            ; MULTPLRL
+;       STA     TMPH            ; PRODH
+        LDY     #$08
+_MULLPL LSR     TMPL            ; ~MULTPLRL
         BCS     +
-        STA     ESTKH+1,X       ; PRODH
-        LDA     ESTKL,X         ; MULTPLNDL
-        ADC     ESTKL+1,X       ; PRODL
-        STA     ESTKL+1,X
-        LDA     ESTKH,X         ; MULTPLNDH
-        ADC     ESTKH+1,X       ; PRODH
+        STA     TMPH            ; PRODH
+        LDA     ESTKL+1,X       ; PRODL
+        ADC     ESTKL,X         ; +MULTPLNDL
+        STA     ESTKL+1,X       ; =PRODL
+        LDA     TMPH            ; PRODH
+        ADC     ESTKH,X         ; +MULTPLNDH
 +       ASL     ESTKL,X         ; MULTPLNDL
         ROL     ESTKH,X         ; MULTPLNDH
         DEY
-        BNE     _MULLP
+        BNE     _MULLPL
+        BEQ     +
+_MULLPH CLC
+        TAY                     ; PRODH
+        LDA     ESTKL+1,X       ; PRODL
+        ADC     ESTKL,X         ; +MULTPLNDL
+        STA     ESTKL+1,X       ; =PRODL
+        TYA                     ; PRODH
+        ADC     ESTKH,X         ; +MULTPLNDH
+-       ASL     ESTKL,X         ; MULTPLNDL
+        ROL     ESTKH,X         ; MULTPLNDH
++       LSR     ESTKH+1,X       ; MULTPLRH
+        BCS     _MULLPH
+        BNE     -               ; ONLY MULT AS MANY BITS AS WE NEED
         STA     ESTKH+1,X       ; PRODH
         LDY     IPY
         JMP     DROP

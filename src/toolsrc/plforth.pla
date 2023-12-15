@@ -14,37 +14,41 @@ include "inc/cmdsys.plh"
 //
 // Predefine instrinsics
 //
-predef _drop_(a)#0, _add_(a,b)#1, _vlist_#0
-predef _exit_#0
-//
+predef _drop_(a)#0, _swap_(a,b)#2
+predef _add_(a,b)#1, _sub_(a,b)#1, _mul_(a,b)#1, _div_(a,b)#1
+predef _vlist_#0, _exit_#0
 // DROP
-//
 char d_drop = "drop"
 word = 0, @_drop_, 0
-//
+// SWAP
+char d_swap = "swap"
+word = @d_drop, @_swap_
 // ADD
-//
 char d_add = "+"
-word = @d_drop, @_add_, 0
-//
+word = @d_swap, @_add_
+// SUB
+char d_sub = "-"
+word = @d_add, @_sub_
+// MUL
+char d_mul = "*"
+word = @d_sub, @_mul_
+// DIV
+char d_div = "/"
+word = @d_mul, @_div_
 // PRINT TOS
-//
 char d_prtos = "."
-word = @d_add, @puti, 0
-//
-// EXIT FORTH
-//
+word = @d_div, @puti
+// EXIT
 char d_exit = "exit"
-word = @d_prtos, @_exit_, 0
-//
-// List vocabulary
-//
+word = @d_prtos, @_exit_
+// LIST VOCAB
 char d_vlist = "vlist"
-word = @d_exit, @_vlist_, 0
+word = @d_exit, @_vlist_
 //
-// Vocabulary
+// Internal variables
 //
 word vocab=@d_vlist
+word inptr
 char exit = 0
 //
 // Intrinsics
@@ -52,8 +56,20 @@ char exit = 0
 def _drop_(a)#0
   return
 end
+def _swap_(a,b)#2
+  return b,a
+end
 def _add_(a,b)#1
   return a+b
+end
+def _sub_(a,b)#1
+  return a-b
+end
+def _mul_(a,b)#1
+  return a*b
+end
+def _div_(a,b)#1
+  return a/b
 end
 def _exit_#0
   exit = 1
@@ -70,26 +86,27 @@ end
 //
 // Find match in vocabulary
 //
-def find(name)#1
+def find#1
   word v
   byte len
 
-  name--
+  inptr--
   v = vocab
   while v
     for len = 1 to ^v
-      putc(^(name+len)); putc('='); putc(^(v+len))
-      if ^(name+len) <> ^(v+len)
-        putln
+      if ^(inptr+len) <> ^(v+len)
         break
       fin
     next
-    if len > ^v and ^(name+len) <= ' '
-      puts("[Found name = "); puts(v); puts("]\n")
+    if len > ^v and ^(inptr+len) <= ' '
+      //puts("[Found name = "); puts(v); puts("]\n")
+      inptr = inptr + len
       return v + ^v + 3
     fin
     v = *(v + ^v + 1)
   loop
+  // Not found
+  inptr++
   return 0
 end
 //
@@ -104,20 +121,24 @@ end
 //
 // Convert input into number
 //
-def isnum(inbuf)#2
-  word num
+def isnum#2
+  word num, sign
 
-
-  if ^inbuf >= '0' and ^inbuf <= '9'
+  sign = 1
+  if ^inptr == '-'
+    sign = -1
+    inptr++
+  fin
+  if ^inptr >= '0' and ^inptr <= '9'
     num = 0
-    while ^inbuf >= '0' and ^inbuf <= '9'
-      num = num * 10 + ^inbuf - '0'
-      putc(^inbuf); inbuf++
-    loop
-    if inbuf <= ' '
-      puts("[Found number = "); puti(num); puts("]\n")
-    fin
-    return num, inbuf <= ' '
+    repeat
+      num = num * 10 + ^inptr - '0'
+      inptr++
+    until ^inptr < '0' or ^inptr > '9'
+    //if ^inptr <= ' '
+    //  puts("[Found number = "); puti(num); puts("]\n")
+    //fin
+    return num * sign, ^inptr <= ' '
   fin
   return 0, FALSE
 end
@@ -125,34 +146,36 @@ end
 // Quit and look for user input
 //
 def _quit_#0
-  word instr, cfa, __drop, __isnum
+  word cfa, __drop, __isnum
 
   __drop  = @_drop_
   __isnum = @isnum
   repeat
-    puts("OK")
-    instr = gets(':'|$80)
-    if ^instr
-      ^(instr + ^instr + 1) = 0
+    puts("\nOK")
+    inptr = gets(':'|$80)
+    if ^inptr
+      ^(inptr + ^inptr + 1) = 0
       //
       // Clear high bit of input buffer
       //
-      for cfa = 1 to ^instr
-        ^(instr + cfa) = ^(instr + cfa) & $7F
+      for cfa = 1 to ^inptr
+        ^(inptr + cfa) = ^(inptr + cfa) & $7F
       next
-      instr++
-      while ^instr == ' '
-        instr++
-      loop
-      if ^instr > ' '
-        cfa = find(instr)
-        if cfa
-          (*cfa)()#0 //exec(*cfa)
-        elsif not __isnum(instr)#1
-            __drop()#0
-            puts("? No match\n")
+      inptr++
+      repeat
+        while ^inptr == ' '
+          inptr++
+        loop
+        if ^inptr > ' '
+          cfa = find
+          if cfa
+            (*cfa)()#0 //exec(*cfa)
+          elsif not __isnum()#1
+              __drop()#0
+              puts("? No match\n")
+          fin
         fin
-      fin
+      until ^inptr < ' '
     fin
   until exit
 end

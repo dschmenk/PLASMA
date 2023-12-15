@@ -1,0 +1,5445 @@
+; ACME COMPATIBLE OUTPUT
+	!WORD	_SEGEND-_SEGBEGIN	; LENGTH OF HEADER + CODE/DATA + BYTECODE SEGMENT
+_SEGBEGIN 
+	!WORD	$6502			; MAGIC #
+	!WORD	_SYSFLAGS			; SYSTEM FLAGS
+	!WORD	_SUBSEG			; BYTECODE SUB-SEGMENT
+	!WORD	_DEFCNT			; BYTECODE DEF COUNT
+	!WORD	_INIT			; MODULE INITIALIZATION ROUTINE
+; libsrc/apple/jit16.pla: 0001: //
+; libsrc/apple/jit16.pla: 0002: // PLASMA JIT bytecode compiler
+; libsrc/apple/jit16.pla: 0003: //
+; libsrc/apple/jit16.pla: 0004: include "inc/cmdsys.plh"
+; inc/cmdsys.plh: 0001: import cmdsys
+	; DCI STRING: CMDSYS
+	!BYTE	$C3,$CD,$C4,$D3,$D9,$53
+					; CMDSYS -> X000
+; inc/cmdsys.plh: 0002:     //
+; inc/cmdsys.plh: 0003:     // Useful values for everyone
+; inc/cmdsys.plh: 0004:     //
+; inc/cmdsys.plh: 0005:     const _SYSVER_ = $0200 // Version built against
+					; _SYSVER_ = 512
+; inc/cmdsys.plh: 0006:     const FALSE    = 0
+					; FALSE = 0
+; inc/cmdsys.plh: 0007:     const TRUE     = not FALSE
+					; TRUE = -1
+; inc/cmdsys.plh: 0008:     const NULL     = 0
+					; NULL = 0
+; inc/cmdsys.plh: 0009:     //
+; inc/cmdsys.plh: 0010:     // Machine ID values
+; inc/cmdsys.plh: 0011:     //
+; inc/cmdsys.plh: 0012:     const MACHID_CLOCK = $01
+					; MACHID_CLOCK = 1
+; inc/cmdsys.plh: 0013:     const MACHID_80COL = $02
+					; MACHID_80COL = 2
+; inc/cmdsys.plh: 0014:     const MACHID_MEM   = $03
+					; MACHID_MEM = 3
+; inc/cmdsys.plh: 0015:     const MACHID_64K   = $20
+					; MACHID_64K = 32
+; inc/cmdsys.plh: 0016:     const MACHID_128K  = $30
+					; MACHID_128K = 48
+; inc/cmdsys.plh: 0017:     const MACHID_MODEL = $C8
+					; MACHID_MODEL = 200
+; inc/cmdsys.plh: 0018:     const MACHID_II    = $00
+					; MACHID_II = 0
+; inc/cmdsys.plh: 0019:     const MACHID_IIPLUS= $40
+					; MACHID_IIPLUS = 64
+; inc/cmdsys.plh: 0020:     const MACHID_IIE   = $80
+					; MACHID_IIE = 128
+; inc/cmdsys.plh: 0021:     const MACHID_III   = $C0
+					; MACHID_III = 192
+; inc/cmdsys.plh: 0022:     const MACHID_IIC   = $88
+					; MACHID_IIC = 136
+; inc/cmdsys.plh: 0023:     const MACHID_I     = $08
+					; MACHID_I = 8
+; inc/cmdsys.plh: 0024:     byte MACHID
+					; MACHID -> X001
+; inc/cmdsys.plh: 0025:     //
+; inc/cmdsys.plh: 0026:     // System flags: memory allocator screen holes.
+; inc/cmdsys.plh: 0027:     //
+; inc/cmdsys.plh: 0028:     const restxt1     = $0001
+					; restxt1 = 1
+; inc/cmdsys.plh: 0029:     const restxt2     = $0002
+					; restxt2 = 2
+; inc/cmdsys.plh: 0030:     const resxtxt1    = $0004
+					; resxtxt1 = 4
+; inc/cmdsys.plh: 0031:     const resxtxt2    = $0008
+					; resxtxt2 = 8
+; inc/cmdsys.plh: 0032:     const reshgr1     = $0010
+					; reshgr1 = 16
+; inc/cmdsys.plh: 0033:     const reshgr2     = $0020
+					; reshgr2 = 32
+; inc/cmdsys.plh: 0034:     const resxhgr1    = $0040
+					; resxhgr1 = 64
+; inc/cmdsys.plh: 0035:     const resxhgr2    = $0080
+					; resxhgr2 = 128
+; inc/cmdsys.plh: 0036:     const nojitc      = $0100
+					; nojitc = 256
+; inc/cmdsys.plh: 0037:     //
+; inc/cmdsys.plh: 0038:     // Module don't free memory
+; inc/cmdsys.plh: 0039:     //
+; inc/cmdsys.plh: 0040:     const modkeep     = $2000
+					; modkeep = 8192
+; inc/cmdsys.plh: 0041:     const modinitkeep = $4000
+					; modinitkeep = 16384
+; inc/cmdsys.plh: 0042:     //
+; inc/cmdsys.plh: 0043:     // CMD exported interface table
+; inc/cmdsys.plh: 0044:     //
+; inc/cmdsys.plh: 0045:     struc t_cmdsys
+; inc/cmdsys.plh: 0046:         word sysver
+					; sysver = 0
+; inc/cmdsys.plh: 0047:         word syspath
+					; syspath = 2
+; inc/cmdsys.plh: 0048:         word cmdline
+					; cmdline = 4
+; inc/cmdsys.plh: 0049:         word modexec
+					; modexec = 6
+; inc/cmdsys.plh: 0050:         word sysopen
+					; sysopen = 8
+; inc/cmdsys.plh: 0051:         word sysclose
+					; sysclose = 10
+; inc/cmdsys.plh: 0052:         word sysread
+					; sysread = 12
+; inc/cmdsys.plh: 0053:         word syswrite
+					; syswrite = 14
+; inc/cmdsys.plh: 0054:         byte syserr
+					; syserr = 16
+; inc/cmdsys.plh: 0055:         byte jitcount
+					; jitcount = 17
+; inc/cmdsys.plh: 0056:         byte jitsize
+					; jitsize = 18
+; inc/cmdsys.plh: 0057:         byte refcons    // Apple /// specific
+					; refcons = 19
+; inc/cmdsys.plh: 0058:         byte devcons    // Apple /// specific
+					; devcons = 20
+; inc/cmdsys.plh: 0059:     end
+					; t_cmdsys = 21
+; inc/cmdsys.plh: 0060:     //
+; inc/cmdsys.plh: 0061:     // CMD exported functions
+; inc/cmdsys.plh: 0062:     //
+; inc/cmdsys.plh: 0063:     predef putc(c)#0, putln()#0, puts(s)#0, puti(i)#0, getc()#1, gets(p)#1, putb(b)#0, puth(h)#0
+					; PUTC -> X002
+					; PUTLN -> X003
+					; PUTS -> X004
+					; PUTI -> X005
+					; GETC -> X006
+					; GETS -> X007
+					; PUTB -> X008
+					; PUTH -> X009
+; inc/cmdsys.plh: 0064:     predef call(addr,areg,xreg,yreg,status)#1, syscall(cmd,params)#1
+					; CALL -> X010
+					; SYSCALL -> X011
+; inc/cmdsys.plh: 0065:     predef heapmark()#1, heapallocalign(size, pow2, freeaddr)#1
+					; HEAPMARK -> X012
+					; HEAPALLOCALIGN -> X013
+; inc/cmdsys.plh: 0066:     predef heapalloc(size)#1, heaprelease(newheap)#1, heapavail()#1
+					; HEAPALLOC -> X014
+					; HEAPRELEASE -> X015
+					; HEAPAVAIL -> X016
+; inc/cmdsys.plh: 0067:     predef memset(addr,value,size)#0, memcpy(dst,src,size)#0, strcpy(dst,src)#1, strcat(dst,src)#1
+					; MEMSET -> X017
+					; MEMCPY -> X018
+					; STRCPY -> X019
+					; STRCAT -> X020
+; inc/cmdsys.plh: 0068:     predef toupper(c)#1, sext(a)#1, divmod(a,b)#2, isugt(a,b)#1, isuge(a,b)#1, isult(a,b)#1, isule(a,b)#1
+					; TOUPPER -> X021
+					; SEXT -> X022
+					; DIVMOD -> X023
+					; ISUGT -> X024
+					; ISUGE -> X025
+					; ISULT -> X026
+					; ISULE -> X027
+; inc/cmdsys.plh: 0069: end
+; libsrc/apple/jit16.pla: 0004: 
+; libsrc/apple/jit16.pla: 0005: //
+; libsrc/apple/jit16.pla: 0006: // Indirect interpreter DEFinition entrypoint
+; libsrc/apple/jit16.pla: 0007: //
+; libsrc/apple/jit16.pla: 0008: struc t_defentry
+	!BYTE	$00			; END OF MODULE DEPENDENCIES
+; libsrc/apple/jit16.pla: 0009:     byte interpjsr
+					; interpjsr = 0
+; libsrc/apple/jit16.pla: 0010:     word interpaddr
+					; interpaddr = 1
+; libsrc/apple/jit16.pla: 0011:     word bytecodeaddr
+					; bytecodeaddr = 3
+; libsrc/apple/jit16.pla: 0012:     byte callcount
+					; callcount = 5
+; libsrc/apple/jit16.pla: 0013:     byte bytecodesize
+					; bytecodesize = 6
+; libsrc/apple/jit16.pla: 0014: end
+					; t_defentry = 7
+; libsrc/apple/jit16.pla: 0015: //
+; libsrc/apple/jit16.pla: 0016: // JIT compiler constants
+; libsrc/apple/jit16.pla: 0017: //
+; libsrc/apple/jit16.pla: 0018: const jitcomp     = $03E2
+					; jitcomp = 994
+; libsrc/apple/jit16.pla: 0019: const jitcodeptr  = $03E4
+					; jitcodeptr = 996
+; libsrc/apple/jit16.pla: 0020: const codemax     = $BEE0
+					; codemax = 48864
+; libsrc/apple/jit16.pla: 0021: const estkh8      = $C000
+					; estkh8 = 49152
+; libsrc/apple/jit16.pla: 0022: const estkh       = $00C0
+					; estkh = 192
+; libsrc/apple/jit16.pla: 0023: const estkl8      = $D000
+					; estkl8 = 53248
+; libsrc/apple/jit16.pla: 0024: const estkl       = $00D0
+					; estkl = 208
+; libsrc/apple/jit16.pla: 0025: const ifp8        = $E000
+					; ifp8 = 57344
+; libsrc/apple/jit16.pla: 0026: const ifpl8       = $E000
+					; ifpl8 = 57344
+; libsrc/apple/jit16.pla: 0027: const ifph8       = $E100
+					; ifph8 = 57600
+; libsrc/apple/jit16.pla: 0028: const jmptmp      = $00E6
+					; jmptmp = 230
+; libsrc/apple/jit16.pla: 0029: const tmp8        = $E700
+					; tmp8 = 59136
+; libsrc/apple/jit16.pla: 0030: const tmpl8       = $E700
+					; tmpl8 = 59136
+; libsrc/apple/jit16.pla: 0031: const tmph8       = $E800
+					; tmph8 = 59392
+; libsrc/apple/jit16.pla: 0032: const fetchop     = $00F1
+					; fetchop = 241
+; libsrc/apple/jit16.pla: 0033: const ip8         = $F200
+					; ip8 = 61952
+; libsrc/apple/jit16.pla: 0034: const ip          = $00F2
+					; ip = 242
+; libsrc/apple/jit16.pla: 0035: //
+; libsrc/apple/jit16.pla: 0036: // Bytecode interpreter entrypoints
+; libsrc/apple/jit16.pla: 0037: //
+; libsrc/apple/jit16.pla: 0038: const indirectentry = $03DC
+					; indirectentry = 988
+; libsrc/apple/jit16.pla: 0039: const directentry   = $03D0
+					; directentry = 976
+; libsrc/apple/jit16.pla: 0040: //
+; libsrc/apple/jit16.pla: 0041: // Copy bytecode DEF to main memory
+; libsrc/apple/jit16.pla: 0042: //
+; libsrc/apple/jit16.pla: 0043: def defcpy(dst, defptr)#0
+	!BYTE	$00			; PAD BYTE
+_SUBSEG 				; BYTECODE STARTS
+					; dst -> [0]
+					; defptr -> [2]
+_C000 					; defcpy()
+; libsrc/apple/jit16.pla: 0044:     *$003C   = defptr=>bytecodeaddr
+	!BYTE	$58,$04,$02		; ENTER	4,2
+; libsrc/apple/jit16.pla: 0045:     *$003E   = *$003C + defptr->bytecodesize
+; libsrc/apple/jit16.pla: 0046:     *$0042   = dst
+; libsrc/apple/jit16.pla: 0047:     call($C311, 0, 0, 0, $04) // CALL XMOVE with carry clear (AUX->MAIN) and ints disabled
+; libsrc/apple/jit16.pla: 0048: end
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$03			; ADDI	3
+	!BYTE	$62			; LW
+	!BYTE	$7E,$3C,$00		; DAW	60
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$06			; ADDI	6
+	!BYTE	$60			; LB
+	!BYTE	$82			; ADD 
+	!BYTE	$7A,$3E,$00		; SAW	62
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$7A,$42,$00		; SAW	66
+	!BYTE	$2C,$11,$C3		; CW	49937
+	!BYTE	$00			; CN	0
+	!BYTE	$00			; CN	0
+	!BYTE	$00			; CN	0
+	!BYTE	$08			; CN	4
+	!BYTE	$54			; CALL	_X010
+_F000 	!WORD	0		
+	!BYTE	$30			; DROP 
+	!BYTE	$5A,$04			; LEAVE	4
+; libsrc/apple/jit16.pla: 0049: //
+; libsrc/apple/jit16.pla: 0050: // Identify hardware addresses for certain byte sized access operations
+; libsrc/apple/jit16.pla: 0051: //
+; libsrc/apple/jit16.pla: 0052: def is_hwaddr(addr)
+					; addr -> [0]
+_C001 					; is_hwaddr()
+; libsrc/apple/jit16.pla: 0053:     return isuge(addr, $C000) and isult(addr, $C100)
+	!BYTE	$58,$02,$01		; ENTER	2,1
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$2C,$00,$C0		; CW	49152
+	!BYTE	$54			; CALL	_X025
+_F001 	!WORD	0		
+	!BYTE	$AC			; BRAND	_B001
+	!WORD	_B001-*
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$2C,$00,$C1		; CW	49408
+	!BYTE	$54			; CALL	_X026
+_F002 	!WORD	0		
+_B001 
+	!BYTE	$5A,$02			; LEAVE	2
+; libsrc/apple/jit16.pla: 0054: end
+; libsrc/apple/jit16.pla: 0055: include "libsrc/jit16core.pla"
+; libsrc/jit16core.pla: 0001: //
+; libsrc/jit16core.pla: 0002: // TOS and NOS stack offsets
+; libsrc/jit16core.pla: 0003: //
+; libsrc/jit16core.pla: 0004: const TOS         = $01 // TOS
+					; TOS = 1
+; libsrc/jit16core.pla: 0005: const NOS         = $03 // TOS-1
+					; NOS = 3
+; libsrc/jit16core.pla: 0006: //
+; libsrc/jit16core.pla: 0007: // JIT compiler entry
+; libsrc/jit16core.pla: 0008: //
+; libsrc/jit16core.pla: 0009: def compiler(defptr)#0
+					; defptr -> [0]
+_C002 					; compiler()
+; libsrc/jit16core.pla: 0010:     word codeptr, isdata[], addrxlate, bytecode, i, case, dest
+					; codeptr -> [2]
+					; isdata -> [4]
+					; addrxlate -> [4]
+					; bytecode -> [6]
+					; i -> [8]
+					; case -> [10]
+					; dest -> [12]
+; libsrc/jit16core.pla: 0011:     byte opcode, j, A_IS_TOS, X_IS_IFP
+					; opcode -> [14]
+					; j -> [15]
+					; A_IS_TOS -> [16]
+					; X_IS_IFP -> [17]
+; libsrc/jit16core.pla: 0012: 
+; libsrc/jit16core.pla: 0013:     defptr=>interpaddr = indirectentry // assume compile will fail
+	!BYTE	$58,$12,$01		; ENTER	18,1
+; libsrc/jit16core.pla: 0014:     addrxlate = heapmark // heapalloc(512 + defptr->bytecodesize)
+; libsrc/jit16core.pla: 0015:     if isult(heapavail, 512 + defptr->bytecodesize) // 256 * sizeof(word) address xlate
+; libsrc/jit16core.pla: 0016:         //
+; libsrc/jit16core.pla: 0017:         // Not enough heap available
+; libsrc/jit16core.pla: 0018:         //
+; libsrc/jit16core.pla: 0019:         //puts("Not enough free heap\n")
+; libsrc/jit16core.pla: 0020:         return
+	!BYTE	$2C,$DC,$03		; CW	988
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$8C			; INCR
+	!BYTE	$72			; SW
+	!BYTE	$54			; CALL	_X012
+_F003 	!WORD	0		
+	!BYTE	$76,$04			; SLW	[4]
+	!BYTE	$54			; CALL	_X016
+_F004 	!WORD	0		
+	!BYTE	$2C,$00,$02		; CW	512
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$38,$06			; ADDI	6
+	!BYTE	$60			; LB
+	!BYTE	$82			; ADD 
+	!BYTE	$54			; CALL	_X026
+_F005 	!WORD	0		
+	!BYTE	$4C			; BRFLS	_B002
+	!WORD	_B002-*
+	!BYTE	$5A,$12			; LEAVE	18
+; libsrc/jit16core.pla: 0021:     fin
+_B002 
+_B003 
+; libsrc/jit16core.pla: 0022:     //
+; libsrc/jit16core.pla: 0023:     // Copy bytecode def from AUX to heap for compiling
+; libsrc/jit16core.pla: 0024:     //
+; libsrc/jit16core.pla: 0025:     bytecode = addrxlate + 512 // def bytecode
+; libsrc/jit16core.pla: 0026:     defcpy(bytecode, defptr)
+; libsrc/jit16core.pla: 0027:     //puts("JITC:$"); puth(defptr=>bytecodeaddr); puts("=>$"); puth(bytecode)
+; libsrc/jit16core.pla: 0028:     //puts(",$"); puth(defptr->bytecodesize); putln
+; libsrc/jit16core.pla: 0029:     //
+; libsrc/jit16core.pla: 0030:     // Find all branch targets and optimization fences. Tag the opcode with the LSB set
+; libsrc/jit16core.pla: 0031:     //
+; libsrc/jit16core.pla: 0032:     // All PLASMA ops are even (LSB clear), so this will flag when to fence optimizations
+; libsrc/jit16core.pla: 0033:     // During compiling.
+; libsrc/jit16core.pla: 0034:     //
+; libsrc/jit16core.pla: 0035:     //isdata = addrxlate     // Use this buffer
+; libsrc/jit16core.pla: 0036:     memset(isdata, 0, 256) // Clear isdata buffer
+; libsrc/jit16core.pla: 0037:     i = 0
+; libsrc/jit16core.pla: 0038:     while i < defptr->bytecodesize
+	!BYTE	$66,$04			; LLW	[4]
+	!BYTE	$2C,$00,$02		; CW	512
+	!BYTE	$82			; ADD 
+	!BYTE	$6E,$06			; DLW	[6]
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$54			; CALL	_C000
+_F006 	!WORD	_C000		
+	!BYTE	$66,$04			; LLW	[4]
+	!BYTE	$00			; CN	0
+	!BYTE	$2C,$00,$01		; CW	256
+	!BYTE	$54			; CALL	_X017
+_F007 	!WORD	0		
+	!BYTE	$00			; CN	0
+	!BYTE	$76,$08			; SLW	[8]
+	!BYTE	$50			; BRNCH	_B006
+	!WORD	_B006-*
+_B004 
+; libsrc/jit16core.pla: 0039:         if not ^(isdata+i)
+; libsrc/jit16core.pla: 0040:             //puth(bytecode+i); putc(':'); putb(^(bytecode+i) & $FE); putln; getc
+; libsrc/jit16core.pla: 0041:             when ^(bytecode+i) & $FE
+	!BYTE	$66,$04			; LLW	[4]
+	!BYTE	$B2,$08			; ADDLW	[8]
+	!BYTE	$60			; LB
+	!BYTE	$4E			; BRTRU	_B007
+	!WORD	_B007-*
+	!BYTE	$66,$06			; LLW	[6]
+	!BYTE	$B2,$08			; ADDLW	[8]
+	!BYTE	$60			; LB
+	!BYTE	$3C,$FE			; ANDI	254
+	!BYTE	$52			; SEL
+	!WORD	_B010-*
+; libsrc/jit16core.pla: 0042:                 //
+; libsrc/jit16core.pla: 0043:                 // Double byte operands
+; libsrc/jit16core.pla: 0044:                 //
+; libsrc/jit16core.pla: 0045:                 is $26 // LA
+_B011 
+; libsrc/jit16core.pla: 0046:                 is $2C // CW
+_B012 
+; libsrc/jit16core.pla: 0047:                 is $54 // CALL
+_B013 
+; libsrc/jit16core.pla: 0048:                 is $58 // ENTER
+_B014 
+; libsrc/jit16core.pla: 0049:                 is $68 // LAB
+_B015 
+; libsrc/jit16core.pla: 0050:                 is $6A // LAW
+_B016 
+; libsrc/jit16core.pla: 0051:                 is $78 // SAB
+_B017 
+; libsrc/jit16core.pla: 0052:                 is $7A // SAW
+_B018 
+; libsrc/jit16core.pla: 0053:                 is $7C // DAB
+_B019 
+; libsrc/jit16core.pla: 0054:                 is $7E // DAW
+_B020 
+; libsrc/jit16core.pla: 0055:                 is $B4 // ADDAB
+_B021 
+; libsrc/jit16core.pla: 0056:                 is $B6 // ADDAW
+_B022 
+; libsrc/jit16core.pla: 0057:                 is $BC // IDXAB
+_B023 
+; libsrc/jit16core.pla: 0058:                 is $BE // IDXAW
+_B024 
+; libsrc/jit16core.pla: 0059:                     i = i + 2
+; libsrc/jit16core.pla: 0060:                     break
+	!BYTE	$66,$08			; LLW	[8]
+	!BYTE	$38,$02			; ADDI	2
+	!BYTE	$76,$08			; SLW	[8]
+	!BYTE	$50			; BRNCH	_B009
+	!WORD	_B009-*
+; libsrc/jit16core.pla: 0061:                 //
+; libsrc/jit16core.pla: 0062:                 // Multi-byte operands
+; libsrc/jit16core.pla: 0063:                 //
+; libsrc/jit16core.pla: 0064:                 is $2E // CS
+_B025 
+; libsrc/jit16core.pla: 0065:                     i = i + ^(bytecode+i+1)
+; libsrc/jit16core.pla: 0066:                 //
+; libsrc/jit16core.pla: 0067:                 // Single byte operands
+; libsrc/jit16core.pla: 0068:                 //
+; libsrc/jit16core.pla: 0069:                 is $2A // CB
+	!BYTE	$66,$08			; LLW	[8]
+	!BYTE	$66,$06			; LLW	[6]
+	!BYTE	$B2,$08			; ADDLW	[8]
+	!BYTE	$8C			; INCR
+	!BYTE	$60			; LB
+	!BYTE	$82			; ADD 
+	!BYTE	$76,$08			; SLW	[8]
+_B026 
+; libsrc/jit16core.pla: 0070:                 is $28 // LLA
+_B027 
+; libsrc/jit16core.pla: 0071:                 is $38 // ADDI
+_B028 
+; libsrc/jit16core.pla: 0072:                 is $3A // SUBI
+_B029 
+; libsrc/jit16core.pla: 0073:                 is $3C // ANDI
+_B030 
+; libsrc/jit16core.pla: 0074:                 is $3E // ORI
+_B031 
+; libsrc/jit16core.pla: 0075:                 is $5A // LEAVE
+_B032 
+; libsrc/jit16core.pla: 0076:                 is $5E // CFFB
+_B033 
+; libsrc/jit16core.pla: 0077:                 is $64 // LLB
+_B034 
+; libsrc/jit16core.pla: 0078:                 is $66 // LLW
+_B035 
+; libsrc/jit16core.pla: 0079:                 is $6C // DLB
+_B036 
+; libsrc/jit16core.pla: 0080:                 is $6E // DLW
+_B037 
+; libsrc/jit16core.pla: 0081:                 is $74 // SLB
+_B038 
+; libsrc/jit16core.pla: 0082:                 is $76 // SLW
+_B039 
+; libsrc/jit16core.pla: 0083:                 is $B0 // ADDLB
+_B040 
+; libsrc/jit16core.pla: 0084:                 is $B2 // ADDLW
+_B041 
+; libsrc/jit16core.pla: 0085:                 is $B8 // IDXLB
+_B042 
+; libsrc/jit16core.pla: 0086:                 is $BA // IDXLW
+_B043 
+; libsrc/jit16core.pla: 0087:                     i++
+	!BYTE	$66,$08			; LLW	[8]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 0088:                     break
+	!BYTE	$76,$08			; SLW	[8]
+	!BYTE	$50			; BRNCH	_B009
+	!WORD	_B009-*
+; libsrc/jit16core.pla: 0089:                 //
+; libsrc/jit16core.pla: 0090:                 // Branches
+; libsrc/jit16core.pla: 0091:                 //
+; libsrc/jit16core.pla: 0092:                 is $50 // BRNCH
+_B044 
+; libsrc/jit16core.pla: 0093:                 is $22 // BREQ
+_B045 
+; libsrc/jit16core.pla: 0094:                 is $24 // BRNE
+_B046 
+; libsrc/jit16core.pla: 0095:                 is $4C // BRFLS
+_B047 
+; libsrc/jit16core.pla: 0096:                 is $4E // BRTRU
+_B048 
+; libsrc/jit16core.pla: 0097:                 is $A0 // BRGT
+_B049 
+; libsrc/jit16core.pla: 0098:                 is $A2 // BRLT
+_B050 
+; libsrc/jit16core.pla: 0099:                 is $A4 // INCBRLE
+_B051 
+; libsrc/jit16core.pla: 0100:                 is $A6 // ADDBRLE
+_B052 
+; libsrc/jit16core.pla: 0101:                 is $A8 // DECBRGE
+_B053 
+; libsrc/jit16core.pla: 0102:                 is $AA // SUBBRGE
+_B054 
+; libsrc/jit16core.pla: 0103:                 is $AC // BRAND
+_B055 
+; libsrc/jit16core.pla: 0104:                 is $AE // BROR
+_B056 
+; libsrc/jit16core.pla: 0105:                     i++
+	!BYTE	$66,$08			; LLW	[8]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 0106:                     dest = i + *(bytecode+i)
+; libsrc/jit16core.pla: 0107:                     i++
+	!BYTE	$6E,$08			; DLW	[8]
+	!BYTE	$66,$06			; LLW	[6]
+	!BYTE	$B2,$08			; ADDLW	[8]
+	!BYTE	$62			; LW
+	!BYTE	$82			; ADD 
+	!BYTE	$76,$0C			; SLW	[12]
+	!BYTE	$66,$08			; LLW	[8]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 0108:                     ^(bytecode+dest) = ^(bytecode+dest) | 1 // Flag as branch dest
+; libsrc/jit16core.pla: 0109:                     break
+	!BYTE	$76,$08			; SLW	[8]
+	!BYTE	$66,$06			; LLW	[6]
+	!BYTE	$B2,$0C			; ADDLW	[12]
+	!BYTE	$60			; LB
+	!BYTE	$3E,$01			; ORI	1
+	!BYTE	$66,$06			; LLW	[6]
+	!BYTE	$B2,$0C			; ADDLW	[12]
+	!BYTE	$70			; SB
+	!BYTE	$50			; BRNCH	_B009
+	!WORD	_B009-*
+; libsrc/jit16core.pla: 0110:                 //
+; libsrc/jit16core.pla: 0111:                 // SELect/caseblock
+; libsrc/jit16core.pla: 0112:                 //
+; libsrc/jit16core.pla: 0113:                 is $52 // SEL
+_B057 
+; libsrc/jit16core.pla: 0114:                     i++
+	!BYTE	$66,$08			; LLW	[8]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 0115:                     case = i + *(bytecode+i)
+; libsrc/jit16core.pla: 0116:                     i++
+	!BYTE	$6E,$08			; DLW	[8]
+	!BYTE	$66,$06			; LLW	[6]
+	!BYTE	$B2,$08			; ADDLW	[8]
+	!BYTE	$62			; LW
+	!BYTE	$82			; ADD 
+	!BYTE	$76,$0A			; SLW	[10]
+	!BYTE	$66,$08			; LLW	[8]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 0117:                     ^(isdata+case) = TRUE // Flag as data
+; libsrc/jit16core.pla: 0118:                     j = ^(bytecode+case)
+; libsrc/jit16core.pla: 0119:                     case++
+	!BYTE	$76,$08			; SLW	[8]
+	!BYTE	$20			; MINUS ONE
+	!BYTE	$66,$04			; LLW	[4]
+	!BYTE	$B2,$0A			; ADDLW	[10]
+	!BYTE	$70			; SB
+	!BYTE	$66,$06			; LLW	[6]
+	!BYTE	$B2,$0A			; ADDLW	[10]
+	!BYTE	$60			; LB
+	!BYTE	$74,$0F			; SLB	[15]
+	!BYTE	$66,$0A			; LLW	[10]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 0120:                     repeat
+	!BYTE	$76,$0A			; SLW	[10]
+_B059 
+; libsrc/jit16core.pla: 0121:                         *(isdata+case)   = TRUE // Flag as data
+; libsrc/jit16core.pla: 0122:                         case             = case + 2
+; libsrc/jit16core.pla: 0123:                         dest             = case + *(bytecode+case)
+; libsrc/jit16core.pla: 0124:                         ^(bytecode+dest) = ^(bytecode+dest) | 1 // Flag as branch dest
+; libsrc/jit16core.pla: 0125:                         *(isdata+case)   = TRUE // Flag as data
+; libsrc/jit16core.pla: 0126:                         case             = case + 2
+; libsrc/jit16core.pla: 0127:                         j--
+	!BYTE	$20			; MINUS ONE
+	!BYTE	$66,$04			; LLW	[4]
+	!BYTE	$B2,$0A			; ADDLW	[10]
+	!BYTE	$72			; SW
+	!BYTE	$66,$0A			; LLW	[10]
+	!BYTE	$38,$02			; ADDI	2
+	!BYTE	$6E,$0A			; DLW	[10]
+	!BYTE	$66,$06			; LLW	[6]
+	!BYTE	$B2,$0A			; ADDLW	[10]
+	!BYTE	$62			; LW
+	!BYTE	$82			; ADD 
+	!BYTE	$76,$0C			; SLW	[12]
+	!BYTE	$66,$06			; LLW	[6]
+	!BYTE	$B2,$0C			; ADDLW	[12]
+	!BYTE	$60			; LB
+	!BYTE	$3E,$01			; ORI	1
+	!BYTE	$66,$06			; LLW	[6]
+	!BYTE	$B2,$0C			; ADDLW	[12]
+	!BYTE	$70			; SB
+	!BYTE	$20			; MINUS ONE
+	!BYTE	$66,$04			; LLW	[4]
+	!BYTE	$B2,$0A			; ADDLW	[10]
+	!BYTE	$72			; SW
+	!BYTE	$66,$0A			; LLW	[10]
+	!BYTE	$38,$02			; ADDI	2
+	!BYTE	$76,$0A			; SLW	[10]
+	!BYTE	$64,$0F			; LLB	[15]
+	!BYTE	$8E			; DECR
+; libsrc/jit16core.pla: 0128:                     until not j
+	!BYTE	$74,$0F			; SLB	[15]
+_B060 
+	!BYTE	$64,$0F			; LLB	[15]
+	!BYTE	$4E			; BRTRU	_B059
+	!WORD	_B059-*
+_B058 
+; libsrc/jit16core.pla: 0129:                     break
+	!BYTE	$50			; BRNCH	_B009
+	!WORD	_B009-*
+; libsrc/jit16core.pla: 0130:             wend
+	!BYTE	$50			; BRNCH	_B009
+	!WORD	_B009-*
+_B010 
+	!BYTE	$2F			; CASEBLOCK
+	!WORD	$0022
+	!WORD	_B045-*
+	!WORD	$0024
+	!WORD	_B046-*
+	!WORD	$0026
+	!WORD	_B011-*
+	!WORD	$0028
+	!WORD	_B027-*
+	!WORD	$002A
+	!WORD	_B026-*
+	!WORD	$002C
+	!WORD	_B012-*
+	!WORD	$002E
+	!WORD	_B025-*
+	!WORD	$0038
+	!WORD	_B028-*
+	!WORD	$003A
+	!WORD	_B029-*
+	!WORD	$003C
+	!WORD	_B030-*
+	!WORD	$003E
+	!WORD	_B031-*
+	!WORD	$004C
+	!WORD	_B047-*
+	!WORD	$004E
+	!WORD	_B048-*
+	!WORD	$0050
+	!WORD	_B044-*
+	!WORD	$0052
+	!WORD	_B057-*
+	!WORD	$0054
+	!WORD	_B013-*
+	!WORD	$0058
+	!WORD	_B014-*
+	!WORD	$005A
+	!WORD	_B032-*
+	!WORD	$005E
+	!WORD	_B033-*
+	!WORD	$0064
+	!WORD	_B034-*
+	!WORD	$0066
+	!WORD	_B035-*
+	!WORD	$0068
+	!WORD	_B015-*
+	!WORD	$006A
+	!WORD	_B016-*
+	!WORD	$006C
+	!WORD	_B036-*
+	!WORD	$006E
+	!WORD	_B037-*
+	!WORD	$0074
+	!WORD	_B038-*
+	!WORD	$0076
+	!WORD	_B039-*
+	!WORD	$0078
+	!WORD	_B017-*
+	!WORD	$007A
+	!WORD	_B018-*
+	!WORD	$007C
+	!WORD	_B019-*
+	!WORD	$007E
+	!WORD	_B020-*
+	!WORD	$00A0
+	!WORD	_B049-*
+	!WORD	$00A2
+	!WORD	_B050-*
+	!WORD	$00A4
+	!WORD	_B051-*
+	!WORD	$00A6
+	!WORD	_B052-*
+	!WORD	$00A8
+	!WORD	_B053-*
+	!WORD	$00AA
+	!WORD	_B054-*
+	!WORD	$00AC
+	!WORD	_B055-*
+	!WORD	$00AE
+	!WORD	_B056-*
+	!WORD	$00B0
+	!WORD	_B040-*
+	!WORD	$00B2
+	!WORD	_B041-*
+	!WORD	$00B4
+	!WORD	_B021-*
+	!WORD	$00B6
+	!WORD	_B022-*
+	!WORD	$00B8
+	!WORD	_B042-*
+	!WORD	$00BA
+	!WORD	_B043-*
+	!WORD	$00BC
+	!WORD	_B023-*
+	!WORD	$00BE
+	!WORD	_B024-*
+_B009 
+; libsrc/jit16core.pla: 0131:         fin
+_B007 
+_B008 
+; libsrc/jit16core.pla: 0132:         i++
+	!BYTE	$66,$08			; LLW	[8]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 0133:     loop
+	!BYTE	$76,$08			; SLW	[8]
+_B006 
+	!BYTE	$66,$08			; LLW	[8]
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$38,$06			; ADDI	6
+	!BYTE	$60			; LB
+	!BYTE	$46			; ISLT
+	!BYTE	$4E			; BRTRU	_B004
+	!WORD	_B004-*
+_B005 
+; libsrc/jit16core.pla: 0134:     //
+; libsrc/jit16core.pla: 0135:     // Compile the bytecodes
+; libsrc/jit16core.pla: 0136:     //
+; libsrc/jit16core.pla: 0137:     memset(addrxlate, 0, 512) // Clear xlate buffer
+; libsrc/jit16core.pla: 0138:     //puts("Bytecode:   $"); puth(bytecode); putln; getc
+; libsrc/jit16core.pla: 0139:     codeptr    = *jitcodeptr
+; libsrc/jit16core.pla: 0140:     A_IS_TOS   = FALSE
+; libsrc/jit16core.pla: 0141:     X_IS_IFP   = FALSE
+; libsrc/jit16core.pla: 0142:     codeptr->0 = $20           // JSR INTERP
+; libsrc/jit16core.pla: 0143:     codeptr=>1 = directentry
+; libsrc/jit16core.pla: 0144:     if ^bytecode == $58
+; libsrc/jit16core.pla: 0145:         //putc('$'); puth(codeptr);//puts(":[0] ENTER "); puti(^(bytecode+1)); putc(',');puti(^(bytecode+2)); putln
+; libsrc/jit16core.pla: 0146:         //
+; libsrc/jit16core.pla: 0147:         // Call into VM
+; libsrc/jit16core.pla: 0148:         //
+; libsrc/jit16core.pla: 0149:         codeptr->3 = $58           // ENTER CODE
+; libsrc/jit16core.pla: 0150:         codeptr=>4 = *(bytecode+1) // ENTER FRAME SIZE & ARG COUNT
+; libsrc/jit16core.pla: 0151:         codeptr->6 = $C0           // NATV CODE
+; libsrc/jit16core.pla: 0152:         codeptr    = codeptr + 7
+; libsrc/jit16core.pla: 0153:         i          = 3
+; libsrc/jit16core.pla: 0154:     else
+	!BYTE	$66,$04			; LLW	[4]
+	!BYTE	$00			; CN	0
+	!BYTE	$2C,$00,$02		; CW	512
+	!BYTE	$54			; CALL	_X017
+_F008 	!WORD	0		
+	!BYTE	$6A,$E4,$03		; LAW	996
+	!BYTE	$76,$02			; SLW	[2]
+	!BYTE	$00			; CN	0
+	!BYTE	$74,$10			; SLB	[16]
+	!BYTE	$00			; CN	0
+	!BYTE	$74,$11			; SLB	[17]
+	!BYTE	$2A,$20			; CB	32
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$2C,$D0,$03		; CW	976
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+	!BYTE	$72			; SW
+	!BYTE	$66,$06			; LLW	[6]
+	!BYTE	$60			; LB
+	!BYTE	$2A,$58			; CB	88
+	!BYTE	$24			; BRNE	_B061
+	!WORD	_B061-*
+	!BYTE	$2A,$58			; CB	88
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$03			; ADDI	3
+	!BYTE	$70			; SB
+	!BYTE	$66,$06			; LLW	[6]
+	!BYTE	$8C			; INCR
+	!BYTE	$62			; LW
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$04			; ADDI	4
+	!BYTE	$72			; SW
+	!BYTE	$2A,$C0			; CB	192
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$06			; ADDI	6
+	!BYTE	$70			; SB
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$07			; ADDI	7
+	!BYTE	$76,$02			; SLW	[2]
+	!BYTE	$06			; CN	3
+	!BYTE	$76,$08			; SLW	[8]
+	!BYTE	$50			; BRNCH	_B062
+	!WORD	_B062-*
+_B061 
+; libsrc/jit16core.pla: 0155:         //
+; libsrc/jit16core.pla: 0156:         // Call into VM
+; libsrc/jit16core.pla: 0157:         //
+; libsrc/jit16core.pla: 0158:         codeptr->3 = $C0           // NATV CODE
+; libsrc/jit16core.pla: 0159:         codeptr    = codeptr + 4
+; libsrc/jit16core.pla: 0160:         i          = 0
+; libsrc/jit16core.pla: 0161:     fin
+	!BYTE	$2A,$C0			; CB	192
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$03			; ADDI	3
+	!BYTE	$70			; SB
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$04			; ADDI	4
+	!BYTE	$76,$02			; SLW	[2]
+	!BYTE	$00			; CN	0
+	!BYTE	$76,$08			; SLW	[8]
+_B062 
+; libsrc/jit16core.pla: 0162:     while isule(codeptr, codemax)
+	!BYTE	$50			; BRNCH	_B065
+	!WORD	_B065-*
+_B063 
+; libsrc/jit16core.pla: 0163:         //putc('$'); puth(codeptr); putc(':')
+; libsrc/jit16core.pla: 0164:         //putc('['); puti(i); //puts("] ")
+; libsrc/jit16core.pla: 0165:         opcode = ^(bytecode+i)
+; libsrc/jit16core.pla: 0166:         if opcode & 1
+; libsrc/jit16core.pla: 0167:             //
+; libsrc/jit16core.pla: 0168:             // Optimization fence. Sync A and X registers
+; libsrc/jit16core.pla: 0169:             //
+; libsrc/jit16core.pla: 0170:             if A_IS_TOS
+; libsrc/jit16core.pla: 0171:                 ^codeptr = $48; codeptr++  // PHA
+	!BYTE	$66,$06			; LLW	[6]
+	!BYTE	$B2,$08			; ADDLW	[8]
+	!BYTE	$60			; LB
+	!BYTE	$6C,$0E			; DLB	[14]
+	!BYTE	$3C,$01			; ANDI	1
+	!BYTE	$4C			; BRFLS	_B066
+	!WORD	_B066-*
+	!BYTE	$64,$10			; LLB	[16]
+	!BYTE	$4C			; BRFLS	_B068
+	!WORD	_B068-*
+	!BYTE	$2A,$48			; CB	72
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 0172:             fin
+	!BYTE	$76,$02			; SLW	[2]
+_B068 
+_B069 
+; libsrc/jit16core.pla: 0173:             A_IS_TOS = FALSE
+; libsrc/jit16core.pla: 0174:             X_IS_IFP = FALSE
+; libsrc/jit16core.pla: 0175:             opcode   = opcode & $FE
+; libsrc/jit16core.pla: 0176:         fin
+	!BYTE	$00			; CN	0
+	!BYTE	$74,$10			; SLB	[16]
+	!BYTE	$00			; CN	0
+	!BYTE	$74,$11			; SLB	[17]
+	!BYTE	$64,$0E			; LLB	[14]
+	!BYTE	$3C,$FE			; ANDI	254
+	!BYTE	$74,$0E			; SLB	[14]
+_B066 
+_B067 
+; libsrc/jit16core.pla: 0177:         //
+; libsrc/jit16core.pla: 0178:         // Update bytecode->native code address translation.
+; libsrc/jit16core.pla: 0179:         //
+; libsrc/jit16core.pla: 0180:         // Here's how it works:
+; libsrc/jit16core.pla: 0181:         //
+; libsrc/jit16core.pla: 0182:         //  The code buffer is above address $8000 so MSBit set.
+; libsrc/jit16core.pla: 0183:         //  When we compile a bytecode, update the destination address in
+; libsrc/jit16core.pla: 0184:         //  the address xlate buffer with actual address (MSBit set). But, if a branch
+; libsrc/jit16core.pla: 0185:         //  opcode jumps to a bytecode address that hasn't been compiled yet, add the
+; libsrc/jit16core.pla: 0186:         //  address offset in the code buffer to the list of addresses needing resolution.
+; libsrc/jit16core.pla: 0187:         //  The offset will be less than $8000, so MSBit clear. This is how we know if
+; libsrc/jit16core.pla: 0188:         //  an address has been resolved or is a list of addresses needing resolution.
+; libsrc/jit16core.pla: 0189:         //  Before updating the address xlate buffer with the known address as we
+; libsrc/jit16core.pla: 0190:         //  compile, look for existing resolution list and traverse it if there.
+; libsrc/jit16core.pla: 0191:         //
+; libsrc/jit16core.pla: 0192:         if addrxlate=>[i]
+; libsrc/jit16core.pla: 0193:             //
+; libsrc/jit16core.pla: 0194:             // Address list awaiting resolution
+; libsrc/jit16core.pla: 0195:             //
+; libsrc/jit16core.pla: 0196:             dest = addrxlate=>[i] + *jitcodeptr
+; libsrc/jit16core.pla: 0197:             repeat
+	!BYTE	$66,$04			; LLW	[4]
+	!BYTE	$BA,$08			; IDXLW	[8]
+	!BYTE	$62			; LW
+	!BYTE	$4C			; BRFLS	_B070
+	!WORD	_B070-*
+	!BYTE	$66,$04			; LLW	[4]
+	!BYTE	$BA,$08			; IDXLW	[8]
+	!BYTE	$62			; LW
+	!BYTE	$B6,$E4,$03		; ADDAW	996
+	!BYTE	$76,$0C			; SLW	[12]
+_B073 
+; libsrc/jit16core.pla: 0198:                 case  = *dest
+; libsrc/jit16core.pla: 0199:                 *dest = codeptr
+; libsrc/jit16core.pla: 0200:                 dest  = case + *jitcodeptr
+; libsrc/jit16core.pla: 0201:             until not case
+	!BYTE	$66,$0C			; LLW	[12]
+	!BYTE	$62			; LW
+	!BYTE	$76,$0A			; SLW	[10]
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$66,$0C			; LLW	[12]
+	!BYTE	$72			; SW
+	!BYTE	$66,$0A			; LLW	[10]
+	!BYTE	$B6,$E4,$03		; ADDAW	996
+	!BYTE	$76,$0C			; SLW	[12]
+_B074 
+	!BYTE	$66,$0A			; LLW	[10]
+	!BYTE	$4E			; BRTRU	_B073
+	!WORD	_B073-*
+_B072 
+; libsrc/jit16core.pla: 0202:         fin
+_B070 
+_B071 
+; libsrc/jit16core.pla: 0203:         //
+; libsrc/jit16core.pla: 0204:         // Update address translate buffer with bytecode->native address
+; libsrc/jit16core.pla: 0205:         //
+; libsrc/jit16core.pla: 0206:         addrxlate=>[i] = codeptr
+; libsrc/jit16core.pla: 0207:         //
+; libsrc/jit16core.pla: 0208:         // Compile this bad boy...
+; libsrc/jit16core.pla: 0209:         //
+; libsrc/jit16core.pla: 0210:         if opcode < $20 // CONSTANT NYBBLE
+; libsrc/jit16core.pla: 0211:             //puts("CN $"); putb(opcode/2)
+; libsrc/jit16core.pla: 0212:             if A_IS_TOS
+; libsrc/jit16core.pla: 0213:                 ^codeptr = $48; codeptr++  // PHA
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$66,$04			; LLW	[4]
+	!BYTE	$BA,$08			; IDXLW	[8]
+	!BYTE	$72			; SW
+	!BYTE	$64,$0E			; LLB	[14]
+	!BYTE	$2A,$20			; CB	32
+	!BYTE	$46			; ISLT
+	!BYTE	$4C			; BRFLS	_B075
+	!WORD	_B075-*
+	!BYTE	$64,$10			; LLB	[16]
+	!BYTE	$4C			; BRFLS	_B077
+	!WORD	_B077-*
+	!BYTE	$2A,$48			; CB	72
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 0214:             fin
+	!BYTE	$76,$02			; SLW	[2]
+_B077 
+_B078 
+; libsrc/jit16core.pla: 0215:             codeptr->0 = $A9               // LDA #(CN/2)
+; libsrc/jit16core.pla: 0216:             codeptr=>1 = opcode/2
+; libsrc/jit16core.pla: 0217:             codeptr    = codeptr + 3
+; libsrc/jit16core.pla: 0218:             A_IS_TOS   = TRUE              // PHA
+; libsrc/jit16core.pla: 0219:         else
+	!BYTE	$2A,$A9			; CB	169
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$64,$0E			; LLB	[14]
+	!BYTE	$02			; CN	1
+	!BYTE	$9C			; SHR
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+	!BYTE	$72			; SW
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$03			; ADDI	3
+	!BYTE	$76,$02			; SLW	[2]
+	!BYTE	$20			; MINUS ONE
+	!BYTE	$74,$10			; SLB	[16]
+	!BYTE	$50			; BRNCH	_B076
+	!WORD	_B076-*
+_B075 
+; libsrc/jit16core.pla: 0220:             when opcode
+	!BYTE	$64,$0E			; LLB	[14]
+	!BYTE	$52			; SEL
+	!WORD	_B080-*
+; libsrc/jit16core.pla: 0221:                 is $20 // MINUS ONE
+_B081 
+; libsrc/jit16core.pla: 0222:                     //puts("MINUS_ONE")
+; libsrc/jit16core.pla: 0223:                     if A_IS_TOS
+; libsrc/jit16core.pla: 0224:                         ^codeptr = $48; codeptr++ // PHA
+	!BYTE	$64,$10			; LLB	[16]
+	!BYTE	$4C			; BRFLS	_B082
+	!WORD	_B082-*
+	!BYTE	$2A,$48			; CB	72
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 0225:                     fin
+	!BYTE	$76,$02			; SLW	[2]
+_B082 
+_B083 
+; libsrc/jit16core.pla: 0226:                     codeptr->0 = $A9              // LDA #$FFFF
+; libsrc/jit16core.pla: 0227:                     codeptr=>1 = $FFFF
+; libsrc/jit16core.pla: 0228:                     codeptr    = codeptr + 3
+; libsrc/jit16core.pla: 0229:                     A_IS_TOS   = TRUE             // PHA
+; libsrc/jit16core.pla: 0230:                     break
+	!BYTE	$2A,$A9			; CB	169
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$20			; MINUS ONE
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+	!BYTE	$72			; SW
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$03			; ADDI	3
+	!BYTE	$76,$02			; SLW	[2]
+	!BYTE	$20			; MINUS ONE
+	!BYTE	$74,$10			; SLB	[16]
+	!BYTE	$50			; BRNCH	_B079
+	!WORD	_B079-*
+; libsrc/jit16core.pla: 0231:                 is $22 // BREQ
+_B084 
+; libsrc/jit16core.pla: 0232:                 is $24 // BRNE
+_B085 
+; libsrc/jit16core.pla: 0233:                     i++
+	!BYTE	$66,$08			; LLW	[8]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 0234:                     dest = i + *(bytecode+i)
+; libsrc/jit16core.pla: 0235:                     i++
+	!BYTE	$6E,$08			; DLW	[8]
+	!BYTE	$66,$06			; LLW	[6]
+	!BYTE	$B2,$08			; ADDLW	[8]
+	!BYTE	$62			; LW
+	!BYTE	$82			; ADD 
+	!BYTE	$76,$0C			; SLW	[12]
+	!BYTE	$66,$08			; LLW	[8]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 0236:                     if not A_IS_TOS
+; libsrc/jit16core.pla: 0237:                         ^codeptr = $68; codeptr++ // PLA
+	!BYTE	$76,$08			; SLW	[8]
+	!BYTE	$64,$10			; LLB	[16]
+	!BYTE	$4E			; BRTRU	_B086
+	!WORD	_B086-*
+	!BYTE	$2A,$68			; CB	104
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 0238:                     fin
+	!BYTE	$76,$02			; SLW	[2]
+_B086 
+_B087 
+; libsrc/jit16core.pla: 0239:                     codeptr=>0 = $C3+(TOS<<8)     // CMP TOS,S
+; libsrc/jit16core.pla: 0240:                     if opcode == $22
+; libsrc/jit16core.pla: 0241:                         //puts("BREQ "); puti(dest)
+; libsrc/jit16core.pla: 0242:                         codeptr=>2 = $04D0        // BNE +4
+; libsrc/jit16core.pla: 0243:                     else
+	!BYTE	$2C,$C3,$01		; CW	451
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$72			; SW
+	!BYTE	$64,$0E			; LLB	[14]
+	!BYTE	$2A,$22			; CB	34
+	!BYTE	$24			; BRNE	_B088
+	!WORD	_B088-*
+	!BYTE	$2C,$D0,$04		; CW	1232
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$02			; ADDI	2
+	!BYTE	$72			; SW
+	!BYTE	$50			; BRNCH	_B089
+	!WORD	_B089-*
+_B088 
+; libsrc/jit16core.pla: 0244:                         //puts("BRNE "); puti(dest)
+; libsrc/jit16core.pla: 0245:                         codeptr=>2 = $04F0        // BEQ +4
+; libsrc/jit16core.pla: 0246:                     fin
+	!BYTE	$2C,$F0,$04		; CW	1264
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$02			; ADDI	2
+	!BYTE	$72			; SW
+_B089 
+; libsrc/jit16core.pla: 0247:                     codeptr=>4 = $4C68            // PLA; JMP abs
+; libsrc/jit16core.pla: 0248:                     codeptr=>6 = addrxlate=>[dest]
+; libsrc/jit16core.pla: 0249:                     if not (codeptr->7 & $80) // Unresolved address list
+; libsrc/jit16core.pla: 0250:                         addrxlate=>[dest] = codeptr + 6 - *jitcodeptr
+; libsrc/jit16core.pla: 0251:                     fin
+	!BYTE	$2C,$68,$4C		; CW	19560
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$04			; ADDI	4
+	!BYTE	$72			; SW
+	!BYTE	$66,$04			; LLW	[4]
+	!BYTE	$BA,$0C			; IDXLW	[12]
+	!BYTE	$62			; LW
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$06			; ADDI	6
+	!BYTE	$72			; SW
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$07			; ADDI	7
+	!BYTE	$60			; LB
+	!BYTE	$3C,$80			; ANDI	128
+	!BYTE	$4E			; BRTRU	_B090
+	!WORD	_B090-*
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$06			; ADDI	6
+	!BYTE	$6A,$E4,$03		; LAW	996
+	!BYTE	$84			; SUB 
+	!BYTE	$66,$04			; LLW	[4]
+	!BYTE	$BA,$0C			; IDXLW	[12]
+	!BYTE	$72			; SW
+_B090 
+_B091 
+; libsrc/jit16core.pla: 0252:                     codeptr->8 = $68              // PLA
+; libsrc/jit16core.pla: 0253:                     codeptr    = codeptr + 9
+; libsrc/jit16core.pla: 0254:                     A_IS_TOS   = FALSE
+; libsrc/jit16core.pla: 0255:                     break
+	!BYTE	$2A,$68			; CB	104
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$08			; ADDI	8
+	!BYTE	$70			; SB
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$09			; ADDI	9
+	!BYTE	$76,$02			; SLW	[2]
+	!BYTE	$00			; CN	0
+	!BYTE	$74,$10			; SLB	[16]
+	!BYTE	$50			; BRNCH	_B079
+	!WORD	_B079-*
+; libsrc/jit16core.pla: 0256:                 is $26 // LA
+_B092 
+; libsrc/jit16core.pla: 0257:                 is $2C // CW
+_B093 
+; libsrc/jit16core.pla: 0258:                     dest = *(bytecode+i+1)
+; libsrc/jit16core.pla: 0259:                     i    = i + 2
+; libsrc/jit16core.pla: 0260:                     //puts("LA/CW $"); puth(dest)
+; libsrc/jit16core.pla: 0261:                     if A_IS_TOS
+; libsrc/jit16core.pla: 0262:                         ^codeptr = $48; codeptr++ // PHA
+	!BYTE	$66,$06			; LLW	[6]
+	!BYTE	$B2,$08			; ADDLW	[8]
+	!BYTE	$8C			; INCR
+	!BYTE	$62			; LW
+	!BYTE	$76,$0C			; SLW	[12]
+	!BYTE	$66,$08			; LLW	[8]
+	!BYTE	$38,$02			; ADDI	2
+	!BYTE	$76,$08			; SLW	[8]
+	!BYTE	$64,$10			; LLB	[16]
+	!BYTE	$4C			; BRFLS	_B094
+	!WORD	_B094-*
+	!BYTE	$2A,$48			; CB	72
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 0263:                     fin
+	!BYTE	$76,$02			; SLW	[2]
+_B094 
+_B095 
+; libsrc/jit16core.pla: 0264:                     codeptr->0 = $A9              // LDA #imm
+; libsrc/jit16core.pla: 0265:                     codeptr=>1 = dest
+; libsrc/jit16core.pla: 0266:                     codeptr    = codeptr + 3
+; libsrc/jit16core.pla: 0267:                     A_IS_TOS   = TRUE             // PHA
+; libsrc/jit16core.pla: 0268:                     break
+	!BYTE	$2A,$A9			; CB	169
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$66,$0C			; LLW	[12]
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+	!BYTE	$72			; SW
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$03			; ADDI	3
+	!BYTE	$76,$02			; SLW	[2]
+	!BYTE	$20			; MINUS ONE
+	!BYTE	$74,$10			; SLB	[16]
+	!BYTE	$50			; BRNCH	_B079
+	!WORD	_B079-*
+; libsrc/jit16core.pla: 0269:                 is $28 // LLA
+_B096 
+; libsrc/jit16core.pla: 0270:                     i++
+	!BYTE	$66,$08			; LLW	[8]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 0271:                     j = ^(bytecode+i)
+; libsrc/jit16core.pla: 0272:                     //puts("LLA "); puti(^(bytecode+i))
+; libsrc/jit16core.pla: 0273:                     if A_IS_TOS
+; libsrc/jit16core.pla: 0274:                         ^codeptr = $48; codeptr++ // PHA
+	!BYTE	$76,$08			; SLW	[8]
+	!BYTE	$66,$06			; LLW	[6]
+	!BYTE	$B2,$08			; ADDLW	[8]
+	!BYTE	$60			; LB
+	!BYTE	$74,$0F			; SLB	[15]
+	!BYTE	$64,$10			; LLB	[16]
+	!BYTE	$4C			; BRFLS	_B097
+	!WORD	_B097-*
+	!BYTE	$2A,$48			; CB	72
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 0275:                     fin
+	!BYTE	$76,$02			; SLW	[2]
+_B097 
+_B098 
+; libsrc/jit16core.pla: 0276:                     if not X_IS_IFP
+; libsrc/jit16core.pla: 0277:                         *codeptr = ifp8+$A6       // LDX IFP
+; libsrc/jit16core.pla: 0278:                         codeptr  = codeptr + 2
+; libsrc/jit16core.pla: 0279:                         X_IS_IFP = TRUE
+; libsrc/jit16core.pla: 0280:                     fin
+	!BYTE	$64,$11			; LLB	[17]
+	!BYTE	$4E			; BRTRU	_B099
+	!WORD	_B099-*
+	!BYTE	$2C,$A6,$E0		; CW	57510
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$72			; SW
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$02			; ADDI	2
+	!BYTE	$76,$02			; SLW	[2]
+	!BYTE	$20			; MINUS ONE
+	!BYTE	$74,$11			; SLB	[17]
+_B099 
+_B100 
+; libsrc/jit16core.pla: 0281:                     ^codeptr = $8A; codeptr++     // TXA
+	!BYTE	$2A,$8A			; CB	138
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 0282:                     if j <> 0
+; libsrc/jit16core.pla: 0283:                         codeptr=>0 = $6918        // CLC; ADC #imm
+; libsrc/jit16core.pla: 0284:                         codeptr=>2 = j
+; libsrc/jit16core.pla: 0285:                         codeptr    = codeptr + 4
+; libsrc/jit16core.pla: 0286:                     fin
+	!BYTE	$76,$02			; SLW	[2]
+	!BYTE	$64,$0F			; LLB	[15]
+	!BYTE	$4C			; BRFLS	_B101
+	!WORD	_B101-*
+	!BYTE	$2C,$18,$69		; CW	26904
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$72			; SW
+	!BYTE	$64,$0F			; LLB	[15]
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$02			; ADDI	2
+	!BYTE	$72			; SW
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$04			; ADDI	4
+	!BYTE	$76,$02			; SLW	[2]
+_B101 
+_B102 
+; libsrc/jit16core.pla: 0287:                     A_IS_TOS   = TRUE
+; libsrc/jit16core.pla: 0288:                     break
+	!BYTE	$20			; MINUS ONE
+	!BYTE	$74,$10			; SLB	[16]
+	!BYTE	$50			; BRNCH	_B079
+	!WORD	_B079-*
+; libsrc/jit16core.pla: 0289:                 is $2A // CB
+_B103 
+; libsrc/jit16core.pla: 0290:                 is $5E // CFFB
+_B104 
+; libsrc/jit16core.pla: 0291:                     i++
+	!BYTE	$66,$08			; LLW	[8]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 0292:                     if A_IS_TOS
+; libsrc/jit16core.pla: 0293:                         ^codeptr = $48; codeptr++ // PHA
+	!BYTE	$76,$08			; SLW	[8]
+	!BYTE	$64,$10			; LLB	[16]
+	!BYTE	$4C			; BRFLS	_B105
+	!WORD	_B105-*
+	!BYTE	$2A,$48			; CB	72
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 0294:                     fin
+	!BYTE	$76,$02			; SLW	[2]
+_B105 
+_B106 
+; libsrc/jit16core.pla: 0295:                     codeptr->0 = $A9
+; libsrc/jit16core.pla: 0296:                     if opcode == $2A              // LDA #imm
+; libsrc/jit16core.pla: 0297:                         dest = ^(bytecode+i)
+; libsrc/jit16core.pla: 0298:                         //puts("CB $"); putb(dest)
+; libsrc/jit16core.pla: 0299:                     else
+	!BYTE	$2A,$A9			; CB	169
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$64,$0E			; LLB	[14]
+	!BYTE	$2A,$2A			; CB	42
+	!BYTE	$24			; BRNE	_B107
+	!WORD	_B107-*
+	!BYTE	$66,$06			; LLW	[6]
+	!BYTE	$B2,$08			; ADDLW	[8]
+	!BYTE	$60			; LB
+	!BYTE	$76,$0C			; SLW	[12]
+	!BYTE	$50			; BRNCH	_B108
+	!WORD	_B108-*
+_B107 
+; libsrc/jit16core.pla: 0300:                         dest = ^(bytecode+i) | $FF00
+; libsrc/jit16core.pla: 0301:                         //puts("CFFB $FF"); puth(dest)
+; libsrc/jit16core.pla: 0302:                     fin
+	!BYTE	$66,$06			; LLW	[6]
+	!BYTE	$B2,$08			; ADDLW	[8]
+	!BYTE	$60			; LB
+	!BYTE	$5E,$00			; CFFB	65280
+	!BYTE	$96			; OR 
+	!BYTE	$76,$0C			; SLW	[12]
+_B108 
+; libsrc/jit16core.pla: 0303:                     codeptr=>1 = dest
+; libsrc/jit16core.pla: 0304:                     codeptr    = codeptr + 3
+; libsrc/jit16core.pla: 0305:                     A_IS_TOS = TRUE              // PHA
+; libsrc/jit16core.pla: 0306:                     break
+	!BYTE	$66,$0C			; LLW	[12]
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+	!BYTE	$72			; SW
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$03			; ADDI	3
+	!BYTE	$76,$02			; SLW	[2]
+	!BYTE	$20			; MINUS ONE
+	!BYTE	$74,$10			; SLB	[16]
+	!BYTE	$50			; BRNCH	_B079
+	!WORD	_B079-*
+; libsrc/jit16core.pla: 0307:                 is $2E // CS
+_B109 
+; libsrc/jit16core.pla: 0308:                     i++
+	!BYTE	$66,$08			; LLW	[8]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 0309:                     j    = ^(bytecode+i)
+; libsrc/jit16core.pla: 0310:                     dest = codeptr + 7 + j
+; libsrc/jit16core.pla: 0311:                     //puts("CS "); //puts(bytecode+i); //puts("-->"); puti(dest)
+; libsrc/jit16core.pla: 0312:                     if isule(dest, codemax)
+; libsrc/jit16core.pla: 0313:                         if A_IS_TOS
+; libsrc/jit16core.pla: 0314:                             ^codeptr = $48; codeptr++ // PHA
+	!BYTE	$76,$08			; SLW	[8]
+	!BYTE	$66,$06			; LLW	[6]
+	!BYTE	$B2,$08			; ADDLW	[8]
+	!BYTE	$60			; LB
+	!BYTE	$74,$0F			; SLB	[15]
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$07			; ADDI	7
+	!BYTE	$B0,$0F			; ADDLB	[15]
+	!BYTE	$6E,$0C			; DLW	[12]
+	!BYTE	$2C,$E0,$BE		; CW	48864
+	!BYTE	$54			; CALL	_X027
+_F009 	!WORD	0		
+	!BYTE	$4C			; BRFLS	_B110
+	!WORD	_B110-*
+	!BYTE	$64,$10			; LLB	[16]
+	!BYTE	$4C			; BRFLS	_B112
+	!WORD	_B112-*
+	!BYTE	$2A,$48			; CB	72
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 0315:                         fin
+	!BYTE	$76,$02			; SLW	[2]
+_B112 
+_B113 
+; libsrc/jit16core.pla: 0316:                         dest       = codeptr + 7 + j
+; libsrc/jit16core.pla: 0317:                         codeptr->0 = $A9              // LDA #STRING
+; libsrc/jit16core.pla: 0318:                         codeptr=>1 = codeptr + 6
+; libsrc/jit16core.pla: 0319:                         codeptr->3 = $4C              // JMP abs
+; libsrc/jit16core.pla: 0320:                         codeptr=>4 = dest
+; libsrc/jit16core.pla: 0321:                         strcpy(codeptr + 6, bytecode + i)
+; libsrc/jit16core.pla: 0322:                         i = i + j
+; libsrc/jit16core.pla: 0323:                     fin
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$07			; ADDI	7
+	!BYTE	$B0,$0F			; ADDLB	[15]
+	!BYTE	$76,$0C			; SLW	[12]
+	!BYTE	$2A,$A9			; CB	169
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$06			; ADDI	6
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+	!BYTE	$72			; SW
+	!BYTE	$2A,$4C			; CB	76
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$03			; ADDI	3
+	!BYTE	$70			; SB
+	!BYTE	$66,$0C			; LLW	[12]
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$04			; ADDI	4
+	!BYTE	$72			; SW
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$06			; ADDI	6
+	!BYTE	$66,$06			; LLW	[6]
+	!BYTE	$B2,$08			; ADDLW	[8]
+	!BYTE	$54			; CALL	_X019
+_F010 	!WORD	0		
+	!BYTE	$30			; DROP 
+	!BYTE	$66,$08			; LLW	[8]
+	!BYTE	$B0,$0F			; ADDLB	[15]
+	!BYTE	$76,$08			; SLW	[8]
+_B110 
+_B111 
+; libsrc/jit16core.pla: 0324:                     codeptr  = dest
+; libsrc/jit16core.pla: 0325:                     A_IS_TOS = TRUE                   // PHA
+; libsrc/jit16core.pla: 0326:                     break
+	!BYTE	$66,$0C			; LLW	[12]
+	!BYTE	$76,$02			; SLW	[2]
+	!BYTE	$20			; MINUS ONE
+	!BYTE	$74,$10			; SLB	[16]
+	!BYTE	$50			; BRNCH	_B079
+	!WORD	_B079-*
+; libsrc/jit16core.pla: 0327:                 is $32 // DROP2
+_B114 
+; libsrc/jit16core.pla: 0328:                     //puts("DROP2")
+; libsrc/jit16core.pla: 0329:                     if not A_IS_TOS
+; libsrc/jit16core.pla: 0330:                         ^codeptr = $68; codeptr++ // PLA
+	!BYTE	$64,$10			; LLB	[16]
+	!BYTE	$4E			; BRTRU	_B115
+	!WORD	_B115-*
+	!BYTE	$2A,$68			; CB	104
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 0331:                     fin
+	!BYTE	$76,$02			; SLW	[2]
+_B115 
+_B116 
+; libsrc/jit16core.pla: 0332:                     A_IS_TOS = FALSE
+; libsrc/jit16core.pla: 0333:                 is $30 // DROP
+	!BYTE	$00			; CN	0
+	!BYTE	$74,$10			; SLB	[16]
+_B117 
+; libsrc/jit16core.pla: 0334:                     //puts("DROP")
+; libsrc/jit16core.pla: 0335:                     if not A_IS_TOS
+; libsrc/jit16core.pla: 0336:                         ^codeptr = $68; codeptr++ // PLA
+	!BYTE	$64,$10			; LLB	[16]
+	!BYTE	$4E			; BRTRU	_B118
+	!WORD	_B118-*
+	!BYTE	$2A,$68			; CB	104
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 0337:                     fin
+	!BYTE	$76,$02			; SLW	[2]
+_B118 
+_B119 
+; libsrc/jit16core.pla: 0338:                     A_IS_TOS = FALSE
+; libsrc/jit16core.pla: 0339:                     break
+	!BYTE	$00			; CN	0
+	!BYTE	$74,$10			; SLB	[16]
+	!BYTE	$50			; BRNCH	_B079
+	!WORD	_B079-*
+; libsrc/jit16core.pla: 0340:                 is $34 // DUP
+_B120 
+; libsrc/jit16core.pla: 0341:                     //puts("DUP")
+; libsrc/jit16core.pla: 0342:                     if not A_IS_TOS
+; libsrc/jit16core.pla: 0343:                         *codeptr = $A3+(TOS<<8)   // LDA S, TOS
+; libsrc/jit16core.pla: 0344:                         codeptr  = codeptr + 2
+; libsrc/jit16core.pla: 0345:                     else
+	!BYTE	$64,$10			; LLB	[16]
+	!BYTE	$4E			; BRTRU	_B121
+	!WORD	_B121-*
+	!BYTE	$2C,$A3,$01		; CW	419
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$72			; SW
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$02			; ADDI	2
+	!BYTE	$76,$02			; SLW	[2]
+	!BYTE	$50			; BRNCH	_B122
+	!WORD	_B122-*
+_B121 
+; libsrc/jit16core.pla: 0346:                         ^codeptr = $48; codeptr++ // PHA
+	!BYTE	$2A,$48			; CB	72
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 0347:                     fin
+	!BYTE	$76,$02			; SLW	[2]
+_B122 
+; libsrc/jit16core.pla: 0348:                     A_IS_TOS = TRUE               // PHA
+; libsrc/jit16core.pla: 0349:                     break
+	!BYTE	$20			; MINUS ONE
+	!BYTE	$74,$10			; SLB	[16]
+	!BYTE	$50			; BRNCH	_B079
+	!WORD	_B079-*
+; libsrc/jit16core.pla: 0350:                 //is $36
+; libsrc/jit16core.pla: 0351:                     //puts("DIVMOD")
+; libsrc/jit16core.pla: 0352:                     //
+; libsrc/jit16core.pla: 0353:                     // Should never happen
+; libsrc/jit16core.pla: 0354:                     //
+; libsrc/jit16core.pla: 0355:                     //break
+; libsrc/jit16core.pla: 0356:                 is $38 // ADDI
+_B123 
+; libsrc/jit16core.pla: 0357:                     i++
+	!BYTE	$66,$08			; LLW	[8]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 0358:                     //puts("ADDI $"); putb(^(bytecode+i))
+; libsrc/jit16core.pla: 0359:                     if not A_IS_TOS
+; libsrc/jit16core.pla: 0360:                         ^codeptr = $68; codeptr++ // PLA
+	!BYTE	$76,$08			; SLW	[8]
+	!BYTE	$64,$10			; LLB	[16]
+	!BYTE	$4E			; BRTRU	_B124
+	!WORD	_B124-*
+	!BYTE	$2A,$68			; CB	104
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 0361:                     fin
+	!BYTE	$76,$02			; SLW	[2]
+_B124 
+_B125 
+; libsrc/jit16core.pla: 0362:                     codeptr=>0 = $6918            // CLC; ADC #imm
+; libsrc/jit16core.pla: 0363:                     codeptr=>2 = ^(bytecode+i)
+; libsrc/jit16core.pla: 0364:                     codeptr    = codeptr + 4
+; libsrc/jit16core.pla: 0365:                     A_IS_TOS   = TRUE             // PHA
+; libsrc/jit16core.pla: 0366:                     break
+	!BYTE	$2C,$18,$69		; CW	26904
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$72			; SW
+	!BYTE	$66,$06			; LLW	[6]
+	!BYTE	$B2,$08			; ADDLW	[8]
+	!BYTE	$60			; LB
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$02			; ADDI	2
+	!BYTE	$72			; SW
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$04			; ADDI	4
+	!BYTE	$76,$02			; SLW	[2]
+	!BYTE	$20			; MINUS ONE
+	!BYTE	$74,$10			; SLB	[16]
+	!BYTE	$50			; BRNCH	_B079
+	!WORD	_B079-*
+; libsrc/jit16core.pla: 0367:                 is $3A // SUBI
+_B126 
+; libsrc/jit16core.pla: 0368:                     i++
+	!BYTE	$66,$08			; LLW	[8]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 0369:                     //puts("SUBI $"); putb(^(bytecode+i))
+; libsrc/jit16core.pla: 0370:                     if not A_IS_TOS
+; libsrc/jit16core.pla: 0371:                         ^codeptr = $68; codeptr++ // PLA
+	!BYTE	$76,$08			; SLW	[8]
+	!BYTE	$64,$10			; LLB	[16]
+	!BYTE	$4E			; BRTRU	_B127
+	!WORD	_B127-*
+	!BYTE	$2A,$68			; CB	104
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 0372:                     fin
+	!BYTE	$76,$02			; SLW	[2]
+_B127 
+_B128 
+; libsrc/jit16core.pla: 0373:                     codeptr=>0 = $E938            // SEC; SBC #imm
+; libsrc/jit16core.pla: 0374:                     codeptr=>2 = ^(bytecode+i)
+; libsrc/jit16core.pla: 0375:                     codeptr    = codeptr + 4
+; libsrc/jit16core.pla: 0376:                     A_IS_TOS   = TRUE             // PHA
+; libsrc/jit16core.pla: 0377:                     break
+	!BYTE	$2C,$38,$E9		; CW	59704
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$72			; SW
+	!BYTE	$66,$06			; LLW	[6]
+	!BYTE	$B2,$08			; ADDLW	[8]
+	!BYTE	$60			; LB
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$02			; ADDI	2
+	!BYTE	$72			; SW
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$04			; ADDI	4
+	!BYTE	$76,$02			; SLW	[2]
+	!BYTE	$20			; MINUS ONE
+	!BYTE	$74,$10			; SLB	[16]
+	!BYTE	$50			; BRNCH	_B079
+	!WORD	_B079-*
+; libsrc/jit16core.pla: 0378:                 is $3C // ANDI
+_B129 
+; libsrc/jit16core.pla: 0379:                     i++
+	!BYTE	$66,$08			; LLW	[8]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 0380:                     //puts("ANDI $"); putb(^(bytecode+i))
+; libsrc/jit16core.pla: 0381:                     if not A_IS_TOS
+; libsrc/jit16core.pla: 0382:                         ^codeptr = $68; codeptr++ // PLA
+	!BYTE	$76,$08			; SLW	[8]
+	!BYTE	$64,$10			; LLB	[16]
+	!BYTE	$4E			; BRTRU	_B130
+	!WORD	_B130-*
+	!BYTE	$2A,$68			; CB	104
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 0383:                     fin
+	!BYTE	$76,$02			; SLW	[2]
+_B130 
+_B131 
+; libsrc/jit16core.pla: 0384:                     codeptr->0 = $29              // AND #imm
+; libsrc/jit16core.pla: 0385:                     codeptr=>1 = ^(bytecode+i)
+; libsrc/jit16core.pla: 0386:                     codeptr    = codeptr + 3
+; libsrc/jit16core.pla: 0387:                     A_IS_TOS   = TRUE             // PHA
+; libsrc/jit16core.pla: 0388:                     break
+	!BYTE	$2A,$29			; CB	41
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$66,$06			; LLW	[6]
+	!BYTE	$B2,$08			; ADDLW	[8]
+	!BYTE	$60			; LB
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+	!BYTE	$72			; SW
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$03			; ADDI	3
+	!BYTE	$76,$02			; SLW	[2]
+	!BYTE	$20			; MINUS ONE
+	!BYTE	$74,$10			; SLB	[16]
+	!BYTE	$50			; BRNCH	_B079
+	!WORD	_B079-*
+; libsrc/jit16core.pla: 0389:                 is $3E // ORI
+_B132 
+; libsrc/jit16core.pla: 0390:                     i++
+	!BYTE	$66,$08			; LLW	[8]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 0391:                     //puts("ORI $"); putb(^(bytecode+i))
+; libsrc/jit16core.pla: 0392:                     if not A_IS_TOS
+; libsrc/jit16core.pla: 0393:                         ^codeptr = $68; codeptr++ // PLA
+	!BYTE	$76,$08			; SLW	[8]
+	!BYTE	$64,$10			; LLB	[16]
+	!BYTE	$4E			; BRTRU	_B133
+	!WORD	_B133-*
+	!BYTE	$2A,$68			; CB	104
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 0394:                     fin
+	!BYTE	$76,$02			; SLW	[2]
+_B133 
+_B134 
+; libsrc/jit16core.pla: 0395:                     codeptr->0 = $09              // ORA #imm
+; libsrc/jit16core.pla: 0396:                     codeptr=>1 = ^(bytecode+i)
+; libsrc/jit16core.pla: 0397:                     codeptr    = codeptr + 3
+; libsrc/jit16core.pla: 0398:                     A_IS_TOS   = TRUE             // PHA
+; libsrc/jit16core.pla: 0399:                     break
+	!BYTE	$12			; CN	9
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$66,$06			; LLW	[6]
+	!BYTE	$B2,$08			; ADDLW	[8]
+	!BYTE	$60			; LB
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+	!BYTE	$72			; SW
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$03			; ADDI	3
+	!BYTE	$76,$02			; SLW	[2]
+	!BYTE	$20			; MINUS ONE
+	!BYTE	$74,$10			; SLB	[16]
+	!BYTE	$50			; BRNCH	_B079
+	!WORD	_B079-*
+; libsrc/jit16core.pla: 0400:                 is $40 // ISEQ
+_B135 
+; libsrc/jit16core.pla: 0401:                 is $42 // ISNE
+_B136 
+; libsrc/jit16core.pla: 0402:                     if not A_IS_TOS
+; libsrc/jit16core.pla: 0403:                         ^codeptr = $68; codeptr++ // PLA
+	!BYTE	$64,$10			; LLB	[16]
+	!BYTE	$4E			; BRTRU	_B137
+	!WORD	_B137-*
+	!BYTE	$2A,$68			; CB	104
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 0404:                     fin
+	!BYTE	$76,$02			; SLW	[2]
+_B137 
+_B138 
+; libsrc/jit16core.pla: 0405:                     codeptr->0 = $A0              // LDY #$0000
+; libsrc/jit16core.pla: 0406:                     codeptr=>1 = $0000
+; libsrc/jit16core.pla: 0407:                     codeptr=>3 = $C3+(TOS<<8)     // CMP TOS,S
+; libsrc/jit16core.pla: 0408:                     if opcode == $40
+; libsrc/jit16core.pla: 0409:                         //puts("ISEQ")
+; libsrc/jit16core.pla: 0410:                         codeptr=>5  = $01D0       // BNE +1
+; libsrc/jit16core.pla: 0411:                     else
+	!BYTE	$2A,$A0			; CB	160
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$00			; CN	0
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+	!BYTE	$72			; SW
+	!BYTE	$2C,$C3,$01		; CW	451
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$03			; ADDI	3
+	!BYTE	$72			; SW
+	!BYTE	$64,$0E			; LLB	[14]
+	!BYTE	$2A,$40			; CB	64
+	!BYTE	$24			; BRNE	_B139
+	!WORD	_B139-*
+	!BYTE	$2C,$D0,$01		; CW	464
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$05			; ADDI	5
+	!BYTE	$72			; SW
+	!BYTE	$50			; BRNCH	_B140
+	!WORD	_B140-*
+_B139 
+; libsrc/jit16core.pla: 0412:                         //puts("ISNE")
+; libsrc/jit16core.pla: 0413:                         codeptr=>5  = $01F0       // BEQ +1
+; libsrc/jit16core.pla: 0414:                     fin
+	!BYTE	$2C,$F0,$01		; CW	496
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$05			; ADDI	5
+	!BYTE	$72			; SW
+_B140 
+; libsrc/jit16core.pla: 0415:                     codeptr=>7 = $9888            // DEY; TYA
+; libsrc/jit16core.pla: 0416:                     codeptr->9 = $7A              // PLY
+; libsrc/jit16core.pla: 0417:                     codeptr    = codeptr + 10
+; libsrc/jit16core.pla: 0418:                     A_IS_TOS   = TRUE             // PHA
+; libsrc/jit16core.pla: 0419:                     break
+	!BYTE	$2C,$88,$98		; CW	39048
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$07			; ADDI	7
+	!BYTE	$72			; SW
+	!BYTE	$2A,$7A			; CB	122
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$09			; ADDI	9
+	!BYTE	$70			; SB
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$0A			; ADDI	10
+	!BYTE	$76,$02			; SLW	[2]
+	!BYTE	$20			; MINUS ONE
+	!BYTE	$74,$10			; SLB	[16]
+	!BYTE	$50			; BRNCH	_B079
+	!WORD	_B079-*
+; libsrc/jit16core.pla: 0420:                 is $44 // ISGT
+_B141 
+; libsrc/jit16core.pla: 0421:                 is $4A // ISLE
+_B142 
+; libsrc/jit16core.pla: 0422:                     if not A_IS_TOS
+; libsrc/jit16core.pla: 0423:                         ^codeptr = $68; codeptr++ // PLA
+	!BYTE	$64,$10			; LLB	[16]
+	!BYTE	$4E			; BRTRU	_B143
+	!WORD	_B143-*
+	!BYTE	$2A,$68			; CB	104
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 0424:                     fin
+	!BYTE	$76,$02			; SLW	[2]
+_B143 
+_B144 
+; libsrc/jit16core.pla: 0425:                     codeptr->0 = $A0              // LDY #$0000
+; libsrc/jit16core.pla: 0426:                     codeptr=>1 = $0000
+; libsrc/jit16core.pla: 0427:                     codeptr->3 = $38              // SEC
+; libsrc/jit16core.pla: 0428:                     codeptr=>4 = $E3+(TOS<<8)     // SBC TOS,S
+; libsrc/jit16core.pla: 0429:                     codeptr=>6 = $0350            // BVC +3
+; libsrc/jit16core.pla: 0430:                     codeptr->8 = $49              // EOR #$8000
+; libsrc/jit16core.pla: 0431:                     codeptr=>9 = $8000
+; libsrc/jit16core.pla: 0432:                     if opcode == $44
+; libsrc/jit16core.pla: 0433:                         //puts("ISGT")
+; libsrc/jit16core.pla: 0434:                         codeptr=>11 = $0110       // BPL +1
+; libsrc/jit16core.pla: 0435:                     else
+	!BYTE	$2A,$A0			; CB	160
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$00			; CN	0
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+	!BYTE	$72			; SW
+	!BYTE	$2A,$38			; CB	56
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$03			; ADDI	3
+	!BYTE	$70			; SB
+	!BYTE	$2C,$E3,$01		; CW	483
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$04			; ADDI	4
+	!BYTE	$72			; SW
+	!BYTE	$2C,$50,$03		; CW	848
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$06			; ADDI	6
+	!BYTE	$72			; SW
+	!BYTE	$2A,$49			; CB	73
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$08			; ADDI	8
+	!BYTE	$70			; SB
+	!BYTE	$2C,$00,$80		; CW	32768
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$09			; ADDI	9
+	!BYTE	$72			; SW
+	!BYTE	$64,$0E			; LLB	[14]
+	!BYTE	$2A,$44			; CB	68
+	!BYTE	$24			; BRNE	_B145
+	!WORD	_B145-*
+	!BYTE	$2C,$10,$01		; CW	272
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$0B			; ADDI	11
+	!BYTE	$72			; SW
+	!BYTE	$50			; BRNCH	_B146
+	!WORD	_B146-*
+_B145 
+; libsrc/jit16core.pla: 0436:                         //puts("ISLE")
+; libsrc/jit16core.pla: 0437:                         codeptr=>11 = $0130       // BMI +1
+; libsrc/jit16core.pla: 0438:                     fin
+	!BYTE	$2C,$30,$01		; CW	304
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$0B			; ADDI	11
+	!BYTE	$72			; SW
+_B146 
+; libsrc/jit16core.pla: 0439:                     codeptr=>13 = $9888           // DEY; TYA
+; libsrc/jit16core.pla: 0440:                     codeptr->15 = $7A             // PLY
+; libsrc/jit16core.pla: 0441:                     codeptr     = codeptr + 16
+; libsrc/jit16core.pla: 0442:                     A_IS_TOS    = TRUE            // PHA
+; libsrc/jit16core.pla: 0443:                     break
+	!BYTE	$2C,$88,$98		; CW	39048
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$0D			; ADDI	13
+	!BYTE	$72			; SW
+	!BYTE	$2A,$7A			; CB	122
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$0F			; ADDI	15
+	!BYTE	$70			; SB
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$10			; ADDI	16
+	!BYTE	$76,$02			; SLW	[2]
+	!BYTE	$20			; MINUS ONE
+	!BYTE	$74,$10			; SLB	[16]
+	!BYTE	$50			; BRNCH	_B079
+	!WORD	_B079-*
+; libsrc/jit16core.pla: 0444:                 is $46 // ISLT
+_B147 
+; libsrc/jit16core.pla: 0445:                 is $48 // ISGE
+_B148 
+; libsrc/jit16core.pla: 0446:                     if not A_IS_TOS
+; libsrc/jit16core.pla: 0447:                         ^codeptr = $68; codeptr++ // PLA
+	!BYTE	$64,$10			; LLB	[16]
+	!BYTE	$4E			; BRTRU	_B149
+	!WORD	_B149-*
+	!BYTE	$2A,$68			; CB	104
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 0448:                     fin
+	!BYTE	$76,$02			; SLW	[2]
+_B149 
+_B150 
+; libsrc/jit16core.pla: 0449:                     codeptr->0  = $A0             // LDY #$0000
+; libsrc/jit16core.pla: 0450:                     codeptr=>1  = $0000
+; libsrc/jit16core.pla: 0451:                     codeptr=>3  = tmp8+$85        // STA TMP
+; libsrc/jit16core.pla: 0452:                     codeptr=>5  = $3868           // PLA; SEC
+; libsrc/jit16core.pla: 0453:                     codeptr=>7  = tmp8+$E5        // SBC TMP
+; libsrc/jit16core.pla: 0454:                     codeptr=>9  = $0350           // BVC +3
+; libsrc/jit16core.pla: 0455:                     codeptr->11 = $49             // EOR #$8000
+; libsrc/jit16core.pla: 0456:                     codeptr=>12 = $8000
+; libsrc/jit16core.pla: 0457:                     if opcode == $46
+; libsrc/jit16core.pla: 0458:                         //puts("ISLT")
+; libsrc/jit16core.pla: 0459:                         codeptr=>14 = $0110       // BPL +1
+; libsrc/jit16core.pla: 0460:                     else
+	!BYTE	$2A,$A0			; CB	160
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$00			; CN	0
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+	!BYTE	$72			; SW
+	!BYTE	$2C,$85,$E7		; CW	59269
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$03			; ADDI	3
+	!BYTE	$72			; SW
+	!BYTE	$2C,$68,$38		; CW	14440
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$05			; ADDI	5
+	!BYTE	$72			; SW
+	!BYTE	$2C,$E5,$E7		; CW	59365
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$07			; ADDI	7
+	!BYTE	$72			; SW
+	!BYTE	$2C,$50,$03		; CW	848
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$09			; ADDI	9
+	!BYTE	$72			; SW
+	!BYTE	$2A,$49			; CB	73
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$0B			; ADDI	11
+	!BYTE	$70			; SB
+	!BYTE	$2C,$00,$80		; CW	32768
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$0C			; ADDI	12
+	!BYTE	$72			; SW
+	!BYTE	$64,$0E			; LLB	[14]
+	!BYTE	$2A,$46			; CB	70
+	!BYTE	$24			; BRNE	_B151
+	!WORD	_B151-*
+	!BYTE	$2C,$10,$01		; CW	272
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$0E			; ADDI	14
+	!BYTE	$72			; SW
+	!BYTE	$50			; BRNCH	_B152
+	!WORD	_B152-*
+_B151 
+; libsrc/jit16core.pla: 0461:                         //puts("ISGE")
+; libsrc/jit16core.pla: 0462:                         codeptr=>14 = $0130       // BMI +1
+; libsrc/jit16core.pla: 0463:                     fin
+	!BYTE	$2C,$30,$01		; CW	304
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$0E			; ADDI	14
+	!BYTE	$72			; SW
+_B152 
+; libsrc/jit16core.pla: 0464:                     codeptr=>16 = $9888           // DEY; TYA
+; libsrc/jit16core.pla: 0465:                     codeptr     = codeptr + 18
+; libsrc/jit16core.pla: 0466:                     A_IS_TOS    = TRUE            // PHA
+; libsrc/jit16core.pla: 0467:                     break
+	!BYTE	$2C,$88,$98		; CW	39048
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$10			; ADDI	16
+	!BYTE	$72			; SW
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$12			; ADDI	18
+	!BYTE	$76,$02			; SLW	[2]
+	!BYTE	$20			; MINUS ONE
+	!BYTE	$74,$10			; SLB	[16]
+	!BYTE	$50			; BRNCH	_B079
+	!WORD	_B079-*
+; libsrc/jit16core.pla: 0468:                 is $4C // BRFLS
+_B153 
+; libsrc/jit16core.pla: 0469:                 is $4E // BRTRU
+_B154 
+; libsrc/jit16core.pla: 0470:                     i++
+	!BYTE	$66,$08			; LLW	[8]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 0471:                     dest = i + *(bytecode+i)
+; libsrc/jit16core.pla: 0472:                     i++
+	!BYTE	$6E,$08			; DLW	[8]
+	!BYTE	$66,$06			; LLW	[6]
+	!BYTE	$B2,$08			; ADDLW	[8]
+	!BYTE	$62			; LW
+	!BYTE	$82			; ADD 
+	!BYTE	$76,$0C			; SLW	[12]
+	!BYTE	$66,$08			; LLW	[8]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 0473:                     if not A_IS_TOS
+; libsrc/jit16core.pla: 0474:                         codeptr->0 = $68            // PLA
+; libsrc/jit16core.pla: 0475:                     else
+	!BYTE	$76,$08			; SLW	[8]
+	!BYTE	$64,$10			; LLB	[16]
+	!BYTE	$4E			; BRTRU	_B155
+	!WORD	_B155-*
+	!BYTE	$2A,$68			; CB	104
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$50			; BRNCH	_B156
+	!WORD	_B156-*
+_B155 
+; libsrc/jit16core.pla: 0476:                         codeptr->0 = $A8            // TAY
+; libsrc/jit16core.pla: 0477:                     fin
+	!BYTE	$2A,$A8			; CB	168
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+_B156 
+; libsrc/jit16core.pla: 0478:                     if opcode == $4C
+; libsrc/jit16core.pla: 0479:                         //puts("BRFLS "); puti(dest)
+; libsrc/jit16core.pla: 0480:                         codeptr=>1 = $03D0          // BNE +3
+; libsrc/jit16core.pla: 0481:                     else
+	!BYTE	$64,$0E			; LLB	[14]
+	!BYTE	$2A,$4C			; CB	76
+	!BYTE	$24			; BRNE	_B157
+	!WORD	_B157-*
+	!BYTE	$2C,$D0,$03		; CW	976
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+	!BYTE	$72			; SW
+	!BYTE	$50			; BRNCH	_B158
+	!WORD	_B158-*
+_B157 
+; libsrc/jit16core.pla: 0482:                         //puts("BRTRU "); puti(dest)
+; libsrc/jit16core.pla: 0483:                         codeptr=>1 = $03F0          // BEQ +3
+; libsrc/jit16core.pla: 0484:                     fin
+	!BYTE	$2C,$F0,$03		; CW	1008
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+	!BYTE	$72			; SW
+_B158 
+; libsrc/jit16core.pla: 0485:                     codeptr->3 = $4C                // JMP abs
+; libsrc/jit16core.pla: 0486:                     codeptr=>4 = addrxlate=>[dest]
+; libsrc/jit16core.pla: 0487:                     if not (codeptr->5 & $80) // Unresolved address list
+; libsrc/jit16core.pla: 0488:                         addrxlate=>[dest] = codeptr + 4 - *jitcodeptr
+; libsrc/jit16core.pla: 0489:                     fin
+	!BYTE	$2A,$4C			; CB	76
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$03			; ADDI	3
+	!BYTE	$70			; SB
+	!BYTE	$66,$04			; LLW	[4]
+	!BYTE	$BA,$0C			; IDXLW	[12]
+	!BYTE	$62			; LW
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$04			; ADDI	4
+	!BYTE	$72			; SW
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$05			; ADDI	5
+	!BYTE	$60			; LB
+	!BYTE	$3C,$80			; ANDI	128
+	!BYTE	$4E			; BRTRU	_B159
+	!WORD	_B159-*
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$04			; ADDI	4
+	!BYTE	$6A,$E4,$03		; LAW	996
+	!BYTE	$84			; SUB 
+	!BYTE	$66,$04			; LLW	[4]
+	!BYTE	$BA,$0C			; IDXLW	[12]
+	!BYTE	$72			; SW
+_B159 
+_B160 
+; libsrc/jit16core.pla: 0490:                     codeptr  = codeptr + 6
+; libsrc/jit16core.pla: 0491:                     A_IS_TOS = FALSE
+; libsrc/jit16core.pla: 0492:                     break
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$06			; ADDI	6
+	!BYTE	$76,$02			; SLW	[2]
+	!BYTE	$00			; CN	0
+	!BYTE	$74,$10			; SLB	[16]
+	!BYTE	$50			; BRNCH	_B079
+	!WORD	_B079-*
+; libsrc/jit16core.pla: 0493:                 is $50 // BRNCH
+_B161 
+; libsrc/jit16core.pla: 0494:                     i++
+	!BYTE	$66,$08			; LLW	[8]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 0495:                     dest = i + *(bytecode+i)
+; libsrc/jit16core.pla: 0496:                     i++
+	!BYTE	$6E,$08			; DLW	[8]
+	!BYTE	$66,$06			; LLW	[6]
+	!BYTE	$B2,$08			; ADDLW	[8]
+	!BYTE	$62			; LW
+	!BYTE	$82			; ADD 
+	!BYTE	$76,$0C			; SLW	[12]
+	!BYTE	$66,$08			; LLW	[8]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 0497:                     //puts("BRNCH "); puti(dest)
+; libsrc/jit16core.pla: 0498:                     if A_IS_TOS
+; libsrc/jit16core.pla: 0499:                         ^codeptr = $48; codeptr++ // PHA
+	!BYTE	$76,$08			; SLW	[8]
+	!BYTE	$64,$10			; LLB	[16]
+	!BYTE	$4C			; BRFLS	_B162
+	!WORD	_B162-*
+	!BYTE	$2A,$48			; CB	72
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 0500:                     fin
+	!BYTE	$76,$02			; SLW	[2]
+_B162 
+_B163 
+; libsrc/jit16core.pla: 0501:                     codeptr->0 = $4C              // JMP abs
+; libsrc/jit16core.pla: 0502:                     codeptr=>1 = addrxlate=>[dest]
+; libsrc/jit16core.pla: 0503:                     if not (codeptr->2 & $80) // Unresolved address list
+; libsrc/jit16core.pla: 0504:                         addrxlate=>[dest] = codeptr + 1 - *jitcodeptr
+; libsrc/jit16core.pla: 0505:                     fin
+	!BYTE	$2A,$4C			; CB	76
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$66,$04			; LLW	[4]
+	!BYTE	$BA,$0C			; IDXLW	[12]
+	!BYTE	$62			; LW
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+	!BYTE	$72			; SW
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$02			; ADDI	2
+	!BYTE	$60			; LB
+	!BYTE	$3C,$80			; ANDI	128
+	!BYTE	$4E			; BRTRU	_B164
+	!WORD	_B164-*
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+	!BYTE	$6A,$E4,$03		; LAW	996
+	!BYTE	$84			; SUB 
+	!BYTE	$66,$04			; LLW	[4]
+	!BYTE	$BA,$0C			; IDXLW	[12]
+	!BYTE	$72			; SW
+_B164 
+_B165 
+; libsrc/jit16core.pla: 0506:                     codeptr  = codeptr + 3
+; libsrc/jit16core.pla: 0507:                     A_IS_TOS = FALSE
+; libsrc/jit16core.pla: 0508:                     break
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$03			; ADDI	3
+	!BYTE	$76,$02			; SLW	[2]
+	!BYTE	$00			; CN	0
+	!BYTE	$74,$10			; SLB	[16]
+	!BYTE	$50			; BRNCH	_B079
+	!WORD	_B079-*
+; libsrc/jit16core.pla: 0509:                 is $52 // SEL
+_B166 
+; libsrc/jit16core.pla: 0510:                     i++
+	!BYTE	$66,$08			; LLW	[8]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 0511:                     case = i + *(bytecode+i)
+; libsrc/jit16core.pla: 0512:                     i++
+	!BYTE	$6E,$08			; DLW	[8]
+	!BYTE	$66,$06			; LLW	[6]
+	!BYTE	$B2,$08			; ADDLW	[8]
+	!BYTE	$62			; LW
+	!BYTE	$82			; ADD 
+	!BYTE	$76,$0A			; SLW	[10]
+	!BYTE	$66,$08			; LLW	[8]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 0513:                     //puts("SEL "); puti(case); putln
+; libsrc/jit16core.pla: 0514:                     j = ^(bytecode+case)
+; libsrc/jit16core.pla: 0515:                     dest = codeptr + 9 + case * 11)
+; libsrc/jit16core.pla: 0516:                     if isule(dest, codemax)
+; libsrc/jit16core.pla: 0517:                         ^(bytecode+case) = $FE // Flag as NOP
+; libsrc/jit16core.pla: 0518:                         case++
+	!BYTE	$76,$08			; SLW	[8]
+	!BYTE	$66,$06			; LLW	[6]
+	!BYTE	$B2,$0A			; ADDLW	[10]
+	!BYTE	$60			; LB
+	!BYTE	$74,$0F			; SLB	[15]
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$09			; ADDI	9
+	!BYTE	$66,$0A			; LLW	[10]
+	!BYTE	$16			; CN	11
+	!BYTE	$86			; MUL
+	!BYTE	$82			; ADD 
+	!BYTE	$6E,$0C			; DLW	[12]
+	!BYTE	$2C,$E0,$BE		; CW	48864
+	!BYTE	$54			; CALL	_X027
+_F011 	!WORD	0		
+	!BYTE	$4C			; BRFLS	_B167
+	!WORD	_B167-*
+	!BYTE	$2A,$FE			; CB	254
+	!BYTE	$66,$06			; LLW	[6]
+	!BYTE	$B2,$0A			; ADDLW	[10]
+	!BYTE	$70			; SB
+	!BYTE	$66,$0A			; LLW	[10]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 0519:                         if not A_IS_TOS
+; libsrc/jit16core.pla: 0520:                             codeptr->0 = $68; codeptr++    // PLA
+	!BYTE	$76,$0A			; SLW	[10]
+	!BYTE	$64,$10			; LLB	[16]
+	!BYTE	$4E			; BRTRU	_B169
+	!WORD	_B169-*
+	!BYTE	$2A,$68			; CB	104
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 0521:                         fin
+	!BYTE	$76,$02			; SLW	[2]
+_B169 
+_B170 
+; libsrc/jit16core.pla: 0522:                         repeat
+_B172 
+; libsrc/jit16core.pla: 0523:                             dest = *(bytecode+case)
+; libsrc/jit16core.pla: 0524:                             //puts("    $"); puth(dest)
+; libsrc/jit16core.pla: 0525:                             codeptr->0 = $C9               // CMP #imm
+; libsrc/jit16core.pla: 0526:                             codeptr=>1 = dest
+; libsrc/jit16core.pla: 0527:                             codeptr=>3 = $03D0             // BNE +3
+; libsrc/jit16core.pla: 0528:                             *(bytecode+case) = $FEFE
+; libsrc/jit16core.pla: 0529:                             case = case + 2
+; libsrc/jit16core.pla: 0530:                             dest = case + *(bytecode+case)
+; libsrc/jit16core.pla: 0531:                             //puts("-->"); puti(dest); putln
+; libsrc/jit16core.pla: 0532:                             codeptr->5 = $4C               // JMP abs
+; libsrc/jit16core.pla: 0533:                             codeptr=>6 = addrxlate=>[dest]
+; libsrc/jit16core.pla: 0534:                             if not (codeptr->7 & $80) // Unresolved address list
+; libsrc/jit16core.pla: 0535:                                 addrxlate=>[dest] = codeptr + 6 - *jitcodeptr
+; libsrc/jit16core.pla: 0536:                             fin
+	!BYTE	$66,$06			; LLW	[6]
+	!BYTE	$B2,$0A			; ADDLW	[10]
+	!BYTE	$62			; LW
+	!BYTE	$76,$0C			; SLW	[12]
+	!BYTE	$2A,$C9			; CB	201
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$66,$0C			; LLW	[12]
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+	!BYTE	$72			; SW
+	!BYTE	$2C,$D0,$03		; CW	976
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$03			; ADDI	3
+	!BYTE	$72			; SW
+	!BYTE	$2C,$FE,$FE		; CW	65278
+	!BYTE	$66,$06			; LLW	[6]
+	!BYTE	$B2,$0A			; ADDLW	[10]
+	!BYTE	$72			; SW
+	!BYTE	$66,$0A			; LLW	[10]
+	!BYTE	$38,$02			; ADDI	2
+	!BYTE	$6E,$0A			; DLW	[10]
+	!BYTE	$66,$06			; LLW	[6]
+	!BYTE	$B2,$0A			; ADDLW	[10]
+	!BYTE	$62			; LW
+	!BYTE	$82			; ADD 
+	!BYTE	$76,$0C			; SLW	[12]
+	!BYTE	$2A,$4C			; CB	76
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$05			; ADDI	5
+	!BYTE	$70			; SB
+	!BYTE	$66,$04			; LLW	[4]
+	!BYTE	$BA,$0C			; IDXLW	[12]
+	!BYTE	$62			; LW
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$06			; ADDI	6
+	!BYTE	$72			; SW
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$07			; ADDI	7
+	!BYTE	$60			; LB
+	!BYTE	$3C,$80			; ANDI	128
+	!BYTE	$4E			; BRTRU	_B174
+	!WORD	_B174-*
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$06			; ADDI	6
+	!BYTE	$6A,$E4,$03		; LAW	996
+	!BYTE	$84			; SUB 
+	!BYTE	$66,$04			; LLW	[4]
+	!BYTE	$BA,$0C			; IDXLW	[12]
+	!BYTE	$72			; SW
+_B174 
+_B175 
+; libsrc/jit16core.pla: 0537:                             codeptr          = codeptr + 8
+; libsrc/jit16core.pla: 0538:                             *(bytecode+case) = $FEFE
+; libsrc/jit16core.pla: 0539:                             case = case + 2
+; libsrc/jit16core.pla: 0540:                             j--
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$08			; ADDI	8
+	!BYTE	$76,$02			; SLW	[2]
+	!BYTE	$2C,$FE,$FE		; CW	65278
+	!BYTE	$66,$06			; LLW	[6]
+	!BYTE	$B2,$0A			; ADDLW	[10]
+	!BYTE	$72			; SW
+	!BYTE	$66,$0A			; LLW	[10]
+	!BYTE	$38,$02			; ADDI	2
+	!BYTE	$76,$0A			; SLW	[10]
+	!BYTE	$64,$0F			; LLB	[15]
+	!BYTE	$8E			; DECR
+; libsrc/jit16core.pla: 0541:                         until not j
+	!BYTE	$74,$0F			; SLB	[15]
+_B173 
+	!BYTE	$64,$0F			; LLB	[15]
+	!BYTE	$4E			; BRTRU	_B172
+	!WORD	_B172-*
+_B171 
+; libsrc/jit16core.pla: 0542:                         codeptr->0 = $4C                   // JMP abs
+; libsrc/jit16core.pla: 0543:                         codeptr=>1 = addrxlate=>[case]
+; libsrc/jit16core.pla: 0544:                         if not (codeptr->2 & $80) // Unresolved address list
+; libsrc/jit16core.pla: 0545:                             addrxlate=>[case] = codeptr + 1 - *jitcodeptr
+; libsrc/jit16core.pla: 0546:                         fin
+	!BYTE	$2A,$4C			; CB	76
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$66,$04			; LLW	[4]
+	!BYTE	$BA,$0A			; IDXLW	[10]
+	!BYTE	$62			; LW
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+	!BYTE	$72			; SW
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$02			; ADDI	2
+	!BYTE	$60			; LB
+	!BYTE	$3C,$80			; ANDI	128
+	!BYTE	$4E			; BRTRU	_B176
+	!WORD	_B176-*
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+	!BYTE	$6A,$E4,$03		; LAW	996
+	!BYTE	$84			; SUB 
+	!BYTE	$66,$04			; LLW	[4]
+	!BYTE	$BA,$0A			; IDXLW	[10]
+	!BYTE	$72			; SW
+_B176 
+_B177 
+; libsrc/jit16core.pla: 0547:                         codeptr = codeptr + 3
+; libsrc/jit16core.pla: 0548:                     else
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$03			; ADDI	3
+	!BYTE	$76,$02			; SLW	[2]
+	!BYTE	$50			; BRNCH	_B168
+	!WORD	_B168-*
+_B167 
+; libsrc/jit16core.pla: 0549:                         codeptr = dest
+; libsrc/jit16core.pla: 0550:                     fin
+	!BYTE	$66,$0C			; LLW	[12]
+	!BYTE	$76,$02			; SLW	[2]
+_B168 
+; libsrc/jit16core.pla: 0551:                     A_IS_TOS = FALSE
+; libsrc/jit16core.pla: 0552:                     break
+	!BYTE	$00			; CN	0
+	!BYTE	$74,$10			; SLB	[16]
+	!BYTE	$50			; BRNCH	_B079
+	!WORD	_B079-*
+; libsrc/jit16core.pla: 0553:                 is $54 // CALL
+_B178 
+; libsrc/jit16core.pla: 0554:                 is $56 // ICAL
+_B179 
+; libsrc/jit16core.pla: 0555:                 is $5A // LEAVE
+_B180 
+; libsrc/jit16core.pla: 0556:                 is $5C // RET
+_B181 
+; libsrc/jit16core.pla: 0557:                     if A_IS_TOS
+; libsrc/jit16core.pla: 0558:                         ^codeptr = $48; codeptr++ // PHA
+	!BYTE	$64,$10			; LLB	[16]
+	!BYTE	$4C			; BRFLS	_B182
+	!WORD	_B182-*
+	!BYTE	$2A,$48			; CB	72
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 0559:                     fin
+	!BYTE	$76,$02			; SLW	[2]
+_B182 
+_B183 
+; libsrc/jit16core.pla: 0560:                     codeptr=>0  = $10E2           // SEP #$10 -> 8 BIT X/Y
+; libsrc/jit16core.pla: 0561:                     codeptr->2  = $A9             // LDA #imm
+; libsrc/jit16core.pla: 0562:                     codeptr=>3  = codeptr + 12
+; libsrc/jit16core.pla: 0563:                     codeptr=>5  = ip8+$85         // STA IP
+; libsrc/jit16core.pla: 0564:                     codeptr=>7  = $00A0           // LDY #$00
+; libsrc/jit16core.pla: 0565:                     codeptr->9  = $4C             // JMP FETCHOP
+; libsrc/jit16core.pla: 0566:                     codeptr=>10 = fetchop         // FETCHOP
+; libsrc/jit16core.pla: 0567:                     codeptr->12 = opcode          // OP
+; libsrc/jit16core.pla: 0568:                     when opcode
+	!BYTE	$2C,$E2,$10		; CW	4322
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$72			; SW
+	!BYTE	$2A,$A9			; CB	169
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$02			; ADDI	2
+	!BYTE	$70			; SB
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$0C			; ADDI	12
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$03			; ADDI	3
+	!BYTE	$72			; SW
+	!BYTE	$2C,$85,$F2		; CW	62085
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$05			; ADDI	5
+	!BYTE	$72			; SW
+	!BYTE	$2A,$A0			; CB	160
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$07			; ADDI	7
+	!BYTE	$72			; SW
+	!BYTE	$2A,$4C			; CB	76
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$09			; ADDI	9
+	!BYTE	$70			; SB
+	!BYTE	$2A,$F1			; CB	241
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$0A			; ADDI	10
+	!BYTE	$72			; SW
+	!BYTE	$64,$0E			; LLB	[14]
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$0C			; ADDI	12
+	!BYTE	$70			; SB
+	!BYTE	$64,$0E			; LLB	[14]
+	!BYTE	$52			; SEL
+	!WORD	_B185-*
+; libsrc/jit16core.pla: 0569:                         is $54 // CALL
+_B186 
+; libsrc/jit16core.pla: 0570:                             //
+; libsrc/jit16core.pla: 0571:                             // Call address
+; libsrc/jit16core.pla: 0572:                             //
+; libsrc/jit16core.pla: 0573:                             //puts("CALL $"); puth(*(bytecode+i))
+; libsrc/jit16core.pla: 0574:                             codeptr=>13 = *(bytecode+i+1) // CALL ADDR
+; libsrc/jit16core.pla: 0575:                             codeptr->15 = $C0             // NATV
+; libsrc/jit16core.pla: 0576:                             codeptr     = codeptr + 16
+; libsrc/jit16core.pla: 0577:                             i           = i + 2
+; libsrc/jit16core.pla: 0578:                             break
+	!BYTE	$66,$06			; LLW	[6]
+	!BYTE	$B2,$08			; ADDLW	[8]
+	!BYTE	$8C			; INCR
+	!BYTE	$62			; LW
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$0D			; ADDI	13
+	!BYTE	$72			; SW
+	!BYTE	$2A,$C0			; CB	192
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$0F			; ADDI	15
+	!BYTE	$70			; SB
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$10			; ADDI	16
+	!BYTE	$76,$02			; SLW	[2]
+	!BYTE	$66,$08			; LLW	[8]
+	!BYTE	$38,$02			; ADDI	2
+	!BYTE	$76,$08			; SLW	[8]
+	!BYTE	$50			; BRNCH	_B184
+	!WORD	_B184-*
+; libsrc/jit16core.pla: 0579:                         is $56 // ICAL
+_B187 
+; libsrc/jit16core.pla: 0580:                             //
+; libsrc/jit16core.pla: 0581:                             // Call address off stack
+; libsrc/jit16core.pla: 0582:                             //
+; libsrc/jit16core.pla: 0583:                             //puts("ICAL")
+; libsrc/jit16core.pla: 0584:                             codeptr->13 = $C0             // NATV
+; libsrc/jit16core.pla: 0585:                             codeptr     = codeptr + 14
+; libsrc/jit16core.pla: 0586:                             break
+	!BYTE	$2A,$C0			; CB	192
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$0D			; ADDI	13
+	!BYTE	$70			; SB
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$0E			; ADDI	14
+	!BYTE	$76,$02			; SLW	[2]
+	!BYTE	$50			; BRNCH	_B184
+	!WORD	_B184-*
+; libsrc/jit16core.pla: 0587:                         is $5A // LEAVE
+_B188 
+; libsrc/jit16core.pla: 0588:                             //
+; libsrc/jit16core.pla: 0589:                             // Leave routine
+; libsrc/jit16core.pla: 0590:                             //
+; libsrc/jit16core.pla: 0591:                             i++
+	!BYTE	$66,$08			; LLW	[8]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 0592:                             //puts("LEAVE "); puti(^(bytecode+i))
+; libsrc/jit16core.pla: 0593:                             codeptr->13 = ^(bytecode+i)   // LEAVE CODE OPERAND
+; libsrc/jit16core.pla: 0594:                             codeptr     = codeptr + 14
+; libsrc/jit16core.pla: 0595:                             break
+	!BYTE	$76,$08			; SLW	[8]
+	!BYTE	$66,$06			; LLW	[6]
+	!BYTE	$B2,$08			; ADDLW	[8]
+	!BYTE	$60			; LB
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$0D			; ADDI	13
+	!BYTE	$70			; SB
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$0E			; ADDI	14
+	!BYTE	$76,$02			; SLW	[2]
+	!BYTE	$50			; BRNCH	_B184
+	!WORD	_B184-*
+; libsrc/jit16core.pla: 0596:                         is $5C // RET
+_B189 
+; libsrc/jit16core.pla: 0597:                             //
+; libsrc/jit16core.pla: 0598:                             // Quick return from routine
+; libsrc/jit16core.pla: 0599:                             //
+; libsrc/jit16core.pla: 0600:                             //puts("RET")
+; libsrc/jit16core.pla: 0601:                             codeptr     = codeptr + 13
+; libsrc/jit16core.pla: 0602:                             break
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$0D			; ADDI	13
+	!BYTE	$76,$02			; SLW	[2]
+	!BYTE	$50			; BRNCH	_B184
+	!WORD	_B184-*
+; libsrc/jit16core.pla: 0603:                     wend
+	!BYTE	$50			; BRNCH	_B184
+	!WORD	_B184-*
+_B185 
+	!BYTE	$04			; CASEBLOCK
+	!WORD	$0054
+	!WORD	_B186-*
+	!WORD	$0056
+	!WORD	_B187-*
+	!WORD	$005A
+	!WORD	_B188-*
+	!WORD	$005C
+	!WORD	_B189-*
+_B184 
+; libsrc/jit16core.pla: 0604:                     X_IS_IFP    = FALSE
+; libsrc/jit16core.pla: 0605:                     A_IS_TOS    = FALSE
+; libsrc/jit16core.pla: 0606:                     break
+	!BYTE	$00			; CN	0
+	!BYTE	$74,$11			; SLB	[17]
+	!BYTE	$00			; CN	0
+	!BYTE	$74,$10			; SLB	[16]
+	!BYTE	$50			; BRNCH	_B079
+	!WORD	_B079-*
+; libsrc/jit16core.pla: 0607:                 is $60 // LB
+_B190 
+; libsrc/jit16core.pla: 0608:                     //puts("LB")
+; libsrc/jit16core.pla: 0609:                     if not A_IS_TOS
+; libsrc/jit16core.pla: 0610:                         ^codeptr = $68; codeptr++ // PLA
+	!BYTE	$64,$10			; LLB	[16]
+	!BYTE	$4E			; BRTRU	_B191
+	!WORD	_B191-*
+	!BYTE	$2A,$68			; CB	104
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 0611:                     fin
+	!BYTE	$76,$02			; SLW	[2]
+_B191 
+_B192 
+; libsrc/jit16core.pla: 0612:                     codeptr=>0 = tmp8+$85         // STA TMP
+; libsrc/jit16core.pla: 0613:                     codeptr=>2 = $20E2            // SEP #$20 -> 8 BIT ACCUM/MEM
+; libsrc/jit16core.pla: 0614:                     codeptr=>4 = tmp8+$B2         // LDA (TMP)
+; libsrc/jit16core.pla: 0615:                     codeptr=>6 = $20C2            // REP #$20 -> 16 BIT ACCUM/MEM
+; libsrc/jit16core.pla: 0616:                     codeptr->8 = $29              // AND #$00FF
+; libsrc/jit16core.pla: 0617:                     codeptr=>9 = $00FF
+; libsrc/jit16core.pla: 0618:                     codeptr    = codeptr + 11
+; libsrc/jit16core.pla: 0619:                     A_IS_TOS   = TRUE             // PHA
+; libsrc/jit16core.pla: 0620:                     break
+	!BYTE	$2C,$85,$E7		; CW	59269
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$72			; SW
+	!BYTE	$2C,$E2,$20		; CW	8418
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$02			; ADDI	2
+	!BYTE	$72			; SW
+	!BYTE	$2C,$B2,$E7		; CW	59314
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$04			; ADDI	4
+	!BYTE	$72			; SW
+	!BYTE	$2C,$C2,$20		; CW	8386
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$06			; ADDI	6
+	!BYTE	$72			; SW
+	!BYTE	$2A,$29			; CB	41
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$08			; ADDI	8
+	!BYTE	$70			; SB
+	!BYTE	$2A,$FF			; CB	255
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$09			; ADDI	9
+	!BYTE	$72			; SW
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$0B			; ADDI	11
+	!BYTE	$76,$02			; SLW	[2]
+	!BYTE	$20			; MINUS ONE
+	!BYTE	$74,$10			; SLB	[16]
+	!BYTE	$50			; BRNCH	_B079
+	!WORD	_B079-*
+; libsrc/jit16core.pla: 0621:                 is $62 // LW
+_B193 
+; libsrc/jit16core.pla: 0622:                     //puts("LW")
+; libsrc/jit16core.pla: 0623:                     if not A_IS_TOS
+; libsrc/jit16core.pla: 0624:                         ^codeptr = $68; codeptr++ // PLA
+	!BYTE	$64,$10			; LLB	[16]
+	!BYTE	$4E			; BRTRU	_B194
+	!WORD	_B194-*
+	!BYTE	$2A,$68			; CB	104
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 0625:                     fin
+	!BYTE	$76,$02			; SLW	[2]
+_B194 
+_B195 
+; libsrc/jit16core.pla: 0626:                     codeptr=>0 = tmp8+$85         // STA TMP
+; libsrc/jit16core.pla: 0627:                     codeptr=>2 = tmp8+$B2         // LDA (TMP)
+; libsrc/jit16core.pla: 0628:                     codeptr    = codeptr + 4
+; libsrc/jit16core.pla: 0629:                     A_IS_TOS   = TRUE             // PHA
+; libsrc/jit16core.pla: 0630:                     break
+	!BYTE	$2C,$85,$E7		; CW	59269
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$72			; SW
+	!BYTE	$2C,$B2,$E7		; CW	59314
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$02			; ADDI	2
+	!BYTE	$72			; SW
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$04			; ADDI	4
+	!BYTE	$76,$02			; SLW	[2]
+	!BYTE	$20			; MINUS ONE
+	!BYTE	$74,$10			; SLB	[16]
+	!BYTE	$50			; BRNCH	_B079
+	!WORD	_B079-*
+; libsrc/jit16core.pla: 0631:                 is $64 // LLB
+_B196 
+; libsrc/jit16core.pla: 0632:                     i++
+	!BYTE	$66,$08			; LLW	[8]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 0633:                     j = ^(bytecode+i)
+; libsrc/jit16core.pla: 0634:                     //puts("LLB "); puti(j)
+; libsrc/jit16core.pla: 0635:                     if A_IS_TOS
+; libsrc/jit16core.pla: 0636:                         ^codeptr = $48; codeptr++ // PHA
+	!BYTE	$76,$08			; SLW	[8]
+	!BYTE	$66,$06			; LLW	[6]
+	!BYTE	$B2,$08			; ADDLW	[8]
+	!BYTE	$60			; LB
+	!BYTE	$74,$0F			; SLB	[15]
+	!BYTE	$64,$10			; LLB	[16]
+	!BYTE	$4C			; BRFLS	_B197
+	!WORD	_B197-*
+	!BYTE	$2A,$48			; CB	72
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 0637:                     fin
+	!BYTE	$76,$02			; SLW	[2]
+_B197 
+_B198 
+; libsrc/jit16core.pla: 0638:                     if not X_IS_IFP
+; libsrc/jit16core.pla: 0639:                         *codeptr = ifp8+$A6       // LDX IFP
+; libsrc/jit16core.pla: 0640:                         codeptr  = codeptr + 2
+; libsrc/jit16core.pla: 0641:                         X_IS_IFP = TRUE
+; libsrc/jit16core.pla: 0642:                     fin
+	!BYTE	$64,$11			; LLB	[17]
+	!BYTE	$4E			; BRTRU	_B199
+	!WORD	_B199-*
+	!BYTE	$2C,$A6,$E0		; CW	57510
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$72			; SW
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$02			; ADDI	2
+	!BYTE	$76,$02			; SLW	[2]
+	!BYTE	$20			; MINUS ONE
+	!BYTE	$74,$11			; SLB	[17]
+_B199 
+_B200 
+; libsrc/jit16core.pla: 0643:                     codeptr=>0 = $B5+(j<<8)       // LDA dp,X
+; libsrc/jit16core.pla: 0644:                     codeptr->2 = $29              // AND #$00FF
+; libsrc/jit16core.pla: 0645:                     codeptr=>3 = $00FF
+; libsrc/jit16core.pla: 0646:                     codeptr    = codeptr + 5
+; libsrc/jit16core.pla: 0647:                     A_IS_TOS   = TRUE             // PHA
+; libsrc/jit16core.pla: 0648:                     break
+	!BYTE	$2A,$B5			; CB	181
+	!BYTE	$64,$0F			; LLB	[15]
+	!BYTE	$10			; CN	8
+	!BYTE	$9A			; SHL
+	!BYTE	$82			; ADD 
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$72			; SW
+	!BYTE	$2A,$29			; CB	41
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$02			; ADDI	2
+	!BYTE	$70			; SB
+	!BYTE	$2A,$FF			; CB	255
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$03			; ADDI	3
+	!BYTE	$72			; SW
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$05			; ADDI	5
+	!BYTE	$76,$02			; SLW	[2]
+	!BYTE	$20			; MINUS ONE
+	!BYTE	$74,$10			; SLB	[16]
+	!BYTE	$50			; BRNCH	_B079
+	!WORD	_B079-*
+; libsrc/jit16core.pla: 0649:                 is $66 // LLW
+_B201 
+; libsrc/jit16core.pla: 0650:                     i++
+	!BYTE	$66,$08			; LLW	[8]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 0651:                     j = ^(bytecode+i)
+; libsrc/jit16core.pla: 0652:                     //puts("LLW "); puti(j)
+; libsrc/jit16core.pla: 0653:                     if A_IS_TOS
+; libsrc/jit16core.pla: 0654:                         ^codeptr = $48; codeptr++ // PHA
+	!BYTE	$76,$08			; SLW	[8]
+	!BYTE	$66,$06			; LLW	[6]
+	!BYTE	$B2,$08			; ADDLW	[8]
+	!BYTE	$60			; LB
+	!BYTE	$74,$0F			; SLB	[15]
+	!BYTE	$64,$10			; LLB	[16]
+	!BYTE	$4C			; BRFLS	_B202
+	!WORD	_B202-*
+	!BYTE	$2A,$48			; CB	72
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 0655:                     fin
+	!BYTE	$76,$02			; SLW	[2]
+_B202 
+_B203 
+; libsrc/jit16core.pla: 0656:                     if not X_IS_IFP
+; libsrc/jit16core.pla: 0657:                         *codeptr = ifp8+$A6       // LDX IFP
+; libsrc/jit16core.pla: 0658:                         codeptr  = codeptr + 2
+; libsrc/jit16core.pla: 0659:                         X_IS_IFP = TRUE
+; libsrc/jit16core.pla: 0660:                     fin
+	!BYTE	$64,$11			; LLB	[17]
+	!BYTE	$4E			; BRTRU	_B204
+	!WORD	_B204-*
+	!BYTE	$2C,$A6,$E0		; CW	57510
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$72			; SW
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$02			; ADDI	2
+	!BYTE	$76,$02			; SLW	[2]
+	!BYTE	$20			; MINUS ONE
+	!BYTE	$74,$11			; SLB	[17]
+_B204 
+_B205 
+; libsrc/jit16core.pla: 0661:                     codeptr=>0 = $B5+(j<<8)       // LDA dp,X
+; libsrc/jit16core.pla: 0662:                     codeptr    = codeptr + 2
+; libsrc/jit16core.pla: 0663:                     A_IS_TOS   = TRUE             // PHA
+; libsrc/jit16core.pla: 0664:                     break
+	!BYTE	$2A,$B5			; CB	181
+	!BYTE	$64,$0F			; LLB	[15]
+	!BYTE	$10			; CN	8
+	!BYTE	$9A			; SHL
+	!BYTE	$82			; ADD 
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$72			; SW
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$02			; ADDI	2
+	!BYTE	$76,$02			; SLW	[2]
+	!BYTE	$20			; MINUS ONE
+	!BYTE	$74,$10			; SLB	[16]
+	!BYTE	$50			; BRNCH	_B079
+	!WORD	_B079-*
+; libsrc/jit16core.pla: 0665:                 is $68 // LAB
+_B206 
+; libsrc/jit16core.pla: 0666:                     dest = *(bytecode+i+1)
+; libsrc/jit16core.pla: 0667:                     i    = i + 2
+; libsrc/jit16core.pla: 0668:                     //puts("LAB $"); puth(dest)
+; libsrc/jit16core.pla: 0669:                     if A_IS_TOS
+; libsrc/jit16core.pla: 0670:                         ^codeptr = $48; codeptr++ // PHA
+	!BYTE	$66,$06			; LLW	[6]
+	!BYTE	$B2,$08			; ADDLW	[8]
+	!BYTE	$8C			; INCR
+	!BYTE	$62			; LW
+	!BYTE	$76,$0C			; SLW	[12]
+	!BYTE	$66,$08			; LLW	[8]
+	!BYTE	$38,$02			; ADDI	2
+	!BYTE	$76,$08			; SLW	[8]
+	!BYTE	$64,$10			; LLB	[16]
+	!BYTE	$4C			; BRFLS	_B207
+	!WORD	_B207-*
+	!BYTE	$2A,$48			; CB	72
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 0671:                     fin
+	!BYTE	$76,$02			; SLW	[2]
+_B207 
+_B208 
+; libsrc/jit16core.pla: 0672:                     if is_hwaddr(dest)
+; libsrc/jit16core.pla: 0673:                         //
+; libsrc/jit16core.pla: 0674:                         // Ensure we only do byte sized accesses to H/W
+; libsrc/jit16core.pla: 0675:                         //
+; libsrc/jit16core.pla: 0676:                         codeptr=>0 = $20E2        // SEP #$20 -> 8 BIT ACCUM/MEM
+; libsrc/jit16core.pla: 0677:                         codeptr->2 = $AD          // LDA abs
+; libsrc/jit16core.pla: 0678:                         codeptr=>3 = dest
+; libsrc/jit16core.pla: 0679:                         codeptr=>5 = $20C2        // REP #$20 -> 16 BIT ACCUM/MEM
+; libsrc/jit16core.pla: 0680:                         codeptr->7 = $29          // AND #$00FF
+; libsrc/jit16core.pla: 0681:                         codeptr=>8 = $00FF
+; libsrc/jit16core.pla: 0682:                         codeptr    = codeptr + 10
+; libsrc/jit16core.pla: 0683:                     else
+	!BYTE	$66,$0C			; LLW	[12]
+	!BYTE	$54			; CALL	_C001
+_F012 	!WORD	_C001		
+	!BYTE	$4C			; BRFLS	_B209
+	!WORD	_B209-*
+	!BYTE	$2C,$E2,$20		; CW	8418
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$72			; SW
+	!BYTE	$2A,$AD			; CB	173
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$02			; ADDI	2
+	!BYTE	$70			; SB
+	!BYTE	$66,$0C			; LLW	[12]
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$03			; ADDI	3
+	!BYTE	$72			; SW
+	!BYTE	$2C,$C2,$20		; CW	8386
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$05			; ADDI	5
+	!BYTE	$72			; SW
+	!BYTE	$2A,$29			; CB	41
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$07			; ADDI	7
+	!BYTE	$70			; SB
+	!BYTE	$2A,$FF			; CB	255
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$08			; ADDI	8
+	!BYTE	$72			; SW
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$0A			; ADDI	10
+	!BYTE	$76,$02			; SLW	[2]
+	!BYTE	$50			; BRNCH	_B210
+	!WORD	_B210-*
+_B209 
+; libsrc/jit16core.pla: 0684:                         codeptr->0 = $AD          // LDA abs
+; libsrc/jit16core.pla: 0685:                         codeptr=>1 = dest
+; libsrc/jit16core.pla: 0686:                         codeptr->3 = $29          // AND #$00FF
+; libsrc/jit16core.pla: 0687:                         codeptr=>4 = $00FF
+; libsrc/jit16core.pla: 0688:                         codeptr    = codeptr + 6
+; libsrc/jit16core.pla: 0689:                     fin
+	!BYTE	$2A,$AD			; CB	173
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$66,$0C			; LLW	[12]
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+	!BYTE	$72			; SW
+	!BYTE	$2A,$29			; CB	41
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$03			; ADDI	3
+	!BYTE	$70			; SB
+	!BYTE	$2A,$FF			; CB	255
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$04			; ADDI	4
+	!BYTE	$72			; SW
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$06			; ADDI	6
+	!BYTE	$76,$02			; SLW	[2]
+_B210 
+; libsrc/jit16core.pla: 0690:                     A_IS_TOS = TRUE               // PHA
+; libsrc/jit16core.pla: 0691:                     break
+	!BYTE	$20			; MINUS ONE
+	!BYTE	$74,$10			; SLB	[16]
+	!BYTE	$50			; BRNCH	_B079
+	!WORD	_B079-*
+; libsrc/jit16core.pla: 0692:                 is $6A // LAW
+_B211 
+; libsrc/jit16core.pla: 0693:                     dest = *(bytecode+i+1)
+; libsrc/jit16core.pla: 0694:                     i    = i + 2
+; libsrc/jit16core.pla: 0695:                     //puts("LAW $"); puth(dest)
+; libsrc/jit16core.pla: 0696:                     if A_IS_TOS
+; libsrc/jit16core.pla: 0697:                         ^codeptr = $48; codeptr++ // PHA
+	!BYTE	$66,$06			; LLW	[6]
+	!BYTE	$B2,$08			; ADDLW	[8]
+	!BYTE	$8C			; INCR
+	!BYTE	$62			; LW
+	!BYTE	$76,$0C			; SLW	[12]
+	!BYTE	$66,$08			; LLW	[8]
+	!BYTE	$38,$02			; ADDI	2
+	!BYTE	$76,$08			; SLW	[8]
+	!BYTE	$64,$10			; LLB	[16]
+	!BYTE	$4C			; BRFLS	_B212
+	!WORD	_B212-*
+	!BYTE	$2A,$48			; CB	72
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 0698:                     fin
+	!BYTE	$76,$02			; SLW	[2]
+_B212 
+_B213 
+; libsrc/jit16core.pla: 0699:                     codeptr->0 = $AD              // LDA abs
+; libsrc/jit16core.pla: 0700:                     codeptr=>1 = dest
+; libsrc/jit16core.pla: 0701:                     codeptr    = codeptr + 3
+; libsrc/jit16core.pla: 0702:                     A_IS_TOS   = TRUE             // PHA
+; libsrc/jit16core.pla: 0703:                     break
+	!BYTE	$2A,$AD			; CB	173
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$66,$0C			; LLW	[12]
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+	!BYTE	$72			; SW
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$03			; ADDI	3
+	!BYTE	$76,$02			; SLW	[2]
+	!BYTE	$20			; MINUS ONE
+	!BYTE	$74,$10			; SLB	[16]
+	!BYTE	$50			; BRNCH	_B079
+	!WORD	_B079-*
+; libsrc/jit16core.pla: 0704:                 is $6C // DLB
+_B214 
+; libsrc/jit16core.pla: 0705:                 is $74 // SLB
+_B215 
+; libsrc/jit16core.pla: 0706:                     i++
+	!BYTE	$66,$08			; LLW	[8]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 0707:                     j = ^(bytecode+i)
+; libsrc/jit16core.pla: 0708:                     if not A_IS_TOS
+; libsrc/jit16core.pla: 0709:                         ^codeptr = $68; codeptr++ // PLA
+	!BYTE	$76,$08			; SLW	[8]
+	!BYTE	$66,$06			; LLW	[6]
+	!BYTE	$B2,$08			; ADDLW	[8]
+	!BYTE	$60			; LB
+	!BYTE	$74,$0F			; SLB	[15]
+	!BYTE	$64,$10			; LLB	[16]
+	!BYTE	$4E			; BRTRU	_B216
+	!WORD	_B216-*
+	!BYTE	$2A,$68			; CB	104
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 0710:                     fin
+	!BYTE	$76,$02			; SLW	[2]
+_B216 
+_B217 
+; libsrc/jit16core.pla: 0711:                     if not X_IS_IFP
+; libsrc/jit16core.pla: 0712:                         *codeptr = ifp8+$A6       // LDX IFP
+; libsrc/jit16core.pla: 0713:                         codeptr  = codeptr + 2
+; libsrc/jit16core.pla: 0714:                         X_IS_IFP = TRUE
+; libsrc/jit16core.pla: 0715:                     fin
+	!BYTE	$64,$11			; LLB	[17]
+	!BYTE	$4E			; BRTRU	_B218
+	!WORD	_B218-*
+	!BYTE	$2C,$A6,$E0		; CW	57510
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$72			; SW
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$02			; ADDI	2
+	!BYTE	$76,$02			; SLW	[2]
+	!BYTE	$20			; MINUS ONE
+	!BYTE	$74,$11			; SLB	[17]
+_B218 
+_B219 
+; libsrc/jit16core.pla: 0716:                     codeptr=>0 = $20E2            // SEP #$20 -> 8 BIT ACCUM/MEM
+; libsrc/jit16core.pla: 0717:                     codeptr=>2 = $95+(j<<8)       // STA dp,X
+; libsrc/jit16core.pla: 0718:                     codeptr=>4 = $20C2            // REP #$20 -> 16 BIT ACCUM/MEM
+; libsrc/jit16core.pla: 0719:                     if opcode == $6C
+; libsrc/jit16core.pla: 0720:                         //puts("DLB "); puti(j)
+; libsrc/jit16core.pla: 0721:                         codeptr->6 = $29          // AND #$00FF
+; libsrc/jit16core.pla: 0722:                         codeptr=>7 = $00FF
+; libsrc/jit16core.pla: 0723:                         codeptr    = codeptr + 9
+; libsrc/jit16core.pla: 0724:                         A_IS_TOS = TRUE           // PHA
+; libsrc/jit16core.pla: 0725:                     else
+	!BYTE	$2C,$E2,$20		; CW	8418
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$72			; SW
+	!BYTE	$2A,$95			; CB	149
+	!BYTE	$64,$0F			; LLB	[15]
+	!BYTE	$10			; CN	8
+	!BYTE	$9A			; SHL
+	!BYTE	$82			; ADD 
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$02			; ADDI	2
+	!BYTE	$72			; SW
+	!BYTE	$2C,$C2,$20		; CW	8386
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$04			; ADDI	4
+	!BYTE	$72			; SW
+	!BYTE	$64,$0E			; LLB	[14]
+	!BYTE	$2A,$6C			; CB	108
+	!BYTE	$24			; BRNE	_B220
+	!WORD	_B220-*
+	!BYTE	$2A,$29			; CB	41
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$06			; ADDI	6
+	!BYTE	$70			; SB
+	!BYTE	$2A,$FF			; CB	255
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$07			; ADDI	7
+	!BYTE	$72			; SW
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$09			; ADDI	9
+	!BYTE	$76,$02			; SLW	[2]
+	!BYTE	$20			; MINUS ONE
+	!BYTE	$74,$10			; SLB	[16]
+	!BYTE	$50			; BRNCH	_B221
+	!WORD	_B221-*
+_B220 
+; libsrc/jit16core.pla: 0726:                         //puts("SLB "); puti(j)
+; libsrc/jit16core.pla: 0727:                         codeptr    = codeptr + 6
+; libsrc/jit16core.pla: 0728:                         A_IS_TOS = FALSE
+; libsrc/jit16core.pla: 0729:                     fin
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$06			; ADDI	6
+	!BYTE	$76,$02			; SLW	[2]
+	!BYTE	$00			; CN	0
+	!BYTE	$74,$10			; SLB	[16]
+_B221 
+; libsrc/jit16core.pla: 0730:                     break
+	!BYTE	$50			; BRNCH	_B079
+	!WORD	_B079-*
+; libsrc/jit16core.pla: 0731:                 is $6E // DLW
+_B222 
+; libsrc/jit16core.pla: 0732:                 is $76 // SLW
+_B223 
+; libsrc/jit16core.pla: 0733:                     i++
+	!BYTE	$66,$08			; LLW	[8]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 0734:                     j = ^(bytecode+i)
+; libsrc/jit16core.pla: 0735:                     if not A_IS_TOS
+; libsrc/jit16core.pla: 0736:                         ^codeptr = $68; codeptr++ // PLA
+	!BYTE	$76,$08			; SLW	[8]
+	!BYTE	$66,$06			; LLW	[6]
+	!BYTE	$B2,$08			; ADDLW	[8]
+	!BYTE	$60			; LB
+	!BYTE	$74,$0F			; SLB	[15]
+	!BYTE	$64,$10			; LLB	[16]
+	!BYTE	$4E			; BRTRU	_B224
+	!WORD	_B224-*
+	!BYTE	$2A,$68			; CB	104
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 0737:                     fin
+	!BYTE	$76,$02			; SLW	[2]
+_B224 
+_B225 
+; libsrc/jit16core.pla: 0738:                     if not X_IS_IFP
+; libsrc/jit16core.pla: 0739:                         *codeptr = ifp8+$A6       // LDX IFP
+; libsrc/jit16core.pla: 0740:                         codeptr  = codeptr + 2
+; libsrc/jit16core.pla: 0741:                         X_IS_IFP = TRUE
+; libsrc/jit16core.pla: 0742:                     fin
+	!BYTE	$64,$11			; LLB	[17]
+	!BYTE	$4E			; BRTRU	_B226
+	!WORD	_B226-*
+	!BYTE	$2C,$A6,$E0		; CW	57510
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$72			; SW
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$02			; ADDI	2
+	!BYTE	$76,$02			; SLW	[2]
+	!BYTE	$20			; MINUS ONE
+	!BYTE	$74,$11			; SLB	[17]
+_B226 
+_B227 
+; libsrc/jit16core.pla: 0743:                     codeptr=>0 = $95+(j<<8)       // STA dp,X
+; libsrc/jit16core.pla: 0744:                     codeptr    = codeptr + 2
+; libsrc/jit16core.pla: 0745:                     if opcode == $6E
+; libsrc/jit16core.pla: 0746:                         //puts("DLW "); puti(j)
+; libsrc/jit16core.pla: 0747:                         A_IS_TOS = TRUE           // PHA
+; libsrc/jit16core.pla: 0748:                     else
+	!BYTE	$2A,$95			; CB	149
+	!BYTE	$64,$0F			; LLB	[15]
+	!BYTE	$10			; CN	8
+	!BYTE	$9A			; SHL
+	!BYTE	$82			; ADD 
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$72			; SW
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$02			; ADDI	2
+	!BYTE	$76,$02			; SLW	[2]
+	!BYTE	$64,$0E			; LLB	[14]
+	!BYTE	$2A,$6E			; CB	110
+	!BYTE	$24			; BRNE	_B228
+	!WORD	_B228-*
+	!BYTE	$20			; MINUS ONE
+	!BYTE	$74,$10			; SLB	[16]
+	!BYTE	$50			; BRNCH	_B229
+	!WORD	_B229-*
+_B228 
+; libsrc/jit16core.pla: 0749:                         //puts("SLW "); puti(j)
+; libsrc/jit16core.pla: 0750:                         A_IS_TOS = FALSE
+; libsrc/jit16core.pla: 0751:                     fin
+	!BYTE	$00			; CN	0
+	!BYTE	$74,$10			; SLB	[16]
+_B229 
+; libsrc/jit16core.pla: 0752:                     break
+	!BYTE	$50			; BRNCH	_B079
+	!WORD	_B079-*
+; libsrc/jit16core.pla: 0753:                 is $70 // SB
+_B230 
+; libsrc/jit16core.pla: 0754:                     //puts("SB")
+; libsrc/jit16core.pla: 0755:                     if not A_IS_TOS
+; libsrc/jit16core.pla: 0756:                         ^codeptr = $68; codeptr++ // PLA
+	!BYTE	$64,$10			; LLB	[16]
+	!BYTE	$4E			; BRTRU	_B231
+	!WORD	_B231-*
+	!BYTE	$2A,$68			; CB	104
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 0757:                     fin
+	!BYTE	$76,$02			; SLW	[2]
+_B231 
+_B232 
+; libsrc/jit16core.pla: 0758:                     codeptr=>0 = tmp8+$85         // STA TMP
+; libsrc/jit16core.pla: 0759:                     codeptr->2 = $68              // PLA
+; libsrc/jit16core.pla: 0760:                     codeptr=>3 = $20E2            // SEP #$20 -> 8 BIT ACCUM/MEM
+; libsrc/jit16core.pla: 0761:                     codeptr=>5 = tmp8+$92         // STA (TMP)
+; libsrc/jit16core.pla: 0762:                     codeptr=>7 = $20C2            // REP #$20 -> 16 BIT ACCUM/MEM
+; libsrc/jit16core.pla: 0763:                     codeptr    = codeptr + 9
+; libsrc/jit16core.pla: 0764:                     A_IS_TOS   = FALSE
+; libsrc/jit16core.pla: 0765:                     break
+	!BYTE	$2C,$85,$E7		; CW	59269
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$72			; SW
+	!BYTE	$2A,$68			; CB	104
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$02			; ADDI	2
+	!BYTE	$70			; SB
+	!BYTE	$2C,$E2,$20		; CW	8418
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$03			; ADDI	3
+	!BYTE	$72			; SW
+	!BYTE	$2C,$92,$E7		; CW	59282
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$05			; ADDI	5
+	!BYTE	$72			; SW
+	!BYTE	$2C,$C2,$20		; CW	8386
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$07			; ADDI	7
+	!BYTE	$72			; SW
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$09			; ADDI	9
+	!BYTE	$76,$02			; SLW	[2]
+	!BYTE	$00			; CN	0
+	!BYTE	$74,$10			; SLB	[16]
+	!BYTE	$50			; BRNCH	_B079
+	!WORD	_B079-*
+; libsrc/jit16core.pla: 0766:                 is $72 // SW
+_B233 
+; libsrc/jit16core.pla: 0767:                     //puts("SW")
+; libsrc/jit16core.pla: 0768:                     if not A_IS_TOS
+; libsrc/jit16core.pla: 0769:                         ^codeptr = $68; codeptr++ // PLA
+	!BYTE	$64,$10			; LLB	[16]
+	!BYTE	$4E			; BRTRU	_B234
+	!WORD	_B234-*
+	!BYTE	$2A,$68			; CB	104
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 0770:                     fin
+	!BYTE	$76,$02			; SLW	[2]
+_B234 
+_B235 
+; libsrc/jit16core.pla: 0771:                     codeptr=>0 = tmp8+$85         // STA TMP
+; libsrc/jit16core.pla: 0772:                     codeptr->2 = $68              // PLA
+; libsrc/jit16core.pla: 0773:                     codeptr=>3 = tmp8+$92         // STA (TMP)
+; libsrc/jit16core.pla: 0774:                     codeptr    = codeptr + 5
+; libsrc/jit16core.pla: 0775:                     A_IS_TOS   = FALSE
+; libsrc/jit16core.pla: 0776:                     break
+	!BYTE	$2C,$85,$E7		; CW	59269
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$72			; SW
+	!BYTE	$2A,$68			; CB	104
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$02			; ADDI	2
+	!BYTE	$70			; SB
+	!BYTE	$2C,$92,$E7		; CW	59282
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$03			; ADDI	3
+	!BYTE	$72			; SW
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$05			; ADDI	5
+	!BYTE	$76,$02			; SLW	[2]
+	!BYTE	$00			; CN	0
+	!BYTE	$74,$10			; SLB	[16]
+	!BYTE	$50			; BRNCH	_B079
+	!WORD	_B079-*
+; libsrc/jit16core.pla: 0777:                 is $78 // SAB
+_B236 
+; libsrc/jit16core.pla: 0778:                 is $7C // DAB
+_B237 
+; libsrc/jit16core.pla: 0779:                     dest = *(bytecode+i+1)
+; libsrc/jit16core.pla: 0780:                     i    = i + 2
+; libsrc/jit16core.pla: 0781:                     if not A_IS_TOS
+; libsrc/jit16core.pla: 0782:                         ^codeptr = $68; codeptr++ // PLA
+	!BYTE	$66,$06			; LLW	[6]
+	!BYTE	$B2,$08			; ADDLW	[8]
+	!BYTE	$8C			; INCR
+	!BYTE	$62			; LW
+	!BYTE	$76,$0C			; SLW	[12]
+	!BYTE	$66,$08			; LLW	[8]
+	!BYTE	$38,$02			; ADDI	2
+	!BYTE	$76,$08			; SLW	[8]
+	!BYTE	$64,$10			; LLB	[16]
+	!BYTE	$4E			; BRTRU	_B238
+	!WORD	_B238-*
+	!BYTE	$2A,$68			; CB	104
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 0783:                     fin
+	!BYTE	$76,$02			; SLW	[2]
+_B238 
+_B239 
+; libsrc/jit16core.pla: 0784:                     codeptr=>0 = $20E2            // SEP #$20 -> 8 BIT ACCUM/MEM
+; libsrc/jit16core.pla: 0785:                     codeptr->2 = $8D              // STA abs
+; libsrc/jit16core.pla: 0786:                     codeptr=>3 = dest
+; libsrc/jit16core.pla: 0787:                     codeptr=>5 = $20C2            // REP #$20 -> 16 BIT ACCUM/MEM
+; libsrc/jit16core.pla: 0788:                     if opcode == $78
+; libsrc/jit16core.pla: 0789:                         //puts("SAB $"); puth(*(bytecode+i))
+; libsrc/jit16core.pla: 0790:                         codeptr    = codeptr + 7
+; libsrc/jit16core.pla: 0791:                         A_IS_TOS   = FALSE
+; libsrc/jit16core.pla: 0792:                     else
+	!BYTE	$2C,$E2,$20		; CW	8418
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$72			; SW
+	!BYTE	$2A,$8D			; CB	141
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$02			; ADDI	2
+	!BYTE	$70			; SB
+	!BYTE	$66,$0C			; LLW	[12]
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$03			; ADDI	3
+	!BYTE	$72			; SW
+	!BYTE	$2C,$C2,$20		; CW	8386
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$05			; ADDI	5
+	!BYTE	$72			; SW
+	!BYTE	$64,$0E			; LLB	[14]
+	!BYTE	$2A,$78			; CB	120
+	!BYTE	$24			; BRNE	_B240
+	!WORD	_B240-*
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$07			; ADDI	7
+	!BYTE	$76,$02			; SLW	[2]
+	!BYTE	$00			; CN	0
+	!BYTE	$74,$10			; SLB	[16]
+	!BYTE	$50			; BRNCH	_B241
+	!WORD	_B241-*
+_B240 
+; libsrc/jit16core.pla: 0793:                         //puts("DAB $"); puth(*(bytecode+i))
+; libsrc/jit16core.pla: 0794:                         codeptr->7 = $29              // AND #$00FF
+; libsrc/jit16core.pla: 0795:                         codeptr=>8 = $00FF
+; libsrc/jit16core.pla: 0796:                         codeptr    = codeptr + 10
+; libsrc/jit16core.pla: 0797:                         A_IS_TOS   = TRUE
+; libsrc/jit16core.pla: 0798:                     fin
+	!BYTE	$2A,$29			; CB	41
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$07			; ADDI	7
+	!BYTE	$70			; SB
+	!BYTE	$2A,$FF			; CB	255
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$08			; ADDI	8
+	!BYTE	$72			; SW
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$0A			; ADDI	10
+	!BYTE	$76,$02			; SLW	[2]
+	!BYTE	$20			; MINUS ONE
+	!BYTE	$74,$10			; SLB	[16]
+_B241 
+; libsrc/jit16core.pla: 0799:                     break
+	!BYTE	$50			; BRNCH	_B079
+	!WORD	_B079-*
+; libsrc/jit16core.pla: 0800:                 is $7A // SAW
+_B242 
+; libsrc/jit16core.pla: 0801:                 is $7E // DAW
+_B243 
+; libsrc/jit16core.pla: 0802:                     dest = *(bytecode+i+1)
+; libsrc/jit16core.pla: 0803:                     i    = i + 2
+; libsrc/jit16core.pla: 0804:                     if not A_IS_TOS
+; libsrc/jit16core.pla: 0805:                         ^codeptr = $68; codeptr++ // PLA
+	!BYTE	$66,$06			; LLW	[6]
+	!BYTE	$B2,$08			; ADDLW	[8]
+	!BYTE	$8C			; INCR
+	!BYTE	$62			; LW
+	!BYTE	$76,$0C			; SLW	[12]
+	!BYTE	$66,$08			; LLW	[8]
+	!BYTE	$38,$02			; ADDI	2
+	!BYTE	$76,$08			; SLW	[8]
+	!BYTE	$64,$10			; LLB	[16]
+	!BYTE	$4E			; BRTRU	_B244
+	!WORD	_B244-*
+	!BYTE	$2A,$68			; CB	104
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 0806:                     fin
+	!BYTE	$76,$02			; SLW	[2]
+_B244 
+_B245 
+; libsrc/jit16core.pla: 0807:                     codeptr->0 = $8D              // STA abs
+; libsrc/jit16core.pla: 0808:                     codeptr=>1 = dest
+; libsrc/jit16core.pla: 0809:                     codeptr    = codeptr + 3
+; libsrc/jit16core.pla: 0810:                     if opcode == $7A
+; libsrc/jit16core.pla: 0811:                         //puts("SAW $"); puth(dest)
+; libsrc/jit16core.pla: 0812:                         A_IS_TOS = FALSE
+; libsrc/jit16core.pla: 0813:                     else
+	!BYTE	$2A,$8D			; CB	141
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$66,$0C			; LLW	[12]
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+	!BYTE	$72			; SW
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$03			; ADDI	3
+	!BYTE	$76,$02			; SLW	[2]
+	!BYTE	$64,$0E			; LLB	[14]
+	!BYTE	$2A,$7A			; CB	122
+	!BYTE	$24			; BRNE	_B246
+	!WORD	_B246-*
+	!BYTE	$00			; CN	0
+	!BYTE	$74,$10			; SLB	[16]
+	!BYTE	$50			; BRNCH	_B247
+	!WORD	_B247-*
+_B246 
+; libsrc/jit16core.pla: 0814:                         //puts("DAW $"); puth(*(bytecode+i))
+; libsrc/jit16core.pla: 0815:                         A_IS_TOS = TRUE
+; libsrc/jit16core.pla: 0816:                     fin
+	!BYTE	$20			; MINUS ONE
+	!BYTE	$74,$10			; SLB	[16]
+_B247 
+; libsrc/jit16core.pla: 0817:                     break
+	!BYTE	$50			; BRNCH	_B079
+	!WORD	_B079-*
+; libsrc/jit16core.pla: 0818:                 is $80 // NOT
+_B248 
+; libsrc/jit16core.pla: 0819:                     //puts("NOT")
+; libsrc/jit16core.pla: 0820:                     if not A_IS_TOS
+; libsrc/jit16core.pla: 0821:                         codeptr->0 = $68 // PLA
+; libsrc/jit16core.pla: 0822:                     else
+	!BYTE	$64,$10			; LLB	[16]
+	!BYTE	$4E			; BRTRU	_B249
+	!WORD	_B249-*
+	!BYTE	$2A,$68			; CB	104
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$50			; BRNCH	_B250
+	!WORD	_B250-*
+_B249 
+; libsrc/jit16core.pla: 0823:                         codeptr->0 = $A8 // TAY
+; libsrc/jit16core.pla: 0824:                     fin
+	!BYTE	$2A,$A8			; CB	168
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+_B250 
+; libsrc/jit16core.pla: 0825:                     codeptr=>1 = $03F0   // BEQ +3
+; libsrc/jit16core.pla: 0826:                     codeptr->3 = $A9     // LDA #$FFFF
+; libsrc/jit16core.pla: 0827:                     codeptr=>4 = $FFFF
+; libsrc/jit16core.pla: 0828:                     codeptr->6 = $49     // EOR #$FFFF
+; libsrc/jit16core.pla: 0829:                     codeptr=>7 = $FFFF
+; libsrc/jit16core.pla: 0830:                     codeptr    = codeptr + 9
+; libsrc/jit16core.pla: 0831:                     A_IS_TOS   = TRUE
+; libsrc/jit16core.pla: 0832:                     break
+	!BYTE	$2C,$F0,$03		; CW	1008
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+	!BYTE	$72			; SW
+	!BYTE	$2A,$A9			; CB	169
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$03			; ADDI	3
+	!BYTE	$70			; SB
+	!BYTE	$20			; MINUS ONE
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$04			; ADDI	4
+	!BYTE	$72			; SW
+	!BYTE	$2A,$49			; CB	73
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$06			; ADDI	6
+	!BYTE	$70			; SB
+	!BYTE	$20			; MINUS ONE
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$07			; ADDI	7
+	!BYTE	$72			; SW
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$09			; ADDI	9
+	!BYTE	$76,$02			; SLW	[2]
+	!BYTE	$20			; MINUS ONE
+	!BYTE	$74,$10			; SLB	[16]
+	!BYTE	$50			; BRNCH	_B079
+	!WORD	_B079-*
+; libsrc/jit16core.pla: 0833:                 is $82 // ADD
+_B251 
+; libsrc/jit16core.pla: 0834:                     //puts("ADD")
+; libsrc/jit16core.pla: 0835:                     if not A_IS_TOS
+; libsrc/jit16core.pla: 0836:                         ^codeptr = $68; codeptr++ // PLA
+	!BYTE	$64,$10			; LLB	[16]
+	!BYTE	$4E			; BRTRU	_B252
+	!WORD	_B252-*
+	!BYTE	$2A,$68			; CB	104
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 0837:                     fin
+	!BYTE	$76,$02			; SLW	[2]
+_B252 
+_B253 
+; libsrc/jit16core.pla: 0838:                     codeptr->0 = $18              // CLC
+; libsrc/jit16core.pla: 0839:                     codeptr=>1 = $63+(TOS<<8)     // ADC S,TOS
+; libsrc/jit16core.pla: 0840:                     codeptr->3 = $7A              // PLY
+; libsrc/jit16core.pla: 0841:                     codeptr    = codeptr + 4
+; libsrc/jit16core.pla: 0842:                     A_IS_TOS   = TRUE
+; libsrc/jit16core.pla: 0843:                     break
+	!BYTE	$2A,$18			; CB	24
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$2C,$63,$01		; CW	355
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+	!BYTE	$72			; SW
+	!BYTE	$2A,$7A			; CB	122
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$03			; ADDI	3
+	!BYTE	$70			; SB
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$04			; ADDI	4
+	!BYTE	$76,$02			; SLW	[2]
+	!BYTE	$20			; MINUS ONE
+	!BYTE	$74,$10			; SLB	[16]
+	!BYTE	$50			; BRNCH	_B079
+	!WORD	_B079-*
+; libsrc/jit16core.pla: 0844:                 is $84 // SUB
+_B254 
+; libsrc/jit16core.pla: 0845:                     //puts("SUB")
+; libsrc/jit16core.pla: 0846:                     if not A_IS_TOS
+; libsrc/jit16core.pla: 0847:                         ^codeptr = $68; codeptr++ // PLA
+	!BYTE	$64,$10			; LLB	[16]
+	!BYTE	$4E			; BRTRU	_B255
+	!WORD	_B255-*
+	!BYTE	$2A,$68			; CB	104
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 0848:                     fin
+	!BYTE	$76,$02			; SLW	[2]
+_B255 
+_B256 
+; libsrc/jit16core.pla: 0849:                     codeptr=>0 = tmp8+$85         // STA TMP
+; libsrc/jit16core.pla: 0850:                     codeptr=>2 = $3868            // PLA; SEC
+; libsrc/jit16core.pla: 0851:                     codeptr=>4 = tmp8+$E5         // SBC TMP
+; libsrc/jit16core.pla: 0852:                     codeptr    = codeptr + 6
+; libsrc/jit16core.pla: 0853:                     A_IS_TOS   = TRUE
+; libsrc/jit16core.pla: 0854:                     break
+	!BYTE	$2C,$85,$E7		; CW	59269
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$72			; SW
+	!BYTE	$2C,$68,$38		; CW	14440
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$02			; ADDI	2
+	!BYTE	$72			; SW
+	!BYTE	$2C,$E5,$E7		; CW	59365
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$04			; ADDI	4
+	!BYTE	$72			; SW
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$06			; ADDI	6
+	!BYTE	$76,$02			; SLW	[2]
+	!BYTE	$20			; MINUS ONE
+	!BYTE	$74,$10			; SLB	[16]
+	!BYTE	$50			; BRNCH	_B079
+	!WORD	_B079-*
+; libsrc/jit16core.pla: 0855:                 is $86 // MUL
+_B257 
+; libsrc/jit16core.pla: 0856:                 is $88 // DIV
+_B258 
+; libsrc/jit16core.pla: 0857:                 is $8A // MOD
+_B259 
+; libsrc/jit16core.pla: 0858:                 is $9A // SHL
+_B260 
+; libsrc/jit16core.pla: 0859:                 is $9C // SHR
+_B261 
+; libsrc/jit16core.pla: 0860:                     //puts("MUL,DIV,MOD,SHL,SHR")
+; libsrc/jit16core.pla: 0861:                     //  when opcode
+; libsrc/jit16core.pla: 0862:                     //        is $86
+; libsrc/jit16core.pla: 0863:                     //            //puts("MUL")
+; libsrc/jit16core.pla: 0864:                     //        is $88
+; libsrc/jit16core.pla: 0865:                     //            //puts("DIV")
+; libsrc/jit16core.pla: 0866:                     //        is $8A
+; libsrc/jit16core.pla: 0867:                     //            //puts("MOD")
+; libsrc/jit16core.pla: 0868:                     //         is $9A
+; libsrc/jit16core.pla: 0869:                     //            //puts("SHL")
+; libsrc/jit16core.pla: 0870:                     //        is $9C
+; libsrc/jit16core.pla: 0871:                     //            //puts("SHR")
+; libsrc/jit16core.pla: 0872:                     //  wend
+; libsrc/jit16core.pla: 0873:                     //
+; libsrc/jit16core.pla: 0874:                     // Call into VM
+; libsrc/jit16core.pla: 0875:                     //
+; libsrc/jit16core.pla: 0876:                     if A_IS_TOS
+; libsrc/jit16core.pla: 0877:                         ^codeptr = $48; codeptr++ // PHA
+	!BYTE	$64,$10			; LLB	[16]
+	!BYTE	$4C			; BRFLS	_B262
+	!WORD	_B262-*
+	!BYTE	$2A,$48			; CB	72
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 0878:                     fin
+	!BYTE	$76,$02			; SLW	[2]
+_B262 
+_B263 
+; libsrc/jit16core.pla: 0879:                     codeptr=>0  = $10E2           // SEP #$10 -> 8 BIT X/Y
+; libsrc/jit16core.pla: 0880:                     codeptr->2  = $A9             // LDA #imm
+; libsrc/jit16core.pla: 0881:                     codeptr=>3  = codeptr + 12
+; libsrc/jit16core.pla: 0882:                     codeptr=>5  = ip8+$85         // STA IP
+; libsrc/jit16core.pla: 0883:                     codeptr=>7  = $00A0           // LDY #$00
+; libsrc/jit16core.pla: 0884:                     codeptr->9  = $4C             // JMP FETCHOP
+; libsrc/jit16core.pla: 0885:                     codeptr=>10 = fetchop         // FETCHOP
+; libsrc/jit16core.pla: 0886:                     codeptr=>12 = $C000+opcode    // OPCODE; NATV CODE
+; libsrc/jit16core.pla: 0887:                     codeptr     = codeptr + 14
+; libsrc/jit16core.pla: 0888:                     X_IS_IFP    = FALSE
+; libsrc/jit16core.pla: 0889:                     A_IS_TOS    = FALSE
+; libsrc/jit16core.pla: 0890:                     break
+	!BYTE	$2C,$E2,$10		; CW	4322
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$72			; SW
+	!BYTE	$2A,$A9			; CB	169
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$02			; ADDI	2
+	!BYTE	$70			; SB
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$0C			; ADDI	12
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$03			; ADDI	3
+	!BYTE	$72			; SW
+	!BYTE	$2C,$85,$F2		; CW	62085
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$05			; ADDI	5
+	!BYTE	$72			; SW
+	!BYTE	$2A,$A0			; CB	160
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$07			; ADDI	7
+	!BYTE	$72			; SW
+	!BYTE	$2A,$4C			; CB	76
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$09			; ADDI	9
+	!BYTE	$70			; SB
+	!BYTE	$2A,$F1			; CB	241
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$0A			; ADDI	10
+	!BYTE	$72			; SW
+	!BYTE	$2C,$00,$C0		; CW	49152
+	!BYTE	$B0,$0E			; ADDLB	[14]
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$0C			; ADDI	12
+	!BYTE	$72			; SW
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$0E			; ADDI	14
+	!BYTE	$76,$02			; SLW	[2]
+	!BYTE	$00			; CN	0
+	!BYTE	$74,$11			; SLB	[17]
+	!BYTE	$00			; CN	0
+	!BYTE	$74,$10			; SLB	[16]
+	!BYTE	$50			; BRNCH	_B079
+	!WORD	_B079-*
+; libsrc/jit16core.pla: 0891:                 is $8C // INCR
+_B264 
+; libsrc/jit16core.pla: 0892:                     //puts("INCR")
+; libsrc/jit16core.pla: 0893:                     if not A_IS_TOS
+; libsrc/jit16core.pla: 0894:                         ^codeptr = $68; codeptr++ // PLA
+	!BYTE	$64,$10			; LLB	[16]
+	!BYTE	$4E			; BRTRU	_B265
+	!WORD	_B265-*
+	!BYTE	$2A,$68			; CB	104
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 0895:                     fin
+	!BYTE	$76,$02			; SLW	[2]
+_B265 
+_B266 
+; libsrc/jit16core.pla: 0896:                     ^codeptr = $1A; codeptr++     // INC A
+	!BYTE	$2A,$1A			; CB	26
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 0897:                     A_IS_TOS = TRUE               // PHA
+; libsrc/jit16core.pla: 0898:                     break
+	!BYTE	$76,$02			; SLW	[2]
+	!BYTE	$20			; MINUS ONE
+	!BYTE	$74,$10			; SLB	[16]
+	!BYTE	$50			; BRNCH	_B079
+	!WORD	_B079-*
+; libsrc/jit16core.pla: 0899:                 is $8E // DECR
+_B267 
+; libsrc/jit16core.pla: 0900:                     //puts("DECR")
+; libsrc/jit16core.pla: 0901:                     if not A_IS_TOS
+; libsrc/jit16core.pla: 0902:                         ^codeptr = $68; codeptr++ // PLA
+	!BYTE	$64,$10			; LLB	[16]
+	!BYTE	$4E			; BRTRU	_B268
+	!WORD	_B268-*
+	!BYTE	$2A,$68			; CB	104
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 0903:                     fin
+	!BYTE	$76,$02			; SLW	[2]
+_B268 
+_B269 
+; libsrc/jit16core.pla: 0904:                     ^codeptr = $3A; codeptr++     // DEC A
+	!BYTE	$2A,$3A			; CB	58
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 0905:                     A_IS_TOS = TRUE               // PHA
+; libsrc/jit16core.pla: 0906:                     break
+	!BYTE	$76,$02			; SLW	[2]
+	!BYTE	$20			; MINUS ONE
+	!BYTE	$74,$10			; SLB	[16]
+	!BYTE	$50			; BRNCH	_B079
+	!WORD	_B079-*
+; libsrc/jit16core.pla: 0907:                 is $90 // NEG
+_B270 
+; libsrc/jit16core.pla: 0908:                     //puts("NEG")
+; libsrc/jit16core.pla: 0909:                     if not A_IS_TOS
+; libsrc/jit16core.pla: 0910:                         ^codeptr = $68; codeptr++ // PLA
+	!BYTE	$64,$10			; LLB	[16]
+	!BYTE	$4E			; BRTRU	_B271
+	!WORD	_B271-*
+	!BYTE	$2A,$68			; CB	104
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 0911:                     fin
+	!BYTE	$76,$02			; SLW	[2]
+_B271 
+_B272 
+; libsrc/jit16core.pla: 0912:                     codeptr->0 = $49              // EOR #$FFFF
+; libsrc/jit16core.pla: 0913:                     codeptr=>1 = $FFFF
+; libsrc/jit16core.pla: 0914:                     codeptr->3 = $1A              // INC A
+; libsrc/jit16core.pla: 0915:                     codeptr    = codeptr + 4
+; libsrc/jit16core.pla: 0916:                     A_IS_TOS   = TRUE
+; libsrc/jit16core.pla: 0917:                     break
+	!BYTE	$2A,$49			; CB	73
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$20			; MINUS ONE
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+	!BYTE	$72			; SW
+	!BYTE	$2A,$1A			; CB	26
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$03			; ADDI	3
+	!BYTE	$70			; SB
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$04			; ADDI	4
+	!BYTE	$76,$02			; SLW	[2]
+	!BYTE	$20			; MINUS ONE
+	!BYTE	$74,$10			; SLB	[16]
+	!BYTE	$50			; BRNCH	_B079
+	!WORD	_B079-*
+; libsrc/jit16core.pla: 0918:                 is $92 // COMP
+_B273 
+; libsrc/jit16core.pla: 0919:                     //puts("COMP")
+; libsrc/jit16core.pla: 0920:                     if not A_IS_TOS
+; libsrc/jit16core.pla: 0921:                         ^codeptr = $68; codeptr++ // PLA
+	!BYTE	$64,$10			; LLB	[16]
+	!BYTE	$4E			; BRTRU	_B274
+	!WORD	_B274-*
+	!BYTE	$2A,$68			; CB	104
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 0922:                     fin
+	!BYTE	$76,$02			; SLW	[2]
+_B274 
+_B275 
+; libsrc/jit16core.pla: 0923:                     codeptr->0 = $49              // EOR #$FFFF
+; libsrc/jit16core.pla: 0924:                     codeptr=>1 = $FFFF
+; libsrc/jit16core.pla: 0925:                     codeptr    = codeptr + 3
+; libsrc/jit16core.pla: 0926:                     A_IS_TOS   = TRUE
+; libsrc/jit16core.pla: 0927:                     break
+	!BYTE	$2A,$49			; CB	73
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$20			; MINUS ONE
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+	!BYTE	$72			; SW
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$03			; ADDI	3
+	!BYTE	$76,$02			; SLW	[2]
+	!BYTE	$20			; MINUS ONE
+	!BYTE	$74,$10			; SLB	[16]
+	!BYTE	$50			; BRNCH	_B079
+	!WORD	_B079-*
+; libsrc/jit16core.pla: 0928:                 is $94 // AND
+_B276 
+; libsrc/jit16core.pla: 0929:                     //puts("AND")
+; libsrc/jit16core.pla: 0930:                     if not A_IS_TOS
+; libsrc/jit16core.pla: 0931:                         ^codeptr = $68; codeptr++ // PLA
+	!BYTE	$64,$10			; LLB	[16]
+	!BYTE	$4E			; BRTRU	_B277
+	!WORD	_B277-*
+	!BYTE	$2A,$68			; CB	104
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 0932:                     fin
+	!BYTE	$76,$02			; SLW	[2]
+_B277 
+_B278 
+; libsrc/jit16core.pla: 0933:                     codeptr=>0 = $23+(TOS<<8)     // AND S,TOS
+; libsrc/jit16core.pla: 0934:                     codeptr->2 = $7A              // PLY
+; libsrc/jit16core.pla: 0935:                     codeptr    = codeptr + 3
+; libsrc/jit16core.pla: 0936:                     A_IS_TOS   = TRUE
+; libsrc/jit16core.pla: 0937:                     break
+	!BYTE	$2C,$23,$01		; CW	291
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$72			; SW
+	!BYTE	$2A,$7A			; CB	122
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$02			; ADDI	2
+	!BYTE	$70			; SB
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$03			; ADDI	3
+	!BYTE	$76,$02			; SLW	[2]
+	!BYTE	$20			; MINUS ONE
+	!BYTE	$74,$10			; SLB	[16]
+	!BYTE	$50			; BRNCH	_B079
+	!WORD	_B079-*
+; libsrc/jit16core.pla: 0938:                 is $96 // OR
+_B279 
+; libsrc/jit16core.pla: 0939:                     //puts("OR")
+; libsrc/jit16core.pla: 0940:                     if not A_IS_TOS
+; libsrc/jit16core.pla: 0941:                         ^codeptr = $68; codeptr++ // PLA
+	!BYTE	$64,$10			; LLB	[16]
+	!BYTE	$4E			; BRTRU	_B280
+	!WORD	_B280-*
+	!BYTE	$2A,$68			; CB	104
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 0942:                     fin
+	!BYTE	$76,$02			; SLW	[2]
+_B280 
+_B281 
+; libsrc/jit16core.pla: 0943:                     codeptr=>0 = $03+(TOS<<8)     // OR S,TOS
+; libsrc/jit16core.pla: 0944:                     codeptr->2 = $7A              // PLY
+; libsrc/jit16core.pla: 0945:                     codeptr    = codeptr + 3
+; libsrc/jit16core.pla: 0946:                     A_IS_TOS   = TRUE
+; libsrc/jit16core.pla: 0947:                     break
+	!BYTE	$2C,$03,$01		; CW	259
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$72			; SW
+	!BYTE	$2A,$7A			; CB	122
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$02			; ADDI	2
+	!BYTE	$70			; SB
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$03			; ADDI	3
+	!BYTE	$76,$02			; SLW	[2]
+	!BYTE	$20			; MINUS ONE
+	!BYTE	$74,$10			; SLB	[16]
+	!BYTE	$50			; BRNCH	_B079
+	!WORD	_B079-*
+; libsrc/jit16core.pla: 0948:                 is $98 // XOR
+_B282 
+; libsrc/jit16core.pla: 0949:                     //puts("XOR")
+; libsrc/jit16core.pla: 0950:                     if not A_IS_TOS
+; libsrc/jit16core.pla: 0951:                         ^codeptr = $68; codeptr++ // PLA
+	!BYTE	$64,$10			; LLB	[16]
+	!BYTE	$4E			; BRTRU	_B283
+	!WORD	_B283-*
+	!BYTE	$2A,$68			; CB	104
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 0952:                     fin
+	!BYTE	$76,$02			; SLW	[2]
+_B283 
+_B284 
+; libsrc/jit16core.pla: 0953:                     codeptr=>0 = $43+(TOS<<8)     // EOR S,TOS
+; libsrc/jit16core.pla: 0954:                     codeptr->2 = $7A              // PLY
+; libsrc/jit16core.pla: 0955:                     codeptr    = codeptr + 3
+; libsrc/jit16core.pla: 0956:                     A_IS_TOS   = TRUE
+; libsrc/jit16core.pla: 0957:                     break
+	!BYTE	$2C,$43,$01		; CW	323
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$72			; SW
+	!BYTE	$2A,$7A			; CB	122
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$02			; ADDI	2
+	!BYTE	$70			; SB
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$03			; ADDI	3
+	!BYTE	$76,$02			; SLW	[2]
+	!BYTE	$20			; MINUS ONE
+	!BYTE	$74,$10			; SLB	[16]
+	!BYTE	$50			; BRNCH	_B079
+	!WORD	_B079-*
+; libsrc/jit16core.pla: 0958:                 is $9E // IDXW
+_B285 
+; libsrc/jit16core.pla: 0959:                     //puts("IDXW")
+; libsrc/jit16core.pla: 0960:                     if not A_IS_TOS
+; libsrc/jit16core.pla: 0961:                         ^codeptr = $68; codeptr++ // PLA
+	!BYTE	$64,$10			; LLB	[16]
+	!BYTE	$4E			; BRTRU	_B286
+	!WORD	_B286-*
+	!BYTE	$2A,$68			; CB	104
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 0962:                     fin
+	!BYTE	$76,$02			; SLW	[2]
+_B286 
+_B287 
+; libsrc/jit16core.pla: 0963:                     codeptr=>0 = $180A            // ASL; CLC
+; libsrc/jit16core.pla: 0964:                     codeptr=>2 = $63+(TOS<<8)     // ADC S,TOS
+; libsrc/jit16core.pla: 0965:                     codeptr->4 = $7A              // PLY
+; libsrc/jit16core.pla: 0966:                     codeptr    = codeptr + 5
+; libsrc/jit16core.pla: 0967:                     A_IS_TOS   = TRUE
+; libsrc/jit16core.pla: 0968:                     break
+	!BYTE	$2C,$0A,$18		; CW	6154
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$72			; SW
+	!BYTE	$2C,$63,$01		; CW	355
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$02			; ADDI	2
+	!BYTE	$72			; SW
+	!BYTE	$2A,$7A			; CB	122
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$04			; ADDI	4
+	!BYTE	$70			; SB
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$05			; ADDI	5
+	!BYTE	$76,$02			; SLW	[2]
+	!BYTE	$20			; MINUS ONE
+	!BYTE	$74,$10			; SLB	[16]
+	!BYTE	$50			; BRNCH	_B079
+	!WORD	_B079-*
+; libsrc/jit16core.pla: 0969:                 is $A0 // BRGT - FOR/NEXT SPECIFIC TEST & BRANCH
+_B288 
+; libsrc/jit16core.pla: 0970:                     i++
+	!BYTE	$66,$08			; LLW	[8]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 0971:                     dest = i + *(bytecode+i)
+; libsrc/jit16core.pla: 0972:                     i++
+	!BYTE	$6E,$08			; DLW	[8]
+	!BYTE	$66,$06			; LLW	[6]
+	!BYTE	$B2,$08			; ADDLW	[8]
+	!BYTE	$62			; LW
+	!BYTE	$82			; ADD 
+	!BYTE	$76,$0C			; SLW	[12]
+	!BYTE	$66,$08			; LLW	[8]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 0973:                     //puts("BRGT "); puti(dest)
+; libsrc/jit16core.pla: 0974:                     if A_IS_TOS
+; libsrc/jit16core.pla: 0975:                         ^codeptr = $48; codeptr++ // PHA
+	!BYTE	$76,$08			; SLW	[8]
+	!BYTE	$64,$10			; LLB	[16]
+	!BYTE	$4C			; BRFLS	_B289
+	!WORD	_B289-*
+	!BYTE	$2A,$48			; CB	72
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 0976:                     fin
+	!BYTE	$76,$02			; SLW	[2]
+_B289 
+_B290 
+; libsrc/jit16core.pla: 0977:                     codeptr=>0  = $A3+(NOS<<8)    // LDA S,NOS
+; libsrc/jit16core.pla: 0978:                     codeptr->2  = $38             // SEC
+; libsrc/jit16core.pla: 0979:                     codeptr=>3  = $E3+(TOS<<8)    // SBC S,TOS
+; libsrc/jit16core.pla: 0980:                     codeptr=>5  = $0350           // BVC +3
+; libsrc/jit16core.pla: 0981:                     codeptr->7  = $49             // EOR #$8000
+; libsrc/jit16core.pla: 0982:                     codeptr=>8  = $8000
+; libsrc/jit16core.pla: 0983:                     codeptr=>10 = $0310           // BPL +3
+; libsrc/jit16core.pla: 0984:                     codeptr->12 = $4C             // JMP abs
+; libsrc/jit16core.pla: 0985:                     codeptr=>13 = addrxlate=>[dest]
+; libsrc/jit16core.pla: 0986:                     if not (codeptr->14 & $80) // Unresolved address list
+; libsrc/jit16core.pla: 0987:                         addrxlate=>[dest] = codeptr + 13 - *jitcodeptr
+; libsrc/jit16core.pla: 0988:                     fin
+	!BYTE	$2C,$A3,$03		; CW	931
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$72			; SW
+	!BYTE	$2A,$38			; CB	56
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$02			; ADDI	2
+	!BYTE	$70			; SB
+	!BYTE	$2C,$E3,$01		; CW	483
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$03			; ADDI	3
+	!BYTE	$72			; SW
+	!BYTE	$2C,$50,$03		; CW	848
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$05			; ADDI	5
+	!BYTE	$72			; SW
+	!BYTE	$2A,$49			; CB	73
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$07			; ADDI	7
+	!BYTE	$70			; SB
+	!BYTE	$2C,$00,$80		; CW	32768
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$08			; ADDI	8
+	!BYTE	$72			; SW
+	!BYTE	$2C,$10,$03		; CW	784
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$0A			; ADDI	10
+	!BYTE	$72			; SW
+	!BYTE	$2A,$4C			; CB	76
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$0C			; ADDI	12
+	!BYTE	$70			; SB
+	!BYTE	$66,$04			; LLW	[4]
+	!BYTE	$BA,$0C			; IDXLW	[12]
+	!BYTE	$62			; LW
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$0D			; ADDI	13
+	!BYTE	$72			; SW
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$0E			; ADDI	14
+	!BYTE	$60			; LB
+	!BYTE	$3C,$80			; ANDI	128
+	!BYTE	$4E			; BRTRU	_B291
+	!WORD	_B291-*
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$0D			; ADDI	13
+	!BYTE	$6A,$E4,$03		; LAW	996
+	!BYTE	$84			; SUB 
+	!BYTE	$66,$04			; LLW	[4]
+	!BYTE	$BA,$0C			; IDXLW	[12]
+	!BYTE	$72			; SW
+_B291 
+_B292 
+; libsrc/jit16core.pla: 0989:                     codeptr     = codeptr + 15
+; libsrc/jit16core.pla: 0990:                     A_IS_TOS    = FALSE
+; libsrc/jit16core.pla: 0991:                     break
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$0F			; ADDI	15
+	!BYTE	$76,$02			; SLW	[2]
+	!BYTE	$00			; CN	0
+	!BYTE	$74,$10			; SLB	[16]
+	!BYTE	$50			; BRNCH	_B079
+	!WORD	_B079-*
+; libsrc/jit16core.pla: 0992:                 is $A2 // BRLT - FOR/NEXT SPECIFIC TEST & BRANCH
+_B293 
+; libsrc/jit16core.pla: 0993:                     i++
+	!BYTE	$66,$08			; LLW	[8]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 0994:                     dest = i + *(bytecode+i)
+; libsrc/jit16core.pla: 0995:                     i++
+	!BYTE	$6E,$08			; DLW	[8]
+	!BYTE	$66,$06			; LLW	[6]
+	!BYTE	$B2,$08			; ADDLW	[8]
+	!BYTE	$62			; LW
+	!BYTE	$82			; ADD 
+	!BYTE	$76,$0C			; SLW	[12]
+	!BYTE	$66,$08			; LLW	[8]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 0996:                     //puts("BRLT "); puti(dest)
+; libsrc/jit16core.pla: 0997:                     if A_IS_TOS
+; libsrc/jit16core.pla: 0998:                         ^codeptr = $48; codeptr++ // PHA
+	!BYTE	$76,$08			; SLW	[8]
+	!BYTE	$64,$10			; LLB	[16]
+	!BYTE	$4C			; BRFLS	_B294
+	!WORD	_B294-*
+	!BYTE	$2A,$48			; CB	72
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 0999:                     fin
+	!BYTE	$76,$02			; SLW	[2]
+_B294 
+_B295 
+; libsrc/jit16core.pla: 1000:                     codeptr->0  = $38             // SEC
+; libsrc/jit16core.pla: 1001:                     codeptr=>1  = $E3+(NOS<<8)    // SBC S,NOS
+; libsrc/jit16core.pla: 1002:                     codeptr=>3  = $0350           // BVC +3
+; libsrc/jit16core.pla: 1003:                     codeptr->5  = $49             // EOR #$8000
+; libsrc/jit16core.pla: 1004:                     codeptr=>6  = $8000
+; libsrc/jit16core.pla: 1005:                     codeptr=>8  = $0310           // BPL +3
+; libsrc/jit16core.pla: 1006:                     codeptr->10 = $4C             // JMP abs
+; libsrc/jit16core.pla: 1007:                     codeptr=>11 = addrxlate=>[dest]
+; libsrc/jit16core.pla: 1008:                     if not (codeptr->12 & $80) // Unresolved address list
+; libsrc/jit16core.pla: 1009:                         addrxlate=>[dest] = codeptr + 11 - *jitcodeptr
+; libsrc/jit16core.pla: 1010:                     fin
+	!BYTE	$2A,$38			; CB	56
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$2C,$E3,$03		; CW	995
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+	!BYTE	$72			; SW
+	!BYTE	$2C,$50,$03		; CW	848
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$03			; ADDI	3
+	!BYTE	$72			; SW
+	!BYTE	$2A,$49			; CB	73
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$05			; ADDI	5
+	!BYTE	$70			; SB
+	!BYTE	$2C,$00,$80		; CW	32768
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$06			; ADDI	6
+	!BYTE	$72			; SW
+	!BYTE	$2C,$10,$03		; CW	784
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$08			; ADDI	8
+	!BYTE	$72			; SW
+	!BYTE	$2A,$4C			; CB	76
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$0A			; ADDI	10
+	!BYTE	$70			; SB
+	!BYTE	$66,$04			; LLW	[4]
+	!BYTE	$BA,$0C			; IDXLW	[12]
+	!BYTE	$62			; LW
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$0B			; ADDI	11
+	!BYTE	$72			; SW
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$0C			; ADDI	12
+	!BYTE	$60			; LB
+	!BYTE	$3C,$80			; ANDI	128
+	!BYTE	$4E			; BRTRU	_B296
+	!WORD	_B296-*
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$0B			; ADDI	11
+	!BYTE	$6A,$E4,$03		; LAW	996
+	!BYTE	$84			; SUB 
+	!BYTE	$66,$04			; LLW	[4]
+	!BYTE	$BA,$0C			; IDXLW	[12]
+	!BYTE	$72			; SW
+_B296 
+_B297 
+; libsrc/jit16core.pla: 1011:                     codeptr     = codeptr + 13
+; libsrc/jit16core.pla: 1012:                     A_IS_TOS    = FALSE
+; libsrc/jit16core.pla: 1013:                    break
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$0D			; ADDI	13
+	!BYTE	$76,$02			; SLW	[2]
+	!BYTE	$00			; CN	0
+	!BYTE	$74,$10			; SLB	[16]
+	!BYTE	$50			; BRNCH	_B079
+	!WORD	_B079-*
+; libsrc/jit16core.pla: 1014:                 is $A4 // INCBRLE - FOR/NEXT SPECIFIC INC & TEST & BRANCH
+_B298 
+; libsrc/jit16core.pla: 1015:                 is $A6 // ADDBRLE - FOR/NEXT SPECIFIC ADD & TEST & BRANCH
+_B299 
+; libsrc/jit16core.pla: 1016:                     i++
+	!BYTE	$66,$08			; LLW	[8]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 1017:                     dest = i + *(bytecode+i)
+; libsrc/jit16core.pla: 1018:                     i++
+	!BYTE	$6E,$08			; DLW	[8]
+	!BYTE	$66,$06			; LLW	[6]
+	!BYTE	$B2,$08			; ADDLW	[8]
+	!BYTE	$62			; LW
+	!BYTE	$82			; ADD 
+	!BYTE	$76,$0C			; SLW	[12]
+	!BYTE	$66,$08			; LLW	[8]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 1019:                     if not A_IS_TOS
+; libsrc/jit16core.pla: 1020:                         ^codeptr = $68; codeptr++ // PLA
+	!BYTE	$76,$08			; SLW	[8]
+	!BYTE	$64,$10			; LLB	[16]
+	!BYTE	$4E			; BRTRU	_B300
+	!WORD	_B300-*
+	!BYTE	$2A,$68			; CB	104
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 1021:                     fin
+	!BYTE	$76,$02			; SLW	[2]
+_B300 
+_B301 
+; libsrc/jit16core.pla: 1022:                     if opcode == $A4
+; libsrc/jit16core.pla: 1023:                         //
+; libsrc/jit16core.pla: 1024:                         // INCR
+; libsrc/jit16core.pla: 1025:                         //
+; libsrc/jit16core.pla: 1026:                         //puts("INCBRLE "); puti(dest)
+; libsrc/jit16core.pla: 1027:                         codeptr=>0 = $481A        // INC A; PHA
+; libsrc/jit16core.pla: 1028:                         codeptr    = codeptr + 2
+; libsrc/jit16core.pla: 1029:                     else
+	!BYTE	$64,$0E			; LLB	[14]
+	!BYTE	$2A,$A4			; CB	164
+	!BYTE	$24			; BRNE	_B302
+	!WORD	_B302-*
+	!BYTE	$2C,$1A,$48		; CW	18458
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$72			; SW
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$02			; ADDI	2
+	!BYTE	$76,$02			; SLW	[2]
+	!BYTE	$50			; BRNCH	_B303
+	!WORD	_B303-*
+_B302 
+; libsrc/jit16core.pla: 1030:                         //
+; libsrc/jit16core.pla: 1031:                         // ADD
+; libsrc/jit16core.pla: 1032:                         //
+; libsrc/jit16core.pla: 1033:                         //puts("ADDBRLE "); puti(dest)
+; libsrc/jit16core.pla: 1034:                         codeptr->0 = $18          // CLC
+; libsrc/jit16core.pla: 1035:                         codeptr=>1 = $63+(TOS<<8) // ADC S,TOS
+; libsrc/jit16core.pla: 1036:                         codeptr=>3 = $83+(TOS<<8) // STA S,TOS
+; libsrc/jit16core.pla: 1037:                         codeptr    = codeptr + 5
+; libsrc/jit16core.pla: 1038:                     fin
+	!BYTE	$2A,$18			; CB	24
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$2C,$63,$01		; CW	355
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+	!BYTE	$72			; SW
+	!BYTE	$2C,$83,$01		; CW	387
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$03			; ADDI	3
+	!BYTE	$72			; SW
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$05			; ADDI	5
+	!BYTE	$76,$02			; SLW	[2]
+_B303 
+; libsrc/jit16core.pla: 1039:                     //
+; libsrc/jit16core.pla: 1040:                     // BRLE
+; libsrc/jit16core.pla: 1041:                     //
+; libsrc/jit16core.pla: 1042:                     codeptr=>0  = $A3+(NOS<<8)    // LDA S,NOS
+; libsrc/jit16core.pla: 1043:                     codeptr->2  = $38             // SEC
+; libsrc/jit16core.pla: 1044:                     codeptr=>3  = $E3+(TOS<<8)    // SBC S,TOS
+; libsrc/jit16core.pla: 1045:                     codeptr=>5  = $0350           // BVC +3
+; libsrc/jit16core.pla: 1046:                     codeptr->7  = $49             // EOR #$8000
+; libsrc/jit16core.pla: 1047:                     codeptr=>8  = $8000
+; libsrc/jit16core.pla: 1048:                     codeptr=>10 = $0330           // BMI +3
+; libsrc/jit16core.pla: 1049:                     codeptr->12 = $4C             // JMP abs
+; libsrc/jit16core.pla: 1050:                     codeptr=>13 = addrxlate=>[dest]
+; libsrc/jit16core.pla: 1051:                     if not (codeptr->14 & $80) // Unresolved address list
+; libsrc/jit16core.pla: 1052:                         addrxlate=>[dest] = codeptr + 13 - *jitcodeptr
+; libsrc/jit16core.pla: 1053:                     fin
+	!BYTE	$2C,$A3,$03		; CW	931
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$72			; SW
+	!BYTE	$2A,$38			; CB	56
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$02			; ADDI	2
+	!BYTE	$70			; SB
+	!BYTE	$2C,$E3,$01		; CW	483
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$03			; ADDI	3
+	!BYTE	$72			; SW
+	!BYTE	$2C,$50,$03		; CW	848
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$05			; ADDI	5
+	!BYTE	$72			; SW
+	!BYTE	$2A,$49			; CB	73
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$07			; ADDI	7
+	!BYTE	$70			; SB
+	!BYTE	$2C,$00,$80		; CW	32768
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$08			; ADDI	8
+	!BYTE	$72			; SW
+	!BYTE	$2C,$30,$03		; CW	816
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$0A			; ADDI	10
+	!BYTE	$72			; SW
+	!BYTE	$2A,$4C			; CB	76
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$0C			; ADDI	12
+	!BYTE	$70			; SB
+	!BYTE	$66,$04			; LLW	[4]
+	!BYTE	$BA,$0C			; IDXLW	[12]
+	!BYTE	$62			; LW
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$0D			; ADDI	13
+	!BYTE	$72			; SW
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$0E			; ADDI	14
+	!BYTE	$60			; LB
+	!BYTE	$3C,$80			; ANDI	128
+	!BYTE	$4E			; BRTRU	_B304
+	!WORD	_B304-*
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$0D			; ADDI	13
+	!BYTE	$6A,$E4,$03		; LAW	996
+	!BYTE	$84			; SUB 
+	!BYTE	$66,$04			; LLW	[4]
+	!BYTE	$BA,$0C			; IDXLW	[12]
+	!BYTE	$72			; SW
+_B304 
+_B305 
+; libsrc/jit16core.pla: 1054:                     codeptr     = codeptr + 15
+; libsrc/jit16core.pla: 1055:                     A_IS_TOS    = FALSE
+; libsrc/jit16core.pla: 1056:                     break
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$0F			; ADDI	15
+	!BYTE	$76,$02			; SLW	[2]
+	!BYTE	$00			; CN	0
+	!BYTE	$74,$10			; SLB	[16]
+	!BYTE	$50			; BRNCH	_B079
+	!WORD	_B079-*
+; libsrc/jit16core.pla: 1057:                 is $A8 // DECBRGR - FOR/NEXT SPECIFIC DEC & TEST & BRANCH
+_B306 
+; libsrc/jit16core.pla: 1058:                 is $AA // SUBBRGE - FOR/NEXT SPECIFIC SUB & TEST & BRANCH
+_B307 
+; libsrc/jit16core.pla: 1059:                     i++
+	!BYTE	$66,$08			; LLW	[8]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 1060:                     dest = i + *(bytecode+i)
+; libsrc/jit16core.pla: 1061:                     i++
+	!BYTE	$6E,$08			; DLW	[8]
+	!BYTE	$66,$06			; LLW	[6]
+	!BYTE	$B2,$08			; ADDLW	[8]
+	!BYTE	$62			; LW
+	!BYTE	$82			; ADD 
+	!BYTE	$76,$0C			; SLW	[12]
+	!BYTE	$66,$08			; LLW	[8]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 1062:                     if not A_IS_TOS
+; libsrc/jit16core.pla: 1063:                         ^codeptr = $68; codeptr++ // PLA
+	!BYTE	$76,$08			; SLW	[8]
+	!BYTE	$64,$10			; LLB	[16]
+	!BYTE	$4E			; BRTRU	_B308
+	!WORD	_B308-*
+	!BYTE	$2A,$68			; CB	104
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 1064:                     fin
+	!BYTE	$76,$02			; SLW	[2]
+_B308 
+_B309 
+; libsrc/jit16core.pla: 1065:                     if opcode == $A8
+; libsrc/jit16core.pla: 1066:                         //
+; libsrc/jit16core.pla: 1067:                         // DECR
+; libsrc/jit16core.pla: 1068:                         //
+; libsrc/jit16core.pla: 1069:                         //puts("DECBRGE "); puti(dest)
+; libsrc/jit16core.pla: 1070:                         codeptr=>0 = $483A        // DEC A; PHA
+; libsrc/jit16core.pla: 1071:                         codeptr    = codeptr + 2
+; libsrc/jit16core.pla: 1072:                     else
+	!BYTE	$64,$0E			; LLB	[14]
+	!BYTE	$2A,$A8			; CB	168
+	!BYTE	$24			; BRNE	_B310
+	!WORD	_B310-*
+	!BYTE	$2C,$3A,$48		; CW	18490
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$72			; SW
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$02			; ADDI	2
+	!BYTE	$76,$02			; SLW	[2]
+	!BYTE	$50			; BRNCH	_B311
+	!WORD	_B311-*
+_B310 
+; libsrc/jit16core.pla: 1073:                         //
+; libsrc/jit16core.pla: 1074:                         // SUB
+; libsrc/jit16core.pla: 1075:                         //
+; libsrc/jit16core.pla: 1076:                         //puts("SUBBRGE "); puti(dest)
+; libsrc/jit16core.pla: 1077:                         codeptr=>0 = tmp8+$85     // STA TMP
+; libsrc/jit16core.pla: 1078:                         codeptr=>2 = $A3+(TOS<<8) // LDA S,TOS
+; libsrc/jit16core.pla: 1079:                         codeptr->4 = $38          // SEC
+; libsrc/jit16core.pla: 1080:                         codeptr=>5 = tmp8+$E5     // SBC TMP
+; libsrc/jit16core.pla: 1081:                         codeptr=>7 = $83+(TOS<<8) // STA S,TOS
+; libsrc/jit16core.pla: 1082:                         codeptr    = codeptr + 9
+; libsrc/jit16core.pla: 1083:                     fin
+	!BYTE	$2C,$85,$E7		; CW	59269
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$72			; SW
+	!BYTE	$2C,$A3,$01		; CW	419
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$02			; ADDI	2
+	!BYTE	$72			; SW
+	!BYTE	$2A,$38			; CB	56
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$04			; ADDI	4
+	!BYTE	$70			; SB
+	!BYTE	$2C,$E5,$E7		; CW	59365
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$05			; ADDI	5
+	!BYTE	$72			; SW
+	!BYTE	$2C,$83,$01		; CW	387
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$07			; ADDI	7
+	!BYTE	$72			; SW
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$09			; ADDI	9
+	!BYTE	$76,$02			; SLW	[2]
+_B311 
+; libsrc/jit16core.pla: 1084:                     //
+; libsrc/jit16core.pla: 1085:                     // BRGE
+; libsrc/jit16core.pla: 1086:                     //
+; libsrc/jit16core.pla: 1087:                     codeptr->0  = $38             // SEC
+; libsrc/jit16core.pla: 1088:                     codeptr=>1  = $E3+(NOS<<8)    // SBC S,NOS
+; libsrc/jit16core.pla: 1089:                     codeptr=>3  = $0350           // BVC +3
+; libsrc/jit16core.pla: 1090:                     codeptr->5  = $49             // EOR #$8000
+; libsrc/jit16core.pla: 1091:                     codeptr=>6  = $8000
+; libsrc/jit16core.pla: 1092:                     codeptr=>8  = $0330           // BMI +3
+; libsrc/jit16core.pla: 1093:                     codeptr->10 = $4C             // JMP abs
+; libsrc/jit16core.pla: 1094:                     codeptr=>11 = addrxlate=>[dest]
+; libsrc/jit16core.pla: 1095:                     if not (codeptr->12 & $80) // Unresolved address list
+; libsrc/jit16core.pla: 1096:                         addrxlate=>[dest] = codeptr + 11 - *jitcodeptr
+; libsrc/jit16core.pla: 1097:                     fin
+	!BYTE	$2A,$38			; CB	56
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$2C,$E3,$03		; CW	995
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+	!BYTE	$72			; SW
+	!BYTE	$2C,$50,$03		; CW	848
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$03			; ADDI	3
+	!BYTE	$72			; SW
+	!BYTE	$2A,$49			; CB	73
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$05			; ADDI	5
+	!BYTE	$70			; SB
+	!BYTE	$2C,$00,$80		; CW	32768
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$06			; ADDI	6
+	!BYTE	$72			; SW
+	!BYTE	$2C,$30,$03		; CW	816
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$08			; ADDI	8
+	!BYTE	$72			; SW
+	!BYTE	$2A,$4C			; CB	76
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$0A			; ADDI	10
+	!BYTE	$70			; SB
+	!BYTE	$66,$04			; LLW	[4]
+	!BYTE	$BA,$0C			; IDXLW	[12]
+	!BYTE	$62			; LW
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$0B			; ADDI	11
+	!BYTE	$72			; SW
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$0C			; ADDI	12
+	!BYTE	$60			; LB
+	!BYTE	$3C,$80			; ANDI	128
+	!BYTE	$4E			; BRTRU	_B312
+	!WORD	_B312-*
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$0B			; ADDI	11
+	!BYTE	$6A,$E4,$03		; LAW	996
+	!BYTE	$84			; SUB 
+	!BYTE	$66,$04			; LLW	[4]
+	!BYTE	$BA,$0C			; IDXLW	[12]
+	!BYTE	$72			; SW
+_B312 
+_B313 
+; libsrc/jit16core.pla: 1098:                     codeptr     = codeptr + 13
+; libsrc/jit16core.pla: 1099:                     A_IS_TOS    = FALSE
+; libsrc/jit16core.pla: 1100:                     break
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$0D			; ADDI	13
+	!BYTE	$76,$02			; SLW	[2]
+	!BYTE	$00			; CN	0
+	!BYTE	$74,$10			; SLB	[16]
+	!BYTE	$50			; BRNCH	_B079
+	!WORD	_B079-*
+; libsrc/jit16core.pla: 1101:                 is $AC // BRAND - LOGICAL AND SPECIFIC BRANCH
+_B314 
+; libsrc/jit16core.pla: 1102:                 is $AE // BROR - LOGICAL OR SPECIFIC BRANCH
+_B315 
+; libsrc/jit16core.pla: 1103:                     i++
+	!BYTE	$66,$08			; LLW	[8]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 1104:                     dest = i + *(bytecode+i)
+; libsrc/jit16core.pla: 1105:                     i++
+	!BYTE	$6E,$08			; DLW	[8]
+	!BYTE	$66,$06			; LLW	[6]
+	!BYTE	$B2,$08			; ADDLW	[8]
+	!BYTE	$62			; LW
+	!BYTE	$82			; ADD 
+	!BYTE	$76,$0C			; SLW	[12]
+	!BYTE	$66,$08			; LLW	[8]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 1106:                     if not A_IS_TOS
+; libsrc/jit16core.pla: 1107:                         codeptr->0 = $68 // PLA
+; libsrc/jit16core.pla: 1108:                     else
+	!BYTE	$76,$08			; SLW	[8]
+	!BYTE	$64,$10			; LLB	[16]
+	!BYTE	$4E			; BRTRU	_B316
+	!WORD	_B316-*
+	!BYTE	$2A,$68			; CB	104
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$50			; BRNCH	_B317
+	!WORD	_B317-*
+_B316 
+; libsrc/jit16core.pla: 1109:                         codeptr->0 = $A8 // TAY
+; libsrc/jit16core.pla: 1110:                     fin
+	!BYTE	$2A,$A8			; CB	168
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+_B317 
+; libsrc/jit16core.pla: 1111:                     if opcode == $AC
+; libsrc/jit16core.pla: 1112:                         //puts("BRAND "); puti(dest)
+; libsrc/jit16core.pla: 1113:                         codeptr=>1 = $04D0         // BNE +4
+; libsrc/jit16core.pla: 1114:                     else
+	!BYTE	$64,$0E			; LLB	[14]
+	!BYTE	$2A,$AC			; CB	172
+	!BYTE	$24			; BRNE	_B318
+	!WORD	_B318-*
+	!BYTE	$2C,$D0,$04		; CW	1232
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+	!BYTE	$72			; SW
+	!BYTE	$50			; BRNCH	_B319
+	!WORD	_B319-*
+_B318 
+; libsrc/jit16core.pla: 1115:                         //puts("BROR "); puti(dest)
+; libsrc/jit16core.pla: 1116:                         codeptr=>1 = $04F0         // BEQ +4
+; libsrc/jit16core.pla: 1117:                     fin
+	!BYTE	$2C,$F0,$04		; CW	1264
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+	!BYTE	$72			; SW
+_B319 
+; libsrc/jit16core.pla: 1118:                     codeptr=>3 = $4C48             // PHA; JMP abs
+; libsrc/jit16core.pla: 1119:                     codeptr=>5 = addrxlate=>[dest]
+; libsrc/jit16core.pla: 1120:                     if not (codeptr->6 & $80) // Unresolved address list
+; libsrc/jit16core.pla: 1121:                         addrxlate=>[dest] = codeptr + 5 - *jitcodeptr
+; libsrc/jit16core.pla: 1122:                     fin
+	!BYTE	$2C,$48,$4C		; CW	19528
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$03			; ADDI	3
+	!BYTE	$72			; SW
+	!BYTE	$66,$04			; LLW	[4]
+	!BYTE	$BA,$0C			; IDXLW	[12]
+	!BYTE	$62			; LW
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$05			; ADDI	5
+	!BYTE	$72			; SW
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$06			; ADDI	6
+	!BYTE	$60			; LB
+	!BYTE	$3C,$80			; ANDI	128
+	!BYTE	$4E			; BRTRU	_B320
+	!WORD	_B320-*
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$05			; ADDI	5
+	!BYTE	$6A,$E4,$03		; LAW	996
+	!BYTE	$84			; SUB 
+	!BYTE	$66,$04			; LLW	[4]
+	!BYTE	$BA,$0C			; IDXLW	[12]
+	!BYTE	$72			; SW
+_B320 
+_B321 
+; libsrc/jit16core.pla: 1123:                     codeptr    = codeptr + 7
+; libsrc/jit16core.pla: 1124:                     A_IS_TOS   = FALSE
+; libsrc/jit16core.pla: 1125:                     break
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$07			; ADDI	7
+	!BYTE	$76,$02			; SLW	[2]
+	!BYTE	$00			; CN	0
+	!BYTE	$74,$10			; SLB	[16]
+	!BYTE	$50			; BRNCH	_B079
+	!WORD	_B079-*
+; libsrc/jit16core.pla: 1126:                 is $B0 // ADDLB
+_B322 
+; libsrc/jit16core.pla: 1127:                     //puts("ADDLB "); puti(j)
+; libsrc/jit16core.pla: 1128:                     i++
+	!BYTE	$66,$08			; LLW	[8]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 1129:                     j = ^(bytecode+i)
+; libsrc/jit16core.pla: 1130:                     if not A_IS_TOS
+; libsrc/jit16core.pla: 1131:                         ^codeptr = $68; codeptr++ // PLA
+	!BYTE	$76,$08			; SLW	[8]
+	!BYTE	$66,$06			; LLW	[6]
+	!BYTE	$B2,$08			; ADDLW	[8]
+	!BYTE	$60			; LB
+	!BYTE	$74,$0F			; SLB	[15]
+	!BYTE	$64,$10			; LLB	[16]
+	!BYTE	$4E			; BRTRU	_B323
+	!WORD	_B323-*
+	!BYTE	$2A,$68			; CB	104
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 1132:                     fin
+	!BYTE	$76,$02			; SLW	[2]
+_B323 
+_B324 
+; libsrc/jit16core.pla: 1133:                     if not X_IS_IFP
+; libsrc/jit16core.pla: 1134:                         *codeptr = ifp8+$A6       // LDX IFP
+; libsrc/jit16core.pla: 1135:                         codeptr  = codeptr + 2
+; libsrc/jit16core.pla: 1136:                         X_IS_IFP = TRUE
+; libsrc/jit16core.pla: 1137:                     fin
+	!BYTE	$64,$11			; LLB	[17]
+	!BYTE	$4E			; BRTRU	_B325
+	!WORD	_B325-*
+	!BYTE	$2C,$A6,$E0		; CW	57510
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$72			; SW
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$02			; ADDI	2
+	!BYTE	$76,$02			; SLW	[2]
+	!BYTE	$20			; MINUS ONE
+	!BYTE	$74,$11			; SLB	[17]
+_B325 
+_B326 
+; libsrc/jit16core.pla: 1138:                     codeptr=>0 = tmp8+$85         // STA TMP
+; libsrc/jit16core.pla: 1139:                     codeptr=>2 = $B5+(j<<8)       // LDA dp,X
+; libsrc/jit16core.pla: 1140:                     codeptr->4 = $29              // AND #$00FF
+; libsrc/jit16core.pla: 1141:                     codeptr=>5 = $00FF
+; libsrc/jit16core.pla: 1142:                     codeptr->7 = $18              // CLC
+; libsrc/jit16core.pla: 1143:                     codeptr=>8 = tmp8+$65         // ADC TMP
+; libsrc/jit16core.pla: 1144:                     codeptr    = codeptr + 10
+; libsrc/jit16core.pla: 1145:                     A_IS_TOS   = TRUE             // PHA
+; libsrc/jit16core.pla: 1146:                     break
+	!BYTE	$2C,$85,$E7		; CW	59269
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$72			; SW
+	!BYTE	$2A,$B5			; CB	181
+	!BYTE	$64,$0F			; LLB	[15]
+	!BYTE	$10			; CN	8
+	!BYTE	$9A			; SHL
+	!BYTE	$82			; ADD 
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$02			; ADDI	2
+	!BYTE	$72			; SW
+	!BYTE	$2A,$29			; CB	41
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$04			; ADDI	4
+	!BYTE	$70			; SB
+	!BYTE	$2A,$FF			; CB	255
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$05			; ADDI	5
+	!BYTE	$72			; SW
+	!BYTE	$2A,$18			; CB	24
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$07			; ADDI	7
+	!BYTE	$70			; SB
+	!BYTE	$2C,$65,$E7		; CW	59237
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$08			; ADDI	8
+	!BYTE	$72			; SW
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$0A			; ADDI	10
+	!BYTE	$76,$02			; SLW	[2]
+	!BYTE	$20			; MINUS ONE
+	!BYTE	$74,$10			; SLB	[16]
+	!BYTE	$50			; BRNCH	_B079
+	!WORD	_B079-*
+; libsrc/jit16core.pla: 1147:                 is $B2 // ADDLW
+_B327 
+; libsrc/jit16core.pla: 1148:                     i++
+	!BYTE	$66,$08			; LLW	[8]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 1149:                     j = ^(bytecode+i)
+; libsrc/jit16core.pla: 1150:                         //puts("ADDLW "); puti(j)
+; libsrc/jit16core.pla: 1151:                     if not A_IS_TOS
+; libsrc/jit16core.pla: 1152:                         ^codeptr = $68; codeptr++ // PLA
+	!BYTE	$76,$08			; SLW	[8]
+	!BYTE	$66,$06			; LLW	[6]
+	!BYTE	$B2,$08			; ADDLW	[8]
+	!BYTE	$60			; LB
+	!BYTE	$74,$0F			; SLB	[15]
+	!BYTE	$64,$10			; LLB	[16]
+	!BYTE	$4E			; BRTRU	_B328
+	!WORD	_B328-*
+	!BYTE	$2A,$68			; CB	104
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 1153:                     fin
+	!BYTE	$76,$02			; SLW	[2]
+_B328 
+_B329 
+; libsrc/jit16core.pla: 1154:                     if not X_IS_IFP
+; libsrc/jit16core.pla: 1155:                         *codeptr = ifp8+$A6       // LDX IFP
+; libsrc/jit16core.pla: 1156:                         codeptr  = codeptr + 2
+; libsrc/jit16core.pla: 1157:                         X_IS_IFP = TRUE
+; libsrc/jit16core.pla: 1158:                     fin
+	!BYTE	$64,$11			; LLB	[17]
+	!BYTE	$4E			; BRTRU	_B330
+	!WORD	_B330-*
+	!BYTE	$2C,$A6,$E0		; CW	57510
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$72			; SW
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$02			; ADDI	2
+	!BYTE	$76,$02			; SLW	[2]
+	!BYTE	$20			; MINUS ONE
+	!BYTE	$74,$11			; SLB	[17]
+_B330 
+_B331 
+; libsrc/jit16core.pla: 1159:                     codeptr->0 = $18              // CLC
+; libsrc/jit16core.pla: 1160:                     codeptr=>1 = $75+(j<<8)       // ADC dp,X
+; libsrc/jit16core.pla: 1161:                     codeptr    = codeptr + 3
+; libsrc/jit16core.pla: 1162:                     A_IS_TOS   = TRUE             // PHA
+; libsrc/jit16core.pla: 1163:                     break
+	!BYTE	$2A,$18			; CB	24
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$2A,$75			; CB	117
+	!BYTE	$64,$0F			; LLB	[15]
+	!BYTE	$10			; CN	8
+	!BYTE	$9A			; SHL
+	!BYTE	$82			; ADD 
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+	!BYTE	$72			; SW
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$03			; ADDI	3
+	!BYTE	$76,$02			; SLW	[2]
+	!BYTE	$20			; MINUS ONE
+	!BYTE	$74,$10			; SLB	[16]
+	!BYTE	$50			; BRNCH	_B079
+	!WORD	_B079-*
+; libsrc/jit16core.pla: 1164:                 is $B4 // ADDAB
+_B332 
+; libsrc/jit16core.pla: 1165:                     dest = *(bytecode+i+1)
+; libsrc/jit16core.pla: 1166:                     i    = i + 2
+; libsrc/jit16core.pla: 1167:                     //puts("ADDAB $"); puth(dest)
+; libsrc/jit16core.pla: 1168:                     if not A_IS_TOS
+; libsrc/jit16core.pla: 1169:                         ^codeptr = $68; codeptr++ // PLA
+	!BYTE	$66,$06			; LLW	[6]
+	!BYTE	$B2,$08			; ADDLW	[8]
+	!BYTE	$8C			; INCR
+	!BYTE	$62			; LW
+	!BYTE	$76,$0C			; SLW	[12]
+	!BYTE	$66,$08			; LLW	[8]
+	!BYTE	$38,$02			; ADDI	2
+	!BYTE	$76,$08			; SLW	[8]
+	!BYTE	$64,$10			; LLB	[16]
+	!BYTE	$4E			; BRTRU	_B333
+	!WORD	_B333-*
+	!BYTE	$2A,$68			; CB	104
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 1170:                     fin
+	!BYTE	$76,$02			; SLW	[2]
+_B333 
+_B334 
+; libsrc/jit16core.pla: 1171:                     if is_hwaddr(dest)
+; libsrc/jit16core.pla: 1172:                         //
+; libsrc/jit16core.pla: 1173:                         // Ensure only byte sized accesses to H/W addresses
+; libsrc/jit16core.pla: 1174:                         //
+; libsrc/jit16core.pla: 1175:                         codeptr=>0  = tmp8+$85    // STA TMP
+; libsrc/jit16core.pla: 1176:                         codeptr=>2  = $20E2       // SEP #$20 -> 8 BIT ACCUM/MEM
+; libsrc/jit16core.pla: 1177:                         codeptr->4  = $AD         // LDA abs
+; libsrc/jit16core.pla: 1178:                         codeptr=>5  = dest
+; libsrc/jit16core.pla: 1179:                         codeptr=>7  = $20C2       // REP #$20 -> 16 BIT ACCUM/MEM
+; libsrc/jit16core.pla: 1180:                         codeptr->9  = $29         // AND #$00FF
+; libsrc/jit16core.pla: 1181:                         codeptr=>10 = $00FF
+; libsrc/jit16core.pla: 1182:                         codeptr->12 = $18         // CLC
+; libsrc/jit16core.pla: 1183:                         codeptr=>13 = tmp8+$65    // ADC TMP
+; libsrc/jit16core.pla: 1184:                         codeptr     = codeptr + 15
+; libsrc/jit16core.pla: 1185:                     else
+	!BYTE	$66,$0C			; LLW	[12]
+	!BYTE	$54			; CALL	_C001
+_F013 	!WORD	_C001		
+	!BYTE	$4C			; BRFLS	_B335
+	!WORD	_B335-*
+	!BYTE	$2C,$85,$E7		; CW	59269
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$72			; SW
+	!BYTE	$2C,$E2,$20		; CW	8418
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$02			; ADDI	2
+	!BYTE	$72			; SW
+	!BYTE	$2A,$AD			; CB	173
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$04			; ADDI	4
+	!BYTE	$70			; SB
+	!BYTE	$66,$0C			; LLW	[12]
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$05			; ADDI	5
+	!BYTE	$72			; SW
+	!BYTE	$2C,$C2,$20		; CW	8386
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$07			; ADDI	7
+	!BYTE	$72			; SW
+	!BYTE	$2A,$29			; CB	41
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$09			; ADDI	9
+	!BYTE	$70			; SB
+	!BYTE	$2A,$FF			; CB	255
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$0A			; ADDI	10
+	!BYTE	$72			; SW
+	!BYTE	$2A,$18			; CB	24
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$0C			; ADDI	12
+	!BYTE	$70			; SB
+	!BYTE	$2C,$65,$E7		; CW	59237
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$0D			; ADDI	13
+	!BYTE	$72			; SW
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$0F			; ADDI	15
+	!BYTE	$76,$02			; SLW	[2]
+	!BYTE	$50			; BRNCH	_B336
+	!WORD	_B336-*
+_B335 
+; libsrc/jit16core.pla: 1186:                         codeptr=>0 = tmp8+$85     // STA TMP
+; libsrc/jit16core.pla: 1187:                         codeptr->2 = $AD          // LDA abs
+; libsrc/jit16core.pla: 1188:                         codeptr=>3 = dest
+; libsrc/jit16core.pla: 1189:                         codeptr->5 = $29          // AND #$00FF
+; libsrc/jit16core.pla: 1190:                         codeptr=>6 = $00FF
+; libsrc/jit16core.pla: 1191:                         codeptr->8 = $18          // CLC
+; libsrc/jit16core.pla: 1192:                         codeptr=>9 = tmp8+$65     // ADC TMP
+; libsrc/jit16core.pla: 1193:                         codeptr     = codeptr + 11
+; libsrc/jit16core.pla: 1194:                     fin
+	!BYTE	$2C,$85,$E7		; CW	59269
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$72			; SW
+	!BYTE	$2A,$AD			; CB	173
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$02			; ADDI	2
+	!BYTE	$70			; SB
+	!BYTE	$66,$0C			; LLW	[12]
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$03			; ADDI	3
+	!BYTE	$72			; SW
+	!BYTE	$2A,$29			; CB	41
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$05			; ADDI	5
+	!BYTE	$70			; SB
+	!BYTE	$2A,$FF			; CB	255
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$06			; ADDI	6
+	!BYTE	$72			; SW
+	!BYTE	$2A,$18			; CB	24
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$08			; ADDI	8
+	!BYTE	$70			; SB
+	!BYTE	$2C,$65,$E7		; CW	59237
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$09			; ADDI	9
+	!BYTE	$72			; SW
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$0B			; ADDI	11
+	!BYTE	$76,$02			; SLW	[2]
+_B336 
+; libsrc/jit16core.pla: 1195:                     A_IS_TOS = TRUE               // PHA
+; libsrc/jit16core.pla: 1196:                     break
+	!BYTE	$20			; MINUS ONE
+	!BYTE	$74,$10			; SLB	[16]
+	!BYTE	$50			; BRNCH	_B079
+	!WORD	_B079-*
+; libsrc/jit16core.pla: 1197:                 is $B6 // ADDAW
+_B337 
+; libsrc/jit16core.pla: 1198:                     dest = *(bytecode+i+1)
+; libsrc/jit16core.pla: 1199:                     i    = i + 2
+; libsrc/jit16core.pla: 1200:                     if not A_IS_TOS
+; libsrc/jit16core.pla: 1201:                         ^codeptr = $68; codeptr++ // PLA
+	!BYTE	$66,$06			; LLW	[6]
+	!BYTE	$B2,$08			; ADDLW	[8]
+	!BYTE	$8C			; INCR
+	!BYTE	$62			; LW
+	!BYTE	$76,$0C			; SLW	[12]
+	!BYTE	$66,$08			; LLW	[8]
+	!BYTE	$38,$02			; ADDI	2
+	!BYTE	$76,$08			; SLW	[8]
+	!BYTE	$64,$10			; LLB	[16]
+	!BYTE	$4E			; BRTRU	_B338
+	!WORD	_B338-*
+	!BYTE	$2A,$68			; CB	104
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 1202:                     fin
+	!BYTE	$76,$02			; SLW	[2]
+_B338 
+_B339 
+; libsrc/jit16core.pla: 1203:                     codeptr=>0 = $6D18            // CLC; ADC abs
+; libsrc/jit16core.pla: 1204:                     codeptr=>2 = dest
+; libsrc/jit16core.pla: 1205:                     codeptr     = codeptr + 4
+; libsrc/jit16core.pla: 1206:                     A_IS_TOS    = TRUE            // PHA
+; libsrc/jit16core.pla: 1207:                     break
+	!BYTE	$2C,$18,$6D		; CW	27928
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$72			; SW
+	!BYTE	$66,$0C			; LLW	[12]
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$02			; ADDI	2
+	!BYTE	$72			; SW
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$04			; ADDI	4
+	!BYTE	$76,$02			; SLW	[2]
+	!BYTE	$20			; MINUS ONE
+	!BYTE	$74,$10			; SLB	[16]
+	!BYTE	$50			; BRNCH	_B079
+	!WORD	_B079-*
+; libsrc/jit16core.pla: 1208:                 is $B8 // IDXLB
+_B340 
+; libsrc/jit16core.pla: 1209:                     i++
+	!BYTE	$66,$08			; LLW	[8]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 1210:                     j = ^(bytecode+i)
+; libsrc/jit16core.pla: 1211:                     //puts("IDXLB "); puti(j)
+; libsrc/jit16core.pla: 1212:                     if not A_IS_TOS
+; libsrc/jit16core.pla: 1213:                         ^codeptr = $68; codeptr++ // PLA
+	!BYTE	$76,$08			; SLW	[8]
+	!BYTE	$66,$06			; LLW	[6]
+	!BYTE	$B2,$08			; ADDLW	[8]
+	!BYTE	$60			; LB
+	!BYTE	$74,$0F			; SLB	[15]
+	!BYTE	$64,$10			; LLB	[16]
+	!BYTE	$4E			; BRTRU	_B341
+	!WORD	_B341-*
+	!BYTE	$2A,$68			; CB	104
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 1214:                     fin
+	!BYTE	$76,$02			; SLW	[2]
+_B341 
+_B342 
+; libsrc/jit16core.pla: 1215:                     if not X_IS_IFP
+; libsrc/jit16core.pla: 1216:                         *codeptr = ifp8+$A6       // LDX IFP
+; libsrc/jit16core.pla: 1217:                         codeptr  = codeptr + 2
+; libsrc/jit16core.pla: 1218:                         X_IS_IFP = TRUE
+; libsrc/jit16core.pla: 1219:                     fin
+	!BYTE	$64,$11			; LLB	[17]
+	!BYTE	$4E			; BRTRU	_B343
+	!WORD	_B343-*
+	!BYTE	$2C,$A6,$E0		; CW	57510
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$72			; SW
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$02			; ADDI	2
+	!BYTE	$76,$02			; SLW	[2]
+	!BYTE	$20			; MINUS ONE
+	!BYTE	$74,$11			; SLB	[17]
+_B343 
+_B344 
+; libsrc/jit16core.pla: 1220:                     codeptr=>0 = tmp8+$85         // STA TMP
+; libsrc/jit16core.pla: 1221:                     codeptr=>2 = $B5+(j<<8)       // LDA dp,X
+; libsrc/jit16core.pla: 1222:                     codeptr->4 = $29              // AND #$00FF
+; libsrc/jit16core.pla: 1223:                     codeptr=>5 = $00FF
+; libsrc/jit16core.pla: 1224:                     codeptr->7 = $0A              // ASL
+; libsrc/jit16core.pla: 1225:                     codeptr=>8 = tmp8+$65         // ADC TMP
+; libsrc/jit16core.pla: 1226:                     codeptr    = codeptr + 10
+; libsrc/jit16core.pla: 1227:                     A_IS_TOS   = TRUE             // PHA
+; libsrc/jit16core.pla: 1228:                     break
+	!BYTE	$2C,$85,$E7		; CW	59269
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$72			; SW
+	!BYTE	$2A,$B5			; CB	181
+	!BYTE	$64,$0F			; LLB	[15]
+	!BYTE	$10			; CN	8
+	!BYTE	$9A			; SHL
+	!BYTE	$82			; ADD 
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$02			; ADDI	2
+	!BYTE	$72			; SW
+	!BYTE	$2A,$29			; CB	41
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$04			; ADDI	4
+	!BYTE	$70			; SB
+	!BYTE	$2A,$FF			; CB	255
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$05			; ADDI	5
+	!BYTE	$72			; SW
+	!BYTE	$14			; CN	10
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$07			; ADDI	7
+	!BYTE	$70			; SB
+	!BYTE	$2C,$65,$E7		; CW	59237
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$08			; ADDI	8
+	!BYTE	$72			; SW
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$0A			; ADDI	10
+	!BYTE	$76,$02			; SLW	[2]
+	!BYTE	$20			; MINUS ONE
+	!BYTE	$74,$10			; SLB	[16]
+	!BYTE	$50			; BRNCH	_B079
+	!WORD	_B079-*
+; libsrc/jit16core.pla: 1229:                 is $BA // IDXLW
+_B345 
+; libsrc/jit16core.pla: 1230:                     i++
+	!BYTE	$66,$08			; LLW	[8]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 1231:                     j = ^(bytecode+i)
+; libsrc/jit16core.pla: 1232:                     //puts("IDXLW "); puti(j)
+; libsrc/jit16core.pla: 1233:                     if not A_IS_TOS
+; libsrc/jit16core.pla: 1234:                         ^codeptr = $68; codeptr++ // PLA
+	!BYTE	$76,$08			; SLW	[8]
+	!BYTE	$66,$06			; LLW	[6]
+	!BYTE	$B2,$08			; ADDLW	[8]
+	!BYTE	$60			; LB
+	!BYTE	$74,$0F			; SLB	[15]
+	!BYTE	$64,$10			; LLB	[16]
+	!BYTE	$4E			; BRTRU	_B346
+	!WORD	_B346-*
+	!BYTE	$2A,$68			; CB	104
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 1235:                     fin
+	!BYTE	$76,$02			; SLW	[2]
+_B346 
+_B347 
+; libsrc/jit16core.pla: 1236:                     if not X_IS_IFP
+; libsrc/jit16core.pla: 1237:                         *codeptr = ifp8+$A6       // LDX IFP
+; libsrc/jit16core.pla: 1238:                         codeptr  = codeptr + 2
+; libsrc/jit16core.pla: 1239:                         X_IS_IFP = TRUE
+; libsrc/jit16core.pla: 1240:                     fin
+	!BYTE	$64,$11			; LLB	[17]
+	!BYTE	$4E			; BRTRU	_B348
+	!WORD	_B348-*
+	!BYTE	$2C,$A6,$E0		; CW	57510
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$72			; SW
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$02			; ADDI	2
+	!BYTE	$76,$02			; SLW	[2]
+	!BYTE	$20			; MINUS ONE
+	!BYTE	$74,$11			; SLB	[17]
+_B348 
+_B349 
+; libsrc/jit16core.pla: 1241:                     codeptr->0 = $18              // CLC
+; libsrc/jit16core.pla: 1242:                     codeptr=>1 = $75+(j<<8)       // ADC dp,X
+; libsrc/jit16core.pla: 1243:                     codeptr->3 = $18              // CLC
+; libsrc/jit16core.pla: 1244:                     codeptr=>4 = $75+(j<<8)       // ADC dp,X
+; libsrc/jit16core.pla: 1245:                     codeptr    = codeptr + 6
+; libsrc/jit16core.pla: 1246:                     A_IS_TOS   = TRUE             // PHA
+; libsrc/jit16core.pla: 1247:                     break
+	!BYTE	$2A,$18			; CB	24
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$2A,$75			; CB	117
+	!BYTE	$64,$0F			; LLB	[15]
+	!BYTE	$10			; CN	8
+	!BYTE	$9A			; SHL
+	!BYTE	$82			; ADD 
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+	!BYTE	$72			; SW
+	!BYTE	$2A,$18			; CB	24
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$03			; ADDI	3
+	!BYTE	$70			; SB
+	!BYTE	$2A,$75			; CB	117
+	!BYTE	$64,$0F			; LLB	[15]
+	!BYTE	$10			; CN	8
+	!BYTE	$9A			; SHL
+	!BYTE	$82			; ADD 
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$04			; ADDI	4
+	!BYTE	$72			; SW
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$06			; ADDI	6
+	!BYTE	$76,$02			; SLW	[2]
+	!BYTE	$20			; MINUS ONE
+	!BYTE	$74,$10			; SLB	[16]
+	!BYTE	$50			; BRNCH	_B079
+	!WORD	_B079-*
+; libsrc/jit16core.pla: 1248:                 is $BC // IDXAB
+_B350 
+; libsrc/jit16core.pla: 1249:                     dest = *(bytecode+i+1)
+; libsrc/jit16core.pla: 1250:                     i    = i + 2
+; libsrc/jit16core.pla: 1251:                     //puts("IDXAB $"); puth(*(bytecode+i))
+; libsrc/jit16core.pla: 1252:                     if not A_IS_TOS
+; libsrc/jit16core.pla: 1253:                         ^codeptr = $68; codeptr++ // PLA
+	!BYTE	$66,$06			; LLW	[6]
+	!BYTE	$B2,$08			; ADDLW	[8]
+	!BYTE	$8C			; INCR
+	!BYTE	$62			; LW
+	!BYTE	$76,$0C			; SLW	[12]
+	!BYTE	$66,$08			; LLW	[8]
+	!BYTE	$38,$02			; ADDI	2
+	!BYTE	$76,$08			; SLW	[8]
+	!BYTE	$64,$10			; LLB	[16]
+	!BYTE	$4E			; BRTRU	_B351
+	!WORD	_B351-*
+	!BYTE	$2A,$68			; CB	104
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 1254:                     fin
+	!BYTE	$76,$02			; SLW	[2]
+_B351 
+_B352 
+; libsrc/jit16core.pla: 1255:                     if is_hwaddr(dest)
+; libsrc/jit16core.pla: 1256:                         //
+; libsrc/jit16core.pla: 1257:                         // Ensure only byte sized accesses to H/W addresses
+; libsrc/jit16core.pla: 1258:                         //
+; libsrc/jit16core.pla: 1259:                         codeptr=>0  = tmp8+$85    // STA TMP
+; libsrc/jit16core.pla: 1260:                         codeptr=>2  = $20E2       // SEP #$20 -> 8 BIT ACCUM/MEM
+; libsrc/jit16core.pla: 1261:                         codeptr->4  = $AD         // LDA abs
+; libsrc/jit16core.pla: 1262:                         codeptr=>5  = dest
+; libsrc/jit16core.pla: 1263:                         codeptr=>7  = $20C2       // REP #$20 -> 16 BIT ACCUM/MEM
+; libsrc/jit16core.pla: 1264:                         codeptr->9  = $29         // AND #$00FF
+; libsrc/jit16core.pla: 1265:                         codeptr=>10 = $00FF
+; libsrc/jit16core.pla: 1266:                         codeptr->12 = $0A         // ASL
+; libsrc/jit16core.pla: 1267:                         codeptr=>13 = tmp8+$65    // ADC TMP
+; libsrc/jit16core.pla: 1268:                         codeptr     = codeptr + 15
+; libsrc/jit16core.pla: 1269:                     else
+	!BYTE	$66,$0C			; LLW	[12]
+	!BYTE	$54			; CALL	_C001
+_F014 	!WORD	_C001		
+	!BYTE	$4C			; BRFLS	_B353
+	!WORD	_B353-*
+	!BYTE	$2C,$85,$E7		; CW	59269
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$72			; SW
+	!BYTE	$2C,$E2,$20		; CW	8418
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$02			; ADDI	2
+	!BYTE	$72			; SW
+	!BYTE	$2A,$AD			; CB	173
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$04			; ADDI	4
+	!BYTE	$70			; SB
+	!BYTE	$66,$0C			; LLW	[12]
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$05			; ADDI	5
+	!BYTE	$72			; SW
+	!BYTE	$2C,$C2,$20		; CW	8386
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$07			; ADDI	7
+	!BYTE	$72			; SW
+	!BYTE	$2A,$29			; CB	41
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$09			; ADDI	9
+	!BYTE	$70			; SB
+	!BYTE	$2A,$FF			; CB	255
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$0A			; ADDI	10
+	!BYTE	$72			; SW
+	!BYTE	$14			; CN	10
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$0C			; ADDI	12
+	!BYTE	$70			; SB
+	!BYTE	$2C,$65,$E7		; CW	59237
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$0D			; ADDI	13
+	!BYTE	$72			; SW
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$0F			; ADDI	15
+	!BYTE	$76,$02			; SLW	[2]
+	!BYTE	$50			; BRNCH	_B354
+	!WORD	_B354-*
+_B353 
+; libsrc/jit16core.pla: 1270:                         codeptr=>0 = tmp8+$85     // STA TMP
+; libsrc/jit16core.pla: 1271:                         codeptr->2 = $AD          // LDA abs
+; libsrc/jit16core.pla: 1272:                         codeptr=>3 = dest
+; libsrc/jit16core.pla: 1273:                         codeptr->5 = $29          // AND #$00FF
+; libsrc/jit16core.pla: 1274:                         codeptr=>6 = $00FF
+; libsrc/jit16core.pla: 1275:                         codeptr->8 = $0A          // ASL
+; libsrc/jit16core.pla: 1276:                         codeptr=>9 = tmp8+$65     // ADC TMP
+; libsrc/jit16core.pla: 1277:                         codeptr    = codeptr + 11
+; libsrc/jit16core.pla: 1278:                     fin
+	!BYTE	$2C,$85,$E7		; CW	59269
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$72			; SW
+	!BYTE	$2A,$AD			; CB	173
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$02			; ADDI	2
+	!BYTE	$70			; SB
+	!BYTE	$66,$0C			; LLW	[12]
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$03			; ADDI	3
+	!BYTE	$72			; SW
+	!BYTE	$2A,$29			; CB	41
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$05			; ADDI	5
+	!BYTE	$70			; SB
+	!BYTE	$2A,$FF			; CB	255
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$06			; ADDI	6
+	!BYTE	$72			; SW
+	!BYTE	$14			; CN	10
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$08			; ADDI	8
+	!BYTE	$70			; SB
+	!BYTE	$2C,$65,$E7		; CW	59237
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$09			; ADDI	9
+	!BYTE	$72			; SW
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$0B			; ADDI	11
+	!BYTE	$76,$02			; SLW	[2]
+_B354 
+; libsrc/jit16core.pla: 1279:                     A_IS_TOS    = TRUE            // PHA
+; libsrc/jit16core.pla: 1280:                     break
+	!BYTE	$20			; MINUS ONE
+	!BYTE	$74,$10			; SLB	[16]
+	!BYTE	$50			; BRNCH	_B079
+	!WORD	_B079-*
+; libsrc/jit16core.pla: 1281:                 is $BE // IDXAW
+_B355 
+; libsrc/jit16core.pla: 1282:                     dest = *(bytecode+i+1)
+; libsrc/jit16core.pla: 1283:                     i    = i + 2
+; libsrc/jit16core.pla: 1284:                     //puts("IDXAW $"); puth(dest)
+; libsrc/jit16core.pla: 1285:                     if not A_IS_TOS
+; libsrc/jit16core.pla: 1286:                         ^codeptr = $68; codeptr++ // PLA
+	!BYTE	$66,$06			; LLW	[6]
+	!BYTE	$B2,$08			; ADDLW	[8]
+	!BYTE	$8C			; INCR
+	!BYTE	$62			; LW
+	!BYTE	$76,$0C			; SLW	[12]
+	!BYTE	$66,$08			; LLW	[8]
+	!BYTE	$38,$02			; ADDI	2
+	!BYTE	$76,$08			; SLW	[8]
+	!BYTE	$64,$10			; LLB	[16]
+	!BYTE	$4E			; BRTRU	_B356
+	!WORD	_B356-*
+	!BYTE	$2A,$68			; CB	104
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 1287:                     fin
+	!BYTE	$76,$02			; SLW	[2]
+_B356 
+_B357 
+; libsrc/jit16core.pla: 1288:                     codeptr=>0 = $6D18            // CLC; ADC abs
+; libsrc/jit16core.pla: 1289:                     codeptr=>2 = dest
+; libsrc/jit16core.pla: 1290:                     codeptr=>4 = $6D18            // CLC; ADC abs
+; libsrc/jit16core.pla: 1291:                     codeptr=>6 = dest
+; libsrc/jit16core.pla: 1292:                     codeptr    = codeptr + 8
+; libsrc/jit16core.pla: 1293:                     A_IS_TOS   = TRUE             // PHA
+; libsrc/jit16core.pla: 1294:                     break
+	!BYTE	$2C,$18,$6D		; CW	27928
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$72			; SW
+	!BYTE	$66,$0C			; LLW	[12]
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$02			; ADDI	2
+	!BYTE	$72			; SW
+	!BYTE	$2C,$18,$6D		; CW	27928
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$04			; ADDI	4
+	!BYTE	$72			; SW
+	!BYTE	$66,$0C			; LLW	[12]
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$06			; ADDI	6
+	!BYTE	$72			; SW
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$38,$08			; ADDI	8
+	!BYTE	$76,$02			; SLW	[2]
+	!BYTE	$20			; MINUS ONE
+	!BYTE	$74,$10			; SLB	[16]
+	!BYTE	$50			; BRNCH	_B079
+	!WORD	_B079-*
+; libsrc/jit16core.pla: 1295:                 is $FE // NOPed out earlier by SELect
+_B358 
+; libsrc/jit16core.pla: 1296:                     break
+	!BYTE	$50			; BRNCH	_B079
+	!WORD	_B079-*
+; libsrc/jit16core.pla: 1297:                 otherwise
+_B080 
+	!BYTE	$4F			; CASEBLOCK
+	!WORD	$0020
+	!WORD	_B081-*
+	!WORD	$0022
+	!WORD	_B084-*
+	!WORD	$0024
+	!WORD	_B085-*
+	!WORD	$0026
+	!WORD	_B092-*
+	!WORD	$0028
+	!WORD	_B096-*
+	!WORD	$002A
+	!WORD	_B103-*
+	!WORD	$002C
+	!WORD	_B093-*
+	!WORD	$002E
+	!WORD	_B109-*
+	!WORD	$0030
+	!WORD	_B117-*
+	!WORD	$0032
+	!WORD	_B114-*
+	!WORD	$0034
+	!WORD	_B120-*
+	!WORD	$0038
+	!WORD	_B123-*
+	!WORD	$003A
+	!WORD	_B126-*
+	!WORD	$003C
+	!WORD	_B129-*
+	!WORD	$003E
+	!WORD	_B132-*
+	!WORD	$0040
+	!WORD	_B135-*
+	!WORD	$0042
+	!WORD	_B136-*
+	!WORD	$0044
+	!WORD	_B141-*
+	!WORD	$0046
+	!WORD	_B147-*
+	!WORD	$0048
+	!WORD	_B148-*
+	!WORD	$004A
+	!WORD	_B142-*
+	!WORD	$004C
+	!WORD	_B153-*
+	!WORD	$004E
+	!WORD	_B154-*
+	!WORD	$0050
+	!WORD	_B161-*
+	!WORD	$0052
+	!WORD	_B166-*
+	!WORD	$0054
+	!WORD	_B178-*
+	!WORD	$0056
+	!WORD	_B179-*
+	!WORD	$005A
+	!WORD	_B180-*
+	!WORD	$005C
+	!WORD	_B181-*
+	!WORD	$005E
+	!WORD	_B104-*
+	!WORD	$0060
+	!WORD	_B190-*
+	!WORD	$0062
+	!WORD	_B193-*
+	!WORD	$0064
+	!WORD	_B196-*
+	!WORD	$0066
+	!WORD	_B201-*
+	!WORD	$0068
+	!WORD	_B206-*
+	!WORD	$006A
+	!WORD	_B211-*
+	!WORD	$006C
+	!WORD	_B214-*
+	!WORD	$006E
+	!WORD	_B222-*
+	!WORD	$0070
+	!WORD	_B230-*
+	!WORD	$0072
+	!WORD	_B233-*
+	!WORD	$0074
+	!WORD	_B215-*
+	!WORD	$0076
+	!WORD	_B223-*
+	!WORD	$0078
+	!WORD	_B236-*
+	!WORD	$007A
+	!WORD	_B242-*
+	!WORD	$007C
+	!WORD	_B237-*
+	!WORD	$007E
+	!WORD	_B243-*
+	!WORD	$0080
+	!WORD	_B248-*
+	!WORD	$0082
+	!WORD	_B251-*
+	!WORD	$0084
+	!WORD	_B254-*
+	!WORD	$0086
+	!WORD	_B257-*
+	!WORD	$0088
+	!WORD	_B258-*
+	!WORD	$008A
+	!WORD	_B259-*
+	!WORD	$008C
+	!WORD	_B264-*
+	!WORD	$008E
+	!WORD	_B267-*
+	!WORD	$0090
+	!WORD	_B270-*
+	!WORD	$0092
+	!WORD	_B273-*
+	!WORD	$0094
+	!WORD	_B276-*
+	!WORD	$0096
+	!WORD	_B279-*
+	!WORD	$0098
+	!WORD	_B282-*
+	!WORD	$009A
+	!WORD	_B260-*
+	!WORD	$009C
+	!WORD	_B261-*
+	!WORD	$009E
+	!WORD	_B285-*
+	!WORD	$00A0
+	!WORD	_B288-*
+	!WORD	$00A2
+	!WORD	_B293-*
+	!WORD	$00A4
+	!WORD	_B298-*
+	!WORD	$00A6
+	!WORD	_B299-*
+	!WORD	$00A8
+	!WORD	_B306-*
+	!WORD	$00AA
+	!WORD	_B307-*
+	!WORD	$00AC
+	!WORD	_B314-*
+	!WORD	$00AE
+	!WORD	_B315-*
+	!WORD	$00B0
+	!WORD	_B322-*
+	!WORD	$00B2
+	!WORD	_B327-*
+	!WORD	$00B4
+	!WORD	_B332-*
+	!WORD	$00B6
+	!WORD	_B337-*
+	!WORD	$00B8
+	!WORD	_B340-*
+	!WORD	$00BA
+	!WORD	_B345-*
+	!WORD	$00BC
+	!WORD	_B350-*
+	!WORD	$00BE
+	!WORD	_B355-*
+	!WORD	$00FE
+	!WORD	_B358-*
+; libsrc/jit16core.pla: 1298:                     //puts("???: $"); puth(^(bytecode+i)); putln
+; libsrc/jit16core.pla: 1299:             wend
+_B079 
+; libsrc/jit16core.pla: 1300:         fin
+_B076 
+; libsrc/jit16core.pla: 1301:         //putln
+; libsrc/jit16core.pla: 1302:         i++
+	!BYTE	$66,$08			; LLW	[8]
+	!BYTE	$8C			; INCR
+; libsrc/jit16core.pla: 1303:         if i >= defptr->bytecodesize
+; libsrc/jit16core.pla: 1304:             //
+; libsrc/jit16core.pla: 1305:             // Done compiling. Update DEF entry with JMP to compiled code
+; libsrc/jit16core.pla: 1306:             //
+; libsrc/jit16core.pla: 1307:             defptr->interpjsr  = $4C // JMP
+; libsrc/jit16core.pla: 1308:             defptr=>interpaddr = *jitcodeptr
+; libsrc/jit16core.pla: 1309:             *jitcodeptr        = codeptr
+; libsrc/jit16core.pla: 1310:             //puts("Done compiling: $"); puth(defptr=>interpaddr)
+; libsrc/jit16core.pla: 1311:             //puts("->$"); puth(*jitcodeptr); putln
+; libsrc/jit16core.pla: 1312:             //getc
+; libsrc/jit16core.pla: 1313:             return
+	!BYTE	$6E,$08			; DLW	[8]
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$38,$06			; ADDI	6
+	!BYTE	$60			; LB
+	!BYTE	$48			; ISGE
+	!BYTE	$4C			; BRFLS	_B359
+	!WORD	_B359-*
+	!BYTE	$2A,$4C			; CB	76
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$70			; SB
+	!BYTE	$6A,$E4,$03		; LAW	996
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$8C			; INCR
+	!BYTE	$72			; SW
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$7A,$E4,$03		; SAW	996
+	!BYTE	$5A,$12			; LEAVE	18
+; libsrc/jit16core.pla: 1314:         fin
+_B359 
+_B360 
+; libsrc/jit16core.pla: 1315:     loop
+_B065 
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$2C,$E0,$BE		; CW	48864
+	!BYTE	$54			; CALL	_X027
+_F015 	!WORD	0		
+	!BYTE	$4E			; BRTRU	_B063
+	!WORD	_B063-*
+_B064 
+; libsrc/jit16core.pla: 1316:     //
+; libsrc/jit16core.pla: 1317:     // If we got here we ran out of code buffer space.
+; libsrc/jit16core.pla: 1318:     //
+; libsrc/jit16core.pla: 1319:     //puts("Ran out of code buffer\n")
+; libsrc/jit16core.pla: 1320:     //getc
+; libsrc/jit16core.pla: 1321: end
+	!BYTE	$5A,$12			; LEAVE	18
+; libsrc/apple/jit16.pla: 0055: 
+; libsrc/apple/jit16.pla: 0056: //
+; libsrc/apple/jit16.pla: 0057: // Install JIT compiler
+; libsrc/apple/jit16.pla: 0058: //
+; libsrc/apple/jit16.pla: 0059: if *jitcomp
+_INIT 
+; libsrc/apple/jit16.pla: 0060:     return 0
+	!BYTE	$6A,$E2,$03		; LAW	994
+	!BYTE	$4C			; BRFLS	_B361
+	!WORD	_B361-*
+	!BYTE	$00			; CN	0
+	!BYTE	$5C			; RET
+; libsrc/apple/jit16.pla: 0061: fin
+_B361 
+_B362 
+; libsrc/apple/jit16.pla: 0062: *jitcomp        = @compiler
+; libsrc/apple/jit16.pla: 0063: cmdsys.jitcount = 32
+; libsrc/apple/jit16.pla: 0064: cmdsys.jitsize  = 96
+; libsrc/apple/jit16.pla: 0065: puts("16-bit VM/JITC enabled\n")
+	!BYTE	$26			; LA	_C002+0
+_F016 	!WORD	_C002+0		
+	!BYTE	$7A,$E2,$03		; SAW	994
+	!BYTE	$2A,$20			; CB	32
+	!BYTE	$78			; SAB	_X000+17
+_F017 	!WORD	0+17		
+	!BYTE	$2A,$60			; CB	96
+	!BYTE	$78			; SAB	_X000+18
+_F018 	!WORD	0+18		
+	!BYTE	$2E			; CS
+	!BYTE	$17
+	!BYTE	$31,$36,$2D,$62,$69,$74,$20,$56
+	!BYTE	$4D,$2F,$4A,$49,$54,$43,$20,$65
+	!BYTE	$6E,$61,$62,$6C,$65,$64,$0D
+	!BYTE	$54			; CALL	_X004
+_F019 	!WORD	0		
+; libsrc/apple/jit16.pla: 0066: return modkeep
+	!BYTE	$2C,$00,$20		; CW	8192
+	!BYTE	$5C			; RET
+; libsrc/apple/jit16.pla: 0067: done
+_SYSFLAGS	=	0
+_DEFCNT	=	4
+_SEGEND 
+;
+; RE-LOCATEABLE DICTIONARY
+;
+	!BYTE	$02			; CODE TABLE FIXUP
+	!WORD	_C000		
+	!BYTE	$00
+	!BYTE	$02			; CODE TABLE FIXUP
+	!WORD	_C001		
+	!BYTE	$00
+	!BYTE	$02			; CODE TABLE FIXUP
+	!WORD	_C002		
+	!BYTE	$00
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F000-_SEGBEGIN		
+	!BYTE	10			; ESD INDEX
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F001-_SEGBEGIN		
+	!BYTE	25			; ESD INDEX
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F002-_SEGBEGIN		
+	!BYTE	26			; ESD INDEX
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F003-_SEGBEGIN		
+	!BYTE	12			; ESD INDEX
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F004-_SEGBEGIN		
+	!BYTE	16			; ESD INDEX
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F005-_SEGBEGIN		
+	!BYTE	26			; ESD INDEX
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F006-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F007-_SEGBEGIN		
+	!BYTE	17			; ESD INDEX
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F008-_SEGBEGIN		
+	!BYTE	17			; ESD INDEX
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F009-_SEGBEGIN		
+	!BYTE	27			; ESD INDEX
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F010-_SEGBEGIN		
+	!BYTE	19			; ESD INDEX
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F011-_SEGBEGIN		
+	!BYTE	27			; ESD INDEX
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F012-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F013-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F014-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F015-_SEGBEGIN		
+	!BYTE	27			; ESD INDEX
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F016-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F017-_SEGBEGIN		
+	!BYTE	0			; ESD INDEX
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F018-_SEGBEGIN		
+	!BYTE	0			; ESD INDEX
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F019-_SEGBEGIN		
+	!BYTE	4			; ESD INDEX
+	!BYTE	$00			; END OF RLD
+;
+; EXTERNAL/ENTRY SYMBOL DICTIONARY
+;
+	; DCI STRING: CMDSYS
+	!BYTE	$C3,$CD,$C4,$D3,$D9,$53
+	!BYTE	$10			; EXTERNAL SYMBOL FLAG
+	!WORD	0			; ESD INDEX
+	; DCI STRING: PUTS
+	!BYTE	$D0,$D5,$D4,$53
+	!BYTE	$10			; EXTERNAL SYMBOL FLAG
+	!WORD	4			; ESD INDEX
+	; DCI STRING: CALL
+	!BYTE	$C3,$C1,$CC,$4C
+	!BYTE	$10			; EXTERNAL SYMBOL FLAG
+	!WORD	10			; ESD INDEX
+	; DCI STRING: HEAPMARK
+	!BYTE	$C8,$C5,$C1,$D0,$CD,$C1,$D2,$4B
+	!BYTE	$10			; EXTERNAL SYMBOL FLAG
+	!WORD	12			; ESD INDEX
+	; DCI STRING: HEAPAVAIL
+	!BYTE	$C8,$C5,$C1,$D0,$C1,$D6,$C1,$C9,$4C
+	!BYTE	$10			; EXTERNAL SYMBOL FLAG
+	!WORD	16			; ESD INDEX
+	; DCI STRING: MEMSET
+	!BYTE	$CD,$C5,$CD,$D3,$C5,$54
+	!BYTE	$10			; EXTERNAL SYMBOL FLAG
+	!WORD	17			; ESD INDEX
+	; DCI STRING: STRCPY
+	!BYTE	$D3,$D4,$D2,$C3,$D0,$59
+	!BYTE	$10			; EXTERNAL SYMBOL FLAG
+	!WORD	19			; ESD INDEX
+	; DCI STRING: ISUGE
+	!BYTE	$C9,$D3,$D5,$C7,$45
+	!BYTE	$10			; EXTERNAL SYMBOL FLAG
+	!WORD	25			; ESD INDEX
+	; DCI STRING: ISULT
+	!BYTE	$C9,$D3,$D5,$CC,$54
+	!BYTE	$10			; EXTERNAL SYMBOL FLAG
+	!WORD	26			; ESD INDEX
+	; DCI STRING: ISULE
+	!BYTE	$C9,$D3,$D5,$CC,$45
+	!BYTE	$10			; EXTERNAL SYMBOL FLAG
+	!WORD	27			; ESD INDEX
+	!BYTE	$00			; END OF ESD
