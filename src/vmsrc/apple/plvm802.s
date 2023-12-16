@@ -577,17 +577,71 @@ IDXW    PLA
 ;*
 MUL     LDX     #$10
         LDA     NOS,S
-        EOR     #$FFFF
+        CMP     TOS,S
+        BCS     _MULSWP
+-       ASL                     ; SKIP LEADING ZEROS
+        BCS     +
+        DEX
+        BNE     -
+        BEQ     _MULEX
++       EOR     #$FFFF
         STA     TMP
-        LDA     #$0000
+        LDA     TOS,S
+        DEX
+        BEQ     _MULEX
 _MULLP  ASL
         ASL     TMP             ; MULTPLR
         BCS     +
         ADC     TOS,S           ; MULTPLD
 +       DEX
         BNE     _MULLP
+_MULEX  STA     NOS,S           ; PROD
+        JMP     DROP
+_MULSWP LDA     TOS,S
+-       ASL                     ; SKIP LEADING ZEROS
+        BCS     +
+        DEX
+        BNE     -
+        BEQ     _MULEX
++       EOR     #$FFFF
+        STA     TMP
+        LDA     NOS,S
+        DEX
+        BEQ     _MULEX
+_MULSLP ASL
+        ASL     TMP             ; MULTPLR
+        BCS     +
+        ADC     NOS,S           ; MULTPLD
++       DEX
+        BNE     _MULSLP
         STA     NOS,S           ; PROD
         JMP     DROP
+;
+;MUL     LDX     #$04
+;        LDA     NOS,S
+;        EOR     #$FFFF
+;        STA     TMP
+;        LDA     #$0000
+;_MULLP  ASL
+;        ASL     TMP             ; MULTPLR
+;        BCS     +
+;        ADC     TOS,S           ; MULTPLD
+;+       ASL
+;        ASL     TMP             ; MULTPLR
+;        BCS     +
+;        ADC     TOS,S           ; MULTPLD
+;+       ASL
+;        ASL     TMP             ; MULTPLR
+;        BCS     +
+;        ADC     TOS,S           ; MULTPLD
+;+       ASL
+;        ASL     TMP             ; MULTPLR
+;        BCS     +
+;        ADC     TOS,S           ; MULTPLD
+;+       DEX
+;        BNE     _MULLP
+;        STA     NOS,S           ; PROD
+;        JMP     DROP
 ;*
 ;* INTERNAL DIVIDE ALGORITHM
 ;*
