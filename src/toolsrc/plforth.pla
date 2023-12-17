@@ -5,23 +5,34 @@ include "inc/cmdsys.plh"
 //
 //  bytes   usage
 //  -----   -----
-// [1..32] name string
+// [1]     name lenght and flags
+// [1..31] name string
 // [2]     LFA (link field address)
 // [2]     CFA (code field address)
 // [2]     PFA (param field address)
 //
 
 //
+// Mask and flags for dictionary entries
+//
+const len_mask    = $1F
+const imm_flag    = $20
+const comp_flag   = $40
+const hidden_flag = $80
+//
 // Predefine instrinsics
 //
 predef _drop_(a)#0, _swap_(a,b)#2
 predef _add_(a,b)#1, _sub_(a,b)#1, _mul_(a,b)#1, _div_(a,b)#1
-predef _vlist_#0, _exit_#0
+predef _cset_(a,b)#0, _cget_(a)#1, _wset_(a,b)#0, _wget_(a)#1
+predef _cfa_(a)#1, _lfa_(a)#1
+predef _var_(a)#0, _forget_#0
+predef _vlist_#0, _bye_#0
 // DROP
-char d_drop = "drop"
+char d_drop = "DROP"
 word = 0, @_drop_, 0
 // SWAP
-char d_swap = "swap"
+char d_swap = "SWAP"
 word = @d_drop, @_swap_
 // ADD
 char d_add = "+"
@@ -35,75 +46,69 @@ word = @d_sub, @_mul_
 // DIV
 char d_div = "/"
 word = @d_mul, @_div_
+// CHAR SET
+char d_cset = "C!"
+word = @d_div, @_cset_
+// WORD SET
+char d_wset = "!"
+word = @d_cset, @_wset_
+// CHAR GET
+char d_cget = "C@"
+word = @d_wset, @_cget_
+// WORD SET
+char d_wget = "@"
+word = @d_cget, @_wget_
+char d_var = "VARIABLE"
+word = @d_wget, @_var_
+// HERE
+char d_here = "HERE"
+word = @d_var, @heapmark
+// ALLOT
+char d_allot = "ALLOT"
+word = @d_here, @heapalloc
+// FORGET
+char d_forget = "FORGET"
+word = @d_allot, @_forget_
 // PRINT TOS
 char d_prtos = "."
-word = @d_div, @puti
+word = @d_forget, @puti
 // EXIT
-char d_exit = "exit"
-word = @d_prtos, @_exit_
+char d_bye = "BYE"
+word = @d_prtos, @_bye_
 // LIST VOCAB
-char d_vlist = "vlist"
-word = @d_exit, @_vlist_
+char d_vlist = "VLIST"
+word = @d_bye, @_vlist_
 //
 // Internal variables
 //
-word vocab=@d_vlist
-word inptr
+word vlist=@d_vlist
+word inptr, ip, w
 char exit = 0
 //
-// Intrinsics
+// Dictionary routines
 //
-def _drop_(a)#0
-  return
-end
-def _swap_(a,b)#2
-  return b,a
-end
-def _add_(a,b)#1
-  return a+b
-end
-def _sub_(a,b)#1
-  return a-b
-end
-def _mul_(a,b)#1
-  return a*b
-end
-def _div_(a,b)#1
-  return a/b
-end
-def _exit_#0
-  exit = 1
-end
-def _vlist_#0
-  word v
-
-  v = vocab
-  while v
-    puts(v); puts("  ")
-    v = *(v + ^v + 1)
-  loop
-end
 //
-// Find match in vocabulary
+// Find match in dictionary
 //
 def find#1
-  word v
-  byte len
+  word d
+  byte len, i
 
   inptr--
-  v = vocab
-  while v
-    for len = 1 to ^v
-      if ^(inptr+len) <> ^(v+len)
+  d = vlist
+  while d
+    len = ^d & len_mask
+    for i = 1 to len
+      if ^(inptr+i) <> ^(d+i)
         break
       fin
     next
-    if len > ^v and ^(inptr+len) <= ' '
-      //puts("[Found name = "); puts(v); puts("]\n")
-      inptr = inptr + len
-      return v + ^v + 3
+    if i > len and ^(inptr+i) <= ' '
+      //puts("[Found name = "); puts(d); puts("]\n")
+      inptr = inptr + i
+      return d
     fin
-    v = *(v + ^v + 1)
+    d = *(d + len + 1)
   loop
   // Not found
   inptr++
@@ -113,10 +118,8 @@ end
 // Execute code in CFA
 //
 def exec(cfa)#0
-  word w
-
-  w = *cfa
-  w()#0
+  w = cfa
+  (*w)()#0
 end
 //
 // Convert input into number
@@ -143,10 +146,95 @@ def isnum#2
   return 0, FALSE
 end
 //
+// Intrinsics
+//
+def _drop_(a)#0
+  return
+end
+def _swap_(a,b)#2
+  return b,a
+end
+def _add_(a,b)#1
+  return a+b
+end
+def _sub_(a,b)#1
+  return a-b
+end
+def _mul_(a,b)#1
+  return a*b
+end
+def _div_(a,b)#1
+  return a/b
+end
+def _cset_(a,b)#0
+  ^b=a
+end
+def _wset_(a,b)#0
+  *b=a
+end
+def _cget_(a)#1
+  return ^a
+end
+def _wget_(a)#1
+  return *a
+end
+def _lfa_(dentry)#1
+  return dentry + ^dentry + 1
+end
+def _cfa_(dentry)#1
+  return dentry + ^dentry + 3
+end
+def _dovar_#1
+  return w + 2
+end
+def _var_(a)#0
+  word bldptr, plist
+
+  while ^inptr == ' '
+    inptr++
+  loop
+  if ^inptr > ' '
+    plist = vlist
+    vlist  = heapmark
+    ^vlist = 0
+    bldptr = vlist + 1
+    while ^inptr > ' '
+      ^bldptr = ^inptr
+      bldptr++
+      inptr++
+      ^vlist++
+    loop
+    *bldptr = plist;    bldptr = bldptr + 2
+    *bldptr = @_dovar_; bldptr = bldptr + 2
+    *bldptr = a
+    heapalloc(bldptr - vlist + 2)
+  fin
+end
+def _forget_#0
+  word dentry
+
+  dentry = find
+  if dentry
+    heaprelease(dentry)
+  fin
+end
+def _bye_#0
+  exit = 1
+end
+def _vlist_#0
+  word d
+
+  d = vlist
+  while d
+    puts(d); puts("  ")
+    d = *(d + ^d + 1)
+  loop
+end
+//
 // Quit and look for user input
 //
 def _quit_#0
-  word cfa, __drop, __isnum
+  word dentry, cfa, __drop, __isnum
 
   __drop  = @_drop_
   __isnum = @isnum
@@ -167,12 +255,13 @@ def _quit_#0
           inptr++
         loop
         if ^inptr > ' '
-          cfa = find
-          if cfa
-            (*cfa)()#0 //exec(*cfa)
+          dentry = find
+          if dentry
+            exec(_cfa_(dentry))
           elsif not __isnum()#1
               __drop()#0
               puts("? No match\n")
+              ^inptr = 0
           fin
         fin
       until ^inptr < ' '
