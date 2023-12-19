@@ -25,9 +25,9 @@ predef _drop_(a)#0, _swap_(a,b)#2, _dup_(a)#2
 predef _add_(a,b)#1, _sub_(a,b)#1, _mul_(a,b)#1, _div_(a,b)#1
 predef _cset_(a,b)#0, _cget_(a)#1, _wset_(a,b)#0, _wget_(a)#1
 predef _cfa_(a)#1, _lfa_(a)#1
-predef _create_#0, _builds_#0, _does_#0, _pset_(a)#0, _colon_#0, _semi_#0
-predef _var_(a)#0, _lit_#1, _forget_#0
-predef _vlist_#0, _show_#0, _bye_#0
+predef _create_#0, _builds_#0, _dodoes_(words)#0, _filldoes_#0, _does_#0, _pset_(a)#0, _colon_#0, _semi_#0
+predef _var_(a)#0, _lit_#1, _tick_#1, _forget_#0
+predef _vlist_#0, _tron_#0, _troff_#0, _show_#0, _bye_#0
 // DROP
 char d_drop = "DROP"
 word = 0, @_drop_, 0
@@ -75,9 +75,15 @@ word = @d_allot, @_forget_, 0
 // BUILDS
 char d_builds = "<BUILDS"
 word = @d_forget, @_builds_, 0
+// FILL DOES COMPILE TIME
+char d_filldoes = "FILLDOES"
+word = @d_builds, @_filldoes_, 0
+// DO DOES RUN TIME
+char d_dodoes = "DODOES>"
+word = @d_filldoes, @_dodoes_, 0
 // DOES
 char d_does = "DOES>"
-word = @d_builds, @_does_, 0
+word = @d_dodoes, @_does_, 0
 // COMMA
 char d_comma = ","
 word = @d_does, @_pset_, 0
@@ -87,21 +93,33 @@ word = @d_comma, @_colon_, 0
 // SEMI
 char d_semi = ";"
 word = @d_colon, @_semi_, 0
+// TICK
+char d_tick = "'"
+word = @d_semi, @_tick_, 0
 // LITERAL
 char d_lit = "LIT"
-word = @d_semi, @_lit_, 0
+word = @d_tick, @_lit_, 0
 // PRINT TOS
 char d_prtos = "."
 word = @d_lit, @puti, 0
+// PRINT TOS HEX
+char d_prtoshex = ".$"
+word = @d_prtos, @puth, 0
 // EXIT
 char d_bye = "BYE"
-word = @d_prtos, @_bye_, 0
+word = @d_prtoshex, @_bye_, 0
 // SHOW DEFINITION
 char d_show = "SHOW"
 word = @d_bye, @_show_, 0
+// TRACE ON
+char d_tron = "TRON"
+word = @d_show, @_tron_, 0
+// TRACE OFF
+char d_troff = "TROFF"
+word = @d_tron, @_troff_, 0
 // LIST VOCAB
 char d_vlist = "VLIST"
-word = @d_show, @_vlist_, 0
+word = @d_troff, @_vlist_, 0
 //
 // Internal variables
 //
@@ -114,6 +132,7 @@ const comp_flag   = $01
 const build_flag  = $02
 const exit_flag   = $80
 char state = 0
+char trace = 0
 //
 // Dictionary routines
 //
@@ -143,18 +162,6 @@ def find#1
   // Not found
   inptr++
   return 0
-end
-//
-// Execute code in CFA
-//
-def exec(dentry)#0
-  //char l
-  //l = ^dentry
-  //^dentry = l & len_mask
-  //puts("Exec "); puts(dentry); putln
-  //^dentry = l
-  W = _cfa_(dentry)
-  (*W)()#0
 end
 //
 // Convert input into number
@@ -234,20 +241,49 @@ def _pfa_(dentry)#1
   l = ^dentry & len_mask
  return dentry + l + 5
 end
+//
+// Execute code in CFA
+//
+def execword(dentry)#0
+  char l
+
+  if trace
+    l = ^dentry
+    ^dentry = l & len_mask
+    puts(": "); puts(dentry); putln
+    ^dentry = l
+  fin
+  W = _cfa_(dentry)
+  (*W)()#0
+end
+def execwords(wlist)#0
+  word prevIP
+
+  prevIP = IIP
+  IIP = wlist
+  while *IIP
+    execword(*IIP)
+    IIP = IIP + 2
+  loop
+  IIP = prevIP
+end
 def _dovar_#1
   return W + 2
 end
 def _docolon_#0
-  word prevIP
-
-  puts("DOCOLON:\n")
-  prevIP = IIP
-  IIP = W + 2
-  while *IIP
-    exec(*IIP)
-    IIP = IIP + 2
-  loop
-  IIP = prevIP
+  //puts("DOCOLON:\n")
+  execwords(W + 2)
+end
+def _pushPFA_#1
+  return W + 2
+end
+def _dodoes_(words)#0
+  //puts("DODOES:\n")
+  (@_pushPFA_)()#0 // Stack hacks
+  execwords(words)
+end
+def _filldoes_#0
+  *(_cfa_(vlist)) = IIP + 4
 end
 def _lit_#1
   IIP = IIP + 2
@@ -275,14 +311,19 @@ def _create_#0
   fin
 end
 def _builds_#0
-  if state  == comp_flag
-    state = build_flag
-  fin
+  _create_
 end
 def _does_#0
-  if state == build_flag
-    state = comp_flag
-  fin
+  *(heapalloc(2)) = @d_filldoes  
+  *(heapalloc(2)) = 0
+  // Build PLASMA bytecode routine
+  ^(heapalloc(1)) = (@divmod)->0 // JSR INTERP
+  *(heapalloc(2)) = (@divmod)=>1
+  ^(heapalloc(1)) = $2C        // CONSTANT WORD
+  *(heapalloc(2)) = heapmark + 6
+  ^(heapalloc(1)) = $54        // CALL _dodoes_
+  *(heapalloc(2)) = @_dodoes_
+  ^(heapalloc(1)) = $5C        // RET
 end
 def _pset_(a)#0
   *(heapalloc(2)) = a
@@ -306,6 +347,12 @@ end
 def _immediate_#0
   ^vlist = ^vlist | imm_flag
 end
+def _tick_#1
+  while ^inptr == ' '
+    inptr++
+  loop
+  return find
+end
 def _forget_#0
   word dentry
 
@@ -321,13 +368,17 @@ def _show_#0
   word dentry, pfa, w
   char l, f
   
-while ^inptr == ' '
-  inptr++
-loop
-if ^inptr > ' '
-  dentry = find
+  while ^inptr == ' '
+    inptr++
+  loop
+  if ^inptr > ' '
+    dentry = find
     if dentry
-      pfa = _pfa_(dentry)
+      if *_cfa_(dentry) == @_docolon_
+        pfa = _pfa_(dentry)
+      else
+        pfa = *_cfa_(dentry) + 10
+      fin
       w = *pfa
       while w
         f = ^w
@@ -340,6 +391,12 @@ if ^inptr > ' '
       loop
     fin
   fin
+end
+def _tron_#0
+  trace = 1
+end
+def _troff_#0
+  trace = 0
 end
 def _vlist_#0
   word d
@@ -368,6 +425,7 @@ def _quit_#0
   // Set flags on words
   //
   d_semi = d_semi | imm_flag
+  d_does = d_does | imm_flag
   repeat
     puts(" OK")
     inptr = gets('\n'|$80)
@@ -388,7 +446,7 @@ def _quit_#0
           dentry = find
           if dentry
             if (not state & comp_flag) or (^dentry & imm_flag) 
-              exec(dentry)
+              execword(dentry)
             else
               //puts("Compile "); puts(dentry); putln
               _pset_(dentry)
