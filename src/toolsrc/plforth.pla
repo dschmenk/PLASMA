@@ -25,7 +25,7 @@ predef _drop_(a)#0, _swap_(a,b)#2, _dup_(a)#2
 predef _add_(a,b)#1, _sub_(a,b)#1, _mul_(a,b)#1, _div_(a,b)#1
 predef _cset_(a,b)#0, _cget_(a)#1, _wset_(a,b)#0, _wget_(a)#1
 predef _cfa_(a)#1, _lfa_(a)#1
-predef _create_#0, _builds_#0, _dodoes_(words)#0, _filldoes_#0, _does_#0, _pset_(a)#0, _colon_#0, _semi_#0
+predef _create_#0, _dodoes_(words)#0, _filldoes_#0, _does_#0, _pset_(a)#0, _colon_#0, _semi_#0
 predef _var_(a)#0, _lit_#1, _tick_#1, _forget_#0
 predef _vlist_#0, _tron_#0, _troff_#0, _show_#0, _bye_#0
 // DROP
@@ -74,7 +74,7 @@ char d_forget = "FORGET"
 word = @d_allot, @_forget_, 0
 // BUILDS
 char d_builds = "<BUILDS"
-word = @d_forget, @_builds_, 0
+word = @d_forget, @_create_, 0
 // FILL DOES COMPILE TIME
 char d_filldoes = "FILLDOES"
 word = @d_builds, @_filldoes_, 0
@@ -124,7 +124,7 @@ word = @d_troff, @_vlist_, 0
 // Internal variables
 //
 word vlist=@d_vlist
-word inptr, IIP, W
+word infunc, inptr, IIP, W
 //
 // State flags
 //
@@ -134,58 +134,167 @@ const exit_flag   = $80
 char state = 0
 char trace = 0
 //
-// Dictionary routines
+// Helper routines
 //
+def keyin#0
+  byte i
+
+  repeat
+    puts(" OK")
+    inptr = gets('\n'|$80)
+  until ^inptr
+  ^(inptr + ^inptr + 1) = 0 // NULL terminate
+  inptr++
+end
+def filein#0
+end
+def toknext#2
+  word tokptr
+  byte len
+
+  repeat
+    if !^inptr
+      infunc()#0
+    fin
+    while ^inptr == ' '
+      inptr++
+    loop
+    if ^inptr == '('
+      repeat
+        inptr++
+        if !^inptr
+          infunc()#0
+        fin
+      until ^inptr == ')'
+    fin
+    len = 0
+    while ^(inptr + len) > ' '
+      len++
+    loop
+  until len
+  tokptr = inptr
+  inptr  = inptr + len
+  return tokptr, len
+end
 //
 // Find match in dictionary
 //
-def find#1
-  word d
+def find(matchchars, matchlen)#1
+  word dentry
   byte len, i
 
-  inptr--
-  d = vlist
-  while d
-    len = ^d & len_mask
-    for i = 1 to len
-      if ^(inptr+i) <> ^(d+i)
-        break
+  matchchars--
+  dentry = vlist
+  while dentry
+    len = ^dentry & len_mask
+    if len == matchlen
+      for i = 1 to len
+        if ^(matchchars+i) <> ^(dentry+i)
+          break
+        fin
+      next
+      if i > len
+        //puts("[Found name = "); puts(dentry); puts("]\n")
+        return dentry
       fin
-    next
-    if i > len and ^(inptr+i) <= ' '
-      //puts("[Found name = "); puts(d); puts("]\n")
-      inptr = inptr + i
-      return d
     fin
-    d = *(d + len + 1)
+    dentry = *(dentry + len + 1)
   loop
   // Not found
-  inptr++
   return 0
 end
 //
 // Convert input into number
 //
-def isnum#2
+def isnum(numchars, numlen)#2
   word num, sign
+  byte numchar
 
   sign = 1
-  if ^inptr == '-'
+  if ^numchars == '-'
     sign = -1
-    inptr++
+    numchars++
+    numlen--
+    if numlen == 0
+      return 0, 0
+    fin
   fin
-  if ^inptr >= '0' and ^inptr <= '9'
-    num = 0
-    repeat
-      num = num * 10 + ^inptr - '0'
-      inptr++
-    until ^inptr < '0' or ^inptr > '9'
-    //if ^inptr <= ' '
-    //  puts("[Found number = "); puti(num); puts("]\n")
-    //fin
-    return num * sign, ^inptr <= ' '
+  num = 0
+  if ^numchars == '$'
+    numchars++
+    numlen--
+    if numlen == 0
+      return 0, 0
+    fin
+    while numlen
+      numchar = toupper(^numchars)
+      if numchar >= '0' and numchar <= '9'
+        num = num * 16 + numchar - '0'
+      elsif numchar >= 'A' and numchar <= 'F'
+        num = num * 16 + numchar - 'A' + 10
+      else
+        break
+      fin
+      numchars++
+      numlen--
+    loop
+  else
+    while numlen
+      numchar = ^numchars
+      if numchar < '0' or numchar > '9'
+        break
+      fin
+      num = num * 10 + numchar - '0'
+      numchars++
+      numlen--
+    loop
   fin
-  return 0, FALSE
+  //puts("[Found number = "); puti(num); puts("]\n")
+  return num * sign, numlen == 0
+end
+//
+// Execute code in CFA
+//
+def execword(dentry)#0
+  char l
+
+  if trace
+    l = ^dentry
+    ^dentry = l & len_mask
+    puts(": "); puts(dentry); putln
+    ^dentry = l
+  fin
+  W = _cfa_(dentry)
+  (*W)()#0
+end
+def execwords(wlist)#0
+  word prevIP
+
+  prevIP = IIP
+  IIP = wlist
+  while *IIP
+    execword(*IIP)
+    IIP = IIP + 2
+  loop
+  IIP = prevIP
+end
+//
+// Word entry routines
+//
+def _dovar_#1
+  return W + 2
+end
+def _docolon_#0
+  //puts("DOCOLON:\n")
+  execwords(W + 2)
+end
+def _pushPFA_#1
+  return W + 2
+end
+def _dodoes_(words)#0
+  //puts("DODOES:\n")
+  (@_pushPFA_)()#0 // Stack hacks
+  execwords(words)
 end
 //
 // Intrinsics
@@ -241,47 +350,6 @@ def _pfa_(dentry)#1
   l = ^dentry & len_mask
  return dentry + l + 5
 end
-//
-// Execute code in CFA
-//
-def execword(dentry)#0
-  char l
-
-  if trace
-    l = ^dentry
-    ^dentry = l & len_mask
-    puts(": "); puts(dentry); putln
-    ^dentry = l
-  fin
-  W = _cfa_(dentry)
-  (*W)()#0
-end
-def execwords(wlist)#0
-  word prevIP
-
-  prevIP = IIP
-  IIP = wlist
-  while *IIP
-    execword(*IIP)
-    IIP = IIP + 2
-  loop
-  IIP = prevIP
-end
-def _dovar_#1
-  return W + 2
-end
-def _docolon_#0
-  //puts("DOCOLON:\n")
-  execwords(W + 2)
-end
-def _pushPFA_#1
-  return W + 2
-end
-def _dodoes_(words)#0
-  //puts("DODOES:\n")
-  (@_pushPFA_)()#0 // Stack hacks
-  execwords(words)
-end
 def _filldoes_#0
   *(_cfa_(vlist)) = IIP + 4
 end
@@ -290,28 +358,22 @@ def _lit_#1
   return *IIP
 end
 def _create_#0
-  word bldptr, plist
+  word bldptr, plist, namechars, namelen
 
-  while ^inptr == ' '
-    inptr++
+  namechars, namelen = toknext
+  plist = vlist
+  vlist  = heapmark
+  ^vlist = namelen
+  bldptr = vlist + 1
+  while namelen
+    ^bldptr = ^namechars
+    bldptr++
+    namechars++
+    namelen--
   loop
-  if ^inptr > ' '
-    plist = vlist
-    vlist  = heapmark
-    ^vlist = 0
-    bldptr = vlist + 1
-    while ^inptr > ' '
-      ^bldptr = ^inptr
-      bldptr++
-      inptr++
-      ^vlist++
-    loop
-    *bldptr = plist;    bldptr = bldptr + 2
-    heapalloc(bldptr - vlist + 2)
-  fin
-end
-def _builds_#0
-  _create_
+  *bldptr = plist;
+  bldptr  = bldptr + 2
+  heapalloc(bldptr - vlist + 2)
 end
 def _does_#0
   *(heapalloc(2)) = @d_filldoes  
@@ -348,15 +410,12 @@ def _immediate_#0
   ^vlist = ^vlist | imm_flag
 end
 def _tick_#1
-  while ^inptr == ' '
-    inptr++
-  loop
-  return find
+  return find(toknext)
 end
 def _forget_#0
   word dentry
 
-  dentry = find
+  dentry = find(toknext)
   if dentry
     heaprelease(dentry)
   fin
@@ -368,28 +427,23 @@ def _show_#0
   word dentry, pfa, w
   char l, f
   
-  while ^inptr == ' '
-    inptr++
-  loop
-  if ^inptr > ' '
-    dentry = find
-    if dentry
-      if *_cfa_(dentry) == @_docolon_
-        pfa = _pfa_(dentry)
-      else
-        pfa = *_cfa_(dentry) + 10
-      fin
-      w = *pfa
-      while w
-        f = ^w
-        l = f & len_mask
-        ^w = l
-        puts("  "); puts(w); putln
-        ^w = f
-        pfa = pfa + 2
-        w = *pfa
-      loop
+  dentry = find(toknext)
+  if dentry
+    if *_cfa_(dentry) == @_docolon_
+      pfa = _pfa_(dentry)
+    else
+      pfa = *_cfa_(dentry) + 10
     fin
+    w = *pfa
+    while w
+      f = ^w
+      l = f & len_mask
+      ^w = l
+      puts("  "); puts(w); putln
+      ^w = f
+      pfa = pfa + 2
+      w = *pfa
+    loop
   fin
 end
 def _tron_#0
@@ -417,6 +471,8 @@ end
 //
 def _quit_#0
   word dentry, __drop, __isnum, __pset
+  word inchars
+  byte inlen, i
 
   __drop  = @_drop_
   __isnum = @isnum
@@ -427,47 +483,30 @@ def _quit_#0
   d_semi = d_semi | imm_flag
   d_does = d_does | imm_flag
   repeat
-    puts(" OK")
-    inptr = gets('\n'|$80)
-    if ^inptr
-      ^(inptr + ^inptr + 1) = 0
-      //
-      // Clear high bit of input buffer
-      //
-      for dentry = 1 to ^inptr
-        ^(inptr + dentry) = ^(inptr + dentry) & $7F
-      next
-      inptr++
-      repeat
-        while ^inptr == ' '
-          inptr++
-        loop
-        if ^inptr > ' '
-          dentry = find
-          if dentry
-            if (not state & comp_flag) or (^dentry & imm_flag) 
-              execword(dentry)
-            else
-              //puts("Compile "); puts(dentry); putln
-              _pset_(dentry)
-            fin
-          elsif not __isnum()#1
-            __drop()#0
-            puts("? No match\n")
-            ^inptr = 0
-            if state // Undo compilation state
-              heaprelease(vlist)
-              vlist = *_lfa_(vlist)
-              state = 0
-            fin
-          elsif state & comp_flag
-            _pset_(@d_lit)
-            __pset()#0 // Poke literal value into PFA
-          fin
-        fin
-      until ^inptr < ' '
+    inchars, inlen = toknext
+    dentry = find(inchars, inlen)
+    if dentry
+      if (not state & comp_flag) or (^dentry & imm_flag) 
+        execword(dentry)
+      else
+        _pset_(dentry)
+      fin
+    elsif not __isnum(inchars, inlen)#1
+      __drop()#0
+      puts("? No match\n")
+      ^inptr = 0
+      if state // Undo compilation state
+        heaprelease(vlist)
+        vlist = *_lfa_(vlist)
+        state = 0
+      fin
+    elsif state & comp_flag
+      _pset_(@d_lit)
+      __pset()#0 // Poke literal value into PFA
     fin
   until state & exit_flag
 end
+
+infunc = @keyin
 _quit_
 done
