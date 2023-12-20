@@ -26,8 +26,9 @@ predef _add_(a,b)#1, _sub_(a,b)#1, _mul_(a,b)#1, _div_(a,b)#1
 predef _cset_(a,b)#0, _cget_(a)#1, _wset_(a,b)#0, _wget_(a)#1
 predef _cfa_(a)#1, _lfa_(a)#1
 predef _create_#0, _dodoes_(words)#0, _filldoes_#0, _does_#0, _pset_(a)#0, _colon_#0, _semi_#0
-predef _var_(a)#0, _lit_#1, _tick_#1, _forget_#0
-predef _vlist_#0, _tron_#0, _troff_#0, _show_#0, _bye_#0
+predef _tors_(a)#0, _fromrs_#1, _toprs_#1
+predef _var_(a)#0, _const_(a)#0,_lit_#1, _tick_#1, _forget_#0
+predef _vlist_#0, _tron_#0, _troff_#0, _show_#0, _bye_#0, _abort_#0
 // DROP
 char d_drop = "DROP"
 word = 0, @_drop_, 0
@@ -61,11 +62,24 @@ word = @d_wset, @_cget_, 0
 // WORD SET
 char d_wget = "@"
 word = @d_cget, @_wget_, 0
+// TO RSTACK
+char d_torstk = ">R"
+word = @d_wget, @_tors_, 0
+// FROM RSTACK
+char d_fromrstk = "R>"
+word = @d_torstk, @_fromrs_, 0
+// TOP OF RSTACK
+char d_toprstk = "R@"
+word = @d_fromrstk, @_toprs_, 0
+// VARIABLE
 char d_var = "VARIABLE"
-word = @d_wget, @_var_, 0
+word = @d_toprstk, @_var_, 0
+// CONSTANT
+char d_const = "CONSTANT"
+word = @d_var, @_const_, 0
 // HERE
 char d_here = "HERE"
-word = @d_var, @heapmark, 0
+word = @d_const, @heapmark, 0
 // ALLOT
 char d_allot = "ALLOT"
 word = @d_here, @heapalloc, 0
@@ -123,8 +137,14 @@ word = @d_troff, @_vlist_, 0
 //
 // Internal variables
 //
-word vlist=@d_vlist
-word infunc, inptr, IIP, W
+word vlist = @d_vlist
+word startheap, infunc, inptr, IIP, W
+//
+// RSTACK
+//
+const RSTK_SIZE = 16
+byte RSP = RSTK_SIZE
+word RSTACK[RSTK_SIZE]
 //
 // State flags
 //
@@ -133,6 +153,10 @@ const build_flag  = $02
 const exit_flag   = $80
 char state = 0
 char trace = 0
+byte _reset_stacks = $A2, $FE // LDX #$FE
+byte               = $9A      // TXS
+byte _reset_estack = $A2, $10 // LDX ESTKSZ/2
+byte               = $60      // RTS
 //
 // Helper routines
 //
@@ -150,27 +174,32 @@ def filein#0
 end
 def toknext#2
   word tokptr
-  byte len
+  byte len, comment
 
+  comment = 0
   repeat
-    if !^inptr
-      infunc()#0
-    fin
-    while ^inptr == ' '
-      inptr++
-    loop
-    if ^inptr == '('
-      repeat
+    repeat
+      if !^inptr
+        infunc()#0
+      fin
+      while ^inptr and ^inptr <= ' ' // Skip whitespace
         inptr++
-        if !^inptr
-          infunc()#0
-        fin
-      until ^inptr == ')'
-    fin
+      loop
+    until ^inptr
     len = 0
-    while ^(inptr + len) > ' '
+    while ^(inptr + len) > ' ' // Tokenize characters
       len++
     loop
+    if len == 1 and ^inptr == '(' // Check for nested comment
+      comment++
+    fin
+    if comment
+      if len == 1 and ^inptr == ')' // Check for nested uncomment
+        comment--
+      fin
+      inptr = inptr + len
+      len   = 0
+    fin
   until len
   tokptr = inptr
   inptr  = inptr + len
@@ -258,6 +287,9 @@ end
 def execword(dentry)#0
   char l
 
+  if ^$C000 == $83 // CTRL-C
+    _abort_
+  fin
   if trace
     l = ^dentry
     ^dentry = l & len_mask
@@ -283,6 +315,9 @@ end
 //
 def _dovar_#1
   return W + 2
+end
+def _doconst_#1
+  return *(W + 2)
 end
 def _docolon_#0
   //puts("DOCOLON:\n")
@@ -350,6 +385,17 @@ def _pfa_(dentry)#1
   l = ^dentry & len_mask
  return dentry + l + 5
 end
+def _tors_(a)#0
+  RSP--
+  RSTACK[RSP] = a
+end
+def _fromrs_#1
+  RSP++
+  return RSTACK[RSP - 1]
+end
+def _toprs_#1
+  return RSTACK[RSP]
+end
 def _filldoes_#0
   *(_cfa_(vlist)) = IIP + 4
 end
@@ -376,7 +422,7 @@ def _create_#0
   heapalloc(bldptr - vlist + 2)
 end
 def _does_#0
-  *(heapalloc(2)) = @d_filldoes  
+  *(heapalloc(2)) = @d_filldoes
   *(heapalloc(2)) = 0
   // Build PLASMA bytecode routine
   ^(heapalloc(1)) = (@divmod)->0 // JSR INTERP
@@ -393,6 +439,11 @@ end
 def _var_(a)#0
   _create_
   *(_cfa_(vlist)) = @_dovar_
+  *(heapalloc(2)) = a
+end
+def _const_(a)#0
+  _create_
+  *(_cfa_(vlist)) = @_doconst_
   *(heapalloc(2)) = a
 end
 def _colon_#0
@@ -426,7 +477,7 @@ end
 def _show_#0
   word dentry, pfa, w
   char l, f
-  
+
   dentry = find(toknext)
   if dentry
     if *_cfa_(dentry) == @_docolon_
@@ -467,16 +518,37 @@ def _vlist_#0
   loop
 end
 //
+// Warm start
+//
+def _warmstart_#0
+  (@_reset_estack)()#0
+  RSP = RSTK_SIZE
+  ^inptr = 0
+  infunc = @keyin
+  if state // Undo compilation state
+    heaprelease(vlist)
+    vlist = *_lfa_(vlist)
+    state = 0
+  fin
+end
+//
+// Cold start
+//
+def _coldstart_#0
+  vlist = @d_vlist
+  state = 0
+  heaprelease(startheap)
+  _warmstart_
+end
+//
 // Quit and look for user input
 //
 def _quit_#0
-  word dentry, __drop, __isnum, __pset
+  word dentry, __isnum
   word inchars
   byte inlen, i
 
-  __drop  = @_drop_
   __isnum = @isnum
-  __pset  = @_pset_
   //
   // Set flags on words
   //
@@ -486,27 +558,31 @@ def _quit_#0
     inchars, inlen = toknext
     dentry = find(inchars, inlen)
     if dentry
-      if (not state & comp_flag) or (^dentry & imm_flag) 
+      if (not state & comp_flag) or (^dentry & imm_flag)
         execword(dentry)
       else
         _pset_(dentry)
       fin
     elsif not __isnum(inchars, inlen)#1
-      __drop()#0
+      _warmstart_
       puts("? No match\n")
-      ^inptr = 0
-      if state // Undo compilation state
-        heaprelease(vlist)
-        vlist = *_lfa_(vlist)
-        state = 0
-      fin
     elsif state & comp_flag
       _pset_(@d_lit)
-      __pset()#0 // Poke literal value into PFA
+      (*(@_pset_))()#0 // Poke literal value on stack into PFA
     fin
   until state & exit_flag
 end
+//
+// Abort
+//
+def _abort_#0
+  _warmstart_
+  puts("Abort\n")
+  _quit_
+end
 
-infunc = @keyin
+puts("PLFORTH WIP")
+startheap = heapmark
+_warmstart_
 _quit_
 done
