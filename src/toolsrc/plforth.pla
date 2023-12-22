@@ -21,10 +21,11 @@ const hidden_flag = $80
 //
 // Predefine instrinsics
 //
-predef _drop_(a)#0, _swap_(a,b)#2, _dup_(a)#2
+predef _drop_(a)#0, _swap_(a,b)#2, _dup_(a)#2, _over_(a,b,c)#4, _rot_(a,b,c)#3
 predef _add_(a,b)#1, _sub_(a,b)#1, _mul_(a,b)#1, _div_(a,b)#1
 predef _cset_(a,b)#0, _cget_(a)#1, _wset_(a,b)#0, _wget_(a)#1
 predef _cfa_(a)#1, _lfa_(a)#1
+predef _branch_#0, _branch0_(a)#0, _if_#0, _else_#0, _then_#0
 predef _create_#0, _dodoes_(words)#0, _filldoes_#0, _does_#0, _pset_(a)#0, _colon_#0, _semi_#0
 predef _tors_(a)#0, _fromrs_#1, _toprs_#1
 predef _var_(a)#0, _const_(a)#0,_lit_#1, _tick_#1, _forget_#0
@@ -38,9 +39,15 @@ word = @d_drop, @_swap_, 0
 // DUP
 char d_dup = "DUP"
 word = @d_swap, @_dup_, 0
+// OVER
+word d_over = "OVER"
+word = @d_dup, @_over_, 0
+// ROT
+word d_rot = "ROT"
+word = @d_over, @_rot_, 0
 // ADD
 char d_add = "+"
-word = @d_dup, @_add_, 0
+word = @d_rot, @_add_, 0
 // SUB
 char d_sub = "-"
 word = @d_add, @_sub_, 0
@@ -83,9 +90,24 @@ word = @d_const, @heapmark, 0
 // ALLOT
 char d_allot = "ALLOT"
 word = @d_here, @heapalloc, 0
+// BRANCH
+char d_branch = "(BRANCH)"
+word = @d_allot, @_branch_, 0
+// BRANCH IF 0
+char d_branch0 = "(BRANCH0)"
+word = @d_branch, @_branch0_, 0
+// IF
+char d_if = "IF"
+word = @d_branch0, @_if_, 0
+// ELSE
+char d_else = "ELSE"
+word = @d_if, @_else_, 0
+// THEN
+char d_then = "THEN"
+word = @d_else, @_then_, 0
 // FORGET
 char d_forget = "FORGET"
-word = @d_allot, @_forget_, 0
+word = @d_then, @_forget_, 0
 // BUILDS
 char d_builds = "<BUILDS"
 word = @d_forget, @_create_, 0
@@ -300,13 +322,14 @@ def execword(dentry)#0
   (*W)()#0
 end
 def execwords(wlist)#0
-  word prevIP
+  word prevIP, dentry
 
   prevIP = IIP
   IIP = wlist
   while *IIP
-    execword(*IIP)
+    dentry = *IIP
     IIP = IIP + 2
+    execword(dentry)
   loop
   IIP = prevIP
 end
@@ -342,6 +365,12 @@ def _swap_(a,b)#2
 end
 def _dup_(a)#2
   return a,a
+end
+def _over_(a,b,c)#4
+  return a,b,c,a
+end
+def _rot_(a,b,c)#3
+  return b,c,a
 end
 def _add_(a,b)#1
   return a+b
@@ -400,8 +429,11 @@ def _filldoes_#0
   *(_cfa_(vlist)) = IIP + 4
 end
 def _lit_#1
+  word lit
+
+  lit = *IIP
   IIP = IIP + 2
-  return *IIP
+  return lit
 end
 def _create_#0
   word bldptr, plist, namechars, namelen
@@ -450,6 +482,33 @@ def _colon_#0
   state = comp_flag
   _create_
   *(_cfa_(vlist)) = @_docolon_
+end
+def _branch_#0
+  IIP = *IIP
+end
+def _branch0_(a)#0
+  if a
+    IIP = IIP + 2
+  else
+    IIP = *IIP
+  fin
+end
+def _if_#0
+  *(heapalloc(2)) = @d_branch0
+  _tors_(heapmark)
+  *(heapalloc(2)) = 0
+end
+def _else_#0
+  word backref
+
+  backref = _fromrs_
+  *(heapalloc(2)) = @d_branch
+  _tors_(heapmark)
+  *(heapalloc(2)) = 0
+  *backref = heapmark
+end
+def _then_#0
+  *_fromrs_ = heapmark
 end
 def _semi_#0
   if state == comp_flag
@@ -544,16 +603,17 @@ end
 // Quit and look for user input
 //
 def _quit_#0
-  word dentry, __isnum
-  word inchars
+  word inchars, dentry
   byte inlen, i
 
-  __isnum = @isnum
   //
   // Set flags on words
   //
   d_semi = d_semi | imm_flag
   d_does = d_does | imm_flag
+  d_if   = d_if   | imm_flag
+  d_else = d_else | imm_flag
+  d_then = d_then | imm_flag
   repeat
     inchars, inlen = toknext
     dentry = find(inchars, inlen)
@@ -563,12 +623,12 @@ def _quit_#0
       else
         _pset_(dentry)
       fin
-    elsif not __isnum(inchars, inlen)#1
+    elsif not (@isnum)(inchars, inlen)#1
       _warmstart_
       puts("? No match\n")
     elsif state & comp_flag
       _pset_(@d_lit)
-      (*(@_pset_))()#0 // Poke literal value on stack into PFA
+      (@_pset_)()#0 // Poke literal value on stack into PFA
     fin
   until state & exit_flag
 end
@@ -581,7 +641,7 @@ def _abort_#0
   _quit_
 end
 
-puts("PLFORTH WIP")
+puts("PLFORTH WIP\n")
 startheap = heapmark
 _warmstart_
 _quit_
