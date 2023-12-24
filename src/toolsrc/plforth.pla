@@ -16,6 +16,7 @@ include "inc/cmdsys.plh"
 //
 // Mask and flags for dictionary entries
 //
+const inline_flag   = $10
 const imm_flag      = $20
 const componly_flag = $40
 const hidden_flag   = $80
@@ -24,9 +25,12 @@ const hidden_flag   = $80
 //
 predef _drop_(a)#0, _swap_(a,b)#2, _dup_(a)#2, _over_(a,b,c)#4, _rot_(a,b,c)#3
 predef _add_(a,b)#1, _sub_(a,b)#1, _mul_(a,b)#1, _div_(a,b)#1
+predef _neg_(a)#1, _and_(a,b)#1, _or_(a,b)#1, _not_(a)#1
 predef _cset_(a,b)#0, _cget_(a)#1, _wset_(a,b)#0, _wget_(a)#1
 predef _cfa_(a)#1, _lfa_(a)#1
+predef _eq_(a,b)#1, _gt_(a,b)#1, _lt_(a,b)#1
 predef _branch_#0, _branch0_(a)#0, _if_#0, _else_#0, _then_#0
+predef _do_#0, _doloop_#0, _loop_#0, _i_#1, _j_#1
 predef _create_#0, _dodoes_(words)#0, _filldoes_#0, _does_#0, _pset_(a)#0, _colon_#0, _semi_#0
 predef _tors_(a)#0, _fromrs_#1, _toprs_#1
 predef _var_(a)#0, _const_(a)#0,_lit_#1, _tick_#1, _forget_#0
@@ -67,11 +71,39 @@ word = @d_sub, @_mul_, 0
 char d_div = "/"
 byte = 0
 word = @d_mul, @_div_, 0
-// CHAR SET
+// NEG
+char d_neg = "NEG"
+byte = 0
+word = @d_div, @_neg_, 0
+// AND
+char d_and = "AND"
+byte = 0
+word = @d_neg, @_and_, 0
+// OR
+char d_or = "OR"
+byte = 0
+word = @d_and, @_or_, 0
+// NOT
+char d_not = "NOT"
+byte = 0
+word = @d_or, @_not_, 0
+// EQUALS
+char d_eq = "="
+byte = 0
+word = @d_not, @_eq_, 0
+// GREATER THAN
+char d_gt = ">"
+byte = 0
+word = @d_eq, @_gt_, 0
+// LESS THAN
+char d_lt = "<"
+byte = 0
+word = @d_gt, @_lt_, 0
+// CHAR PUT
 char d_cset = "C!"
 byte = 0
-word = @d_div, @_cset_, 0
-// WORD SET
+word = @d_lt, @_cset_, 0
+// WORD PUT
 char d_wset = "!"
 byte = 0
 word = @d_cset, @_wset_, 0
@@ -113,28 +145,48 @@ byte = 0
 word = @d_here, @heapalloc, 0
 // BRANCH
 char d_branch = "(BRANCH)"
-byte = 0
+byte = inline_flag
 word = @d_allot, @_branch_, 0
 // BRANCH IF 0
 char d_branch0 = "(BRANCH0)"
-byte = 0
+byte = inline_flag
 word = @d_branch, @_branch0_, 0
 // IF
 char d_if = "IF"
-byte = imm_flag
+byte = componly_flag | imm_flag
 word = @d_branch0, @_if_, 0
 // ELSE
 char d_else = "ELSE"
-byte = imm_flag
+byte = componly_flag | imm_flag
 word = @d_if, @_else_, 0
 // THEN
 char d_then = "THEN"
-byte = imm_flag
+byte = componly_flag | imm_flag
 word = @d_else, @_then_, 0
+// DO
+char d_do = "DO"
+byte = componly_flag | imm_flag
+word = @d_then, @_do_, 0
+// LOOP
+char d_doloop = "(DOLOOP)"
+byte = componly_flag | inline_flag
+word = @d_do, @_doloop_, 0
+// LOOP
+char d_loop = "LOOP"
+byte = componly_flag | imm_flag
+word = @d_doloop, @_loop_, 0
+// I
+char d_i = "I"
+byte = componly_flag
+word = @d_loop, @_toprs_, 0
+// J
+char d_j = "J"
+byte = componly_flag
+word = @d_i, @_j_, 0
 // FORGET
 char d_forget = "FORGET"
 byte = 0
-word = @d_then, @_forget_, 0
+word = @d_j, @_forget_, 0
 // BUILDS
 char d_builds = "<BUILDS"
 byte = imm_flag
@@ -169,7 +221,7 @@ byte = 0
 word = @d_semi, @_tick_, 0
 // LITERAL
 char d_lit = "LIT"
-byte = 0
+byte = inline_flag
 word = @d_tick, @_lit_, 0
 // PRINT TOS
 char d_prtos = "."
@@ -419,6 +471,27 @@ end
 def _div_(a,b)#1
   return a/b
 end
+def _neg_(a)#1
+  return -a
+end
+def _and_(a,b)#1
+  return a & b
+end
+def _or_(a,b)#1
+  return a | b
+end
+def _not_(a)#1
+  return ~a
+end
+def _eq_(a,b)#1
+  return a == b
+end
+def _gt_(a,b)#1
+  return a > b
+end
+def _lt_(a,b)#1
+  return a < b
+end
 def _cset_(a,b)#0
   ^b=a
 end
@@ -526,20 +599,45 @@ def _branch0_(a)#0
 end
 def _if_#0
   *(heapalloc(2)) = @d_branch0
-  _tors_(heapmark)
-  *(heapalloc(2)) = 0
+  _tors_(heapalloc(2))
 end
 def _else_#0
   word backref
 
   backref = _fromrs_
   *(heapalloc(2)) = @d_branch
-  _tors_(heapmark)
-  *(heapalloc(2)) = 0
+  _tors_(heapalloc(2))
   *backref = heapmark
 end
 def _then_#0
   *_fromrs_ = heapmark
+end
+def _do_#0
+  *(heapalloc(2)) = @d_torstk
+  *(heapalloc(2)) = @d_torstk
+  _tors_(heapmark)
+end
+def _doloop_#0
+  word count
+
+  count = _fromrs_
+  if count <> _toprs_
+    _tors_(count + 1)
+    IIP = *IIP
+  else
+    _fromrs_
+    IIP = IIP + 2
+  fin
+end
+def _loop_#0
+  *(heapalloc(2)) = @d_doloop
+  *(heapalloc(2)) = _fromrs_
+end
+def _i_#1
+  return RSTACK[RSP]
+end
+def _j_#1
+  return RSTACK[RSP + 2]
 end
 def _semi_#0
   *(heapalloc(2)) = 0
@@ -575,6 +673,9 @@ def _show_#0
     w = *pfa
     while w
       puts("  "); puts(w); putln
+      if ^_ffa_(w) & inline_flag
+        pfa = pfa + 2
+      fin
       pfa = pfa + 2
       w = *pfa
     loop
