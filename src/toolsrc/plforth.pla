@@ -1,5 +1,6 @@
 include "inc/cmdsys.plh"
 include "inc/fileio.plh"
+include "inc/args.plh"
 //
 // FORTH dictionary layout
 //
@@ -30,10 +31,11 @@ predef _cset_(a,b)#0, _cget_(a)#1, _wset_(a,b)#0, _wget_(a)#1
 predef _cfa_(a)#1, _lfa_(a)#1
 predef _eq_(a,b)#1, _gt_(a,b)#1, _lt_(a,b)#1
 predef _branch_#0, _branch0_(a)#0, _if_#0, _else_#0, _then_#0
-predef _do_#0, _doloop_#0, _loop_#0, _i_#1, _j_#1
+predef _do_#0, _doloop_#0, _leave_#0, _loop_#0, _j_#1
 predef _create_#0, _dodoes_(words)#0, _filldoes_#0, _does_#0, _pset_(a)#0, _colon_#0, _semi_#0
 predef _tors_(a)#0, _fromrs_#1, _toprs_#1
 predef _var_(a)#0, _const_(a)#0, _lit_#1, _tick_#1, _forget_#0
+predef _prstr_#0, _src_#0
 predef _vlist_#0, _tron_#0, _troff_#0, _show_#0, _bye_#0, _abort_#0
 // DROP
 char d_drop = "DROP"
@@ -167,10 +169,14 @@ word = @d_else, @_then_, 0
 char d_do = "DO"
 byte = componly_flag | imm_flag
 word = @d_then, @_do_, 0
+// LEAVE
+char d_leave = "LEAVE"
+byte = componly_flag
+word = @d_do, @_leave_, 0
 // LOOP
 char d_doloop = "(DOLOOP)"
 byte = componly_flag | inline_flag
-word = @d_do, @_doloop_, 0
+word = @d_leave, @_doloop_, 0
 // LOOP
 char d_loop = "LOOP"
 byte = componly_flag | imm_flag
@@ -235,10 +241,22 @@ word = @d_prtos, @puth, 0
 char d_emit = "EMIT"
 byte = 0
 word = @d_prtoshex, @putc, 0
+// CR
+char d_cr = "CR"
+byte = 0
+word = @d_emit, @putln, 0
+// PRINT STRING
+char d_prstr = ".\""
+byte = 0
+word = @d_cr, @_prstr_, 0
+// SOURCE FILE
+char d_prsrc = "SRC\""
+byte = 0
+word = @d_prstr, @_src_, 0
 // BYE
 char d_bye = "BYE"
 byte = 0
-word = @d_emit, @_bye_, 0
+word = @d_prsrc, @_bye_, 0
 // SHOW DEFINITION
 char d_show = "SHOW"
 byte = 0
@@ -259,7 +277,10 @@ word = @d_troff, @_vlist_, 0
 // Internal variables
 //
 word vlist = @d_vlist
-word startheap, infunc, inptr, IIP, W
+word startheap, arg, infunc, inref, IIP, W
+const INBUF_SIZE = 80
+char inbuf[INBUF_SIZE + 2]
+word inptr = @inbuf
 //
 // RSTACK
 //
@@ -274,10 +295,15 @@ const comp_flag  = $02
 byte state   = 0
 byte trace   = 0
 byte aborted = 0
-byte _reset_stacks = $A2, $FE // LDX #$FE
-byte               = $9A      // TXS
-byte _reset_estack = $A2, $10 // LDX ESTKSZ/2
-byte               = $60      // RTS
+byte _get_hwstack  = $EA           // TXA
+byte               = $EA           // TSX
+byte               = $EA, $EA, $EA // STX *+2
+byte               = $EA           // TAX
+byte               = $60           // RTS
+byte _reset_stacks = $A2, $FE      // LDX #$FE
+byte               = $9A           // TXS
+byte _reset_estack = $A2, $10      // LDX ESTKSZ/2
+byte               = $60           // RTS
 //
 // Helper routines
 //
@@ -296,6 +322,16 @@ def keyin#0
   inptr++
 end
 def filein#0
+  inbuf = fileio:read(inref, @inbuf + 1, INBUF_SIZE)
+  if inbuf
+    inbuf[inbuf + 1] = 0 // NULL terminate
+    inptr            = @inbuf + 1
+  else
+    fileio:close(inref)
+    inref = 0
+    infunc = @keyin
+    keyin
+  fin
 end
 def toknext#2
   word tokptr
@@ -329,6 +365,23 @@ def toknext#2
   tokptr = inptr
   inptr  = inptr + len
   return tokptr, len
+end
+def delimit(a)#2
+  word delim
+  byte len
+
+  if ^inptr == ' '
+    inptr++
+  fin
+  delim = inptr
+  while ^inptr and ^inptr <> a // Find delimiter
+    inptr++
+  loop
+  len = inptr - delim
+  if ^inptr == a
+    inptr++
+  fin
+  return delim, len
 end
 //
 // Find match in dictionary
@@ -631,6 +684,9 @@ def _do_#0
   *(heapalloc(2)) = @d_torstk
   _tors_(heapmark)
 end
+def _leave_#0
+  RSTACK[RSP] = RSTACK[RSP + 1] - 1
+end
 def _doloop_#0
   word count
 
@@ -647,9 +703,6 @@ end
 def _loop_#0
   *(heapalloc(2)) = @d_doloop
   *(heapalloc(2)) = _fromrs_
-end
-def _i_#1
-  return RSTACK[RSP]
 end
 def _j_#1
   return RSTACK[RSP + 2]
@@ -675,7 +728,7 @@ end
 def _bye_#0
   byte params[7]
 
-  if aborted // If aborted then must exit with 'BYE' processing
+  if aborted // then must exit with 'BYE' processing
     params.0 = 4
     params.1 = 0
     params:2 = 0
@@ -684,6 +737,33 @@ def _bye_#0
     syscall($65, @params)
   fin
   state = state | exit_flag
+end
+def _prstr_#0
+  word str
+  byte len
+
+  str, len = delimit('"')
+  str--
+  ^str = len
+  puts(str)
+end
+def _src_#0
+  word filename
+  byte len
+
+  filename, len = delimit('"')
+  filename--
+  ^filename = len
+  inref = fileio:open(filename)
+  if inref
+    fileio:newline(inref, $7F, $0D)
+    infunc = @filein
+    inptr  = @inbuf
+    inbuf  = 0
+  else
+    puts("Failed to open "); puts(filename); putln
+    _abort_
+  fin
 end
 def _show_#0
   word dentry, pfa, w
@@ -726,13 +806,18 @@ end
 //
 def _warmstart_#0
   (@_reset_estack)()#0
-  RSP = RSTK_SIZE
-  ^inptr = 0
+  RSP    = RSTK_SIZE
+  inbuf  = 0
+  inptr  = @inbuf
   infunc = @keyin
   if state // Undo compilation state
     heaprelease(vlist)
     vlist = *_lfa_(vlist)
     state = 0
+  fin
+  if inref
+    fileio:close(inref)
+    inref = 0
   fin
 end
 //
@@ -776,6 +861,7 @@ end
 // Abort
 //
 def _abort_#0
+  (@_reset_stacks)()#0
   _warmstart_
   puts("Abort\n")
   aborted = 1
@@ -785,5 +871,7 @@ end
 puts("PLFORTH WIP\n")
 startheap = heapmark
 _warmstart_
+inptr = argNext(argFirst)
+if ^inptr; inptr++; _src_; fin
 _quit_
 done
