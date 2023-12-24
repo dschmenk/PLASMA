@@ -1,5 +1,5 @@
 include "inc/cmdsys.plh"
-
+include "inc/fileio.plh"
 //
 // FORTH dictionary layout
 //
@@ -269,10 +269,11 @@ word RSTACK[RSTK_SIZE]
 //
 // State flags
 //
-const exit_flag = $01
-const comp_flag = $02
-char state = 0
-char trace = 0
+const exit_flag  = $01
+const comp_flag  = $02
+byte state   = 0
+byte trace   = 0
+byte aborted = 0
 byte _reset_stacks = $A2, $FE // LDX #$FE
 byte               = $9A      // TXS
 byte _reset_estack = $A2, $10 // LDX ESTKSZ/2
@@ -284,8 +285,12 @@ def keyin#0
   byte i
 
   repeat
-    puts(" OK")
-    inptr = gets('\n'|$80)
+    if state & comp_flag
+      inptr = gets('>'|$80)
+    else
+      puts(" OK")
+      inptr = gets('\n'|$80)
+    fin
   until ^inptr
   ^(inptr + ^inptr + 1) = 0 // NULL terminate
   inptr++
@@ -621,6 +626,7 @@ def _then_#0
   *_fromrs_ = heapmark
 end
 def _do_#0
+  *(heapalloc(2)) = @d_swap
   *(heapalloc(2)) = @d_torstk
   *(heapalloc(2)) = @d_torstk
   _tors_(heapmark)
@@ -629,8 +635,9 @@ def _doloop_#0
   word count
 
   count = _fromrs_
+  count++
   if count <> _toprs_
-    _tors_(count + 1)
+    _tors_(count)
     IIP = *IIP
   else
     _fromrs_
@@ -649,7 +656,7 @@ def _j_#1
 end
 def _semi_#0
   *(heapalloc(2)) = 0
-  state = 0
+  state = state & ~comp_flag
 end
 def _immediate_#0
   ^_ffa_(vlist) = ^_ffa_(vlist) | imm_flag
@@ -666,6 +673,16 @@ def _forget_#0
   fin
 end
 def _bye_#0
+  byte params[7]
+
+  if aborted // If aborted then must exit with 'BYE' processing
+    params.0 = 4
+    params.1 = 0
+    params:2 = 0
+    params.4 = 0
+    params:5 = 0
+    syscall($65, @params)
+  fin
   state = state | exit_flag
 end
 def _show_#0
@@ -761,6 +778,7 @@ end
 def _abort_#0
   _warmstart_
   puts("Abort\n")
+  aborted = 1
   _quit_
 end
 
