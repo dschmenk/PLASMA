@@ -32,7 +32,7 @@ predef _cfa_(a)#1, _lfa_(a)#1
 predef _eq_(a,b)#1, _gt_(a,b)#1, _lt_(a,b)#1
 predef _branch_#0, _branch0_(a)#0, _if_#0, _else_#0, _then_#0
 predef _do_#0, _doloop_#0, _leave_#0, _loop_#0, _j_#1
-predef _create_#0, _builds_#0, _dodoes_(words)#0, _filldoes_#0, _does_#0
+predef _create_#0, _dodoes_#0, _filldoes_#0, _does_#0
 predef _pset_(a)#0, _colon_#0, _semi_#0
 predef _tors_(a)#0, _fromrs_#1, _toprs_#1
 predef _var_(a)#0, _const_(a)#0, _lit_#1, _slit_#1, _tick_#1, _forget_#0
@@ -243,10 +243,14 @@ word = @d_lit, @puti, 0
 char d_prtoshex = ".$"
 byte = 0
 word = @d_prtos, @puth, 0
+// PRINT TOS HEX
+char d_prtosbyte = ".C$"
+byte = 0
+word = @d_prtoshex, @putb, 0
 // EMIT
 char d_emit = "EMIT"
 byte = 0
-word = @d_prtoshex, @putc, 0
+word = @d_prtosbyte, @putc, 0
 // CR
 char d_cr = "CR"
 byte = 0
@@ -635,6 +639,9 @@ def _slit_#1
   IIP  = IIP + ^IIP + 1
   return slit
 end
+def _pset_(a)#0
+  *(heapalloc(2)) = a
+end
 def _create_#0
   word bldptr, plist, namechars, namelen
 
@@ -653,53 +660,47 @@ def _create_#0
   bldptr++
   *bldptr = plist; // Link ptr
   bldptr  = bldptr + 2
+  *bldptr = 0;     // Code ptr
+  bldptr  = bldptr + 2
+  *bldptr = 0;     // Parameters
   heapalloc(bldptr - vlist + 2) // Code ptr
 end
-def _filldoes_#0
-  *(_cfa_(vlist)) = IIP + 2
-end
-def _dodoes_(words)#0
-  (@push)(W + 2)#0 // Stack hacks
-  execwords(words)
-end
-def _does_#0
-  *(heapalloc(2)) = @d_filldoes
-  *(heapalloc(2)) = 0
-  // Build PLASMA bytecode routine
-  ^(heapalloc(1)) = (@divmod)->0 // JSR INTERP
-  *(heapalloc(2)) = (@divmod)=>1
-  ^(heapalloc(1)) = $2C          // CONSTANT WORD
-  *(heapalloc(2)) = heapmark + 6
-  ^(heapalloc(1)) = $54          // CALL _dodoes_
-  *(heapalloc(2)) = @_dodoes_
-  ^(heapalloc(1)) = $5C          // RET
-end
-def _pset_(a)#0
-  *(heapalloc(2)) = a
-end
 def _dovar_#1
-  return W + 2
+  return W + 2 // Address of PFA
 end
 def _var_(a)#0
   _create_
-  *(heapalloc(2)) = a
   *(_cfa_(vlist)) = @_dovar_
+  *(_pfa_(vlist)) = a
 end
 def _doconst_#1
-  return *(W + 2)
+  return *(W + 2) // PFA contents
 end
 def _const_(a)#0
   _create_
-  *(heapalloc(2)) = a
   *(_cfa_(vlist)) = @_doconst_
+  *(_pfa_(vlist)) = a
 end
 def _docolon_#0
-  execwords(W + 2)
+  execwords(W + 2) // Exec PFA
 end
 def _colon_#0
   state = comp_flag
   _create_
   *(_cfa_(vlist)) = @_docolon_
+  heaprelease(_pfa_(vlist))
+end
+def _dodoes_#0
+  (@push)(W + 4)#0 // Address of PFA + 2
+  execwords(*(W + 2)) // Exec PFA ptr
+end
+def _filldoes_#0
+  *(_cfa_(vlist)) = @_dodoes_
+  *(_pfa_(vlist)) = IIP + 2
+end
+def _does_#0
+  *(heapalloc(2)) = @d_filldoes
+  *(heapalloc(2)) = 0
 end
 def _semi_#0
   *(heapalloc(2)) = 0
@@ -845,7 +846,7 @@ def _show_#0
     if *_cfa_(dentry) == @_docolon_
       pfa = _pfa_(dentry)
     else
-      pfa = *_cfa_(dentry) + 10
+      pfa = *_pfa_(dentry)
     fin
     w = *pfa
     while w
