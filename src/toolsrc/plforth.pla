@@ -6,12 +6,12 @@ include "inc/args.plh"
 //
 //  bytes   usage
 //  -----   -----
-// [1]     name length and flags
-// [1..31] name string
-// [1]     FFA (flag field address)
-// [2]     LFA (link field address)
-// [2]     CFA (code field address)
-// [2]     PFA (param field address)
+// [1]      name length
+// [1..255] name
+// [1]      FFA (flag field address)
+// [2]      LFA (link field address)
+// [2]      CFA (code field address)
+// [2..]    PFA (param field address)
 //
 
 //
@@ -353,7 +353,7 @@ def keyin#0
 
   repeat
     if state & comp_flag
-      inptr = gets('>'|$80)
+      inptr = gets('>'|$80) // Compilation continuation prompt
     else
       puts(" OK")
       inptr = gets('\n'|$80)
@@ -368,8 +368,8 @@ def filein#0
     inbuf[inbuf + 1] = 0 // NULL terminate
     inptr            = @inbuf + 1
   else
-    fileio:close(inref)
-    inref = 0
+    fileio:close(inref) // EOF - switch back to keyboard input
+    inref  = 0
     infunc = @keyin
     keyin
   fin
@@ -441,7 +441,6 @@ def find(matchchars, matchlen)#1
         fin
       next
       if i > ^dentry
-        //puts("[Found name = "); puts(dentry); puts("]\n")
         return dentry
       fin
     fin
@@ -496,7 +495,6 @@ def isnum(numchars, numlen)#2
       numlen--
     loop
   fin
-  //puts("[Found number = "); puti(num); puts("]\n")
   return num * sign, numlen == 0
 end
 //
@@ -545,7 +543,7 @@ def execwords_nocheck(wlist)#0
   loop
   IIP = prevIP
 end
-def push(a)#1
+def push(a)#1 // Stack hack - call as (@push)(a)#0 to leave a on eval stack
   return a
 end
 //
@@ -708,7 +706,7 @@ def _colon_#0
   state = comp_flag
   _create_
   *(_cfa_(vlist)) = @_docolon_
-  heaprelease(_pfa_(vlist))
+  heaprelease(_pfa_(vlist)) // Backup to compile into PFA
 end
 def _dodoes_#0
   (@push)(W + 4)#0 // Address of PFA + 2
@@ -914,7 +912,7 @@ def _vlist_#0
   d = vlist
   while d
     puts(d); puts("  ")
-    d = *(d + ^d + 2)
+    d = *_lfa_(d)
   loop
 end
 //
@@ -985,9 +983,9 @@ end
 
 puts("PLFORTH WIP\n")
 startheap = heapmark
-_estkl = ^(@syscall + 1) // Hack to fill in parameter stack locations
-_estkh = ^(@syscall + 3)
-execwords = @execwords_nocheck
+_estkl    = ^(@syscall + 1) // Hack to fill in parameter stack locations
+_estkh    = ^(@syscall + 3)
+execwords = @execwords_nocheck // Faster, no checking execution
 _warmstart_
 inptr = argNext(argFirst)
 if ^inptr; inptr++; _src_; fin
