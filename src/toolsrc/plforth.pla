@@ -37,7 +37,7 @@ predef _pset_(a)#0, _colon_#0, _semi_#0
 predef _tors_(a)#0, _fromrs_#1, _toprs_#1
 predef _var_(a)#0, _const_(a)#0, _lit_#1, _slit_#1, _tick_#1, _forget_#0
 predef _str_#0, _prstr_#0, _src_#0
-predef _vlist_#0, _tron_#0, _troff_#0
+predef _vlist_#0, _tron_#0, _troff_#0, _checkon_#0, _checkoff_#0
 predef _show_#0, _showstack_#0, _bye_#0, _abort_#0
 // DROP
 char d_drop = "DROP"
@@ -295,15 +295,23 @@ word = @d_showstack, @_tron_, 0
 char d_troff = "TROFF"
 byte = 0
 word = @d_tron, @_troff_, 0
+// CHECK ON
+char d_checkon = "CHKON"
+byte = 0
+word = @d_troff, @_checkon_, 0
+// CHECK OFF
+char d_checkoff = "CHKOFF"
+byte = 0
+word = @d_checkon, @_checkoff_, 0
 // LIST VOCAB
 char d_vlist = "VLIST"
 byte = 0
-word = @d_troff, @_vlist_, 0
+word = @d_checkoff, @_vlist_, 0
 //
 // Internal variables
 //
 word vlist = @d_vlist
-word startheap, arg, infunc, inref, IIP, W
+word startheap, arg, infunc, inref, execwords, IIP, W
 const INBUF_SIZE = 80
 char inbuf[INBUF_SIZE + 2]
 word inptr = @inbuf
@@ -513,15 +521,27 @@ def execword(dentry)#0
     _abort_
   fin
 end
-def execwords(wlist)#0
+def execwords_check(wlist)#0
   word prevIP, dentry
 
   prevIP = IIP
-  IIP = wlist
+  IIP    = wlist
   while *IIP
     dentry = *IIP
     IIP    = IIP + 2
     execword(dentry)
+  loop
+  IIP = prevIP
+end
+def execwords_nocheck(wlist)#0
+  word prevIP
+
+  prevIP = IIP
+  IIP    = wlist
+  while *IIP
+    W   = _cfa_(*IIP)
+    IIP = IIP + 2
+    (*W)()#0
   loop
   IIP = prevIP
 end
@@ -682,7 +702,7 @@ def _const_(a)#0
   *(_pfa_(vlist)) = a
 end
 def _docolon_#0
-  execwords(W + 2) // Exec PFA
+  execwords(W + 2)#0 // Exec PFA
 end
 def _colon_#0
   state = comp_flag
@@ -692,7 +712,7 @@ def _colon_#0
 end
 def _dodoes_#0
   (@push)(W + 4)#0 // Address of PFA + 2
-  execwords(*(W + 2)) // Exec PFA ptr
+  execwords(*(W + 2))#0 // Exec PFA ptr
 end
 def _filldoes_#0
   *(_cfa_(vlist)) = @_dodoes_
@@ -882,6 +902,12 @@ end
 def _troff_#0
   trace = 0
 end
+def _checkon_#0
+  execwords = @execwords_check
+end
+def _checkoff_#0
+  execwords = @execwords_nocheck
+end
 def _vlist_#0
   word d
 
@@ -961,6 +987,7 @@ puts("PLFORTH WIP\n")
 startheap = heapmark
 _estkl = ^(@syscall + 1) // Hack to fill in parameter stack locations
 _estkh = ^(@syscall + 3)
+execwords = @execwords_nocheck
 _warmstart_
 inptr = argNext(argFirst)
 if ^inptr; inptr++; _src_; fin
