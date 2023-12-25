@@ -32,10 +32,11 @@ predef _cfa_(a)#1, _lfa_(a)#1
 predef _eq_(a,b)#1, _gt_(a,b)#1, _lt_(a,b)#1
 predef _branch_#0, _branch0_(a)#0, _if_#0, _else_#0, _then_#0
 predef _do_#0, _doloop_#0, _leave_#0, _loop_#0, _j_#1
-predef _create_#0, _dodoes_(words)#0, _filldoes_#0, _does_#0, _pset_(a)#0, _colon_#0, _semi_#0
+predef _create_#0, _builds_#0, _dodoes_(words)#0, _filldoes_#0, _does_#0
+predef _pset_(a)#0, _colon_#0, _semi_#0
 predef _tors_(a)#0, _fromrs_#1, _toprs_#1
-predef _var_(a)#0, _const_(a)#0, _lit_#1, _tick_#1, _forget_#0
-predef _prstr_#0, _src_#0
+predef _var_(a)#0, _const_(a)#0, _lit_#1, _slit_#1, _tick_#1, _forget_#0
+predef _str_#0, _prstr_#0, _src_#0
 predef _vlist_#0, _tron_#0, _troff_#0
 predef _show_#0, _showstack_#0, _bye_#0, _abort_#0
 // DROP
@@ -200,14 +201,14 @@ byte = 0
 word = @d_j, @_forget_, 0
 // BUILDS
 char d_builds = "<BUILDS"
-byte = imm_flag
+byte = 0
 word = @d_forget, @_create_, 0
 // FILL DOES COMPILE TIME
-char d_filldoes = "FILLDOES"
+char d_filldoes = "(FILLDOES)"
 byte = 0
 word = @d_builds, @_filldoes_, 0
 // DO DOES RUN TIME
-char d_dodoes = "DODOES>"
+char d_dodoes = "(DODOES)"
 byte = 0
 word = @d_filldoes, @_dodoes_, 0
 // DOES
@@ -230,7 +231,7 @@ word = @d_colon, @_semi_, 0
 char d_tick = "'"
 byte = 0
 word = @d_semi, @_tick_, 0
-// LITERAL
+// LITERAL NUMBER
 char d_lit = "LIT"
 byte = inline_flag
 word = @d_tick, @_lit_, 0
@@ -250,10 +251,22 @@ word = @d_prtoshex, @putc, 0
 char d_cr = "CR"
 byte = 0
 word = @d_emit, @putln, 0
+// STRING
+char d_str = "\""
+byte = imm_flag
+word = @d_cr, @_str_, 0
+// LITERAL STRING
+char d_slit = "SLIT"
+byte = inline_flag
+word = @d_str, @_slit_, 0
+// COMPILED PRINT STRING
+char d_doprstr = "(.\")"
+byte = 0
+word = @d_slit, @puts, 0
 // PRINT STRING
 char d_prstr = ".\""
-byte = 0
-word = @d_cr, @_prstr_, 0
+byte = imm_flag
+word = @d_doprstr, @_prstr_, 0
 // SOURCE FILE
 char d_prsrc = "SRC\""
 byte = 0
@@ -508,24 +521,8 @@ def execwords(wlist)#0
   loop
   IIP = prevIP
 end
-//
-// Word entry routines
-//
-def _dovar_#1
-  return W + 2
-end
-def _doconst_#1
-  return *(W + 2)
-end
-def _docolon_#0
-  execwords(W + 2)
-end
-def _pushPFA_#1
-  return W + 2
-end
-def _dodoes_(words)#0
-  (@_pushPFA_)()#0 // Stack hacks
-  execwords(words)
+def push(a)#1
+  return a
 end
 //
 // Intrinsics
@@ -624,15 +621,19 @@ end
 def _toprs_#1
   return RSTACK[RSP]
 end
-def _filldoes_#0
-  *(_cfa_(vlist)) = IIP + 4
-end
 def _lit_#1
   word lit
 
   lit = *IIP
   IIP = IIP + 2
   return lit
+end
+def _slit_#1
+  word slit
+
+  slit = IIP
+  IIP  = IIP + ^IIP + 1
+  return slit
 end
 def _create_#0
   word bldptr, plist, namechars, namelen
@@ -652,7 +653,14 @@ def _create_#0
   bldptr++
   *bldptr = plist; // Link ptr
   bldptr  = bldptr + 2
-  heapalloc(bldptr - vlist + 2)
+  heapalloc(bldptr - vlist + 2) // Code ptr
+end
+def _filldoes_#0
+  *(_cfa_(vlist)) = IIP + 2
+end
+def _dodoes_(words)#0
+  (@push)(W + 2)#0 // Stack hacks
+  execwords(words)
 end
 def _does_#0
   *(heapalloc(2)) = @d_filldoes
@@ -669,20 +677,36 @@ end
 def _pset_(a)#0
   *(heapalloc(2)) = a
 end
+def _dovar_#1
+  return W + 2
+end
 def _var_(a)#0
   _create_
-  *(_cfa_(vlist)) = @_dovar_
   *(heapalloc(2)) = a
+  *(_cfa_(vlist)) = @_dovar_
+end
+def _doconst_#1
+  return *(W + 2)
 end
 def _const_(a)#0
   _create_
-  *(_cfa_(vlist)) = @_doconst_
   *(heapalloc(2)) = a
+  *(_cfa_(vlist)) = @_doconst_
+end
+def _docolon_#0
+  execwords(W + 2)
 end
 def _colon_#0
   state = comp_flag
   _create_
   *(_cfa_(vlist)) = @_docolon_
+end
+def _semi_#0
+  *(heapalloc(2)) = 0
+  state = 0
+end
+def _immediate_#0
+  ^_ffa_(vlist) = ^_ffa_(vlist) | imm_flag
 end
 def _branch_#0
   IIP = *IIP
@@ -738,13 +762,6 @@ end
 def _j_#1
   return RSTACK[RSP + 2]
 end
-def _semi_#0
-  *(heapalloc(2)) = 0
-  state = state & ~comp_flag
-end
-def _immediate_#0
-  ^_ffa_(vlist) = ^_ffa_(vlist) | imm_flag
-end
 def _tick_#1
   return find(toknext)
 end
@@ -770,6 +787,23 @@ def _bye_#0
   fin
   state = state | exit_flag
 end
+def _str_#0
+  word str, dict
+  byte len
+
+  str, len = delimit('"')
+  str--
+  ^str = len
+  len++
+  if state & comp_flag
+    *(heapalloc(2)) = @d_slit
+  fin
+  dict = heapalloc(len)
+  memcpy(dict, str, len)
+  if not state & comp_flag
+    (@push)(dict)#0
+  fin
+end
 def _prstr_#0
   word str
   byte len
@@ -777,7 +811,14 @@ def _prstr_#0
   str, len = delimit('"')
   str--
   ^str = len
-  puts(str)
+  if state & comp_flag
+    len++
+    *(heapalloc(2)) = @d_slit
+    memcpy(heapalloc(len), str, len)
+    *(heapalloc(2)) = @d_doprstr
+  else
+    puts(str)
+  fin
 end
 def _src_#0
   word filename
@@ -808,10 +849,18 @@ def _show_#0
     fin
     w = *pfa
     while w
-      puts("  "); puts(w); putln
+      puts("  "); puts(w)
       if ^_ffa_(w) & inline_flag
         pfa = pfa + 2
+        putc('=')
+        if *_cfa_(w) == @_slit_
+          puts(pfa)
+          pfa = pfa + ^pfa - 1
+        else
+          puti(*pfa)
+        fin
       fin
+      putln
       pfa = pfa + 2
       w = *pfa
     loop
