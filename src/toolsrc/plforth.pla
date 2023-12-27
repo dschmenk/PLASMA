@@ -1,6 +1,7 @@
 include "inc/cmdsys.plh"
-include "inc/fileio.plh"
 include "inc/args.plh"
+include "inc/fileio.plh"
+include "inc/longjmp.plh"
 //
 // FORTH dictionary layout
 //
@@ -30,7 +31,7 @@ predef _drop_(a)#0, _swap_(a,b)#2, _dup_(a)#2, _over_(a,b,c)#4, _rot_(a,b,c)#3
 predef _add_(a,b)#1, _sub_(a,b)#1, _mul_(a,b)#1, _div_(a,b)#1
 predef _neg_(a)#1, _and_(a,b)#1, _or_(a,b)#1, _xor_(a,b)#1, _not_(a)#1
 predef _cset_(a,b)#0, _cget_(a)#1, _wset_(a,b)#0, _wget_(a)#1
-predef _cfa_(a)#1, _lfa_(a)#1
+predef _ffa_(a)#1, _lfa_(a)#1, _cfa_(a)#1, _pfa_(a)#1
 predef _eq_(a,b)#1, _gt_(a,b)#1, _lt_(a,b)#1
 predef _branch_#0, _branch0_(a)#0, _if_#0, _else_#0, _then_#0
 predef _do_#0, _doloop_#0, _leave_#0, _loop_#0, _j_#1
@@ -40,7 +41,8 @@ predef _tors_(a)#0, _fromrs_#1, _toprs_#1
 predef _var_(a)#0, _const_(a)#0, _lit_#1, _slit_#1, _tick_#1, _forget_#0
 predef _str_#0, _prstr_#0, _src_#0
 predef _vlist_#0, _tron_#0, _troff_#0, _itc_#0, _pbc_#0
-predef _show_#0, _showstack_#0, _bye_#0, _abort_#0
+predef _show_#0, _showstack_#0, _showrstack_#0
+predef _cont_#0, _quit_#0, _bye_#0, _abort_#0
 // DROP
 char d_drop = "DROP"
 byte = inline_flag
@@ -281,10 +283,18 @@ word = @d_doprstr, @_prstr_, 0
 char d_prsrc = "SRC\""
 byte = 0
 word = @d_prstr, @_src_, 0
+// CONT
+char d_cont = "CONT"
+byte = 0
+word = @d_prsrc, @_cont_, 0
+// QUIT
+char d_quit = "QUIT"
+byte = 0
+word = @d_cont, @_quit_, 0
 // BYE
 char d_bye = "BYE"
 byte = 0
-word = @d_prsrc, @_bye_, 0
+word = @d_quit, @_bye_, 0
 // SHOW DEFINITION
 char d_show = "SHOW"
 byte = 0
@@ -293,10 +303,14 @@ word = @d_bye, @_show_, 0
 char d_showstack = "SHOWSTACK"
 byte = 0
 word = @d_show, @_showstack_, 0
+// SHOW RSTACK
+char d_showrstack = "SHOWRSTACK"
+byte = 0
+word = @d_showstack, @_showrstack_, 0
 // TRACE ON
 char d_tron = "TRON"
 byte = 0
-word = @d_showstack, @_tron_, 0
+word = @d_showrstack, @_tron_, 0
 // TRACE OFF
 char d_troff = "TROFF"
 byte = 0
@@ -317,9 +331,10 @@ word = @d_pbc, @_vlist_, 0
 // Internal variables
 //
 word vlist = @d_vlist
-word startheap, arg, infunc, inref, IIP, W
+word startheap, arg, infunc, inref, IIP, W, exit
 const INBUF_SIZE = 80
 char inbuf[INBUF_SIZE + 2]
+const keyinbuf = $1FF
 word inptr = @inbuf
 //
 // RSTACK
@@ -331,8 +346,8 @@ word RSTACK[RSTK_SIZE]
 // State flags
 //
 const exit_flag     = $01
-const comp_itc_flag = $02
-const comp_pbc_flag = $04
+const comp_itc_flag = $10
+const comp_pbc_flag = $20
 const comp_flag     = comp_itc_flag | comp_pbc_flag
 //
 // Mode and state
@@ -340,6 +355,7 @@ const comp_flag     = comp_itc_flag | comp_pbc_flag
 byte comp_mode = comp_itc_flag
 byte state     = 0
 byte trace     = 0
+byte brk       = 0
 byte aborted   = 0
 byte _get_estack   = $8A           // TXA
 byte               = $49, $FF      // EOR #$FF
@@ -360,6 +376,11 @@ byte               = $60           // RTS
 //
 // Helper routines
 //
+predef doinput#0
+
+//
+// Input routines
+//
 def keyin#0
   byte i
 
@@ -367,7 +388,11 @@ def keyin#0
     if state & comp_flag
       inptr = gets('>'|$80) // Compilation continuation prompt
     else
-      puts(" OK")
+      if brk
+        puts(" BRK("); puti(brk); putc(')')
+      else
+        puts(" OK")
+      fin
       inptr = gets('\n'|$80)
     fin
   until ^inptr
@@ -513,9 +538,26 @@ end
 // Execute code in CFA
 //
 def execword(dentry)#0
+  word brk_infn, brk_inptr, brk_iip
+  byte brk_state
+
   if ^$C000 == $83 // CTRL-C
     ^$C010 // Clear KB strobe
-    _abort_
+    brk++
+    brk_state = state
+    brk_iip   = IIP
+    brk_infn  = infunc
+    brk_inptr = inptr
+    state  = 0
+    infunc = @keyin
+    inptr  = keyinbuf
+    ^inptr = 0
+    doinput
+    state  = brk_state
+    IIP    = brk_iip
+    infunc = brk_infn
+    inptr  = brk_inptr
+    brk--
   fin
   if ^$C000 == $94 // CTRL-T
     ^$C010 // Clear KB strobe
@@ -553,7 +595,90 @@ end
 def pfillb(a)#0
   *(heapalloc(1)) = a
 end
+//
+// Warm start
+//
+def warmstart#0
+  (@_reset_estack)()#0
+  brk    = 0
+  RSP    = RSTK_SIZE
+  infunc = @keyin
+  inptr  = keyinbuf
+  ^inptr = 0
+  if state & comp_flag // Undo compilation state
+    heaprelease(vlist)
+    vlist = *_lfa_(vlist)
+    state = 0
+  fin
+  if inref
+    fileio:close(inref)
+    inref = 0
+  fin
+end
+//
+// Cold start
+//
+def coldstart#0
+  vlist = @d_vlist
+  state = 0
+  heaprelease(startheap)
+  warmstart
+end
+def doinput#0
+  word inchars, dentry, value
+  byte inlen, valid
 
+  //
+  // Set flags on words
+  //
+  repeat
+    inchars, inlen = toknext
+    dentry = find(inchars, inlen)
+    if dentry
+      if (not state & comp_flag) or (^_ffa_(dentry) & imm_flag)
+        execword(dentry)
+      elsif state & comp_itc_flag
+        pfillw(dentry)
+      else // comp_pbc_flag
+        if ^_ffa_(dentry) & itc_flag // Check if calling ITC word
+          pfillb($2C)    // CONSTANT WORD
+          pfillw(dentry) // Pointer to dictionary entry
+          pfillb($54)    // CALL execword
+          pfillw(@execword)
+        elsif ^_ffa_(dentry) & inline_flag // inline bytecode
+          pfillb(^_pfa_(dentry))
+        else
+          pfillb($54) // CALL CFA directly
+          pfillw(*_cfa_(dentry))
+        fin
+      fin
+    else
+      value, valid = isnum(inchars, inlen)
+      if not valid
+        warmstart
+        puts("? No match\n")
+      else
+        if state & comp_flag
+          if state & comp_itc_flag
+            pfillw(@d_lit)
+            pfillw(value) // Poke literal value into PFA
+          else // comp_pbc_flag
+            if value >= 0 and value <= 15
+              pfillb(value << 1) // CONSTANT NIBBLE
+            elsif value == -1
+              pfillb($20) // CONSTANT MINUS_ONE
+            else
+              pfillb($2C) // CONSTANT WORD
+              pfillw(value) // Poke literal value into PFA
+            fin
+          fin
+        else
+          (@push)(value)#0
+        fin
+      fin
+    fin
+  until state & exit_flag
+end
 //
 // Intrinsics
 //
@@ -776,7 +901,7 @@ def _semi_#0
   elsif state & comp_pbc_flag
     pfillb($5C) // RET
   fin
-  state = 0
+  state = state & ~comp_flag
 end
 def _immediate_#0
   ^_ffa_(vlist) = ^_ffa_(vlist) | imm_flag
@@ -884,18 +1009,12 @@ def _forget_#0
     heaprelease(dentry)
   fin
 end
-def _bye_#0
-  byte params[7]
-
-  if aborted // then must exit with 'BYE' processing
-    params.0 = 4
-    params.1 = 0
-    params:2 = 0
-    params.4 = 0
-    params:5 = 0
-    syscall($65, @params)
+def _cont_#0
+  if brk
+    state = exit_flag
+  else
+    putc('?')
   fin
-  state = state | exit_flag
 end
 def _str_#0
   word str
@@ -993,6 +1112,15 @@ def _showstack_#0
     puti(val); putc(' ')
   next
 end
+def _showrstack_#0
+  byte depth
+
+  depth = RSTK_SIZE - 1
+  while depth >= RSP
+    puti(RSTACK[depth]); putc(' ')
+    depth--
+  loop
+end
 def _tron_#0
   trace = 1
 end
@@ -1015,107 +1143,47 @@ def _vlist_#0
   loop
 end
 //
-// Warm start
-//
-def _warmstart_#0
-  (@_reset_estack)()#0
-  RSP    = RSTK_SIZE
-  inbuf  = 0
-  inptr  = @inbuf
-  infunc = @keyin
-  if state // Undo compilation state
-    heaprelease(vlist)
-    vlist = *_lfa_(vlist)
-    state = 0
-  fin
-  if inref
-    fileio:close(inref)
-    inref = 0
-  fin
-end
-//
-// Cold start
-//
-def _coldstart_#0
-  vlist = @d_vlist
-  state = 0
-  heaprelease(startheap)
-  _warmstart_
-end
-//
 // Quit and look for user input
 //
 def _quit_#0
-  word inchars, dentry, value
-  byte inlen, valid
-
-  //
-  // Set flags on words
-  //
-  repeat
-    inchars, inlen = toknext
-    dentry = find(inchars, inlen)
-    if dentry
-      if (not state & comp_flag) or (^_ffa_(dentry) & imm_flag)
-        execword(dentry)
-      elsif state & comp_itc_flag
-        pfillw(dentry)
-      else // comp_pbc_flag
-        if ^_ffa_(dentry) & itc_flag // Check if calling ITC word
-          pfillb($2C)    // CONSTANT WORD
-          pfillw(dentry) // Pointer to dictionary entry
-          pfillb($54)    // CALL execword
-          pfillw(@execword)
-        elsif ^_ffa_(dentry) & inline_flag // inline bytecode
-          pfillb(^_pfa_(dentry))
-        else
-          pfillb($54) // CALL CFA directly
-          pfillw(*_cfa_(dentry))
-        fin
-      fin
-    else
-      value, valid = isnum(inchars, inlen)
-      if not valid
-        _warmstart_
-        puts("? No match\n")
-      else
-        if state & comp_flag
-          if state & comp_itc_flag
-            pfillw(@d_lit)
-            pfillw(value) // Poke literal value into PFA
-          else // comp_pbc_flag
-            if value >= 0 and value <= 15
-              pfillb(value << 1) // CONSTANT NIBBLE
-            elsif value == -1
-              pfillb($20) // CONSTANT MINUS_ONE
-            else
-              pfillb($2C) // CONSTANT WORD
-              pfillw(value) // Poke literal value into PFA
-            fin
-          fin
-        else
-          (@push)(value)#0
-        fin
-      fin
-    fin
-  until state & exit_flag
+  warmstart
+  throw(exit, FALSE)
 end
 //
 // Abort
 //
 def _abort_#0
-  _warmstart_
   puts("Abort\n")
-  aborted = 1
+  //aborted = 1
   _quit_
+end
+//
+// Leave FORTH
+//
+def _bye_#0
+  byte params[7]
+
+  throw(exit, TRUE)
+  if aborted // then must exit with 'BYE' processing
+    params.0 = 4
+    params.1 = 0
+    params:2 = 0
+    params.4 = 0
+    params:5 = 0
+    syscall($65, @params)
+  fin
+  state = state | exit_flag
 end
 
 puts("PLFORTH WIP\n")
 startheap = heapmark
 _estkl    = ^(@syscall + 1) // Hack to fill in parameter stack locations
 _estkh    = ^(@syscall + 3)
-_warmstart_
+warmstart
 inptr = argNext(argFirst)
-if ^inptr; inptr++; _src_; fin
-_quit_
+exit  = heapalloc(t_except)
+if not except(exit)
+  if ^inptr; inptr++; _src_; fin
+  doinput
+fin
 done
