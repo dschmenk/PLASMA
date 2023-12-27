@@ -17,6 +17,8 @@ include "inc/args.plh"
 //
 // Mask and flags for dictionary entries
 //
+const param_flag    = $04
+const itc_flag      = $08
 const inline_flag   = $10
 const imm_flag      = $20
 const componly_flag = $40
@@ -32,25 +34,25 @@ predef _cfa_(a)#1, _lfa_(a)#1
 predef _eq_(a,b)#1, _gt_(a,b)#1, _lt_(a,b)#1
 predef _branch_#0, _branch0_(a)#0, _if_#0, _else_#0, _then_#0
 predef _do_#0, _doloop_#0, _leave_#0, _loop_#0, _j_#1
-predef _create_#0, _dodoes_#0, _filldoes_#0, _does_#0
-predef _pset_(a)#0, _colon_#0, _semi_#0
+predef _bldcreate_#0, _builds_#0, _dodoes_#0, _filldoes_#0, _does_#0
+predef pfillw(a)#0, pfillb(a)#0, _colon_#0, _semi_#0
 predef _tors_(a)#0, _fromrs_#1, _toprs_#1
 predef _var_(a)#0, _const_(a)#0, _lit_#1, _slit_#1, _tick_#1, _forget_#0
 predef _str_#0, _prstr_#0, _src_#0
-predef _vlist_#0, _tron_#0, _troff_#0, _checkon_#0, _checkoff_#0
+predef _vlist_#0, _tron_#0, _troff_#0, _itc_#0, _pbc_#0
 predef _show_#0, _showstack_#0, _bye_#0, _abort_#0
 // DROP
 char d_drop = "DROP"
-byte = 0
-word = 0, @_drop_, 0
+byte = inline_flag
+word = 0, @_drop_, $30
 // SWAP
 char d_swap = "SWAP"
-byte = 0
+byte = inline_flag
 word = @d_drop, @_swap_, 0
 // DUP
 char d_dup = "DUP"
-byte = 0
-word = @d_swap, @_dup_, 0
+byte = inline_flag
+word = @d_swap, @_dup_, $34
 // OVER
 word d_over = "OVER"
 byte = 0
@@ -61,68 +63,68 @@ byte = 0
 word = @d_over, @_rot_, 0
 // ADD
 char d_add = "+"
-byte = 0
-word = @d_rot, @_add_, 0
+byte = inline_flag
+word = @d_rot, @_add_, $82
 // SUB
 char d_sub = "-"
-byte = 0
-word = @d_add, @_sub_, 0
+byte = inline_flag
+word = @d_add, @_sub_, $84
 // MUL
 char d_mul = "*"
-byte = 0
-word = @d_sub, @_mul_, 0
+byte = inline_flag
+word = @d_sub, @_mul_, $86
 // DIV
 char d_div = "/"
-byte = 0
-word = @d_mul, @_div_, 0
+byte = inline_flag
+word = @d_mul, @_div_, $88
 // NEG
 char d_neg = "NEG"
-byte = 0
-word = @d_div, @_neg_, 0
+byte = inline_flag
+word = @d_div, @_neg_, $90
 // AND
 char d_and = "AND"
-byte = 0
-word = @d_neg, @_and_, 0
+byte = inline_flag
+word = @d_neg, @_and_, $94
 // OR
 char d_or = "OR"
-byte = 0
-word = @d_and, @_or_, 0
+byte = inline_flag
+word = @d_and, @_or_, $96
 // XOR
 char d_xor = "XOR"
-byte = 0
-word = @d_or, @_xor_, 0
+byte = inline_flag
+word = @d_or, @_xor_, $98
 // NOT
 char d_not = "NOT"
-byte = 0
-word = @d_xor, @_not_, 0
+byte = inline_flag
+word = @d_xor, @_not_, $92
 // EQUALS
 char d_eq = "="
-byte = 0
-word = @d_not, @_eq_, 0
+byte = inline_flag
+word = @d_not, @_eq_, $40
 // GREATER THAN
 char d_gt = ">"
-byte = 0
-word = @d_eq, @_gt_, 0
+byte = inline_flag
+word = @d_eq, @_gt_, $44
 // LESS THAN
 char d_lt = "<"
-byte = 0
-word = @d_gt, @_lt_, 0
+byte = inline_flag
+word = @d_gt, @_lt_, $46
 // CHAR PUT
 char d_cset = "C!"
-byte = 0
-word = @d_lt, @_cset_, 0
+byte = inline_flag
+word = @d_lt, @_cset_, $70
 // WORD PUT
 char d_wset = "!"
-byte = 0
-word = @d_cset, @_wset_, 0
+byte = inline_flag
+word = @d_cset, @_wset_, $72
 // CHAR GET
 char d_cget = "C@"
-byte = 0
-word = @d_wset, @_cget_, 0
+byte = inline_flag
+word = @d_wset, @_cget_, $60
 // WORD SET
 char d_wget = "@"
-byte = 0
-word = @d_cget, @_wget_, 0
+byte = inline_flag
+word = @d_cget, @_wget_, $62
 // TO RSTACK
 char d_torstk = ">R"
 byte = 0
@@ -153,11 +155,11 @@ byte = 0
 word = @d_here, @heapalloc, 0
 // BRANCH
 char d_branch = "(BRANCH)"
-byte = inline_flag
+byte = param_flag
 word = @d_allot, @_branch_, 0
 // BRANCH IF 0
 char d_branch0 = "(BRANCH0)"
-byte = inline_flag
+byte = param_flag
 word = @d_branch, @_branch0_, 0
 // IF
 char d_if = "IF"
@@ -181,7 +183,7 @@ byte = componly_flag
 word = @d_do, @_leave_, 0
 // LOOP
 char d_doloop = "(DOLOOP)"
-byte = componly_flag | inline_flag
+byte = param_flag
 word = @d_leave, @_doloop_, 0
 // LOOP
 char d_loop = "LOOP"
@@ -199,10 +201,14 @@ word = @d_i, @_j_, 0
 char d_forget = "FORGET"
 byte = 0
 word = @d_j, @_forget_, 0
+// CREATE
+char d_create = "(CREATE)"
+byte = 0
+word = @d_forget, @_bldcreate_, 0
 // BUILDS
 char d_builds = "<BUILDS"
-byte = 0
-word = @d_forget, @_create_, 0
+byte = imm_flag
+word = @d_create, @_builds_, 0
 // FILL DOES COMPILE TIME
 char d_filldoes = "(FILLDOES)"
 byte = 0
@@ -218,7 +224,7 @@ word = @d_dodoes, @_does_, 0
 // COMMA
 char d_comma = ","
 byte = 0
-word = @d_does, @_pset_, 0
+word = @d_does, @pfillw, 0
 // COLON
 char d_colon = ":"
 byte = 0
@@ -233,7 +239,7 @@ byte = 0
 word = @d_semi, @_tick_, 0
 // LITERAL NUMBER
 char d_lit = "LIT"
-byte = inline_flag
+byte = param_flag
 word = @d_tick, @_lit_, 0
 // PRINT TOS
 char d_prtos = "."
@@ -261,7 +267,7 @@ byte = imm_flag
 word = @d_cr, @_str_, 0
 // LITERAL STRING
 char d_slit = "SLIT"
-byte = inline_flag
+byte = param_flag
 word = @d_str, @_slit_, 0
 // COMPILED PRINT STRING
 char d_doprstr = "(.\")"
@@ -295,23 +301,23 @@ word = @d_showstack, @_tron_, 0
 char d_troff = "TROFF"
 byte = 0
 word = @d_tron, @_troff_, 0
-// CHECK ON
-char d_checkon = "CHKON"
+//  COMPILE USING ITC
+char d_itc = "ITC"
 byte = 0
-word = @d_troff, @_checkon_, 0
-// CHECK OFF
-char d_checkoff = "CHKOFF"
+word = @d_troff, @_itc_, 0
+// COMPILE USING PLASMA BYTECODES
+char d_pbc = "PBC"
 byte = 0
-word = @d_checkon, @_checkoff_, 0
+word = @d_itc, @_pbc_, 0
 // LIST VOCAB
 char d_vlist = "VLIST"
 byte = 0
-word = @d_checkoff, @_vlist_, 0
+word = @d_pbc, @_vlist_, 0
 //
 // Internal variables
 //
 word vlist = @d_vlist
-word startheap, arg, infunc, inref, execwords, IIP, W
+word startheap, arg, infunc, inref, IIP, W
 const INBUF_SIZE = 80
 char inbuf[INBUF_SIZE + 2]
 word inptr = @inbuf
@@ -324,11 +330,17 @@ word RSTACK[RSTK_SIZE]
 //
 // State flags
 //
-const exit_flag  = $01
-const comp_flag  = $02
-byte state   = 0
-byte trace   = 0
-byte aborted = 0
+const exit_flag     = $01
+const comp_itc_flag = $02
+const comp_pbc_flag = $04
+const comp_flag     = comp_itc_flag | comp_pbc_flag
+//
+// Mode and state
+//
+byte comp_mode = comp_itc_flag
+byte state     = 0
+byte trace     = 0
+byte aborted   = 0
 byte _get_estack   = $8A           // TXA
 byte               = $49, $FF      // EOR #$FF
 byte               = $38           // SEC
@@ -510,7 +522,7 @@ def execword(dentry)#0
     trace = not trace
   fin
   if trace
-    _showstack_; puts(": "); puts(dentry); putln
+    puts(" [ "); _showstack_; puts("] "); puts(dentry); putln
   fin
   W = _cfa_(dentry)
   (*W)()#0
@@ -519,33 +531,29 @@ def execword(dentry)#0
     _abort_
   fin
 end
-def execwords_check(wlist)#0
+def execwords(wlist)#0
   word prevIP, dentry
 
   prevIP = IIP
   IIP    = wlist
-  while *IIP
-    dentry = *IIP
+  dentry = *IIP
+  while dentry
     IIP    = IIP + 2
     execword(dentry)
-  loop
-  IIP = prevIP
-end
-def execwords_nocheck(wlist)#0
-  word prevIP
-
-  prevIP = IIP
-  IIP    = wlist
-  while *IIP
-    W   = _cfa_(*IIP)
-    IIP = IIP + 2
-    (*W)()#0
+    dentry = *IIP
   loop
   IIP = prevIP
 end
 def push(a)#1 // Stack hack - call as (@push)(a)#0 to leave a on eval stack
   return a
 end
+def pfillw(a)#0
+  *(heapalloc(2)) = a
+end
+def pfillb(a)#0
+  *(heapalloc(1)) = a
+end
+
 //
 // Intrinsics
 //
@@ -657,10 +665,7 @@ def _slit_#1
   IIP  = IIP + ^IIP + 1
   return slit
 end
-def _pset_(a)#0
-  *(heapalloc(2)) = a
-end
-def _create_#0
+def _create_(flags)#0
   word bldptr, plist, namechars, namelen
 
   namechars, namelen = toknext
@@ -674,54 +679,103 @@ def _create_#0
     namechars++
     namelen--
   loop
-  ^bldptr = 0      // Flags
+  ^bldptr = flags  // Flags
   bldptr++
   *bldptr = plist; // Link ptr
   bldptr  = bldptr + 2
   *bldptr = 0;     // Code ptr
-  bldptr  = bldptr + 2
-  *bldptr = 0;     // Parameters
-  heapalloc(bldptr - vlist + 2) // Code ptr
+  heapalloc(bldptr - vlist + 2)
 end
-def _dovar_#1
-  return W + 2 // Address of PFA
+def _bldcreate_#0
+  _create_(itc_flag)
+  pfillw(0) // Reserve space fpr PFA
 end
 def _var_(a)#0
-  _create_
-  *(_cfa_(vlist)) = @_dovar_
-  *(_pfa_(vlist)) = a
-end
-def _doconst_#1
-  return *(W + 2) // PFA contents
+  _create_(0)
+  *(_cfa_(vlist)) = _pfa_(vlist)
+  pfillb(^(@divmod)) // Hack - get VM entry vector from divmod
+  pfillw(*(@divmod + 1))
+  pfillb($2C) // CONSTANT WORD
+  pfillw(heapmark + 3)
+  pfillb($5C) // RET
+  pfillw(a)   // Variable storage
 end
 def _const_(a)#0
-  _create_
-  *(_cfa_(vlist)) = @_doconst_
-  *(_pfa_(vlist)) = a
+  _create_(0)
+  *(_cfa_(vlist)) = _pfa_(vlist)
+  pfillb(^(@divmod)) // Hack - get VM entry vector from divmod
+  pfillw(*(@divmod + 1))
+  pfillb($2C) // CONSTANT WORD
+  pfillw(a)
+  pfillb($5C) // RET
 end
 def _docolon_#0
-  execwords(W + 2)#0 // Exec PFA
+  execwords(W + 2) // Exec PFA
 end
 def _colon_#0
-  state = comp_flag
-  _create_
-  *(_cfa_(vlist)) = @_docolon_
-  heaprelease(_pfa_(vlist)) // Backup to compile into PFA
+  state = comp_mode
+  if state & comp_itc_flag
+    _create_(itc_flag)
+    *(_cfa_(vlist)) = @_docolon_
+  else // comp_pbc_flag
+    _create_(0)
+    *(_cfa_(vlist)) = _pfa_(vlist)
+    pfillb(^(@divmod)) // Hack - get VM entry vector from divmod
+    pfillw(*(@divmod + 1))
+  fin
+end
+def _compbuilds_#0
+  *(_cfa_(vlist)) = _pfa_(vlist)
+  pfillb(^(@divmod))   // Hack - get VM entry vector from divmod
+  pfillw(*(@divmod + 1))
+  pfillb($2C)          // CONSTANT WORD
+  pfillw(heapmark + 6) // Pointer to PFA storage
+  pfillb($54)          // CALL
+  pfillw(0)            // Filled in later during _compdoes_
+  pfillb($5C)          // RET
+end
+def _builds_#0
+  if state & comp_itc_flag
+    pfillw(@d_create)
+  else // comp_pbc_flag
+    pfillb($54) // CALL
+    pfillw(@_create_)
+    pfillb($54) // CALL
+    pfillw(@_compbuilds_)
+  fin
 end
 def _dodoes_#0
-  (@push)(W + 4)#0 // Address of PFA + 2
-  execwords(*(W + 2))#0 // Exec PFA ptr
+  (@push)(W + 4)#0    // Pointer to PFA storage
+  execwords(*(W + 2)) // Exec PFA ptr
 end
 def _filldoes_#0
   *(_cfa_(vlist)) = @_dodoes_
   *(_pfa_(vlist)) = IIP + 2
 end
+def _compdoes_(does)#0
+  *(_pfa_(vlist) + 7) = does // Fill in DOES code address
+end
 def _does_#0
-  *(heapalloc(2)) = @d_filldoes
-  *(heapalloc(2)) = 0
+  if state & comp_itc_flag
+    pfillw(@d_filldoes)
+    pfillw(0)
+  else // comp_pbc_flag
+    pfillb($2C)          // CONSTANT WORD
+    pfillw(heapmark + 6) // Pointer to DOES code
+    pfillb($54)          // CALL
+    pfillw(@_compdoes_)  // Fills in code address reserved in _compbuilds_
+    pfillb($5C)          // RET
+    // End of BUILDS, beginning of DOES code
+    pfillb(^(@divmod))   // Hack - get VM entry vector from divmod
+    pfillw(*(@divmod + 1))
+  fin
 end
 def _semi_#0
-  *(heapalloc(2)) = 0
+  if state & comp_itc_flag
+    pfillw(0)
+  elsif state & comp_pbc_flag
+    pfillb($5C) // RET
+  fin
   state = 0
 end
 def _immediate_#0
@@ -738,45 +792,82 @@ def _branch0_(a)#0
   fin
 end
 def _if_#0
-  *(heapalloc(2)) = @d_branch0
-  _tors_(heapalloc(2))
+  if state & comp_itc_flag
+    pfillw(@d_branch0)
+  else // comp_pbc_flag
+    pfillb($4C) // BRFLS
+  fin
+  _tors_(heapalloc(2)) // Save backfill address
 end
 def _else_#0
   word backref
 
   backref = _fromrs_
-  *(heapalloc(2)) = @d_branch
-  _tors_(heapalloc(2))
-  *backref = heapmark
+  if state & comp_itc_flag
+    pfillw(@d_branch)
+    _tors_(heapalloc(2))
+    *backref = heapmark
+  else // comp_pbc_flag
+    pfillb($50) // BRNCH
+    _tors_(heapalloc(2))
+    *backref = heapmark - backref // Relative branch
+  fin
 end
 def _then_#0
-  *_fromrs_ = heapmark
+  word backref
+
+  backref = _fromrs_
+  if state & comp_itc_flag
+    *_fromrs_ = heapmark
+  else // comp_pbc_flag
+    *backref = heapmark - backref // Relative branch
+  fin
 end
 def _do_#0
-  *(heapalloc(2)) = @d_swap
-  *(heapalloc(2)) = @d_torstk
-  *(heapalloc(2)) = @d_torstk
+  if state & comp_itc_flag
+    pfillw(@d_swap)
+    pfillw(@d_torstk)
+    pfillw(@d_torstk)
+  else // comp_pbc_flag
+    pfillb($54) // CALL
+    pfillw(@_swap_)
+    pfillb($54) // CALL
+    pfillw(@_tors_)
+    pfillb($54) // CALL
+    pfillw(@_tors_)
+  fin
   _tors_(heapmark)
 end
 def _leave_#0
   RSTACK[RSP] = RSTACK[RSP + 1] - 1
 end
 def _doloop_#0
-  word count
-
-  count = _fromrs_
-  count++
-  if count <> _toprs_
-    _tors_(count)
-    IIP = *IIP
-  else
-    _fromrs_
+  RSTACK[RSP]++
+  if RSTACK[RSP] == RSTACK[RSP + 1]
+    RSP = RSP + 2
     IIP = IIP + 2
+  else
+    IIP = *IIP
   fin
 end
+def _dopbcloop_#1
+  RSTACK[RSP]++
+  if RSTACK[RSP] == RSTACK[RSP + 1]
+    RSP = RSP + 2
+    return TRUE
+  fin
+  return FALSE
+end
 def _loop_#0
-  *(heapalloc(2)) = @d_doloop
-  *(heapalloc(2)) = _fromrs_
+  if state & comp_itc_flag
+    pfillw(@d_doloop)
+    pfillw(_fromrs_)
+  else // comp_pbc_flag
+    pfillb($54) // CALL
+    pfillw(@_dopbcloop_)
+    pfillb($4C) // BRFLS
+    pfillw(_fromrs_ - heapmark)
+  fin
 end
 def _j_#1
   return RSTACK[RSP + 2]
@@ -807,35 +898,38 @@ def _bye_#0
   state = state | exit_flag
 end
 def _str_#0
-  word str, dict
-  byte len
-
-  str, len = delimit('"')
-  str--
-  ^str = len
-  len++
-  if state & comp_flag
-    *(heapalloc(2)) = @d_slit
-  fin
-  dict = heapalloc(len)
-  memcpy(dict, str, len)
-  if not state & comp_flag
-    (@push)(dict)#0
-  fin
-end
-def _prstr_#0
   word str
   byte len
 
   str, len = delimit('"')
   str--
   ^str = len
-  if state & comp_flag
-    len++
-    *(heapalloc(2)) = @d_slit
-    memcpy(heapalloc(len), str, len)
-    *(heapalloc(2)) = @d_doprstr
+  len++
+  if state & comp_itc_flag
+    pfillw(@d_slit)
+  elsif state & comp_pbc_flag
+    pfillb($2E) // CONSTANT STRING
   else
+    (@push)(heapmark)#0
+  fin
+  memcpy(heapalloc(len), str, len)
+end
+def _prstr_#0
+  word str
+  byte len
+
+  if state & comp_flag
+    _str_
+    if state & comp_itc_flag
+      pfillw(@d_doprstr)
+    else // comp_pbc_flag
+      pfillb($54) // CALL
+      pfillw(*_cfa_(@d_doprstr))
+    fin
+  else
+    str, len = delimit('"')
+    str--
+    ^str = len
     puts(str)
   fin
 end
@@ -861,28 +955,33 @@ def _show_#0
 
   dentry = find(toknext)
   if dentry
-    if *_cfa_(dentry) == @_docolon_
-      pfa = _pfa_(dentry)
-    else
-      pfa = *_pfa_(dentry)
-    fin
-    w = *pfa
-    while w
-      puts("  "); puts(w)
-      if ^_ffa_(w) & inline_flag
-        pfa = pfa + 2
-        putc('=')
-        if *_cfa_(w) == @_slit_
-          puts(pfa)
-          pfa = pfa + ^pfa - 1
-        else
-          puti(*pfa)
-        fin
+    if ^_ffa_(dentry) & itc_flag // Only show ITC words
+      if *_cfa_(dentry) == @_docolon_
+        pfa = _pfa_(dentry)
+      else // @d_dodoes
+        pfa = *_pfa_(dentry)
       fin
-      putln
-      pfa = pfa + 2
       w = *pfa
-    loop
+      while w
+        puts("  ")
+        if ^_ffa_(w) & param_flag
+          pfa = pfa + 2
+        fin
+        if w == @d_slit
+          putc('"')
+          puts(pfa)
+          putc('"')
+          pfa = pfa + ^pfa - 1
+        elsif w == @d_lit
+          puti(*pfa)
+        else
+          puts(w)
+        fin
+        putln
+        pfa = pfa + 2
+        w = *pfa
+      loop
+    fin
   fin
 end
 def _showstack_#0
@@ -900,11 +999,11 @@ end
 def _troff_#0
   trace = 0
 end
-def _checkon_#0
-  execwords = @execwords_check
+def _itc_#0
+  comp_mode = comp_itc_flag
 end
-def _checkoff_#0
-  execwords = @execwords_nocheck
+def _pbc_#0
+  comp_mode = comp_pbc_flag
 end
 def _vlist_#0
   word d
@@ -947,8 +1046,8 @@ end
 // Quit and look for user input
 //
 def _quit_#0
-  word inchars, dentry
-  byte inlen, i
+  word inchars, dentry, value
+  byte inlen, valid
 
   //
   // Set flags on words
@@ -959,15 +1058,45 @@ def _quit_#0
     if dentry
       if (not state & comp_flag) or (^_ffa_(dentry) & imm_flag)
         execword(dentry)
-      else
-        _pset_(dentry)
+      elsif state & comp_itc_flag
+        pfillw(dentry)
+      else // comp_pbc_flag
+        if ^_ffa_(dentry) & itc_flag // Check if calling ITC word
+          pfillb($2C)    // CONSTANT WORD
+          pfillw(dentry) // Pointer to dictionary entry
+          pfillb($54)    // CALL execword
+          pfillw(@execword)
+        elsif ^_ffa_(dentry) & inline_flag // inline bytecode
+          pfillb(^_pfa_(dentry))
+        else
+          pfillb($54) // CALL CFA directly
+          pfillw(*_cfa_(dentry))
+        fin
       fin
-    elsif not (@isnum)(inchars, inlen)#1
-      _warmstart_
-      puts("? No match\n")
-    elsif state & comp_flag
-      _pset_(@d_lit)
-      (@_pset_)()#0 // Poke literal value on stack into PFA
+    else
+      value, valid = isnum(inchars, inlen)
+      if not valid
+        _warmstart_
+        puts("? No match\n")
+      else
+        if state & comp_flag
+          if state & comp_itc_flag
+            pfillw(@d_lit)
+            pfillw(value) // Poke literal value into PFA
+          else // comp_pbc_flag
+            if value >= 0 and value <= 15
+              pfillb(value << 1) // CONSTANT NIBBLE
+            elsif value == -1
+              pfillb($20) // CONSTANT MINUS_ONE
+            else
+              pfillb($2C) // CONSTANT WORD
+              pfillw(value) // Poke literal value into PFA
+            fin
+          fin
+        else
+          (@push)(value)#0
+        fin
+      fin
     fin
   until state & exit_flag
 end
@@ -985,7 +1114,6 @@ puts("PLFORTH WIP\n")
 startheap = heapmark
 _estkl    = ^(@syscall + 1) // Hack to fill in parameter stack locations
 _estkh    = ^(@syscall + 3)
-execwords = @execwords_nocheck // Faster, no checking execution
 _warmstart_
 inptr = argNext(argFirst)
 if ^inptr; inptr++; _src_; fin
