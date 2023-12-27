@@ -1,6 +1,5 @@
 include "inc/cmdsys.plh"
 include "inc/args.plh"
-include "inc/fileio.plh"
 include "inc/longjmp.plh"
 //
 // FORTH dictionary layout
@@ -295,10 +294,14 @@ word = @d_cont, @_quit_, 0
 char d_bye = "BYE"
 byte = 0
 word = @d_quit, @_bye_, 0
+// CALL 6502
+char d_call = "CALL"
+byte = 0
+word = @d_bye, @call, 0
 // SHOW DEFINITION
 char d_show = "SHOW"
 byte = 0
-word = @d_bye, @_show_, 0
+word = @d_call, @_show_, 0
 // SHOW STACK
 char d_showstack = "SHOWSTACK"
 byte = 0
@@ -346,6 +349,7 @@ word RSTACK[RSTK_SIZE]
 // State flags
 //
 const exit_flag     = $01
+const trace_flag    = $02
 const comp_itc_flag = $10
 const comp_pbc_flag = $20
 const comp_flag     = comp_itc_flag | comp_pbc_flag
@@ -354,9 +358,7 @@ const comp_flag     = comp_itc_flag | comp_pbc_flag
 //
 byte comp_mode = comp_itc_flag
 byte state     = 0
-byte trace     = 0
 byte brk       = 0
-byte aborted   = 0
 byte _get_estack   = $8A           // TXA
 byte               = $49, $FF      // EOR #$FF
 byte               = $38           // SEC
@@ -400,12 +402,12 @@ def keyin#0
   inptr++
 end
 def filein#0
-  inbuf = fileio:read(inref, @inbuf + 1, INBUF_SIZE)
+  inbuf = cmdsys:sysread(inref, @inbuf + 1, INBUF_SIZE)
   if inbuf
     inbuf[inbuf + 1] = 0 // NULL terminate
     inptr            = @inbuf + 1
   else
-    fileio:close(inref) // EOF - switch back to keyboard input
+    cmdsys:sysclose(inref) // EOF - switch back to keyboard input
     inref  = 0
     infunc = @keyin
     keyin
@@ -561,9 +563,9 @@ def execword(dentry)#0
   fin
   if ^$C000 == $94 // CTRL-T
     ^$C010 // Clear KB strobe
-    trace = not trace
+    state = state ^ trace_flag
   fin
-  if trace
+  if state & trace_flag
     puts(" [ "); _showstack_; puts("] "); puts(dentry); putln
   fin
   W = _cfa_(dentry)
@@ -611,7 +613,7 @@ def warmstart#0
     state = 0
   fin
   if inref
-    fileio:close(inref)
+    cmdsys:sysclose(inref)
     inref = 0
   fin
 end
@@ -1055,13 +1057,18 @@ end
 def _src_#0
   word filename
   byte len
+  byte params[4]
 
   filename, len = delimit('"')
   filename--
   ^filename = len
-  inref = fileio:open(filename)
+  inref = cmdsys:sysopen(filename)
   if inref
-    fileio:newline(inref, $7F, $0D)
+    params.0 = 3
+    params.1 = inref // refnum
+    params.2 = $7F   // mask
+    params.3 = $0D   // nlchar
+    syscall($C9, @params)
     infunc = @filein
     inptr  = @inbuf
     inbuf  = 0
@@ -1122,10 +1129,10 @@ def _showrstack_#0
   loop
 end
 def _tron_#0
-  trace = 1
+  state = state | trace_flag
 end
 def _troff_#0
-  trace = 0
+  state = state & ~trace_flag
 end
 def _itc_#0
   comp_mode = comp_itc_flag
@@ -1154,25 +1161,13 @@ end
 //
 def _abort_#0
   puts("Abort\n")
-  //aborted = 1
   _quit_
 end
 //
 // Leave FORTH
 //
 def _bye_#0
-  byte params[7]
-
   throw(exit, TRUE)
-  if aborted // then must exit with 'BYE' processing
-    params.0 = 4
-    params.1 = 0
-    params:2 = 0
-    params.4 = 0
-    params:5 = 0
-    syscall($65, @params)
-  fin
-  state = state | exit_flag
 end
 
 puts("PLFORTH WIP\n")
