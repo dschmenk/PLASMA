@@ -17,47 +17,56 @@ include "inc/longjmp.plh"
 //
 // Mask and flags for dictionary entries
 //
-const param_flag    = $04
-const itc_flag      = $08
-const inline_flag   = $10
+const param_flag    = $02
+const itc_flag      = $04
+const inline_flag   = $08
+const inlinew_flag  = $10
 const imm_flag      = $20
 const componly_flag = $40
 const hidden_flag   = $80
 //
 // Predefine instrinsics
 //
-predef _drop_(a)#0, _swap_(a,b)#2, _dup_(a)#2, _over_(a,b,c)#4, _rot_(a,b,c)#3
-predef _add_(a,b)#1, _sub_(a,b)#1, _mul_(a,b)#1, _div_(a,b)#1
+predef _drop_(a)#0, _swap_(a,b)#2, _dup_(a)#2, _dashdup_(a)#1, _over_(a,b,c)#4, _rot_(a,b,c)#3
+predef _add_(a,b)#1, _inc_(a)#1, _inc2_(a)#1, _sub_(a,b)#1, _mul_(a,b)#1, _div_(a,b)#1
 predef _neg_(a)#1, _and_(a,b)#1, _or_(a,b)#1, _xor_(a,b)#1, _not_(a)#1
-predef _cset_(a,b)#0, _cget_(a)#1, _wset_(a,b)#0, _wget_(a)#1
+predef _abs_(a)#1, _max_(a,b)#1, _min_(a,b)#1
+predef _cset_(a,b)#0, _cget_(a)#1, _wset_(a,b)#0, _wplusset_(a,b)#0, _wget_(a)#1
 predef _ffa_(a)#1, _lfa_(a)#1, _cfa_(a)#1, _pfa_(a)#1
-predef _eq_(a,b)#1, _gt_(a,b)#1, _lt_(a,b)#1
-predef _branch_#0, _branch0_(a)#0, _if_#0, _else_#0, _then_#0
-predef _do_#0, _doloop_#0, _leave_#0, _loop_#0, _j_#1
-predef _bldcreate_#0, _builds_#0, _dodoes_#0, _filldoes_#0, _does_#0
+predef _eq_(a,b)#1, _gt_(a,b)#1, _lt_(a,b)#1, _0lt_(a)#1, _0eq_(a)#1
+predef _branch_#0, _0branch_(a)#0, _if_#0, _else_#0, _then_#0
+predef _begin_#0, _again_#0, _until_#0, _while_#0, _repeat_#0
+predef _do_#0, _doloop_#0, _doplusloop_(a)#0, _plusloop_#0, _loop_#0, _leave_#0, _j_#1
+predef _create_#0, _builds_#0, _dodoes_#0, _filldoes_#0, _does_#0
 predef pfillw(a)#0, pfillb(a)#0, _colon_#0, _semi_#0
 predef _tors_(a)#0, _fromrs_#1, _toprs_#1
+predef _cmove_(a,b,c)#0, _move_(a,b,c)#0, _fill_(a,b,c)#0
 predef _var_(a)#0, _const_(a)#0, _lit_#1, _slit_#1, _tick_#1, _forget_#0
-predef _str_#0, _prstr_#0, _src_#0
+predef _terminal_#1, _prat_(a)#0, _str_#0, _prstr_#0, _src_#0
 predef _vlist_#0, _tron_#0, _troff_#0, _itc_#0, _pbc_#0
+predef _brkon_#0, _brkoff_#0
 predef _show_#0, _showstack_#0, _showrstack_#0
-predef _cont_#0, _quit_#0, _restart_#0, _bye_#0, _abort_#0
+predef _cont_#0, _restart_#0, _bye_#0, _quit_#0, _abort_#0
 // DROP
 char d_drop = "DROP"
 byte = inline_flag
 word = 0, @_drop_, $30
 // SWAP
 char d_swap = "SWAP"
-byte = inline_flag
+byte = 0
 word = @d_drop, @_swap_, 0
 // DUP
 char d_dup = "DUP"
 byte = inline_flag
 word = @d_swap, @_dup_, $34
+// -DUP
+char d_dashdup = "-DUP"
+byte = 0
+word = @d_dup, @_dashdup_, 0
 // OVER
 word d_over = "OVER"
 byte = 0
-word = @d_dup, @_over_, 0
+word = @d_dashdup, @_over_, 0
 // ROT
 word d_rot = "ROT"
 byte = 0
@@ -66,10 +75,18 @@ word = @d_over, @_rot_, 0
 char d_add = "+"
 byte = inline_flag
 word = @d_rot, @_add_, $82
+// ONE PLUS
+char d_inc = "1+"
+byte = inline_flag
+word = @d_add, @_inc_, $8C
+// TWO PLUS
+char d_inc2 = "2+"
+byte = inlinew_flag
+word = @d_inc, @_inc2_, $8C8C
 // SUB
 char d_sub = "-"
 byte = inline_flag
-word = @d_add, @_sub_, $84
+word = @d_inc2, @_sub_, $84
 // MUL
 char d_mul = "*"
 byte = inline_flag
@@ -110,18 +127,42 @@ word = @d_eq, @_gt_, $44
 char d_lt = "<"
 byte = inline_flag
 word = @d_gt, @_lt_, $46
+// LESS THAN ZERO
+char d_0lt = "0<"
+byte = inlinew_flag
+word = @d_lt, @_0lt_, $4600 // ZERO ISLT
+// EQUALS ZERO
+char d_0eq = "0="
+byte = inlinew_flag
+word = @d_0lt, @_0eq_, $4000 // ZERO ISEQ
+// ABS
+char d_abs = "ABS"
+byte = 0
+word = @d_0eq, @_abs_, 0
+// MIN
+char d_min = "MIN"
+byte = 0
+word = @d_abs, @_min_, 0
+// MAX
+char d_max = "MAX"
+byte = 0
+word = @d_min, @_max_, 0
 // CHAR PUT
 char d_cset = "C!"
 byte = inline_flag
-word = @d_lt, @_cset_, $70
+word = @d_max, @_cset_, $70
 // WORD PUT
 char d_wset = "!"
 byte = inline_flag
 word = @d_cset, @_wset_, $72
+// WORD PLUS PUT
+char d_wplusset = "+!"
+byte = 0
+word = @d_wset, @_wplusset_, 0
 // CHAR GET
 char d_cget = "C@"
 byte = inline_flag
-word = @d_wset, @_cget_, $60
+word = @d_wplusset, @_cget_, $60
 // WORD SET
 char d_wget = "@"
 byte = inline_flag
@@ -146,10 +187,22 @@ word = @d_toprstk, @_var_, 0
 char d_const = "CONSTANT"
 byte = 0
 word = @d_var, @_const_, 0
+// CMOVE
+char d_cmove = "CMOVE"
+byte = 0
+word = @d_var, @_cmove_, 0
+// MOVE
+char d_move = "MOVE"
+byte = 0
+word = @d_cmove, @_move_, 0
+// FILL
+char d_fill = "FILL"
+byte = 0
+word = @d_move, @_fill_, 0
 // HERE
 char d_here = "HERE"
 byte = 0
-word = @d_const, @heapmark, 0
+word = @d_fill, @heapmark, 0
 // ALLOT
 char d_allot = "ALLOT"
 byte = 0
@@ -159,13 +212,13 @@ char d_branch = "(BRANCH)"
 byte = param_flag
 word = @d_allot, @_branch_, 0
 // BRANCH IF 0
-char d_branch0 = "(BRANCH0)"
+char d_0branch = "(0BRANCH)"
 byte = param_flag
-word = @d_branch, @_branch0_, 0
+word = @d_branch, @_0branch_, 0
 // IF
 char d_if = "IF"
 byte = componly_flag | imm_flag
-word = @d_branch0, @_if_, 0
+word = @d_0branch, @_if_, 0
 // ELSE
 char d_else = "ELSE"
 byte = componly_flag | imm_flag
@@ -182,7 +235,7 @@ word = @d_then, @_do_, 0
 char d_leave = "LEAVE"
 byte = componly_flag
 word = @d_do, @_leave_, 0
-// LOOP
+// COMPILED LOOP
 char d_doloop = "(DOLOOP)"
 byte = param_flag
 word = @d_leave, @_doloop_, 0
@@ -190,22 +243,50 @@ word = @d_leave, @_doloop_, 0
 char d_loop = "LOOP"
 byte = componly_flag | imm_flag
 word = @d_doloop, @_loop_, 0
+// COMPILED LOOP+
+char d_doplusloop = "(+DOLOOP)"
+byte = param_flag
+word = @d_loop, @_doplusloop_, 0
+// LOOP
+char d_plusloop = "+LOOP"
+byte = componly_flag | imm_flag
+word = @d_doplusloop, @_plusloop_, 0
 // I
 char d_i = "I"
 byte = componly_flag
-word = @d_loop, @_toprs_, 0
+word = @d_plusloop, @_toprs_, 0
 // J
 char d_j = "J"
 byte = componly_flag
 word = @d_i, @_j_, 0
+// BEGIN
+char d_begin = "BEGIN"
+byte = componly_flag | imm_flag
+word = @d_j, @_begin_, 0
+// AGAIN
+char d_again = "AGAIN"
+byte = componly_flag | imm_flag
+word = @d_begin, @_again_, 0
+// UNTIL
+char d_until = "UNTIL"
+byte = componly_flag | imm_flag
+word = @d_again, @_until_, 0
+// WHILE
+char d_while = "WHILE"
+byte = componly_flag | imm_flag
+word = @d_until, @_while_, 0
+// REPEAT
+char d_repeat = "REPEAT"
+byte = componly_flag | imm_flag
+word = @d_while, @_repeat_, 0
 // FORGET
 char d_forget = "FORGET"
 byte = 0
-word = @d_j, @_forget_, 0
+word = @d_repeat, @_forget_, 0
 // CREATE
-char d_create = "(CREATE)"
-byte = 0
-word = @d_forget, @_bldcreate_, 0
+char d_create = "CREATE"
+byte = imm_flag
+word = @d_forget, @_create_, 0
 // BUILDS
 char d_builds = "<BUILDS"
 byte = imm_flag
@@ -226,10 +307,14 @@ word = @d_dodoes, @_does_, 0
 char d_comma = ","
 byte = 0
 word = @d_does, @pfillw, 0
+// COMMA
+char d_commab = "C,"
+byte = 0
+word = @d_comma, @pfillb, 0
 // COLON
 char d_colon = ":"
 byte = 0
-word = @d_comma, @_colon_, 0
+word = @d_commab, @_colon_, 0
 // SEMI
 char d_semi = ";"
 byte = imm_flag
@@ -242,10 +327,22 @@ word = @d_semi, @_tick_, 0
 char d_lit = "LIT"
 byte = param_flag
 word = @d_tick, @_lit_, 0
+// ?TERMINAL
+char d_terminal = "?TERMINAL"
+byte = 0
+word = @d_lit, @_terminal_, 0
+// KEY
+char d_key = "KEY"
+byte = 0
+word = @d_terminal, @getc, 0
+// PRINT @TOS
+char d_prat = "?"
+byte = 0
+word = @d_key, @_prat_, 0
 // PRINT TOS
 char d_prtos = "."
 byte = 0
-word = @d_lit, @puti, 0
+word = @d_prat, @puti, 0
 // PRINT TOS HEX
 char d_prtoshex = ".$"
 byte = 0
@@ -290,10 +387,14 @@ word = @d_prsrc, @_cont_, 0
 char d_quit = "QUIT"
 byte = 0
 word = @d_cont, @_quit_, 0
+// ABORT
+char d_abort = "ABORT"
+byte = 0
+word = @d_quit, @_abort_, 0
 // RESTART
 char d_restart = "RESTART"
 byte = 0
-word = @d_quit, @_restart_, 0
+word = @d_abort, @_restart_, 0
 // BYE
 char d_bye = "BYE"
 byte = 0
@@ -322,10 +423,18 @@ word = @d_showrstack, @_tron_, 0
 char d_troff = "TROFF"
 byte = 0
 word = @d_tron, @_troff_, 0
+// BREAK ON
+char d_brkon = "BRKON"
+byte = 0
+word = @d_troff, @_brkon_, 0
+// BREAK OFF
+char d_brkoff = "BRKOFF"
+byte = 0
+word = @d_brkon, @_brkoff_, 0
 //  COMPILE USING ITC
 char d_itc = "ITC"
 byte = 0
-word = @d_troff, @_itc_, 0
+word = @d_brkoff, @_itc_, 0
 // COMPILE USING PLASMA BYTECODES
 char d_pbc = "PBC"
 byte = 0
@@ -363,6 +472,8 @@ const comp_flag     = comp_itc_flag | comp_pbc_flag
 byte comp_mode = comp_itc_flag
 byte state     = 0
 byte brk       = 0
+word brkentry  = 0
+word brkcfa    = 0
 byte _get_estack   = $8A           // TXA
 byte               = $49, $FF      // EOR #$FF
 byte               = $38           // SEC
@@ -382,7 +493,7 @@ byte               = $60           // RTS
 //
 // Helper routines
 //
-predef doinput#0
+predef interpret#0
 
 //
 // Input routines
@@ -541,36 +652,47 @@ def isnum(numchars, numlen)#2
   return num * sign, numlen == 0
 end
 //
-// Execute code in CFA
+// Break handler
 //
-def execword(dentry)#0
+def showtrace(dentry)#0
+    puts("\n[ "); _showstack_; puts("] "); puts(dentry); puts(": ")
+end
+def brkhandle(dentry)#0
   word brk_infn, brk_inptr, brk_iip
   byte brk_state
 
+  showtrace(dentry)
+  brk++
+  brk_state = state
+  brk_iip   = IIP
+  brk_infn  = infunc
+  brk_inptr = inptr
+  state  = 0
+  infunc = @keyin
+  inptr  = keyinbuf
+  ^inptr = 0
+  interpret
+  state  = brk_state
+  IIP    = brk_iip
+  infunc = brk_infn
+  inptr  = brk_inptr
+  brk--
+end
+//
+// Execute code in CFA
+//
+def execword(dentry)#0
+
   if ^$C000 == $83 // CTRL-C
     ^$C010 // Clear KB strobe
-    brk++
-    brk_state = state
-    brk_iip   = IIP
-    brk_infn  = infunc
-    brk_inptr = inptr
-    state  = 0
-    infunc = @keyin
-    inptr  = keyinbuf
-    ^inptr = 0
-    doinput
-    state  = brk_state
-    IIP    = brk_iip
-    infunc = brk_infn
-    inptr  = brk_inptr
-    brk--
+    brkhandle(dentry)
   fin
   if ^$C000 == $94 // CTRL-T
     ^$C010 // Clear KB strobe
     state = state ^ trace_flag
   fin
   if state & trace_flag
-    puts(" [ "); _showstack_; puts("] "); puts(dentry); putln
+    showtrace(dentry)
   fin
   W = _cfa_(dentry)
   (*W)()#0
@@ -614,8 +736,8 @@ def warmstart#0
   if state & comp_flag // Undo compilation state
     heaprelease(vlist)
     vlist = *_lfa_(vlist)
-    state = 0
   fin
+  state = 0
   if inref
     cmdsys:sysclose(inref)
     inref = 0
@@ -626,11 +748,10 @@ end
 //
 def coldstart#0
   vlist = @d_vlist
-  state = 0
   heaprelease(startheap)
   warmstart
 end
-def doinput#0
+def interpret#0
   word inchars, dentry, value
   byte inlen, valid
 
@@ -641,11 +762,11 @@ def doinput#0
     inchars, inlen = toknext
     dentry = find(inchars, inlen)
     if dentry
-      if (not state & comp_flag) or (^_ffa_(dentry) & imm_flag)
+      if (not (state & comp_flag)) or (^_ffa_(dentry) & imm_flag)
         execword(dentry)
       elsif state & comp_itc_flag
         pfillw(dentry)
-      else // comp_pbc_flag
+      elsif state & comp_pbc_flag
         if ^_ffa_(dentry) & itc_flag // Check if calling ITC word
           pfillb($2C)    // CONSTANT WORD
           pfillw(dentry) // Pointer to dictionary entry
@@ -653,6 +774,8 @@ def doinput#0
           pfillw(@execword)
         elsif ^_ffa_(dentry) & inline_flag // inline bytecode
           pfillb(^_pfa_(dentry))
+        elsif ^_ffa_(dentry) & inlinew_flag // inline 2 bytecodes
+          pfillw(*_pfa_(dentry))
         else
           pfillb($54) // CALL CFA directly
           pfillw(*_cfa_(dentry))
@@ -661,7 +784,9 @@ def doinput#0
     else
       value, valid = isnum(inchars, inlen)
       if not valid
-        warmstart
+        if state & comp_flag
+          warmstart
+        fin
         puts("? No match\n")
       else
         if state & comp_flag
@@ -697,6 +822,10 @@ end
 def _dup_(a)#2
   return a,a
 end
+def _dashdup_(a)#1
+  if a; (@push)(a)#0; fin
+  return a
+end
 def _over_(a,b,c)#4
   return a,b,c,a
 end
@@ -705,6 +834,12 @@ def _rot_(a,b,c)#3
 end
 def _add_(a,b)#1
   return a+b
+end
+def _inc_(a)
+  return a + 1
+end
+def _inc2_(a)
+  return a + 2
 end
 def _sub_(a,b)#1
   return a-b
@@ -739,11 +874,29 @@ end
 def _lt_(a,b)#1
   return a < b
 end
+def _0lt_(a)#1
+  return a < 0
+end
+def _0eq_(a)#1
+  return a == 0
+end
 def _cset_(a,b)#0
-  ^b=a
+  ^b = a
 end
 def _wset_(a,b)#0
-  *b=a
+  *b = a
+end
+def _wplusset_(a,b)#0
+  *b = *b + a
+end
+def _abs_(a)#1
+  return a < 0 ?? -a :: a
+end
+def _min_(a,b)#1
+  return a > b ?? b :: a
+end
+def _max_(a,b)
+  return a > b ?? a :: b
 end
 def _cget_(a)#1
   return ^a
@@ -796,9 +949,22 @@ def _slit_#1
   IIP  = IIP + ^IIP + 1
   return slit
 end
-def _create_(flags)#0
+def _cmove_(a,b,c)#0
+  memcpy(b, a, c)
+end
+def _move_(a,b,c)#0
+  memcpy(b, a, c * 2)
+end
+def _fill_(a,b,c)#0
+  memset(a, c | (c << 8), b)
+end
+def _create_#0
   word bldptr, plist, namechars, namelen
 
+  if state & comp_flag
+    puts(" Already compiling\n")
+    _abort_
+  fin
   namechars, namelen = toknext
   plist = vlist
   vlist  = heapmark
@@ -810,53 +976,54 @@ def _create_(flags)#0
     namechars++
     namelen--
   loop
-  ^bldptr = flags  // Flags
+  state   = state | comp_mode
+  ^bldptr = state & comp_itc_flag ?? itc_flag :: 0  // Flags
   bldptr++
-  *bldptr = plist; // Link ptr
+  *bldptr = plist;      // Link ptr
   bldptr  = bldptr + 2
-  *bldptr = 0;     // Code ptr
+  *bldptr = bldptr + 2; // Code ptr linked to PFA
   heapalloc(bldptr - vlist + 2)
 end
-def _bldcreate_#0
-  _create_(itc_flag)
-  pfillw(0) // Reserve space fpr PFA
-end
 def _var_(a)#0
-  _create_(0)
-  *(_cfa_(vlist)) = _pfa_(vlist)
+  byte ss
+
+  ss = state
+  _create_
+  ^(_ffa_(vlist)) = 0 // Always compiled
   pfillb(^(@divmod)) // Hack - get VM entry vector from divmod
   pfillw(*(@divmod + 1))
   pfillb($2C) // CONSTANT WORD
   pfillw(heapmark + 3)
   pfillb($5C) // RET
   pfillw(a)   // Variable storage
+  state = ss
 end
 def _const_(a)#0
-  _create_(0)
-  *(_cfa_(vlist)) = _pfa_(vlist)
+  byte ss
+
+  ss = state
+  _create_
+  ^(_ffa_(vlist)) = 0 // Always compiled
   pfillb(^(@divmod)) // Hack - get VM entry vector from divmod
   pfillw(*(@divmod + 1))
   pfillb($2C) // CONSTANT WORD
   pfillw(a)
   pfillb($5C) // RET
+  state = ss
 end
 def _docolon_#0
   execwords(W + 2) // Exec PFA
 end
 def _colon_#0
-  state = comp_mode
+  _create_
   if state & comp_itc_flag
-    _create_(itc_flag)
     *(_cfa_(vlist)) = @_docolon_
   else // comp_pbc_flag
-    _create_(0)
-    *(_cfa_(vlist)) = _pfa_(vlist)
     pfillb(^(@divmod)) // Hack - get VM entry vector from divmod
     pfillw(*(@divmod + 1))
   fin
 end
 def _compbuilds_#0
-  *(_cfa_(vlist)) = _pfa_(vlist)
   pfillb(^(@divmod))   // Hack - get VM entry vector from divmod
   pfillw(*(@divmod + 1))
   pfillb($2C)          // CONSTANT WORD
@@ -868,6 +1035,9 @@ end
 def _builds_#0
   if state & comp_itc_flag
     pfillw(@d_create)
+    pfillw(@d_lit) // Allocate space for PFA to be filled in during _filldoes_
+    pfillw(2)
+    pfillw(@d_allot)
   else // comp_pbc_flag
     pfillb($54) // CALL
     pfillw(@_create_)
@@ -882,9 +1052,11 @@ end
 def _filldoes_#0
   *(_cfa_(vlist)) = @_dodoes_
   *(_pfa_(vlist)) = IIP + 2
+  state           = state & ~comp_flag
 end
 def _compdoes_(does)#0
   *(_pfa_(vlist) + 7) = does // Fill in DOES code address
+  state               = state & ~comp_flag
 end
 def _does_#0
   if state & comp_itc_flag
@@ -906,6 +1078,9 @@ def _semi_#0
     pfillw(0)
   elsif state & comp_pbc_flag
     pfillb($5C) // RET
+  else
+    puts(" Not compiling\n")
+    _abort_
   fin
   state = state & ~comp_flag
 end
@@ -915,7 +1090,7 @@ end
 def _branch_#0
   IIP = *IIP
 end
-def _branch0_(a)#0
+def _0branch_(a)#0
   if a
     IIP = IIP + 2
   else
@@ -924,7 +1099,7 @@ def _branch0_(a)#0
 end
 def _if_#0
   if state & comp_itc_flag
-    pfillw(@d_branch0)
+    pfillw(@d_0branch)
   else // comp_pbc_flag
     pfillb($4C) // BRFLS
   fin
@@ -949,7 +1124,7 @@ def _then_#0
 
   backref = _fromrs_
   if state & comp_itc_flag
-    *_fromrs_ = heapmark
+    *backref = heapmark
   else // comp_pbc_flag
     *backref = heapmark - backref // Relative branch
   fin
@@ -989,6 +1164,23 @@ def _dopbcloop_#1
   fin
   return FALSE
 end
+def _doplusloop_(a)#0
+  RSTACK[RSP] = RSTACK[RSP] + a
+  if (a >= 0 and RSTACK[RSP] >= RSTACK[RSP + 1]) or (a < 0 and RSTACK[RSP] <= RSTACK[RSP + 1])
+    RSP = RSP + 2
+    IIP = IIP + 2
+  else
+    IIP = *IIP
+  fin
+end
+def _dopbcplusloop_(a)#1
+  RSTACK[RSP] = RSTACK[RSP] + a
+  if (a >= 0 and RSTACK[RSP] >= RSTACK[RSP + 1]) or (a < 0 and RSTACK[RSP] <= RSTACK[RSP + 1])
+    RSP = RSP + 2
+    return TRUE
+  fin
+  return FALSE
+end
 def _loop_#0
   if state & comp_itc_flag
     pfillw(@d_doloop)
@@ -1000,8 +1192,63 @@ def _loop_#0
     pfillw(_fromrs_ - heapmark)
   fin
 end
+def _plusloop_#0
+  if state & comp_itc_flag
+    pfillw(@d_doplusloop)
+    pfillw(_fromrs_)
+  else // comp_pbc_flag
+    pfillb($54) // CALL
+    pfillw(@_dopbcplusloop_)
+    pfillb($4C) // BRFLS
+    pfillw(_fromrs_ - heapmark)
+  fin
+end
 def _j_#1
   return RSTACK[RSP + 2]
+end
+def _begin_#0
+  _tors_(heapmark)
+end
+def _again_#0
+  if state & comp_itc_flag
+    pfillw(@d_branch)
+    pfillw(_fromrs_)
+  else // comp_pbc_flag
+    pfillb($50) // BRNCH
+    pfillw(_fromrs_ - heapmark)
+  fin
+end
+def _until_#0
+  if state & comp_itc_flag
+    pfillw(@d_0branch)
+    pfillw(_fromrs_)
+  else // comp_pbc_flag
+    pfillb($4C) // BRFLS
+    pfillw(_fromrs_ - heapmark)
+  fin
+end
+def _while_#0
+  if state & comp_itc_flag
+    pfillw(@d_0branch)
+  else // comp_pbc_flag
+    pfillb($4C) // BRFLS
+  fin
+  _tors_(heapalloc(2)) // Save backfill address
+end
+def _repeat_#0
+  word backref
+
+  backref = _fromrs_ // Backref from WHILE
+
+  if state & comp_itc_flag
+    pfillw(@d_branch)
+    pfillw(_fromrs_)
+    *backref = heapmark // Backref to BEGIN
+  else // comp_pbc_flag
+    pfillb($50) // BRNCH
+    pfillw(_fromrs_ - heapmark)
+    *backref = heapmark - backref // Backref to BEGIN
+  fin
 end
 def _tick_#1
   return find(toknext)
@@ -1021,6 +1268,12 @@ def _cont_#0
   else
     putc('?')
   fin
+end
+def _terminal_#1
+  return ^$C000 > 127
+end
+def _prat_(a)#0
+  puti(*a)
 end
 def _str_#0
   word str
@@ -1049,7 +1302,7 @@ def _prstr_#0
       pfillw(@d_doprstr)
     else // comp_pbc_flag
       pfillb($54) // CALL
-      pfillw(*_cfa_(@d_doprstr))
+      pfillw(@puts)
     fin
   else
     str, len = delimit('"')
@@ -1138,6 +1391,37 @@ end
 def _troff_#0
   state = state & ~trace_flag
 end
+def brkpoint#0
+  brkhandle(brkentry)
+  W = _cfa_(brkentry)
+  if brkcfa
+    brkcfa()#0
+  else // Breakpoint was cleared
+    (*_cfa_(brkentry))()#0
+  fin
+end
+def _brkon_#0
+  word inchars, dentry
+  byte inlen
+
+  if brkcfa
+    puts("Breakpoint already enabled\n")
+  else
+    inchars, inlen = toknext
+    dentry = find(inchars, inlen)
+    if dentry
+      brkentry = dentry
+      brkcfa = *_cfa_(dentry)
+      *_cfa_(dentry) = @brkpoint
+    else
+      puts("No match\n")
+    fin
+  fin
+end
+def _brkoff_#0
+  *_cfa_(brkentry) = brkcfa
+  brkcfa           = 0
+end
 def _itc_#0
   comp_mode = comp_itc_flag
 end
@@ -1154,10 +1438,10 @@ def _vlist_#0
   loop
 end
 //
-// Quit and look for user input
+// Quit
 //
 def _quit_#0
-  warmstart
+  state = 0
   throw(exit, FALSE)
 end
 //
@@ -1165,14 +1449,16 @@ end
 //
 def _abort_#0
   puts("Abort\n")
-  _quit_
+  warmstart
+  throw(exit, FALSE)
 end
 //
 // Restart
 //
 def _restart_#0
   coldstart
-  _quit_
+  warmstart
+  throw(exit, FALSE)
 end
 //
 // Leave FORTH
@@ -1190,6 +1476,6 @@ inptr = argNext(argFirst)
 exit  = heapalloc(t_except)
 if not except(exit)
   if ^inptr; inptr++; _src_; fin
-  doinput
+  interpret
 fin
 done
