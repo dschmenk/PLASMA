@@ -39,8 +39,8 @@ predef _begin_#0, _again_#0, _until_#0, _while_#0, _repeat_#0
 predef _do_#0, _doloop_#0, _doplusloop_(a)#0, _plusloop_#0, _loop_#0, _leave_#0, _j_#1
 predef _create_#0, _builds_#0, _dodoes_#0, _filldoes_#0, _does_#0
 predef pfillw(a)#0, pfillb(a)#0, _colon_#0, _semi_#0
-predef _tors_(a)#0, _fromrs_#1, _toprs_#1
-predef _cmove_(a,b,c)#0, _move_(a,b,c)#0, _fill_(a,b,c)#0
+predef _tors_(a)#0, _fromrs_#1, _toprs_#1, _execute_(a)#0, _lookup_#1
+predef _cmove_(a,b,c)#0, _move_(a,b,c)#0, _fill_(a,b,c)#0, _plasma_#0
 predef _var_(a)#0, _const_(a)#0, _lit_#1, _slit_#1, _tick_#1, _forget_#0
 predef _terminal_#1, _prat_(a)#0, _str_#0, _prstr_#0, _src_#0
 predef _vlist_#0, _tron_#0, _troff_#0, _itc_#0, _pbc_#0
@@ -167,10 +167,14 @@ word = @d_wplusset, @_cget_, $60
 char d_wget = "@"
 byte = inline_flag
 word = @d_cget, @_wget_, $62
+// EXECUTE
+char d_execute = "EXECUTE"
+byte = inline_flag
+word = @d_wget, @_execute_, $56 // ICAL
 // TO RSTACK
 char d_torstk = ">R"
 byte = 0
-word = @d_wget, @_tors_, 0
+word = @d_execute, @_tors_, 0
 // FROM RSTACK
 char d_fromrstk = "R>"
 byte = 0
@@ -179,10 +183,18 @@ word = @d_torstk, @_fromrs_, 0
 char d_toprstk = "R@"
 byte = 0
 word = @d_fromrstk, @_toprs_, 0
+// PLASMA SYMBOL LOOKUP
+char d_lookup = "LOOKUP"
+byte = 0
+word = @d_toprstk, @_lookup_, 0
+// PLASMA LINKEAGE
+char d_plasma = "PLASMA"
+byte = 0
+word = @d_lookup, @_plasma_, 0
 // VARIABLE
 char d_var = "VARIABLE"
 byte = 0
-word = @d_toprstk, @_var_, 0
+word = @d_plasma, @_var_, 0
 // CONSTANT
 char d_const = "CONSTANT"
 byte = 0
@@ -190,7 +202,7 @@ word = @d_var, @_const_, 0
 // CMOVE
 char d_cmove = "CMOVE"
 byte = 0
-word = @d_var, @_cmove_, 0
+word = @d_const, @_cmove_, 0
 // MOVE
 char d_move = "MOVE"
 byte = 0
@@ -908,6 +920,9 @@ end
 def _wget_(a)#1
   return *a
 end
+def _execute_(a)#0
+  a()#0
+end
 def _ffa_(dentry)#1
   return dentry + ^dentry + 1
 end
@@ -970,7 +985,7 @@ def _create_#0
     _abort_
   fin
   namechars, namelen = toknext
-  plist = vlist
+  plist  = vlist
   vlist  = heapmark
   ^vlist = namelen
   bldptr = vlist + 1
@@ -988,10 +1003,48 @@ def _create_#0
   *bldptr = bldptr + 2; // Code ptr linked to PFA
   heapalloc(bldptr - vlist + 2)
 end
-def _var_(a)#0
-  byte ss
+def stodci(str, dci)
+  byte len, c
 
-  ss = state
+  len = ^str
+  if len == 0
+    ^dci = 0
+    return dci
+  fin
+  c = toupper(^(str + len)) & $7F
+  len--
+  ^(dci + len) = c
+  while len
+    c = toupper(^(str + len)) | $80
+    len--
+    ^(dci + len) = c
+  loop
+  return dci
+end
+def _lookup_#1
+  word symname
+  char symlen, dci[31]
+
+  symname, symlen = toknext
+  symname--
+  ^symname = symlen
+  return cmdsys:lookupsym(stodci(symname, @dci))
+end
+def _plasma_#0
+  word addr
+  char dci[31]
+
+  _create_
+  addr = cmdsys:lookupsym(stodci(vlist, @dci))
+  if not addr
+    puts("PLASMA symbol "); puts(vlist); puts(" not found\n")
+    _abort_
+  fin
+  ^(_ffa_(vlist)) = 0    // Always compiled
+  *(_cfa_(vlist)) = addr // Symbol address
+  state = state & ~comp_flag
+end
+def _var_(a)#0
   _create_
   ^(_ffa_(vlist)) = 0 // Always compiled
   pfillb(^(@divmod)) // Hack - get VM entry vector from divmod
@@ -1000,12 +1053,9 @@ def _var_(a)#0
   pfillw(heapmark + 3)
   pfillb($5C) // RET
   pfillw(a)   // Variable storage
-  state = ss
+  state = state & ~comp_flag
 end
 def _const_(a)#0
-  byte ss
-
-  ss = state
   _create_
   ^(_ffa_(vlist)) = 0 // Always compiled
   pfillb(^(@divmod)) // Hack - get VM entry vector from divmod
@@ -1013,7 +1063,7 @@ def _const_(a)#0
   pfillb($2C) // CONSTANT WORD
   pfillw(a)
   pfillb($5C) // RET
-  state = ss
+  state = state & ~comp_flag
 end
 def _docolon_#0
   execwords(W + 2) // Exec PFA
@@ -1475,6 +1525,10 @@ def _bye_#0
 end
 
 puts("PLFORTH WIP\n")
+if cmdsys:sysver < $0201
+  puts("PLASMA >= 2.01 required\n")
+  return
+fin
 startheap = heapmark
 _estkl    = ^(@syscall + 1) // Hack to fill in parameter stack locations
 _estkh    = ^(@syscall + 3)

@@ -52,16 +52,20 @@ predef markheap()#1, allocheap(size)#1, allocalignheap(size, pow2, freeaddr)#1, 
 predef memset(addr,value,size)#0, memcpy(dst,src,size)#0, strcpy(dst,src)#1, strcat(dst,src)#1
 predef uword_isgt(a,b)#1, uword_isge(a,b)#1, uword_islt(a,b)#1, uword_isle(a,b)#1, sext(a)#1, divmod(a,b)#2
 predef execmod(modfile)#1, open(path)#1, close(refnum)#1, read(refnum, buf, len)#1
+predef lookuptbl(dci)#1
+
 //
 // Exported CMDSYS table
 //
-word version    = $0200 // 02.00 Dev
+word version    = $0201 // 02.01 Dev
 word syspath
 word syscmdln
 word            = @execmod, @open, @close, @read, 0 // Mark write() as NULL
 byte perr
 byte jitcount   = 0
 byte jitsize    = 0
+word            = symtbl // Different between Apple II and ///
+word            = @lookuptbl //
 //
 // Working input buffer overlayed with strings table
 //
@@ -596,29 +600,29 @@ end
 //
 // Lookup routines.
 //
-//def lookuptbl(dci, tbl)
-//    word match
-//    while ^tbl
+//def lookuptbl(dci)
+//    word match, tbl
+//    sym = symtbl
+//    while ^sym
 //        match = dci
-//        while ^tbl == ^match
-//            if !(^tbl & $80)
+//        while ^sym == ^match
+//            if !(^sym & $80)
 //                return (tbl):1
 //            fin
-//            tbl   = tbl   + 1
-//            match = match + 1
+//            tbl++
+//            match++
 //        loop
-//        while (^tbl & $80)
-//            tbl = tbl + 1
+//        while (^sym & $80)
+//            sym = sym + 1
 //        loop
-//        tbl = tbl + 3
+//        sym = sym + 3
 //    loop
 //    return 0
-asm lookuptbl(dci, tbl)#1
-        LDA     ESTKL,X
+asm lookuptbl(dci)#1
+        LDA     #$00                ; SYMBOL TABLE
         STA     DSTL
-        LDA     ESTKH,X
+        LDA     #$0C
         STA     DSTH
-        INX
         LDA     ESTKL,X
         STA     SRCL
         LDA     ESTKH,X
@@ -990,7 +994,7 @@ def lookupextern(esd, index)#1
     byte str[33]
     sym = lookupidx(esd, index)
     if sym
-        addr = lookuptbl(sym, symtbl)
+        addr = lookuptbl(sym)
         if !addr
             perr = $81
             dcitos(sym, @str)
@@ -1068,7 +1072,7 @@ def loadmod(mod)#1
             // Load module dependencies.
             //
             while ^moddep
-                if !lookuptbl(moddep, symtbl)
+                if !lookuptbl(moddep)
                     close(refnum)
                     refnum = 0
                     if loadmod(moddep) < 0
@@ -1414,13 +1418,13 @@ def docmds#0
                     execsys(getlnbuf)
                     break
                 is '+'
-					//
-					// Set JIT code pointer
-					//
-					*jitcodeptr = jitcbuf
-					//
-					// Exec module
-					//
+                    //
+                    // Set JIT code pointer
+                    //
+                    *jitcodeptr = jitcbuf
+                    //
+                    // Exec module
+                    //
                     execmod(striptrail(getlnbuf))
                     //
                     // Clean up
@@ -1433,7 +1437,7 @@ def docmds#0
             if perr
                 prstr("ERR:$")
                 prbyte(perr)
-		crout()
+        crout()
             fin
         fin
         prstr(pfxop(prefix, GET_PFX))
