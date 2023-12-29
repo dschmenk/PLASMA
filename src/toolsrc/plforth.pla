@@ -1,5 +1,6 @@
 include "inc/cmdsys.plh"
 include "inc/args.plh"
+include "inc/fileio.plh"
 include "inc/longjmp.plh"
 //
 // FORTH dictionary layout
@@ -40,7 +41,7 @@ predef _do_#0, _doloop_#0, _doplusloop_(a)#0, _plusloop_#0, _loop_#0, _leave_#0,
 predef _buildcreate_#0, _builds_#0, _dodoes_#0, _filldoes_#0, _does_#0
 predef pfillw(a)#0, pfillb(a)#0, _colon_#0, _semi_#0
 predef _tors_(a)#0, _fromrs_#1, _toprs_#1, _execute_(a)#0, _lookup_#1
-predef _cmove_(a,b,c)#0, _move_(a,b,c)#0, _fill_(a,b,c)#0, _plasma_#0
+predef _cmove_(a,b,c)#0, _move_(a,b,c)#0, _fill_(a,b,c)#0, _plasma_(a)#0
 predef _var_(a)#0, _const_(a)#0, _lit_#1, _slit_#1, _tick_#1, _forget_#0
 predef _terminal_#1, _prat_(a)#0, _str_#0, _prstr_#0, _src_#0
 predef _vlist_#0, _tron_#0, _troff_#0, _itc_#0, _pbc_#0
@@ -533,12 +534,12 @@ def keyin#0
   inptr++
 end
 def filein#0
-  inbuf = cmdsys:sysread(inref, @inbuf + 1, INBUF_SIZE)
+  inbuf = fileio:read(inref, @inbuf + 1, INBUF_SIZE)
   if inbuf
     inbuf[inbuf + 1] = 0 // NULL terminate
     inptr            = @inbuf + 1
   else
-    cmdsys:sysclose(inref) // EOF - switch back to keyboard input
+    fileio:close(inref) // EOF - switch back to keyboard input
     inref  = 0
     infunc = @keyin
     keyin
@@ -699,13 +700,15 @@ end
 //
 def execword(dentry)#0
 
-  if ^$C000 == $83 // CTRL-C
-    ^$C010 // Clear KB strobe
-    brkhandle(dentry)
-  fin
-  if ^$C000 == $94 // CTRL-T
-    ^$C010 // Clear KB strobe
-    state = state ^ trace_flag
+  if ^$C000 & $80
+    if ^$C000 == $83 // CTRL-C
+      ^$C010 // Clear KB strobe
+      brkhandle(dentry)
+    fin
+    if ^$C000 == $94 // CTRL-T
+      ^$C010 // Clear KB strobe
+      state = state ^ trace_flag
+    fin
   fin
   if state & trace_flag
     showtrace(dentry)
@@ -755,7 +758,7 @@ def warmstart#0
   fin
   state = 0
   if inref
-    cmdsys:sysclose(inref)
+    fileio:close(inref)
     inref = 0
   fin
 end
@@ -1035,18 +1038,10 @@ def _lookup_#1
   ^symname = symlen
   return cmdsys:lookupsym(stodci(symname, @dci))
 end
-def _plasma_#0
-  word addr
-  char dci[31]
-
+def _plasma_(a)#0
   _create_
-  addr = cmdsys:lookupsym(stodci(vlist, @dci))
-  if not addr
-    puts("PLASMA symbol "); puts(vlist); puts(" not found\n")
-    _abort_
-  fin
-  ^(_ffa_(vlist)) = 0    // Always compiled
-  *(_cfa_(vlist)) = addr // Symbol address
+  ^(_ffa_(vlist)) = 0 // Always compiled
+  *(_cfa_(vlist)) = a // Code address
   state = state & ~comp_flag
 end
 def _var_(a)#0
@@ -1375,13 +1370,9 @@ def _src_#0
   filename, len = delimit('"')
   filename--
   ^filename = len
-  inref = cmdsys:sysopen(filename)
+  inref = fileio:open(filename)
   if inref
-    params.0 = 3
-    params.1 = inref // refnum
-    params.2 = $7F   // mask
-    params.3 = $0D   // nlchar
-    syscall($C9, @params)
+    fileio:newline(inref, $7F, $0D)
     infunc = @filein
     inptr  = @inbuf
     inbuf  = 0
@@ -1531,6 +1522,7 @@ if cmdsys:sysver < $0201
   puts("PLASMA >= 2.01 required\n")
   return
 fin
+fileio:iobufalloc(2) // Allocate buffer away from system buffer
 startheap = heapmark
 _estkl    = ^(@syscall + 1) // Hack to fill in parameter stack locations
 _estkh    = ^(@syscall + 3)
