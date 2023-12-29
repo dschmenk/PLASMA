@@ -37,6 +37,7 @@ predef _ffa_(a)#1, _lfa_(a)#1, _cfa_(a)#1, _pfa_(a)#1, _allot_(a)#0
 predef _eq_(a,b)#1, _gt_(a,b)#1, _lt_(a,b)#1, _0lt_(a)#1, _0eq_(a)#1
 predef _branch_#0, _0branch_(a)#0, _if_#0, _else_#0, _then_#0
 predef _begin_#0, _again_#0, _until_#0, _while_#0, _repeat_#0
+predef _case_#0, _of_#0, _endof_#0, _endcase_#0
 predef _do_#0, _doloop_#0, _doplusloop_(a)#0, _plusloop_#0, _loop_#0, _leave_#0, _j_#1
 predef _buildcreate_#0, _builds_#0, _dodoes_#0, _filldoes_#0, _does_#0
 predef pfillw(a)#0, pfillb(a)#0, _colon_#0, _semi_#0
@@ -240,10 +241,26 @@ word = @d_if, @_else_, 0
 char d_then = "THEN"
 byte = componly_flag | imm_flag
 word = @d_else, @_then_, 0
+// CASE
+char d_case = "CASE"
+byte = componly_flag | imm_flag
+word = @d_then, @_case_, 0
+// OF
+char d_of = "OF"
+byte = componly_flag | imm_flag
+word = @d_case, @_of_, 0
+// ENDOF
+char d_endof = "ENDOF"
+byte = componly_flag | imm_flag
+word = @d_of, @_endof_, 0
+// ENDCASE
+char d_endcase = "ENDCASE"
+byte = componly_flag | imm_flag
+word = @d_endof, @_endcase_, 0
 // DO
 char d_do = "DO"
 byte = componly_flag | imm_flag
-word = @d_then, @_do_, 0
+word = @d_endcase, @_do_, 0
 // LEAVE
 char d_leave = "LEAVE"
 byte = componly_flag
@@ -1180,6 +1197,66 @@ def _then_#0
     *backref = heapmark - backref // Relative branch
   fin
 end
+def _case_#0
+  if state & comp_itc_flag
+    pfillw(@d_dup)
+  else // comp_pbc_flag
+    pfillb($34) // DUP
+  fin
+  _tors_(0) // Linked address list
+end
+def _of_#0
+  if state & comp_itc_flag
+    pfillw(@d_eq)
+    pfillw(@d_0branch)
+  else // comp_pbc_flag
+    pfillb($24) // BRNE
+  fin
+  _tors_(heapalloc(2)) // Save backfill address
+end
+def _endof_#0
+  word backref, link
+
+  backref = _fromrs_
+  link    = _fromrs_
+  if state & comp_itc_flag
+    pfillw(@d_branch)
+    _tors_(heapmark)
+    pfillw(link)
+    *backref = heapmark
+    pfillw(@d_dup)
+  else // comp_pbc_flag
+    pfillb($50) // BRNCH
+    _tors_(heapmark)
+    pfillw(link)
+    *backref = heapmark - backref // Relative branch
+    pfillb($34) // DUP
+  fin
+end
+def _endcase_#0
+  word backref, link
+
+  if state & comp_itc_flag
+    pfillw(@d_drop)
+  else // comp_pbc_flag
+    pfillb($30) // DROP
+  fin
+  backref = _fromrs_
+  while backref
+    link = *backref
+    if state & comp_itc_flag
+      *backref = heapmark
+    else // comp_pbc_flag
+      *backref = heapmark - backref // Relative branch
+    fin
+    backref = link
+  loop
+  if state & comp_itc_flag
+    pfillw(@d_drop)
+  else // comp_pbc_flag
+    pfillb($30) // DROP
+  fin
+end
 def _do_#0
   if state & comp_itc_flag
     pfillw(@d_swap)
@@ -1522,13 +1599,13 @@ if cmdsys:sysver < $0201
   puts("PLASMA >= 2.01 required\n")
   return
 fin
+warmstart
 fileio:iobufalloc(2) // Allocate buffer away from system buffer
-startheap = heapmark
 _estkl    = ^(@syscall + 1) // Hack to fill in parameter stack locations
 _estkh    = ^(@syscall + 3)
-warmstart
-inptr = argNext(argFirst)
-exit  = heapalloc(t_except)
+inptr     = argNext(argFirst)
+exit      = heapalloc(t_except)
+startheap = heapmark
 if not except(exit)
   if ^inptr; inptr++; _src_; fin
   interpret
