@@ -38,7 +38,7 @@ predef _ffa_(a)#1, _lfa_(a)#1, _cfa_(a)#1, _pfa_(a)#1, _allot_(a)#0
 predef _eq_(a,b)#1, _gt_(a,b)#1, _lt_(a,b)#1, _0lt_(a)#1, _0eq_(a)#1
 predef _branch_#0, _0branch_(a)#0, _if_#0, _else_#0, _then_#0
 predef _begin_#0, _again_#0, _until_#0, _while_#0, _repeat_#0
-predef _case_#0, _of_#0, _endof_#0, _endcase_#0
+predef _case_#0, _of_#0, _endof_#0, _endcase_#0, _literal_(a)#0
 predef _do_#0, _doloop_#0, _doplusloop_(a)#0, _plusloop_#0, _loop_#0, _leave_#0, _j_#1
 predef _buildcreate_#0, _builds_#0, _dodoes_#0, _filldoes_#0, _does_#0
 predef pfillw(a)#0, pfillb(a)#0, _colon_#0, _semi_#0
@@ -46,8 +46,8 @@ predef _tors_(a)#0, _fromrs_#1, _toprs_#1, _execute_(a)#0, _lookup_#1
 predef _cmove_(a,b,c)#0, _move_(a,b,c)#0, _fill_(a,b,c)#0, _plasma_(a)#0
 predef _var_(a)#0, _const_(a)#0, _lit_#1, _slit_#1, _tick_#1, _forget_#0
 predef _terminal_#1, _prat_(a)#0, _str_#0, _prstr_#0, _src_#0
-predef _vlist_#0, _tron_#0, _troff_#0, _itc_#0, _pbc_#0
-predef _brkout_#0, _brkon_#0, _brkoff_#0
+predef _vlist_#0, _tron_#0, _troff_#0, _itc_#0, _pbc_#0, _comment_#0
+predef _brkout_#0, _brkon_#0, _brkoff_#0, _word_(a)#1
 predef _space_#0, _spaces_(a)#0, _show_#0, _showstack_#0, _showrstack_#0
 predef _cont_#0, _restart_#0, _bye_#0, _quit_#0, _abort_#0
 // DROP
@@ -370,10 +370,14 @@ word = @d_colon, @_semi_
 char d_tick = "'"
 byte = 0
 word = @d_semi, @_tick_
-// LITERAL NUMBER
+// INLINE LITERAL NUMBER
 char d_lit = "LIT"
 byte = param_flag
 word = @d_tick, @_lit_
+// COMPILED LITERAL NUMBER
+char d_literal = "LITERAL"
+byte = imm_flag
+word = @d_lit, @_literal_
 // ?TERMINAL
 char d_terminal = "?TERMINAL"
 byte = 0
@@ -382,10 +386,14 @@ word = @d_lit, @_terminal_
 char d_key = "KEY"
 byte = 0
 word = @d_terminal, @getc
+// WORD
+char d_word = "WORD"
+byte = 0
+word = @d_key, @_word_
 // PRINT @TOS
 char d_prat = "?"
 byte = 0
-word = @d_key, @_prat_
+word = @d_word, @_prat_
 // PRINT TOS
 char d_prtos = "."
 byte = 0
@@ -498,10 +506,14 @@ word = @d_brkoff, @_itc_
 char d_pbc = "PBC"
 byte = 0
 word = @d_itc, @_pbc_
+// COMMENT
+char d_comment = "("
+byte = imm_flag
+word = @d_pbc, @_comment_
 // LIST VOCAB
 char d_vlist = "VLIST"
 byte = 0
-word = @d_pbc, @_vlist_
+word = @d_comment, @_vlist_
 //
 // Internal variables
 //
@@ -512,6 +524,7 @@ const SRCREFS    = 2
 const INBUF_SIZE = 81
 byte  srclevel   = 0
 byte  inref[SRCREFS]
+word  previnptr[SRCREFS]
 char  inbuf[SRCREFS * INBUF_SIZE]
 word  inbufptr
 
@@ -566,7 +579,7 @@ def keyin#0
 
   repeat
     if state & comp_flag
-      inptr = gets('>'|$80) // Compilation continuation prompt
+      inptr = gets(']'|$80) // Compilation continuation prompt
     else
       if brk
         puts(" BRK("); puti(brk); putc(')')
@@ -584,14 +597,16 @@ def filein#0
   repeat
       len = fileio:read(inref[srclevel-1], inbufptr, INBUF_SIZE-1)
       if len
+        len-- // Remove trailing carriage return
         ^(inbufptr + len) = 0 // NULL terminate
         inptr             = inbufptr
       else
         srclevel--
-        inbufptr = inbufptr - INBUF_SIZE
         fileio:close(inref[srclevel]) // EOF
+        inref[srclevel] = 0
+        inbufptr        = inbufptr - INBUF_SIZE
+        inptr           = previnptr[srclevel]
         if srclevel == 0              // - switch back to keyboard input
-            inref  = 0
             infunc = @keyin
             keyin
             return
@@ -599,55 +614,27 @@ def filein#0
       fin
     until len
 end
-def toknext#2
-  word tokptr
-  byte len, comment
-
-  comment = 0
-  repeat
-    repeat
-      if !^inptr
-        infunc()#0
-      fin
-      while ^inptr and ^inptr <= ' ' // Skip whitespace
-        inptr++
-      loop
-    until ^inptr
-    len = 0
-    while ^(inptr + len) > ' ' // Tokenize characters
-      len++
-    loop
-    if len == 1 and ^inptr == '(' // Check for nested comment
-      comment++
-    fin
-    if comment
-      if len == 1 and ^inptr == ')' // Check for nested uncomment
-        comment--
-      fin
-      inptr = inptr + len
-      len   = 0
-    fin
-  until len
-  tokptr = inptr
-  inptr  = inptr + len
-  return tokptr, len
-end
-def delimit(a)#2
-  word delim
+def nextword(delim)#2
+  word wordptr
   byte len
 
-  if ^inptr == ' '
-    inptr++
-  fin
-  delim = inptr
-  while ^inptr and ^inptr <> a // Find delimiter
+  repeat
+    if !^inptr
+      infunc()#0
+    fin
+    while ^inptr == delim // Skip leading delimiter
+      inptr++
+    loop
+  until ^inptr
+  wordptr = inptr
+  while ^inptr and ^inptr <> delim // Tokenize characters
     inptr++
   loop
-  len = inptr - delim
-  if ^inptr == a
+  len = inptr - wordptr
+  if ^inptr // Skip trailing delimiter
     inptr++
   fin
-  return delim, len
+  return wordptr, len
 end
 //
 // Find match in dictionary
@@ -833,7 +820,7 @@ def interpret#0
   // Set flags on words
   //
   repeat
-    inchars, inlen = toknext
+    inchars, inlen = nextword(' ')
     dentry = find(inchars, inlen)
     if dentry
       if (not (state & comp_flag)) or (^_ffa_(dentry) & imm_flag)
@@ -874,7 +861,7 @@ def interpret#0
         if state & comp_flag
           if state & comp_itc_flag
             pfillw(@d_lit)
-            pfillw(value) // Poke literal value into PFA
+            pfillw(value) // Poke literal value into dictionary
           else // comp_pbc_flag
             if value >= 0 and value <= 15
               pfillb(value << 1) // CONSTANT NIBBLE
@@ -882,7 +869,7 @@ def interpret#0
               pfillb($20) // CONSTANT MINUS_ONE
             else
               pfillb($2C) // CONSTANT WORD
-              pfillw(value) // Poke literal value into PFA
+              pfillw(value) // Poke literal value into dictionary
             fin
           fin
         else
@@ -1062,7 +1049,7 @@ def _create_#0
     puts(" CREATE already compiling\n")
     _abort_
   fin
-  namechars, namelen = toknext
+  namechars, namelen = nextword(' ')
   plist  = vlist
   vlist  = heapmark
   ^vlist = namelen
@@ -1107,7 +1094,7 @@ def _lookup_#1
   word symname
   char symlen, dci[31]
 
-  symname, symlen = toknext
+  symname, symlen = nextword(' ')
   symname--
   ^symname = symlen
   return cmdsys:lookupsym(stodci(symname, @dci))
@@ -1123,10 +1110,10 @@ def _var_(a)#0
   ^(_ffa_(vlist)) = 0 // Always compiled
   pfillb(^(@divmod)) // Hack - get VM entry vector from divmod
   pfillw(*(@divmod + 1))
-  pfillb($2C) // CONSTANT WORD
   pfillw(heapmark + 3)
   pfillb($5C) // RET
   pfillw(a)   // Variable storage
+  pfillb($2C) // CONSTANT WORD
   state = state & ~comp_flag
 end
 def _const_(a)#0
@@ -1196,6 +1183,25 @@ def _does_#0
     // End of BUILDS, beginning of DOES code
     pfillb(^(@divmod))   // Hack - get VM entry vector from divmod
     pfillw(*(@divmod + 1))
+  fin
+end
+def _literal_(a)#0
+  if state & comp_flag
+    if state & comp_itc_flag
+      pfillw(@d_lit)
+      pfillw(a) // Poke literal value into dictionary
+    else // comp_pbc_flag
+      if a >= 0 and a <= 15
+        pfillb(a << 1) // CONSTANT NIBBLE
+      elsif a == -1
+        pfillb($20) // CONSTANT MINUS_ONE
+      else
+        pfillb($2C) // CONSTANT WORD
+        pfillw(a) // Poke literal value into dictionary
+      fin
+    fin
+  else
+    pfillw(a) // Not really sure what to do here
   fin
 end
 def _semi_#0
@@ -1436,12 +1442,12 @@ def _repeat_#0
   fin
 end
 def _tick_#1
-  return find(toknext)
+  return find(nextword(' '))
 end
 def _forget_#0
   word dentry
 
-  dentry = find(toknext)
+  dentry = find(nextword(' '))
   if dentry
     vlist = *_lfa_(dentry)
     heaprelease(dentry)
@@ -1456,6 +1462,15 @@ def _cont_#0
 end
 def _terminal_#1
   return ^$C000 > 127
+end
+def _word_(a)#1
+  word wordptr
+  byte len
+
+  wordptr, len = nextword(a)
+  wordptr--
+  ^wordptr = len
+  return wordptr
 end
 def _prat_(a)#0
   puti(*a)
@@ -1473,7 +1488,7 @@ def _str_#0
   word str
   byte len
 
-  str, len = delimit('"')
+  str, len = nextword('"')
   str--
   ^str = len
   len++
@@ -1499,7 +1514,7 @@ def _prstr_#0
       pfillw(@puts)
     fin
   else
-    str, len = delimit('"')
+    str, len = nextword('"')
     str--
     ^str = len
     puts(str)
@@ -1509,7 +1524,7 @@ def _src_#0
   word filename
   byte len
 
-  filename, len = delimit('"')
+  filename, len = nextword('"')
   filename--
   ^filename = len
   if srclevel >= SRCREFS
@@ -1519,10 +1534,11 @@ def _src_#0
   inref[srclevel] = fileio:open(filename)
   if inref[srclevel]
     fileio:newline(inref[srclevel], $7F, $0D)
-    infunc   = @filein
-    inbufptr = @inbuf + srclevel * INBUF_SIZE
-    inptr    = inbufptr
-    ^inptr   = 0
+    infunc               = @filein
+    inbufptr             = @inbuf + srclevel * INBUF_SIZE
+    previnptr[srclevel]  = inptr
+    inptr                = inbufptr
+    ^inptr               = 0
     srclevel++
   else
     puts("Failed to open "); puts(filename); putln
@@ -1531,7 +1547,7 @@ end
 def _show_#0
   word dentry, pfa, w
 
-  dentry = find(toknext)
+  dentry = find(nextword(' '))
   if dentry
     if ^_ffa_(dentry) & itc_flag // Only show ITC words
       if *_cfa_(dentry) == @_docolon_
@@ -1599,14 +1615,12 @@ def _brkout_#0
   brkhandle(@d_brkout)
 end
 def _brkon_#0
-  word inchars, dentry
-  byte inlen
+  word dentry
 
   if brkcfa
     puts("Breakpoint already enabled\n")
   else
-    inchars, inlen = toknext
-    dentry = find(inchars, inlen)
+    dentry = find(nextword(' '))
     if dentry
       brkentry = dentry
       brkcfa = *_cfa_(dentry)
@@ -1625,6 +1639,9 @@ def _itc_#0
 end
 def _pbc_#0
   comp_mode = comp_pbc_flag
+end
+def _comment_#0
+  nextword(')')
 end
 def _vlist_#0
   word d
