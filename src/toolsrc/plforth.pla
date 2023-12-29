@@ -31,7 +31,8 @@ const hidden_flag   = $80
 predef _drop_(a)#0, _swap_(a,b)#2, _dup_(a)#2, _dashdup_(a)#1, _over_(a,b,c)#4, _rot_(a,b,c)#3
 predef _add_(a,b)#1, _inc_(a)#1, _inc2_(a)#1, _sub_(a,b)#1, _mul_(a,b)#1, _div_(a,b)#1
 predef _neg_(a)#1, _and_(a,b)#1, _or_(a,b)#1, _xor_(a,b)#1, _not_(a)#1
-predef _abs_(a)#1, _max_(a,b)#1, _min_(a,b)#1
+predef _mod_(a,b)#1, _abs_(a)#1, _max_(a,b)#1, _min_(a,b)#1
+predef _lshift_(a,b)#1, _rshift_(a,b)#1
 predef _cset_(a,b)#0, _cget_(a)#1, _wset_(a,b)#0, _wplusset_(a,b)#0, _wget_(a)#1
 predef _ffa_(a)#1, _lfa_(a)#1, _cfa_(a)#1, _pfa_(a)#1, _allot_(a)#0
 predef _eq_(a,b)#1, _gt_(a,b)#1, _lt_(a,b)#1, _0lt_(a)#1, _0eq_(a)#1
@@ -47,7 +48,7 @@ predef _var_(a)#0, _const_(a)#0, _lit_#1, _slit_#1, _tick_#1, _forget_#0
 predef _terminal_#1, _prat_(a)#0, _str_#0, _prstr_#0, _src_#0
 predef _vlist_#0, _tron_#0, _troff_#0, _itc_#0, _pbc_#0
 predef _brkout_#0, _brkon_#0, _brkoff_#0
-predef _show_#0, _showstack_#0, _showrstack_#0
+predef _space_#0, _spaces_(a)#0, _show_#0, _showstack_#0, _showrstack_#0
 predef _cont_#0, _restart_#0, _bye_#0, _quit_#0, _abort_#0
 // DROP
 char d_drop = "DROP"
@@ -56,7 +57,7 @@ word = 0, @_drop_, $30
 // SWAP
 char d_swap = "SWAP"
 byte = 0
-word = @d_drop, @_swap_, 0
+word = @d_drop, @_swap_
 // DUP
 char d_dup = "DUP"
 byte = inline_flag
@@ -64,15 +65,15 @@ word = @d_swap, @_dup_, $34
 // -DUP
 char d_dashdup = "-DUP"
 byte = 0
-word = @d_dup, @_dashdup_, 0
+word = @d_dup, @_dashdup_
 // OVER
 word d_over = "OVER"
 byte = 0
-word = @d_dashdup, @_over_, 0
+word = @d_dashdup, @_over_
 // ROT
 word d_rot = "ROT"
 byte = 0
-word = @d_over, @_rot_, 0
+word = @d_over, @_rot_
 // ADD
 char d_add = "+"
 byte = inline_flag
@@ -97,10 +98,18 @@ word = @d_sub, @_mul_, $86
 char d_div = "/"
 byte = inline_flag
 word = @d_mul, @_div_, $88
+// DIVMOD
+char d_divmod = "/MOD"
+byte = inline_flag
+word = @d_div, @divmod, $36
+// MOD
+char d_mod = "MOD"
+byte = inline_flag
+word = @d_divmod, @_mod_, $8A
 // NEG
 char d_neg = "NEG"
 byte = inline_flag
-word = @d_div, @_neg_, $90
+word = @d_mod, @_neg_, $90
 // AND
 char d_and = "AND"
 byte = inline_flag
@@ -117,10 +126,18 @@ word = @d_or, @_xor_, $98
 char d_not = "NOT"
 byte = inline_flag
 word = @d_xor, @_not_, $92
+// LEFT SHIFT
+char d_lshift = "LSHIFT"
+byte = inline_flag
+word = @d_not, @_lshift_, $9A
+// RIGHT SHIFT
+char d_rshift = "RSHIFT"
+byte = inline_flag
+word = @d_lshift, @_rshift_, $9C
 // EQUALS
 char d_eq = "="
 byte = inline_flag
-word = @d_not, @_eq_, $40
+word = @d_rshift, @_eq_, $40
 // GREATER THAN
 char d_gt = ">"
 byte = inline_flag
@@ -140,15 +157,15 @@ word = @d_0lt, @_0eq_, $4000 // ZERO ISEQ
 // ABS
 char d_abs = "ABS"
 byte = 0
-word = @d_0eq, @_abs_, 0
+word = @d_0eq, @_abs_
 // MIN
 char d_min = "MIN"
 byte = 0
-word = @d_abs, @_min_, 0
+word = @d_abs, @_min_
 // MAX
 char d_max = "MAX"
 byte = 0
-word = @d_min, @_max_, 0
+word = @d_min, @_max_
 // CHAR PUT
 char d_cset = "C!"
 byte = inline_flag
@@ -160,7 +177,7 @@ word = @d_cset, @_wset_, $72
 // WORD PLUS PUT
 char d_wplusset = "+!"
 byte = 0
-word = @d_wset, @_wplusset_, 0
+word = @d_wset, @_wplusset_
 // CHAR GET
 char d_cget = "C@"
 byte = inline_flag
@@ -176,316 +193,328 @@ word = @d_wget, @_execute_, $56 // ICAL
 // TO RSTACK
 char d_torstk = ">R"
 byte = 0
-word = @d_execute, @_tors_, 0
+word = @d_execute, @_tors_
 // FROM RSTACK
 char d_fromrstk = "R>"
 byte = 0
-word = @d_torstk, @_fromrs_, 0
+word = @d_torstk, @_fromrs_
 // TOP OF RSTACK
 char d_toprstk = "R@"
 byte = 0
-word = @d_fromrstk, @_toprs_, 0
+word = @d_fromrstk, @_toprs_
 // PLASMA SYMBOL LOOKUP
 char d_lookup = "LOOKUP"
 byte = imm_flag
-word = @d_toprstk, @_lookup_, 0
+word = @d_toprstk, @_lookup_
 // PLASMA LINKEAGE
 char d_plasma = "PLASMA"
 byte = 0
-word = @d_lookup, @_plasma_, 0
+word = @d_lookup, @_plasma_
 // VARIABLE
 char d_var = "VARIABLE"
 byte = 0
-word = @d_plasma, @_var_, 0
+word = @d_plasma, @_var_
 // CONSTANT
 char d_const = "CONSTANT"
 byte = 0
-word = @d_var, @_const_, 0
+word = @d_var, @_const_
 // CMOVE
 char d_cmove = "CMOVE"
 byte = 0
-word = @d_const, @_cmove_, 0
+word = @d_const, @_cmove_
 // MOVE
 char d_move = "MOVE"
 byte = 0
-word = @d_cmove, @_move_, 0
+word = @d_cmove, @_move_
 // FILL
 char d_fill = "FILL"
 byte = 0
-word = @d_move, @_fill_, 0
+word = @d_move, @_fill_
 // HERE
 char d_here = "HERE"
 byte = 0
-word = @d_fill, @heapmark, 0
+word = @d_fill, @heapmark
 // ALLOT
 char d_allot = "ALLOT"
 byte = 0
-word = @d_here, @_allot_, 0
+word = @d_here, @_allot_
 // BRANCH
 char d_branch = "(BRANCH)"
-byte = param_flag
-word = @d_allot, @_branch_, 0
+byte = componly_flag | param_flag
+word = @d_allot, @_branch_
 // BRANCH IF 0
 char d_0branch = "(0BRANCH)"
-byte = param_flag
-word = @d_branch, @_0branch_, 0
+byte = componly_flag | param_flag
+word = @d_branch, @_0branch_
 // IF
 char d_if = "IF"
-byte = componly_flag | imm_flag
-word = @d_0branch, @_if_, 0
+byte = imm_flag
+word = @d_0branch, @_if_
 // ELSE
 char d_else = "ELSE"
-byte = componly_flag | imm_flag
-word = @d_if, @_else_, 0
+byte = imm_flag
+word = @d_if, @_else_
 // THEN
 char d_then = "THEN"
-byte = componly_flag | imm_flag
-word = @d_else, @_then_, 0
+byte = imm_flag
+word = @d_else, @_then_
 // CASE
 char d_case = "CASE"
-byte = componly_flag | imm_flag
-word = @d_then, @_case_, 0
+byte = imm_flag
+word = @d_then, @_case_
 // OF
 char d_of = "OF"
-byte = componly_flag | imm_flag
-word = @d_case, @_of_, 0
+byte = imm_flag
+word = @d_case, @_of_
 // ENDOF
 char d_endof = "ENDOF"
-byte = componly_flag | imm_flag
-word = @d_of, @_endof_, 0
+byte = imm_flag
+word = @d_of, @_endof_
 // ENDCASE
 char d_endcase = "ENDCASE"
-byte = componly_flag | imm_flag
-word = @d_endof, @_endcase_, 0
+byte = imm_flag
+word = @d_endof, @_endcase_
 // DO
 char d_do = "DO"
-byte = componly_flag | imm_flag
-word = @d_endcase, @_do_, 0
+byte = imm_flag
+word = @d_endcase, @_do_
 // LEAVE
 char d_leave = "LEAVE"
 byte = componly_flag
-word = @d_do, @_leave_, 0
+word = @d_do, @_leave_
 // COMPILED LOOP
 char d_doloop = "(DOLOOP)"
-byte = param_flag
-word = @d_leave, @_doloop_, 0
+byte = componly_flag | param_flag
+word = @d_leave, @_doloop_
 // LOOP
 char d_loop = "LOOP"
-byte = componly_flag | imm_flag
-word = @d_doloop, @_loop_, 0
+byte = imm_flag
+word = @d_doloop, @_loop_
 // COMPILED LOOP+
 char d_doplusloop = "(+DOLOOP)"
-byte = param_flag
-word = @d_loop, @_doplusloop_, 0
+byte = componly_flag | param_flag
+word = @d_loop, @_doplusloop_
 // LOOP
 char d_plusloop = "+LOOP"
-byte = componly_flag | imm_flag
-word = @d_doplusloop, @_plusloop_, 0
+byte = imm_flag
+word = @d_doplusloop, @_plusloop_
 // I
 char d_i = "I"
 byte = componly_flag
-word = @d_plusloop, @_toprs_, 0
+word = @d_plusloop, @_toprs_
 // J
 char d_j = "J"
 byte = componly_flag
-word = @d_i, @_j_, 0
+word = @d_i, @_j_
 // BEGIN
 char d_begin = "BEGIN"
-byte = componly_flag | imm_flag
-word = @d_j, @_begin_, 0
+byte = imm_flag
+word = @d_j, @_begin_
 // AGAIN
 char d_again = "AGAIN"
-byte = componly_flag | imm_flag
-word = @d_begin, @_again_, 0
+byte = imm_flag
+word = @d_begin, @_again_
 // UNTIL
 char d_until = "UNTIL"
-byte = componly_flag | imm_flag
-word = @d_again, @_until_, 0
+byte = imm_flag
+word = @d_again, @_until_
 // WHILE
 char d_while = "WHILE"
-byte = componly_flag | imm_flag
-word = @d_until, @_while_, 0
+byte = imm_flag
+word = @d_until, @_while_
 // REPEAT
 char d_repeat = "REPEAT"
-byte = componly_flag | imm_flag
-word = @d_while, @_repeat_, 0
+byte = imm_flag
+word = @d_while, @_repeat_
 // FORGET
 char d_forget = "FORGET"
 byte = 0
-word = @d_repeat, @_forget_, 0
+word = @d_repeat, @_forget_
 // CREATE
 char d_create = "CREATE"
 byte = imm_flag
-word = @d_forget, @_buildcreate_, 0
+word = @d_forget, @_buildcreate_
 // BUILDS
 char d_builds = "<BUILDS"
 byte = imm_flag
-word = @d_create, @_builds_, 0
+word = @d_create, @_builds_
 // FILL DOES COMPILE TIME
 char d_filldoes = "(FILLDOES)"
-byte = 0
-word = @d_builds, @_filldoes_, 0
+byte = componly_flag
+word = @d_builds, @_filldoes_
 // DO DOES RUN TIME
 char d_dodoes = "(DODOES)"
-byte = 0
-word = @d_filldoes, @_dodoes_, 0
+byte = componly_flag
+word = @d_filldoes, @_dodoes_
 // DOES
 char d_does = "DOES>"
 byte = imm_flag
-word = @d_dodoes, @_does_, 0
+word = @d_dodoes, @_does_
 // COMMA
 char d_comma = ","
 byte = 0
-word = @d_does, @pfillw, 0
+word = @d_does, @pfillw
 // COMMA
 char d_commab = "C,"
 byte = 0
-word = @d_comma, @pfillb, 0
+word = @d_comma, @pfillb
 // COLON
 char d_colon = ":"
 byte = 0
-word = @d_commab, @_colon_, 0
+word = @d_commab, @_colon_
 // SEMI
 char d_semi = ";"
 byte = imm_flag
-word = @d_colon, @_semi_, 0
+word = @d_colon, @_semi_
 // TICK
 char d_tick = "'"
 byte = 0
-word = @d_semi, @_tick_, 0
+word = @d_semi, @_tick_
 // LITERAL NUMBER
 char d_lit = "LIT"
 byte = param_flag
-word = @d_tick, @_lit_, 0
+word = @d_tick, @_lit_
 // ?TERMINAL
 char d_terminal = "?TERMINAL"
 byte = 0
-word = @d_lit, @_terminal_, 0
+word = @d_lit, @_terminal_
 // KEY
 char d_key = "KEY"
 byte = 0
-word = @d_terminal, @getc, 0
+word = @d_terminal, @getc
 // PRINT @TOS
 char d_prat = "?"
 byte = 0
-word = @d_key, @_prat_, 0
+word = @d_key, @_prat_
 // PRINT TOS
 char d_prtos = "."
 byte = 0
-word = @d_prat, @puti, 0
+word = @d_prat, @puti
 // PRINT TOS HEX
 char d_prtoshex = ".$"
 byte = 0
-word = @d_prtos, @puth, 0
+word = @d_prtos, @puth
 // PRINT TOS HEX
 char d_prtosbyte = ".C$"
 byte = 0
-word = @d_prtoshex, @putb, 0
+word = @d_prtoshex, @putb
 // EMIT
 char d_emit = "EMIT"
 byte = 0
-word = @d_prtosbyte, @putc, 0
+word = @d_prtosbyte, @putc
 // CR
 char d_cr = "CR"
 byte = 0
-word = @d_emit, @putln, 0
+word = @d_emit, @putln
+// SPACE
+char d_space = "SPACE"
+byte = 0
+word = @d_cr, @_space_
+// SPACES
+char d_spaces = "SPACES"
+byte = 0
+word = @d_space, @_spaces_
 // STRING
 char d_str = "\""
 byte = imm_flag
-word = @d_cr, @_str_, 0
+word = @d_spaces, @_str_
 // LITERAL STRING
 char d_slit = "SLIT"
 byte = param_flag
-word = @d_str, @_slit_, 0
+word = @d_str, @_slit_
 // COMPILED PRINT STRING
 char d_doprstr = "(.\")"
 byte = 0
-word = @d_slit, @puts, 0
+word = @d_slit, @puts
 // PRINT STRING
 char d_prstr = ".\""
 byte = imm_flag
-word = @d_doprstr, @_prstr_, 0
+word = @d_doprstr, @_prstr_
 // SOURCE FILE
 char d_prsrc = "SRC\""
 byte = 0
-word = @d_prstr, @_src_, 0
+word = @d_prstr, @_src_
 // CONT
 char d_cont = "CONT"
 byte = 0
-word = @d_prsrc, @_cont_, 0
+word = @d_prsrc, @_cont_
 // QUIT
 char d_quit = "QUIT"
 byte = 0
-word = @d_cont, @_quit_, 0
+word = @d_cont, @_quit_
 // ABORT
 char d_abort = "ABORT"
 byte = 0
-word = @d_quit, @_abort_, 0
+word = @d_quit, @_abort_
 // RESTART
 char d_restart = "RESTART"
 byte = 0
-word = @d_abort, @_restart_, 0
+word = @d_abort, @_restart_
 // BYE
 char d_bye = "BYE"
 byte = 0
-word = @d_restart, @_bye_, 0
+word = @d_restart, @_bye_
 // CALL 6502
 char d_call = "CALL"
 byte = 0
-word = @d_bye, @call, 0
+word = @d_bye, @call
 // SHOW DEFINITION
 char d_show = "SHOW"
 byte = 0
-word = @d_call, @_show_, 0
+word = @d_call, @_show_
 // SHOW STACK
 char d_showstack = "SHOWSTACK"
 byte = 0
-word = @d_show, @_showstack_, 0
+word = @d_show, @_showstack_
 // SHOW RSTACK
 char d_showrstack = "SHOWRSTACK"
 byte = 0
-word = @d_showstack, @_showrstack_, 0
+word = @d_showstack, @_showrstack_
 // TRACE ON
 char d_tron = "TRON"
 byte = 0
-word = @d_showrstack, @_tron_, 0
+word = @d_showrstack, @_tron_
 // TRACE OFF
 char d_troff = "TROFF"
 byte = 0
-word = @d_tron, @_troff_, 0
+word = @d_tron, @_troff_
 // BREAK OUT
 char d_brkout = "BRKOUT"
 byte = 0
-word = @d_troff, @_brkout_, 0
+word = @d_troff, @_brkout_
 // BREAK ON
 char d_brkon = "BRKON"
 byte = 0
-word = @d_brkout, @_brkon_, 0
+word = @d_brkout, @_brkon_
 // BREAK OFF
 char d_brkoff = "BRKOFF"
 byte = 0
-word = @d_brkon, @_brkoff_, 0
+word = @d_brkon, @_brkoff_
 //  COMPILE USING ITC
 char d_itc = "ITC"
 byte = 0
-word = @d_brkoff, @_itc_, 0
+word = @d_brkoff, @_itc_
 // COMPILE USING PLASMA BYTECODES
 char d_pbc = "PBC"
 byte = 0
-word = @d_itc, @_pbc_, 0
+word = @d_itc, @_pbc_
 // LIST VOCAB
 char d_vlist = "VLIST"
 byte = 0
-word = @d_pbc, @_vlist_, 0
+word = @d_pbc, @_vlist_
 //
 // Internal variables
 //
-word vlist = @d_vlist
-word startheap, arg, infunc, inref, IIP, W, exit
-const INBUF_SIZE = 80
-char inbuf[INBUF_SIZE + 2]
+word  vlist = @d_vlist
+word  startheap, arg, infunc, inptr, IIP, W, exit
 const keyinbuf = $1FF
-word inptr = @inbuf
+const SRCREFS    = 2
+const INBUF_SIZE = 81
+byte  srclevel   = 0
+byte  inref[SRCREFS]
+char  inbuf[SRCREFS * INBUF_SIZE]
+word  inbufptr
+
 //
 // RSTACK
 //
@@ -551,16 +580,24 @@ def keyin#0
   inptr++
 end
 def filein#0
-  inbuf = fileio:read(inref, @inbuf + 1, INBUF_SIZE)
-  if inbuf
-    inbuf[inbuf + 1] = 0 // NULL terminate
-    inptr            = @inbuf + 1
-  else
-    fileio:close(inref) // EOF - switch back to keyboard input
-    inref  = 0
-    infunc = @keyin
-    keyin
-  fin
+  byte len
+  repeat
+      len = fileio:read(inref[srclevel-1], inbufptr, INBUF_SIZE-1)
+      if len
+        ^(inbufptr + len) = 0 // NULL terminate
+        inptr             = inbufptr
+      else
+        srclevel--
+        inbufptr = inbufptr - INBUF_SIZE
+        fileio:close(inref[srclevel]) // EOF
+        if srclevel == 0              // - switch back to keyboard input
+            inref  = 0
+            infunc = @keyin
+            keyin
+            return
+        fin
+      fin
+    until len
 end
 def toknext#2
   word tokptr
@@ -774,10 +811,11 @@ def warmstart#0
     vlist = *_lfa_(vlist)
   fin
   state = 0
-  if inref
-    fileio:close(inref)
-    inref = 0
-  fin
+  while srclevel
+    srclevel--
+    fileio:close(inref[srclevel])
+    inref[srclevel] = 0
+  loop
 end
 //
 // Cold start
@@ -799,6 +837,13 @@ def interpret#0
     dentry = find(inchars, inlen)
     if dentry
       if (not (state & comp_flag)) or (^_ffa_(dentry) & imm_flag)
+        if ^_ffa_(dentry) & componly_flag
+          inchars--
+          ^inchars = inlen
+          puts(inchars)
+          puts(" : Compile ony word\n")
+          _abort_
+        fin
         execword(dentry)
       elsif state & comp_itc_flag
         pfillw(dentry)
@@ -820,8 +865,11 @@ def interpret#0
     else
       value, valid = isnum(inchars, inlen)
       if not valid
+        inchars--
+        ^inchars = inlen
+        puts(inchars)
+        puts(" ? No match\n")
         warmstart
-        puts("? No match\n")
       else
         if state & comp_flag
           if state & comp_itc_flag
@@ -884,8 +932,17 @@ end
 def _div_(a,b)#1
   return a/b
 end
+def _mod_(a,b)#1
+    return a%b
+end
 def _neg_(a)#1
   return -a
+end
+def _lshift_(a,b)#1
+    return a<<b
+end
+def _rshift_(a,b)#1
+    return a>>b
 end
 def _and_(a,b)#1
   return a & b
@@ -1002,7 +1059,7 @@ def _create_#0
   word bldptr, plist, namechars, namelen
 
   if state & comp_flag
-    puts(" Already compiling\n")
+    puts(" CREATE already compiling\n")
     _abort_
   fin
   namechars, namelen = toknext
@@ -1147,7 +1204,7 @@ def _semi_#0
   elsif state & comp_pbc_flag
     pfillb($5C) // RET
   else
-    puts(" Not compiling\n")
+    puts("; Not compiling\n")
     _abort_
   fin
   state = state & ~comp_flag
@@ -1403,6 +1460,15 @@ end
 def _prat_(a)#0
   puti(*a)
 end
+def _space_#0
+    putc(' ')
+end
+def _spaces_(a)#0
+    while a
+        putc(' ')
+        a--
+    loop
+end
 def _str_#0
   word str
   byte len
@@ -1442,17 +1508,22 @@ end
 def _src_#0
   word filename
   byte len
-  byte params[4]
 
   filename, len = delimit('"')
   filename--
   ^filename = len
-  inref = fileio:open(filename)
-  if inref
-    fileio:newline(inref, $7F, $0D)
-    infunc = @filein
-    inptr  = @inbuf
-    inbuf  = 0
+  if srclevel >= SRCREFS
+    puts("Too many nested SRC\"")
+    _abort_
+  fin
+  inref[srclevel] = fileio:open(filename)
+  if inref[srclevel]
+    fileio:newline(inref[srclevel], $7F, $0D)
+    infunc   = @filein
+    inbufptr = @inbuf + srclevel * INBUF_SIZE
+    inptr    = inbufptr
+    ^inptr   = 0
+    srclevel++
   else
     puts("Failed to open "); puts(filename); putln
   fin
@@ -1600,7 +1671,7 @@ if cmdsys:sysver < $0201
   return
 fin
 warmstart
-fileio:iobufalloc(2) // Allocate buffer away from system buffer
+fileio:iobufalloc(4) // Allocate a bunch of file buffers
 _estkl    = ^(@syscall + 1) // Hack to fill in parameter stack locations
 _estkh    = ^(@syscall + 3)
 inptr     = argNext(argFirst)

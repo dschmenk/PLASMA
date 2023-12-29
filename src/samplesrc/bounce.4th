@@ -1,6 +1,5 @@
-: IFACE 2 * + @ ;
+SRC" CMDSYS.4TH"
 
-LOOKUP CMDSYS 3 IFACE PLASMA EXECMOD
 " CONIO" EXECMOD
 ." Load module returns " . CR
 
