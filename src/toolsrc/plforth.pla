@@ -40,7 +40,7 @@ predef _branch_#0, _0branch_(a)#0, _if_#0, _else_#0, _then_#0
 predef _begin_#0, _again_#0, _until_#0, _while_#0, _repeat_#0
 predef _case_#0, _of_#0, _endof_#0, _endcase_#0, _literal_(a)#0
 predef _do_#0, _doloop_#0, _doplusloop_(a)#0, _plusloop_#0, _loop_#0, _leave_#0, _j_#1
-predef _buildcreate_#0, _builds_#0, _dodoes_#0, _filldoes_#0, _does_#0
+predef _create_#0, _itcdoes_(a)#0, _does_#0
 predef pfillw(a)#0, pfillb(a)#0, _colon_#0, _semi_#0
 predef _tors_(a)#0, _fromrs_#1, _toprs_#1, _execute_(a)#0, _lookup_#1
 predef _cmove_(a,b,c)#0, _move_(a,b,c)#0, _fill_(a,b,c)#0, _plasma_(a)#0
@@ -332,24 +332,20 @@ byte = 0
 word = @d_repeat, @_forget_
 // CREATE
 char d_create = "CREATE"
-byte = imm_flag
-word = @d_forget, @_buildcreate_
+byte = 0
+word = @d_forget, @_create_
 // BUILDS
 char d_builds = "<BUILDS"
-byte = imm_flag
-word = @d_create, @_builds_
-// FILL DOES COMPILE TIME
-char d_filldoes = "(FILLDOES)"
+byte = 0
+word = @d_create, @_create_
+// RECREATE/DOES COMPILE TIME
+char d_createdoes = "(CREATEDOES)"
 byte = componly_flag
-word = @d_builds, @_filldoes_
-// DO DOES RUN TIME
-char d_dodoes = "(DODOES)"
-byte = componly_flag
-word = @d_filldoes, @_dodoes_
+word = @d_builds, @_itcdoes_
 // DOES
 char d_does = "DOES>"
 byte = imm_flag
-word = @d_dodoes, @_does_
+word = @d_createdoes, @_does_
 // COMMA
 char d_comma = ","
 byte = 0
@@ -1042,36 +1038,6 @@ end
 def _fill_(a,b,c)#0
   memset(a, c | (c << 8), b)
 end
-def _create_#0
-  word bldptr, plist, namechars, namelen
-
-  if state & comp_flag
-    puts(" CREATE already compiling\n")
-    _abort_
-  fin
-  namechars, namelen = nextword(' ')
-  plist  = vlist
-  vlist  = heapmark
-  ^vlist = namelen
-  bldptr = vlist + 1
-  while namelen
-    ^bldptr = ^namechars
-    bldptr++
-    namechars++
-    namelen--
-  loop
-  state   = state | comp_mode
-  ^bldptr = state & comp_itc_flag ?? itc_flag :: 0  // Flags
-  bldptr++
-  *bldptr = plist;      // Link ptr
-  bldptr  = bldptr + 2
-  *bldptr = bldptr + 2; // Code ptr linked to PFA
-  heapalloc(bldptr - vlist + 2)
-end
-def _buildcreate_#0
-  _create_
-  pfillw(0) // Allocate space for LFA
-end
 def stodci(str, dci)
   byte len, c
 
@@ -1099,89 +1065,115 @@ def _lookup_#1
   ^symname = symlen
   return cmdsys:lookupsym(stodci(symname, @dci))
 end
+def newdict#0
+  word bldptr, plist, namechars, namelen
+
+  namechars, namelen = nextword(' ')
+  plist  = vlist
+  vlist  = heapmark
+  ^vlist = namelen
+  bldptr = vlist + 1
+  while namelen
+    ^bldptr = ^namechars
+    bldptr++
+    namechars++
+    namelen--
+  loop
+  ^bldptr = 0           // Flags
+  bldptr++
+  *bldptr = plist;      // Link ptr
+  bldptr  = bldptr + 2
+  *bldptr = bldptr + 2 b// Point CFA to PFA
+  heapalloc(bldptr - vlist + 2)
+end
 def _plasma_(a)#0
-  _create_
-  ^(_ffa_(vlist)) = 0 // Always compiled
-  *(_cfa_(vlist)) = a // Code address
-  state = state & ~comp_flag
+  newdict
+  *(_cfa_(vlist)) = a  // PLASMA code address
 end
 def _var_(a)#0
-  _create_
-  ^(_ffa_(vlist)) = 0 // Always compiled
-  pfillb(^(@divmod)) // Hack - get VM entry vector from divmod
-  pfillw(*(@divmod + 1))
-  pfillw(heapmark + 3)
-  pfillb($5C) // RET
-  pfillw(a)   // Variable storage
-  pfillb($2C) // CONSTANT WORD
-  state = state & ~comp_flag
-end
-def _const_(a)#0
-  _create_
-  ^(_ffa_(vlist)) = 0 // Always compiled
-  pfillb(^(@divmod)) // Hack - get VM entry vector from divmod
-  pfillw(*(@divmod + 1))
-  pfillb($2C) // CONSTANT WORD
-  pfillw(a)
-  pfillb($5C) // RET
-  state = state & ~comp_flag
-end
-def _docolon_#0
-  execwords(W + 2) // Exec PFA
-end
-def _colon_#0
-  _create_
-  if state & comp_itc_flag
-    *(_cfa_(vlist)) = @_docolon_
-  else // comp_pbc_flag
-    pfillb(^(@divmod)) // Hack - get VM entry vector from divmod
-    pfillw(*(@divmod + 1))
-  fin
-end
-def _compbuilds_#0
+  newdict
   pfillb(^(@divmod))   // Hack - get VM entry vector from divmod
   pfillw(*(@divmod + 1))
   pfillb($2C)          // CONSTANT WORD
-  pfillw(heapmark + 6) // Pointer to PFA storage
-  pfillb($54)          // CALL
-  pfillw(0)            // Filled in later during _compdoes_
+  pfillw(heapmark + 3) // Poiner to variable in PFA
+  pfillb($5C)          // RET
+  pfillw(a)            // Variable storage
+end
+def _const_(a)#0
+  newdict
+  pfillb(^(@divmod))   // Hack - get VM entry vector from divmod
+  pfillw(*(@divmod + 1))
+  pfillb($2C)          // CONSTANT WORD
+  pfillw(a)
   pfillb($5C)          // RET
 end
-def _builds_#0
-  if state & comp_itc_flag
-    pfillw(@d_create)
-  else // comp_pbc_flag
-    pfillb($54) // CALL
-    pfillw(@_create_)
-    pfillb($54) // CALL
-    pfillw(@_compbuilds_)
-  fin
+def _create_#0
+  newdict
+  pfillb(^(@divmod))   // Hack - get VM entry vector from divmod
+  pfillw(*(@divmod + 1))
+  pfillb($2C)          // CONSTANT WORD
+  pfillw(heapmark + 6) // Pointer to rest of PFA
+  pfillb($5C)          // RET
+  // Reserve following in case of DOES>
+  pfillw(0)            // reserved word for DOES>
+  pfillb(0)            // Reserved byte for DOES>
+  //
+  // 10 bytes after PFA, data follows...
+  //
 end
 def _dodoes_#0
-  (@push)(W + 4)#0    // Pointer to PFA storage
+  (@push)(W + 12)#0   // Pointer to PFA storage
   execwords(*(W + 2)) // Exec PFA ptr
 end
-def _filldoes_#0
-  *(_cfa_(vlist)) = @_dodoes_
-  *(_pfa_(vlist)) = IIP + 2
-  state           = state & ~comp_flag
+def _createdoes_(a)#0
+  if state & comp_itc_flag
+    //
+    // Overwrite CREATE as ITC words
+    //
+    ^(_ffa_(vlist))     = itc_flag
+    *(_cfa_(vlist))     = @_dodoes_
+    *(_pfa_(vlist))     = a // Fill in DOES code address
+  else // comp_pbc_flag
+    //
+    // Rewrite the end of CREATE
+    //
+    ^(_pfa_(vlist) + 6) = $54    // CALL DOES> directly
+    *(_pfa_(vlist) + 7) = a
+    ^(_pfa_(vlist) + 9) = $5C    // RET
+  fin
+  state  = state & ~comp_flag
 end
-def _compdoes_(does)#0
-  *(_pfa_(vlist) + 7) = does // Fill in DOES code address
-  state               = state & ~comp_flag
+def _itcdoes_(a)#0
+  //
+  // Overwrite CREATE as ITC words
+  //
+  ^(_ffa_(vlist))     = itc_flag
+  *(_cfa_(vlist))     = @_dodoes_
+  *(_pfa_(vlist))     = a // Fill in DOES code address
+end
+def _pbcdoes_(a)#0
+  //
+  // Rewrite the end of CREATE
+  //
+  ^(_pfa_(vlist) + 6) = $54    // CALL DOES> directly
+  *(_pfa_(vlist) + 7) = a
+  ^(_pfa_(vlist) + 9) = $5C    // RET
 end
 def _does_#0
   if state & comp_itc_flag
-    pfillw(@d_filldoes)
-    pfillw(0)
-  else // comp_pbc_flag
-    pfillb($2C)          // CONSTANT WORD
+    pfillw(@d_lit)
     pfillw(heapmark + 6) // Pointer to DOES code
-    pfillb($54)          // CALL
-    pfillw(@_compdoes_)  // Fills in code address reserved in _compbuilds_
-    pfillb($5C)          // RET
-    // End of BUILDS, beginning of DOES code
-    pfillb(^(@divmod))   // Hack - get VM entry vector from divmod
+    pfillw(@d_createdoes)
+    pfillw(0)
+    // End of <BUILDS, beginning of DOES>
+  else // comp_pbc_flag
+    pfillb($2C)           // CONSTANT WORD
+    pfillw(heapmark + 6)  // Pointer to DOES code
+    pfillb($54)           // CALL
+    pfillw(@_pbcdoes_)      // Fills in code address reserved in _compbuilds_
+    pfillb($5C)           // RET
+    // End of BUILDS, beginning of DOES> code
+    pfillb(^(@divmod))    // Hack - get VM entry vector from divmod
     pfillw(*(@divmod + 1))
   fin
 end
@@ -1194,14 +1186,28 @@ def _literal_(a)#0
       if a >= 0 and a <= 15
         pfillb(a << 1) // CONSTANT NIBBLE
       elsif a == -1
-        pfillb($20) // CONSTANT MINUS_ONE
+        pfillb($20)    // CONSTANT MINUS_ONE
       else
-        pfillb($2C) // CONSTANT WORD
-        pfillw(a) // Poke literal value into dictionary
+        pfillb($2C)    // CONSTANT WORD
+        pfillw(a)      // Poke literal value into dictionary
       fin
     fin
   else
     pfillw(a) // Not really sure what to do here
+  fin
+end
+def _docolon_#0
+  execwords(W + 2) // Exec PFA
+end
+def _colon_#0
+  newdict
+  state = state | comp_mode
+  if state & comp_itc_flag
+    ^(_ffa_(vlist)) = itc_flag
+    *(_cfa_(vlist)) = @_docolon_
+  else // comp_pbc_flag
+    pfillb(^(@divmod)) // Hack - get VM entry vector from divmod
+    pfillw(*(@divmod + 1))
   fin
 end
 def _semi_#0
@@ -1657,6 +1663,7 @@ end
 //
 def _quit_#0
   state = 0
+  warmstart
   throw(exit, FALSE)
 end
 //
@@ -1664,8 +1671,7 @@ end
 //
 def _abort_#0
   puts("Abort\n")
-  warmstart
-  throw(exit, FALSE)
+  _quit_
 end
 //
 // Restart
