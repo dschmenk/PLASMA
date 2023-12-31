@@ -45,10 +45,11 @@ predef _create_#0, _itcdoes_(a)#0, _does_#0
 predef pfillw(a)#0, pfillb(a)#0, _colon_#0, _semi_#0
 predef _tors_(a)#0, _fromrs_#1, _toprs_#1, _execute_(a)#0, _lookup_#1
 predef _cmove_(a,b,c)#0, _move_(a,b,c)#0, _fill_(a,b,c)#0, _plasma_(a)#0
-predef _var_(a)#0, _const_(a)#0, _lit_#1, _slit_#1, _tick_#1, _forget_#0
-predef _terminal_#1, _prat_(a)#0, _str_#0, _prstr_#0, _src_#0
+predef _var_(a)#0, _const_(a)#0, _lit_#1, _slit_#1, _find_(a)#2, _tick_#1
+predef _forget_#0, _terminal_#1, _prat_(a)#0, _str_#0, _prstr_#0
+predef _src_(a)#0, _srcstr_#0
 predef _vlist_#0, _tron_#0, _troff_#0, _itc_#0, _pbc_#0, _comment_#0
-predef _brkout_#0, _brkon_#0, _brkoff_#0, _word_(a)#1
+predef _brkout_#0, _brkon_#0, _brkoff_#0, _word_(a)#1, _count_(a)#2
 predef _space_#0, _spaces_(a)#0, _show_#0, _showstack_#0, _showrstack_#0
 predef _cont_#0, _restart_#0, _bye_#0, _quit_#0, _abort_#0
 // DROP
@@ -363,10 +364,18 @@ word = @d_commab, @_colon_
 char d_semi = ";"
 byte = imm_flag
 word = @d_colon, @_semi_
+// COUNT
+char d_count = "COUNT"
+byte = 0
+word = @d_semi, @_count_
+// FIND
+char d_find = "FIND"
+byte = 0
+word = @d_count, @_find_
 // TICK
 char d_tick = "'"
-byte = 0
-word = @d_semi, @_tick_
+byte = imm_flag
+word = @d_find, @_tick_
 // INLINE LITERAL NUMBER
 char d_lit = "LIT"
 byte = param_flag
@@ -435,14 +444,18 @@ word = @d_slit, @puts
 char d_prstr = ".\""
 byte = imm_flag
 word = @d_doprstr, @_prstr_
-// SOURCE FILE
-char d_prsrc = "SRC\""
+// READ SOURCE FILE FROM STACK
+char d_src = "SRC"
 byte = 0
 word = @d_prstr, @_src_
+// READ SOURCE FILE FROM INPUT
+char d_srcstr = "SRC\""
+byte = 0
+word = @d_src, @_srcstr_
 // CONT
 char d_cont = "CONT"
 byte = 0
-word = @d_prsrc, @_cont_
+word = @d_srcstr, @_cont_
 // QUIT
 char d_quit = "QUIT"
 byte = 0
@@ -1423,6 +1436,18 @@ def _repeat_#0
     *backref = heapmark - backref // Backref to BEGIN
   fin
 end
+def _count_(a)#2
+  return a + 1, ^a
+end
+def _find_(a)#2
+  word dentry
+
+  dentry = find(_count_(a))
+  if dentry
+    return dentry, ^_ffa_(dentry) & imm_flag ?? 1 :: -1
+  fin
+  return a, 0
+end
 def _tick_#1
   return find(nextword(' '))
 end
@@ -1502,18 +1527,15 @@ def _prstr_#0
     puts(str)
   fin
 end
-def _src_#0
+def _src_(a)#0
   word filename
   byte len
 
-  filename, len = nextword('"')
-  filename--
-  ^filename = len
   if srclevel >= SRCREFS
-    puts("Too many nested SRC\"")
+    puts("Too many nested SRC")
     _abort_
   fin
-  inref[srclevel] = fileio:open(filename)
+  inref[srclevel] = fileio:open(a)
   if inref[srclevel]
     fileio:newline(inref[srclevel], $7F, $0D)
     infunc               = @filein
@@ -1524,6 +1546,25 @@ def _src_#0
     srclevel++
   else
     puts("Failed to open "); puts(filename); putln
+  fin
+end
+def _srcstr_#0
+  word filename
+  byte len
+
+  if state & comp_flag
+    _str_
+    if state & comp_itc_flag
+      pfillw(@d_src)
+    else // comp_pbc_flag
+      pfillb($54) // CALL
+      pfillw(@_src_)
+    fin
+  else
+    filename, len = nextword('"')
+    filename--
+    ^filename = len
+    _src_(filename)
   fin
 end
 def _show_#0
@@ -1677,7 +1718,7 @@ inptr     = argNext(argFirst)
 exit      = heapalloc(t_except)
 startheap = heapmark
 if not except(exit)
-  if ^inptr; inptr++; _src_; fin
+  if ^inptr; inptr++; _srcstr_; fin
   interpret
 fin
 done
