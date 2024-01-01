@@ -41,13 +41,13 @@ predef _branch_#0, _0branch_(a)#0, _if_#0, _else_#0, _then_#0
 predef _begin_#0, _again_#0, _until_#0, _while_#0, _repeat_#0
 predef _case_#0, _of_#0, _endof_#0, _endcase_#0, _literal_(a)#0
 predef _do_#0, _doloop_#0, _doplusloop_(a)#0, _plusloop_#0, _loop_#0, _leave_#0, _j_#1
-predef _create_#0, _itcdoes_(a)#0, _does_#0
-predef pfillw(a)#0, pfillb(a)#0, _colon_#0, _semi_#0
+predef _create_#0, _itcdoes_(a)#0, _does_#0, _compoff_#0, _compon_#0
+predef _forcecomp_#0, pfillw(a)#0, pfillb(a)#0, _colon_#0, _semi_#0
 predef _tors_(a)#0, _fromrs_#1, _toprs_#1, _execute_(a)#0, _lookup_#1
 predef _cmove_(a,b,c)#0, _move_(a,b,c)#0, _fill_(a,b,c)#0, _plasma_(a)#0
 predef _var_(a)#0, _const_(a)#0, _lit_#1, _slit_#1, _find_(a)#2, _tick_#1
 predef _forget_#0, _terminal_#1, _prat_(a)#0, _str_#0, _prstr_#0
-predef _src_(a)#0, _srcstr_#0
+predef _src_(a)#0, _srcstr_#0, _query_#0, _expect_(a,b)#0, _type_(a,b)#0
 predef _vlist_#0, _tron_#0, _troff_#0, _itc_#0, _pbc_#0, _comment_#0
 predef _brkout_#0, _brkon_#0, _brkoff_#0, _word_(a)#1, _count_(a)#2
 predef _space_#0, _spaces_(a)#0, _show_#0, _showstack_#0, _showrstack_#0
@@ -360,10 +360,22 @@ word = @d_comma, @pfillb
 char d_colon = ":"
 byte = 0
 word = @d_commab, @_colon_
+// COMP OFF
+char d_compoff = "["
+byte = imm_flag
+word = @d_colon, @_compoff_
+// COMP ON
+char d_compon = "]"
+byte = imm_flag
+word = @d_compoff, @_compon_
+// FORCE COMPILE
+char d_forcecomp = "[COMPILE]"
+byte = imm_flag
+word = @d_compon, @_forcecomp_
 // SEMI
 char d_semi = ";"
 byte = imm_flag
-word = @d_colon, @_semi_
+word = @d_forcecomp, @_semi_
 // COUNT
 char d_count = "COUNT"
 byte = 0
@@ -392,10 +404,18 @@ word = @d_lit, @_terminal_
 char d_key = "KEY"
 byte = 0
 word = @d_terminal, @getc
+// QUERY
+char d_query = "QUERY"
+byte = 0
+word = @d_key, @_query_
+// EXPECT
+char d_expect = "EXPECT"
+byte = 0
+word = @d_query, @_expect_
 // WORD
 char d_word = "WORD"
 byte = 0
-word = @d_key, @_word_
+word = @d_expect, @_word_
 // PRINT @TOS
 char d_prat = "?"
 byte = 0
@@ -428,10 +448,14 @@ word = @d_cr, @_space_
 char d_spaces = "SPACES"
 byte = 0
 word = @d_space, @_spaces_
+// TYPE
+char d_type = "TYPE"
+byte = 0
+word = @d_spaces, @_type_
 // STRING
 char d_str = "\""
 byte = imm_flag
-word = @d_spaces, @_str_
+word = @d_type, @_str_
 // LITERAL STRING
 char d_slit = "SLIT"
 byte = param_flag
@@ -552,6 +576,7 @@ const comp_flag     = comp_itc_flag | comp_pbc_flag
 //
 byte comp_mode = comp_itc_flag
 byte state     = 0
+byte savestate = 0
 byte brk       = 0
 word brkentry  = 0
 word brkcfa    = 0
@@ -816,6 +841,28 @@ def coldstart#0
   heaprelease(startheap)
   warmstart
 end
+def docompile(dentry)#0
+  if state & comp_itc_flag
+    pfillw(dentry)
+  elsif state & comp_pbc_flag
+    if ^_ffa_(dentry) & itc_flag // Check if calling ITC word
+      pfillb($2C)    // CONSTANT WORD
+      pfillw(dentry) // Pointer to dictionary entry
+      pfillb($54)    // CALL execword
+      pfillw(@execword)
+    elsif ^_ffa_(dentry) & inline_flag // inline bytecode
+      pfillb(^_pfa_(dentry))
+    elsif ^_ffa_(dentry) & inlinew_flag // inline 2 bytecodes
+      pfillw(*_pfa_(dentry))
+    else
+      pfillb($54) // CALL CFA directly
+      pfillw(*_cfa_(dentry))
+    fin
+  else
+    puts("[COMPILE] not compiling\n")
+    _abort_
+  fin
+end
 def interpret#0
   word inchars, dentry, value
   byte inlen, valid
@@ -836,22 +883,8 @@ def interpret#0
           _abort_
         fin
         execword(dentry)
-      elsif state & comp_itc_flag
-        pfillw(dentry)
-      elsif state & comp_pbc_flag
-        if ^_ffa_(dentry) & itc_flag // Check if calling ITC word
-          pfillb($2C)    // CONSTANT WORD
-          pfillw(dentry) // Pointer to dictionary entry
-          pfillb($54)    // CALL execword
-          pfillw(@execword)
-        elsif ^_ffa_(dentry) & inline_flag // inline bytecode
-          pfillb(^_pfa_(dentry))
-        elsif ^_ffa_(dentry) & inlinew_flag // inline 2 bytecodes
-          pfillw(*_pfa_(dentry))
-        else
-          pfillb($54) // CALL CFA directly
-          pfillw(*_cfa_(dentry))
-        fin
+      else
+        docompile(dentry)
       fin
     else
       value, valid = isnum(inchars, inlen)
@@ -1211,6 +1244,31 @@ def _semi_#0
   fin
   state = state & ~comp_flag
 end
+def _forcecomp_#0
+  word dentry
+
+  dentry = find(nextword(' '))
+  if dentry
+    docompile(dentry)
+  fin
+end
+def _compoff_#0
+  if state & comp_flag
+    savestate = state
+    state     = state & ~comp_flag
+  else
+    puts("[ Not compiling\n")
+    _abort_
+  fin
+end
+def _compon_#0
+  state     = savestate
+  savestate = 0
+  if not (state & comp_flag)
+    puts("[ Not compiling\n")
+    _abort_
+  fin
+end
 def _immediate_#0
   ^_ffa_(vlist) = ^_ffa_(vlist) | imm_flag
 end
@@ -1467,6 +1525,19 @@ def _cont_#0
     putc('?')
   fin
 end
+def _query_#0
+  inptr = gets('>'|$80)
+  ^(inptr + ^inptr + 1) = 0
+  inptr++
+end
+def _expect_(a,b)#0
+  inptr = gets('>'|$80)
+  if ^inptr > b
+    ^inptr = b
+  fin
+  ^(inptr + ^inptr + 1) = 0
+  memcpy(a, inptr + 1, ^inptr)
+end
 def _terminal_#1
   return ^$C000 > 127
 end
@@ -1507,6 +1578,13 @@ def _str_#0
     (@push)(heapmark)#0
   fin
   memcpy(heapalloc(len), str, len)
+end
+def _type_(a,b)#0
+  while b
+    putc(^a)
+    a++
+    b--
+  loop
 end
 def _prstr_#0
   word str
