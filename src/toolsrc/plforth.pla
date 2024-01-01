@@ -4,550 +4,9 @@ include "inc/fileio.plh"
 include "inc/conio.plh"
 include "inc/longjmp.plh"
 //
-// FORTH dictionary layout
-//
-//  bytes   usage
-//  -----   -----
-// [1]      name length
-// [1..255] name
-// [1]      FFA (flag field address)
-// [2]      LFA (link field address)
-// [2]      CFA (code field address)
-// [2..]    PFA (param field address)
-//
-
-//
-// Mask and flags for dictionary entries
-//
-const param_flag    = $02
-const itc_flag      = $04
-const inline_flag   = $08
-const inlinew_flag  = $10
-const imm_flag      = $20
-const componly_flag = $40
-const hidden_flag   = $80
-//
-// Predefine instrinsics
-//
-predef _drop_(a)#0, _swap_(a,b)#2, _dup_(a)#2, _dashdup_(a)#1, _over_(a,b,c)#4, _rot_(a,b,c)#3
-predef _add_(a,b)#1, _inc_(a)#1, _inc2_(a)#1, _sub_(a,b)#1, _mul_(a,b)#1, _div_(a,b)#1
-predef _neg_(a)#1, _and_(a,b)#1, _or_(a,b)#1, _xor_(a,b)#1, _not_(a)#1
-predef _mod_(a,b)#1, _abs_(a)#1, _max_(a,b)#1, _min_(a,b)#1
-predef _lshift_(a,b)#1, _rshift_(a,b)#1
-predef _cset_(a,b)#0, _cget_(a)#1, _wset_(a,b)#0, _wplusset_(a,b)#0, _wget_(a)#1
-predef _ffa_(a)#1, _lfa_(a)#1, _cfa_(a)#1, _pfa_(a)#1, _allot_(a)#0
-predef _eq_(a,b)#1, _gt_(a,b)#1, _lt_(a,b)#1, _0lt_(a)#1, _0eq_(a)#1
-predef _branch_#0, _0branch_(a)#0, _if_#0, _else_#0, _then_#0
-predef _begin_#0, _again_#0, _until_#0, _while_#0, _repeat_#0
-predef _case_#0, _of_#0, _endof_#0, _endcase_#0, _literal_(a)#0
-predef _do_#0, _doloop_#0, _doplusloop_(a)#0, _plusloop_#0, _loop_#0, _leave_#0, _j_#1
-predef _create_#0, _itcdoes_(a)#0, _does_#0, _compoff_#0, _compon_#0
-predef _forcecomp_#0, pfillw(a)#0, pfillb(a)#0, _colon_#0, _semi_#0
-predef _tors_(a)#0, _fromrs_#1, _toprs_#1, _execute_(a)#0, _lookup_#1
-predef _cmove_(a,b,c)#0, _move_(a,b,c)#0, _fill_(a,b,c)#0, _plasma_(a)#0
-predef _var_(a)#0, _const_(a)#0, _lit_#1, _slit_#1, _find_(a)#2, _tick_#1
-predef _forget_#0, _terminal_#1, _prat_(a)#0, _str_#0, _prstr_#0
-predef _src_(a)#0, _srcstr_#0, _query_#0, _expect_(a,b)#0, _type_(a,b)#0
-predef _vlist_#0, _tron_#0, _troff_#0, _itc_#0, _pbc_#0, _comment_#0
-predef _brkout_#0, _brkon_#0, _brkoff_#0, _word_(a)#1, _count_(a)#2
-predef _space_#0, _spaces_(a)#0, _show_#0, _showstack_#0, _showrstack_#0
-predef _cont_#0, _restart_#0, _bye_#0, _quit_#0, _abort_#0
-// DROP
-char d_drop = "DROP"
-byte = inline_flag
-word = 0, @_drop_, $30
-// SWAP
-char d_swap = "SWAP"
-byte = 0
-word = @d_drop, @_swap_
-// DUP
-char d_dup = "DUP"
-byte = inline_flag
-word = @d_swap, @_dup_, $34
-// -DUP
-char d_dashdup = "-DUP"
-byte = 0
-word = @d_dup, @_dashdup_
-// OVER
-word d_over = "OVER"
-byte = 0
-word = @d_dashdup, @_over_
-// ROT
-word d_rot = "ROT"
-byte = 0
-word = @d_over, @_rot_
-// ADD
-char d_add = "+"
-byte = inline_flag
-word = @d_rot, @_add_, $82
-// ONE PLUS
-char d_inc = "1+"
-byte = inline_flag
-word = @d_add, @_inc_, $8C
-// TWO PLUS
-char d_inc2 = "2+"
-byte = inlinew_flag
-word = @d_inc, @_inc2_, $8C8C
-// SUB
-char d_sub = "-"
-byte = inline_flag
-word = @d_inc2, @_sub_, $84
-// MUL
-char d_mul = "*"
-byte = inline_flag
-word = @d_sub, @_mul_, $86
-// DIV
-char d_div = "/"
-byte = inline_flag
-word = @d_mul, @_div_, $88
-// DIVMOD
-char d_divmod = "/MOD"
-byte = inline_flag
-word = @d_div, @divmod, $36
-// MOD
-char d_mod = "MOD"
-byte = inline_flag
-word = @d_divmod, @_mod_, $8A
-// NEG
-char d_neg = "NEG"
-byte = inline_flag
-word = @d_mod, @_neg_, $90
-// AND
-char d_and = "AND"
-byte = inline_flag
-word = @d_neg, @_and_, $94
-// OR
-char d_or = "OR"
-byte = inline_flag
-word = @d_and, @_or_, $96
-// XOR
-char d_xor = "XOR"
-byte = inline_flag
-word = @d_or, @_xor_, $98
-// NOT
-char d_not = "NOT"
-byte = inline_flag
-word = @d_xor, @_not_, $92
-// LEFT SHIFT
-char d_lshift = "LSHIFT"
-byte = inline_flag
-word = @d_not, @_lshift_, $9A
-// RIGHT SHIFT
-char d_rshift = "RSHIFT"
-byte = inline_flag
-word = @d_lshift, @_rshift_, $9C
-// EQUALS
-char d_eq = "="
-byte = inline_flag
-word = @d_rshift, @_eq_, $40
-// GREATER THAN
-char d_gt = ">"
-byte = inline_flag
-word = @d_eq, @_gt_, $44
-// LESS THAN
-char d_lt = "<"
-byte = inline_flag
-word = @d_gt, @_lt_, $46
-// LESS THAN ZERO
-char d_0lt = "0<"
-byte = inlinew_flag
-word = @d_lt, @_0lt_, $4600 // ZERO ISLT
-// EQUALS ZERO
-char d_0eq = "0="
-byte = inlinew_flag
-word = @d_0lt, @_0eq_, $4000 // ZERO ISEQ
-// ABS
-char d_abs = "ABS"
-byte = 0
-word = @d_0eq, @_abs_
-// MIN
-char d_min = "MIN"
-byte = 0
-word = @d_abs, @_min_
-// MAX
-char d_max = "MAX"
-byte = 0
-word = @d_min, @_max_
-// CHAR PUT
-char d_cset = "C!"
-byte = inline_flag
-word = @d_max, @_cset_, $70
-// WORD PUT
-char d_wset = "!"
-byte = inline_flag
-word = @d_cset, @_wset_, $72
-// WORD PLUS PUT
-char d_wplusset = "+!"
-byte = 0
-word = @d_wset, @_wplusset_
-// CHAR GET
-char d_cget = "C@"
-byte = inline_flag
-word = @d_wplusset, @_cget_, $60
-// WORD SET
-char d_wget = "@"
-byte = inline_flag
-word = @d_cget, @_wget_, $62
-// EXECUTE
-char d_execute = "EXECUTE"
-byte = inline_flag
-word = @d_wget, @_execute_, $56 // ICAL
-// TO RSTACK
-char d_torstk = ">R"
-byte = 0
-word = @d_execute, @_tors_
-// FROM RSTACK
-char d_fromrstk = "R>"
-byte = 0
-word = @d_torstk, @_fromrs_
-// TOP OF RSTACK
-char d_toprstk = "R@"
-byte = 0
-word = @d_fromrstk, @_toprs_
-// PLASMA SYMBOL LOOKUP
-char d_lookup = "LOOKUP"
-byte = imm_flag
-word = @d_toprstk, @_lookup_
-// PLASMA LINKEAGE
-char d_plasma = "PLASMA"
-byte = 0
-word = @d_lookup, @_plasma_
-// VARIABLE
-char d_var = "VARIABLE"
-byte = 0
-word = @d_plasma, @_var_
-// CONSTANT
-char d_const = "CONSTANT"
-byte = 0
-word = @d_var, @_const_
-// CMOVE
-char d_cmove = "CMOVE"
-byte = 0
-word = @d_const, @_cmove_
-// MOVE
-char d_move = "MOVE"
-byte = 0
-word = @d_cmove, @_move_
-// FILL
-char d_fill = "FILL"
-byte = 0
-word = @d_move, @_fill_
-// HERE
-char d_here = "HERE"
-byte = 0
-word = @d_fill, @heapmark
-// ALLOT
-char d_allot = "ALLOT"
-byte = 0
-word = @d_here, @_allot_
-// BRANCH
-char d_branch = "(BRANCH)"
-byte = componly_flag | param_flag
-word = @d_allot, @_branch_
-// BRANCH IF 0
-char d_0branch = "(0BRANCH)"
-byte = componly_flag | param_flag
-word = @d_branch, @_0branch_
-// IF
-char d_if = "IF"
-byte = imm_flag
-word = @d_0branch, @_if_
-// ELSE
-char d_else = "ELSE"
-byte = imm_flag
-word = @d_if, @_else_
-// THEN
-char d_then = "THEN"
-byte = imm_flag
-word = @d_else, @_then_
-// CASE
-char d_case = "CASE"
-byte = imm_flag
-word = @d_then, @_case_
-// OF
-char d_of = "OF"
-byte = imm_flag
-word = @d_case, @_of_
-// ENDOF
-char d_endof = "ENDOF"
-byte = imm_flag
-word = @d_of, @_endof_
-// ENDCASE
-char d_endcase = "ENDCASE"
-byte = imm_flag
-word = @d_endof, @_endcase_
-// DO
-char d_do = "DO"
-byte = imm_flag
-word = @d_endcase, @_do_
-// LEAVE
-char d_leave = "LEAVE"
-byte = componly_flag
-word = @d_do, @_leave_
-// COMPILED LOOP
-char d_doloop = "(DOLOOP)"
-byte = componly_flag | param_flag
-word = @d_leave, @_doloop_
-// LOOP
-char d_loop = "LOOP"
-byte = imm_flag
-word = @d_doloop, @_loop_
-// COMPILED LOOP+
-char d_doplusloop = "(+DOLOOP)"
-byte = componly_flag | param_flag
-word = @d_loop, @_doplusloop_
-// LOOP
-char d_plusloop = "+LOOP"
-byte = imm_flag
-word = @d_doplusloop, @_plusloop_
-// I
-char d_i = "I"
-byte = componly_flag
-word = @d_plusloop, @_toprs_
-// J
-char d_j = "J"
-byte = componly_flag
-word = @d_i, @_j_
-// BEGIN
-char d_begin = "BEGIN"
-byte = imm_flag
-word = @d_j, @_begin_
-// AGAIN
-char d_again = "AGAIN"
-byte = imm_flag
-word = @d_begin, @_again_
-// UNTIL
-char d_until = "UNTIL"
-byte = imm_flag
-word = @d_again, @_until_
-// WHILE
-char d_while = "WHILE"
-byte = imm_flag
-word = @d_until, @_while_
-// REPEAT
-char d_repeat = "REPEAT"
-byte = imm_flag
-word = @d_while, @_repeat_
-// FORGET
-char d_forget = "FORGET"
-byte = 0
-word = @d_repeat, @_forget_
-// CREATE
-char d_create = "CREATE"
-byte = 0
-word = @d_forget, @_create_
-// BUILDS
-char d_builds = "<BUILDS"
-byte = 0
-word = @d_create, @_create_
-// RECREATE/DOES COMPILE TIME
-char d_createdoes = "(CREATEDOES)"
-byte = componly_flag
-word = @d_builds, @_itcdoes_
-// DOES
-char d_does = "DOES>"
-byte = imm_flag
-word = @d_createdoes, @_does_
-// COMMA
-char d_comma = ","
-byte = 0
-word = @d_does, @pfillw
-// COMMA
-char d_commab = "C,"
-byte = 0
-word = @d_comma, @pfillb
-// COLON
-char d_colon = ":"
-byte = 0
-word = @d_commab, @_colon_
-// COMP OFF
-char d_compoff = "["
-byte = imm_flag
-word = @d_colon, @_compoff_
-// COMP ON
-char d_compon = "]"
-byte = imm_flag
-word = @d_compoff, @_compon_
-// FORCE COMPILE
-char d_forcecomp = "[COMPILE]"
-byte = imm_flag
-word = @d_compon, @_forcecomp_
-// SEMI
-char d_semi = ";"
-byte = imm_flag
-word = @d_forcecomp, @_semi_
-// COUNT
-char d_count = "COUNT"
-byte = 0
-word = @d_semi, @_count_
-// FIND
-char d_find = "FIND"
-byte = 0
-word = @d_count, @_find_
-// TICK
-char d_tick = "'"
-byte = imm_flag
-word = @d_find, @_tick_
-// INLINE LITERAL NUMBER
-char d_lit = "LIT"
-byte = param_flag
-word = @d_tick, @_lit_
-// COMPILED LITERAL NUMBER
-char d_literal = "LITERAL"
-byte = imm_flag
-word = @d_lit, @_literal_
-// ?TERMINAL
-char d_terminal = "?TERMINAL"
-byte = 0
-word = @d_lit, @_terminal_
-// KEY
-char d_key = "KEY"
-byte = 0
-word = @d_terminal, @getc
-// QUERY
-char d_query = "QUERY"
-byte = 0
-word = @d_key, @_query_
-// EXPECT
-char d_expect = "EXPECT"
-byte = 0
-word = @d_query, @_expect_
-// WORD
-char d_word = "WORD"
-byte = 0
-word = @d_expect, @_word_
-// PRINT @TOS
-char d_prat = "?"
-byte = 0
-word = @d_word, @_prat_
-// PRINT TOS
-char d_prtos = "."
-byte = 0
-word = @d_prat, @puti
-// PRINT TOS HEX
-char d_prtoshex = ".$"
-byte = 0
-word = @d_prtos, @puth
-// PRINT TOS HEX
-char d_prtosbyte = ".C$"
-byte = 0
-word = @d_prtoshex, @putb
-// EMIT
-char d_emit = "EMIT"
-byte = 0
-word = @d_prtosbyte, @putc
-// CR
-char d_cr = "CR"
-byte = 0
-word = @d_emit, @putln
-// SPACE
-char d_space = "SPACE"
-byte = 0
-word = @d_cr, @_space_
-// SPACES
-char d_spaces = "SPACES"
-byte = 0
-word = @d_space, @_spaces_
-// TYPE
-char d_type = "TYPE"
-byte = 0
-word = @d_spaces, @_type_
-// STRING
-char d_str = "\""
-byte = imm_flag
-word = @d_type, @_str_
-// LITERAL STRING
-char d_slit = "SLIT"
-byte = param_flag
-word = @d_str, @_slit_
-// COMPILED PRINT STRING
-char d_doprstr = "(.\")"
-byte = 0
-word = @d_slit, @puts
-// PRINT STRING
-char d_prstr = ".\""
-byte = imm_flag
-word = @d_doprstr, @_prstr_
-// READ SOURCE FILE FROM STACK
-char d_src = "SRC"
-byte = 0
-word = @d_prstr, @_src_
-// READ SOURCE FILE FROM INPUT
-char d_srcstr = "SRC\""
-byte = 0
-word = @d_src, @_srcstr_
-// CONT
-char d_cont = "CONT"
-byte = 0
-word = @d_srcstr, @_cont_
-// QUIT
-char d_quit = "QUIT"
-byte = 0
-word = @d_cont, @_quit_
-// ABORT
-char d_abort = "ABORT"
-byte = 0
-word = @d_quit, @_abort_
-// RESTART
-char d_restart = "RESTART"
-byte = 0
-word = @d_abort, @_restart_
-// BYE
-char d_bye = "BYE"
-byte = 0
-word = @d_restart, @_bye_
-// SHOW DEFINITION
-char d_show = "SHOW"
-byte = 0
-word = @d_bye, @_show_
-// SHOW STACK
-char d_showstack = "SHOWSTACK"
-byte = 0
-word = @d_show, @_showstack_
-// SHOW RSTACK
-char d_showrstack = "SHOWRSTACK"
-byte = 0
-word = @d_showstack, @_showrstack_
-// TRACE ON
-char d_tron = "TRON"
-byte = 0
-word = @d_showrstack, @_tron_
-// TRACE OFF
-char d_troff = "TROFF"
-byte = 0
-word = @d_tron, @_troff_
-// BREAK OUT
-char d_brkout = "BRKOUT"
-byte = 0
-word = @d_troff, @_brkout_
-// BREAK ON
-char d_brkon = "BRKON"
-byte = 0
-word = @d_brkout, @_brkon_
-// BREAK OFF
-char d_brkoff = "BRKOFF"
-byte = 0
-word = @d_brkon, @_brkoff_
-//  COMPILE USING ITC
-char d_itc = "ITC"
-byte = 0
-word = @d_brkoff, @_itc_
-// COMPILE USING PLASMA BYTECODES
-char d_pbc = "PBC"
-byte = 0
-word = @d_itc, @_pbc_
-// COMMENT
-char d_comment = "("
-byte = imm_flag
-word = @d_pbc, @_comment_
-// LIST VOCAB
-char d_vlist = "VLIST"
-byte = 0
-word = @d_comment, @_vlist_
-//
 // Internal variables
 //
-word  vlist = @d_vlist
+word  vlist
 word  startheap, arg, infunc, inptr, IIP, W, exit
 const keyinbuf = $1FF
 const SRCREFS    = 2
@@ -563,6 +22,12 @@ word  inbufptr
 const RSTK_SIZE = 16
 byte RSP = RSTK_SIZE
 word RSTACK[RSTK_SIZE]
+//
+// Vocabulary hash table
+//
+const HASH_SIZE = 64 // Must be power of two!
+const HASH_MASK = HASH_SIZE-1
+word hashtbl[HASH_SIZE]
 //
 // State flags
 //
@@ -596,6 +61,551 @@ byte _estkh        = $C0           // ESTKH,X
 byte               = $60           // RTS
 byte _reset_estack = $A2, $10      // LDX #ESTKSZ/2
 byte               = $60           // RTS
+//
+// FORTH dictionary layout
+//
+//  bytes   usage
+//  -----   -----
+// [1]      name length
+// [1..255] name
+// [1]      FFA (flag field address)
+// [2]      LFA (link field address)
+// [2]      HFA (hash field address)
+// [2]      CFA (code field address)
+// [2..]    PFA (param field address)
+//
+//
+// Mask and flags for dictionary entries
+//
+const param_flag    = $02
+const itc_flag      = $04
+const inline_flag   = $08
+const inlinew_flag  = $10
+const imm_flag      = $20
+const componly_flag = $40
+const hidden_flag   = $80
+//
+// Predefine instrinsics
+//
+predef _drop_(a)#0, _swap_(a,b)#2, _dup_(a)#2, _dashdup_(a)#1, _over_(a,b,c)#4, _rot_(a,b,c)#3
+predef _add_(a,b)#1, _inc_(a)#1, _inc2_(a)#1, _sub_(a,b)#1, _mul_(a,b)#1, _div_(a,b)#1
+predef _neg_(a)#1, _and_(a,b)#1, _or_(a,b)#1, _xor_(a,b)#1, _not_(a)#1
+predef _mod_(a,b)#1, _abs_(a)#1, _max_(a,b)#1, _min_(a,b)#1
+predef _lshift_(a,b)#1, _rshift_(a,b)#1
+predef _cset_(a,b)#0, _cget_(a)#1, _wset_(a,b)#0, _wplusset_(a,b)#0, _wget_(a)#1
+predef _ffa_(a)#1, _lfa_(a)#1, _hfa_(a)#1, _cfa_(a)#1, _pfa_(a)#1, _allot_(a)#0
+predef _eq_(a,b)#1, _gt_(a,b)#1, _lt_(a,b)#1, _0lt_(a)#1, _0eq_(a)#1
+predef _branch_#0, _0branch_(a)#0, _if_#0, _else_#0, _then_#0
+predef _begin_#0, _again_#0, _until_#0, _while_#0, _repeat_#0
+predef _case_#0, _of_#0, _endof_#0, _endcase_#0, _literal_(a)#0
+predef _do_#0, _doloop_#0, _doplusloop_(a)#0, _plusloop_#0, _loop_#0, _leave_#0, _j_#1
+predef _create_#0, _itcdoes_(a)#0, _does_#0, _compoff_#0, _compon_#0
+predef _forcecomp_#0, pfillw(a)#0, pfillb(a)#0, _colon_#0, _semi_#0
+predef _tors_(a)#0, _fromrs_#1, _toprs_#1, _execute_(a)#0, _lookup_#1
+predef _cmove_(a,b,c)#0, _move_(a,b,c)#0, _fill_(a,b,c)#0, _plasma_(a)#0
+predef _var_(a)#0, _const_(a)#0, _lit_#1, _slit_#1, _find_(a)#2, _tick_#1
+predef _forget_#0, _terminal_#1, _prat_(a)#0, _str_#0, _prstr_#0
+predef _src_(a)#0, _srcstr_#0, _query_#0, _expect_(a,b)#0, _type_(a,b)#0
+predef _vlist_#0, _tron_#0, _troff_#0, _itc_#0, _pbc_#0, _comment_#0
+predef _brkout_#0, _brkon_#0, _brkoff_#0, _word_(a)#1, _count_(a)#2
+predef _space_#0, _spaces_(a)#0, _show_#0, _showstack_#0, _showrstack_#0
+predef _showhash_#0, _cont_#0, _restart_#0, _bye_#0, _quit_#0, _abort_#0
+// DROP
+char d_drop = "DROP"
+byte = inline_flag
+word = 0, 0, @_drop_, $30
+// SWAP
+char d_swap = "SWAP"
+byte = 0
+word = @d_drop, 0, @_swap_
+// DUP
+char d_dup = "DUP"
+byte = inline_flag
+word = @d_swap, 0, @_dup_, $34
+// -DUP
+char d_dashdup = "-DUP"
+byte = 0
+word = @d_dup, 0, @_dashdup_
+// OVER
+word d_over = "OVER"
+byte = 0
+word = @d_dashdup, 0, @_over_
+// ROT
+word d_rot = "ROT"
+byte = 0
+word = @d_over, 0, @_rot_
+// ADD
+char d_add = "+"
+byte = inline_flag
+word = @d_rot, 0, @_add_, $82
+// ONE PLUS
+char d_inc = "1+"
+byte = inline_flag
+word = @d_add, 0, @_inc_, $8C
+// TWO PLUS
+char d_inc2 = "2+"
+byte = inlinew_flag
+word = @d_inc, 0, @_inc2_, $8C8C
+// SUB
+char d_sub = "-"
+byte = inline_flag
+word = @d_inc2, 0, @_sub_, $84
+// MUL
+char d_mul = "*"
+byte = inline_flag
+word = @d_sub, 0, @_mul_, $86
+// DIV
+char d_div = "/"
+byte = inline_flag
+word = @d_mul, 0, @_div_, $88
+// DIVMOD
+char d_divmod = "/MOD"
+byte = inline_flag
+word = @d_div, 0, @divmod, $36
+// MOD
+char d_mod = "MOD"
+byte = inline_flag
+word = @d_divmod, 0, @_mod_, $8A
+// NEG
+char d_neg = "NEG"
+byte = inline_flag
+word = @d_mod, 0, @_neg_, $90
+// AND
+char d_and = "AND"
+byte = inline_flag
+word = @d_neg, 0, @_and_, $94
+// OR
+char d_or = "OR"
+byte = inline_flag
+word = @d_and, 0, @_or_, $96
+// XOR
+char d_xor = "XOR"
+byte = inline_flag
+word = @d_or, 0, @_xor_, $98
+// NOT
+char d_not = "NOT"
+byte = inline_flag
+word = @d_xor, 0, @_not_, $92
+// LEFT SHIFT
+char d_lshift = "LSHIFT"
+byte = inline_flag
+word = @d_not, 0, @_lshift_, $9A
+// RIGHT SHIFT
+char d_rshift = "RSHIFT"
+byte = inline_flag
+word = @d_lshift, 0, @_rshift_, $9C
+// EQUALS
+char d_eq = "="
+byte = inline_flag
+word = @d_rshift, 0, @_eq_, $40
+// GREATER THAN
+char d_gt = ">"
+byte = inline_flag
+word = @d_eq, 0, @_gt_, $44
+// LESS THAN
+char d_lt = "<"
+byte = inline_flag
+word = @d_gt, 0, @_lt_, $46
+// LESS THAN ZERO
+char d_0lt = "0<"
+byte = inlinew_flag
+word = @d_lt, 0, @_0lt_, $4600 // ZERO ISLT
+// EQUALS ZERO
+char d_0eq = "0="
+byte = inlinew_flag
+word = @d_0lt, 0, @_0eq_, $4000 // ZERO ISEQ
+// ABS
+char d_abs = "ABS"
+byte = 0
+word = @d_0eq, 0, @_abs_
+// MIN
+char d_min = "MIN"
+byte = 0
+word = @d_abs, 0, @_min_
+// MAX
+char d_max = "MAX"
+byte = 0
+word = @d_min, 0, @_max_
+// CHAR PUT
+char d_cset = "C!"
+byte = inline_flag
+word = @d_max, 0, @_cset_, $70
+// WORD PUT
+char d_wset = "!"
+byte = inline_flag
+word = @d_cset, 0, @_wset_, $72
+// WORD PLUS PUT
+char d_wplusset = "+!"
+byte = 0
+word = @d_wset, 0, @_wplusset_
+// CHAR GET
+char d_cget = "C@"
+byte = inline_flag
+word = @d_wplusset, 0, @_cget_, $60
+// WORD SET
+char d_wget = "@"
+byte = inline_flag
+word = @d_cget, 0, @_wget_, $62
+// EXECUTE
+char d_execute = "EXECUTE"
+byte = inline_flag
+word = @d_wget, 0, @_execute_, $56 // ICAL
+// TO RSTACK
+char d_torstk = ">R"
+byte = 0
+word = @d_execute, 0, @_tors_
+// FROM RSTACK
+char d_fromrstk = "R>"
+byte = 0
+word = @d_torstk, 0, @_fromrs_
+// TOP OF RSTACK
+char d_toprstk = "R@"
+byte = 0
+word = @d_fromrstk, 0, @_toprs_
+// PLASMA SYMBOL LOOKUP
+char d_lookup = "LOOKUP"
+byte = 0
+word = @d_toprstk, 0, @_lookup_
+// PLASMA LINKEAGE
+char d_plasma = "PLASMA"
+byte = 0
+word = @d_lookup, 0, @_plasma_
+// VARIABLE
+char d_var = "VARIABLE"
+byte = 0
+word = @d_plasma, 0, @_var_
+// CONSTANT
+char d_const = "CONSTANT"
+byte = 0
+word = @d_var, 0, @_const_
+// CMOVE
+char d_cmove = "CMOVE"
+byte = 0
+word = @d_const, 0, @_cmove_
+// MOVE
+char d_move = "MOVE"
+byte = 0
+word = @d_cmove, 0, @_move_
+// FILL
+char d_fill = "FILL"
+byte = 0
+word = @d_move, 0, @_fill_
+// HERE
+char d_here = "HERE"
+byte = 0
+word = @d_fill, 0, @heapmark
+// ALLOT
+char d_allot = "ALLOT"
+byte = 0
+word = @d_here, 0, @_allot_
+// BRANCH
+char d_branch = "(BRANCH)"
+byte = componly_flag | param_flag
+word = @d_allot, 0, @_branch_
+// BRANCH IF 0
+char d_0branch = "(0BRANCH)"
+byte = componly_flag | param_flag
+word = @d_branch, 0, @_0branch_
+// IF
+char d_if = "IF"
+byte = imm_flag
+word = @d_0branch, 0, @_if_
+// ELSE
+char d_else = "ELSE"
+byte = imm_flag
+word = @d_if, 0, @_else_
+// THEN
+char d_then = "THEN"
+byte = imm_flag
+word = @d_else, 0, @_then_
+// CASE
+char d_case = "CASE"
+byte = imm_flag
+word = @d_then, 0, @_case_
+// OF
+char d_of = "OF"
+byte = imm_flag
+word = @d_case, 0, @_of_
+// ENDOF
+char d_endof = "ENDOF"
+byte = imm_flag
+word = @d_of, 0, @_endof_
+// ENDCASE
+char d_endcase = "ENDCASE"
+byte = imm_flag
+word = @d_endof, 0, @_endcase_
+// DO
+char d_do = "DO"
+byte = imm_flag
+word = @d_endcase, 0, @_do_
+// LEAVE
+char d_leave = "LEAVE"
+byte = componly_flag
+word = @d_do, 0, @_leave_
+// COMPILED LOOP
+char d_doloop = "(DOLOOP)"
+byte = componly_flag | param_flag
+word = @d_leave, 0, @_doloop_
+// LOOP
+char d_loop = "LOOP"
+byte = imm_flag
+word = @d_doloop, 0, @_loop_
+// COMPILED LOOP+
+char d_doplusloop = "(+DOLOOP)"
+byte = componly_flag | param_flag
+word = @d_loop, 0, @_doplusloop_
+// LOOP
+char d_plusloop = "+LOOP"
+byte = imm_flag
+word = @d_doplusloop, 0, @_plusloop_
+// I
+char d_i = "I"
+byte = componly_flag
+word = @d_plusloop, 0, @_toprs_
+// J
+char d_j = "J"
+byte = componly_flag
+word = @d_i, 0, @_j_
+// BEGIN
+char d_begin = "BEGIN"
+byte = imm_flag
+word = @d_j, 0, @_begin_
+// AGAIN
+char d_again = "AGAIN"
+byte = imm_flag
+word = @d_begin, 0, @_again_
+// UNTIL
+char d_until = "UNTIL"
+byte = imm_flag
+word = @d_again, 0, @_until_
+// WHILE
+char d_while = "WHILE"
+byte = imm_flag
+word = @d_until, 0, @_while_
+// REPEAT
+char d_repeat = "REPEAT"
+byte = imm_flag
+word = @d_while, 0, @_repeat_
+// FORGET
+char d_forget = "FORGET"
+byte = 0
+word = @d_repeat, 0, @_forget_
+// CREATE
+char d_create = "CREATE"
+byte = 0
+word = @d_forget, 0, @_create_
+// BUILDS
+char d_builds = "<BUILDS"
+byte = 0
+word = @d_create, 0, @_create_
+// RECREATE/DOES COMPILE TIME
+char d_createdoes = "(CREATEDOES)"
+byte = componly_flag
+word = @d_builds, 0, @_itcdoes_
+// DOES
+char d_does = "DOES>"
+byte = imm_flag
+word = @d_createdoes, 0, @_does_
+// COMMA
+char d_comma = ","
+byte = 0
+word = @d_does, 0, @pfillw
+// COMMA
+char d_commab = "C,"
+byte = 0
+word = @d_comma, 0, @pfillb
+// COLON
+char d_colon = ":"
+byte = 0
+word = @d_commab, 0, @_colon_
+// COMP OFF
+char d_compoff = "["
+byte = imm_flag
+word = @d_colon, 0, @_compoff_
+// COMP ON
+char d_compon = "]"
+byte = imm_flag
+word = @d_compoff, 0, @_compon_
+// FORCE COMPILE
+char d_forcecomp = "[COMPILE]"
+byte = imm_flag
+word = @d_compon, 0, @_forcecomp_
+// SEMI
+char d_semi = ";"
+byte = imm_flag
+word = @d_forcecomp, 0, @_semi_
+// COUNT
+char d_count = "COUNT"
+byte = 0
+word = @d_semi, 0, @_count_
+// FIND
+char d_find = "FIND"
+byte = 0
+word = @d_count, 0, @_find_
+// TICK
+char d_tick = "'"
+byte = imm_flag
+word = @d_find, 0, @_tick_
+// INLINE LITERAL NUMBER
+char d_lit = "LIT"
+byte = param_flag
+word = @d_tick, 0, @_lit_
+// COMPILED LITERAL NUMBER
+char d_literal = "LITERAL"
+byte = imm_flag
+word = @d_lit, 0, @_literal_
+// ?TERMINAL
+char d_terminal = "?TERMINAL"
+byte = 0
+word = @d_lit, 0, @_terminal_
+// KEY
+char d_key = "KEY"
+byte = 0
+word = @d_terminal, 0, @getc
+// QUERY
+char d_query = "QUERY"
+byte = 0
+word = @d_key, 0, @_query_
+// EXPECT
+char d_expect = "EXPECT"
+byte = 0
+word = @d_query, 0, @_expect_
+// WORD
+char d_word = "WORD"
+byte = 0
+word = @d_expect, 0, @_word_
+// PRINT @TOS
+char d_prat = "?"
+byte = 0
+word = @d_word, 0, @_prat_
+// PRINT TOS
+char d_prtos = "."
+byte = 0
+word = @d_prat, 0, @puti
+// PRINT TOS HEX
+char d_prtoshex = ".$"
+byte = 0
+word = @d_prtos, 0, @puth
+// PRINT TOS HEX
+char d_prtosbyte = ".C$"
+byte = 0
+word = @d_prtoshex, 0, @putb
+// EMIT
+char d_emit = "EMIT"
+byte = 0
+word = @d_prtosbyte, 0, @putc
+// CR
+char d_cr = "CR"
+byte = 0
+word = @d_emit, 0, @putln
+// SPACE
+char d_space = "SPACE"
+byte = 0
+word = @d_cr, 0, @_space_
+// SPACES
+char d_spaces = "SPACES"
+byte = 0
+word = @d_space, 0, @_spaces_
+// TYPE
+char d_type = "TYPE"
+byte = 0
+word = @d_spaces, 0, @_type_
+// STRING
+char d_str = "\""
+byte = imm_flag
+word = @d_type, 0, @_str_
+// LITERAL STRING
+char d_slit = "SLIT"
+byte = param_flag
+word = @d_str, 0, @_slit_
+// COMPILED PRINT STRING
+char d_doprstr = "(.\")"
+byte = 0
+word = @d_slit, 0, @puts
+// PRINT STRING
+char d_prstr = ".\""
+byte = imm_flag
+word = @d_doprstr, 0, @_prstr_
+// READ SOURCE FILE FROM STACK
+char d_src = "SRC"
+byte = 0
+word = @d_prstr, 0, @_src_
+// READ SOURCE FILE FROM INPUT
+char d_srcstr = "SRC\""
+byte = 0
+word = @d_src, 0, @_srcstr_
+// CONT
+char d_cont = "CONT"
+byte = 0
+word = @d_srcstr, 0, @_cont_
+// QUIT
+char d_quit = "QUIT"
+byte = 0
+word = @d_cont, 0, @_quit_
+// ABORT
+char d_abort = "ABORT"
+byte = 0
+word = @d_quit, 0, @_abort_
+// RESTART
+char d_restart = "RESTART"
+byte = 0
+word = @d_abort, 0, @_restart_
+// BYE
+char d_bye = "BYE"
+byte = 0
+word = @d_restart, 0, @_bye_
+// SHOW DEFINITION
+char d_show = "SHOW"
+byte = 0
+word = @d_bye, 0, @_show_
+// SHOW STACK
+char d_showstack = "SHOWSTACK"
+byte = 0
+word = @d_show, 0, @_showstack_
+// SHOW RSTACK
+char d_showrstack = "SHOWRSTACK"
+byte = 0
+word = @d_showstack, 0, @_showrstack_
+// SHOW HASH
+char d_showhash = "SHOWHASH"
+byte = 0
+word = @d_showrstack, 0, @_showhash_
+// TRACE ON
+char d_tron = "TRON"
+byte = 0
+word = @d_showhash, 0, @_tron_
+// TRACE OFF
+char d_troff = "TROFF"
+byte = 0
+word = @d_tron, 0, @_troff_
+// BREAK OUT
+char d_brkout = "BRKOUT"
+byte = 0
+word = @d_troff, 0, @_brkout_
+// BREAK ON
+char d_brkon = "BRKON"
+byte = 0
+word = @d_brkout, 0, @_brkon_
+// BREAK OFF
+char d_brkoff = "BRKOFF"
+byte = 0
+word = @d_brkon, 0, @_brkoff_
+//  COMPILE USING ITC
+char d_itc = "ITC"
+byte = 0
+word = @d_brkoff, 0, @_itc_
+// COMPILE USING PLASMA BYTECODES
+char d_pbc = "PBC"
+byte = 0
+word = @d_itc, 0, @_pbc_
+// COMMENT
+char d_comment = "("
+byte = imm_flag
+word = @d_pbc, 0, @_comment_
+// LIST VOCAB
+char d_vlist = "VLIST"
+byte = 0
+word = @d_comment, 0, @_vlist_
 //
 // Helper routines
 //
@@ -668,16 +678,50 @@ end
 //
 // Find match in dictionary
 //
+def hashname(chars, len)#1
+  byte hash
+
+  hash = 0
+  while len
+    hash = hash + ^chars
+    chars++
+    len--
+  loop
+  return hash & HASH_MASK
+end
+def addhash(dentry)#0
+  byte hash
+
+  hash           = hashname(dentry + 1, ^dentry)
+  *_hfa_(dentry) = hashtbl[hash])
+  hashtbl[hash]  = dentry
+end
+def buildhashtbl#0
+  word dentry
+  byte i, hash
+
+  for i = 0 to HASH_MASK
+    hashtbl[i] = 0
+  next
+  dentry = vlist
+  while dentry
+    hash           = hashname(dentry + 1, ^dentry)
+    *_hfa_(dentry) = hashtbl[hash])
+    hashtbl[hash]  = dentry
+    dentry         = *(dentry + ^dentry + 2)
+  loop
+end
 def find(matchchars, matchlen)#1
   word dentry
-  byte i
+  byte i, hash
 
+  hash = hashname(matchchars, matchlen)
   matchchars--
-  dentry = vlist
+  dentry = hashtbl[hash]
   while dentry
     if ^dentry == matchlen
       for i = 1 to ^dentry
-        if ^(matchchars+i) <> ^(dentry+i)
+        if ^(matchchars + i) <> ^(dentry + i)
           break
         fin
       next
@@ -685,7 +729,7 @@ def find(matchchars, matchlen)#1
         return dentry
       fin
     fin
-    dentry = *(dentry + ^dentry + 2)
+    dentry = *(dentry + ^dentry + 4)
   loop
   // Not found
   return 0
@@ -818,6 +862,7 @@ end
 def warmstart#0
   (@_reset_estack)()#0
   brk    = 0
+  brkcfa = 0
   RSP    = RSTK_SIZE
   infunc = @keyin
   inptr  = keyinbuf
@@ -837,9 +882,10 @@ end
 // Cold start
 //
 def coldstart#0
+  warmstart
   vlist = @d_vlist
   heaprelease(startheap)
-  warmstart
+  buildhashtbl
 end
 def docompile(dentry)#0
   if state & comp_itc_flag
@@ -1028,11 +1074,14 @@ end
 def _lfa_(dentry)#1
   return dentry + ^dentry + 2
 end
-def _cfa_(dentry)#1
+def _hfa_(dentry)#1
  return dentry + ^dentry + 4
 end
-def _pfa_(dentry)#1
+def _cfa_(dentry)#1
  return dentry + ^dentry + 6
+end
+def _pfa_(dentry)#1
+ return dentry + ^dentry + 8
 end
 def _tors_(a)#0
   if RSP == 0
@@ -1124,12 +1173,15 @@ def newdict#0
   bldptr++
   *bldptr = plist;      // Link ptr
   bldptr  = bldptr + 2
-  *bldptr = bldptr + 2 b// Point CFA to PFA
+  *bldptr = 0;          // Hash ptr
+  bldptr  = bldptr + 2
+  *bldptr = bldptr + 2  // Point CFA to PFA
   heapalloc(bldptr - vlist + 2)
 end
 def _plasma_(a)#0
   newdict
   *(_cfa_(vlist)) = a  // PLASMA code address
+  addhash(vlist)
 end
 def _var_(a)#0
   newdict
@@ -1139,6 +1191,7 @@ def _var_(a)#0
   pfillw(heapmark + 3) // Poiner to variable in PFA
   pfillb($5C)          // RET
   pfillw(a)            // Variable storage
+  addhash(vlist)
 end
 def _const_(a)#0
   newdict
@@ -1147,6 +1200,7 @@ def _const_(a)#0
   pfillb($2C)          // CONSTANT WORD
   pfillw(a)
   pfillb($5C)          // RET
+  addhash(vlist)
 end
 def _create_#0
   newdict
@@ -1243,6 +1297,7 @@ def _semi_#0
     _abort_
   fin
   state = state & ~comp_flag
+  addhash(vlist)
 end
 def _forcecomp_#0
   word dentry
@@ -1516,6 +1571,7 @@ def _forget_#0
   if dentry
     vlist = *_lfa_(dentry)
     heaprelease(dentry)
+    buildhashtbl
   fin
 end
 def _cont_#0
@@ -1606,9 +1662,6 @@ def _prstr_#0
   fin
 end
 def _src_(a)#0
-  word filename
-  byte len
-
   if srclevel >= SRCREFS
     puts("Too many nested SRC")
     _abort_
@@ -1623,7 +1676,7 @@ def _src_(a)#0
     ^inptr               = 0
     srclevel++
   else
-    puts("Failed to open "); puts(filename); putln
+    puts("Failed to open "); puts(a); putln
   fin
 end
 def _srcstr_#0
@@ -1697,6 +1750,20 @@ def _showrstack_#0
     depth--
   loop
 end
+def _showhash_#0
+  word count, dentry
+  byte i
+
+  for i = 0 to HASH_MASK
+    count = 0
+    dentry = hashtbl[i]
+    while dentry
+      count++
+      dentry = *_hfa_(dentry)
+    loop
+    puti(count); putc(' ')
+  next
+end
 def _tron_#0
   state = state | trace_flag
 end
@@ -1757,7 +1824,6 @@ end
 // Quit
 //
 def _quit_#0
-  state = 0
   warmstart
   throw(exit, FALSE)
 end
@@ -1773,7 +1839,6 @@ end
 //
 def _restart_#0
   coldstart
-  warmstart
   throw(exit, FALSE)
 end
 //
@@ -1788,13 +1853,13 @@ if cmdsys:sysver < $0201
   puts("PLASMA >= 2.01 required\n")
   return
 fin
-warmstart
 fileio:iobufalloc(4) // Allocate a bunch of file buffers
 _estkl    = ^(@syscall + 1) // Hack to fill in parameter stack locations
 _estkh    = ^(@syscall + 3)
-inptr     = argNext(argFirst)
 exit      = heapalloc(t_except)
 startheap = heapmark
+coldstart
+inptr     = argNext(argFirst)
 if not except(exit)
   if ^inptr; inptr++; _srcstr_; fin
   interpret
