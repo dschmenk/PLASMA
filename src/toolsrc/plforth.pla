@@ -103,9 +103,9 @@ predef _eq_(a,b)#1, _gt_(a,b)#1, _lt_(a,b)#1, _0lt_(a)#1, _0eq_(a)#1
 predef _branch_#0, _0branch_(a)#0, _if_#0, _else_#0, _then_#0
 predef _begin_#0, _again_#0, _until_#0, _while_#0, _repeat_#0
 predef _case_#0, _of_#0, _endof_#0, _endcase_#0, _literal_(a)#0, _iscomp_#1
-predef _do_#0, _doloop_#0, _doplusloop_(a)#0, _plusloop_#0, _loop_#0, _leave_#0, _j_#1
+predef _dodo_(a,b)#0, _do_#0, _doloop_#0, _doplusloop_(a)#0, _plusloop_#0, _loop_#0, _leave_#0, _j_#1
 predef _create_#0, _itcdoes_(a)#0, _does_#0, _compoff_#0, _compon_#0
-predef _compcomp_#0, pfillw(a)#0, pfillb(a)#0, _colon_#0, _semi_#0
+predef _forcecomp_#0, pfillw(a)#0, pfillb(a)#0, _colon_#0, _semi_#0
 predef _immediate_#0, _exit_#0, _pad_#1
 predef _tors_(a)#0, _fromrs_#1, _toprs_#1, _execute_(a)#0, _lookup_#1
 predef _cmove_(a,b,c)#0, _move_(a,b,c)#0, _fill_(a,b,c)#0, _plasma_(a)#0
@@ -113,7 +113,7 @@ predef _var_(a)#0, _const_(a)#0, _lit_#1, _slit_#1, _find_(a)#2, _tick_#1
 predef _forget_#0, _terminal_#1, _prat_(a)#0, _str_#0, _prstr_#0
 predef _src_(a)#0, _srcstr_#0, _query_#0, _expect_(a,b)#0, _type_(a,b)#0
 predef _vlist_#0, _tron_#0, _troff_#0, _stepon_#0, _stepoff_#0
-predef _itc_#0, _pbc_#0, _comment_#0, _docompile_(a)#0
+predef _itc_#0, _pbc_#0, _comment_#0
 predef _brkout_#0, _brkon_#0, _brkoff_#0, _word_(a)#1, _count_(a)#2
 predef _space_#0, _spaces_(a)#0, _show_#0, _showstack_#0, _showrstack_#0
 predef _showhash_#0, _cont_#0, _restart_#0, _bye_#0, _quit_#0
@@ -316,12 +316,12 @@ byte = 0
 word = @d_pad, 0, @_allot_
 // BRANCH
 char d_branch = "(BRANCH)"
-byte = componly_flag | param_flag
-word = @d_allot, 0, @_branch_
+byte = componly_flag | param_flag | inline_flag
+word = @d_allot, 0, @_branch_, $50
 // BRANCH IF 0
 char d_0branch = "(0BRANCH)"
-byte = componly_flag | param_flag
-word = @d_branch, 0, @_0branch_
+byte = componly_flag | param_flag | inline_flag
+word = @d_branch, 0, @_0branch_, $4C
 // IF
 char d_if = "IF"
 byte = imm_flag
@@ -350,10 +350,14 @@ word = @d_of, 0, @_endof_
 char d_endcase = "ENDCASE"
 byte = imm_flag
 word = @d_endof, 0, @_endcase_
+// COMPILED DO
+char d_dodo = "(DO)"
+byte = 0
+word = @d_endcase, 0, @_dodo_
 // DO
 char d_do = "DO"
 byte = imm_flag
-word = @d_endcase, 0, @_do_
+word = @d_dodo, 0, @_do_
 // LEAVE
 char d_leave = "LEAVE"
 byte = componly_flag
@@ -443,17 +447,13 @@ char d_compon = "]"
 byte = imm_flag
 word = @d_compoff, 0, @_compon_
 // COMPILE NEXT WORD
-char d_compcomp = "[COMPILE]"
+char d_forcecomp = "[COMPILE]"
 byte = imm_flag
-word = @d_compon, 0, @_compcomp_
-// DO COMPILE
-char d_docomp = "(COMPILE)"
-byte = 0
-word = @d_compcomp, 0, @_docompile_
+word = @d_compon, 0, @_forcecomp_
 // IMMEDIATE
 char d_immediate = "IMMEDIATE"
 byte = imm_flag
-word = @d_docomp, 0, @_immediate_
+word = @d_forcecomp, 0, @_immediate_
 // EXIT
 char d_exit = "EXIT"
 byte = imm_flag
@@ -548,8 +548,8 @@ byte = imm_flag
 word = @d_type, 0, @_str_
 // LITERAL STRING
 char d_slit = "SLIT"
-byte = param_flag
-word = @d_str, 0, @_slit_
+byte = param_flag | inline_flag
+word = @d_str, 0, @_slit_, $2E
 // COMPILED PRINT STRING
 char d_doprstr = "(.\")"
 byte = 0
@@ -719,15 +719,8 @@ end
 // Find match in dictionary
 //
 def hashname(chars, len)#1
-  byte hash
 
-  hash = 0
-  while len
-    hash = (hash << 1) ^ ^chars
-    chars++
-    len--
-  loop
-  return hash & HASH_MASK
+  return (len ^ ((^chars << 1) ^ ^(chars + len / 2) << 2)) & HASH_MASK
 end
 def addhash(dentry)#0
   byte hash
@@ -931,9 +924,9 @@ def coldstart#0
   buildhashtbl
 end
 //
-// Compile a word into the dictionary: ITC and PBC
+// Compile a word/literal into the dictionary: ITC and PBC
 //
-def _docompile_(dentry)#0
+def compword(dentry)#0
   if state & comp_itc_flag
     pfillw(dentry)
   elsif state & comp_pbc_flag
@@ -958,6 +951,21 @@ def _docompile_(dentry)#0
     putc('['); puts(dentry); puts("] ")
   fin
 end
+def compliteral(value)#0
+  if state & comp_itc_flag
+    pfillw(@d_lit)
+    pfillw(value) // Poke literal value into dictionary
+  else // comp_pbc_flag
+    if value >= 0 and value <= 15
+      pfillb(value << 1) // CONSTANT NIBBLE
+    elsif value == -1
+      pfillb($20) // CONSTANT MINUS_ONE
+    else
+      pfillb($2C) // CONSTANT WORD
+      pfillw(value) // Poke literal value into dictionary
+    fin
+  fin
+end
 def interpret#0
   word inchars, dentry, value
   byte inlen, valid
@@ -979,7 +987,7 @@ def interpret#0
         fin
         execword(dentry)
       else
-        _docompile_(dentry)
+        compword(dentry)
       fin
     else
       value, valid = isnum(inchars, inlen)
@@ -991,19 +999,7 @@ def interpret#0
         warmstart
       else
         if state & comp_flag
-          if state & comp_itc_flag
-            pfillw(@d_lit)
-            pfillw(value) // Poke literal value into dictionary
-          else // comp_pbc_flag
-            if value >= 0 and value <= 15
-              pfillb(value << 1) // CONSTANT NIBBLE
-            elsif value == -1
-              pfillb($20) // CONSTANT MINUS_ONE
-            else
-              pfillb($2C) // CONSTANT WORD
-              pfillw(value) // Poke literal value into dictionary
-            fin
-          fin
+          compliteral(value)
         else
           (@push)(value)#0
         fin
@@ -1300,7 +1296,7 @@ def _does_#0
     pfillb($2C)           // CONSTANT WORD
     pfillw(heapmark + 6)  // Pointer to DOES code
     pfillb($54)           // CALL
-    pfillw(@_pbcdoes_)      // Fills in code address reserved in _compbuilds_
+    pfillw(@_pbcdoes_)    // Fills in code address reserved in _compbuilds_
     pfillb($5C)           // RET
     // End of BUILDS, beginning of DOES> code
     pfillb(^(@divmod))    // Hack - get VM entry vector from divmod
@@ -1309,19 +1305,7 @@ def _does_#0
 end
 def _literal_(a)#0
   if state & comp_flag
-    if state & comp_itc_flag
-      pfillw(@d_lit)
-      pfillw(a) // Poke literal value into dictionary
-    else // comp_pbc_flag
-      if a >= 0 and a <= 15
-        pfillb(a << 1) // CONSTANT NIBBLE
-      elsif a == -1
-        pfillb($20)    // CONSTANT MINUS_ONE
-      else
-        pfillb($2C)    // CONSTANT WORD
-        pfillw(a)      // Poke literal value into dictionary
-      fin
-    fin
+    compliteral(a)
   else
     pfillw(a) // Not really sure what to do here
   fin
@@ -1358,13 +1342,12 @@ def _semi_#0
   state = state & ~comp_flag
   addhash(vlist)
 end
-def _compcomp_#0
+def _forcecomp_#0
   word dentry
 
   dentry = find(nextword(' '))
   if dentry
-    _literal_(dentry)
-    _docompile_(@d_docomp)
+    compword(dentry)
   fin
 end
 def _compoff_#0
@@ -1398,20 +1381,16 @@ def _0branch_(a)#0
   fin
 end
 def _if_#0
-  if state & comp_itc_flag
-    pfillw(@d_0branch)
-  else // comp_pbc_flag
-    pfillb($4C) // BRFLS
-  fin
+  compword(@d_0branch)
   _tors_(heapalloc(2)) // Save backfill address
 end
 def _else_#0
   word backref
 
   backref = _fromrs_
+  compword(@d_branch)
+  _tors_(heapalloc(2))
   if state & comp_itc_flag
-    pfillw(@d_branch)
-    _tors_(heapalloc(2))
     *backref = heapmark
   else // comp_pbc_flag
     pfillb($50) // BRNCH
@@ -1430,11 +1409,7 @@ def _then_#0
   fin
 end
 def _case_#0
-  if state & comp_itc_flag
-    pfillw(@d_dup)
-  else // comp_pbc_flag
-    pfillb($34) // DUP
-  fin
+  compword(@d_dup)
   _tors_(0) // Linked address list
 end
 def _of_#0
@@ -1451,28 +1426,20 @@ def _endof_#0
 
   backref = _fromrs_
   link    = _fromrs_
+  compword(@d_branch)
+  _tors_(heapmark)
+  pfillw(link)
   if state & comp_itc_flag
-    pfillw(@d_branch)
-    _tors_(heapmark)
-    pfillw(link)
     *backref = heapmark
-    pfillw(@d_dup)
   else // comp_pbc_flag
-    pfillb($50) // BRNCH
-    _tors_(heapmark)
-    pfillw(link)
     *backref = heapmark - backref // Relative branch
-    pfillb($34) // DUP
   fin
+  compword(@d_dup)
 end
 def _endcase_#0
   word backref, link
 
-  if state & comp_itc_flag
-    pfillw(@d_drop)
-  else // comp_pbc_flag
-    pfillb($30) // DROP
-  fin
+  compword(@d_drop)
   backref = _fromrs_
   while backref
     link = *backref
@@ -1483,25 +1450,19 @@ def _endcase_#0
     fin
     backref = link
   loop
-  if state & comp_itc_flag
-    pfillw(@d_drop)
-  else // comp_pbc_flag
-    pfillb($30) // DROP
+  compword(@d_drop)
+end
+def _dodo_(a,b)#0
+  if RSP < 2
+    puts("Return stack overflow\n")
+    _quit_
   fin
+  RSP             = RSP - 2
+  RSTACK[RSP + 1] = a
+  RSTACK[RSP]     = b
 end
 def _do_#0
-  if state & comp_itc_flag
-    pfillw(@d_swap)
-    pfillw(@d_torstk)
-    pfillw(@d_torstk)
-  else // comp_pbc_flag
-    pfillb($54) // CALL
-    pfillw(@_swap_)
-    pfillb($54) // CALL
-    pfillw(@_tors_)
-    pfillb($54) // CALL
-    pfillw(@_tors_)
-  fin
+  compword(@d_dodo)
   _tors_(heapmark)
 end
 def _leave_#0
@@ -1570,41 +1531,34 @@ def _begin_#0
   _tors_(heapmark)
 end
 def _again_#0
+  compword(@d_branch)
   if state & comp_itc_flag
-    pfillw(@d_branch)
     pfillw(_fromrs_)
   else // comp_pbc_flag
-    pfillb($50) // BRNCH
     pfillw(_fromrs_ - heapmark)
   fin
 end
 def _until_#0
+  compword(@d_0branch)
   if state & comp_itc_flag
-    pfillw(@d_0branch)
     pfillw(_fromrs_)
   else // comp_pbc_flag
-    pfillb($4C) // BRFLS
     pfillw(_fromrs_ - heapmark)
   fin
 end
 def _while_#0
-  if state & comp_itc_flag
-    pfillw(@d_0branch)
-  else // comp_pbc_flag
-    pfillb($4C) // BRFLS
-  fin
+  compword(@d_0branch)
   _tors_(heapalloc(2)) // Save backfill address
 end
 def _repeat_#0
   word backref
 
   backref = _fromrs_ // Backref from WHILE
+  compword(@d_branch)
   if state & comp_itc_flag
-    pfillw(@d_branch)
     pfillw(_fromrs_)
     *backref = heapmark // Backref to BEGIN
   else // comp_pbc_flag
-    pfillb($50) // BRNCH
     pfillw(_fromrs_ - heapmark)
     *backref = heapmark - backref // Backref to BEGIN
   fin
@@ -1690,11 +1644,7 @@ def _str_#0
   ^str = len
   len++
   if state & comp_flag
-    if state & comp_itc_flag
-      pfillw(@d_slit)
-    elsif state & comp_pbc_flag
-      pfillb($2E) // CONSTANT STRING
-    fin
+    compword(@d_slit)
     memcpy(heapalloc(len), str, len) // Add to dictionary
   else
     (@push)(heapmark)#0
@@ -1714,12 +1664,7 @@ def _prstr_#0
 
   if state & comp_flag
     _str_
-    if state & comp_itc_flag
-      pfillw(@d_doprstr)
-    else // comp_pbc_flag
-      pfillb($54) // CALL
-      pfillw(@puts)
-    fin
+    compword(@d_doprstr)
   else
     str, len = nextword('"')
     str--
@@ -1751,12 +1696,7 @@ def _srcstr_#0
 
   if state & comp_flag
     _str_
-    if state & comp_itc_flag
-      pfillw(@d_src)
-    else // comp_pbc_flag
-      pfillb($54) // CALL
-      pfillw(@_src_)
-    fin
+    compword(@d_src)
   else
     filename, len = nextword('"')
     filename--
@@ -1920,12 +1860,7 @@ def _abortstr_#0
 
   _str_
   if state & comp_flag
-    if state & comp_itc_flag
-      pfillw(@d_doabortstr)
-    else // comp_pbc_flag
-      pfillb($54) // CALL
-      pfillw(@d_doabortstr)
-    fin
+    compword(@d_doabortstr)
   else
     (@_doabortstr_)()#0
   fin
