@@ -22,7 +22,7 @@ LOOKUP STRCAT PLASMA STRCAT
 
 : LOADMOD" ( modulename -- )
   PAD SWAP STRCPY ( Move module name out of the way in case its immediate )
-  [ ' " CFA @ ] LITERAL EXECUTE ( Exec word to build a string from input )
+  34 WORD ( Build a string from input )
   LOADMOD
 ;
 

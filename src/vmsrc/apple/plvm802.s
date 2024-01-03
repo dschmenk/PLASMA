@@ -269,7 +269,7 @@ OPTBL   !WORD   ZERO,CN,CN,CN,CN,CN,CN,CN                               ; 00 02 
         !WORD   NEG,COMP,BAND,IOR,XOR,SHL,SHR,IDXW                      ; 90 92 94 96 98 9A 9C 9E
         !WORD   BRGT,BRLT,INCBRLE,ADDBRLE,DECBRGE,SUBBRGE,BRAND,BROR    ; A0 A2 A4 A6 A8 AA AC AE
         !WORD   ADDLB,ADDLW,ADDAB,ADDAW,IDXLB,IDXLW,IDXAB,IDXAW         ; B0 B2 B4 B6 B8 BA BC BE
-        !WORD   NATV                                                    ; C0
+        !WORD   NATV,JUMPZ,JUMP                                         ; C0 C2 C4
 ;*
 ;* ENTER INTO BYTECODE INTERPRETER - IMMEDIATELY SWITCH TO NATIVE
 ;*
@@ -479,7 +479,7 @@ OPXTBL  !WORD   ZERO,CN,CN,CN,CN,CN,CN,CN                               ; 00 02 
         !WORD   NEG,COMP,BAND,IOR,XOR,SHL,SHR,IDXW                      ; 90 92 94 96 98 9A 9C 9E
         !WORD   BRGT,BRLT,INCBRLE,ADDBRLE,DECBRGE,SUBBRGE,BRAND,BROR    ; A0 A2 A4 A6 A8 AA AC AE
         !WORD   ADDLBX,ADDLWX,ADDABX,ADDAWX,IDXLBX,IDXLWX,IDXABX,IDXAWX ; B0 B2 B4 B6 B8 BA BC BE
-        !WORD   NATV                                                    ; C0
+        !WORD   NATV,JUMPZ,JUMP                                         ; C0 C2 C4
 ;*
 ;* JIT PROFILING ENTRY INTO INTERPRETER
 ;*
@@ -1846,5 +1846,20 @@ NATV    TYA                     ; FLATTEN IP
         STA     IP
         +INDEX16                ; SET 16 BIT X/Y
         JMP     (IP)
+;*
+;* JUMPS FOR FORTH COMPILER
+;*
+JUMPZ   PLA
+        BEQ     JUMP
+        INY                     ;+INC_IP
+        INY
+        BMI     +
+        JMP     NEXTOP
++       JMP     FIXNEXT
+JUMP    INY
+        LDA     (IP),Y
+        STA     IP
+        LDY     #$00
+        JMP     FETCHOP
 VMEND   =       *
 }
