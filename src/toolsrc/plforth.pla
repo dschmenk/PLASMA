@@ -7,15 +7,19 @@ include "inc/longjmp.plh"
 // Internal variables
 //
 word  vlist
-word  startheap, arg, infunc, inptr, IIP, W, exit
+word  startheap, arg, infunc, inptr, IIP, W
 const keyinbuf = $1FF
 const SRCREFS    = 2
 const INBUF_SIZE = 81
 byte  srclevel   = 0
+word  inbufptr
 byte  inref[SRCREFS]
 word  previnptr[SRCREFS]
-char  inbuf[SRCREFS * INBUF_SIZE]
-word  inbufptr
+//
+// Internal buffers
+//
+res[SRCREFS * INBUF_SIZE] inbuf
+res[t_except]             exit
 //
 // RSTACK
 //
@@ -33,6 +37,7 @@ word hashtbl[HASH_SIZE]
 //
 const exit_flag     = $01
 const trace_flag    = $02
+const step_flag     = $04
 const comp_itc_flag = $10
 const comp_pbc_flag = $20
 const comp_flag     = comp_itc_flag | comp_pbc_flag
@@ -42,9 +47,9 @@ const comp_flag     = comp_itc_flag | comp_pbc_flag
 byte comp_mode = comp_itc_flag
 byte state     = 0
 byte savestate = 0
-byte brk       = 0
 word brkentry  = 0
 word brkcfa    = 0
+byte brk       = 0
 byte _get_estack   = $8A           // TXA
 byte               = $49, $FF      // EOR #$FF
 byte               = $38           // SEC
@@ -97,19 +102,22 @@ predef _ffa_(a)#1, _lfa_(a)#1, _hfa_(a)#1, _cfa_(a)#1, _pfa_(a)#1, _allot_(a)#0
 predef _eq_(a,b)#1, _gt_(a,b)#1, _lt_(a,b)#1, _0lt_(a)#1, _0eq_(a)#1
 predef _branch_#0, _0branch_(a)#0, _if_#0, _else_#0, _then_#0
 predef _begin_#0, _again_#0, _until_#0, _while_#0, _repeat_#0
-predef _case_#0, _of_#0, _endof_#0, _endcase_#0, _literal_(a)#0
+predef _case_#0, _of_#0, _endof_#0, _endcase_#0, _literal_(a)#0, _iscomp_#1
 predef _do_#0, _doloop_#0, _doplusloop_(a)#0, _plusloop_#0, _loop_#0, _leave_#0, _j_#1
 predef _create_#0, _itcdoes_(a)#0, _does_#0, _compoff_#0, _compon_#0
-predef _forcecomp_#0, pfillw(a)#0, pfillb(a)#0, _colon_#0, _semi_#0
+predef _compcomp_#0, pfillw(a)#0, pfillb(a)#0, _colon_#0, _semi_#0
+predef _immediate_#0, _exit_#0, _pad_#1
 predef _tors_(a)#0, _fromrs_#1, _toprs_#1, _execute_(a)#0, _lookup_#1
 predef _cmove_(a,b,c)#0, _move_(a,b,c)#0, _fill_(a,b,c)#0, _plasma_(a)#0
 predef _var_(a)#0, _const_(a)#0, _lit_#1, _slit_#1, _find_(a)#2, _tick_#1
 predef _forget_#0, _terminal_#1, _prat_(a)#0, _str_#0, _prstr_#0
 predef _src_(a)#0, _srcstr_#0, _query_#0, _expect_(a,b)#0, _type_(a,b)#0
-predef _vlist_#0, _tron_#0, _troff_#0, _itc_#0, _pbc_#0, _comment_#0
+predef _vlist_#0, _tron_#0, _troff_#0, _stepon_#0, _stepoff_#0
+predef _itc_#0, _pbc_#0, _comment_#0, _docompile_(a)#0
 predef _brkout_#0, _brkon_#0, _brkoff_#0, _word_(a)#1, _count_(a)#2
 predef _space_#0, _spaces_(a)#0, _show_#0, _showstack_#0, _showrstack_#0
-predef _showhash_#0, _cont_#0, _restart_#0, _bye_#0, _quit_#0, _abort_#0
+predef _showhash_#0, _cont_#0, _restart_#0, _bye_#0, _quit_#0
+predef _abort_(a)#0, _doabortstr_(a,b)#0, _abortstr_#0
 // DROP
 char d_drop = "DROP"
 byte = inline_flag
@@ -278,10 +286,14 @@ word = @d_plasma, 0, @_var_
 char d_const = "CONSTANT"
 byte = 0
 word = @d_var, 0, @_const_
+// COMPILING?
+char d_iscomp = "?COMP"
+byte = 0
+word = @d_const, 0, @_iscomp_
 // CMOVE
 char d_cmove = "CMOVE"
 byte = 0
-word = @d_const, 0, @_cmove_
+word = @d_iscomp, 0, @_cmove_
 // MOVE
 char d_move = "MOVE"
 byte = 0
@@ -294,10 +306,14 @@ word = @d_move, 0, @_fill_
 char d_here = "HERE"
 byte = 0
 word = @d_fill, 0, @heapmark
+// PAD
+char d_pad = "PAD"
+byte = 0
+word = @d_here, 0, @_pad_
 // ALLOT
 char d_allot = "ALLOT"
 byte = 0
-word = @d_here, 0, @_allot_
+word = @d_pad, 0, @_allot_
 // BRANCH
 char d_branch = "(BRANCH)"
 byte = componly_flag | param_flag
@@ -426,14 +442,26 @@ word = @d_colon, 0, @_compoff_
 char d_compon = "]"
 byte = imm_flag
 word = @d_compoff, 0, @_compon_
-// FORCE COMPILE
-char d_forcecomp = "[COMPILE]"
+// COMPILE NEXT WORD
+char d_compcomp = "[COMPILE]"
 byte = imm_flag
-word = @d_compon, 0, @_forcecomp_
+word = @d_compon, 0, @_compcomp_
+// DO COMPILE
+char d_docomp = "(COMPILE)"
+byte = 0
+word = @d_compcomp, 0, @_docompile_
+// IMMEDIATE
+char d_immediate = "IMMEDIATE"
+byte = imm_flag
+word = @d_docomp, 0, @_immediate_
+// EXIT
+char d_exit = "EXIT"
+byte = imm_flag
+word = @d_immediate, 0, @_exit_
 // SEMI
 char d_semi = ";"
 byte = imm_flag
-word = @d_forcecomp, 0, @_semi_
+word = @d_exit, 0, @_semi_
 // COUNT
 char d_count = "COUNT"
 byte = 0
@@ -446,18 +474,22 @@ word = @d_count, 0, @_find_
 char d_tick = "'"
 byte = imm_flag
 word = @d_find, 0, @_tick_
+// CFA
+char d_cfa = "CFA"
+byte = 0
+word = @d_tick, 0, @_cfa_
 // INLINE LITERAL NUMBER
 char d_lit = "LIT"
 byte = param_flag
-word = @d_tick, 0, @_lit_
-// COMPILED LITERAL NUMBER
+word = @d_cfa, 0, @_lit_
+// COMPILED LITERAL VALUE FROM STACK
 char d_literal = "LITERAL"
 byte = imm_flag
 word = @d_lit, 0, @_literal_
 // ?TERMINAL
 char d_terminal = "?TERMINAL"
 byte = 0
-word = @d_lit, 0, @_terminal_
+word = @d_literal, 0, @_terminal_
 // KEY
 char d_key = "KEY"
 byte = 0
@@ -546,10 +578,18 @@ word = @d_cont, 0, @_quit_
 char d_abort = "ABORT"
 byte = 0
 word = @d_quit, 0, @_abort_
+// DOABORTSTR
+char d_doabortstr = "(ABORT\")"
+byte = 0
+word = @d_abort, 0, @_doabortstr_
+// ABORTSTR
+char d_abortstr = "ABORT\""
+byte = imm_flag
+word = @d_doabortstr, 0, @_abortstr_
 // RESTART
 char d_restart = "RESTART"
 byte = 0
-word = @d_abort, 0, @_restart_
+word = @d_abortstr, 0, @_restart_
 // BYE
 char d_bye = "BYE"
 byte = 0
@@ -578,10 +618,18 @@ word = @d_showhash, 0, @_tron_
 char d_troff = "TROFF"
 byte = 0
 word = @d_tron, 0, @_troff_
+// SINGLE STEP ON
+char d_stepon = "STEPON"
+byte = 0
+word = @d_troff, 0, @_stepon_
+// SINGLE STEP OFF
+char d_stepoff = "STEPOFF"
+byte = 0
+word = @d_stepon, 0, @_stepoff_
 // BREAK OUT
 char d_brkout = "BRKOUT"
 byte = 0
-word = @d_troff, 0, @_brkout_
+word = @d_stepoff, 0, @_brkout_
 // BREAK ON
 char d_brkon = "BRKON"
 byte = 0
@@ -617,16 +665,8 @@ def keyin#0
   byte i
 
   repeat
-    if state & comp_flag
-      inptr = gets(']'|$80) // Compilation continuation prompt
-    else
-      if brk
-        puts(" BRK("); puti(brk); putc(')')
-      else
-        puts(" OK")
-      fin
-      inptr = gets('\n'|$80)
-    fin
+    puts(brk ?? " BRK\n" :: " OK\n")
+    inptr = gets(state & comp_flag ?? ']'|$80 :: '>'|$80)
   until ^inptr
   ^(inptr + ^inptr + 1) = 0 // NULL terminate
   inptr++
@@ -785,28 +825,28 @@ end
 // Break handler
 //
 def showtrace(dentry)#0
-    puts("\n[ "); _showstack_; puts("] "); puts(dentry); puts(": ")
+    puts("\n( "); _showstack_; puts(") "); puts(dentry); putc(' ')
 end
 def brkhandle(dentry)#0
   word brk_infn, brk_inptr, brk_iip
   byte brk_state
 
   showtrace(dentry)
-  brk++
-  brk_state = state
   brk_iip   = IIP
   brk_infn  = infunc
   brk_inptr = inptr
-  state  = 0
-  infunc = @keyin
-  inptr  = keyinbuf
-  ^inptr = 0
+  infunc    = @keyin
+  inptr     = keyinbuf
+  ^inptr    = 0
+  brk_state = state &  comp_flag
+  state     = state & ~comp_flag
+  brk++
   interpret
-  state  = brk_state
-  IIP    = brk_iip
-  infunc = brk_infn
-  inptr  = brk_inptr
   brk--
+  state     = brk_state | state
+  IIP       = brk_iip
+  infunc    = brk_infn
+  inptr     = brk_inptr
 end
 //
 // Execute code in CFA
@@ -824,12 +864,17 @@ def execword(dentry)#0
   wend
   if state & trace_flag
     showtrace(dentry)
+    if state & step_flag
+      if getc == $03 // CTRL-C
+        brkhandle(dentry)
+      fin
+    fin
   fin
   W = _cfa_(dentry)
   (*W)()#0
   if (@_get_estack)()#1 > 16
     puts("Stack over/underflow\n")
-    _abort_
+    _quit_
   fin
 end
 def execwords(wlist)#0
@@ -885,7 +930,10 @@ def coldstart#0
   heaprelease(startheap)
   buildhashtbl
 end
-def docompile(dentry)#0
+//
+// Compile a word into the dictionary: ITC and PBC
+//
+def _docompile_(dentry)#0
   if state & comp_itc_flag
     pfillw(dentry)
   elsif state & comp_pbc_flag
@@ -904,7 +952,10 @@ def docompile(dentry)#0
     fin
   else
     puts("[COMPILE] not compiling\n")
-    _abort_
+    _quit_
+  fin
+  if state & trace_flag
+    putc('['); puts(dentry); puts("] ")
   fin
 end
 def interpret#0
@@ -924,11 +975,11 @@ def interpret#0
           ^inchars = inlen
           puts(inchars)
           puts(" : Compile ony word\n")
-          _abort_
+          _quit_
         fin
         execword(dentry)
       else
-        docompile(dentry)
+        _docompile_(dentry)
       fin
     else
       value, valid = isnum(inchars, inlen)
@@ -959,6 +1010,7 @@ def interpret#0
       fin
     fin
   until state & exit_flag
+  state = state & ~exit_flag
 end
 //
 // Intrinsics
@@ -1084,7 +1136,7 @@ end
 def _tors_(a)#0
   if RSP == 0
     puts("Return stack overflow\n")
-    _abort_
+    _quit_
   fin
   RSP--
   RSTACK[RSP] = a
@@ -1092,7 +1144,7 @@ end
 def _fromrs_#1
   if RSP == RSTK_SIZE
     puts("Return stack underflow\n")
-    _abort_
+    _quit_
   fin
   RSP++
   return RSTACK[RSP - 1]
@@ -1125,6 +1177,9 @@ def _move_(a,b,c)#0
 end
 def _fill_(a,b,c)#0
   memset(a, c | (c << 8), b)
+end
+def _pad_#1
+  return heapmark + 128
 end
 def stodci(str, dci)
   byte len, c
@@ -1284,42 +1339,49 @@ def _colon_#0
     pfillb(^(@divmod)) // Hack - get VM entry vector from divmod
     pfillw(*(@divmod + 1))
   fin
+  if state & trace_flag
+    puts(vlist); putc(' ')
+  fin
 end
-def _semi_#0
+def _exit_#0
   if state & comp_itc_flag
     pfillw(0)
   elsif state & comp_pbc_flag
     pfillb($5C) // RET
   else
     puts("; Not compiling\n")
-    _abort_
+    _quit_
   fin
+end
+def _semi_#0
+  _exit_
   state = state & ~comp_flag
   addhash(vlist)
 end
-def _forcecomp_#0
+def _compcomp_#0
   word dentry
 
   dentry = find(nextword(' '))
   if dentry
-    docompile(dentry)
+    _literal_(dentry)
+    _docompile_(@d_docomp)
   fin
 end
 def _compoff_#0
   if state & comp_flag
-    savestate = state
+    savestate = state &  comp_flag
     state     = state & ~comp_flag
   else
     puts("[ Not compiling\n")
-    _abort_
+    _quit_
   fin
 end
 def _compon_#0
-  state     = savestate
+  state     = state | savestate
   savestate = 0
   if not (state & comp_flag)
     puts("[ Not compiling\n")
-    _abort_
+    _quit_
   fin
 end
 def _immediate_#0
@@ -1574,10 +1636,13 @@ def _forget_#0
 end
 def _cont_#0
   if brk
-    state = exit_flag
+    state = state | exit_flag
   else
     putc('?')
   fin
+end
+def _iscomp_#1
+  return state & comp_flag
 end
 def _query_#0
   inptr = gets('>'|$80)
@@ -1624,14 +1689,17 @@ def _str_#0
   str--
   ^str = len
   len++
-  if state & comp_itc_flag
-    pfillw(@d_slit)
-  elsif state & comp_pbc_flag
-    pfillb($2E) // CONSTANT STRING
+  if state & comp_flag
+    if state & comp_itc_flag
+      pfillw(@d_slit)
+    elsif state & comp_pbc_flag
+      pfillb($2E) // CONSTANT STRING
+    fin
+    memcpy(heapalloc(len), str, len) // Add to dictionary
   else
     (@push)(heapmark)#0
+    memcpy(heapmark, str, len) // Copy to HERE
   fin
-  memcpy(heapalloc(len), str, len)
 end
 def _type_(a,b)#0
   while b
@@ -1662,7 +1730,7 @@ end
 def _src_(a)#0
   if srclevel >= SRCREFS
     puts("Too many nested SRC")
-    _abort_
+    _quit_
   fin
   inref[srclevel] = fileio:open(a)
   if inref[srclevel]
@@ -1766,7 +1834,13 @@ def _tron_#0
   state = state | trace_flag
 end
 def _troff_#0
-  state = state & ~trace_flag
+  state = state & ~(trace_flag | step_flag)
+end
+def _stepon_#0
+  state = state | step_flag | trace_flag
+end
+def _stepoff_#0
+  state = state & ~step_flag
 end
 def brkpoint#0
   brkhandle(brkentry)
@@ -1823,42 +1897,65 @@ end
 //
 def _quit_#0
   warmstart
-  throw(exit, FALSE)
+  throw(@exit, FALSE)
 end
 //
 // Abort
 //
-def _abort_#0
-  puts("Abort\n")
-  _quit_
+def _abort_(a)#0
+  if a
+    puts("Abort\n")
+    _quit_
+  fin
+end
+def _doabortstr_(a,b)#0
+  if a
+    puts("Abort: "); puts(b); putln
+    _quit_
+  fin
+end
+def _abortstr_#0
+  word str
+  byte len
+
+  _str_
+  if state & comp_flag
+    if state & comp_itc_flag
+      pfillw(@d_doabortstr)
+    else // comp_pbc_flag
+      pfillb($54) // CALL
+      pfillw(@d_doabortstr)
+    fin
+  else
+    (@_doabortstr_)()#0
+  fin
 end
 //
 // Restart
 //
 def _restart_#0
   coldstart
-  throw(exit, FALSE)
+  throw(@exit, FALSE)
 end
 //
 // Leave FORTH
 //
 def _bye_#0
-  throw(exit, TRUE)
+  throw(@exit, TRUE)
 end
 
-puts("PLFORTH WIP\n")
+puts("FORTH for PLASMA 2.0 WIP\n")
 if cmdsys:sysver < $0201
   puts("PLASMA >= 2.01 required\n")
   return
 fin
-fileio:iobufalloc(4) // Allocate a bunch of file buffers
 _estkl    = ^(@syscall + 1) // Hack to fill in parameter stack locations
 _estkh    = ^(@syscall + 3)
-exit      = heapalloc(t_except)
+fileio:iobufalloc(4) // Allocate a bunch of file buffers
 startheap = heapmark
 coldstart
 inptr     = argNext(argFirst)
-if not except(exit)
+if not except(@exit)
   if ^inptr; inptr++; _srcstr_; fin
   interpret
 fin

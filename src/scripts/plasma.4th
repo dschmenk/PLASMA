@@ -1,0 +1,82 @@
+: IFACE 2 * + @ ;
+
+LOOKUP CMDSYS 0 IFACE CONSTANT PLASMA_VER
+LOOKUP CMDSYS 2 IFACE CONSTANT CMDLINE
+LOOKUP CMDSYS 3 IFACE PLASMA   EXECMOD
+LOOKUP STRCPY PLASMA STRCPY
+LOOKUP STRCAT PLASMA STRCAT
+
+: .PLASMAVER
+  PLASMA_VER 12 RSHIFT $0F AND 48 + EMIT
+  PLASMA_VER  8 RSHIFT $0F AND 48 + EMIT
+                               46   EMIT
+  PLASMA_VER  4 RSHIFT $0F AND 48 + EMIT
+  PLASMA_VER           $0F AND 48 + EMIT
+;
+
+: LOADMOD ( modulename paramstr -- )
+  CMDLINE " . " STRCPY DROP ( Dummy parameter for module name )
+  CMDLINE SWAP STRCAT DROP
+  EXECMOD 0< ABORT" Failed to load module"
+;
+
+: LOADMOD" ( modulename -- )
+  PAD SWAP STRCPY ( Move module name out of the way in case its immediate )
+  [ ' " CFA @ ] LITERAL EXECUTE ( Exec word to build a string from input )
+  LOADMOD
+;
+
+: EDIT
+  " ED" "  " LOADMOD
+;
+
+: EDIT"
+  " ED" LOADMOD"
+;
+
+: CAT
+  " CAT" "  " LOADMOD
+;
+
+: CAT"
+  " CAT" LOADMOD"
+;
+
+: DEL"
+  " DEL" LOADMOD"
+;
+
+: REN"
+  " REN" LOADMOD"
+;
+
+: COPY"
+  " COPY" LOADMOD"
+;
+
+: NEWDIR"
+  " NEWDIR" LOADMOD"
+;
+
+
+( LOADMOD" FILEIO"  FILEIO is already available in plforth )
+
+LOOKUP FILEIO CONSTANT FILEIOAPI
+FILEIOAPI 0  IFACE PLASMA GETPFX
+FILEIOAPI 1  IFACE PLASMA SETPFX
+
+: .PFX
+    HERE GETPFX DROP HERE (.")
+;
+
+: SETPFX"
+    34 WORD SETPFX DROP
+;
+
+( LOADMOD" CONIO"  CONIO is already available in plforth )
+
+LOOKUP CONIO CONSTANT CONIOAPI
+CONIOAPI 3  IFACE PLASMA HOME
+CONIOAPI 4  IFACE PLASMA GOTOXY
+CONIOAPI 11 IFACE PLASMA TONE
+CONIOAPI 12 IFACE PLASMA RAND
