@@ -317,11 +317,11 @@ word = @d_pad, 0, @_allot_
 // BRANCH ( not in vocabulary )
 char d_branch = "(BRANCH)"
 byte = componly_flag | param_flag | inline_flag
-word = 0, 0, @_branch_, $50
+word = 0, 0, @_branch_, $C4
 // BRANCH IF 0 ( not in vocabulary )
 char d_0branch = "(0BRANCH)"
 byte = componly_flag | param_flag | inline_flag
-word = 0, 0, @_0branch_, $4C
+word = 0, 0, @_0branch_, $C2
 // IF
 char d_if = "IF"
 byte = imm_flag
@@ -1391,23 +1391,10 @@ def _else_#0
   backref = _fromrs_
   compword(@d_branch)
   _tors_(heapalloc(2))
-  if state & comp_itc_flag
-    *backref = heapmark
-  else // comp_pbc_flag
-    pfillb($50) // BRNCH
-    _tors_(heapalloc(2))
-    *backref = heapmark - backref // Relative branch
-  fin
+  *backref = heapmark
 end
 def _then_#0
-  word backref
-
-  backref = _fromrs_
-  if state & comp_itc_flag
-    *backref = heapmark
-  else // comp_pbc_flag
-    *backref = heapmark - backref // Relative branch
-  fin
+  *_fromrs_ = heapmark
 end
 def _case_#0
   compword(@d_dup)
@@ -1443,13 +1430,9 @@ def _endcase_#0
   compword(@d_drop)
   backref = _fromrs_
   while backref
-    link = *backref
-    if state & comp_itc_flag
-      *backref = heapmark
-    else // comp_pbc_flag
-      *backref = heapmark - backref // Relative branch
-    fin
-    backref = link
+    link     = *backref
+    *backref = heapmark
+    backref  = link
   loop
   compword(@d_drop)
 end
@@ -1506,24 +1489,22 @@ end
 def _loop_#0
   if state & comp_itc_flag
     pfillw(@d_doloop)
-    pfillw(_fromrs_)
   else // comp_pbc_flag
     pfillb($54) // CALL
     pfillw(@_dopbcloop_)
-    pfillb($4C) // BRFLS
-    pfillw(_fromrs_ - heapmark)
+    pfillb($C2) // JUMPZ
   fin
+    pfillw(_fromrs_)
 end
 def _plusloop_#0
   if state & comp_itc_flag
     pfillw(@d_doplusloop)
-    pfillw(_fromrs_)
   else // comp_pbc_flag
     pfillb($54) // CALL
     pfillw(@_dopbcplusloop_)
-    pfillb($4C) // BRFLS
-    pfillw(_fromrs_ - heapmark)
+    pfillb($C2) // JUMPZ
   fin
+    pfillw(_fromrs_)
 end
 def _j_#1
   return RSTACK[RSP + 2]
@@ -1533,19 +1514,11 @@ def _begin_#0
 end
 def _again_#0
   compword(@d_branch)
-  if state & comp_itc_flag
-    pfillw(_fromrs_)
-  else // comp_pbc_flag
-    pfillw(_fromrs_ - heapmark)
-  fin
+  pfillw(_fromrs_)
 end
 def _until_#0
   compword(@d_0branch)
-  if state & comp_itc_flag
-    pfillw(_fromrs_)
-  else // comp_pbc_flag
-    pfillw(_fromrs_ - heapmark)
-  fin
+  pfillw(_fromrs_)
 end
 def _while_#0
   compword(@d_0branch)
@@ -1556,13 +1529,8 @@ def _repeat_#0
 
   backref = _fromrs_ // Backref from WHILE
   compword(@d_branch)
-  if state & comp_itc_flag
-    pfillw(_fromrs_)
-    *backref = heapmark // Backref to BEGIN
-  else // comp_pbc_flag
-    pfillw(_fromrs_ - heapmark)
-    *backref = heapmark - backref // Backref to BEGIN
-  fin
+  pfillw(_fromrs_)
+  *backref = heapmark // Backref to BEGIN
 end
 def _count_(a)#2
   return a + 1, ^a
