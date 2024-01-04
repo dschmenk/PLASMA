@@ -1,5 +1,6 @@
 : ?PLASMA
     " IFACE" FIND
+    SWAP DROP
     0= IF
       " PLASMA.4TH" SRC
     THEN
@@ -11,6 +12,7 @@ $6000 HERE - ALLOT ( Reserve HGR2 screen )
 
 : ?HGRLIB
     " HGRLIB" FIND
+    SWAP DROP
     0= IF
       " HGRLIB.4TH" SRC
     THEN
@@ -57,4 +59,4 @@ $6000 HERE - ALLOT ( Reserve HGR2 screen )
   0 HGRMODE DROP
 ;
 
-( BOUNCE)
+BOUNCE

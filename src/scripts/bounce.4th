@@ -1,5 +1,6 @@
 : ?PLASMA
     " IFACE" FIND
+    SWAP DROP
     0= IF
       " PLASMA.4TH" SRC
     THEN
@@ -9,6 +10,7 @@
 
 : ?GRLIB
     " GRLIB" FIND
+    SWAP DROP
     0= IF
       " GRLIB.4TH" SRC
     THEN
