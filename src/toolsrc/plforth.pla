@@ -8,7 +8,7 @@ include "inc/longjmp.plh"
 //
 word  vlist
 word  startheap, arg, infunc, inptr, IIP, W
-const keyinbuf = $1FF
+word  keyinbuf   = $1FF
 const SRCREFS    = 2
 const INBUF_SIZE = 81
 byte  srclevel   = 0
@@ -93,7 +93,8 @@ const hidden_flag   = $80
 // Predefine instrinsics
 //
 predef _drop_(a)#0, _swap_(a,b)#2, _dup_(a)#2, _dashdup_(a)#1, _over_(a,b,c)#4, _rot_(a,b,c)#3
-predef _add_(a,b)#1, _inc_(a)#1, _inc2_(a)#1, _sub_(a,b)#1, _mul_(a,b)#1, _div_(a,b)#1
+predef _add_(a,b)#1, _inc_(a)#1, _inc2_(a)#1, _dec_(a)#1, _dec2_(a)#1
+predef _sub_(a,b)#1, _mul_(a,b)#1, _div_(a,b)#1
 predef _neg_(a)#1, _and_(a,b)#1, _or_(a,b)#1, _xor_(a,b)#1, _not_(a)#1
 predef _mod_(a,b)#1, _abs_(a)#1, _max_(a,b)#1, _min_(a,b)#1
 predef _lshift_(a,b)#1, _rshift_(a,b)#1
@@ -102,19 +103,20 @@ predef _ffa_(a)#1, _lfa_(a)#1, _hfa_(a)#1, _cfa_(a)#1, _pfa_(a)#1, _allot_(a)#0
 predef _eq_(a,b)#1, _gt_(a,b)#1, _lt_(a,b)#1, _0lt_(a)#1, _0eq_(a)#1
 predef _branch_#0, _0branch_(a)#0, _if_#0, _else_#0, _then_#0
 predef _begin_#0, _again_#0, _until_#0, _while_#0, _repeat_#0
-predef _case_#0, _of_#0, _endof_#0, _endcase_#0, _literal_(a)#0, _iscomp_#1
+predef _case_#0, _of_#0, _endof_#0, _endcase_#0, _literal_(a)#0
 predef _dodo_(a,b)#0, _do_#0, _doloop_#0, _doplusloop_(a)#0, _plusloop_#0, _loop_#0, _leave_#0, _j_#1
 predef _create_#0, _itcdoes_(a)#0, _does_#0, _compoff_#0, _compon_#0
 predef _forcecomp_#0, pfillw(a)#0, pfillb(a)#0, _colon_#0, _semi_#0
-predef _immediate_#0, _exit_#0, _pad_#1
+predef _immediate_#0, _exit_#0, _pad_#1, _trailing_(a,b)#2
 predef _tors_(a)#0, _fromrs_#1, _toprs_#1, _execute_(a)#0, _lookup_#1
-predef _cmove_(a,b,c)#0, _move_(a,b,c)#0, _fill_(a,b,c)#0, _plasma_(a)#0
+predef _move_(a,b,c)#0, _fill_(a,b,c)#0, _plasma_(a)#0
 predef _var_(a)#0, _const_(a)#0, _lit_#1, _slit_#1, _find_(a)#2, _tick_#1
-predef _forget_#0, _terminal_#1, _prat_(a)#0, _str_#0, _prstr_#0
+predef _forget_#0, _terminal_#1, _prat_(a)#0, _str_#0, _prstr_#0, _prpstr_#0
+predef _prval_(a)#0, _prbyte_(a)#0, _prhex_(a)#0, _accept_(a,b)#1
 predef _src_(a)#0, _srcstr_#0, _query_#0, _expect_(a,b)#0, _type_(a,b)#0
 predef _vlist_#0, _tron_#0, _troff_#0, _stepon_#0, _stepoff_#0
 predef _itc_#0, _pbc_#0, _comment_#0
-predef _brkout_#0, _brkon_#0, _brkoff_#0, _word_(a)#1, _count_(a)#2
+predef _brk_#0, _brkon_#0, _brkoff_#0, _word_(a)#1, _count_(a)#2
 predef _space_#0, _spaces_(a)#0, _show_#0, _showstack_#0, _showrstack_#0
 predef _showhash_#0, _cont_#0, _restart_#0, _bye_#0, _quit_#0
 predef _abort_(a)#0, _doabortstr_(a,b)#0, _abortstr_#0
@@ -154,10 +156,18 @@ word = @d_add, 0, @_inc_, $8C
 char d_inc2 = "2+"
 byte = inlinew_flag
 word = @d_inc, 0, @_inc2_, $8C8C
+// ONE MINUS
+char d_dec = "1-"
+byte = inline_flag
+word = @d_inc2, 0, @_dec_, $8E
+// TWO MINUS
+char d_dec2 = "2-"
+byte = inlinew_flag
+word = @d_dec, 0, @_dec2_, $8E8E
 // SUB
 char d_sub = "-"
 byte = inline_flag
-word = @d_inc2, 0, @_sub_, $84
+word = @d_dec2, 0, @_sub_, $84
 // MUL
 char d_mul = "*"
 byte = inline_flag
@@ -175,7 +185,7 @@ char d_mod = "MOD"
 byte = inline_flag
 word = @d_divmod, 0, @_mod_, $8A
 // NEG
-char d_neg = "NEG"
+char d_neg = "NEGATE"
 byte = inline_flag
 word = @d_mod, 0, @_neg_, $90
 // AND
@@ -214,10 +224,18 @@ word = @d_eq, 0, @_gt_, $44
 char d_lt = "<"
 byte = inline_flag
 word = @d_gt, 0, @_lt_, $46
+// UNSIGNED GREATER THAN
+char d_ugt = "U>"
+byte = 0
+word = @d_lt, 0, @isugt
+// UNSIGNED LESS THAN
+char d_ult = "U<"
+byte = 0
+word = @d_ugt, 0, @isult
 // LESS THAN ZERO
 char d_0lt = "0<"
 byte = inlinew_flag
-word = @d_lt, 0, @_0lt_, $4600 // ZERO ISLT
+word = @d_ult, 0, @_0lt_, $4600 // ZERO ISLT
 // EQUALS ZERO
 char d_0eq = "0="
 byte = inlinew_flag
@@ -286,18 +304,10 @@ word = @d_plasma, 0, @_var_
 char d_const = "CONSTANT"
 byte = 0
 word = @d_var, 0, @_const_
-// COMPILING?
-char d_iscomp = "?COMP"
-byte = 0
-word = @d_const, 0, @_iscomp_
-// CMOVE
-char d_cmove = "CMOVE"
-byte = 0
-word = @d_iscomp, 0, @_cmove_
 // MOVE
 char d_move = "MOVE"
 byte = 0
-word = @d_cmove, 0, @_move_
+word = @d_const, 0, @_move_
 // FILL
 char d_fill = "FILL"
 byte = 0
@@ -414,7 +424,7 @@ word = @d_repeat, 0, @_forget_
 char d_create = "CREATE"
 byte = 0
 word = @d_forget, 0, @_create_
-// BUILDS
+// BUILDS ( same as CREATE )
 char d_builds = "<BUILDS"
 byte = 0
 word = @d_create, 0, @_create_
@@ -478,14 +488,14 @@ word = @d_find, 0, @_tick_
 char d_cfa = "CFA"
 byte = 0
 word = @d_tick, 0, @_cfa_
-// INLINE LITERAL NUMBER
+// INLINE LITERAL NUMBER ( not in vocabulary )
 char d_lit = "LIT"
 byte = param_flag
-word = @d_cfa, 0, @_lit_
+word = 0, 0, @_lit_
 // COMPILED LITERAL VALUE FROM STACK
 char d_literal = "LITERAL"
 byte = imm_flag
-word = @d_lit, 0, @_literal_
+word = @d_cfa, 0, @_literal_
 // ?TERMINAL
 char d_terminal = "?TERMINAL"
 byte = 0
@@ -502,26 +512,34 @@ word = @d_key, 0, @_query_
 char d_expect = "EXPECT"
 byte = 0
 word = @d_query, 0, @_expect_
+// ACCEPT
+char d_accept = "ACCEPT"
+byte = 0
+word = @d_expect, 0, @_accept_
 // WORD
 char d_word = "WORD"
 byte = 0
-word = @d_expect, 0, @_word_
+word = @d_accept, 0, @_word_
+// -TRAILING
+char d_trailing = "-TRAILING"
+byte = 0
+word = @d_word, 0, @_trailing_
 // PRINT @TOS
 char d_prat = "?"
 byte = 0
-word = @d_word, 0, @_prat_
+word = @d_trailing, 0, @_prat_
 // PRINT TOS
 char d_prtos = "."
 byte = 0
-word = @d_prat, 0, @puti
+word = @d_prat, 0, @_prval_
 // PRINT TOS HEX
-char d_prtoshex = ".$"
+char d_prtoshex = "$."
 byte = 0
-word = @d_prtos, 0, @puth
-// PRINT TOS HEX
-char d_prtosbyte = ".C$"
+word = @d_prtos, 0, @_prhex_
+// PRINT TOS HEX BYTE
+char d_prtosbyte = "C$."
 byte = 0
-word = @d_prtoshex, 0, @putb
+word = @d_prtoshex, 0, @_prbyte_
 // EMIT
 char d_emit = "EMIT"
 byte = 0
@@ -546,27 +564,31 @@ word = @d_spaces, 0, @_type_
 char d_str = "\""
 byte = imm_flag
 word = @d_type, 0, @_str_
-// LITERAL STRING
+// LITERAL STRING ( not in vocabulary )
 char d_slit = "SLIT"
 byte = param_flag | inline_flag
-word = @d_str, 0, @_slit_, $2E
-// COMPILED PRINT STRING
+word = 0, 0, @_slit_, $2E
+// PRINT STRING FROM STACK
 char d_doprstr = "(.\")"
 byte = 0
-word = @d_slit, 0, @puts
+word = @d_str, 0, @puts
 // PRINT STRING
 char d_prstr = ".\""
 byte = imm_flag
 word = @d_doprstr, 0, @_prstr_
+// PRINT PAREN STRING
+char d_prpstr = ".("
+byte = imm_flag
+word = @d_prstr, 0, @_prpstr_
 // READ SOURCE FILE FROM STACK
 char d_src = "SRC"
 byte = 0
-word = @d_prstr, 0, @_src_
+word = @d_prpstr, 0, @_src_
 // READ SOURCE FILE FROM INPUT
 char d_srcstr = "SRC\""
 byte = 0
 word = @d_src, 0, @_srcstr_
-// CONT
+// CONTINUE AFTER BRK
 char d_cont = "CONT"
 byte = 0
 word = @d_srcstr, 0, @_cont_
@@ -574,7 +596,7 @@ word = @d_srcstr, 0, @_cont_
 char d_quit = "QUIT"
 byte = 0
 word = @d_cont, 0, @_quit_
-// ABORT
+// ABORT IF <> 0
 char d_abort = "ABORT"
 byte = 0
 word = @d_quit, 0, @_abort_
@@ -586,14 +608,22 @@ word = @d_abort, 0, @_doabortstr_
 char d_abortstr = "ABORT\""
 byte = imm_flag
 word = @d_doabortstr, 0, @_abortstr_
-// RESTART
-char d_restart = "RESTART"
+// COLD RESTART
+char d_restart = "COLD"
 byte = 0
 word = @d_abortstr, 0, @_restart_
+// COMMENT
+char d_comment = "("
+byte = imm_flag
+word = @d_restart, 0, @_comment_
+
+//
+// PLFORTH custom words
+//
 // BYE
 char d_bye = "BYE"
 byte = 0
-word = @d_restart, 0, @_bye_
+word = @d_comment, 0, @_bye_
 // SHOW DEFINITION
 char d_show = "SHOW"
 byte = 0
@@ -627,13 +657,13 @@ char d_stepoff = "STEPOFF"
 byte = 0
 word = @d_stepon, 0, @_stepoff_
 // BREAK OUT
-char d_brkout = "BRKOUT"
+char d_brk = "BRK"
 byte = 0
-word = @d_stepoff, 0, @_brkout_
+word = @d_stepoff, 0, @_brk_
 // BREAK ON
 char d_brkon = "BRKON"
 byte = 0
-word = @d_brkout, 0, @_brkon_
+word = @d_brk, 0, @_brkon_
 // BREAK OFF
 char d_brkoff = "BRKOFF"
 byte = 0
@@ -646,14 +676,13 @@ word = @d_brkoff, 0, @_itc_
 char d_pbc = "PBC"
 byte = 0
 word = @d_itc, 0, @_pbc_
-// COMMENT
-char d_comment = "("
-byte = imm_flag
-word = @d_pbc, 0, @_comment_
+//
+// Start of vocabulary
+//
 // LIST VOCAB
 char d_vlist = "VLIST"
 byte = 0
-word = @d_comment, 0, @_vlist_
+word = @d_pbc, 0, @_vlist_
 //
 // Helper routines
 //
@@ -666,7 +695,8 @@ def keyin#0
 
   repeat
     puts(brk ?? " BRK\n" :: " OK\n")
-    inptr = gets(state & comp_flag ?? ']'|$80 :: '>'|$80)
+    inptr    = gets(state & comp_flag ?? ']'|$80 :: '>'|$80)
+    keyinbuf = inptr // Save if needed
   until ^inptr
   ^(inptr + ^inptr + 1) = 0 // NULL terminate
   inptr++
@@ -762,8 +792,7 @@ def find(matchchars, matchlen)#1
     fin
     dentry = *(dentry + ^dentry + 4)
   loop
-  // Not found
-  return 0
+  return 0 // Not found
 end
 //
 // Convert input into number
@@ -1038,6 +1067,12 @@ end
 def _inc2_(a)
   return a + 2
 end
+def _dec_(a)
+  return a - 1
+end
+def _dec2_(a)
+  return a - 2
+end
 def _sub_(a,b)#1
   return a-b
 end
@@ -1176,32 +1211,11 @@ end
 def _pad_#1
   return heapmark + 128
 end
-def stodci(str, dci)
-  byte len, c
-
-  len = ^str
-  if len == 0
-    ^dci = 0
-    return dci
-  fin
-  c = toupper(^(str + len)) & $7F
-  len--
-  ^(dci + len) = c
-  while len
-    c = toupper(^(str + len)) | $80
-    len--
-    ^(dci + len) = c
+def _trailing_(a,b)#2
+  while b and ^(a + b) == ' '
+    b--
   loop
-  return dci
-end
-def _lookup_#1
-  word symname
-  char symlen, dci[31]
-
-  symname, symlen = nextword(' ')
-  symname--
-  ^symname = symlen
-  return cmdsys:lookupsym(stodci(symname, @dci))
+  return a, b
 end
 def newdict#0
   word bldptr, plist, namechars, namelen
@@ -1557,28 +1571,41 @@ def _forget_#0
     buildhashtbl
   fin
 end
-def _cont_#0
-  if brk
-    state = state | exit_flag
-  else
-    putc('?')
-  fin
-end
-def _iscomp_#1
-  return state & comp_flag
-end
 def _query_#0
-  inptr = gets('>'|$80)
+  inptr                 = gets('?'|$80)
   ^(inptr + ^inptr + 1) = 0
   inptr++
 end
 def _expect_(a,b)#0
-  inptr = gets('>'|$80)
+  word saveinptr
+
+  saveinptr = inptr
+  memcpy(heapmark + 256, keyinbuf, 80)
+  inptr = gets('?'|$80)
   if ^inptr > b
     ^inptr = b
   fin
   ^(inptr + ^inptr + 1) = 0
   memcpy(a, inptr + 1, ^inptr)
+  memcpy(keyinbuf, heapmark + 256, 80)
+  inptr = saveinptr
+end
+def _accept_(a,b)#1
+  word saveinptr
+  byte len
+
+  saveinptr = inptr
+  memcpy(heapmark + 256, keyinbuf, 80)
+  inptr = gets('?'|$80)
+  len = ^inptr
+  if len > b
+    len = b
+  fin
+  ^(inptr + len + 1) = 0
+  memcpy(a, inptr + 1, len)
+  memcpy(keyinbuf, heapmark + 256, 80)
+  inptr = saveinptr
+  return len
 end
 def _terminal_#1
   return ^$C000 > 127
@@ -1592,9 +1619,6 @@ def _word_(a)#1
   ^wordptr = len
   return wordptr
 end
-def _prat_(a)#0
-  puti(*a)
-end
 def _space_#0
     putc(' ')
 end
@@ -1603,6 +1627,18 @@ def _spaces_(a)#0
         putc(' ')
         a--
     loop
+end
+def _prval_(a)#0
+  puti(a); putc(' ')
+end
+def _prbyte_(a)#0
+  putb(a); putc(' ')
+end
+def _prhex_(a)#0
+  puth(a); putc(' ')
+end
+def _prat_(a)#0
+  puti(*a); putc(' ')
 end
 def _str_#0
   word str
@@ -1621,7 +1657,7 @@ def _str_#0
   fin
 end
 def _type_(a,b)#0
-  while b
+  while b and ^a
     putc(^a)
     a++
     b--
@@ -1640,6 +1676,47 @@ def _prstr_#0
     ^str = len
     puts(str)
   fin
+end
+def _prpstr_#0
+  word str
+  byte len
+
+  if state & comp_flag
+    _str_
+    compword(@d_doprstr)
+  else
+    str, len = nextword(')')
+    str--
+    ^str = len
+    puts(str)
+  fin
+end
+def stodci(str, dci)
+  byte len, c
+
+  len = ^str
+  if len == 0
+    ^dci = 0
+    return dci
+  fin
+  c = toupper(^(str + len)) & $7F
+  len--
+  ^(dci + len) = c
+  while len
+    c = toupper(^(str + len)) | $80
+    len--
+    ^(dci + len) = c
+  loop
+  return dci
+end
+def _lookup_#1
+  word symname
+  char symlen, dci[31]
+
+  symname, symlen = nextword(' ')
+  symname--
+  ^symname = symlen
+  return cmdsys:lookupsym(stodci(symname, @dci))
 end
 def _src_(a)#0
   if srclevel >= SRCREFS
@@ -1760,8 +1837,8 @@ def brkpoint#0
     (*_cfa_(brkentry))()#0
   fin
 end
-def _brkout_#0
-  brkhandle(@d_brkout)
+def _brk_#0
+  brkhandle(@d_brk)
 end
 def _brkon_#0
   word dentry
@@ -1782,6 +1859,13 @@ end
 def _brkoff_#0
   *_cfa_(brkentry) = brkcfa
   brkcfa           = 0
+end
+def _cont_#0
+  if brk
+    state = state | exit_flag
+  else
+    putc('?')
+  fin
 end
 def _itc_#0
   comp_mode = comp_itc_flag
