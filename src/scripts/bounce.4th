@@ -63,7 +63,7 @@
     MOVEBALL
     ?TERMINAL
   UNTIL
-  KEY
+  KEY DROP
   0 GRMODE DROP
 ;
 

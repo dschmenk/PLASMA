@@ -56,7 +56,7 @@
     LOOP                                  ( next )
   ?TERMINAL
   UNTIL
-  KEY
+  KEY DROP
   TEXT
 ;
 

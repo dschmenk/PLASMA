@@ -93,6 +93,8 @@ PLASM      = plasm
 PLASMAPLASM = rel/PLASM\#FE1000
 CODEOPT    = rel/CODEOPT\#FE1000
 PLFORTH    = rel/PLFORTH\#FE1000
+HRFORTH    = rel/HRFORTH\#FE1000
+HR2FORTH   = rel/HR2FORTH\#FE1000
 INCS       = toolsrc/plasm.h toolsrc/tokens.h toolsrc/symbols.h toolsrc/lex.h toolsrc/parse.h toolsrc/codegen.h
 OBJS	   = toolsrc/plasm.c toolsrc/parse.c toolsrc/lex.c toolsrc/codegen.c
 #
@@ -111,7 +113,7 @@ TXTTYPE	= .TXT
 #SYSTYPE	= \#FF2000
 #TXTTYPE	= \#040000
 
-apple: $(PLVMZP_APL) $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVMJIT) $(PLVM802) $(PLVM03) $(PLVMJIT03) $(CMD) $(CMDJIT) $(JIT) $(JIT16) $(JITUNE) $(SOSCMD) $(SOSCMDJIT) $(PLASMAPLASM) $(CODEOPT) $(PLFORTH) $(ZIPCHIP) $(MATCHFILES) $(ARGS) $(MEMMGR) $(MEMTEST) $(FIBER) $(FIBERTEST) $(LONGJMP) $(ED) $(MON) $(COPY) $(DEL) $(REN) $(CAT) $(NEWDIR) $(TYPE) $(SOS) $(ROD) $(SIEVE) $(PRIMEGAP) $(MOUSE) $(UTHERNET2) $(UTHERNET) $(ETHERIP) $(INET) $(DHCP) $(HTTPD) $(TFTPD) $(ROGUE) $(ROGUEMAP) $(ROGUECOMBAT) $(SFM) $(SFMSPRT) $(GRAFIX) $(GFXDEMO) $(LINES) $(HGRTILE) $(HGRFONT) $(HGRSPRITE) $(HGRLIB) $(TILETEST) $(HGRTEST) $(GRLIB) $(DGRLIB) $(GRTEST) $(DGRTEST) $(HGRTEST) $(FILEIO_APL) $(CONIO_APL) $(JOYBUZZ) $(PORTIO) $(SPIPORT) $(SDFAT) $(FATCAT) $(FATGET) $(FATPUT) $(FATWDSK) $(FATRDSK) $(INT32) $(INT32TEST) $(SANE) $(FPSTR) $(FPU) $(SANITY) $(LZ4) $(LZ4CAT) $(RPNCALC) $(SNDSEQ) $(PLAYSEQ) $(CONIOTST)
+apple: $(PLVMZP_APL) $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVMJIT) $(PLVM802) $(PLVM03) $(PLVMJIT03) $(CMD) $(CMDJIT) $(JIT) $(JIT16) $(JITUNE) $(SOSCMD) $(SOSCMDJIT) $(PLASMAPLASM) $(CODEOPT) $(PLFORTH) $(HRFORTH) $(HR2FORTH) $(ZIPCHIP) $(MATCHFILES) $(ARGS) $(MEMMGR) $(MEMTEST) $(FIBER) $(FIBERTEST) $(LONGJMP) $(ED) $(MON) $(COPY) $(DEL) $(REN) $(CAT) $(NEWDIR) $(TYPE) $(SOS) $(ROD) $(SIEVE) $(PRIMEGAP) $(MOUSE) $(UTHERNET2) $(UTHERNET) $(ETHERIP) $(INET) $(DHCP) $(HTTPD) $(TFTPD) $(ROGUE) $(ROGUEMAP) $(ROGUECOMBAT) $(SFM) $(SFMSPRT) $(GRAFIX) $(GFXDEMO) $(LINES) $(HGRTILE) $(HGRFONT) $(HGRSPRITE) $(HGRLIB) $(TILETEST) $(HGRTEST) $(GRLIB) $(DGRLIB) $(GRTEST) $(DGRTEST) $(HGRTEST) $(FILEIO_APL) $(CONIO_APL) $(JOYBUZZ) $(PORTIO) $(SPIPORT) $(SDFAT) $(FATCAT) $(FATGET) $(FATPUT) $(FATWDSK) $(FATRDSK) $(INT32) $(INT32TEST) $(SANE) $(FPSTR) $(FPU) $(SANITY) $(LZ4) $(LZ4CAT) $(RPNCALC) $(SNDSEQ) $(PLAYSEQ) $(CONIOTST)
 
 	-rm vmsrc/plvmzp.inc
 
@@ -150,6 +152,14 @@ $(PLASMAPLASM): toolsrc/plasm.pla toolsrc/lex.pla toolsrc/parse.pla toolsrc/code
 $(CODEOPT): toolsrc/codeopt.pla toolsrc/codeseq.plh
 	./$(PLASM) -AMOW toolsrc/codeopt.pla
 	acme --setpc 4094 -o $(CODEOPT) toolsrc/codeopt.a
+
+$(HRFORTH): toolsrc/hrforth.pla
+	./$(PLASM) -AMOW toolsrc/hrforth.pla
+	acme --setpc 4094 -o $(HRFORTH) toolsrc/hrforth.a
+
+$(HR2FORTH): toolsrc/hr2forth.pla
+	./$(PLASM) -AMOW toolsrc/hr2forth.pla
+	acme --setpc 4094 -o $(HR2FORTH) toolsrc/hr2forth.a
 
 $(PLFORTH): toolsrc/plforth.pla
 	./$(PLASM) -AMOW toolsrc/plforth.pla
