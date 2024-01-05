@@ -1,24 +1,40 @@
+: RESERVEHGR2
+  $6000 HERE - DUP
+  0< ABORT" Can't reserve HGR2"
+  ALLOT
+;
+
+RESERVEHGR2
+
 : ?PLASMA
-    " IFACE" FIND
-    SWAP DROP
-    0= IF
-      " PLASMA.4TH" SRC
-    THEN
+  " IFACE" FIND
+  SWAP DROP
+  0= IF
+    " PLASMA.4TH" SRC
+  THEN
 ;
 
 ?PLASMA ( Load PLASMA if not already )
 
-$6000 HERE - ALLOT ( Reserve HGR2 screen )
-
-: ?HGRLIB
-    " HGRLIB" FIND
-    SWAP DROP
-    0= IF
-      " HGRLIB.4TH" SRC
-    THEN
+: ?CONIO
+  " CONIOAPI" FIND
+  SWAP DROP
+  0= IF
+    " CONIO.4TH" SRC
+  THEN
 ;
 
-?HGRLIB ( Load HGRLIB if not already )
+?CONIO ( Load CONIO if not already )
+
+: ?HGRLIB
+  " HGRLIB" FIND
+  SWAP DROP
+  0= IF
+    " HGRLIB.4TH" SRC
+  THEN
+;
+
+?HGRLIB ( Load GRLIB if not already )
 
  5 VARIABLE BALLCLR
 10 VARIABLE BALLX
@@ -28,9 +44,9 @@ $6000 HERE - ALLOT ( Reserve HGR2 screen )
  1 VARIABLE INCX
  1 VARIABLE INCY
 
-: BEEP 30 10 TONE DROP ;
+: BEEP 30 10 TONE ;
 
-: BOOP 10 30 TONE DROP ;
+: BOOP 10 30 TONE ;
 
 : MOVEBALL
   BALLX @ 0=    IF INCX @ NEGATE INCX ! BEEP THEN

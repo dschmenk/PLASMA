@@ -1,19 +1,29 @@
 : ?PLASMA
-    " IFACE" FIND
-    SWAP DROP
-    0= IF
-      " PLASMA.4TH" SRC
-    THEN
+  " IFACE" FIND
+  SWAP DROP
+  0= IF
+    " PLASMA.4TH" SRC
+  THEN
 ;
 
 ?PLASMA ( Load PLASMA if not already )
 
+: ?CONIO
+  " CONIOAPI" FIND
+  SWAP DROP
+  0= IF
+    " CONIO.4TH" SRC
+  THEN
+;
+
+?CONIO ( Load CONIO if not already )
+
 : ?GRLIB
-    " GRLIB" FIND
-    SWAP DROP
-    0= IF
-      " GRLIB.4TH" SRC
-    THEN
+  " GRLIB" FIND
+  SWAP DROP
+  0= IF
+    " GRLIB.4TH" SRC
+  THEN
 ;
 
 ?GRLIB ( Load GRLIB if not already )
@@ -26,9 +36,9 @@
  1 VARIABLE INCX
  1 VARIABLE INCY
 
-: BEEP 30 10 TONE DROP ;
+: BEEP 30 10 TONE ;
 
-: BOOP 10 30 TONE DROP ;
+: BOOP 10 30 TONE ;
 
 : MOVEBALL
   BALLX @ 0=   IF INCX @ NEGATE INCX ! BEEP THEN

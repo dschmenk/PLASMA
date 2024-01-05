@@ -82,7 +82,7 @@ FPULIB 68 IFACE PLASMA _FPRANDNUM       : FPRANDNUM    _FPRANDNUM    FPERR ! ;
 4 CONSTANT FPSTR.EXP   ( Force exponential format )
 8 CONSTANT FPSTR.FLEX  ( Flexible switch to EXP format if over/underflow )
 
-: FP. HERE 4 4 FPSTR.FLOAT FPSTR! HERE (.") ;
+: FP. HERE 10 4 FPSTR.FLEX FPSTR! HERE (.") ;
 
 FPRESET ( Load SANE code and set up libraries )
 
