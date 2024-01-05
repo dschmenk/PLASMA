@@ -1,5 +1,5 @@
-LOOKUP HRFORTH
-LOOKUP HR2FORTH
+LOOKUP HRFORTH  ( HGR page 1 reserved )
+LOOKUP HR2FORTH ( HGR page 1 and 2 reserved )
 OR NOT ABORT" Must run with HRFORTH."
 
 : ?PLASMA

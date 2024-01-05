@@ -84,5 +84,7 @@ FPULIB 68 IFACE PLASMA _FPRANDNUM       : FPRANDNUM    _FPRANDNUM    FPERR ! ;
 
 : FP. HERE 10 4 FPSTR.FLEX FPSTR! HERE (.") ;
 
+: FPEXT CREATE 10 ALLOT ;
+
 FPRESET ( Load SANE code and set up libraries )
 
