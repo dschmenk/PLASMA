@@ -106,7 +106,7 @@ predef _begin_#0, _again_#0, _until_#0, _while_#0, _repeat_#0
 predef _case_#0, _of_#0, _endof_#0, _endcase_#0, _literal_(a)#0
 predef _dodo_(a,b)#0, _do_#0, _doloop_#0, _doplusloop_(a)#0, _plusloop_#0, _loop_#0, _leave_#0, _j_#1
 predef _create_#0, _itcdoes_(a)#0, _does_#0, _compoff_#0, _compon_#0
-predef _forcecomp_#0, pfillw(a)#0, pfillb(a)#0, _colon_#0, _semi_#0
+predef compword(dentry)#0, _forcecomp_#0, pfillw(a)#0, pfillb(a)#0, _colon_#0, _semi_#0
 predef _immediate_#0, _exit_#0, _pad_#1, _trailing_(a,b)#2
 predef _tors_(a)#0, _fromrs_#1, _toprs_#1, _execute_(a)#0, _lookup_#1
 predef _move_(a,b,c)#0, _fill_(a,b,c)#0, _plasma_(a)#0
@@ -460,10 +460,14 @@ word = @d_colon, 0, @_compoff_
 char d_compon = "]"
 byte = imm_flag
 word = @d_compoff, 0, @_compon_
+// COMPILE
+char d_comp = "COMPILE"
+byte = 0
+word = @d_compon, 0, @compword
 // COMPILE NEXT WORD
 char d_forcecomp = "[COMPILE]"
 byte = imm_flag
-word = @d_compon, 0, @_forcecomp_
+word = @d_comp, 0, @_forcecomp_
 // IMMEDIATE
 char d_immediate = "IMMEDIATE"
 byte = imm_flag
@@ -1269,7 +1273,7 @@ def _plasma_(a)#0
 end
 def _var_(a)#0
   newdict
-  pfillb(^(@divmod))   // Hack - get VM entry vector from divmod
+  pfillb($20)          // Hack - get VM entry vector from divmod
   pfillw(*(@divmod + 1))
   pfillb($2C)          // CONSTANT WORD
   pfillw(heapmark + 3) // Poiner to variable in PFA
@@ -1278,7 +1282,7 @@ def _var_(a)#0
 end
 def _const_(a)#0
   newdict
-  pfillb(^(@divmod))   // Hack - get VM entry vector from divmod
+  pfillb($20)          // Hack - get VM entry vector from divmod
   pfillw(*(@divmod + 1))
   pfillb($2C)          // CONSTANT WORD
   pfillw(a)
@@ -1286,12 +1290,11 @@ def _const_(a)#0
 end
 def _create_#0
   newdict
-  pfillb(^(@divmod))   // Hack - get VM entry vector from divmod
+  pfillb($20)          // Hack - get VM entry vector from divmod
   pfillw(*(@divmod + 1))
   pfillb($2C)          // CONSTANT WORD
   pfillw(heapmark + 5) // Pointer to rest of PFA
   pfillb($5C)          // RET
-  // Reserve following in case of DOES>
   pfillw(0)            // reserved word for DOES>
   //
   // 9 bytes after PFA, data follows...
@@ -1305,7 +1308,7 @@ def _itcdoes_(a)#0
   //
   // Overwrite CREATE as ITC words
   //
-  ^(_ffa_(vlist))     = itc_flag
+  ^(_ffa_(vlist))     = ^(_ffa_(vlist)) | itc_flag
   *(_cfa_(vlist))     = @_dodoes_
   *(_pfa_(vlist))     = a // Fill in DOES code address
 end
@@ -1349,7 +1352,7 @@ def _colon_#0
     ^(_ffa_(vlist)) = itc_flag
     *(_cfa_(vlist)) = @_docolon_
   else // comp_pbc_flag
-    pfillb(^(@divmod)) // Hack - get VM entry vector from divmod
+    pfillb($20)            // Hack - get VM entry vector from divmod
     pfillw(*(@divmod + 1))
   fin
   if state & trace_flag
@@ -1375,7 +1378,12 @@ def _forcecomp_#0
 
   dentry = find(nextword(' '))
   if dentry
-    compword(dentry)
+    compliteral(dentry)
+    compword(@d_comp)
+  else
+    puts(dentry)
+    puts(" not found\n")
+    _quit_
   fin
 end
 def _compoff_#0
