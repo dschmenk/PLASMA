@@ -6,7 +6,7 @@ include "inc/longjmp.plh"
 //
 // Internal variables
 //
-word  vlist
+word  vlist, fence
 word  startheap, arg, infunc, inptr, IIP, W
 word  keyinbuf   = $1FF
 const SRCREFS    = 2
@@ -111,7 +111,7 @@ predef _immediate_#0, _exit_#0, _pad_#1, _trailing_(a,b)#2
 predef _tors_(a)#0, _fromrs_#1, _toprs_#1, _lookup_#1
 predef _move_(a,b,c)#0, _fill_(a,b,c)#0, _plasma_(a)#0
 predef _var_(a)#0, _const_(a)#0, _lit_#1, _slit_#1, _find_(a)#2, _tick_#1
-predef _forget_#0, _terminal_#1, _prat_(a)#0, _prhexat_(a)#0
+predef _fence_(a)#0, _forget_#0, _terminal_#1, _prat_(a)#0, _prhexat_(a)#0
 predef _char_#0, _str_#0, _prstr_#0, _prpstr_#0
 predef _prval_(a)#0, _prbyte_(a)#0, _prshex_(a)#0, _prsbyte_(a)#0, _prhex_(a)#0
 predef _accept_(a,b)#1, _src_(a)#0, _srcstr_#0, _query_#0, _expect_(a,b)#0, _type_(a,b)#0
@@ -422,10 +422,14 @@ word = @d_until, 0, @_while_
 char d_repeat = "REPEAT"
 byte = imm_flag
 word = @d_while, 0, @_repeat_
+// FENCE
+char d_fence = "FENCE"
+byte = 0
+word = @d_repeat, 0, @_fence_
 // FORGET
 char d_forget = "FORGET"
 byte = 0
-word = @d_repeat, 0, @_forget_
+word = @d_fence, 0, @_forget_
 // CREATE
 char d_create = "CREATE"
 byte = 0
@@ -978,6 +982,7 @@ end
 def coldstart#0
   warmstart
   vlist = @d_vlist
+  fence = startheap
   heaprelease(startheap)
   buildhashtbl
 end
@@ -1357,6 +1362,7 @@ def _colon_#0
   newdict
   state = state | comp_mode
   if state & comp_itc_flag
+    ^(_ffa_(vlist)) = itc_flag
     *(_cfa_(vlist)) = @_docolon_
   else // comp_pbc_flag
     pfillb($20)            // Hack - get VM entry vector from divmod
@@ -1590,12 +1596,29 @@ end
 def _tick_#1
   return find(nextword(' '))
 end
+def _fence_(a)#0
+  if isult(a, startheap)
+    a = startheap
+  fin
+  fence = a
+end
 def _forget_#0
   word dentry
 
   dentry = find(nextword(' '))
   if dentry
-    vlist = *_lfa_(dentry)
+    if isult(dentry, fence)
+      if isuge(vlist, fence)
+        repeat
+          dentry = vlist
+          vlist  = *_lfa_(dentry)
+        until isult(vlist, fence)
+      else
+        return // Do nothing
+      fin
+    else
+      vlist = *_lfa_(dentry)
+    fin
     heaprelease(dentry)
     buildhashtbl
   fin
@@ -1811,34 +1834,32 @@ def _show_#0
   word dentry, pfa, w
 
   dentry = find(nextword(' '))
-  if dentry
-    if ^_ffa_(dentry) & itc_flag // Only show ITC words
-      if *_cfa_(dentry) == @_docolon_
-        pfa = _pfa_(dentry)
-      else // @d_dodoes
-        pfa = *_pfa_(dentry)
-      fin
-      w = *pfa
-      while w
-        puts("  ")
-        if ^_ffa_(w) & param_flag
-          pfa = pfa + 2
-        fin
-        if w == @d_slit
-          putc('"')
-          puts(pfa)
-          putc('"')
-          pfa = pfa + ^pfa - 1
-        elsif w == @d_lit
-          puti(*pfa)
-        else
-          puts(w)
-        fin
-        putln
-        pfa = pfa + 2
-        w = *pfa
-      loop
+  if dentry and ^_ffa_(dentry) & itc_flag // Only show ITC words
+    if *_cfa_(dentry) == @_docolon_
+      pfa = _pfa_(dentry)
+    else // @d_dodoes
+      pfa = *_pfa_(dentry)
     fin
+    w = *pfa
+    while w
+      puts("  ")
+      if ^_ffa_(w) & param_flag
+        pfa = pfa + 2
+      fin
+      if w == @d_slit
+        putc('"')
+        puts(pfa)
+        putc('"')
+        pfa = pfa + ^pfa - 1
+      elsif w == @d_lit
+        puti(*pfa)
+      else
+        puts(w)
+      fin
+      putln
+      pfa = pfa + 2
+      w = *pfa
+    loop
   fin
 end
 def _showstack_#0
@@ -1939,6 +1960,9 @@ def _vlist_#0
   d = vlist
   while d
     puts(d); puts("  ")
+    if conio:keypressed()
+      getc; getc
+    fin
     d = *_lfa_(d)
   loop
 end
