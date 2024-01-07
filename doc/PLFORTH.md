@@ -27,7 +27,7 @@ There are quite a few missing word that a standard FORTH would have. Mostly due 
 
 `TRON`: Turn tracing on
 
-`TROFF`: Tirn tracing off (will also turn off single stepping if enabled)
+`TROFF`: Turn tracing off (will also turn off single stepping if enabled)
 
 `STEPON`: Turn single stepping on
 
