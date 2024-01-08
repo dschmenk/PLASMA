@@ -6,7 +6,7 @@ include "inc/longjmp.plh"
 //
 // Internal variables
 //
-word  vlist, fence
+word  vlist
 word  startheap, arg, infunc, inptr, IIP, W
 word  keyinbuf   = $1FF
 const SRCREFS    = 2
@@ -82,13 +82,13 @@ byte               = $60           // RTS
 //
 // Mask and flags for dictionary entries
 //
-const param_flag    = $02
-const itc_flag      = $04
-const inline_flag   = $08
-const inlinew_flag  = $10
-const imm_flag      = $20
-const componly_flag = $40
-const hidden_flag   = $80
+const inline_flag     = $01
+const inlinew_flag    = $02
+const param_flag      = $04
+const itc_flag        = $10
+const imm_flag        = $20
+const componly_flag   = $40
+const interponly_flag = $80
 //
 // Predefine instrinsics
 //
@@ -106,12 +106,12 @@ predef _begin_#0, _again_#0, _until_#0, _while_#0, _repeat_#0
 predef _case_#0, _of_#0, _endof_#0, _endcase_#0, _literal_(a)#0
 predef _dodo_(a,b)#0, _do_#0, _doloop_#0, _doplusloop_(a)#0, _plusloop_#0, _loop_#0, _leave_#0, _j_#1
 predef _create_#0, _itcdoes_(a)#0, _does_#0, _compoff_#0, _compon_#0
-predef _forcecomp_#0, pfillw(a)#0, pfillb(a)#0, _colon_#0, _semi_#0
-predef _immediate_#0, _exit_#0, _pad_#1, _trailing_(a,b)#2
+predef _compile_#0, pfillw(a)#0, pfillb(a)#0, _colon_#0, _semi_#0
+predef _componly_#0, _interponly_#0, _immediate_#0, _exit_#0, _pad_#1, _trailing_(a,b)#2
 predef _tors_(a)#0, _fromrs_#1, _toprs_#1, _lookup_#1
 predef _move_(a,b,c)#0, _fill_(a,b,c)#0, _plasma_(a)#0
-predef _var_(a)#0, _const_(a)#0, _lit_#1, _slit_#1, _find_(a)#2, _tick_#1
-predef _forget_#0, _terminal_#1, _prat_(a)#0
+predef _var_(a)#0, _const_(a)#0, _lit_#1, _slit_#1, _find_(a)#2
+predef _tick_#1, _comptick_#0, _forget_#0, _terminal_#1, _prat_(a)#0
 predef _char_#0, _str_#0, _prstr_#0, _prpstr_#0
 predef _prval_(a)#0, _prbyte_(a)#0, _prhex_(a)#0
 predef _accept_(a,b)#1, _query_#0, _expect_(a,b)#0, _type_(a,b)#0
@@ -119,7 +119,7 @@ predef _vlist_#0, _tron_#0, _troff_#0, _stepon_#0, _stepoff_#0
 predef _itc_#0, _pbc_#0, _comment_#0, _src_(a)#0, _srcstr_#0, _endsrc_(a)#0
 predef _brk_#0, _brkon_#0, _brkoff_#0, _word_(a)#1, _count_(a)#2
 predef _space_#0, _spaces_(a)#0, _show_#0, _showstack_#0, _showrstack_#0
-predef _showhash_#0, _cont_#0, _exitforth_#0, _bye_#0, _quit_#0
+predef _cont_#0, _exitforth_#0, _bye_#0, _quit_#0
 predef _abort_(a)#0, _doabortstr_(a,b)#0, _abortstr_#0
 predef compword(dentry)#0, execword(dentry)#0
 // DROP
@@ -300,15 +300,15 @@ byte = 0
 word = @d_toprstk, 0, @_lookup_
 // PLASMA LINKEAGE
 char d_plasma = "PLASMA"
-byte = 0
+byte = imm_flag
 word = @d_lookup, 0, @_plasma_
 // VARIABLE
 char d_var = "VARIABLE"
-byte = 0
+byte = imm_flag
 word = @d_plasma, 0, @_var_
 // CONSTANT
 char d_const = "CONSTANT"
-byte = 0
+byte = imm_flag
 word = @d_var, 0, @_const_
 // MOVE
 char d_move = "MOVE"
@@ -332,39 +332,39 @@ byte = 0
 word = @d_pad, 0, @_allot_
 // BRANCH ( not in vocabulary )
 char d_branch = "(BRANCH)"
-byte = componly_flag | param_flag | inline_flag
+byte = param_flag | inline_flag
 word = 0, 0, @_branch_, $C4
 // BRANCH IF 0 ( not in vocabulary )
 char d_0branch = "(0BRANCH)"
-byte = componly_flag | param_flag | inline_flag
+byte = param_flag | inline_flag
 word = 0, 0, @_0branch_, $C2
 // IF
 char d_if = "IF"
-byte = imm_flag
+byte = imm_flag | componly_flag
 word = @d_allot, 0, @_if_
 // ELSE
 char d_else = "ELSE"
-byte = imm_flag
+byte = imm_flag | componly_flag
 word = @d_if, 0, @_else_
 // THEN
 char d_then = "THEN"
-byte = imm_flag
+byte = imm_flag | componly_flag
 word = @d_else, 0, @_then_
 // CASE
 char d_case = "CASE"
-byte = imm_flag
+byte = imm_flag | componly_flag
 word = @d_then, 0, @_case_
 // OF
 char d_of = "OF"
-byte = imm_flag
+byte = imm_flag | componly_flag
 word = @d_case, 0, @_of_
 // ENDOF
 char d_endof = "ENDOF"
-byte = imm_flag
+byte = imm_flag | componly_flag
 word = @d_of, 0, @_endof_
 // ENDCASE
 char d_endcase = "ENDCASE"
-byte = imm_flag
+byte = imm_flag | componly_flag
 word = @d_endof, 0, @_endcase_
 // COMPILED DO ( not in vocabulary )
 char d_dodo = "(DO)"
@@ -372,7 +372,7 @@ byte = 0
 word = 0, 0, @_dodo_
 // DO
 char d_do = "DO"
-byte = imm_flag
+byte = imm_flag | componly_flag
 word = @d_endcase, 0, @_do_
 // LEAVE
 char d_leave = "LEAVE"
@@ -380,19 +380,19 @@ byte = componly_flag
 word = @d_do, 0, @_leave_
 // COMPILED LOOP ( not in vocabulary )
 char d_doloop = "(DOLOOP)"
-byte = componly_flag | param_flag
+byte = param_flag
 word = 0, 0, @_doloop_
 // LOOP
 char d_loop = "LOOP"
-byte = imm_flag
+byte = imm_flag | componly_flag
 word = @d_leave, 0, @_loop_
 // COMPILED LOOP+ ( not in vocabulary )
 char d_doplusloop = "(+DOLOOP)"
-byte = componly_flag | param_flag
+byte = param_flag
 word = 0, 0, @_doplusloop_
 // LOOP
 char d_plusloop = "+LOOP"
-byte = imm_flag
+byte = imm_flag | componly_flag
 word = @d_loop, 0, @_plusloop_
 // I
 char d_i = "I"
@@ -404,23 +404,23 @@ byte = componly_flag
 word = @d_i, 0, @_j_
 // BEGIN
 char d_begin = "BEGIN"
-byte = imm_flag
+byte = imm_flag | componly_flag
 word = @d_j, 0, @_begin_
 // AGAIN
 char d_again = "AGAIN"
-byte = imm_flag
+byte = imm_flag | componly_flag
 word = @d_begin, 0, @_again_
 // UNTIL
 char d_until = "UNTIL"
-byte = imm_flag
+byte = imm_flag | componly_flag
 word = @d_again, 0, @_until_
 // WHILE
 char d_while = "WHILE"
-byte = imm_flag
+byte = imm_flag | componly_flag
 word = @d_until, 0, @_while_
 // REPEAT
 char d_repeat = "REPEAT"
-byte = imm_flag
+byte = imm_flag | componly_flag
 word = @d_while, 0, @_repeat_
 // FORGET
 char d_forget = "FORGET"
@@ -432,11 +432,11 @@ byte = 0
 word = @d_forget, 0, @_create_
 // RECREATE/DOES COMPILE TIME ( not in vocabulary )
 char d_createdoes = "(CREATEDOES)"
-byte = componly_flag
+byte = 0
 word = 0, 0, @_itcdoes_
 // DOES
 char d_does = "DOES>"
-byte = imm_flag
+byte = imm_flag | componly_flag
 word = @d_create, 0, @_does_
 // COMMA
 char d_comma = ","
@@ -448,35 +448,39 @@ byte = 0
 word = @d_comma, 0, @pfillb
 // COLON
 char d_colon = ":"
-byte = 0
+byte = interponly_flag
 word = @d_commab, 0, @_colon_
 // COMP OFF
 char d_compoff = "["
-byte = imm_flag
+byte = imm_flag | componly_flag
 word = @d_colon, 0, @_compoff_
 // COMP ON
 char d_compon = "]"
-byte = imm_flag
+byte = interponly_flag
 word = @d_compoff, 0, @_compon_
-// COMPILE
-char d_comp = "COMPILE"
-byte = 0
-word = @d_compon, 0, @compword
 // COMPILE NEXT WORD
-char d_forcecomp = "[COMPILE]"
+char d_compile = "[COMPILE]"
+byte = imm_flag | componly_flag
+word = @d_compon, 0, @_compile_
+// COMPILE ONLY
+char d_componly = "COMPONLY"
 byte = imm_flag
-word = @d_comp, 0, @_forcecomp_
+word = @d_compile, 0, @_componly_
+// INTERPRET ONLY
+char d_interponly = "INTERPONLY"
+byte = imm_flag
+word = @d_componly, 0, @_interponly_
 // IMMEDIATE
 char d_immediate = "IMMEDIATE"
 byte = imm_flag
-word = @d_forcecomp, 0, @_immediate_
+word = @d_interponly, 0, @_immediate_
 // EXIT
 char d_exit = "EXIT"
-byte = imm_flag
+byte = imm_flag | componly_flag
 word = @d_immediate, 0, @_exit_
 // SEMI
 char d_semi = ";"
-byte = imm_flag
+byte = imm_flag | componly_flag
 word = @d_exit, 0, @_semi_
 // COUNT
 char d_count = "COUNT"
@@ -488,12 +492,12 @@ byte = 0
 word = @d_count, 0, @_find_
 // TICK
 char d_tick = "'"
-byte = imm_flag
+byte = interponly_flag
 word = @d_find, 0, @_tick_
-// CFA
-char d_cfa = "CFA"
-byte = 0
-word = @d_tick, 0, @_cfa_
+// COMPILED TICK
+char d_comptick = "[']"
+byte = imm_flag | componly_flag
+word = @d_tick, 0, @_comptick_
 // INLINE LITERAL NUMBER ( not in vocabulary )
 char d_lit = "LIT"
 byte = param_flag
@@ -501,7 +505,7 @@ word = 0, 0, @_lit_
 // COMPILED LITERAL VALUE FROM STACK
 char d_literal = "LITERAL"
 byte = imm_flag
-word = @d_cfa, 0, @_literal_
+word = @d_comptick, 0, @_literal_
 // ?TERMINAL
 char d_terminal = "?TERMINAL"
 byte = 0
@@ -596,7 +600,7 @@ byte = 0
 word = @d_prpstr, 0, @_src_
 // READ SOURCE FILE FROM INPUT
 char d_srcstr = "SRC\""
-byte = 0
+byte = imm_flag
 word = @d_src, 0, @_srcstr_
 // END SOURCE FILE
 char d_endsrc = "ENDSRC"
@@ -604,7 +608,7 @@ byte = 0
 word = @d_srcstr, 0, @_endsrc_
 // CONTINUE AFTER BRK
 char d_cont = "CONT"
-byte = 0
+byte = interponly_flag
 word = @d_endsrc, 0, @_cont_
 // QUIT
 char d_quit = "QUIT"
@@ -630,7 +634,6 @@ word = @d_abortstr, 0, @_exitforth_
 char d_comment = "("
 byte = imm_flag
 word = @d_exitforth, 0, @_comment_
-
 //
 // PLFORTH custom words
 //
@@ -640,7 +643,7 @@ byte = 0
 word = @d_comment, 0, @_bye_
 // SHOW DEFINITION
 char d_show = "SHOW"
-byte = 0
+byte = interponly_flag
 word = @d_bye, 0, @_show_
 // SHOW STACK
 char d_showstack = "SHOWSTACK"
@@ -650,14 +653,10 @@ word = @d_show, 0, @_showstack_
 char d_showrstack = "SHOWRSTACK"
 byte = 0
 word = @d_showstack, 0, @_showrstack_
-// SHOW HASH
-char d_showhash = "SHOWHASH"
-byte = 0
-word = @d_showrstack, 0, @_showhash_
 // TRACE ON
 char d_tron = "TRON"
 byte = 0
-word = @d_showhash, 0, @_tron_
+word = @d_showrstack, 0, @_tron_
 // TRACE OFF
 char d_troff = "TROFF"
 byte = 0
@@ -676,7 +675,7 @@ byte = 0
 word = @d_stepoff, 0, @_brk_
 // BREAK ON
 char d_brkon = "BRKON"
-byte = 0
+byte = imm_flag
 word = @d_brk, 0, @_brkon_
 // BREAK OFF
 char d_brkoff = "BRKOFF"
@@ -684,11 +683,11 @@ byte = 0
 word = @d_brkon, 0, @_brkoff_
 //  COMPILE USING ITC
 char d_itc = "ITC"
-byte = 0
+byte = interponly_flag
 word = @d_brkoff, 0, @_itc_
 // COMPILE USING PLASMA BYTECODES
 char d_pbc = "PBC"
-byte = 0
+byte = interponly_flag
 word = @d_itc, 0, @_pbc_
 //
 // Start of vocabulary
@@ -701,6 +700,15 @@ word = @d_pbc, 0, @_vlist_
 // Helper routines
 //
 predef interpret#0
+def push(a)#1 // Stack hack - call as (@push)(a)#0 to leave a on eval stack
+  return a
+end
+def pfillw(a)#0
+  *(heapalloc(2)) = a
+end
+def pfillb(a)#0
+  *(heapalloc(1)) = a
+end
 //
 // Input routines
 //
@@ -769,7 +777,7 @@ def nextword(delim)#2
   return wordptr, len
 end
 //
-// Find match in dictionary
+// Hash table routines
 //
 def hashname(chars, len)#1
   return (len ^ ((^chars << 1) ^ ^(chars + len / 2) << 2)) & HASH_MASK
@@ -796,6 +804,36 @@ def buildhashtbl#0
     dentry         = *(dentry + ^dentry + 2)
   loop
 end
+//
+// Warm start
+//
+def warmstart#0
+  (@_reset_estack)()#0
+  brk    = 0
+  brkcfa = 0
+  RSP    = RSTK_SIZE
+  if state & comp_flag // Undo compilation state
+    heaprelease(vlist)
+    vlist = *_lfa_(vlist)
+  fin
+  state = 0
+  while !endsrc; loop
+  infunc = @keyin
+  inptr  = keyinbuf
+  ^inptr = 0
+end
+//
+// Cold start
+//
+def coldstart#0
+  warmstart
+  vlist = @d_vlist
+  heaprelease(startheap)
+  buildhashtbl
+end
+//
+// Find match in dictionary
+//
 def find(matchchars, matchlen)#1
   word dentry
   byte i
@@ -897,6 +935,11 @@ end
 // Execute code in CFA
 //
 def execword(dentry)#0
+  if ^_ffa_(dentry) & componly_flag and not (state & comp_flag)
+    puts(dentry)
+    puts(" : Compile only word\n")
+    _quit_
+  fin
   when conio:keypressed()
     is $83 // CTRL-C
       getc // Clear KB
@@ -935,48 +978,14 @@ def execwords(wlist)#0
   loop
   IIP = prevIP
 end
-def push(a)#1 // Stack hack - call as (@push)(a)#0 to leave a on eval stack
-  return a
-end
-def pfillw(a)#0
-  *(heapalloc(2)) = a
-end
-def pfillb(a)#0
-  *(heapalloc(1)) = a
-end
-//
-// Warm start
-//
-def warmstart#0
-  (@_reset_estack)()#0
-  brk    = 0
-  brkcfa = 0
-  RSP    = RSTK_SIZE
-  if state & comp_flag // Undo compilation state
-    heaprelease(vlist)
-    vlist = *_lfa_(vlist)
-  fin
-  state = 0
-  while !endsrc; loop
-  infunc = @keyin
-  inptr  = keyinbuf
-  ^inptr = 0
-end
-//
-// Cold start
-//
-def coldstart#0
-  warmstart
-  vlist = @d_vlist
-  fence = startheap
-  heaprelease(startheap)
-  buildhashtbl
-end
 //
 // Compile a word/literal into the dictionary: ITC and PBC
 //
 def compword(dentry)#0
-  if state & comp_itc_flag
+  if ^_ffa_(dentry) & interponly_flag
+    puts("INTERP only word\n")
+    _quit_
+  elsif state & comp_itc_flag
     pfillw(dentry)
   elsif state & comp_pbc_flag
     if ^_ffa_(dentry) & itc_flag // Check if calling ITC word
@@ -992,9 +1001,6 @@ def compword(dentry)#0
       pfillb($54) // CALL CFA directly
       pfillw(*_cfa_(dentry))
     fin
-  else
-    puts("[COMPILE] not compiling\n")
-    _quit_
   fin
   if state & trace_flag
     putc('['); puts(dentry); puts("] ")
@@ -1036,14 +1042,7 @@ def interpret#0
     inchars, inlen = nextword(' ')
     dentry = find(inchars, inlen)
     if dentry
-      if (not (state & comp_flag)) or (^_ffa_(dentry) & imm_flag)
-        if ^_ffa_(dentry) & componly_flag
-          inchars--
-          ^inchars = inlen
-          puts(inchars)
-          puts(" : Compile only word\n")
-          _quit_
-        fin
+      if ^_ffa_(dentry) & imm_flag or not (state & comp_flag)
         execword(dentry)
       else
         compword(dentry)
@@ -1186,13 +1185,13 @@ def _lfa_(dentry)#1
   return dentry + ^dentry + 2
 end
 def _hfa_(dentry)#1
- return dentry + ^dentry + 4
+  return dentry + ^dentry + 4
 end
 def _cfa_(dentry)#1
- return dentry + ^dentry + 6
+  return dentry + ^dentry + 6
 end
 def _pfa_(dentry)#1
- return dentry + ^dentry + 8
+  return dentry + ^dentry + 8
 end
 def _tors_(a)#0
   if RSP == 0
@@ -1345,11 +1344,7 @@ def _does_#0
   fin
 end
 def _literal_(a)#0
-  if state & comp_flag
-    compliteral(a)
-  else
-    pfillw(a) // Not really sure what to do here
-  fin
+  compliteral(a)
 end
 def _docolon_#0
   execwords(W + 2) // Exec PFA
@@ -1383,13 +1378,12 @@ def _semi_#0
   addhash(vlist)
   state = state & ~comp_flag
 end
-def _forcecomp_#0
+def _compile_#0
   word dentry
 
   dentry = find(nextword(' '))
   if dentry
-    compliteral(dentry)
-    compword(@d_comp)
+    compword(dentry)
   else
     puts(dentry)
     puts(" not found\n")
@@ -1412,6 +1406,12 @@ def _compon_#0
     puts("[ Not compiling\n")
     _quit_
   fin
+end
+def _componly_#0
+  ^_ffa_(vlist) = ^_ffa_(vlist) | componly_flag
+end
+def _interponly_#0
+  ^_ffa_(vlist) = ^_ffa_(vlist) | interponly_flag
 end
 def _immediate_#0
   ^_ffa_(vlist) = ^_ffa_(vlist) | imm_flag
@@ -1591,6 +1591,9 @@ def _find_(a)#2
 end
 def _tick_#1
   return find(nextword(' '))
+end
+def _comptick_#0
+  compliteral(find(nextword(' ')))
 end
 def _forget_#0
   word dentry
@@ -1859,20 +1862,6 @@ def _showrstack_#0
     puti(RSTACK[depth]); putc(' ')
     depth--
   loop
-end
-def _showhash_#0
-  word count, dentry
-  byte i
-
-  for i = 0 to HASH_MASK
-    count = 0
-    dentry = hashtbl[i]
-    while dentry
-      count++
-      dentry = *_hfa_(dentry)
-    loop
-    puti(count); putc(' ')
-  next
 end
 def _tron_#0
   state = state | trace_flag

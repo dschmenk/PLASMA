@@ -55,7 +55,11 @@ While running code, `<CTRL-C>` will break out and return to the interpreter.
 
 ### Word to run a script:
 
+`SRC`: Source filename on stack as input. Can be nested
+
 `SRC" ssss"`: Source file `ssss` as input. Can be nested
+
+`ENDSRC`: End sourcing file as input if stack flag non-zero
 
 ### Word for compiler modes:
 
