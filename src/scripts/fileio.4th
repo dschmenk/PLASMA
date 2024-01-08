@@ -1,3 +1,5 @@
+' FILEIOAPI ENDSRC ( Avoid multiple loads )
+
 ( LOADMOD" FILEIO"  FILEIO is already available in plforth )
 
 LOOKUP FILEIO CONSTANT FILEIOAPI

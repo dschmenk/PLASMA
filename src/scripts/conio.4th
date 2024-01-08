@@ -1,3 +1,5 @@
+' CONIOAPI ENDSRC ( Avoid multiple loads )
+
 ( LOADMOD" CONIO"  CONIO is already available in plforth )
 
 LOOKUP CONIO CONSTANT CONIOAPI

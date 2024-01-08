@@ -1,3 +1,5 @@
+' GRMODE ENDSRC ( Avoid multiple loads )
+
 " GRLIB" LOADMOD"  "
 
 LOOKUP GRPLOT    PLASMA GRPLOT

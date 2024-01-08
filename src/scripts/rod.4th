@@ -1,22 +1,5 @@
-: ?PLASMA
-  " IFACE" FIND
-  SWAP DROP
-  0= IF
-    " PLASMA.4TH" SRC
-  THEN
-;
-
-?PLASMA ( Load PLASMA if not already )
-
-: ?CONIO
-  " CONIOAPI" FIND
-  SWAP DROP
-  0= IF
-    " CONIO.4TH" SRC
-  THEN
-;
-
-?CONIO ( Load CONIO if not already )
+SRC" PLASMA.4TH"
+SRC" CONIO.4TH"
 
 0 VARIABLE K
 0 VARIABLE W

@@ -1,32 +1,6 @@
-: ?PLASMA
-  " IFACE" FIND
-  SWAP DROP
-  0= IF
-    " PLASMA.4TH" SRC
-  THEN
-;
-
-?PLASMA ( Load PLASMA if not already )
-
-: ?CONIO
-  " CONIOAPI" FIND
-  SWAP DROP
-  0= IF
-    " CONIO.4TH" SRC
-  THEN
-;
-
-?CONIO ( Load CONIO if not already )
-
-: ?GRLIB
-  " GRLIB" FIND
-  SWAP DROP
-  0= IF
-    " GRLIB.4TH" SRC
-  THEN
-;
-
-?GRLIB ( Load GRLIB if not already )
+SRC" PLASMA.4TH"
+SRC" CONIO.4TH"
+SRC" GRLIB.4TH"
 
  5 VARIABLE BALLCLR
 10 VARIABLE BALLX

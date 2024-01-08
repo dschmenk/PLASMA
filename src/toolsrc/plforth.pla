@@ -19,7 +19,7 @@ word  previnptr[SRCREFS]
 // Internal buffers
 //
 res[SRCREFS * INBUF_SIZE] inbuf
-res[t_except]             exit
+res[t_except]             exitforth
 //
 // RSTACK
 //
@@ -111,15 +111,15 @@ predef _immediate_#0, _exit_#0, _pad_#1, _trailing_(a,b)#2
 predef _tors_(a)#0, _fromrs_#1, _toprs_#1, _lookup_#1
 predef _move_(a,b,c)#0, _fill_(a,b,c)#0, _plasma_(a)#0
 predef _var_(a)#0, _const_(a)#0, _lit_#1, _slit_#1, _find_(a)#2, _tick_#1
-predef _fence_(a)#0, _forget_#0, _terminal_#1, _prat_(a)#0, _prhexat_(a)#0
+predef _forget_#0, _terminal_#1, _prat_(a)#0
 predef _char_#0, _str_#0, _prstr_#0, _prpstr_#0
-predef _prval_(a)#0, _prbyte_(a)#0, _prshex_(a)#0, _prsbyte_(a)#0, _prhex_(a)#0
-predef _accept_(a,b)#1, _src_(a)#0, _srcstr_#0, _query_#0, _expect_(a,b)#0, _type_(a,b)#0
+predef _prval_(a)#0, _prbyte_(a)#0, _prhex_(a)#0
+predef _accept_(a,b)#1, _query_#0, _expect_(a,b)#0, _type_(a,b)#0
 predef _vlist_#0, _tron_#0, _troff_#0, _stepon_#0, _stepoff_#0
-predef _itc_#0, _pbc_#0, _comment_#0
+predef _itc_#0, _pbc_#0, _comment_#0, _src_(a)#0, _srcstr_#0, _endsrc_(a)#0
 predef _brk_#0, _brkon_#0, _brkoff_#0, _word_(a)#1, _count_(a)#2
 predef _space_#0, _spaces_(a)#0, _show_#0, _showstack_#0, _showrstack_#0
-predef _showhash_#0, _cont_#0, _restart_#0, _bye_#0, _quit_#0
+predef _showhash_#0, _cont_#0, _exitforth_#0, _bye_#0, _quit_#0
 predef _abort_(a)#0, _doabortstr_(a,b)#0, _abortstr_#0
 predef compword(dentry)#0, execword(dentry)#0
 // DROP
@@ -422,22 +422,14 @@ word = @d_until, 0, @_while_
 char d_repeat = "REPEAT"
 byte = imm_flag
 word = @d_while, 0, @_repeat_
-// FENCE
-char d_fence = "FENCE"
-byte = 0
-word = @d_repeat, 0, @_fence_
 // FORGET
 char d_forget = "FORGET"
 byte = 0
-word = @d_fence, 0, @_forget_
+word = @d_repeat, 0, @_forget_
 // CREATE
 char d_create = "CREATE"
 byte = 0
 word = @d_forget, 0, @_create_
-// BUILDS ( same as CREATE )
-char d_builds = "<BUILDS"
-byte = 0
-word = @d_create, 0, @_create_
 // RECREATE/DOES COMPILE TIME ( not in vocabulary )
 char d_createdoes = "(CREATEDOES)"
 byte = componly_flag
@@ -445,7 +437,7 @@ word = 0, 0, @_itcdoes_
 // DOES
 char d_does = "DOES>"
 byte = imm_flag
-word = @d_builds, 0, @_does_
+word = @d_create, 0, @_does_
 // COMMA
 char d_comma = ","
 byte = 0
@@ -542,14 +534,10 @@ word = @d_word, 0, @_trailing_
 char d_prat = "?"
 byte = 0
 word = @d_trailing, 0, @_prat_
-// PRINT HEX @TOS
-char d_prhexat = "$?"
-byte = 0
-word = @d_prat, 0, @_prhexat_
 // PRINT TOS
 char d_prtos = "."
 byte = 0
-word = @d_prhexat, 0, @_prval_
+word = @d_prat, 0, @_prval_
 // PRINT TOS HEX
 char d_prtoshex = "$."
 byte = 0
@@ -558,18 +546,10 @@ word = @d_prtos, 0, @_prhex_
 char d_prtosbyte = "C$."
 byte = 0
 word = @d_prtoshex, 0, @_prbyte_
-// PRINT TOS $HEX
-char d_prtosshex = "$$."
-byte = 0
-word = @d_prtosbyte, 0, @_prshex_
-// PRINT TOS SHEX BYTE
-char d_prtossbyte = "CS$."
-byte = 0
-word = @d_prtosshex, 0, @_prsbyte_
 // EMIT
 char d_emit = "EMIT"
 byte = 0
-word = @d_prtossbyte, 0, @putc
+word = @d_prtosbyte, 0, @putc
 // CR
 char d_cr = "CR"
 byte = 0
@@ -618,10 +598,14 @@ word = @d_prpstr, 0, @_src_
 char d_srcstr = "SRC\""
 byte = 0
 word = @d_src, 0, @_srcstr_
+// END SOURCE FILE
+char d_endsrc = "ENDSRC"
+byte = 0
+word = @d_srcstr, 0, @_endsrc_
 // CONTINUE AFTER BRK
 char d_cont = "CONT"
 byte = 0
-word = @d_srcstr, 0, @_cont_
+word = @d_endsrc, 0, @_cont_
 // QUIT
 char d_quit = "QUIT"
 byte = 0
@@ -638,14 +622,14 @@ word = @d_abort, 0, @_doabortstr_
 char d_abortstr = "ABORT\""
 byte = imm_flag
 word = @d_doabortstr, 0, @_abortstr_
-// COLD RESTART
-char d_restart = "COLD"
+// COLD exitforth
+char d_exitforth = "COLD"
 byte = 0
-word = @d_abortstr, 0, @_restart_
+word = @d_abortstr, 0, @_exitforth_
 // COMMENT
 char d_comment = "("
 byte = imm_flag
-word = @d_restart, 0, @_comment_
+word = @d_exitforth, 0, @_comment_
 
 //
 // PLFORTH custom words
@@ -731,6 +715,20 @@ def keyin#0
   ^(inptr + ^inptr + 1) = 0 // NULL terminate
   inptr++
 end
+def endsrc#1
+  if srclevel > 0
+    srclevel--
+    fileio:close(inref[srclevel]) // EOF
+    inref[srclevel] = 0
+    inbufptr        = inbufptr - INBUF_SIZE
+    inptr           = previnptr[srclevel]
+    if srclevel == 0              // - switch back to keyboard input
+        infunc = @keyin
+        keyin
+    fin
+  fin
+  return srclevel == 0
+end
 def filein#0
   byte len
   repeat
@@ -742,15 +740,8 @@ def filein#0
         ^(inbufptr + len) = 0 // NULL terminate
         inptr             = inbufptr
       else
-        srclevel--
-        fileio:close(inref[srclevel]) // EOF
-        inref[srclevel] = 0
-        inbufptr        = inbufptr - INBUF_SIZE
-        inptr           = previnptr[srclevel]
-        if srclevel == 0              // - switch back to keyboard input
-            infunc = @keyin
-            keyin
-            return
+        if endsrc
+          return
         fin
       fin
     until len
@@ -961,20 +952,15 @@ def warmstart#0
   brk    = 0
   brkcfa = 0
   RSP    = RSTK_SIZE
-  infunc = @keyin
-  inptr  = keyinbuf
-  ^inptr = 0
   if state & comp_flag // Undo compilation state
     heaprelease(vlist)
     vlist = *_lfa_(vlist)
-    buildhashtbl
   fin
   state = 0
-  while srclevel
-    srclevel--
-    fileio:close(inref[srclevel])
-    inref[srclevel] = 0
-  loop
+  while !endsrc; loop
+  infunc = @keyin
+  inptr  = keyinbuf
+  ^inptr = 0
 end
 //
 // Cold start
@@ -1019,10 +1005,20 @@ def compliteral(value)#0
     pfillw(@d_lit)
     pfillw(value) // Poke literal value into dictionary
   else // comp_pbc_flag
-    if value >= 0 and value <= 15
-      pfillb(value << 1) // CONSTANT NIBBLE
-    elsif value == -1
-      pfillb($20) // CONSTANT MINUS_ONE
+    if value >= 0 and value <= 255
+      if value <= 15
+        pfillb(value << 1) // CONSTANT NIBBLE
+      else
+        pfillb($2A) // CONSTANT BYTE
+        pfillb(value) // Poke literal value into dictionary
+      fin
+    elsif value < 0 and value >= -256
+      if value == -1
+        pfillb($20) // CONSTANT MINUS_ONE
+      else
+        pfillb($5E) // CONSTANT NEGATIVE BYTE
+        pfillb(value) // Poke literal value into dictionary
+      fin
     else
       pfillb($2C) // CONSTANT WORD
       pfillw(value) // Poke literal value into dictionary
@@ -1596,26 +1592,14 @@ end
 def _tick_#1
   return find(nextword(' '))
 end
-def _fence_(a)#0
-  if isult(a, startheap)
-    a = startheap
-  fin
-  fence = a
-end
 def _forget_#0
   word dentry
 
   dentry = find(nextword(' '))
   if dentry
-    if isult(dentry, fence)
-      if isuge(vlist, fence)
-        repeat
-          dentry = vlist
-          vlist  = *_lfa_(dentry)
-        until isult(vlist, fence)
-      else
-        return // Do nothing
-      fin
+    if isult(dentry, startheap)
+      vlist = @d_vlist
+      dentry = startheap
     else
       vlist = *_lfa_(dentry)
     fin
@@ -1684,22 +1668,13 @@ def _prval_(a)#0
   puti(a); putc(' ')
 end
 def _prbyte_(a)#0
-  putb(a); putc(' ')
-end
-def _prhex_(a)#0
-  puth(a); putc(' ')
-end
-def _prsbyte_(a)#0
   putc('$'); putb(a); putc(' ')
 end
-def _prshex_(a)#0
+def _prhex_(a)#0
   putc('$'); puth(a); putc(' ')
 end
 def _prat_(a)#0
   puti(*a); putc(' ')
-end
-def _prhexat_(a)#0
-  putc('$'); puth(*a); putc(' ')
 end
 def _char_#0
   word str
@@ -1828,6 +1803,11 @@ def _srcstr_#0
     filename--
     ^filename = len
     _src_(filename)
+  fin
+end
+def _endsrc_(a)#0
+  if a
+    endsrc
   fin
 end
 def _show_#0
@@ -1971,7 +1951,7 @@ end
 //
 def _quit_#0
   warmstart
-  throw(@exit, FALSE)
+  throw(@exitforth, FALSE)
 end
 //
 // Abort
@@ -2000,20 +1980,20 @@ def _abortstr_#0
   fin
 end
 //
-// Restart
+// exitforth
 //
-def _restart_#0
+def _exitforth_#0
   coldstart
-  throw(@exit, FALSE)
+  throw(@exitforth, FALSE)
 end
 //
 // Leave FORTH
 //
 def _bye_#0
-  throw(@exit, TRUE)
+  throw(@exitforth, TRUE)
 end
 
-puts("FORTH for PLASMA 2.1 WIP\n")
+puts("FORTH WIP for PLASMA 2.1\n")
 if cmdsys:sysver < $0201
   puts("PLASMA >= 2.01 required\n")
   return
@@ -2024,7 +2004,7 @@ fileio:iobufalloc(4) // Allocate a bunch of file buffers
 startheap = heapmark
 coldstart
 inptr = argNext(argFirst)
-if not except(@exit)
+if not except(@exitforth)
   if ^inptr; inptr++; _srcstr_; fin
   interpret
 fin

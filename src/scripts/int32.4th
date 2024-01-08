@@ -1,3 +1,5 @@
+' DVAR ENDSRC ( Avoid multiple loads )
+
 " INT32"   LOADMOD"  "
 
 LOOKUP ZERO32       PLASMA ZERO32   ( -- )

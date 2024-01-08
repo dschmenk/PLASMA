@@ -1,3 +1,5 @@
+' HGRMODE ENDSRC ( Avoid multiple loads )
+
 " HGRLIB" LOADMOD"  "
 
 LOOKUP HGRPLOT    PLASMA HGRPLOT

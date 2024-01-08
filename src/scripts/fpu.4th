@@ -1,3 +1,5 @@
+' FPULIB ENDSRC ( Avoid multipe loads )
+
 " SANE"   LOADMOD"  "
 " FPSTR"  LOADMOD"  "
 " FPU"    LOADMOD"  "

@@ -2,35 +2,9 @@ LOOKUP HRFORTH  ( HGR page 1 reserved )
 LOOKUP HR2FORTH ( HGR page 1 and 2 reserved )
 OR NOT ABORT" Must run with HRFORTH."
 
-: ?PLASMA
-  " IFACE" FIND
-  SWAP DROP
-  0= IF
-    " PLASMA.4TH" SRC
-  THEN
-;
-
-?PLASMA ( Load PLASMA if not already )
-
-: ?CONIO
-  " CONIOAPI" FIND
-  SWAP DROP
-  0= IF
-    " CONIO.4TH" SRC
-  THEN
-;
-
-?CONIO ( Load CONIO if not already )
-
-: ?HGRLIB
-  " HGRLIB" FIND
-  SWAP DROP
-  0= IF
-    " HGRLIB.4TH" SRC
-  THEN
-;
-
-?HGRLIB ( Load GRLIB if not already )
+SRC" PLASMA.4TH"
+SRC" CONIO.4TH"
+SRC" HGRLIB.4TH"
 
  5 VARIABLE BALLCLR
 10 VARIABLE BALLX
