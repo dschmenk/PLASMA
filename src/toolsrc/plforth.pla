@@ -111,8 +111,8 @@ predef _componly_#0, _interponly_#0, _immediate_#0, _exit_#0, _pad_#1, _trailing
 predef _tors_(a)#0, _fromrs_#1, _toprs_#1, _lookup_#1
 predef _move_(a,b,c)#0, _fill_(a,b,c)#0, _plasma_(a)#0
 predef _var_(a)#0, _const_(a)#0, _lit_#1, _slit_#1, _find_(a)#2
-predef _tick_#1, _comptick_#0, _forget_#0, _terminal_#1, _prat_(a)#0
-predef _char_#0, _str_#0, _prstr_#0, _prpstr_#0
+predef _tick_#0, _forget_#0, _terminal_#1, _prat_(a)#0
+predef _blank_#0, _char_#0, _str_#0, _prstr_#0, _prpstr_#0
 predef _prval_(a)#0, _prbyte_(a)#0, _prhex_(a)#0
 predef _accept_(a,b)#1, _query_#0, _expect_(a,b)#0, _type_(a,b)#0
 predef _vlist_#0, _tron_#0, _troff_#0, _stepon_#0, _stepoff_#0
@@ -121,7 +121,7 @@ predef _brk_#0, _brkon_#0, _brkoff_#0, _word_(a)#1, _count_(a)#2
 predef _space_#0, _spaces_(a)#0, _show_#0, _showstack_#0, _showrstack_#0
 predef _cont_#0, _exitforth_#0, _bye_#0, _quit_#0
 predef _abort_(a)#0, _doabortstr_(a,b)#0, _abortstr_#0
-predef compword(dentry)#0, execword(dentry)#0
+predef compword(dentry)#0, execword(dentry)#0, isnum(a,b)#2
 // DROP
 char d_drop = "DROP"
 byte = inline_flag
@@ -492,12 +492,8 @@ byte = 0
 word = @d_count, 0, @_find_
 // TICK
 char d_tick = "'"
-byte = interponly_flag
+byte = imm_flag
 word = @d_find, 0, @_tick_
-// COMPILED TICK
-char d_comptick = "[']"
-byte = imm_flag | componly_flag
-word = @d_tick, 0, @_comptick_
 // INLINE LITERAL NUMBER ( not in vocabulary )
 char d_lit = "LIT"
 byte = param_flag
@@ -505,7 +501,7 @@ word = 0, 0, @_lit_
 // COMPILED LITERAL VALUE FROM STACK
 char d_literal = "LITERAL"
 byte = imm_flag
-word = @d_comptick, 0, @_literal_
+word = @d_tick, 0, @_literal_
 // ?TERMINAL
 char d_terminal = "?TERMINAL"
 byte = 0
@@ -530,10 +526,14 @@ word = @d_expect, 0, @_accept_
 char d_word = "WORD"
 byte = 0
 word = @d_accept, 0, @_word_
+// ISNUM
+char d_isnum = "?NUM"
+byte = 0
+word = @d_word, 0, @isnum
 // -TRAILING
 char d_trailing = "-TRAILING"
 byte = 0
-word = @d_word, 0, @_trailing_
+word = @d_isnum, 0, @_trailing_
 // PRINT @TOS
 char d_prat = "?"
 byte = 0
@@ -570,10 +570,14 @@ word = @d_space, 0, @_spaces_
 char d_type = "TYPE"
 byte = 0
 word = @d_spaces, 0, @_type_
+// BLANK
+char d_blank = "BL"
+byte = imm_flag
+word = @d_type, 0, @_blank_
 // CHAR
 char d_char = "CHAR"
 byte = imm_flag
-word = @d_type, 0, @_char_
+word = @d_blank, 0, @_char_
 // STRING
 char d_str = "\""
 byte = imm_flag
@@ -1385,8 +1389,7 @@ def _compile_#0
   if dentry
     compword(dentry)
   else
-    puts(dentry)
-    puts(" not found\n")
+    puts("No match\n")
     _quit_
   fin
 end
@@ -1589,11 +1592,20 @@ def _find_(a)#2
   fin
   return a, 0
 end
-def _tick_#1
-  return find(nextword(' '))
-end
-def _comptick_#0
-  compliteral(find(nextword(' ')))
+def _tick_#0
+  word dentry
+
+  dentry = find(nextword(' '))
+  if dentry
+    if state & comp_flag
+      compliteral(dentry)
+    else
+      (@push)(dentry)#0
+    fin
+  else
+    puts("No match\n")
+    _quit_
+  fin
 end
 def _forget_#0
   word dentry
@@ -1608,6 +1620,9 @@ def _forget_#0
     fin
     heaprelease(dentry)
     buildhashtbl
+  else
+    puts("No match\n")
+    _quit_
   fin
 end
 def _query_#0
@@ -1678,6 +1693,13 @@ def _prhex_(a)#0
 end
 def _prat_(a)#0
   puti(*a); putc(' ')
+end
+def _blank_#0
+  if state & comp_flag
+    compliteral(32)
+  else
+    (@push)(32)#0
+  fin
 end
 def _char_#0
   word str

@@ -53,7 +53,7 @@ While running code, `<CTRL-C>` will break out and return to the interpreter.
 
 `PLASMA zzzz`: Create word `zzzz` with code address from `LOOKUP`
 
-### Word to run a script:
+### Words to run a script:
 
 `SRC`: Source filename on stack as input. Can be nested
 
@@ -61,11 +61,15 @@ While running code, `<CTRL-C>` will break out and return to the interpreter.
 
 `ENDSRC`: End sourcing file as input if stack flag non-zero
 
-### Word for compiler modes:
+### Words for compiler modes:
 
 `PBC`: Compile into PLASMA Byte Code
 
 `ITC`: Compile into Indirect Threaded Code
+
+### Word for converting string to number:
+
+`?NUM`: Convert string and length to number, returning number and valid flag
 
 ## Debugging vs Performance
 
