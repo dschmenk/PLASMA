@@ -1,4 +1,4 @@
-' IFACE ENDSRC ( Avoid multiple loads )
+' IFACE ENDSRC
 : IFACE 2 * + @ ;
 LOOKUP CMDSYS 0  IFACE  CONSTANT PLASMAVER
 LOOKUP CMDSYS 2  IFACE  CONSTANT CMDLINE
@@ -7,13 +7,13 @@ LOOKUP STRCPY    PLASMA STRCPY
 LOOKUP STRCAT    PLASMA STRCAT
 LOOKUP TOUPPER   PLASMA TOUPPER
 LOOKUP HEAPAVAIL PLASMA FREEMEM
-: LOADMOD ( modulename paramstr -- )
-  CMDLINE " . " STRCPY DROP ( Module name )
-  CMDLINE SWAP STRCAT DROP ( Parameter string )
+: LOADMOD
+  CMDLINE " . " STRCPY DROP
+  CMDLINE SWAP STRCAT DROP
   EXECMOD 0< ABORT" Failed to load module" ;
-: LOADMOD" ( modulename -- )
-  PAD SWAP STRCPY ( Move module name out of the way in case its immediate )
-  CHAR " WORD ( Build a string from input )
+: LOADMOD" 
+  PAD SWAP STRCPY
+  CHAR " WORD
   LOADMOD ;
 : EDIT " ED" "  " LOADMOD ;
 : EDIT" " ED" LOADMOD" ;

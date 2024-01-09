@@ -105,7 +105,7 @@ predef _create_#0, _itcdoes_(a)#0, _does_#0, _compoff_#0, _compon_#0
 predef _compile_#0, _dictaddw_(a)#0, _dictaddb_(a)#0, _colon_#0, _semi_#0
 predef _componly_#0, _interponly_#0, _immediate_#0, _exit_#0, _pad_#1, _trailing_(a,b)#2
 predef _tors_(a)#0, _fromrs_#1, _toprs_#1, _lookup_#1
-predef _move_(a,b,c)#0, _fill_(a,b,c)#0, _plasma_(a)#0
+predef _cmove_(a,b,c)#0, _move_(a,b,c)#0, _fill_(a,b,c)#0, _plasma_(a)#0
 predef _var_(a)#0, _const_(a)#0, _lit_#1, _slit_#1, _find_(a)#2
 predef _tick_#0, _forget_#0, _terminal_#1, _prat_(a)#0
 predef _blank_#0, _char_#0, _str_#0, _prstr_#0, _prpstr_#0
@@ -295,24 +295,28 @@ byte = 0
 word = @d_toprstk, 0, @_lookup_
 // PLASMA LINKEAGE
 char d_plasma = "PLASMA"
-byte = imm_flag
+byte = interponly_flag
 word = @d_lookup, 0, @_plasma_
 // VARIABLE
 char d_var = "VARIABLE"
-byte = imm_flag
+byte = interponly_flag
 word = @d_plasma, 0, @_var_
 // CONSTANT
 char d_const = "CONSTANT"
-byte = imm_flag
+byte = interponly_flag
 word = @d_var, 0, @_const_
+// CMOVE
+char d_cmove = "CMOVE"
+byte = 0
+word = @d_const, 0, @_cmove_
 // MOVE
 char d_move = "MOVE"
 byte = 0
-word = @d_const, 0, @_move_
+word = @d_cmove, 0, @_move_
 // FILL
 char d_fill = "FILL"
 byte = 0
-word = @d_move, 0, @_fill_
+word = @d_cmove, 0, @_fill_
 // HERE
 char d_here = "HERE"
 byte = 0
@@ -495,7 +499,7 @@ byte = param_flag
 word = 0, 0, @_lit_
 // COMPILED LITERAL VALUE FROM STACK
 char d_literal = "LITERAL"
-byte = imm_flag
+byte = imm_flag | componly_flag
 word = @d_tick, 0, @_compliteral_
 // ?TERMINAL
 char d_terminal = "?TERMINAL"
@@ -666,11 +670,11 @@ byte = 0
 word = @d_stepoff, 0, @_brk_
 // BREAK ON
 char d_brkon = "BRKON"
-byte = imm_flag
+byte = interponly_flag
 word = @d_brk, 0, @_brkon_
 // BREAK OFF
 char d_brkoff = "BRKOFF"
-byte = 0
+byte = interponly_flag
 word = @d_brkon, 0, @_brkoff_
 //  COMPILE USING ITC
 char d_itc = "ITC"
@@ -1831,26 +1835,35 @@ end
 def _comment_#0
   nextword(')')
 end
-def _vlist_#0
+def typelist(typestr, typemask, type)#0
   word d
   byte tab
 
-  tab = 0
+  puts(typestr)
+  tab = ^typestr
   d   = vlist
   while d
-    tab = tab + 1 + ^d
-    if tab > 39
-      putln;
-      tab = ^d
-    else
-      puts(" ")
-    fin 
-    puts(d)
-    if conio:keypressed()
-      getc; getc
+    if (typemask & ^_ffa_(d)) == type
+      tab = tab + 1 + ^d
+      if tab > 39
+        putln;
+        tab = ^d
+      else
+        puts(" ")
+      fin 
+      puts(d)
+      if conio:keypressed(); getc; getc; fin
     fin
     d = *_lfa_(d)
   loop
+end
+def _vlist_#0
+  putln
+  typelist("Compile only: ", componly_flag, componly_flag)
+  putln; putln
+  typelist("Interpret only: ", interponly_flag, interponly_flag)
+  putln; putln
+  typelist("Both: ", componly_flag | interponly_flag, 0)
 end
 //
 // Quit
