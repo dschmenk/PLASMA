@@ -80,6 +80,7 @@ word                = $0850,$08D0,$0950,$09D0,$0A50,$0AD0,$0B50,$0BD0
 byte textbwmode[]   = 2, 16, 0
 byte textclrmode[]  = 2, 16, 1
 byte grcharset[]    = 1, 0, $7F, $7F, $7F, $7F, $00, $00, $00, $00
+byte a3keyqueue     = 0
 //
 // Random number for Apple 1 and III.
 //
@@ -152,6 +153,12 @@ end
 //
 def a1keypressed
     return ^$D011 >= 128 ?? ^$D011 :: 0
+end
+def a1getkey
+    while not a1keypressed
+        randnum = randnum + 123
+    loop
+    return getc()
 end
 def a12echo(state)
     return 0
@@ -278,8 +285,24 @@ def dev_status(devnum, code, list)
 end
 def a3keypressed
     byte count
+
     dev_status(cmdsys.devcons, 5, @count)
-    return count
+    if count and !a3keyqueue
+        a3keyqueue = getc
+    fin
+    return a3keyqueue | $80
+end
+def a3getkey
+    byte keycode
+    repeat
+        randnum = randnum + 123
+        if !a3keyqueue
+            a3keypressed
+        fin
+        keycode = a3keyqueue
+    until keycode
+    a3keyqueue = 0
+    return keycode
 end
 def a3echo(state)
     return dev_control(cmdsys.devcons, 11, @state)
@@ -362,12 +385,6 @@ end
 //
 // Apple 1 and III combined routines.
 //
-def a13getkey
-    while not conio:keypressed()
-        randnum = randnum + 123
-    loop
-    return getc()
-end
 def a13rnd
     randnum = (randnum << 1) + randnum + 123
     return randnum & $7FFF
@@ -378,7 +395,7 @@ end
 when MACHID & MACHID_MODEL
     is MACHID_III
         conio:keypressed = @a3keypressed
-        conio:getkey     = @a13getkey
+        conio:getkey     = @a3getkey
         conio:echo       = @a3echo
         conio:home       = @a3home
         conio:gotoxy     = @a3gotoxy
@@ -391,7 +408,7 @@ when MACHID & MACHID_MODEL
         break
     is MACHID_I
         conio:keypressed = @a1keypressed
-        conio:getkey     = @a13getkey
+        conio:getkey     = @a1getkey
         conio:home       = @a1home
         conio:gotoxy     = @a1gotoxy
         conio:viewport   = @a1viewport
