@@ -11,6 +11,10 @@ PLFORTH is a PLASMA module written in PLASMA itself. As a first class citizen of
 
 There are quite a few missing word that a standard FORTH would have. Mostly due to deliberately keeping PLFORTH as minimal as possible to reduce the memory footpring and load time. Most of the missing words can be synthesized using existing PLASMA modules and some glue words. The double word have mostly been made avialable through PLASMA's 32 bit integer module, `INT32` by way of the `int32.4th` script. You can always petition to get your favorite FORTH word included in the default vocabulary. Speaking of `VOCABULARY`, PLFORTH only has one.
 
+## PLFORTH built-in words
+
+![VLIST](forthwords.png)
+
 ## PLFORTH specific words
 
 ### Words for looking at internal structures:
