@@ -6,9 +6,10 @@ include "inc/longjmp.plh"
 //
 // Internal variables
 //
-word  vlist
-word  startheap, arg, infunc, inptr, IIP, W
+word  vlist, infunc, inptr, IIP, W
+word  vmvect, startheap, arg
 word  keyinbuf   = $1FF
+const JSR        = $20 // 6502 JSR opcode needed for VM entry
 const SRCREFS    = 2
 const INBUF_SIZE = 128
 byte  srclevel   = 0
@@ -92,15 +93,9 @@ const interponly_flag = $80
 //
 // Predefine instrinsics
 //
-predef _drop_(a)#0, _swap_(a,b)#2, _dup_(a)#2, _dashdup_(a)#1, _over_(a,b,c)#4, _rot_(a,b,c)#3
-predef _add_(a,b)#1, _inc_(a)#1, _inc2_(a)#1, _dec_(a)#1, _dec2_(a)#1
-predef _sub_(a,b)#1, _mul_(a,b)#1, _div_(a,b)#1
-predef _neg_(a)#1, _and_(a,b)#1, _or_(a,b)#1, _xor_(a,b)#1, _complement_(a)#1, _not_(a)#1
-predef _mod_(a,b)#1, _abs_(a)#1, _max_(a,b)#1, _min_(a,b)#1
-predef _lshift_(a,b)#1, _rshift_(a,b)#1
-predef _cset_(a,b)#0, _cget_(a)#1, _wset_(a,b)#0, _wplusset_(a,b)#0, _wget_(a)#1
+predef _swap_(a,b)#2, _dashdup_(a)#1, _over_(a,b,c)#4, _rot_(a,b,c)#3
+predef _abs_(a)#1, _max_(a,b)#1, _min_(a,b)#1, _wplusset_(a,b)#0
 predef _ffa_(a)#1, _lfa_(a)#1, _hfa_(a)#1, _cfa_(a)#1, _pfa_(a)#1, _allot_(a)#0
-predef _eq_(a,b)#1, _gt_(a,b)#1, _lt_(a,b)#1, _0lt_(a)#1, _0eq_(a)#1
 predef _branch_#0, _0branch_(a)#0, _if_#0, _else_#0, _then_#0
 predef _begin_#0, _again_#0, _until_#0, _while_#0, _repeat_#0
 predef _case_#0, _of_#0, _endof_#0, _endcase_#0
@@ -124,7 +119,7 @@ predef _compword_(dentry)#0, _compliteral_(a)#0, _execword_(dentry)#0, _isnum_(a
 // DROP
 char d_drop = "DROP"
 byte = inline_flag
-word = 0, 0, @_drop_, $30
+word = 0, 0, 0, $30
 // SWAP
 char d_swap = "SWAP"
 byte = 0
@@ -132,7 +127,7 @@ word = @d_drop, 0, @_swap_
 // DUP
 char d_dup = "DUP"
 byte = inline_flag
-word = @d_swap, 0, @_dup_, $34
+word = @d_swap, 0, 0, $34
 // -DUP
 char d_dashdup = "-DUP"
 byte = 0
@@ -148,87 +143,87 @@ word = @d_over, 0, @_rot_
 // ADD
 char d_add = "+"
 byte = inline_flag
-word = @d_rot, 0, @_add_, $82
+word = @d_rot, 0, 0, $82
 // ONE PLUS
 char d_inc = "1+"
 byte = inline_flag
-word = @d_add, 0, @_inc_, $8C
+word = @d_add, 0, 0, $8C
 // TWO PLUS
 char d_inc2 = "2+"
 byte = inlinew_flag
-word = @d_inc, 0, @_inc2_, $8C8C
+word = @d_inc, 0, 0, $8C8C
 // ONE MINUS
 char d_dec = "1-"
 byte = inline_flag
-word = @d_inc2, 0, @_dec_, $8E
+word = @d_inc2, 0, 0, $8E
 // TWO MINUS
 char d_dec2 = "2-"
 byte = inlinew_flag
-word = @d_dec, 0, @_dec2_, $8E8E
+word = @d_dec, 0, 0, $8E8E
 // SUB
 char d_sub = "-"
 byte = inline_flag
-word = @d_dec2, 0, @_sub_, $84
+word = @d_dec2, 0, 0, $84
 // MUL
 char d_mul = "*"
 byte = inline_flag
-word = @d_sub, 0, @_mul_, $86
+word = @d_sub, 0, 0, $86
 // DIV
 char d_div = "/"
 byte = inline_flag
-word = @d_mul, 0, @_div_, $88
+word = @d_mul, 0, 0, $88
 // DIVMOD
 char d_divmod = "/MOD"
 byte = inline_flag
-word = @d_div, 0, @divmod, $36
+word = @d_div, 0, 0, $36
 // MOD
 char d_mod = "MOD"
 byte = inline_flag
-word = @d_divmod, 0, @_mod_, $8A
+word = @d_divmod, 0, 0, $8A
 // NEG
 char d_neg = "NEGATE"
 byte = inline_flag
-word = @d_mod, 0, @_neg_, $90
+word = @d_mod, 0, 0, $90
 // AND
 char d_and = "AND"
 byte = inline_flag
-word = @d_neg, 0, @_and_, $94
+word = @d_neg, 0, 0, $94
 // OR
 char d_or = "OR"
 byte = inline_flag
-word = @d_and, 0, @_or_, $96
+word = @d_and, 0, 0, $96
 // XOR
 char d_xor = "XOR"
 byte = inline_flag
-word = @d_or, 0, @_xor_, $98
+word = @d_or, 0, 0, $98
 // COMPLEMENT
 char d_complement = "COMPLEMENT"
 byte = inline_flag
-word = @d_xor, 0, @_complement_, $92
+word = @d_xor, 0, 0, $92
 // NOT
 char d_not = "NOT"
 byte = inline_flag
-word = @d_complement, 0, @_not_, $80
+word = @d_complement, 0, 0, $80
 // LEFT SHIFT
 char d_lshift = "LSHIFT"
 byte = inline_flag
-word = @d_not, 0, @_lshift_, $9A
+word = @d_not, 0, 0, $9A
 // RIGHT SHIFT
 char d_rshift = "RSHIFT"
 byte = inline_flag
-word = @d_lshift, 0, @_rshift_, $9C
+word = @d_lshift, 0, 0, $9C
 // EQUALS
 char d_eq = "="
 byte = inline_flag
-word = @d_rshift, 0, @_eq_, $40
+word = @d_rshift, 0, 0, $40
 // GREATER THAN
 char d_gt = ">"
 byte = inline_flag
-word = @d_eq, 0, @_gt_, $44
+word = @d_eq, 0, 0, $44
 // LESS THAN
 char d_lt = "<"
 byte = inline_flag
-word = @d_gt, 0, @_lt_, $46
+word = @d_gt, 0, 0, $46
 // UNSIGNED GREATER THAN
 char d_ugt = "U>"
 byte = 0
@@ -240,11 +235,11 @@ word = @d_ugt, 0, @isult
 // LESS THAN ZERO
 char d_0lt = "0<"
 byte = inlinew_flag
-word = @d_ult, 0, @_0lt_, $4600 // ZERO ISLT
+word = @d_ult, 0, 0, $4600 // ZERO ISLT
 // EQUALS ZERO
 char d_0eq = "0="
 byte = inlinew_flag
-word = @d_0lt, 0, @_0eq_, $4000 // ZERO ISEQ
+word = @d_0lt, 0, 0, $4000 // ZERO ISEQ
 // ABS
 char d_abs = "ABS"
 byte = 0
@@ -260,11 +255,11 @@ word = @d_min, 0, @_max_
 // CHAR PUT
 char d_cset = "C!"
 byte = inline_flag
-word = @d_max, 0, @_cset_, $70
+word = @d_max, 0, 0, $70
 // WORD PUT
 char d_wset = "!"
 byte = inline_flag
-word = @d_cset, 0, @_wset_, $72
+word = @d_cset, 0, 0, $72
 // WORD PLUS PUT
 char d_wplusset = "+!"
 byte = 0
@@ -272,11 +267,11 @@ word = @d_wset, 0, @_wplusset_
 // CHAR GET
 char d_cget = "C@"
 byte = inline_flag
-word = @d_wplusset, 0, @_cget_, $60
+word = @d_wplusset, 0, 0, $60
 // WORD SET
 char d_wget = "@"
 byte = inline_flag
-word = @d_cget, 0, @_wget_, $62
+word = @d_cget, 0, 0, $62
 // EXECUTE
 char d_execute = "EXECUTE"
 byte = 0
@@ -1064,14 +1059,8 @@ end
 //
 // Intrinsics
 //
-def _drop_(a)#0
-  return
-end
 def _swap_(a,b)#2
   return b,a
-end
-def _dup_(a)#2
-  return a,a
 end
 def _dashdup_(a)#1
   if a; (@push)(a)#0; fin
@@ -1082,78 +1071,6 @@ def _over_(a,b,c)#4
 end
 def _rot_(a,b,c)#3
   return b,c,a
-end
-def _add_(a,b)#1
-  return a+b
-end
-def _inc_(a)
-  return a + 1
-end
-def _inc2_(a)
-  return a + 2
-end
-def _dec_(a)
-  return a - 1
-end
-def _dec2_(a)
-  return a - 2
-end
-def _sub_(a,b)#1
-  return a-b
-end
-def _mul_(a,b)#1
-  return a*b
-end
-def _div_(a,b)#1
-  return a/b
-end
-def _mod_(a,b)#1
-    return a%b
-end
-def _neg_(a)#1
-  return -a
-end
-def _lshift_(a,b)#1
-    return a<<b
-end
-def _rshift_(a,b)#1
-    return a>>b
-end
-def _and_(a,b)#1
-  return a & b
-end
-def _or_(a,b)#1
-  return a | b
-end
-def _xor_(a,b)#1
-  return a ^ b
-end
-def _complement_(a)#1
-  return ~a
-end
-def _not_(a)#1
-  return not a
-end
-def _eq_(a,b)#1
-  return a == b
-end
-def _gt_(a,b)#1
-  return a > b
-end
-def _lt_(a,b)#1
-  return a < b
-end
-def _0lt_(a)#1
-  return a < 0
-end
-def _0eq_(a)#1
-  return a == 0
-end
-def _cset_(a,b)#0
-  ^b = a
-end
-def _wset_(a,b)#0
-  *b = a
 end
 def _wplusset_(a,b)#0
   *b = *b + a
@@ -1166,12 +1083,6 @@ def _min_(a,b)#1
 end
 def _max_(a,b)
   return a > b ?? a :: b
-end
-def _cget_(a)#1
-  return ^a
-end
-def _wget_(a)#1
-  return *a
 end
 def _ffa_(dentry)#1
   return dentry + ^dentry + 1
@@ -1272,8 +1183,7 @@ def _plasma_(a)#0
 end
 def _var_(a)#0
   newdict
-  _dictaddb_($20)          // Hack - get VM entry vector from divmod
-  _dictaddw_(*(@divmod + 1))
+  _dictaddb_(JSR); _dictaddw_(vmvect)
   _dictaddb_($2C)          // CONSTANT WORD
   _dictaddw_(heapmark + 3) // Poiner to variable in PFA
   _dictaddb_($5C)          // RET
@@ -1282,8 +1192,7 @@ def _var_(a)#0
 end
 def _const_(a)#0
   newdict
-  _dictaddb_($20)          // Hack - get VM entry vector from divmod
-  _dictaddw_(*(@divmod + 1))
+  _dictaddb_(JSR); _dictaddw_(vmvect)
   _dictaddb_($2C)          // CONSTANT WORD
   _dictaddw_(a)
   _dictaddb_($5C)          // RET
@@ -1291,8 +1200,7 @@ def _const_(a)#0
 end
 def _create_#0
   newdict
-  _dictaddb_($20)          // Hack - get VM entry vector from divmod
-  _dictaddw_(*(@divmod + 1))
+  _dictaddb_(JSR); _dictaddw_(vmvect)
   _dictaddb_($2C)          // CONSTANT WORD
   _dictaddw_(heapmark + 5) // Pointer to rest of PFA
   _dictaddb_($5C)          // RET
@@ -1348,8 +1256,7 @@ def _colon_#0
     ^(_ffa_(vlist)) = itc_flag
     *(_cfa_(vlist)) = @_docolon_
   else // comp_pbc_flag
-    _dictaddb_($20)            // Hack - get VM entry vector from divmod
-    _dictaddw_(*(@divmod + 1))
+    _dictaddb_(JSR); _dictaddw_(vmvect)
   fin
   if state & trace_flag
     puts(vlist); putc(' ')
@@ -1967,18 +1874,47 @@ end
 def _bye_#0
   throw(@exitforth, TRUE)
 end
-
+//
+// Start FORTH
+//
 puts("FORTH (Alpha) for PLASMA 2.1\n")
 if cmdsys:sysver < $0201
   puts("PLASMA >= 2.01 required\n")
   return
 fin
+//
+// Compile ITC version of inline words ( speeds it up a smidge )
+//
+vmvect = *(@divmod + 1)  // Hack - get VM entry vector from divmod
+vlist  = @d_vlist
+while vlist
+  if *_cfa_(vlist) == 0
+    *_cfa_(vlist) = heapmark
+    _dictaddb_(JSR); _dictaddw_(vmvect)
+    if ^_ffa_(vlist) == inline_flag
+      _dictaddb_(^_pfa_(vlist))
+    elsif ^_ffa_(vlist) == inlinew_flag
+      _dictaddw_(*_pfa_(vlist))
+    else
+      puts(vlist); puts(": Invalid dictionary\n")
+      return -1
+    fin
+    _dictaddb_($5C) // RET
+  fin
+  vlist = *_lfa_(vlist)
+loop
 _estkl = ^(@syscall + 1) // Hack to fill in parameter stack locations
 _estkh = ^(@syscall + 3)
 fileio:iobufalloc(4) // Allocate a bunch of file buffers
 startheap = heapmark
 coldstart
+//
+// Check for command line argument
+//
 inptr = argNext(argFirst)
+//
+// Main start and restart entry
+//
 if not except(@exitforth)
   if ^inptr; inptr++; _srcstr_; fin
   _interpret_
