@@ -291,26 +291,6 @@ DINTRP  PHP
         STX     OPPAGE
         LDY     #$00
         JMP     FETCHOP
-        !AS
-IINTRPX PHP
-        PLA
-        STA     PSR
-        SEI
-        CLC                     ; SWITCH TO NATIVE MODE
-        XCE
-        +ACCMEM16               ; 16 BIT A/M
-        LDY     #$01
-        LDA     (TOS,S),Y
-        DEY
-        STA     IP
-        PLA
-        STX     ESP
-        TSX
-        STX     HWSP
-        STX     ALTRDON
-        LDX     #>OPXTBL
-        STX     OPPAGE
-        JMP     FETCHOP
 ;************************************************************
 ;*                                                          *
 ;* 'BYE' PROCESSING - COPIED TO $1000 ON PRODOS BYE COMMAND *
@@ -481,6 +461,29 @@ OPXTBL  !WORD   ZERO,CN,CN,CN,CN,CN,CN,CN                               ; 00 02 
         !WORD   ADDLBX,ADDLWX,ADDABX,ADDAWX,IDXLBX,IDXLWX,IDXABX,IDXAWX ; B0 B2 B4 B6 B8 BA BC BE
         !WORD   NATV,JUMPZ,JUMP                                         ; C0 C2 C4
 ;*
+;* INDIRECT ENTRY INTO INTERPRETER
+;*
+        !AS
+IINTRPX PHP
+        PLA
+        STA     PSR
+        SEI
+        CLC                     ; SWITCH TO NATIVE MODE
+        XCE
+        +ACCMEM16               ; 16 BIT A/M
+        LDY     #$01
+        LDA     (TOS,S),Y
+        DEY
+        STA     IP
+        PLA
+        STX     ESP
+        TSX
+        STX     HWSP
+        STX     ALTRDON
+        LDX     #>OPXTBL
+        STX     OPPAGE
+        JMP     FETCHOP
+;*
 ;* JIT PROFILING ENTRY INTO INTERPRETER
 ;*
         !AS
@@ -616,7 +619,7 @@ _MULSLP ASL
         BNE     _MULSLP
         STA     NOS,S           ; PROD
         JMP     DROP
-;
+
 ;MUL     LDX     #$04
 ;        LDA     NOS,S
 ;        EOR     #$FFFF
