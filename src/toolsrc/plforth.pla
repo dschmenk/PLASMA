@@ -104,8 +104,8 @@ predef _branch_#0, _0branch_(a)#0, _if_#0, _else_#0, _then_#0
 predef _begin_#0, _again_#0, _until_#0, _while_#0, _repeat_#0
 predef _case_#0, _of_#0, _endof_#0, _endcase_#0
 predef _dodo_(a,b)#0, _do_#0, _doloop_#0, _doplusloop_(a)#0, _plusloop_#0, _loop_#0, _leave_#0, _j_#1
-predef _create_#0, _itcdoes_(a)#0, _does_#0, _compoff_#0, _compon_#0
-predef _compile_#0, _dictaddw_(a)#0, _dictaddb_(a)#0, _colon_#0, _semi_#0
+predef _create_#0, _itcdoes_(a)#0, _does_#0, _compoff_#0, _compon_#0, _state_#1
+predef _compile_#0, _forcecomp_#0, _dictaddw_(a)#0, _dictaddb_(a)#0, _colon_#0, _semi_#0
 predef _componly_#0, _interponly_#0, _immediate_#0, _exit_#0, _pad_#1, _trailing_(a,b)#2
 predef _tors_(a)#0, _fromrs_#1, _toprs_#1, _lookup_#1
 predef _cmove_(a,b,c)#0, _move_(a,b,c)#0, _fill_(a,b,c)#0, _plasma_(a)#0
@@ -448,10 +448,14 @@ word = @d_does, 0, @_dictaddw_
 char d_commab = "C,"
 byte = showcr_flag
 word = @d_comma, 0, @_dictaddb_
+// STATE
+char d_state = "STATE"
+byte = 0
+word = @d_commab, 0, @_state_
 // COLON
 char d_colon = ":"
 byte = interponly_flag
-word = @d_commab, 0, @_colon_
+word = @d_state, 0, @_colon_
 // COMP OFF
 char d_compoff = "["
 byte = imm_flag | componly_flag
@@ -460,14 +464,22 @@ word = @d_colon, 0, @_compoff_
 char d_compon = "]"
 byte = interponly_flag
 word = @d_compoff, 0, @_compon_
+// COMPILE WORD ON STACK
+char d_compword = "(COMPILE)"
+byte = componly_flag
+word = @d_compon, 0, @_compword_
 // COMPILE NEXT WORD
-char d_compile = "[COMPILE]"
+char d_compile = "COMPILE"
 byte = imm_flag | componly_flag
-word = @d_compon, 0, @_compile_
+word = @d_compword, 0, @_compile_
+// FORCE COMPILE NEXT WORD
+char d_forcecomp = "[COMPILE]"
+byte = imm_flag | componly_flag
+word = @d_compile, 0, @_forcecomp_
 // COMPILE ONLY
 char d_componly = "COMPONLY"
 byte = imm_flag
-word = @d_compile, 0, @_componly_
+word = @d_forcecomp, 0, @_componly_
 // INTERPRET ONLY
 char d_interponly = "INTERPONLY"
 byte = imm_flag
@@ -1218,6 +1230,9 @@ def _create_#0
   // 9 bytes after PFA, data follows...
   //
 end
+def _state_#1
+  return state & comp_flag
+end
 def _dodoes_#0
   (@push)(W + 11)#0   // Pointer to PFA storage
   execwords(*(W + 2)) // Exec PFA ptr
@@ -1296,7 +1311,24 @@ def _compile_#0
 
   dentry = find(nextword(' '))
   if dentry
-    _compword_(dentry)
+    if ^_ffa_(dentry) & imm_flag
+      _compword_(dentry)
+    else
+      _compliteral_(dentry)
+      _compword_(@d_compword)
+    fin
+  else
+    puts("No match\n")
+    _quit_
+  fin
+end
+def _forcecomp_#0
+  word dentry
+
+  dentry = find(nextword(' '))
+  if dentry
+    _compliteral_(dentry)
+    _compword_(@d_compword)
   else
     puts("No match\n")
     _quit_
@@ -1748,14 +1780,15 @@ def _show_#0
       pfa = pfa + 2
       w = *pfa
       if !w
-        puts(" EXIT\n")
         pfa = pfa + 2
         w = *pfa
+        if !*w; puts(" EXIT\n"); fin
       fin
       if conio:keypressed()
         conio:getkey(); conio:getkey()
       fin
     loop
+    puts(" EXIT\n")
   fin
 end
 def _showstack_#0
