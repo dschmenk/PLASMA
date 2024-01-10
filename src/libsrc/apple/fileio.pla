@@ -23,14 +23,14 @@ const sysbuf = $0800
 //
 // External interface
 //
-predef a2getpfx(path), a23setpfx(path), a2getfileinfo(path, fileinfo), a2setfileinfo(path, fileinfo), a23geteof(refnum)#2, a23seteof(refnum, eofl, eofh), a2iobufs(iobufs), a2open(path), a2close(refnum)
+predef a2getpfx(path), a2setpfx(path), a2getfileinfo(path, fileinfo), a2setfileinfo(path, fileinfo), a23geteof(refnum)#2, a23seteof(refnum, eofl, eofh), a2iobufs(iobufs), a2open(path), a2close(refnum)
 predef a23read(refnum, buf, len), a2write(refnum, buf, len), a2create(path, type, aux), a23destroy(path), a23rename(path, newpath)
 predef a2newline(refnum, emask, nlchar), a2online(unit, buf), a2readblock(unit, buf, block), a2writeblock(unit, buf, block)
 //
 // Exported function table.
 //
 word fileio[]
-word = @a2getpfx, @a23setpfx, @a2getfileinfo, @a2setfileinfo, @a23geteof, @a23seteof, @a2iobufs, @a2open, @a2close
+word = @a2getpfx, @a2setpfx, @a2getfileinfo, @a2setfileinfo, @a23geteof, @a23seteof, @a2iobufs, @a2open, @a2close
 word = @a23read, @a2write, @a2create, @a23destroy, @a23rename
 word = @a2newline, @a2online, @a2readblock, @a2writeblock
 //
@@ -60,7 +60,7 @@ def a2getpfx(path)
     return path
 end
 def a3getpfx(path)
-    byte params[3]
+    byte params[4]
 
     params.0 = 2
     params:1 = path
@@ -71,12 +71,35 @@ end
 def a1setpfx(path)
     return path
 end
-def a23setpfx(path)
+def a2setpfx(path)
     byte params[3]
 
     params.0 = 1
     params:1 = path
     perr     = syscall($C6, @params)
+    return path
+end
+def a3setpfx(path)
+    byte params[6]
+    byte fileinfo[2]
+    char fullpath[65]
+
+    if ^path and ^(path + 1) <> '/' and ^(path + 1) <> '.'
+        a3getpfx(@fullpath)
+        strcat(@fullpath, path)
+        path = @fullpath
+    fin
+    params.0 = 3
+    params:1 = path
+    params:3 = @fileinfo
+    params.5 = 2
+    if not syscall($C4, @params) and (fileinfo.1 == $00 or fileinfo.1 == $0F) // Make sure it's a directory
+        params.0 = 1
+        params:1 = path
+        syscall($C6, @params)
+    else
+        a3getpfx(path) // Get current path
+    fin
     return path
 end
 def a1getfileinfo(path, fileinfo)
@@ -445,6 +468,7 @@ end
 when MACHID & MACHID_MODEL
     is MACHID_III
         fileio:getpfx      = @a3getpfx
+        fileio:setpfx      = @a3setpfx
         fileio:getfileinfo = @a3getfileinfo
         fileio:setfileinfo = @a3setfileinfo
         fileio:iobufalloc  = @a13iobufs
