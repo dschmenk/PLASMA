@@ -210,7 +210,7 @@ RAMDONE ;CLI UNTIL I KNOW WHAT TO DO WITH THE UNENHANCED IIE
         JSR     PRODOS          ; GET PREFIX
         !BYTE   $C7
         !WORD   GETPFXPARMS
-        LDY     STRBUF          ; APPEND "CMDJIT"
+        LDY     STRBUF          ; APPEND "CMD128"
         LDA     #"/"
         CMP     STRBUF,Y
         BEQ     +
@@ -287,9 +287,19 @@ DINTRP  PHP
         STX     ESP
         TSX
         STX     HWSP
-        LDX     #>OPTBL
+        LDX     #ESTKSZ/2       ; COPY ZERO PAGE EVAL STACK TO HW STACK
+        CMP     ESP
+        BEQ     +
+-       LDY     ESTKH,X
+        PHY
+        LDY     ESTKL,X
+        PHY
+        DEX
+        CPX     ESP
+        BNE     -
++       LDX     #>OPTBL
         STX     OPPAGE
-        LDY     #$00
+        LDY     #$00             ; Y MUST BE ZERO FOR ENTER (DON'T CHANGE THIS)
         JMP     FETCHOP
 ;************************************************************
 ;*                                                          *
@@ -436,10 +446,9 @@ PAGE3   =       *
         BIT     LCRDEN+LCBNK2   ; $03DC - INDIRECT INTERPX ENTRY
         JMP     IINTRPX
 }
-DEFCMD  !FILL   28
-ENDBYE  =       *
+DEFCMD  =       *
 }
-LCDEFCMD =      *-28            ; DEFCMD IN LC MEMORY
+LCDEFCMD =      *               ; DEFCMD IN LC MEMORY
 
 ;*****************
 ;*               *
@@ -452,7 +461,7 @@ OPXTBL  !WORD   ZERO,CN,CN,CN,CN,CN,CN,CN                               ; 00 02 
         !WORD   MINUS1,BREQ,BRNE,LA,LLA,CB,CW,CSX                       ; 20 22 24 26 28 2A 2C 2E
         !WORD   DROP,DROP2,DUP,DIVMOD,ADDI,SUBI,ANDI,ORI                ; 30 32 34 36 38 3A 3C 3E
         !WORD   ISEQ,ISNE,ISGT,ISLT,ISGE,ISLE,BRFLS,BRTRU               ; 40 42 44 46 48 4A 4C 4E
-        !WORD   BRNCH,SEL,CALLX,ICALX,ENTER,LEAVEX,RETX,CFFB            ; 50 52 54 56 58 5A 5C 5E
+        !WORD   BRNCH,SEL,CALLX,ICALX,ENTER,LEAVE,RET,CFFB              ; 50 52 54 56 58 5A 5C 5E
         !WORD   LBX,LWX,LLBX,LLWX,LABX,LAWX,DLB,DLW                     ; 60 62 64 66 68 6A 6C 6E
         !WORD   SB,SW,SLB,SLW,SAB,SAW,DAB,DAW                           ; 70 72 74 76 78 7A 7C 7E
         !WORD   LNOT,ADD,SUB,MUL,DIV,MOD,INCR,DECR                      ; 80 82 84 86 88 8A 8C 8E
@@ -470,18 +479,28 @@ IINTRPX PHP
         SEI
         CLC                     ; SWITCH TO NATIVE MODE
         XCE
-        +ACCMEM16               ; 16 BIT A/M
+_INTRPX +ACCMEM16               ; 16 BIT A/M
         LDY     #$01
         LDA     (TOS,S),Y
-        DEY
         STA     IP
-        PLA
+        PLA                     ; DROP RETURN ADDRESS
         STX     ESP
         TSX
         STX     HWSP
-        STX     ALTRDON
+        LDX     #ESTKSZ/2       ; COPY ZERO PAGE EVAL STACK TO HW STACK
+        CMP     ESP
+        BEQ     +
+-       LDY     ESTKH,X
+        PHY
+        LDY     ESTKL,X
+        PHY
+        DEX
+        CPX     ESP
+        BNE     -
++       STX     ALTRDON
         LDX     #>OPXTBL
         STX     OPPAGE
+        LDY     #$00
         JMP     FETCHOP
 ;*
 ;* JIT PROFILING ENTRY INTO INTERPRETER
@@ -497,22 +516,8 @@ JITINTRPX PHP
         LDA     (TOS,S),Y
         DEC
         STA     (TOS,S),Y
+        BNE     _INTRPX
         +ACCMEM16               ; 16 BIT A/M
-        BEQ     RUNJIT
-        LDY     #$01
-        LDA     (TOS,S),Y
-        DEY
-        STA     IP
-        PLA
-        STX     ESP
-        TSX
-        STX     HWSP
-        STX     ALTRDON
-        LDX     #>OPXTBL
-        STX     OPPAGE
-        JMP     FETCHOP
-;
-        !AL
 RUNJIT  PLA                     ; BACK UP DEF ENTRY TO POINT TO JSR
         SEC
         SBC     #$0002
@@ -619,7 +624,6 @@ _MULSLP ASL
         BNE     _MULSLP
         STA     NOS,S           ; PROD
         JMP     DROP
-
 ;MUL     LDX     #$04
 ;        LDA     NOS,S
 ;        EOR     #$FFFF
@@ -1617,24 +1621,23 @@ EMUSTK  STA     TMP
         XCE
         !AS
         TSC                     ; MOVE HW EVAL STACK TO ZP EVAL STACK
+        CLC
+        ADC     #ESTKSZ
         SEC
-        SBC     HWSP            ; STACK DEPTH = (HWSP - SP)/2
-        CMP     #$80
-        ROR
-        ADC     ESP             ; ESP - STACK DEPTH
+        SBC     HWSP            ; PARAM STACK SIZE
+        LSR                     ; PARAM STACK COUNT
         TAX
-        TAY
-        CPY     ESP
+        CPX     #ESTKSZ/2
         BEQ     +
+        TAY
 -       PLA
         STA     ESTKL,Y
         PLA
         STA     ESTKH,Y
         INY
-        CPY     ESP
+        CPY     #ESTKSZ/2
         BNE     -
 +       PEI     (IP)            ; SAVE INSTRUCTION POINTER
-        PHY                     ; SAVE BASELINE ESP
         LDA     PSR
         PHA
         PLP
@@ -1646,21 +1649,20 @@ EMUSTK  STA     TMP
         CLC                     ; SWITCH BACK TO NATIVE MODE
         XCE
         +ACCMEM16               ; 16 BIT A/M
-        PLY                     ; MOVE RETURN VALUES TO HW EVAL STACK
-        STY     ESP             ; RESTORE BASELINE ESP
         PLA
         STA     IP
-        STX     TMPL
-        TSX                     ; RESTORE BASELINE HWSP
+        STX     ESP
+        TSX
         STX     HWSP
-        CPY     TMPL
+        LDX     #ESTKSZ/2       ; COPY ZERO PAGE EVAL STACK TO HW STACK
+        CMP     ESP
         BEQ     +
--       DEY
-        LDX     ESTKH,Y
-        PHX
-        LDX     ESTKL,Y
-        PHX
-        CPY     TMPL
+-       LDY     ESTKH,X
+        PHY
+        LDY     ESTKL,X
+        PHY
+        DEX
+        CPX     ESP
         BNE     -
 +       LDX     #>OPTBL         ; MAKE SURE WE'RE INDEXING THE RIGHT TABLE
         STX     OPPAGE
@@ -1686,24 +1688,23 @@ EMUSTKX STA     TMP
         XCE
         !AS
         TSC                     ; MOVE HW EVAL STACK TO ZP EVAL STACK
+        CLC
+        ADC     #ESTKSZ
         SEC
-        SBC     HWSP            ; STACK DEPTH = (HWSP - SP)/2
-        CMP     #$80
-        ROR
-        ADC     ESP             ; ESP - STACK DEPTH
+        SBC     HWSP            ; PARAM STACK SIZE
+        LSR                     ; PARAM STACK COUNT
         TAX
-        TAY
-        CPY     ESP
+        CPX     #ESTKSZ/2
         BEQ     +
+        TAY
 -       PLA
         STA     ESTKL,Y
         PLA
         STA     ESTKH,Y
         INY
-        CPY     ESP
+        CPY     #ESTKSZ/2
         BNE     -
 +       PEI     (IP)            ; SAVE INSTRUCTION POINTER
-        PHY                     ; SAVE BASELINE ESP
         STA     ALTRDOFF
         LDA     PSR
         PHA
@@ -1713,130 +1714,97 @@ EMUSTKX STA     TMP
         PLA
         STA     PSR
         SEI
-        STX     ALTRDON
         CLC                     ; SWITCH BACK TO NATIVE MODE
         XCE
         +ACCMEM16               ; 16 BIT A/M
-        PLY                     ; MOVE RETURN VALUES TO HW EVAL STACK
-        STY     ESP             ; RESTORE BASELINE ESP
         PLA
         STA     IP
-        STX     TMPL
-        TSX                     ; RESTORE BASELINE HWSP
+        STX     ESP
+        TSX
         STX     HWSP
-        CPY     TMPL
+        LDX     #ESTKSZ/2       ; COPY ZERO PAGE EVAL STACK TO HW STACK
+        CMP     ESP
         BEQ     +
--       DEY
-        LDX     ESTKH,Y
-        PHX
-        LDX     ESTKL,Y
-        PHX
-        CPY     TMPL
+-       LDY     ESTKH,X
+        PHY
+        LDY     ESTKL,X
+        PHY
+        DEX
+        CPX     ESP
         BNE     -
-+       LDX     #>OPXTBL        ; MAKE SURE WE'RE INDEXING THE RIGHT TABLE
++       STX     ALTRDON
+        LDX     #>OPXTBL        ; MAKE SURE WE'RE INDEXING THE RIGHT TABLE
         STX     OPPAGE
         LDY     #$00
         JMP     FETCHOP
 ;*
 ;* ENTER FUNCTION WITH FRAME SIZE AND PARAM COUNT
 ;*
-ENTER   PEI     (IFP)           ; SAVE ON STACK FOR LEAVE
-        TSX                     ; REFLECT SP IN SAVED HWSP
-        STX     HWSP
+ENTER   LDA     IFP
+        STA     TMP
         INY
-        LDA     (IP),Y
+        LDA     (IP),Y          ; FRAME SIZE
         AND     #$00FF
+        TAX
+        INC
+        INC                     ; SAVE SPACE FOR PREV IFP
         EOR     #$FFFF          ; ALLOCATE FRAME
         SEC
         ADC     PP
         STA     PP
         STA     IFP
-        +ACCMEM8                ; 8 BIT A/M
         INY
-        LDA     (IP),Y
+        LDA     (IP),Y          ; PARAM COUNT
+        AND     #$00FF
         BEQ     +
         ASL
         TAY
-        LDX     ESP             ; MOVE PARAMETERS TO CALL FRAME
--       LDA     ESTKH,X
+-       PLA                     ; COPY PARAMS FROM STACK INTO FRAME
+        DEY
         DEY
         STA     (IFP),Y
-        LDA     ESTKL,X
-        INX
-        DEY
+        BNE     -
++       TXY                      ; SAVE PREVIOUS IFP AT TOP OF FRAME
+        LDA     TMP
         STA     (IFP),Y
-        BNE -
-        STX     ESP
-+       +ACCMEM16               ; 16 BIT A/M
         LDY     #$03
         JMP     FETCHOP
 ;*
 ;* LEAVE FUNCTION
 ;*
-LEAVE   INY                     ;+INC_IP
-        +ACCMEM8                ; 8 BIT A/M
+LEAVE   STX     ALTRDOFF
+        INY                     ;+INC_IP
         LDA     (IP),Y          ; DEALLOCATE POOL + FRAME
-        BRA     +
-LEAVEX  INY                     ;+INC_IP
-        +ACCMEM8                ; 8 BIT A/M
-        LDA     (IP),Y          ; DEALLOCATE POOL + FRAME
-        STA     ALTRDOFF
-+       STA     TMPL
-        TSC                     ; MOVE HW EVAL STACK TO ZP EVAL STACK
-        SEC
-        SBC     HWSP            ; STACK DEPTH = (HWSP - SP)/2
-        CMP     #$80
-        ROR
-        ADC     ESP             ; ESP - STACK DEPTH
-        TAX
-        CPX     ESP
-        BEQ     ++
+        AND     #$00FF
         TAY
--       PLA
-        STA     ESTKL,Y
-        PLA
-        STA     ESTKH,Y
-        INY
-        CPY     ESP
-        BNE     -
-++      +ACCMEM16               ; 16 BIT A/M
-        LDY     TMPL            ; DEALLOCATE POOL + FRAME
-        TYA
         CLC
+        ADC     #$02            ; PREVIOUS IFP HIDDEN AT END OF FRAME
         ADC     IFP
         STA     PP
-        PLA                     ; RESTORE PREVIOUS FRAME
+        LDA     (IFP),Y         ; RESTORE PREVIOUS FRAME
         STA     IFP
+RET     STX     ALTRDOFF
         SEC                     ; SWITCH TO EMULATION MODE
         XCE
         !AS
-        LDA     PSR
-        PHA
-        PLP
-        RTS                     ; RETURN IN EMULATION MODE
-        !AL
-RETX    STX     ALTRDOFF
-RET     SEC                     ; SWITCH TO EMULATION MODE
-        XCE
-        !AS
         TSC                     ; MOVE HW EVAL STACK TO ZP EVAL STACK
+        CLC
+        ADC     #ESTKSZ
         SEC
-        SBC     HWSP            ; STACK DEPTH = (HWSP - SP)/2
-        CMP     #$80
-        ROR
-        ADC     ESP             ; ESP - STACK DEPTH
+        SBC     HWSP            ; PARAM STACK SIZE
+        LSR                     ; PARAM STACK COUNT
         TAX
-        CPX     ESP
-        BEQ     ++
+        CPX     #ESTKSZ/2
+        BEQ     +
         TAY
 -       PLA
         STA     ESTKL,Y
         PLA
         STA     ESTKH,Y
         INY
-        CPY     ESP
+        CPY     #ESTKSZ/2
         BNE     -
-++      LDA     PSR
++       LDA     PSR
         PHA
         PLP
         RTS                     ; RETURN IN EMULATION MODE
