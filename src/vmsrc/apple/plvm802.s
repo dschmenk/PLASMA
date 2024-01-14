@@ -288,13 +288,13 @@ DINTRP  PHP
         TSX
         STX     HWSP
         LDX     #ESTKSZ/2       ; COPY ZERO PAGE EVAL STACK TO HW STACK
-        CMP     ESP
+        CPX     ESP
         BEQ     +
--       LDY     ESTKH,X
+-       DEX
+        LDY     ESTKH,X
         PHY
         LDY     ESTKL,X
         PHY
-        DEX
         CPX     ESP
         BNE     -
 +       LDX     #>OPTBL
@@ -488,13 +488,13 @@ _INTRPX +ACCMEM16               ; 16 BIT A/M
         TSX
         STX     HWSP
         LDX     #ESTKSZ/2       ; COPY ZERO PAGE EVAL STACK TO HW STACK
-        CMP     ESP
+        CPX     ESP
         BEQ     +
--       LDY     ESTKH,X
+-       DEX
+        LDY     ESTKH,X
         PHY
         LDY     ESTKL,X
         PHY
-        DEX
         CPX     ESP
         BNE     -
 +       STX     ALTRDON
@@ -1655,13 +1655,13 @@ EMUSTK  STA     TMP
         TSX
         STX     HWSP
         LDX     #ESTKSZ/2       ; COPY ZERO PAGE EVAL STACK TO HW STACK
-        CMP     ESP
+        CPX     ESP
         BEQ     +
--       LDY     ESTKH,X
+-       DEX
+        LDY     ESTKH,X
         PHY
         LDY     ESTKL,X
         PHY
-        DEX
         CPX     ESP
         BNE     -
 +       LDX     #>OPTBL         ; MAKE SURE WE'RE INDEXING THE RIGHT TABLE
@@ -1723,13 +1723,13 @@ EMUSTKX STA     TMP
         TSX
         STX     HWSP
         LDX     #ESTKSZ/2       ; COPY ZERO PAGE EVAL STACK TO HW STACK
-        CMP     ESP
+        CPX     ESP
         BEQ     +
--       LDY     ESTKH,X
+-       DEX
+        LDY     ESTKH,X
         PHY
         LDY     ESTKL,X
         PHY
-        DEX
         CPX     ESP
         BNE     -
 +       STX     ALTRDON
@@ -1759,7 +1759,7 @@ ENTER   LDA     IFP
         BEQ     +
         ASL
         TAY
--       PLA                     ; COPY PARAMS FROM STACK INTO FRAME
+-       PLA                     ; COPY   PARAMS FROM STACK INTO FRAME
         DEY
         DEY
         STA     (IFP),Y
@@ -1772,8 +1772,7 @@ ENTER   LDA     IFP
 ;*
 ;* LEAVE FUNCTION
 ;*
-LEAVE   STX     ALTRDOFF
-        INY                     ;+INC_IP
+LEAVE   INY                     ;+INC_IP
         LDA     (IP),Y          ; DEALLOCATE POOL + FRAME
         AND     #$00FF
         TAY
@@ -1781,6 +1780,7 @@ LEAVE   STX     ALTRDOFF
         ADC     #$02            ; PREVIOUS IFP HIDDEN AT END OF FRAME
         ADC     IFP
         STA     PP
+        STX     ALTRDOFF
         LDA     (IFP),Y         ; RESTORE PREVIOUS FRAME
         STA     IFP
 RET     STX     ALTRDOFF

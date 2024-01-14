@@ -199,11 +199,11 @@ $(PLVM01): vmsrc/apple/plvm01.s vmsrc/apple/a1cmd.a
 
 $(CMD): vmsrc/apple/cmd.pla vmsrc/apple/cmdstub.s $(PLVM02) $(PLASM)
 	./$(PLASM) -AOW vmsrc/apple/cmd.pla
-	acme --setpc 8192 -o $(CMD) vmsrc/apple/cmdstub.s
+	acme --setpc 8192 -o $(CMD)  -l vmsrc/apple/cmd.sym vmsrc/apple/cmdstub.s
 
 $(CMDJIT): vmsrc/apple/cmdjit.pla vmsrc/apple/cmdjitstub.s $(PLVMJIT) $(PLASM)
 	./$(PLASM) -AOW vmsrc/apple/cmdjit.pla
-	acme --setpc 8192 -o $(CMDJIT) vmsrc/apple/cmdjitstub.s
+	acme --setpc 8192 -o $(CMDJIT) -l vmsrc/apple/cmdjit.sym vmsrc/apple/cmdjitstub.s
 
 $(SOSCMD): vmsrc/apple/soscmd.pla $(PLVM03) $(PLASM)
 	./$(PLASM) -AMOW vmsrc/apple/soscmd.pla
