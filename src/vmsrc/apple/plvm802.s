@@ -518,7 +518,9 @@ JITINTRPX PHP
         STA     (TOS,S),Y
         BNE     _INTRPX
         +ACCMEM16               ; 16 BIT A/M
-RUNJIT  PLA                     ; BACK UP DEF ENTRY TO POINT TO JSR
+        LDA     JITCOMP
+        STA     TMP
+        PLA                     ; BACK UP STACK ADDRESS TO POINT TO DEF ENTRY BEGINNING
         SEC
         SBC     #$0002
         PHA
@@ -527,24 +529,9 @@ RUNJIT  PLA                     ; BACK UP DEF ENTRY TO POINT TO JSR
         STA     ESTKL,X
         XBA
         STA     ESTKH,X
-        STX     ESP
-        +ACCMEM16               ; 16 BIT A/M
-        LDA     JITCOMP
-        STA     SRC
-        LDY     #$03
-        LDA     (SRC),Y
-        STA     IP
-        TSX
-        DEX                     ; TAKE INTO ACCOUNT JSR BELOW
-        DEX
-        STX     HWSP
-        STX     ALTRDON
-        LDX     #>OPXTBL
-        STX     OPPAGE
-        LDY     #$00
-        JSR     FETCHOP         ; CALL JIT COMPILER
+        JSR     JMPTMP
         !AS                     ; RETURN IN EMULATION MODE
-        PLA
+RETJIT  PLA
         STA     TMPL
         PLA
         STA     TMPH
