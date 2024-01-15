@@ -694,18 +694,7 @@ MOD     JSR     _DIV
 ;*
 ;* DIVMOD TOS-1 BY TOS - !!!HACK!!! MUST COPY ESTK TO HW STACK
 ;*
-DIVMOD  +ACCMEM8
-        LDX     ESP
-        LDA     ESTKH+1,X
-        PHA
-        LDA     ESTKL+1,X
-        PHA
-        LDA     ESTKH,X
-        PHA
-        LDA     ESTKL,X
-        PHA
-        +ACCMEM16
-        JSR     _DIV
+DIVMOD  JSR     _DIV
         CPX     #$80            ; DIVSGN
         BCC     +               ; REMAINDER IS SIGN OF DIVIDEND
         EOR     #$FFFF
@@ -718,17 +707,6 @@ DIVMOD  +ACCMEM8
         EOR     #$FFFF
         INC
 +       STA     NOS,S           ; DVDND
-        +ACCMEM8
-        LDX     ESP
-        PLA
-        STA     ESTKL,X
-        PLA
-        STA     ESTKH,X
-        PLA
-        STA     ESTKL+1,X
-        PLA
-        STA     ESTKH+1,X
-        +ACCMEM16
         JMP     NEXTOP
 ;*
 ;* NEGATE TOS
