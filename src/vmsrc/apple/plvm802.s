@@ -521,8 +521,8 @@ JITINTRPX PHP
         LDA     JITCOMP
         STA     TMP
         PLA                     ; BACK UP STACK ADDRESS TO POINT TO DEF ENTRY BEGINNING
-        SEC
-        SBC     #$0002
+        DEC                     ; SEC
+        DEC                     ; SBC     #$0002
         PHA
         +ACCMEM8                ; 8 BIT A/M
         DEX                     ; ADD PARAMETER TO DEF ENTRY
