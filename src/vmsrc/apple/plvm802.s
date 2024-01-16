@@ -531,7 +531,7 @@ JITINTRPX PHP
         STA     ESTKH,X
         JSR     JMPTMP
         !AS                     ; RETURN IN EMULATION MODE
-RETJIT  PLA
+  PLA
         STA     TMPL
         PLA
         STA     TMPH
