@@ -175,13 +175,13 @@ $(PLVMZP_APL): FORCE
 	-mkdir -p rel
 	-mkdir -p rel/apple
 	-rm -f vmsrc/plvmzp.inc
-	-ln -s apple/plvmzp.inc vmsrc/plvmzp.inc
+	-cp vmsrc/apple/plvmzp.inc vmsrc/plvmzp.inc
 
 $(PLVMZP_C64): FORCE
 	-mkdir -p rel
 	-mkdir -p rel/c64
 	-rm -f vmsrc/plvmzp.inc
-	-ln -s c64/plvmzp.inc vmsrc/plvmzp.inc
+	-cp vmsrc/c64/plvmzp.inc vmsrc/plvmzp.inc
 
 FORCE:
 

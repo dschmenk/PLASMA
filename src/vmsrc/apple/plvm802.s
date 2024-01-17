@@ -51,6 +51,9 @@ ALTWRON =       $C005
         !SOURCE "vmsrc/plvmzp.inc"
 PSR     =       TMP+2
 HWSP    =       PSR+1
+VM16SP  =       HWSP+1
+VM16RETX =      VM16SP+1
+VM16RETIP=      VM16RETX+1
 DROP    =       $EF
 NEXTOP  =       DROP+1
 FETCHOP =       NEXTOP+1
@@ -378,16 +381,23 @@ CMDENTRY =      *
 ;
 ; INIT VM ENVIRONMENT STACK POINTERS
 ;
-;       LDA     #$00
-        STA     $01FF           ; CLEAR CMDLINE BUFF
-        STA     PPL             ; INIT FRAME POINTER
-        STA     IFPL
+        STZ     $01FF           ; CLEAR CMDLINE BUFF
+        STZ     PPL             ; INIT FRAME POINTER
+        STZ     IFPL
         LDA     #$AF            ; FRAME POINTER AT $AF00, BELOW JIT BUFFER
         STA     PPH
         STA     IFPH
         LDX     #$FE            ; INIT STACK POINTER (YES, $FE. SEE GETS)
         TXS
+        INX
+        STX     VM16SP          ; INIT VM16 RETURN STACK POINTER
         LDX     #ESTKSZ/2       ; INIT EVAL STACK INDEX
+;
+; CLEAR VM16 RETURN IP
+;
+        STZ     VM16RETX
+        STZ     VM16RETIP
+        STZ     VM16RETIP+1
 ;
 ; CHANGE CMD STRING TO SYSPATH STRING
 ;
@@ -531,7 +541,7 @@ JITINTRPX PHP
         STA     ESTKH,X
         JSR     JMPTMP
         !AS                     ; RETURN IN EMULATION MODE
-  PLA
+        PLA
         STA     TMPL
         PLA
         STA     TMPH
@@ -611,31 +621,6 @@ _MULSLP ASL
         BNE     _MULSLP
         STA     NOS,S           ; PROD
         JMP     DROP
-;MUL     LDX     #$04
-;        LDA     NOS,S
-;        EOR     #$FFFF
-;        STA     TMP
-;        LDA     #$0000
-;_MULLP  ASL
-;        ASL     TMP             ; MULTPLR
-;        BCS     +
-;        ADC     TOS,S           ; MULTPLD
-;+       ASL
-;        ASL     TMP             ; MULTPLR
-;        BCS     +
-;        ADC     TOS,S           ; MULTPLD
-;+       ASL
-;        ASL     TMP             ; MULTPLR
-;        BCS     +
-;        ADC     TOS,S           ; MULTPLD
-;+       ASL
-;        ASL     TMP             ; MULTPLR
-;        BCS     +
-;        ADC     TOS,S           ; MULTPLD
-;+       DEX
-;        BNE     _MULLP
-;        STA     NOS,S           ; PROD
-;        JMP     DROP
 ;*
 ;* INTERNAL DIVIDE ALGORITHM
 ;*
@@ -1582,6 +1567,19 @@ EMUSTK  STA     TMP
         SEC
         ADC     IP
         STA     IP
+        LDA     (TMP)           ; CHECK IF FIRST OPCODE IS JSR TO $XXDX
+        AND     #$F3FF
+        CMP     #$D020
+        BNE     +        
+        LDY     #$01            ; VERIFY JSR ADDRESS AS VM ENTRYPOINT
+        LDA     (TMP),Y
+        CMP     #$03D0
+        BEQ     CALL16
+        CMP     #$03DC
+        BEQ     XCALL16
++       JSR     PUSHVM16        ; SAVE CURRENT VM16 RETURN ADDRESS
+        STZ     VM16RETX        ; CLEAR RETURN ADDRESS
+        STZ     VM16RETIP
         SEC                     ; SWITCH TO EMULATION MODE
         XCE
         !AS
@@ -1629,8 +1627,40 @@ EMUSTK  STA     TMP
         PHY
         CPX     ESP
         BNE     -
-+       LDX     #>OPTBL         ; MAKE SURE WE'RE INDEXING THE RIGHT TABLE
++       JSR     POPVM16         ; RESTORE VM16 RETURN ADDRESS
+        LDX     #>OPTBL         ; MAKE SURE WE'RE INDEXING THE RIGHT TABLE
         STX     OPPAGE
+        LDY     #$00
+        JMP     FETCHOP
+;*
+;* QUICK CALL TO VM16 FUNCTION
+;*
+CALL16  JSR     PUSHVM16
+        LDX     OPPAGE
+        STX     VM16RETX
+        LDA     IP
+        STA     VM16RETIP
+        LDA     TMP             ; BYTECODE DIRECTLY FOLLOWS JSR DINTERP
+        CLC
+        ADC     #$0003
+        STA     IP
+        LDX     #>OPTBL         ; MAKE SURE WE'RE INDEXING THE RIGHT TABLE
+        STX     OPPAGE
+        STX     ALTRDOFF
+        LDY     #$00
+        JMP     FETCHOP
+XCALL16 JSR     PUSHVM16
+        LDX     OPPAGE
+        STX     VM16RETX
+        LDA     IP
+        STA     VM16RETIP
+        STX     ALTRDOFF
+        LDY     #$03
+        LDA     (TMP),Y          ; BYTECODE ADDRESS FOLLOWS JSR IINTERP IN DEF STRUCTURE
+        STA     IP
+        LDX     #>OPXTBL         ; MAKE SURE WE'RE INDEXING THE RIGHT TABLE
+        STX     OPPAGE
+        STX     ALTRDON
         LDY     #$00
         JMP     FETCHOP
 ;*
@@ -1649,6 +1679,19 @@ EMUSTKX STA     TMP
         SEC
         ADC     IP
         STA     IP
+        LDA     (TMP)           ; CHECK IF FIRST OPCODE IS JSR TO $XXDX
+        AND     #$F0FF
+        CMP     #$D020
+        BNE     +        
+        LDY     #$01            ; VERIFY JSR ADDRESS AS VM ENTRYPOINT
+        LDA     (TMP),Y
+        CMP     #$03D0
+        BEQ     CALL16
+        CMP     #$03DC
+        BEQ     XCALL16
++       JSR     PUSHVM16        ; SAVE CURRENT VM16 RETURN ADDRESS
+        STZ     VM16RETX        ; CLEAR RETURN ADDRESS
+        STZ     VM16RETIP
         SEC                     ; SWITCH TO EMULATION MODE
         XCE
         !AS
@@ -1697,7 +1740,8 @@ EMUSTKX STA     TMP
         PHY
         CPX     ESP
         BNE     -
-+       STX     ALTRDON
++       JSR     POPVM16         ; RESTORE VM16 RETURN ADDRESS
+        STX     ALTRDON
         LDX     #>OPXTBL        ; MAKE SURE WE'RE INDEXING THE RIGHT TABLE
         STX     OPPAGE
         LDY     #$00
@@ -1749,7 +1793,18 @@ LEAVE   INY                     ;+INC_IP
         LDA     (IFP),Y         ; RESTORE PREVIOUS FRAME
         STA     IFP
 RET     STX     ALTRDOFF
-        SEC                     ; SWITCH TO EMULATION MODE
+        LDA     VM16RETIP
+        BEQ     ++
+        STA     IP
+        LDX     VM16RETX
+        STX     OPPAGE
+        CPX     #>OPXTBL        ; CHECK IF AUXMEM NEEDS READ ENABLING
+        BNE     +
+        STX     ALTRDON
++       JSR     POPVM16         ; RESTORE VM16 RETURN ADDRESS FOR CALLING FUNCTION
+        LDY     #$00
+        JMP     FETCHOP
+++      SEC                     ; SWITCH TO EMULATION MODE
         XCE
         !AS
         TSC                     ; MOVE HW EVAL STACK TO ZP EVAL STACK
@@ -1797,5 +1852,34 @@ JUMP    INY
         STA     IP
         LDY     #$00
         JMP     FETCHOP
+;*
+;* RETURN ADDRESS STACK FOR 16 BIT VM CALL/RETURN
+;*
+PUSHVM16 LDX    VM16SP
+        DEX
+        DEX
+        DEX
+        LDY     LCRWEN+LCBNK2   ; MAKE SURE LANGUAGE CARD IS WRITEABLE
+        LDY     LCRWEN+LCBNK2
+        LDA     VM16RETX        ; CAREFUL, PUSHING 8 BIT VALUE AS 16, BUT MSB OVERWRITTEN NEXT
+        STA     VM16STACK+1,X
+        LDA     VM16RETIP
+        STA     VM16STACK+2,X
+        STX     VM16SP
+        RTS
+POPVM16 LDX     VM16SP
+        LDY     VM16STACK+1,X
+        STY     VM16RETX
+        LDA     VM16STACK+2,X
+        STA     VM16RETIP
+        INX
+        INX
+        INX
+        STX     VM16SP
+        RTS
+VM16STACK = *
+;*
+;* SPACE FOR STACK FOLLOWS
+;*
 VMEND   =       *
 }
