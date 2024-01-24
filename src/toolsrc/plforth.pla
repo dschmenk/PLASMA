@@ -15,13 +15,13 @@ byte  srclevel   = 0
 //
 // Internal buffers
 //
-word                      strbuf
-res[SRCREFS * INBUF_SIZE] inbuf
+word strbuf, inbuf
 res[t_except]             exitforth
 //
 // Input references, pointers, and saved values
 //
-word  keyinbuf = @inbuf // Point somewhere benign for starters (updated in keyin)
+byte  nullstr = 0
+word  keyinbuf = @nullstr // Point somewhere benign for starters (updated in keyin)
 word  inbufptr
 byte  inref[SRCREFS]
 word  previnptr[SRCREFS]
@@ -97,7 +97,7 @@ const interponly_flag = $80
 //
 // Predefine instrinsics
 //
-predef _swap_(a,b)#2, _dashdup_(a)#1, _over_(a,b)#3, _rot_(a,b,c)#3
+predef _swap_(a,b)#2, _ifdup_(a)#1, _over_(a,b)#3, _rot_(a,b,c)#3
 predef _abs_(a)#1, _max_(a,b)#1, _min_(a,b)#1, _wplusset_(a,b)#0
 predef _ffa_(a)#1, _lfa_(a)#1, _hfa_(a)#1, _cfa_(a)#1, _pfa_(a)#1, _allot_(a)#0
 predef _branch_#0, _0branch_(a)#0, _if_#0, _else_#0, _then_#0
@@ -114,7 +114,7 @@ predef _tick_#0, _forget_#0, _terminal_#1, _key_#1, _prat_(a)#0
 predef _blank_#0, _char_#0, _str_#0, _prstr_#0, _prpstr_#0
 predef _prval_(a)#0, _prbyte_(a)#0, _prhex_(a)#0, _accept_(a,b)#1, _type_(a,b)#0
 predef _vlist_#0, _tron_#0, _troff_#0, _stepon_#0, _stepoff_#0
-predef _itc_#0, _pbc_#0, _comment_#0, _src_(a)#0, _srcstr_#0, _endsrc_(a)#0
+predef _itc_#0, _pbc_#0, _comment_#0, _src_(a)#0, _srcstr_#0, _endsrc_#0, _ifendsrc_(a)#0
 predef _brk_#0, _brkon_#0, _brkoff_#0, _word_(a)#1, _count_(a)#2
 predef _space_#0, _spaces_(a)#0, _show_#0, _showstack_#0, _showrstack_#0
 predef _cont_#0, _restart_#0, _bye_#0, _quit_#0
@@ -132,14 +132,14 @@ word = @d_drop, 0, @_swap_
 char d_dup = "DUP"
 byte = inline_flag
 word = @d_swap, 0, 0, $34
-// -DUP
-char d_dashdup = "-DUP"
+// ?DUP
+char d_ifdup = "?DUP"
 byte = 0
-word = @d_dup, 0, @_dashdup_
+word = @d_dup, 0, @_ifdup_
 // OVER
 word d_over = "OVER"
 byte = 0
-word = @d_dashdup, 0, @_over_
+word = @d_ifdup, 0, @_over_
 // ROT
 word d_rot = "ROT"
 byte = 0
@@ -612,10 +612,14 @@ word = @d_prpstr, 0, @_src_
 char d_srcstr = "SRC\""
 byte = imm_flag
 word = @d_src, 0, @_srcstr_
+// IF END SOURCE FILE
+char d_ifendsrc = "?ENDSRC"
+byte = showcr_flag
+word = @d_srcstr, 0, @_ifendsrc_
 // END SOURCE FILE
 char d_endsrc = "ENDSRC"
 byte = showcr_flag
-word = @d_srcstr, 0, @_endsrc_
+word = @d_ifendsrc, 0, @_endsrc_
 // CONTINUE AFTER BRK
 char d_cont = "CONT"
 byte = interponly_flag
@@ -625,15 +629,15 @@ char d_quit = "QUIT"
 byte = showcr_flag
 word = @d_cont, 0, @_quit_
 // ABORT IF <> 0
-char d_abort = "ABORT"
+char d_abort = "?ABORT"
 byte = showcr_flag
 word = @d_quit, 0, @_abort_
 // DOABORTSTR
-char d_doabortstr = "(ABORT\")"
+char d_doabortstr = "(?ABORT\")"
 byte = showcr_flag
 word = @d_abort, 0, @_doabortstr_
 // ABORTSTR
-char d_abortstr = "ABORT\""
+char d_abortstr = "?ABORT\""
 byte = imm_flag
 word = @d_doabortstr, 0, @_abortstr_
 // COLD exitforth
@@ -1082,7 +1086,7 @@ end
 def _swap_(a,b)#2
   return b,a
 end
-def _dashdup_(a)#1
+def _ifdup_(a)#1
   if a; (@push)(a)#0; fin
   return a
 end
@@ -1716,7 +1720,7 @@ def _src_(a)#0
   if inref[srclevel]
     fileio:newline(inref[srclevel], $7F, $0D)
     infunc               = @filein
-    inbufptr             = @inbuf + srclevel * INBUF_SIZE
+    inbufptr             = inbuf + srclevel * INBUF_SIZE
     previnptr[srclevel]  = inptr
     inptr                = inbufptr
     ^inptr               = 0
@@ -1739,7 +1743,10 @@ def _srcstr_#0
     _src_(filename)
   fin
 end
-def _endsrc_(a)#0
+def _endsrc_#0
+  endsrc
+end
+def _ifendsrc_(a)#0
   if a
     endsrc
   fin
@@ -1972,6 +1979,7 @@ _estkl = ^(@syscall + 1) // Hack to fill in parameter stack locations
 _estkh = ^(@syscall + 3)
 fileio:iobufalloc(4) // Allocate a bunch of file buffers
 strbuf = heapalloc(256)
+inbuf  = heapalloc(SRCREFS * INBUF_SIZE)
 startheap = heapmark
 coldstart
 //

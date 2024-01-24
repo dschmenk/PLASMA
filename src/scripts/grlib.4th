@@ -1,4 +1,4 @@
-' GRMODE ENDSRC ( Avoid multiple loads )
+' GRMODE ?ENDSRC ( Avoid multiple loads )
 " GRLIB" LOADMOD"  "
 LOOKUP GRPLOT    PLASMA GRPLOT
 LOOKUP GRHLIN    PLASMA GRHLIN
