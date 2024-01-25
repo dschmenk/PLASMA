@@ -1,19 +1,24 @@
 SRC" plasma.4th"
 SRC" conio.4th"
+0 VARIABLE RESUMEXT
+0 VARIABLE EXECXT
+
 : RESUME> ; ( PLACE HOLDER TO RESUME EXECUTION )
+' RESUME> RESUMEXT !
+
 : ?EXEC ( F -- )
   NOT IF ( SKIP CODE IN BETWEEN ?EXEC AND RESUME> )
     1 >R
     BEGIN
       BL WORD FIND IF
         CASE
-          ' RESUME> OF
+          RESUMEXT @ OF
             R> 1- ?DUP 0= IF ( EXIT IF FINAL RESUME> )
               DROP EXIT
             THEN
             >R
             ENDOF
-          ' ?EXEC OF ( CHECK FOR NESTED ?EXEC )
+          EXECXT @ OF ( CHECK FOR NESTED ?EXEC )
             R> 1+ >R
             ENDOF
         ENDCASE
@@ -23,6 +28,7 @@ SRC" conio.4th"
     AGAIN
   THEN
 ;
+' ?EXEC EXECXT !
 
 : STRING CREATE 256 ALLOT DOES> ; ( JUST ALLOCATE THE BIGGEST STRING POSSIBLE )
 
@@ -102,7 +108,7 @@ CONFIRM" Copy build tools?"
 
 RESUME>
 
-FILELIST " AUTORUN HDINSTALL.4TH"
+FILELIST " AUTORUN HDINSTALL.4TH" STRCPY
 " DEL" SWAP LOADMOD
 
 0 0 40 24 VIEWPORT
