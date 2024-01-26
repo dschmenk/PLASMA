@@ -1,6 +1,7 @@
 SRC" plasma.4th"
 SRC" conio.4th"
-: RESUME> ; ( PLACE HOLDER TO RESUME EXECUTION )
+
+: RESUME> ; INTERPONLY ( PLACE HOLDER TO RESUME EXECUTION )
 : ?EXEC ( F -- )
   NOT IF ( SKIP CODE IN BETWEEN ?EXEC AND RESUME> )
     1 >R
@@ -13,7 +14,7 @@ SRC" conio.4th"
             THEN
             >R
             ENDOF
-          ' ?EXEC OF ( CHECK FOR NESTED ?EXEC )
+          [ LATEST ] LITERAL OF ( CHECK FOR NESTED ?EXEC )
             R> 1+ >R
             ENDOF
         ENDCASE
@@ -22,7 +23,7 @@ SRC" conio.4th"
       THEN
     AGAIN
   THEN
-;
+; INTERPONLY
 
 : STRINPUT ( STR -- )
   DUP 1+ 255 ACCEPT -TRAILING SWAP C!

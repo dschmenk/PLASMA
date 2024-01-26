@@ -1,24 +1,20 @@
 SRC" plasma.4th"
 SRC" conio.4th"
-0 VARIABLE RESUMEXT
-0 VARIABLE EXECXT
 
-: RESUME> ; ( PLACE HOLDER TO RESUME EXECUTION )
-' RESUME> RESUMEXT !
-
+: RESUME> ; INTERPONLY ( PLACE HOLDER TO RESUME EXECUTION )
 : ?EXEC ( F -- )
   NOT IF ( SKIP CODE IN BETWEEN ?EXEC AND RESUME> )
     1 >R
     BEGIN
       BL WORD FIND IF
         CASE
-          RESUMEXT @ OF
+          ' RESUME> OF
             R> 1- ?DUP 0= IF ( EXIT IF FINAL RESUME> )
               DROP EXIT
             THEN
             >R
             ENDOF
-          EXECXT @ OF ( CHECK FOR NESTED ?EXEC )
+          [ LATEST ] LITERAL OF ( CHECK FOR NESTED ?EXEC )
             R> 1+ >R
             ENDOF
         ENDCASE
@@ -27,8 +23,7 @@ SRC" conio.4th"
       THEN
     AGAIN
   THEN
-;
-' ?EXEC EXECXT !
+; INTERPONLY
 
 : STRING CREATE 256 ALLOT DOES> ; ( JUST ALLOCATE THE BIGGEST STRING POSSIBLE )
 

@@ -28,9 +28,9 @@ SRC" CONIO.4TH"
           FMK @ J PLOT
           ?TERMINAL IF ( if keypressed )
             KEY DROP
-            R> DROP R> DROP ( clean up DO-OKIE )
-            R> DROP R> DROP
-            R> DROP R> DROP
+            UNLOOP ( clean up DO-OKIE )
+            UNLOOP
+            UNLOOP
             EXIT ( return )
           THEN
         LOOP
