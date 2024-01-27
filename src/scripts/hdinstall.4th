@@ -48,7 +48,7 @@ NORMALTEXT CR CR
 ." Enter destination " DEST STRINPUT
 DEST C@ 0= ?ABORT" Destination required"
 ." Copying system files to " DEST (.") CR
-FILELIST " -R PLVM16 CMD128 SYS " STRCPY DEST STRCAT
+FILELIST " -R EDITOR.README PL* CMD* SYS " STRCPY DEST STRCAT
 " COPY" SWAP LOADMOD
 
 CONFIRM" Copy demos?"
