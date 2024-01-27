@@ -1567,6 +1567,7 @@ EMUSTK  STA     TMP
         SEC
         ADC     IP
         STA     IP
+        JSR     PUSHVM16        ; SAVE CURRENT VM16 RETURN ADDRESS
         LDA     (TMP)           ; CHECK IF FIRST OPCODE IS JSR TO $XXDX
         AND     #$F3FF
         CMP     #$D020
@@ -1577,8 +1578,7 @@ EMUSTK  STA     TMP
         BEQ     CALL16
         CMP     #$03DC
         BEQ     XCALL16
-+       JSR     PUSHVM16        ; SAVE CURRENT VM16 RETURN ADDRESS
-        STZ     VM16RETX        ; CLEAR RETURN ADDRESS
++       STZ     VM16RETX        ; CLEAR RETURN ADDRESS
         STZ     VM16RETIP
         SEC                     ; SWITCH TO EMULATION MODE
         XCE
@@ -1635,8 +1635,7 @@ EMUSTK  STA     TMP
 ;*
 ;* QUICK CALL TO VM16 FUNCTION
 ;*
-CALL16  JSR     PUSHVM16
-        LDX     OPPAGE
+CALL16  LDX     OPPAGE
         STX     VM16RETX
         LDA     IP
         STA     VM16RETIP
@@ -1646,15 +1645,14 @@ CALL16  JSR     PUSHVM16
         STA     IP
         LDX     #>OPTBL         ; MAKE SURE WE'RE INDEXING THE RIGHT TABLE
         STX     OPPAGE
-        STX     ALTRDOFF
+        ;STX     ALTRDOFF
         LDY     #$00
         JMP     FETCHOP
-XCALL16 JSR     PUSHVM16
-        LDX     OPPAGE
+XCALL16 LDX     OPPAGE
         STX     VM16RETX
         LDA     IP
         STA     VM16RETIP
-        STX     ALTRDOFF
+        ;STX     ALTRDOFF
         LDY     #$03
         LDA     (TMP),Y          ; BYTECODE ADDRESS FOLLOWS JSR IINTERP IN DEF STRUCTURE
         STA     IP
@@ -1679,6 +1677,8 @@ EMUSTKX STA     TMP
         SEC
         ADC     IP
         STA     IP
+        JSR     PUSHVM16        ; SAVE CURRENT VM16 RETURN ADDRESS
+        STX     ALTRDOFF
         LDA     (TMP)           ; CHECK IF FIRST OPCODE IS JSR TO $XXDX
         AND     #$F0FF
         CMP     #$D020
@@ -1689,8 +1689,7 @@ EMUSTKX STA     TMP
         BEQ     CALL16
         CMP     #$03DC
         BEQ     XCALL16
-+       JSR     PUSHVM16        ; SAVE CURRENT VM16 RETURN ADDRESS
-        STZ     VM16RETX        ; CLEAR RETURN ADDRESS
++       STZ     VM16RETX        ; CLEAR RETURN ADDRESS
         STZ     VM16RETIP
         SEC                     ; SWITCH TO EMULATION MODE
         XCE
@@ -1713,7 +1712,6 @@ EMUSTKX STA     TMP
         CPY     #ESTKSZ/2
         BNE     -
 +       PEI     (IP)            ; SAVE INSTRUCTION POINTER
-        STA     ALTRDOFF
         LDA     PSR
         PHA
         PLP
