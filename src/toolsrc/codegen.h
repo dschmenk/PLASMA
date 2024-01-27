@@ -151,7 +151,7 @@ void emit_indexword(void);
 int emit_unaryop(t_token op);
 int emit_op(t_token op);
 void emit_select(int tag);
-void emit_caseblock(int casecnt, int *caseof, int *casetag);
+void emit_caseblock(int casecnt, int *caseof, int *casetype, int *casetag);
 void emit_brand(int tag);
 void emit_bror(int tag);
 void emit_brtru(int tag);

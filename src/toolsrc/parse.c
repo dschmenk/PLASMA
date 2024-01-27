@@ -850,7 +850,7 @@ int parse_stmnt(void)
 {
     int tag_prevbrk, tag_prevcnt, tag_else, tag_endif, tag_while, tag_wend, tag_repeat, tag_for, tag_choice, tag_of;
     int type, addr, step, cfnvals, constsize, casecnt, i;
-    int *caseval, *casetag;
+    int *caseval, *casetyp, *casetag;
     long constval;
     char *idptr;
     t_opseq *seq, *fromseq, *toseq;
@@ -1052,6 +1052,7 @@ int parse_stmnt(void)
             break_tag   = tag_new(BRANCH_TYPE);
             tag_choice  = tag_new(BRANCH_TYPE);
             caseval     = malloc(sizeof(int)*256);
+            casetyp     = malloc(sizeof(int)*256);
             casetag     = malloc(sizeof(int)*256);
             casecnt     = 0;
             if (!(seq = parse_expr(NULL, &cfnvals)))
@@ -1070,7 +1071,7 @@ int parse_stmnt(void)
                 {
                     tag_of   = tag_new(BRANCH_TYPE);
                     constval = 0;
-                    parse_constexpr(&constval, &constsize);
+                    type = parse_constexpr(&constval, &constsize);
                     i = casecnt;
                     while ((i > 0) && (caseval[i-1] > constval))
                     {
@@ -1078,12 +1079,14 @@ int parse_stmnt(void)
                         // Move larger case consts up
                         //
                         caseval[i] = caseval[i-1];
+                        casetyp[i] = casetyp[i-1];
                         casetag[i] = casetag[i-1];
                         i--;
                     }
                     if ((i < casecnt) && (caseval[i] == constval))
                         parse_error("Duplicate CASE");
                     caseval[i] = constval;
+                    casetyp[i] = type;
                     casetag[i] = tag_of;
                     casecnt++;
                     emit_codetag(tag_of);
@@ -1099,7 +1102,7 @@ int parse_stmnt(void)
                     else
                         tag_of = 0;
                     emit_codetag(tag_choice);
-                    emit_caseblock(casecnt, caseval, casetag);
+                    emit_caseblock(casecnt, caseval, casetyp, casetag);
                     tag_choice = 0;
                     scan();
                     if (tag_of)
@@ -1117,9 +1120,10 @@ int parse_stmnt(void)
             {
                 emit_brnch(break_tag);
                 emit_codetag(tag_choice);
-                emit_caseblock(casecnt, caseval, casetag);
+                emit_caseblock(casecnt, caseval, casetyp, casetag);
             }
             free(caseval);
+            free(casetyp);
             free(casetag);
             emit_codetag(break_tag);
             break_tag = tag_prevbrk;

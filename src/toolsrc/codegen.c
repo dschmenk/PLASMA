@@ -871,7 +871,7 @@ void emit_select(int tag)
     fprintf(outputfile, "\t%s\t$52\t\t\t; SEL\n", DB);
     fprintf(outputfile, "\t%s\t_B%03d-*\n", DW, tag);
 }
-void emit_caseblock(int casecnt, int *caseof, int *casetag)
+void emit_caseblock(int casecnt, int *caseof, int *casetyp, int *casetag)
 {
     int i;
 
@@ -881,7 +881,14 @@ void emit_caseblock(int casecnt, int *caseof, int *casetag)
     fprintf(outputfile, "\t%s\t$%02X\t\t\t; CASEBLOCK\n", DB, casecnt & 0xFF);
     for (i = 0; i < casecnt; i++)
     {
-        fprintf(outputfile, "\t%s\t$%04X\n", DW, caseof[i] & 0xFFFF);
+        if (casetyp[i] & (FUNC_TYPE | ADDR_TYPE))
+        {
+            int fixup = fixup_new(caseof[i], casetyp[i], FIXUP_WORD);
+            char *taglbl = tag_string(caseof[i], casetyp[i]);
+            fprintf(outputfile, "_F%03d%c\t%s\t%s+%d\t\t\n", fixup, LBL, DW, casetyp[i] & EXTERN_TYPE ? "0" : taglbl, 0);
+        }
+        else
+            fprintf(outputfile, "\t%s\t$%04X\n", DW, caseof[i] & 0xFFFF);
         fprintf(outputfile, "\t%s\t_B%03d-*\n", DW, casetag[i]);
     }
 }

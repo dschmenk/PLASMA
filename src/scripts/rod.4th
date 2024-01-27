@@ -26,7 +26,7 @@ SRC" CONIO.4TH"
           FMI @ K @ PLOT
           J FMK @ PLOT
           FMK @ J PLOT
-          ?TERMINAL IF ( if keypressed )
+          KEY? IF ( if keypressed )
             KEY DROP
             UNLOOP ( clean up DO-OKIE )
             UNLOOP

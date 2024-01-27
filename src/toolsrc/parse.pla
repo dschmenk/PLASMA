@@ -614,7 +614,7 @@ def parse_stmnt
     byte type, elem_type, elem_size, cfnvals
     word seq, fromseq, toseq, tag_prevbrk, tag_prevcnt, tag_else, tag_endif, tag_while, tag_wend
     word tag_repeat, tag_for, tag_choice, tag_of, idptr, addr, stepdir
-    word caseconst, casecnt, caseval, casetag, i
+    word caseconst, casetype, casecnt, caseval, casetyp, casetag, i
 
     if token <> END_TKN and token <> DONE_TKN and token <> OF_TKN and token <> DEFAULT_TKN
         prevstmnt = token
@@ -803,6 +803,7 @@ def parse_stmnt
             break_tag   = new_tag(RELATIVE_FIXUP)
             tag_choice  = new_tag(RELATIVE_FIXUP)
             caseval     = heapalloc(CASENUM)
+            casetyp     = heapalloc(CASENUM)
             casetag     = heapalloc(CASENUM)
             casecnt     = 0
             seq, cfnvals = parse_expr(NULL)
@@ -818,19 +819,21 @@ def parse_stmnt
                 when token
                     is OF_TKN
                         if casecnt == CASENUM; exit_err(ERR_OVER|ERR_TABLE); fin
-                        caseconst, drop, drop = parse_constexpr
-                        tag_of                = new_tag(RELATIVE_FIXUP)
-                        i                     = casecnt
+                        caseconst, drop, casetype = parse_constexpr
+                        tag_of                    = new_tag(RELATIVE_FIXUP)
+                        i                         = casecnt
                         while i > 0 and caseval=>[i-1] > caseconst
                             //
                             // Move larger case consts up
                             //
                             caseval=>[i] = caseval=>[i-1]
+                            casetyp=>[i] = casetyp=>[i-1]
                             casetag=>[i] = casetag=>[i-1]
                             i--
                         loop
                         if i < casecnt and caseval=>[i] == caseconst; exit_err(ERR_DUP|ERR_STATE); fin
                         caseval=>[i] = caseconst
+                        casetyp=>[i] = casetype
                         casetag=>[i] = tag_of
                         casecnt++
                         emit_tag(tag_of)
@@ -845,7 +848,7 @@ def parse_stmnt
                             emit_branch(tag_of)
                         fin
                         emit_tag(tag_choice)
-                        emit_caseblock(casecnt, caseval, casetag)
+                        emit_caseblock(casecnt, caseval, casetype, casetag)
                         tag_choice = 0
                         if tag_of
                             emit_tag(tag_of)
@@ -866,7 +869,7 @@ def parse_stmnt
             if tag_choice
                 emit_branch(break_tag)
                 emit_tag(tag_choice)
-                emit_caseblock(casecnt, caseval, casetag)
+                emit_caseblock(casecnt, caseval, casetyp, casetag)
             fin
             heaprelease(caseval)
             emit_tag(break_tag)
