@@ -63,7 +63,9 @@ While running code, `<CTRL-C>` will break out and return to the interpreter.
 
 `SRC" ssss"`: Source file `ssss` as input. Can be nested
 
-`ENDSRC`: End sourcing file as input if stack flag non-zero
+`?ENDSRC`: End sourcing file as input if stack flag non-zero
+
+`ENDSRC`: End sourcing file as input
 
 ### Words for compiler modes:
 
@@ -73,7 +75,7 @@ While running code, `<CTRL-C>` will break out and return to the interpreter.
 
 ### Word for converting string to number:
 
-`?NUM`: Convert string and length to number, returning number and valid flag
+`NUM?`: Convert string and length to number, returning number and valid flag
 
 ## Debugging vs Performance
 
