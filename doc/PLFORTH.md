@@ -25,8 +25,6 @@ There are quite a few missing word that a standard FORTH would have. Mostly due 
 
 `SHOWRSTACK`: Displays the return stack. Note: PLFORTH uses a software defined return stack, this is not the hardware stack
 
-`SHOWHASH`: Display the hash table depth counts. Used to debug the efficacy of the hash algorithm
-
 ### Words for tracing and single stepping execution:
 
 `TRON`: Turn tracing on
