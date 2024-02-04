@@ -108,6 +108,14 @@ There are a few useful scripts located in the `scripts` directory. By far the mo
 
 `EDIT" ssss"`: Edit file `ssss`
 
+## Command line options
+
+`-F`: Fast flag (like `PCB` as first command)
+
+`-T`: Trace flag (like `TRON` as first command)
+
+`SCRIPT NAME`: Soure filename to execute
+
 ## Caveats
 
 This is definitely a Work-In-Progress. There are still a few places where I'm unsure about the proper implementation of some words, especially the more esoteric compiler constructs. It also looks suspiciously like an early '80s wordset, as that is what I'm most familiar with.
