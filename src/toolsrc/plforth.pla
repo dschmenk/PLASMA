@@ -15,8 +15,8 @@ byte  srclevel   = 0
 //
 // Internal buffers
 //
-word strbuf, inbuf
-res[t_except]             exitforth
+word          strbuf, inbuf
+res[t_except] exitforth
 //
 // Input references, pointers, and saved values
 //
@@ -54,6 +54,9 @@ byte state     = 0
 word brkentry  = 0
 word brkcfa    = 0
 byte brk       = 0
+//
+// Machine code helper routines
+//
 byte _get_estack   = $8A           // TXA
 byte               = $49, $FF      // EOR #$FF
 byte               = $38           // SEC
@@ -758,7 +761,7 @@ def endsrc#1
     inptr           = previnptr[srclevel]
     if srclevel == 0              // - switch back to keyboard input
         infunc = @keyin
-        keyin
+        //keyin
     fin
   fin
   return srclevel == 0
@@ -1003,7 +1006,9 @@ end
 // Compile a word/literal into the dictionary: ITC and PBC
 //
 def _compword_(dentry)#0
-  if ^_ffa_(dentry) & interponly_flag
+  if  ^_ffa_(dentry) & imm_flag
+    _execword_(dentry)
+  elsif ^_ffa_(dentry) & interponly_flag
     puts("INTERP only word\n")
     _quit_
   elsif state & comp_itc_flag
@@ -1063,30 +1068,30 @@ def _interpret_#0
     inchars, inlen = nextword(' ')
     dentry = find(inchars, inlen)
     if dentry
-      if ^_ffa_(dentry) & imm_flag or not (state & comp_flag)
-        if ^_ffa_(dentry) & componly_flag and not (state & comp_flag)
+      if state & comp_flag
+        _compword_(dentry)
+      else
+        if ^_ffa_(dentry) & componly_flag
           puts(dentry)
           puts(" : Compile only word\n")
           _quit_
         fin
         _execword_(dentry)
-      else
-        _compword_(dentry)
       fin
     else
       value, valid = _isnum_(inchars, inlen)
-      if not valid
-        inchars--
-        ^inchars = inlen
-        puts(inchars)
-        puts(" ? No match\n")
-        if !brk; warmstart; fin
-      else
+      if valid
         if state & comp_flag
           _compliteral_(value)
         else
           (@push)(value)#0
         fin
+      else
+        inchars--
+        ^inchars = inlen
+        puts(inchars)
+        puts(" ? No match\n")
+        if !brk; warmstart; fin
       fin
     fin
   until state & exit_flag
@@ -2017,6 +2022,17 @@ coldstart
 // Check for command line argument
 //
 inptr = argNext(argFirst)
+while ^inptr and ^(inptr + 1) == '-'
+  when toupper(^(inptr + 2))
+    is 'F' // Fast flag
+      _pbc_
+      break
+    is 'T' // Trace flag
+      _tron_
+      break
+  wend
+  inptr = argNext(inptr)
+loop
 //
 // Main start and restart entry
 //
