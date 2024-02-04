@@ -13,17 +13,13 @@ There are quite a few missing word that a standard FORTH would have. Mostly due 
 
 ## PLFORTH built-in words
 
-![VLIST](forthwords.png)
+![WORDS](forthwords.png)
 
 ## PLFORTH specific words
 
 ### Words for looking at internal structures:
 
-`SHOW xxxx`: Displays the decompiled words making up the definition of `xxxx`
-
-`SHOWSTACK`: Displays the data stack
-
-`SHOWRSTACK`: Displays the return stack. Note: PLFORTH uses a software defined return stack, this is not the hardware stack
+`.RS`: Displays the return stack. Note: PLFORTH uses a software defined return stack, this is not the hardware stack
 
 ### Words for tracing and single stepping execution:
 
@@ -75,16 +71,26 @@ While running code, `<CTRL-C>` will break out and return to the interpreter.
 
 `NUM?`: Convert string and length to number, returning number and valid flag
 
+Numbers entered with a preceeding `$` will be interpreted as hex values
+
+### Words for displaying hex numbers
+
+`$.`: Display TOS word in hex with leading `$`
+
+`C$.`: Display TOS byte in hex with leading `$`
+
 ## Debugging vs Performance
 
 PLFORTH defaults to compiling using ITC (Indirect Threaded Code). This supports a list of inspection and debugging features while developing programs and scripts. However, the compiler can easily switch to PBC (PLASMA Byte Code) to greatly improve performance, but most of the debugging tools are lost. ITC compiled words and PBC compiled words can be intermingled and call each other seemlessly. PLASMA Byte Code is a direct match to many low-level FORTH constructs.
 
-## Hi-Res Graphics
-Due to the way the Apple II implements Hi-Res graphics, a stub loader is required to reserve the pages used.
+## Graphics
+Due to the way the Apple II implements Hi-Res, Lo-Res and Double Lo-Res graphics, a stub loader is required to reserve the pages used.
 
 `HRFORTH`: Reserve HGR page 1 before launching PLFORTH
 
 `HR2FORTH`: Reserve HGR pages 1 and 2 before launching PLFORTH
+
+`TX2FORTH`: Reserve GR and DGR pages 1 and 2 before launching PLFORTH
 
 ## Scripts
 

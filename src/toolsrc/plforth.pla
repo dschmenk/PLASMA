@@ -7,9 +7,10 @@ include "inc/longjmp.plh"
 // Internal variables
 //
 const JSR        = $20 // 6502 JSR opcode needed for VM entry
+const RTS        = $60
 const SRCREFS    = 2
 const INBUF_SIZE = 128
-word  vlist, infunc, inptr, IIP, W
+word  latest, infunc, inptr, IIP, W
 word  vmvect, startheap, arg
 byte  srclevel   = 0
 //
@@ -107,20 +108,20 @@ predef _branch_#0, _0branch_(a)#0, _if_#0, _else_#0, _then_#0
 predef _begin_#0, _again_#0, _until_#0, _while_#0, _repeat_#0
 predef _case_#0, _of_#0, _endof_#0, _endcase_#0
 predef _dodo_(a,b)#0, _do_#0, _doloop_#0, _doplusloop_(a)#0, _plusloop_#0, _loop_#0
-predef _unloop_#0, _leave_#0, _j_#1
+predef _unloop_#0, _leave_#0, _j_#1, _defer_#0, _is_(a)#0, _noname_#0
 predef _create_#0, _itcdoes_(a)#0, _does_#0, _compoff_#0, _compon_#0, _state_#1
 predef _compile_#0, _forcecomp_#0, _dictaddw_(a)#0, _dictaddb_(a)#0, _colon_#0, _semi_#0
 predef _componly_#0, _interponly_#0, _immediate_#0, _exit_#0, _pad_#1, _trailing_(a,b)#2
-predef _tors_(a)#0, _fromrs_#1, _toprs_#1, _lookup_#1, _latest_#1
+predef _tors_(a)#0, _fromrs_#1, _toprs_#1, _lookup_#1, _latest_#1, _recurse_#0
 predef _cmove_(a,b,c)#0, _move_(a,b,c)#0, _fill_(a,b,c)#0, _plasma_(a)#0
 predef _var_(a)#0, _const_(a)#0, _lit_#1, _slit_#1, _find_(a)#2
 predef _tick_#0, _forget_#0, _keypressed_#1, _key_#1, _prat_(a)#0
 predef _blank_#0, _char_#0, _str_#0, _prstr_#0, _prpstr_#0
 predef _prval_(a)#0, _prbyte_(a)#0, _prhex_(a)#0, _accept_(a,b)#1, _type_(a,b)#0
-predef _vlist_#0, _tron_#0, _troff_#0, _stepon_#0, _stepoff_#0
+predef _words_#0, _tron_#0, _troff_#0, _stepon_#0, _stepoff_#0
 predef _itc_#0, _pbc_#0, _comment_#0, _src_(a)#0, _srcstr_#0, _endsrc_#0, _ifendsrc_(a)#0
 predef _brk_#0, _brkon_#0, _brkoff_#0, _word_(a)#1, _count_(a)#2
-predef _space_#0, _spaces_(a)#0, _show_#0, _showstack_#0, _showrstack_#0
+predef _space_#0, _spaces_(a)#0, _see_#0, _prstack_#0, _prrstack_#0
 predef _cont_#0, _restart_#0, _bye_#0, _quit_#0
 predef _abort_(a)#0, _doabortstr_(a,b)#0, _abortstr_#0
 predef _compword_(dentry)#0, _compliteral_(a)#0, _execword_(dentry)#0, _isnum_(a,b)#2
@@ -247,14 +248,22 @@ word = @d_ugt, 0, @isult
 char d_0lt = "0<"
 byte = inlinew_flag
 word = @d_ult, 0, 0, $4600 // ZERO ISLT
+// GREATER THAN ZERO
+char d_0gt = "0>"
+byte = inlinew_flag
+word = @d_0lt, 0, 0, $4400 // ZERO ISGT
 // EQUALS ZERO
 char d_0eq = "0="
 byte = inlinew_flag
-word = @d_0lt, 0, 0, $4000 // ZERO ISEQ
+word = @d_0gt, 0, 0, $4000 // ZERO ISEQ
+// NOT EQUAL ZERO
+char d_0ne = "0<>"
+byte = inlinew_flag
+word = @d_0eq, 0, 0, $4200 // ZERO ISNE
 // ABS
 char d_abs = "ABS"
 byte = 0
-word = @d_0eq, 0, @_abs_
+word = @d_0ne, 0, @_abs_
 // MIN
 char d_min = "MIN"
 byte = 0
@@ -351,10 +360,14 @@ word = 0, 0, @_branch_, $C4
 char d_0branch = "(0BRANCH)"
 byte = param_flag | inline_flag | showcr_flag
 word = 0, 0, @_0branch_, $C2
+// RECURSE
+char d_recurse = "RECURSE"
+byte = imm_flag | componly_flag
+word = @d_allot, 0, @_recurse_
 // IF
 char d_if = "IF"
 byte = imm_flag | componly_flag
-word = @d_allot, 0, @_if_
+word = @d_recurse, 0, @_if_
 // ELSE
 char d_else = "ELSE"
 byte = imm_flag | componly_flag
@@ -471,10 +484,22 @@ word = @d_commab, 0, @_state_
 char d_colon = ":"
 byte = interponly_flag
 word = @d_state, 0, @_colon_
+// NONAME
+char d_noname = ":NONAME"
+byte = interponly_flag
+word = @d_colon, 0, @_noname_
+// DEFER
+char d_defer = "DEFER"
+byte = interponly_flag
+word = @d_noname, 0, @_defer_
+// IS
+char d_is = "IS"
+byte = interponly_flag
+word = @d_defer, 0, @_is_
 // COMP OFF
 char d_compoff = "["
 byte = imm_flag | componly_flag
-word = @d_colon, 0, @_compoff_
+word = @d_is, 0, @_compoff_
 // COMP ON
 char d_compon = "]"
 byte = interponly_flag
@@ -670,22 +695,22 @@ word = @d_exitforth, 0, @_comment_
 char d_bye = "BYE"
 byte = 0
 word = @d_comment, 0, @_bye_
-// SHOW DEFINITION
-char d_show = "SHOW"
+// SEE DEFINITION
+char d_see = "SEE"
 byte = interponly_flag
-word = @d_bye, 0, @_show_
-// SHOW STACK
-char d_showstack = "SHOWSTACK"
+word = @d_bye, 0, @_see_
+// PRINT STACK
+char d_prstack = ".S"
 byte = showcr_flag
-word = @d_show, 0, @_showstack_
-// SHOW RSTACK
-char d_showrstack = "SHOWRSTACK"
+word = @d_see, 0, @_prstack_
+// PRINT RSTACK
+char d_prrstack = ".RS"
 byte = showcr_flag
-word = @d_showstack, 0, @_showrstack_
+word = @d_prstack, 0, @_prrstack_
 // TRACE ON
 char d_tron = "TRON"
 byte = showcr_flag
-word = @d_showrstack, 0, @_tron_
+word = @d_prrstack, 0, @_tron_
 // TRACE OFF
 char d_troff = "TROFF"
 byte = showcr_flag
@@ -721,10 +746,10 @@ word = @d_itc, 0, @_pbc_
 //
 // Start of vocabulary
 //
-// LIST VOCAB
-char d_vlist = "VLIST"
+// LIST VOCAB WORDS
+char d_words = "WORDS"
 byte = showcr_flag
-word = @d_pbc, 0, @_vlist_
+word = @d_pbc, 0, @_words_
 //
 // Helper routines
 //
@@ -825,7 +850,7 @@ def buildhashtbl#0
   for i = 0 to HASH_MASK
     hashtbl[i] = 0
   next
-  dentry = vlist
+  dentry = latest
   while dentry
     hash           = hashname(dentry + 1, ^dentry)
     *_hfa_(dentry) = hashtbl[hash])
@@ -842,8 +867,8 @@ def warmstart#0
   brkcfa = 0
   RSP    = RSTK_SIZE
   if state & comp_flag // Undo compilation state
-    heaprelease(vlist)
-    vlist = *_lfa_(vlist)
+    heaprelease(latest)
+    latest = *_lfa_(latest)
   fin
   state = 0
   while !endsrc; loop
@@ -856,7 +881,7 @@ end
 //
 def coldstart#0
   warmstart
-  vlist = @d_vlist
+  latest = @d_words
   heaprelease(startheap)
   buildhashtbl
 end
@@ -937,7 +962,7 @@ end
 // Break handler
 //
 def showtrace(dentry)#0
-    putln; puts("( "); _showstack_; puts(") "); puts(dentry); putc(' ')
+    putln; puts("( "); _prstack_; puts(") "); puts(dentry); putc(' ')
 end
 def brkhandle(dentry)#0
   word brk_infn, brk_inptr, brk_iip
@@ -1066,8 +1091,8 @@ def _interpret_#0
     inchars, inlen = nextword(' ')
     dentry = find(inchars, inlen)
     if dentry
-      if not state & comp_flag or ^_ffa_(dentry) & imm_flag
-        if not state & comp_flag and ^_ffa_(dentry) & componly_flag
+      if not (state & comp_flag) or (^_ffa_(dentry) & imm_flag)
+        if not (state & comp_flag) and (^_ffa_(dentry) & componly_flag)
           puts(dentry)
           puts(" : Compile only word\n")
           _quit_
@@ -1193,16 +1218,16 @@ def _trailing_(a,b)#2
   return a, b
 end
 def _latest_#1
-  return vlist
+  return latest
 end
 def newdict#0
   word bldptr, plist, namechars, namelen
 
   namechars, namelen = nextword(' ')
-  plist  = vlist
-  vlist  = heapmark
-  ^vlist = namelen
-  bldptr = vlist + 1
+  plist   = latest
+  latest  = heapmark
+  ^latest = namelen
+  bldptr  = latest + 1
   while namelen
     ^bldptr = ^namechars
     bldptr++
@@ -1211,18 +1236,18 @@ def newdict#0
   loop
   ^bldptr = 0          // Flags
   bldptr++
-  *bldptr = plist;      // Link ptr
+  *bldptr = plist;     // Link ptr
   bldptr  = bldptr + 2
-  *bldptr = 0;          // Hash ptr
+  *bldptr = 0;         // Hash ptr
   bldptr  = bldptr + 2
-  *bldptr = bldptr + 2  // Point CFA to PFA
-  heapalloc(bldptr - vlist + 2)
+  *bldptr = bldptr + 2 // Point CFA to PFA
+  heapalloc(bldptr - latest + 2)
 end
 def _plasma_(a)#0
   newdict
-  ^(_ffa_(vlist)) = showcr_flag
-  *(_cfa_(vlist)) = a  // PLASMA code address
-  addhash(vlist)
+  ^(_ffa_(latest)) = showcr_flag
+  *(_cfa_(latest)) = a // PLASMA code address
+  addhash(latest)
 end
 def _var_(a)#0
   newdict
@@ -1231,7 +1256,7 @@ def _var_(a)#0
   _dictaddw_(heapmark + 3) // Poiner to variable in PFA
   _dictaddb_($5C)          // RET
   _dictaddw_(a)            // Variable storage
-  addhash(vlist)
+  addhash(latest)
 end
 def _const_(a)#0
   newdict
@@ -1239,7 +1264,7 @@ def _const_(a)#0
   _dictaddb_($2C)          // CONSTANT WORD
   _dictaddw_(a)
   _dictaddb_($5C)          // RET
-  addhash(vlist)
+  addhash(latest)
 end
 def _create_#0
   newdict
@@ -1248,7 +1273,7 @@ def _create_#0
   _dictaddw_(heapmark + 5) // Pointer to rest of PFA
   _dictaddb_($5C)          // RET
   _dictaddw_(0)            // reserved word for DOES>
-  addhash(vlist)
+  addhash(latest)
   //
   // 9 bytes after PFA, data follows...
   //
@@ -1264,16 +1289,16 @@ def _itcdoes_(a)#0
   //
   // Overwrite CREATE as ITC words
   //
-  ^(_ffa_(vlist))     = ^(_ffa_(vlist)) | itc_flag
-  *(_cfa_(vlist))     = @_dodoes_
-  *(_pfa_(vlist))     = a // Fill in DOES code address
+  ^(_ffa_(latest)) = ^(_ffa_(latest)) | itc_flag
+  *(_cfa_(latest)) = @_dodoes_
+  *(_pfa_(latest)) = a // Fill in DOES code address
 end
 def _pbcdoes_(a)#0
   //
   // Rewrite the end of CREATE
   //
-  ^(_pfa_(vlist) + 6) = $C4    // JUMP DOES> directly
-  *(_pfa_(vlist) + 7) = a
+  ^(_pfa_(latest) + 6) = $C4    // JUMP DOES> directly
+  *(_pfa_(latest) + 7) = a
 end
 def _does_#0
   if state & comp_itc_flag
@@ -1289,7 +1314,32 @@ def _does_#0
     _dictaddb_($54)           // CALL
     _dictaddw_(@_pbcdoes_)    // Fills in code address reserved in _compbuilds_
     _dictaddb_($5C)           // RET
-    // End of BUILDS, beginning of DOES> code
+    // End of <BUILDS, beginning of DOES> code
+  fin
+end
+def _dodefer_#0
+  _execword_(*(W + 2)) // Exec deferred word
+end
+def _defer_#0
+  newdict
+  _dictaddb_(RTS); _dictaddb_(0) // NO-OP and space for deferred pfa
+  addhash(latest)
+end
+def _is_(a)#0
+  word dentry
+
+  dentry = find(nextword(' '))
+  if dentry
+    if ^_ffa_(a) & itc_flag
+      *_cfa_(dentry)   = @_dodefer_
+      *_pfa_(dentry)   = a
+      ^(_ffa_(dentry)) = ^(_ffa_(dentry)) | itc_flag
+    else // comp_pbc_flag
+      *_cfa_(dentry) = *_cfa_(a)
+    fin
+  else
+    puts(a); puts(" Not found")
+    _quit_
   fin
 end
 def _docolon_#0
@@ -1299,14 +1349,41 @@ def _colon_#0
   newdict
   state = state | comp_mode
   if state & comp_itc_flag
-    ^(_ffa_(vlist)) = itc_flag | showcr_flag
-    *(_cfa_(vlist)) = @_docolon_
+    ^(_ffa_(latest)) = itc_flag | showcr_flag
+    *(_cfa_(latest)) = @_docolon_
   else // comp_pbc_flag
-    ^(_ffa_(vlist)) = showcr_flag
+    ^(_ffa_(latest)) = showcr_flag
     _dictaddb_(JSR); _dictaddw_(vmvect)
   fin
   if state & trace_flag
-    puts(vlist); putc(' ')
+    puts(latest); putc(' ')
+  fin
+end
+def _noname_#0
+  word bldptr, plist
+
+  plist   = latest
+  latest  = heapmark
+  ^latest = 0          // Anonymous definition
+  bldptr  = latest + 1
+  ^bldptr = 0          // Flags
+  bldptr++
+  *bldptr = plist;     // Link ptr
+  bldptr  = bldptr + 2
+  *bldptr = 0;         // Hash ptr
+  bldptr  = bldptr + 2
+  *bldptr = bldptr + 2 // Point CFA to PFA
+  heapalloc(bldptr - latest + 2)
+  state = state | comp_mode
+  if state & comp_itc_flag
+    ^(_ffa_(latest)) = itc_flag | showcr_flag
+    *(_cfa_(latest)) = @_docolon_
+  else // comp_pbc_flag
+    ^(_ffa_(latest)) = showcr_flag
+    _dictaddb_(JSR); _dictaddw_(vmvect)
+  fin
+  if state & trace_flag
+    puts(latest); putc(' ')
   fin
 end
 def _exit_#0
@@ -1321,7 +1398,11 @@ def _semi_#0
   if state & comp_itc_flag // Add double zero at end of definition for SHOW
     _dictaddw_(0)
   fin
-  addhash(vlist)
+  if ^latest
+    addhash(latest) // COLON definition
+  else
+    (@push)(latest)#0 // NONAME definition
+  fin
   state = state & ~comp_flag
 end
 def _compile_#0
@@ -1359,13 +1440,13 @@ def _compon_#0
   state = state | comp_mode
 end
 def _componly_#0
-  ^_ffa_(vlist) = ^_ffa_(vlist) | componly_flag
+  ^_ffa_(latest) = ^_ffa_(latest) | componly_flag
 end
 def _interponly_#0
-  ^_ffa_(vlist) = ^_ffa_(vlist) | interponly_flag
+  ^_ffa_(latest) = ^_ffa_(latest) | interponly_flag
 end
 def _immediate_#0
-  ^_ffa_(vlist) = ^_ffa_(vlist) | imm_flag
+  ^_ffa_(latest) = ^_ffa_(latest) | imm_flag
 end
 def _branch_#0
   IIP = *IIP
@@ -1376,6 +1457,9 @@ def _0branch_(a)#0
   else
     IIP = *IIP
   fin
+end
+def _recurse_#0
+  _compword_(latest)
 end
 def _if_#0
   _compword_(@d_0branch)
@@ -1563,10 +1647,10 @@ def _forget_#0
   dentry = find(nextword(' '))
   if dentry
     if isult(dentry, startheap)
-      vlist = @d_vlist
+      latest = @d_words
       dentry = startheap
     else
-      vlist = *_lfa_(dentry)
+      latest = *_lfa_(dentry)
     fin
     heaprelease(dentry)
     buildhashtbl
@@ -1772,16 +1856,24 @@ def _ifendsrc_(a)#0
     endsrc
   fin
 end
-def _show_#0
+def _see_#0
   word dentry, pfa, w
 
   dentry = find(nextword(' '))
   if dentry and ^_ffa_(dentry) & itc_flag // Only show ITC words
-    if *_cfa_(dentry) == @_docolon_
-      pfa = _pfa_(dentry)
-    else // @d_dodoes
-      pfa = *_pfa_(dentry)
-    fin
+    when *_cfa_(dentry)
+      is @_docolon_
+        pfa = _pfa_(dentry)
+        break
+      is @_dodefer_
+        pfa = *_pfa_(*_pfa_(dentry))
+        break
+      is @_dodoes_
+        pfa = *_pfa_(dentry)
+        break
+      otherwise // ???
+        pfa = @d_exit
+    wend
     putc('$'); puth(pfa); putc(' ')
     w = *pfa
     while w
@@ -1826,7 +1918,7 @@ def _show_#0
     puts("EXIT\n")
   fin
 end
-def _showstack_#0
+def _prstack_#0
   word val
   byte depth
 
@@ -1835,7 +1927,7 @@ def _showstack_#0
     puti(val); putc(' ')
   next
 end
-def _showrstack_#0
+def _prrstack_#0
   byte depth
 
   depth = RSTK_SIZE - 1
@@ -1910,23 +2002,25 @@ def typelist(typestr, typemask, type)#0
 
   puts(typestr)
   tab = ^typestr
-  d   = vlist
+  d   = latest
   while d
-    if (typemask & ^_ffa_(d)) == type
-      tab = tab + 1 + ^d
-      if tab > 39
-        putln;
-        tab = ^d
-      else
-        puts(" ")
+    if ^d // Skip NONAME definitions
+      if (typemask & ^_ffa_(d)) == type
+        tab = tab + 1 + ^d
+        if tab > 39
+          putln;
+          tab = ^d
+        else
+          puts(" ")
+        fin
+        puts(d)
+        if conio:keypressed(); conio:getkey(); conio:getkey(); fin
       fin
-      puts(d)
-      if conio:keypressed(); conio:getkey(); conio:getkey(); fin
     fin
     d = *_lfa_(d)
   loop
 end
-def _vlist_#0
+def _words_#0
   putln
   typelist("Compile only: ", componly_flag, componly_flag)
   putln; putln
@@ -1992,22 +2086,22 @@ fin
 // Compile ITC version of inline words ( speeds it up a smidge )
 //
 vmvect = *(@divmod + 1)  // Hack - get VM entry vector from divmod
-vlist  = @d_vlist
-while vlist
-  if *_cfa_(vlist) == 0
-    *_cfa_(vlist) = heapmark
+latest = @d_words
+while latest
+  if *_cfa_(latest) == 0
+    *_cfa_(latest) = heapmark
     _dictaddb_(JSR); _dictaddw_(vmvect)
-    if ^_ffa_(vlist) & inline_flag
-      _dictaddb_(^_pfa_(vlist))
-    elsif ^_ffa_(vlist) & inlinew_flag
-      _dictaddw_(*_pfa_(vlist))
+    if ^_ffa_(latest) & inline_flag
+      _dictaddb_(^_pfa_(latest))
+    elsif ^_ffa_(latest) & inlinew_flag
+      _dictaddw_(*_pfa_(latest))
     else
-      puts(vlist); puts(": Invalid dictionary\n")
+      puts(latest); puts(": Invalid dictionary\n")
       return -1
     fin
     _dictaddb_($5C) // RET
   fin
-  vlist = *_lfa_(vlist)
+  latest = *_lfa_(latest)
 loop
 _estkl = ^(@syscall + 1) // Hack to fill in parameter stack locations
 _estkh = ^(@syscall + 3)
@@ -2028,6 +2122,9 @@ while ^inptr and ^(inptr + 1) == '-'
     is 'T' // Trace flag
       _tron_
       break
+    otherwise
+      puts("Usage: +PLFORTH [-T] [-F] [SCRIPT NAME]\n")
+      return 0
   wend
   inptr = argNext(inptr)
 loop
