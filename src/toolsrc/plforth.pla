@@ -7,7 +7,8 @@ include "inc/longjmp.plh"
 // Internal variables
 //
 const JSR        = $20 // 6502 JSR opcode needed for VM entry
-const RTS        = $60
+const RTS        = $60 // 6502 RTS opcode
+const JMP        = $4C // 6502 JMP opcode
 const SRCREFS    = 2
 const INBUF_SIZE = 128
 word  latest, infunc, inptr, IIP, W
@@ -1322,7 +1323,7 @@ def _dodefer_#0
 end
 def _defer_#0
   newdict
-  _dictaddb_(RTS); _dictaddb_(0) // NO-OP and space for deferred pfa
+  _dictaddb_(RTS);  _dictaddw_(0) // NO-OP and space for deferred pfa
   addhash(latest)
 end
 def _is_(a)#0
@@ -1330,12 +1331,13 @@ def _is_(a)#0
 
   dentry = find(nextword(' '))
   if dentry
-    if ^_ffa_(a) & itc_flag
-      *_cfa_(dentry)   = @_dodefer_
-      *_pfa_(dentry)   = a
-      ^(_ffa_(dentry)) = ^(_ffa_(dentry)) | itc_flag
+    ^(_ffa_(dentry)) = ^(_ffa_(a))
+    if ^_ffa_(dentry) & itc_flag
+      *_cfa_(dentry) = @_dodefer_
+      *_pfa_(dentry) = a
     else // comp_pbc_flag
-      *_cfa_(dentry) = *_cfa_(a)
+      ^_pfa_(dentry)       = JMP
+      *(_pfa_(dentry) + 1) = *_cfa_(a)
     fin
   else
     puts(a); puts(" Not found")
