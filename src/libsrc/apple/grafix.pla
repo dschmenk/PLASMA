@@ -2,6 +2,7 @@ include "inc/cmdsys.plh"
 
 byte gfxref, gfxseg
 byte params[8], cmd[16]
+byte textmode[] = 16, 0, 15
 
 export def pencolor(clr)#0
     params:4 = 2
@@ -112,6 +113,31 @@ export def drawmode(mode)#0
     syscall($CB, @params)
 end
 
+def gfxopen#1
+    //
+    // Allocate bank 0
+    //
+    params.0 = 4
+    params:1 = $2000
+    params:3 = $9F00
+    params.5 = $10
+    params.6 = $00
+    syscall($40, @params)
+    gfxseg   = params.6
+    ^$1907   = $80 // Set graphics pages allocated
+    //
+    // Open graphics driver
+    //
+    params.0 = 4
+    params:1 = ".GRAFIX"
+    params.3 = 0
+    params:4 = 0
+    params.6 = 0
+    syscall($C8, @params)
+    gfxref   = params.3
+    return gfxref <> 0
+end
+
 export def setmode(mode)#0
     if mode < 0
         //
@@ -122,15 +148,19 @@ export def setmode(mode)#0
         syscall($CC, @params)
         gfxref   = 0
         //
-        // Deaalocate bank 0
+        // Deallocate bank 0
         //
         params.0 = 1
         params.1 = gfxseg
         syscall($45, @params)
         ^$1907   = $00 // Unset graphics pages allocated
-    fin
-    if not gfxref
+        //
+        // Reset textmode
+        //
+        cmdsys:syswrite(cmdsys.refcons, @textmode, 3)
         return
+    elsif not gfxref
+        gfxopen
     fin
     params.0 = 3
     params.1 = gfxref
@@ -151,28 +181,7 @@ if MACHID <> $F2
     return -1
 fin
 //
-// Allocate bank 0
-//
-params.0 = 4
-params:1 = $2000
-params:3 = $9F00
-params.5 = $10
-params.6 = $00
-syscall($40, @params)
-gfxseg   = params.6
-^$1907   = $80 // Set graphics pages allocated
-//
-// Open graphics driver
-//
-params.0 = 4
-params:1 = ".GRAFIX"
-params.3 = 0
-params:4 = 0
-params.6 = 0
-syscall($C8, @params)
-gfxref   = params.3
-//
 // Keep module in memory
 //
-return modkeep
+return gfxopen ?? modkeep :: -1
 done
