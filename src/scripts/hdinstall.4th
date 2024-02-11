@@ -1,20 +1,26 @@
 SRC" plasma.4th"
 SRC" conio.4th"
 
-: RESUME> ; INTERPONLY ( PLACE HOLDER TO RESUME EXECUTION )
-: ?EXEC ( F -- )
-  NOT IF ( SKIP CODE IN BETWEEN ?EXEC AND RESUME> )
+: [THEN] ; IMMEDIATE ( PLACE HOLDER TO RESUME EXECUTION )
+DEFER [ELSE] ( SKIP UNTIL [THEN] IF EXECUTED )
+: [IF] ( F -- )
+  NOT IF ( SKIP CODE IN BETWEEN [ELSE] OR [THEN] )
     1 >R
     BEGIN
       BL WORD FIND IF
         CASE
-          ' RESUME> OF
-            R> 1- ?DUP 0= IF ( EXIT IF FINAL RESUME> )
+          ' [ELSE] OF
+            R@ 1 = IF ( RESUME EXECUTING AT MATCHING [ELSE] )
+              R> DROP DROP EXIT
+            THEN
+            ENDOF
+          ' [THEN] OF
+            R> 1- ?DUP 0= IF ( EXIT AT FINAL [THEN] )
               DROP EXIT
             THEN
             >R
             ENDOF
-          [ LATEST ] LITERAL OF ( CHECK FOR NESTED ?EXEC )
+          [ LATEST ] LITERAL OF ( CHECK FOR NESTED [IF] )
             R> 1+ >R
             ENDOF
         ENDCASE
@@ -23,7 +29,27 @@ SRC" conio.4th"
       THEN
     AGAIN
   THEN
-; INTERPONLY
+; IMMEDIATE
+:NONAME ( [ELSE] )
+  1 >R
+  BEGIN
+    BL WORD FIND IF
+      CASE
+        ' [THEN] OF
+          R> 1- ?DUP 0= IF ( EXIT AT FINAL [THEN] )
+            DROP EXIT
+          THEN
+          >R
+          ENDOF
+        ' [IF] OF ( CHECK FOR NESTED [IF] )
+          R> 1+ >R
+          ENDOF
+      ENDCASE
+    ELSE
+      DROP
+    THEN
+  AGAIN
+; IMMEDIATE IS [ELSE]
 
 : STRINPUT ( STR -- )
   DUP 1+ 255 ACCEPT -TRAILING SWAP C!
@@ -51,14 +77,12 @@ DEST C@ 0= ?ABORT" Destination required"
 FILELIST " -R EDITOR.README PL* CMD* SYS " STRCPY DEST STRCAT
 " COPY" SWAP LOADMOD
 
-CONFIRM" Copy demos?"
-?EXEC
+CONFIRM" Copy demos?" [IF]
   FILELIST " -R DEMOS " STRCPY DEST STRCAT
   " COPY" SWAP LOADMOD
-RESUME>
+[THEN]
 
-CONFIRM" Copy build tools?"
-?EXEC
+CONFIRM" Copy build tools?" [IF]
   DEST " /BLD" STRCAT DROP
   " NEWDIR" DEST LOADMOD
   FILELIST " BLD/PLASM BLD/CODEOPT " STRCPY
@@ -67,13 +91,12 @@ CONFIRM" Copy build tools?"
   FILELIST " -R BLD/INC " STRCPY DEST STRCAT
   " COPY" SWAP LOADMOD
 
-  CONFIRM" Copy sample code?"
-  ?EXEC
+  CONFIRM" Copy sample code?" [IF]
     FILELIST " -R BLD/SAMPLES " STRCPY DEST STRCAT
     " COPY" SWAP LOADMOD
-  RESUME>
+  [THEN]
 
-RESUME>
+[THEN]
 
 ." Done" CR
 0 0 40 24 VIEWPORT
