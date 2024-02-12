@@ -2,28 +2,37 @@ SRC" plasma.4th"
 SRC" conio.4th"
 
 : [THEN] ; IMMEDIATE ( PLACE HOLDER TO RESUME EXECUTION )
+DEFER [ELSE] ( SKIP UNTIL [THEN] IF EXECUTED )
 : [IF] ( F -- )
   NOT IF ( SKIP CODE IN BETWEEN [ELSE] OR [THEN] )
-    1 >R
-    BEGIN
-      BL WORD FIND IF
-        CASE
-          ' [THEN] OF
-            R> 1- ?DUP 0= IF ( EXIT AT FINAL [THEN] )
-              DROP EXIT
-            THEN
-            >R
-            ENDOF
-          [ LATEST ] LITERAL OF ( CHECK FOR NESTED [IF] )
-            R> 1+ >R
-            ENDOF
-        ENDCASE
-      ELSE
-        DROP
-      THEN
-    AGAIN
+    [COMPILE] [ELSE]
   THEN
 ; IMMEDIATE
+:NONAME ( [ELSE] )
+  1 >R
+  BEGIN
+    BL WORD FIND IF
+      CASE
+        ' [ELSE] OF
+          R@ 1 = IF ( RESUME EXECUTING AT MATCHING [ELSE] )
+            R> DROP DROP EXIT
+          THEN
+          ENDOF
+        ' [THEN] OF
+          R> 1- ?DUP 0= IF ( EXIT AT FINAL [THEN] )
+            DROP EXIT
+          THEN
+          >R
+          ENDOF
+        ' [IF] OF ( CHECK FOR NESTED [IF] )
+          R> 1+ >R
+          ENDOF
+      ENDCASE
+    ELSE
+      DROP
+    THEN
+  AGAIN
+; IMMEDIATE IS [ELSE]
 : STRING CREATE 256 ALLOT DOES> ; ( JUST ALLOCATE THE BIGGEST STRING POSSIBLE )
 
 : CONFIRM" ( -- F )
