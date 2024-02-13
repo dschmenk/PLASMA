@@ -102,7 +102,7 @@ const interponly_flag = $80
 //
 // Predefine instrinsics
 //
-predef _swap_(a,b)#2, _ifdup_(a)#1, _over_(a,b)#3, _rot_(a,b,c)#3
+predef _swap_(a,b)#2, _ifdup_(a)#1, _over_(a,b)#3, _rot_(a,b,c)#3, _dup2_(a,b)#4
 predef _abs_(a)#1, _max_(a,b)#1, _min_(a,b)#1, _wplusset_(a,b)#0
 predef _ffa_(a)#1, _lfa_(a)#1, _hfa_(a)#1, _cfa_(a)#1, _pfa_(a)#1, _allot_(a)#0
 predef _branch_#0, _0branch_(a)#0, _if_#0, _else_#0, _then_#0
@@ -115,7 +115,7 @@ predef _postpone_#0, _dictaddw_(a)#0, _dictaddb_(a)#0, _colon_#0, _semi_#0
 predef _componly_#0, _interponly_#0, _immediate_#0, _exit_#0, _pad_#1, _trailing_(a,b)#2
 predef _tors_(a)#0, _fromrs_#1, _toprs_#1, _lookup_#1, _latest_#1, _recurse_#0
 predef _cmove_(a,b,c)#0, _move_(a,b,c)#0, _fill_(a,b,c)#0, _plasma_(a)#0
-predef _var_(a)#0, _const_(a)#0, _lit_#1, _slit_#1, _find_(a)#2
+predef _compare_(a,b,c,d)#1, _var_(a)#0, _const_(a)#0, _lit_#1, _slit_#1, _find_(a)#2
 predef _tick_#0, _forget_#0, _keypressed_#1, _key_#1, _prat_(a)#0
 predef _blank_#0, _char_#0, _str_#0, _prstr_#0, _prpstr_#0
 predef _prval_(a)#0, _prbyte_(a)#0, _prhex_(a)#0, _accept_(a,b)#1, _type_(a,b)#0
@@ -133,18 +133,26 @@ predef _compword_(dentry)#0, _compliteral_(a)#0, _execword_(dentry)#0, _isnum_(a
 char d_drop = "DROP"
 byte = inline_flag | showcr_flag
 word = 0, 0, 0, $30
+// DROP2
+char d_drop2 = "DROP2"
+byte = inlinew_flag | showcr_flag
+word = @d_drop, 0, 0, $3030
 // SWAP
 char d_swap = "SWAP"
 byte = 0
-word = @d_drop, 0, @_swap_
+word = @d_drop2, 0, @_swap_
 // DUP
 char d_dup = "DUP"
 byte = inline_flag
 word = @d_swap, 0, 0, $34
+// DUP2
+char d_dup2 = "DUP2"
+byte = 0
+word = @d_dup, 0, @_dup2_
 // ?DUP
 char d_ifdup = "?DUP"
 byte = 0
-word = @d_dup, 0, @_ifdup_
+word = @d_dup2, 0, @_ifdup_
 // OVER
 word d_over = "OVER"
 byte = 0
@@ -577,10 +585,14 @@ word = @d_word, 0, @_isnum_
 char d_trailing = "-TRAILING"
 byte = 0
 word = @d__isnum_, 0, @_trailing_
+// COMPARE
+char d_compare = "COMPARE"
+byte = 0
+word = @d_trailing, 0, @_compare_
 // PRINT @TOS
 char d_prat = "?"
 byte = 0
-word = @d_trailing, 0, @_prat_
+word = @d_compare, 0, @_prat_
 // PRINT TOS
 char d_prtos = "."
 byte = 0
@@ -1127,6 +1139,9 @@ def _ifdup_(a)#1
   if a; (@push)(a)#0; fin
   return a
 end
+def _dup2_(a,b)#4
+  return a,b,a,b
+end
 def _over_(a,b)#3
   return a,b,a
 end
@@ -1213,6 +1228,20 @@ def _trailing_(a,b)#2
     b--
   loop
   return a, b
+end
+def _compare_(a,b,c,d)#1
+  byte i, l
+
+  l = b < d ?? b :: d
+  for i = 0 to l - 1
+    if ^(a + i) <> ^(c + i)
+      return ^(a + i) < ^(c + i) ?? -1 :: 1
+    fin
+  next
+  if    b < d return -1
+  elsif b > d return 1
+  fin
+  return 0
 end
 def _latest_#1
   return latest
