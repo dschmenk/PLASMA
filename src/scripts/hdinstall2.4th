@@ -5,7 +5,7 @@ SRC" conio.4th"
 DEFER [ELSE] ( SKIP UNTIL [THEN] IF EXECUTED )
 : [IF] ( F -- )
   NOT IF ( SKIP CODE IN BETWEEN [ELSE] OR [THEN] )
-    [COMPILE] [ELSE]
+    POSTPONE [ELSE]
   THEN
 ; IMMEDIATE
 :NONAME ( [ELSE] )
@@ -36,14 +36,14 @@ DEFER [ELSE] ( SKIP UNTIL [THEN] IF EXECUTED )
 : STRING CREATE 256 ALLOT DOES> ; ( JUST ALLOCATE THE BIGGEST STRING POSSIBLE )
 
 : CONFIRM" ( -- F )
-  COMPILE ."
+  POSTPONE ."
   ."  (Y/N)"
   KEY CR TOUPPER CHAR Y =
 ;
 
 : INSERT.FLOPPY"
   ." Insert "
-  COMPILE ."
+  POSTPONE ."
   ."  into floppy drive" CR
   ."  Press any key to continue" KEY DROP CR
 ;
