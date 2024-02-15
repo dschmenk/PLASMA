@@ -102,6 +102,10 @@ The build disk includes sample source, include files for the system modules, and
 ```
 Compiler warnings are enabled with `-W`. The optional optimizer is enabled with `-O` and extra optimizations are enabled with `-O2`. The source code for a few sample programs are included. The big one, `RPNCALC.PLA`, is the sample RPN calculator that uses many of PLASMA's advanced features. The self-hosted compiler is the same compiler as the cross-compiler, just transcribed from C to PLASMA (yes, the self-hosted PLASMA compiler is written in PLASMA). It requires patience when compiling: it is a fairly large and extensive program.
 
+## FORTH Module
+
+New for version 2.1 is a FORTH language module capable of interpreting script files and interactive programming. Further documentation here: https://github.com/dschmenk/PLASMA/blob/master/doc/PLFORTH.md. Samples scripts are in /HARDISK/BLD/SCRIPTS
+
 ## Demos
 
 There are some demo programs included for your perusal. Check out `ROGUE` for some diversion. You can find the documentation here: https://github.com/dschmenk/PLASMA/blob/master/doc/Rogue%20Instructions.md. A music sequencer to play through a MockingBoard if it is detected, or the built-in speaker if not. A minimal Web server if you have an Uthernet2 card (required). Try `SPIDERS`for some hires shoot'em-up action. Bug reports appreciated.
@@ -112,7 +116,7 @@ Most sample source code is included from the project. They build without alterat
 
 ## Video Playlist
 
-There is a [YouTube playlist](https://www.youtube.com/playlist?list=PLlPKgUMQbJ79VJvZRfv1CJQf4SP2Gw3yU) created for learning PLASMA. It is a WIP, with updates every week or so
+There is a [YouTube playlist](https://www.youtube.com/playlist?list=PLlPKgUMQbJ79VJvZRfv1CJQf4SP2Gw3yU) created for learning PLASMA.
 
 ## Issues
 
@@ -123,6 +127,22 @@ There is a [YouTube playlist](https://www.youtube.com/playlist?list=PLlPKgUMQbJ7
 - The Apple /// may not always report errors properly or at all.
 
 - The documentation is sparse and incomplete. Yep, could use your help...
+
+# Changes in PLASMA for 2.1 Release
+
+1. Lots of small bug fixes in floating point, file copy and graphics libraries
+
+2. MULT opcode speedup improvements
+
+3. Overhaul 65802/65814 VM for better speed and compatibility with PLFORTH compilation
+
+4. Many Apple /// improvements and bug fixes
+
+5. Low memory fixes and tests
+
+6. FORTH language support as a PLASMA module. Full accessabilit to PLASMA modules and libraries
+
+7. Install script for ProDOS mass storage
 
 # Changes in PLASMA for 2.0 Release
 

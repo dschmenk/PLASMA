@@ -1,4 +1,10 @@
-[Get a preview of FORTH coming to PLASMA 2.1](https://github.com/dschmenk/PLASMA/blob/master/doc/PLFORTH.md)
+# 2/15/2024 PLASMA 2.1 Available!
+
+[Download and read the Release Notes](https://github.com/dschmenk/PLASMA/blob/master/doc/Version%202.1.md)
+
+[Change List](https://github.com/dschmenk/PLASMA/blob/master/doc/Version%202.1.md#changes-in-plasma-for-21-release)
+
+[Get single boot floppy for FORTH for PLASMA 2.1](https://github.com/dschmenk/PLASMA/blob/master/doc/PLFORTH.md)
 
 # 3/24/2023 PLASMA 2.0 Available!
 
