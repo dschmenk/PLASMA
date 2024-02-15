@@ -16,7 +16,7 @@ Download the five disk images:
 
 [PLASMA 2.1 TCP/IP network modules](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLASMA-2.1-INET.po?raw=true)
 
-[PLASMA 2.1 Apple /// SOS Mame Boot and SANE floating point modules](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLASMA-2.1-FPSOS.po?raw=true)
+[PLASMA 2.1 Apple /// SOS and SANE floating point modules](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLASMA-2.1-FPSOS.po?raw=true)
 
 [PLASMA 2.1 Apple /// SOS Mame Boot](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLASMA2-A3MAME.PO?raw=true)
 

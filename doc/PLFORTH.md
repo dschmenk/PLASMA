@@ -116,12 +116,8 @@ There are a few useful scripts located in the `scripts` directory. By far the mo
 
 `SCRIPT NAME`: Soure filename to execute
 
-## Caveats
-
-This is definitely a Work-In-Progress. There are still a few places where I'm unsure about the proper implementation of some words, especially the more esoteric compiler constructs. It also looks suspiciously like an early '80s wordset, as that is what I'm most familiar with.
-
 ## Links
 
-Here is a (worse than usual) video running through some examples: https://youtu.be/picPyXAk77I?si=Td2En5Z3oxVTzh0z
+Here is a (worse than usual) video running through some examples. This was a preliminary release so the final is a bit different: https://youtu.be/picPyXAk77I?si=Td2En5Z3oxVTzh0z
 
-A pre-configures ProDOS floppy image barely able to run PLFORTH is available here: https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLFORTH.PO
+A pre-configured ProDOS floppy image able to run  and a few utilities is available here: https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLFORTH.PO
