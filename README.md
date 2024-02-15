@@ -4,18 +4,7 @@
 
 [Change List](https://github.com/dschmenk/PLASMA/blob/master/doc/Version%202.1.md#changes-in-plasma-for-21-release)
 
-[Get single boot floppy for FORTH for PLASMA 2.1](https://github.com/dschmenk/PLASMA/blob/master/doc/PLFORTH.md)
-
-# 3/24/2023 PLASMA 2.0 Available!
-
-Only 5 years in the making!
-
-[Download and read the Release Notes](https://github.com/dschmenk/PLASMA/blob/master/doc/Version%202.0.md)
-
-[Change List](https://github.com/dschmenk/PLASMA/blob/master/doc/Version%202.0.md#changes-in-plasma-for-20-release)
-
-# 4/29/2018 PLASMA 1.2 Available!
-[Download and read the Release Notes](https://github.com/dschmenk/PLASMA/blob/master/doc/Version%201.2.md)
+[Get single boot floppy of FORTH for PLASMA 2.1](https://github.com/dschmenk/PLASMA/blob/master/doc/PLFORTH.md)
 
 # The PLASMA Programming Language
 
