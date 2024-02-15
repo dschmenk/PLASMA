@@ -23,8 +23,6 @@ Different projects have led to the architecture of PLASMA, most notably Apple Pa
 
 <!-- TOC depthFrom:1 depthTo:6 withLinks:1 updateOnSave:1 orderedList:0 -->
 
-- [3/24/2023 PLASMA 2.0 Available!](#3242023-plasma-20-available)
-- [4/29/2018 PLASMA 1.2 Available!](#4292018-plasma-12-available)
 - [The PLASMA Programming Language](#the-plasma-programming-language)
   - [Contents](#contents)
 - [Build Environment](#build-environment)
