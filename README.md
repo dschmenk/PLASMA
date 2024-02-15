@@ -4,7 +4,7 @@
 
 [Change List](https://github.com/dschmenk/PLASMA/blob/master/doc/Version%202.1.md#changes-in-plasma-for-21-release)
 
-[Get single boot floppy of FORTH for PLASMA 2.1](https://github.com/dschmenk/PLASMA/blob/master/doc/PLFORTH.md)
+[Get single boot floppy of FORTH for PLASMA 2.1](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLFORTH.PO)
 
 # The PLASMA Programming Language
 
