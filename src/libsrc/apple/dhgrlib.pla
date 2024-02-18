@@ -1,0 +1,152 @@
+include "inc/cmdsys.plh"
+
+sysflags restxt1|reshgr1|resxhgr1
+
+//
+// Apple II graphics soft switches
+//
+const store80dis   = $C000
+const store80ena   = $C001
+const show40col    = $C00C
+const show80col    = $C00D
+const showgraphics = $C050
+const showtext     = $C051
+const showfull     = $C052
+const showmix      = $C053
+const page1m       = $C054
+const page1x       = $C055
+const showhires    = $C057
+const dhresena     = $C05E
+const dhresdis     = $C05F
+const IOUdis       = $C07E
+const IOUena       = $C07F
+//
+// HiRes scanline addresses
+//
+word hgrscan[] = $2000,$2400,$2800,$2C00,$3000,$3400,$3800,$3C00
+word           = $2080,$2480,$2880,$2C80,$3080,$3480,$3880,$3C80
+word           = $2100,$2500,$2900,$2D00,$3100,$3500,$3900,$3D00
+word           = $2180,$2580,$2980,$2D80,$3180,$3580,$3980,$3D80
+word           = $2200,$2600,$2A00,$2E00,$3200,$3600,$3A00,$3E00
+word           = $2280,$2680,$2A80,$2E80,$3280,$3680,$3A80,$3E80
+word           = $2300,$2700,$2B00,$2F00,$3300,$3700,$3B00,$3F00
+word           = $2380,$2780,$2B80,$2F80,$3380,$3780,$3B80,$3F80
+word           = $2028,$2428,$2828,$2C28,$3028,$3428,$3828,$3C28
+word           = $20A8,$24A8,$28A8,$2CA8,$30A8,$34A8,$38A8,$3CA8
+word           = $2128,$2528,$2928,$2D28,$3128,$3528,$3928,$3D28
+word           = $21A8,$25A8,$29A8,$2DA8,$31A8,$35A8,$39A8,$3DA8
+word           = $2228,$2628,$2A28,$2E28,$3228,$3628,$3A28,$3E28
+word           = $22A8,$26A8,$2AA8,$2EA8,$32A8,$36A8,$3AA8,$3EA8
+word           = $2328,$2728,$2B28,$2F28,$3328,$3728,$3B28,$3F28
+word           = $23A8,$27A8,$2BA8,$2FA8,$33A8,$37A8,$3BA8,$3FA8
+word           = $2050,$2450,$2850,$2C50,$3050,$3450,$3850,$3C50
+word           = $20D0,$24D0,$28D0,$2CD0,$30D0,$34D0,$38D0,$3CD0
+word           = $2150,$2550,$2950,$2D50,$3150,$3550,$3950,$3D50
+word           = $21D0,$25D0,$29D0,$2DD0,$31D0,$35D0,$39D0,$3DD0
+word           = $2250,$2650,$2A50,$2E50,$3250,$3650,$3A50,$3E50
+word           = $22D0,$26D0,$2AD0,$2ED0,$32D0,$36D0,$3AD0,$3ED0
+word           = $2350,$2750,$2B50,$2F50,$3350,$3750,$3B50,$3F50
+word           = $23D0,$27D0,$2BD0,$2FD0,$33D0,$37D0,$3BD0,$3FD0
+//
+// Pixel masks for 7 contiguous pixels
+//
+byte masks[] = $0F, $00, $00, $00 // $78, $00, $00, $00
+byte         = $70, $01, $00, $00 // $03, $40, $00, $00
+byte         = $00, $1E ,$00, $00 // $00, $3C, $00, $00
+byte         = $00, $60, $03, $00 // $00, $03, $60, $00
+byte         = $00, $00, $3C, $00 // $00, $00, $1E, $00
+byte         = $00, $00, $40, $07 // $00, $00, $01, $70
+byte         = $00, $00, $00, $78 // $00, $00, $00, $0F
+//
+// Solid colors
+//
+byte colors[] = $00, $00, $00, $00 // black
+byte          = $08, $11, $22, $44 // magenta
+byte          = $44, $08, $11, $22 // brown
+byte          = $4C, $19, $33, $66 // orange
+byte          = $22, $44, $08, $11 // dark green
+byte          = $2A, $55, $2A, $55 // gray 1
+byte          = $66, $4C, $19, $33 // green
+byte          = $6E, $5D, $3B, $77 // yellow
+byte          = $11, $22, $44, $08 // dark blue
+byte          = $19, $33, $66, $4C // purple
+byte          = $55, $2A, $55, $2A // gray 2
+byte          = $5D, $3B, $77, $6E // pink
+byte          = $33, $66, $4C, $19 // medium blue
+byte          = $3B, $77, $6E, $5D // light blue
+byte          = $77, $6E, $5D, $3B // aqua
+byte          = $7F, $7F, $7F, $7F // white
+word clr = @colors
+
+def dhgrcolor(c)#0
+  clr = @colors + ((c & $0F) << 2)
+end
+def dhgrplot(x, y)#0
+  word scanaddr, maskblk
+  byte pixblk, pixofst, pixbyte
+
+  pixblk, pixofst = divmod(x, 7)
+  maskblk  = @masks + pixofst * 4
+  scanaddr = hgrscan[y] + pixblk * 2
+  if ^maskblk
+    ^page1x
+    pixbyte = ^scanaddr & ~(^maskblk)
+    ^scanaddr = pixbyte | (^maskblk & ^clr)
+  fin
+  if ^(maskblk + 1)
+    ^page1m
+    pixbyte = ^scanaddr & ~(^(maskblk + 1))
+    ^scanaddr = pixbyte | (^(maskblk + 1) & ^(clr + 1))
+  fin
+  scanaddr++
+  if ^(maskblk + 2)
+    ^page1x
+    pixbyte = ^scanaddr & ~(^(maskblk + 2))
+    ^scanaddr = pixbyte | (^(maskblk + 2) & ^(clr + 2))
+  fin
+  if ^(maskblk + 3)
+    ^page1m
+    pixbyte = ^scanaddr & ~(^(maskblk + 3))
+    ^scanaddr = pixbyte | (^(maskblk + 3) & ^(clr + 3))
+  fin
+end
+def dhgrmode(mode)
+  if mode == 0
+    ^page1m
+    ^showfull
+    ^showhires
+    ^showgraphics
+    ^IOUdis     = 0
+    ^show80col  = 0
+    ^dhresena
+    ^store80ena = 0
+    ^page1m
+    memset($2000, 0, $2000)
+    ^page1x
+    memset($2000, 0, $2000)
+  else
+    ^store80dis = 0
+    ^dhresdis
+    ^show40col  = 0
+    ^showtext
+    ^page1m
+  fin
+  return mode
+end
+
+def dhgrtest#0
+  byte i
+
+  dhgrcolor(15)
+  for i = 0 to 139
+    dhgrplot(i, i)
+  next
+  while ^$C000 < 128
+  loop
+  ^$C010
+end
+
+dhgrmode(0)
+dhgrtest
+dhgrmode(-1)
+done
