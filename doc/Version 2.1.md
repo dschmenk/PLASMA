@@ -2,7 +2,7 @@
 
 Welcome to PLASMA: the Grand Unifying Platform for the Apple 1, ][, and ///.
 
-Download the five disk images:
+Download the disk images:
 
 [PLASMA 2.1 800K Full System](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLASMA-2.1.2mg?raw=true)
 
