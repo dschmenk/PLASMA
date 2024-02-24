@@ -773,25 +773,42 @@ asm reloc(modfix, modofst, bytecode, rld)#3
         LDY     #$00
 -       LDA     (SRC),Y
         BEQ     RLDEX       ; END OF RLD
-        PHA
         INY
         LDA     (SRC),Y
-        INY
         CLC
         ADC     ESTKL+3,X   ; ADDR=ENTRY=>1+MODFIX
         STA     DSTL
+        INY
         LDA     (SRC),Y
         ADC     ESTKH+3,X
         STA     DSTH
-        PLA
+        LDY     #$00
+        LDA     (SRC),Y
         AND     #$10        ; EXTERN REF - EXIT
         BNE     RLDEX
-        TAY                 ; FIXUP=*ADDR+MODOFST
+        LDA     (SRC),Y
+        BMI     FIX16
+        AND     #$40
+        BNE     FIXMSB
+FIXLSB  LDA     (DST),Y
+        CLC
+        ADC     ESTKL+2,X
+        CLC
+        BCC     FIX8
+FIXMSB  LDY     #$03
+        LDA     (SRC),Y     ; FIXUPH=(ENTRY->3+MODOFSTL)+(^ADDR+MODOFSTH)
+        CLC
+        ADC     ESTKL+2,X
+        LDY     #$00
         LDA     (DST),Y
-        INY
+        ADC     ESTKH+2,X
+        CLC
+        BCC     FIX8
+FIX16   LDA     (DST),Y     ; FIXUP=*ADDR+MODOFST
         CLC
         ADC     ESTKL+2,X
         STA     TMPL
+        INY
         LDA     (DST),Y
         ADC     ESTKH+2,X
         CMP     ESTKH+1,X   ; FIXUP >= BYTECODE?
@@ -805,7 +822,7 @@ asm reloc(modfix, modofst, bytecode, rld)#3
 +       STA     (DST),Y     ; *ADDR=FIXUP
         DEY
         LDA     TMPL
-        STA     (DST),Y
+FIX8    STA     (DST),Y
         LDA     SRCL        ; NEXT ENTRY
 ;       CLC
         ADC     #$04
