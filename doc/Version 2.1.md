@@ -24,6 +24,8 @@ Download the disk images:
 
 [PLASMA 2.11 PLFORTH stand-alone boot](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLFORTH.PO?raw=true)
 
+[PLASMA 2.11 Assembly Language Toolkit](https://github.com/dschmenk/PLASMA/blob/master/images/apple/ASM-TK.po?raw=true)
+
 PLASMA now has a ProDOS hard disk install script. Mass storage is the recommended installation that looks like (replacing HARDISK with your volume name of choice) if you want to copy files yourself:
 
 Boot & System Files => /HARDISK/PLASMA/
