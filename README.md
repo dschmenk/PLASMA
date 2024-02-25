@@ -1,10 +1,10 @@
-# 2/15/2024 PLASMA 2.1 Available!
+# 2/25/2024 PLASMA 2.11 Available!
 
 [Download and read the Release Notes](https://github.com/dschmenk/PLASMA/blob/master/doc/Version%202.1.md)
 
 [Change List](https://github.com/dschmenk/PLASMA/blob/master/doc/Version%202.1.md#changes-in-plasma-for-21-release)
 
-[Get single boot floppy of FORTH for PLASMA 2.1](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLFORTH.PO)
+[Get single boot floppy of FORTH for PLASMA 2.11](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLFORTH.PO)
 
 # The PLASMA Programming Language
 
