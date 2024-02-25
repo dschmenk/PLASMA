@@ -6,27 +6,27 @@ Download the disk images:
 
 [PLASMA 2.11 HD Full System](https://github.com/dschmenk/PLASMA/raw/master/images/apple/PLASMA2.2mg)
 
-[PLASMA 2.11 800K Full System](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLASMA-2.1.po?raw=true)
+[PLASMA 2.11 800K Full System](https://github.com/dschmenk/PLASMA/raw/master/images/apple/PLASMA-2.1.po)
 
-[PLASMA 2.11 ProDOS Boot & Install](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLASMA-2.1-INST.po?raw=true)
+[PLASMA 2.11 ProDOS Boot & Install](https://github.com/dschmenk/PLASMA/raw/master/images/apple/PLASMA-2.1-INST.po)
 
-[PLASMA 2.1 System Libraries](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLASMA-2.1-SYS.po?raw=true)
+[PLASMA 2.1 System Libraries](https://github.com/dschmenk/PLASMA/raw/master/images/apple/PLASMA-2.1-SYS.po)
 
-[PLASMA 2.11 Build Tools](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLASMA-2.1-BLD.po?raw=true)
+[PLASMA 2.11 Build Tools](https://github.com/dschmenk/PLASMA/raw/master/images/apple/PLASMA-2.1-BLD.po)
 
-[PLASMA 2.1 Demos](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLASMA-2.1-DEMOS.po?raw=true)
+[PLASMA 2.1 Demos](https://github.com/dschmenk/PLASMA/raw/master/images/apple/PLASMA-2.1-DEMOS.po)
 
-[PLASMA 2.1 TCP/IP network modules](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLASMA-2.1-INET.po?raw=true)
+[PLASMA 2.1 TCP/IP network modules](https://github.com/dschmenk/PLASMA/raw/master/images/apple/PLASMA-2.1-INET.po)
 
-[PLASMA 2.11 Apple /// SOS and SANE floating point modules](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLASMA-2.1-FPSOS.po?raw=true)
+[PLASMA 2.11 Apple /// SOS and SANE floating point modules](https://github.com/dschmenk/PLASMA/raw/master/images/apple/PLASMA-2.1-FPSOS.po)
 
-[PLASMA 2.11 Apple /// SOS Mame Boot](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLASMA2-A3MAME.PO?raw=true)
+[PLASMA 2.11 Apple /// SOS Mame Boot](https://github.com/dschmenk/PLASMA/raw/master/images/apple/PLASMA2-A3MAME.PO)
 
-[PLASMA 2.11 Apple /// Mame hard disk image](https://github.com/dschmenk/PLASMA/blob/master/images/apple/apple3.hd?raw=true)
+[PLASMA 2.11 Apple /// Mame hard disk image](https://github.com/dschmenk/PLASMA/raw/master/images/apple/apple3.hd)
 
-[PLASMA 2.11 PLFORTH stand-alone boot](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLFORTH.PO?raw=true)
+[PLASMA 2.11 PLFORTH stand-alone boot](https://github.com/dschmenk/PLASMA/raw/master/images/apple/PLFORTH.PO)
 
-[PLASMA 2.11 Assembly Language Toolkit](https://github.com/dschmenk/PLASMA/blob/master/images/apple/ASM-TK.po?raw=true)
+[PLASMA 2.11 Assembly Language Toolkit](https://github.com/dschmenk/PLASMA/raw/master/images/apple/ASM-TK.po)
 
 PLASMA now has a ProDOS hard disk install script. Mass storage is the recommended installation that looks like (replacing HARDISK with your volume name of choice) if you want to copy files yourself:
 
