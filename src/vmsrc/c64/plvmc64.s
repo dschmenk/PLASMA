@@ -121,8 +121,8 @@ OPTBL   !WORD   CN,CN,CN,CN,CN,CN,CN,CN                                 ; 00 02 
         !WORD   NEG,COMP,BAND,IOR,XOR,SHL,SHR,IDXW                      ; 90 92 94 96 98 9A 9C 9E
         !WORD   BRGT,BRLT,INCBRLE,ADDBRLE,DECBRGE,SUBBRGE,BRAND,BROR    ; A0 A2 A4 A6 A8 AA AC AE
         !WORD   ADDLB,ADDLW,ADDAB,ADDAW,IDXLB,IDXLW,IDXAB,IDXAW         ; B0 B2 B4 B6 B8 BA BC BE
-        !WORD   NATV                                                    ; C0
-;*
+        !WORD   NATV,JUMPZ,JUMP                                         ; C0 C2 C4
+;;*
 ;* DIV TOS-1 BY TOS
 ;*
 DIV     JSR     _DIV
@@ -1193,6 +1193,28 @@ NATV    TYA                     ; FLATTEN IP
         JMP     (IP)
 +       INC     IPH
         JMP     (IP)
+;*
+;* JUMPS FOR FORTH COMPILER
+;*
+JUMPZ   INX
+        LDA     ESTKH-1,X
+        ORA     ESTKL-1,X
+        BEQ     JUMP
+        INY                     ;+INC_IP
+        INY
+        BMI     +
+        JMP     NEXTOP
++       JMP     FIXNEXT
+JUMP    INY
+        LDA     (IP),Y
+        PHA
+        INY
+        LDA     (IP),Y
+        STA     IPH
+        PLA
+        STA     IPL
+        LDY     #$00
+        JMP     FETCHOP
 CMD     !SOURCE "vmsrc/c64/cmd.a"
 SEGEND  =       *
 VMINIT  JSR     $FFE7           ; CLOSE ALL CHANNELS

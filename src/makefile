@@ -192,7 +192,7 @@ $(PLVMZP_C64): FORCE
 FORCE:
 
 vmsrc/c64/cmd.a: vmsrc/c64/cmd.pla $(PLASM)
-	./$(PLASM) -AOW < vmsrc/c64/cmd.pla > vmsrc/c64/cmd.a
+	./$(PLASM) -AOW vmsrc/c64/cmd.pla
 
 $(PLVMC64): vmsrc/c64/plvmc64.s vmsrc/c64/cmd.a
 	acme -f cbm -o $(PLVMC64) -l vmsrc/c64/plvmc64.sym vmsrc/c64/plvmc64.s
