@@ -53,7 +53,7 @@ word              = @syslookuptbl
 // String pool.
 //
 byte autorun[]    = "AUTORUN"
-byte verstr[]     = "\nPLASMA BETA"
+byte verstr[]     = "\nAPPLE1 PLASMA "
 byte freestr[]    = "MEM FREE:$"
 byte errorstr[]   = "ERR:$"
 byte prompt[]     = "PLASMA"
@@ -132,24 +132,17 @@ word syslibsym    = @exports
 //
 // Utility functions
 //
-asm saveX#0
-        STX     XREG+1
-end
-asm restoreX#0
-XREG    LDX     #$00
-        RTS
-end
 //
 // CALL CFFA1 API ENTRYPOINT
 // SYSCALL(CMD, 0)
 //
 asm syscall(cmd, null)#1
+        INX
         LDA     ESTKL,X
         STX     ESP
         TAX
         JSR     $900C
         LDX     ESP
-        INX
         LDY     #$00
         STA     ESTKL,X
         STY     ESTKH,X
@@ -199,7 +192,7 @@ end
 // QUIT TO MONITOR
 //
 asm quit()#0
-    JMP $9000
+        JMP $9000
 end
 //
 // SET MEMORY TO VALUE
@@ -744,15 +737,19 @@ end
 asm cout(c)#0
         LDA     ESTKL,X
         JSR     TOUPR
+        INX
         ORA     #$80
         JMP     $FFEF
+;        JMP     $FDED
 end
 asm cin()#1
-        DEX
 -       LDA     $D011
+;-       LDA     $C000
         BPL     -
         LDA     $D010
+;        STA     $C010
         AND     #$7F
+        DEX
         STA     ESTKL,X
         LDA     #$00
         STA     ESTKH,X
@@ -775,32 +772,32 @@ end
 def rdstr(prompt)#1
     byte ch, maxlen
     maxlen = 0
-    inbuff.0 = 0
+    ^inbuff = 0
     cout(prompt)
     repeat
         ch = cin
         when ch
             is $15 // right arrow
-                if ^inbuff < maxlen //inbuff.0 < maxlen
-                    inbuff.0++
-                    ch = inbuff[inbuff.0]
+                if ^inbuff < maxlen
+                    ^inbuff++
+                    ch = ^(inbuff + ^inbuff)]
                     cout(ch)
                 fin
                 break
             is $08 // left arrow
-                if inbuff.0
+                if ^inbuff
                     cout('\\')
-                    cout(inbuff[inbuff.0])
+                    cout(^(inbuff + ^inbuff))
                     inbuff.0--
                 fin
                 break
             is $04 // ctrl-d
                 if inbuff.0
                     cout('#')
-                    cout(inbuff[inbuff.0])
-                    memcpy(inbuff + inbuff.0, inbuff + inbuff.0 + 1, maxlen - inbuff.0)
+                    cout(^(inbuff + ^inbuff))
+                    memcpy(inbuff + ^inbuff, inbuff + ^inbuff + 1, maxlen - ^inbuff)
                     maxlen--
-                    inbuff.0--
+                    ^inbuff--
                 fin
                 break
             is $0C // ctrl-l
@@ -808,25 +805,26 @@ def rdstr(prompt)#1
                 prstr(inbuff)
                 break
             is $0D // return
+                break
             is $18 // ctrl-x
                 crout
-                inbuff.0 = 0
+                ^inbuff = 0
                 break
             is $9B // escape
-                inbuff.0 = 0
+                ^inbuff = 0
                 ch = $0D
                 break
             otherwise
                 if ch >= ' '
                     cout(ch)
-                    inbuff.0++
-                    inbuff[inbuff.0] = ch
-                    if inbuff.0 > maxlen
-                        maxlen = inbuff.0
+                    ^inbuff++
+                    ^(inbuff + ^inbuff) = ch
+                    if ^inbuff > maxlen
+                        maxlen = ^inbuff
                     fin
                 fin
         wend
-    until ch == $0D or inbuff.0 == $7F
+    until ch == $0D or ^inbuff == $7F
     cout($0D)
     return inbuff
 end
@@ -855,14 +853,6 @@ end
 // CFFA1 routines
 // FILE I/O
 //
-//def opendir
-//    perr = syscall($10, 0)
-//    return perr
-//end
-//def readdir
-//    perr = syscall($12, 0)
-//    return *CFFAEntryPtr
-//end
 def finddirentry(filename)#1
     *CFFAFileName = filename
     perr = syscall($14, 0)
@@ -982,7 +972,7 @@ def loadmod(mod)#1
         moddep  = @header.1
         defofst = modsize + RELADDR
         init    = 0
-        if rdlen > 4 and heap=>2 == $6502 // magic number
+        if rdlen > 4 and header:2 == $6502 // magic number
             //
             // This is an EXTended RELocatable (data+bytecode) module.
             //
@@ -1042,10 +1032,12 @@ def loadmod(mod)#1
         //
         // Run through the DeFinition Dictionary.
         //
+        prstr("Bytecode = "); prword(bytecode); crout
         while ^rld == $02
             //
             // This is a bytcode def entry - add it to the def directory.
             //
+            prstr("Add DEF: "); prword(rld=>1 + defofst); prstr(" -> "); prword(deflast); crout
             adddef(rld=>1 + defofst, @deflast)
             rld = rld + 4
         loop
@@ -1058,31 +1050,6 @@ def loadmod(mod)#1
                 *addr = ^rld & $10 ?? *addr + lookupextern(esd, rld->3) :: lookupdef(fixup + defofst, deftbl)
                 rld   = rld + 4
             fin
-            //addr = rld=>1 + modfix
-            //if uword_isge(addr, modaddr) // Skip fixups to header
-            //    if type & $80 // WORD sized fixup.
-            //        fixup = *addr
-            //    else      // BYTE sized fixup.
-            //        fixup = ^addr
-            //    fin
-            //    if ^rld & $10 // EXTERN reference.
-            //        fixup = fixup + lookupextern(esd, rld->3)
-            //    else      // INTERN fixup.
-            //        fixup = fixup + modofst
-            //        if uword_isge(fixup, bytecode)
-            //            //
-            //            // Bytecode address - replace with call def directory.
-            //            //
-            //            fixup = lookupdef(fixup + defofst, deftbl)
-            //        fin
-            //    fin
-            //    if type & $80 // WORD sized fixup.
-            //        *addr = fixup
-            //    else      // BYTE sized fixup.
-            //        ^addr = fixup
-            //    fin
-            //fin
-            //rld = rld + 4
         loop
         //
         // Run through the External/Entry Symbol Directory.
@@ -1094,12 +1061,13 @@ def loadmod(mod)#1
                 //
                 // EXPORT symbol - add it to the global symbol table.
                 //
-                addr = esd=>1 + modofst
+                addr = esd=>1 + defofst // modofst
                 if uword_isge(addr, bytecode)
                     //
                     // Use the def directory address for bytecode.
                     //
-                    addr = lookupdef(addr + defofst, deftbl)
+                    //addr = lookupdef(addr + defofst, deftbl)
+                    addr = lookupdef(addr, deftbl)
                 fin
                 addsym(sym, addr)
             fin
@@ -1118,8 +1086,7 @@ def loadmod(mod)#1
     //
     fixup = modkeep
     if init
-        init = init - defofst + bytecode
-        fixup = adddef(init, @deflast)()
+        fixup = adddef(init + defofst, @deflast)()
         if fixup < 0
             perr = -fixup
         fin
@@ -1234,6 +1201,7 @@ while 1
         when toupper(parsecmd(cmdptr))
             is 'Q'
                 quit
+                break
             is 'M'
                 syscall($02, 0)
                 break
@@ -1250,7 +1218,7 @@ while 1
         else
             prstr(@okstr)
         fin
-    crout()
+        crout()
     fin
     prstr(@prompt)
     cmdptr = rdstr($BA)

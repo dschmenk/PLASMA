@@ -22,6 +22,7 @@ OPPAGE  =   OPIDX+1
 ;* INTERPRETER HEADER+INITIALIZATION
 ;*
         *=      $0280
+;*        *=      $2000
 SEGBEGIN JMP    VMINIT
 ;*
 ;* SYSTEM INTERPRETER ENTRYPOINT
@@ -33,7 +34,7 @@ INTERP  PLA
         PLA
         ADC     #$00
         STA     IPH
-        LDY     #$01
+        LDY     #$00
         JMP     FETCHOP
 ;*
 ;* ENTER INTO USER BYTECODE INTERPRETER
@@ -774,7 +775,7 @@ ISGE    LDA     ESTKL+1,X
         BPL     ISTRU
         BMI     ISFLS
 +
- -      BPL     ISFLS
+-       BPL     ISFLS
         BMI     ISTRU
 ISLE    LDA     ESTKL,X
         CMP     ESTKL+1,X
