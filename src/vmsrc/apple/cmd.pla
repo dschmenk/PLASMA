@@ -979,7 +979,7 @@ def adddef(addr, deflast)#1
     return defentry
 end
 def loadmod(mod)#1
-    word rdlen, modsize, bytecode, codefix, defofst, defcnt, init, initcode[], fixup
+    word rdlen, modsize, bytecode, defofst, defcnt, init, initcode[], fixup
     word addr, defaddr, modaddr, modfix, modofst, modend
     word deftbl, deflast
     word moddep, rld, esd, sym
@@ -1074,15 +1074,13 @@ def loadmod(mod)#1
         modofst  = modfix  - RELADDR
         modend   = modaddr + modsize
         bytecode = defofst + modofst
+        defofst  = bytecode - defofst
         rld      = modend  // Re-Locatable Directory
         esd      = rld     // Extern+Entry Symbol Directory
         while ^esd         // Scan to end of ESD
             esd = esd + 4
         loop
         esd = esd + 1
-        defaddr = bytecode
-        codefix = defaddr - bytecode
-        defofst = defaddr - defofst
         //
         // Run through the DeFinition Dictionary.
         //
@@ -1099,7 +1097,7 @@ def loadmod(mod)#1
         while ^rld
             rld, addr, fixup = reloc(modfix, modofst, bytecode, rld)
             if ^rld
-                *addr = ^rld & $10 ?? *addr + lookupextern(esd, rld->3) :: lookupdef(fixup + codefix, deftbl)
+                *addr = ^rld & $10 ?? *addr + lookupextern(esd, rld->3) :: lookupdef(fixup, deftbl)
                 rld   = rld + 4
             fin
         loop
@@ -1118,7 +1116,7 @@ def loadmod(mod)#1
                     //
                     // Use the def directory address for bytecode.
                     //
-                    addr = lookupdef(addr + codefix, deftbl)
+                    addr = lookupdef(addr, deftbl)
                 fin
                 addsym(sym, addr)
             fin
