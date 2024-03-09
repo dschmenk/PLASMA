@@ -1,0 +1,380 @@
+.\" Copyright (c) 2005 Ian Piumarta
+.\" 
+.\" Permission is hereby granted, free of charge, to any person
+.\" obtaining a copy of this software and associated documentation
+.\" files (the 'Software'), to deal in the Software without
+.\" restriction, including without limitation the rights to use, copy,
+.\" modify, merge, publish, distribute, and/or sell copies of the
+.\" Software, and to permit persons to whom the Software is furnished
+.\" to do so, provided that the above copyright notice(s) and this
+.\" permission notice appear in all copies of the Software and that
+.\" both the above copyright notice(s) and this permission notice
+.\" appear in supporting documentation.
+.\" 
+.\" THE SOFTWARE IS PROVIDED 'AS IS'.  USE ENTIRELY AT YOUR OWN RISK.
+.\"
+.\" last edited: 2005-11-02 01:18:22 by piumarta on margaux.local
+.\"
+.Dd October 31, 2005
+.Dt RUN6502 1 LOCAL
+.Os ""
+.\" ----------------------------------------------------------------
+.Sh NAME
+.\" 
+.Nm run6502
+.Nd execute a 6502 microprocessor program
+.\" ----------------------------------------------------------------
+.Sh SYNOPSIS
+.\" 
+.Nm run6502
+.Op Ar option ...
+.Nm run6502
+.Op Ar option ...
+.Fl B
+.Op Ar
+.\" ----------------------------------------------------------------
+.Sh DESCRIPTION
+The
+.Nm run6502
+command emulates the execution of a 6502 microprocessor.  It creates a
+memory image from the contents of one or more files on the command
+line and then simulates a power-on hardware reset to begin execution.
+.Pp
+In its first form,
+.Nm run6502
+emulates an embedded 6502 processor with 64 kilobytes of RAM, no
+memory-mapped hardware, and no input-output capabilities.  Limited
+interaction with the machine is possible only through the
+.Fl G , M
+and
+.Fl P
+options.
+.Pp
+In its second form (with the
+.Fl B
+option)
+.Nm run6502
+provides minimal emulation of Acorn 'BBC Model B' hardware with 32
+kilobytes of RAM, 16 kilobytes of paged language ROMs, and 16
+kilobytes of operating system ROM.  A few MOS calls are intercepted to
+provide keyboard input and screen output via stdin and stdout.
+Switching between the sixteen paged read-only memory banks is also
+supported by the usual memory-mapped control register.  Any
+.Ar file
+arguments after the
+.Fl B
+are loaded into successive paged ROM banks (starting at 15 and working
+down towards 0) before execution begins.
+.\" ----------------------------------------------------------------
+.Ss Options
+.\" 
+.Bl -tag -width indent
+.It Fl B
+enable minimal Acorn 'BBC Model B' hardware emulation:
+.Bl -bullet
+.It
+the contents of memory between addresses 0x8000 and 0xBFFF are copied
+into paged ROM number 0;
+.It
+memory between 0x8000 and 0xBFFF becomes bank-switchable between
+sixteen different ROM images;
+.It
+the memory-mapped pages ('FRED', 'JIM' and 'SHEILA') between 0xFC00
+and 0xFEFF are initialised to harmless values;
+.It
+the upper half of the address space is write-protected; and
+.It
+callbacks are installed on several OS entry points to provide
+input-output via stdin and stdout.
+.El
+.Pp
+Any remaining non-option arguments on the command line will name files
+to be loaded successively into paged ROMs, starting at 15 and working
+downwards towards 0.
+.It Fl d Ar addr Ar end
+dump memory from the address
+.Ar addr
+(given in hexadecimal) up to (but not including)
+.Ar end .
+The
+.Ar end
+argument is either an absolute address or a relative address specified
+as a '+' character followed by the number (in hexadecimal) of bytes to
+dump.  In other words, the following two options dump the same region
+of memory:
+.Bd -ragged -offset indent
+.Fl d
+8000  C000
+.Ed
+.Bd -ragged -offset indent -compact
+.Fl d
+8000 +4000
+.Ed
+.Pp
+The format of the dump cannot currently be modified and consists of
+the current address followed by one, two or three hexadecimal bytes,
+and a symbolic representation of the instruction at that address.
+.It Fl G Ar addr
+arrange that subroutine calls to
+.Ar addr
+will behave as if there were an implementation of
+.Xr getchar 3
+at that address, reading a character from stdin and returning it in
+the accumulator.
+.It Fl h
+print a summary of the available options and then exit.
+.It Fl I Ar addr
+set the IRQ (interrupt request) vector (the address to which the
+processor will transfer control upon execution of a BRK instruction).
+Setting this address to zero will cause execution to halt (and the
+emulator to exit) when a BRK instruction is encountered.
+.It Fl i Ar addr Ar file
+Load
+.Ar file
+into the memory image at the address
+.Ar addr
+(in hexadecimal), skipping over any initial '#!' interpreter line.
+.It Fl l Ar addr Ar file
+Load
+.Ar file
+into the memory image at the address
+.Ar addr
+(in hexadecimal).
+.It Fl M Ar addrio
+arrange that memory reads from address
+.Ar addrio
+will return the next character on stdin (blocking if necessary), and
+memory writes to
+.Ar addrio
+will send the value written to stdout.
+.It Fl N Ar addr
+set the NMI (non-maskable interrupt) vector to
+.Ar addr .
+.It Fl P Ar addr
+arrange that subroutine calls to
+.Ar addr
+will behave as if there were an implementation of
+.Xr putchar 3
+at that address, writing the contents of the accumulator to stdout.
+.It Fl R Ar addr
+set the RST (hardware reset) vector.  The processor will transfer
+control to this address when emulated execution begins.
+.It Fl s Ar addr Ar end Ar file
+save the contents of memory from the address
+.Ar addr
+up to
+.Ar end
+(exclusive) to the given
+.Ar file .
+As with the
+.Fl d
+option,
+.Ar end
+can be absolute or '+' followed by a byte count.
+.It Fl v
+print version information and then exit.
+.It Fl X Ar addr
+arrange that any transfer of control to the address
+.Ar addr
+will cause an immediate exit with zero exit status.
+.It Fl x
+exit immediately.  (Useful after
+.Fl d
+or when
+.Nm run6502
+is being used as a trivial 'image editor', with several
+.Fl l
+options followed by
+.Fl s
+and
+.Fl x . )
+.It Ar
+following a
+.Fl B
+option, load one or more ROM image
+files
+into successive paged ROM slots.  Other than the paging aspect, this
+is equivalent to:
+.Bd -ragged -offset indent
+.Fl l Ar 8000 Ar image
+.Ed
+.El
+.\" ----------------------------------------------------------------
+.Sh EXAMPLES
+.\" 
+.Ss A Very Simple Program
+The
+.Xr perl 1
+command can be used to create a binary file from hexadecimal input:
+.Bd -literal
+    echo a2418a20eeffe8e05bd0f7a90a20eeff00 |
+    perl -e 'print pack "H*",<STDIN>' > temp.img
+.Ed
+.Pp
+The file can be loaded and executed with:
+.Bd -literal
+    run6502 -l 1000 temp.img -R 1000 -P FFEE -X 0
+.Ed
+.Pp
+The contents of the file can be inspected symbolically with:
+.Bd -literal
+    run6502 -l 1000 temp.img -d 1000 +12
+.Ed
+.Pp
+The options passed to
+.Nm run6502
+in the above examples have the following effects:
+.Bl -tag -width offset
+.It \-l 1000 temp.img
+loads the file
+.Pa temp.img
+into memory at address 0x8000.
+.It \-R 1000
+sets the reset vector (the address of first instruction to be executed
+after 'power on') to 0x1000.
+.It \-P FFEE
+arranges for calls to address 0xFFEE to behave as if there were an
+implementation of
+.Xr putchar 3
+at that address.
+.It \-X 0
+arranges for transfers of control to address 0 to exit from the
+emulator.  This works in the above example because the final 'BRK'
+instruction causes an implicit subroutine call through an
+uninitialised interrupt vector to location 0.  To see this
+instruction...
+.It \-d 1000 +12
+disassembles 18 bytes of memory at address 0x8000.
+.El
+.Ss Standalone Images
+The
+.Fl i
+option is designed for use in the 'interpreter command' appearing on
+the first line of an executable script.  Adding the line
+.Bd -literal
+    #!run6502 -R 1000 -P FFEE -X 0 -i 1000
+.Ed
+.Pp
+(with no leading spaces and a single trailing newline character)
+to the
+.Pa temp.img
+file from the first example turns it into a script.  If the file is
+made executable with
+.Bd -literal
+    chmod +x temp.img
+.Ed
+.Pp
+it can be run like a standalone program:
+.Bd -literal
+    ./temp.img
+.Ed
+.Ss A Very Complex Program
+Consider a pair of files named
+.Pa os1.2
+and
+.Pa basic2
+containing (legally-acquired, of course) ROM images of Acorn MOS 1.2
+and BBC Basic 2.  The following command loads each of the images into
+memory at the appropriate address, cleans up the regions of memory
+containing memory-mapped i/o on the BBC computer, saves a snapshot of
+the entire memory to the file
+.Pa image 
+and then exits:
+.Bd -literal
+    run6502 -l C000 os1.2 -l 8000 basic2 -B -s0 +10000 image -x
+.Ed
+.Pp
+Running the generated image with
+.Bd -literal
+    run6502 image
+.Ed
+.Pp
+will cold-start the emulated hardware, run the OS for a while, and
+then drop into the language ROM.  Basic programs can then be entered,
+edited and run from the terminal.
+.Pp
+More details are given in the
+.Pa README
+file available in the
+.Pa examples
+directory of the distribution.
+.Ss Exercises
+Create a standalone image (one that can be run as a program, with
+a '#!' interpreter line at the beginning) that contains Basic2 and
+OS1.2 (as described above).  This image should be no larger than 32K
+(memory below 0x8000, which would be full of zeroes, should not appear
+in the image file).
+.\" ----------------------------------------------------------------
+.Sh DIAGNOSTICS
+.\" 
+If nothing goes wrong, none.  Otherwise lots.  They should be
+self-explanatory.  I'm too lazy to enumerate them.
+.\" ----------------------------------------------------------------
+.Sh COMPATIBILITY
+.\" 
+See
+.Xr lib6502 3
+for a discussion of the emulated instruction set.
+.\" ----------------------------------------------------------------
+.Sh SEE ALSO
+.\" 
+.Xr lib6502 3
+.Pp
+The file
+.Pa examples/README
+in the lib6502 distribution.  (Depending on your system this may be
+installed in
+.Pa /usr/doc/lib6502 ,
+.Pa /usr/local/doc/lib6502 ,
+.Pa /usr/share/doc/lib6502 ,
+or similar.)
+.Pp
+.Pa http://piumarta.com/software/lib6502
+for updates and documentation.
+.Pp
+.Pa http://6502.org
+for lots of 6502-related resources.
+.\" ----------------------------------------------------------------
+.Sh AUTHORS
+.\" 
+The software and manual pages were written by
+.An "Ian Piumarta" .
+.Pp
+The software is provided as-is, with absolutely no warranty, in the
+hope that you will enjoy and benefit from it.  You may use (entirely
+at your own risk) and redistribute it under the terms of a very
+liberal license that does not seek to restrict your rights in any way
+(unlike certain so-called 'open source' licenses that significantly
+limit your freedom in the name of 'free' software that is, ultimately,
+anything but free).  See the file COPYING for details.
+.\" ----------------------------------------------------------------
+.Sh BUGS
+.\" 
+.Bl -bullet
+.It
+Options must appear one at a time.
+.It
+Any attempt (in a load or save operation) to transfer data beyond
+0xFFFF is silently truncated at the end of memory.
+.It
+There is no way to specify the slot into which a ROM image should be
+loaded, other than implicitly according to the order of arguments on
+the command line.
+.It
+Execution can only be started via the emulated power-up reset.  There
+is no support for 'warm-starting' execution in an image at an
+arbitrary address.
+.It
+Even though the emulator fully supports them, there is no way to
+artificially generate a hardware interrupt request, non-maskable
+interrupt, or reset condition.  If you need these, read
+.Xr lib6502 3
+and write your own shell.
+.It
+The Acorn 'BBC Model B' hardware emulation is totally lame.
+.El
+.Pp
+Please send bug reports (and feature requests) to the author at:
+firstName (at) lastName (dot) com.  (See
+.Sx AUTHORS
+above for suitable values of firstName and lastName.)

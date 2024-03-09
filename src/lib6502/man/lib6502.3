@@ -1,0 +1,508 @@
+.\" Copyright (c) 2005 Ian Piumarta
+.\" 
+.\" Permission is hereby granted, free of charge, to any person
+.\" obtaining a copy of this software and associated documentation
+.\" files (the 'Software'), to deal in the Software without
+.\" restriction, including without limitation the rights to use, copy,
+.\" modify, merge, publish, distribute, and/or sell copies of the
+.\" Software, and to permit persons to whom the Software is furnished
+.\" to do so, provided that the above copyright notice(s) and this
+.\" permission notice appear in all copies of the Software and that
+.\" both the above copyright notice(s) and this permission notice
+.\" appear in supporting documentation.
+.\" 
+.\" THE SOFTWARE IS PROVIDED 'AS IS'.  USE ENTIRELY AT YOUR OWN RISK.
+.\"
+.\" last edited: 2005-11-02 01:18:07 by piumarta on margaux.local
+.\"
+.Dd October 31, 2005
+.Dt LIB6502 3 LOCAL
+.Os ""
+.\" ----------------------------------------------------------------
+.Sh NAME
+.\"
+.Nm lib6502
+.Nd 6502 microprocessor emulator
+.\" ----------------------------------------------------------------
+.Sh SYNOPSIS
+.\"
+.In stdint.h
+.In lib6502.h
+.Ft M6502 *
+.Fn M6502_new "M6502_Registers *registers" "M6502_Memory memory" "M6502_Callbacks *callbacks"
+.Ft void
+.Fn M6502_reset "M6502 *mpu"
+.Ft void
+.Fn M6502_nmi "M6502 *mpu"
+.Ft void
+.Fn M6502_irq "M6502 *mpu"
+.Ft uint16_t
+.Fn M6502_getVector "M6502 *mpu" "vector"
+.Ft uint16_t
+.Fn M6502_setVector "M6502 *mpu" "vector" "uint16_t address"
+.Ft M6502_Callback
+.Fn M6502_getCallback "M6502 *mpu" "type" "uint16_t address"
+.Ft M6502_Callback
+.Fn M6502_setCallback "M6502 *mpu" "type" "uint16_t address" "M6502_Callback callback"
+.Ft void
+.Fn M6502_run "M6502 *mpu"
+.Ft int
+.Fn M6502_disassemble "M6502 *mpu" "uint16_t address" "char buffer[64]"
+.Ft void
+.Fn M6502_dump "M6502 *mpu" "char buffer[64]"
+.Ft void
+.Fn M6502_delete "M6502 *mpu"
+.\" ----------------------------------------------------------------
+.Sh DESCRIPTION
+.\"
+.Fn M6502_new
+creates an instance of a 6502 microprocessor.
+.Fn M6502_reset ,
+.Fn M6502_nmi
+and 
+.Fn M6502_irq
+place it into the states associated with the hardware signals for
+reset, non-maskable interrupt and interrupt request, respectively.
+The macros
+.Fn M6502_getVector
+and
+.Fn M6502_setVector
+read and write the vectors through which the processor jumps in
+response to the above signals.  The macros
+.Fn M6502_getCallback
+and
+.Fn M6502_setVector
+read and write client-supplied functions that intercept accesses to
+memory.
+.Fn M6502_run
+begins emulated execution.
+.Fn M6502_dump
+and
+.Fn M6502_disassemble
+create human-readable representations of processor or memory state.
+.Fn M6502_delete
+frees all resources associated with a processor instance.  Each of
+these functions and macros is described in more detail below.
+.Pp
+.Fn M6502_new
+returns a pointer to a
+.Fa M6502
+structure containing at least the following members:
+.Bd -literal
+struct _M6502
+{
+    M6502_Registers  *registers;   /* processor state */
+    uint8_t          *memory;      /* memory image */
+    M6502_Callbacks  *callbacks;   /* r/w/x callbacks */
+};
+.Ed
+.Pp
+These members are initialised according to the supplied
+.Fa registers ,
+.Fa memory
+and
+.Fa callbacks
+arguments.  If a given argument is NULL, the corresponding member is
+initialised automatically with a suitable (non-NULL) value.
+.Pp
+The members of
+.Fa M6502
+are as follows:
+.Bl -tag -width ".Fa callbacks"
+.It Fa registers
+the processor state, containing all registers and condition codes.
+.It Fa memory
+a block of at least 64 kilobytes of storage containing the processor's
+memory.  (An array type
+.Vt M6502_Memory,
+suitable for defining values to pass as the
+.Fa memory
+argument, is defined in the
+.In lib6502.h
+include file.)
+.It Fa callbacks
+a structure mapping processor memory accesses to client callback
+functions.
+.El
+.Pp
+Access to the contents of the
+.Fa registers
+and
+.Fa memory
+members can be made directly.
+The
+.Fa registers
+member is a
+.Vt M6502_Registers
+containing the following members:
+.Bd -literal
+struct _M6502_Registers
+{
+    uint8_t   a;  /* accumulator */
+    uint8_t   x;  /* X index register */
+    uint8_t   y;  /* Y index register */
+    uint8_t   p;  /* processor status register */
+    uint8_t   s;  /* stack pointer */
+    uint16_t pc;  /* program counter */
+};
+.Ed
+.Pp
+The
+.Fa memory
+member is an array of
+.Vt unsigned char
+and can be indexed directly.  In addition, two convenience macros
+.Fn M6502_getVector
+and
+.Fn M6502_setVector
+provide access to the reset and interrupt vectors within
+.Fa memory .
+.Fn M6502_getVector
+returns the address stored in the named
+.Fa vector
+which must be precisely one of the following:
+.Bl  -tag -width ".Dv RST" -offset indent
+.It Dv RST
+the reset vector.
+.It Dv NMI
+the non-maskable interrupt vector.
+.It Dv IRQ
+the interrupt request vector.
+.El
+.Pp
+.Fn M6502_setVector
+stores its
+.Fa address
+argument in the named
+.Fa vector
+and returns the new value.
+.Pp
+The
+.Fa callbacks
+member contains an opaque structure mapping processor memory accesses
+to client callback functions.  Whenever the processor performs an
+access for which a corresponding entry exists in the the
+.Fa callbacks
+structure, the emulator suspends execution and invokes the callback to
+complete the operation.  Each callback function should have a
+signature equivalent to:
+.Bd -ragged -offset indent
+int
+.Va callback
+(M6502 *mpu, uint16_t address, uint8_t data);
+.Ed
+.Pp
+The macros
+.Fn M6502_getCallback
+and
+.Fn M6502_setCallback
+read and write entries in the
+.Fa callbacks
+structure.  These macros identify a unique memory access operation
+from the specified
+.Fa address
+on which it operates and
+.Fa type
+of access involved.  The
+.Fa type
+argument must be one of the following:
+.Bl -tag -width ".Dv write"
+.It Dv read
+the
+.Fa callback
+is invoked when the processor attempts to read from the
+given address.  The emulator passes the effective address of the
+operation to the callback in its
+.Fa address
+argument.  (The
+.Fa data
+argument is undefined.)  The value returned by the callback will be
+used by the emulator as the result of the read operation.
+.It Dv write
+the
+.Fa callback
+is invoked when the processor attempts to write to the
+given address.  The emulator passes the effective address of the
+operation to the callback in its
+.Fa address
+argument and the byte being written in the
+.Fa data
+argument.  The emulator will not perform the write operation before
+invoking the callback; if the write should complete, the callback must
+modify the processor's
+.Fa memory
+explicitly.  The valued returned from the callback is ignored.
+.It Dv call
+the
+.Fa callback
+is invoked when the processor attempts to transfer control to the
+given address by any instruction other than a relative branch.  The
+emulator passes the destination address to the callback in its
+.Fa address
+argument and the instruction that initiated the control transfer in
+its
+.Fa data
+argument (one of JMP, JSR, BRK, RTS or RTI).  If the callback returns
+zero (the callback refuses to handle the operation) the emulator will
+allow the operation to complete as normal.  If the callback returns a
+non-zero address (indicating that the callback has handled the
+operation internally) the emulator will transfer control to that
+address.
+.El
+.Pp
+.Fn M6502_getCallback
+returns zero if there is no callback associated with the given
+.Fa type
+and
+.Fa address .
+Passing zero as the
+.Fa callback
+argument of
+.Fn M6502_setCallback
+removes any callback that might have been associated with
+.Fa type
+and
+.Fa address .
+.Pp
+.Fn M6502_run
+emulates processor execution in the given
+.Fa mpu
+by repeatedly fetching the instruction addressed by
+.Fa pc
+and dispatching to it.  This function normally never returns.
+.Pp
+.Fn M6502_dump
+writes a (NUL-terminated) symbolic representation of the processor's
+internal state into the supplied
+.Fa buffer .
+Typical output resembles:
+.Bd -literal -offset indent
+PC=1010 SP=01FE A=0A X=5B Y=00 P=D1 NV-B---C
+.Ed
+.Pp
+.Fn M6502_disassemble
+writes a (NUL-terminated) symbolic representation of the instruction
+in the processor's memory at the given
+.Fa address
+into the supplied
+.Fa buffer .
+It returns the size (in bytes) of the instruction.  (In other words,
+the amount by which
+.Fa address
+should be incremented to arrive at the next instruction.)
+Typical output resembles:
+.Bd -literal -offset indent
+1009 cpx #5B
+.Ed
+.Pp
+(The
+.Fa buffer
+arguments are oversized to allow for future expansion.)
+.Pp
+.Fn M6502_delete
+frees the resources associated with the given
+.Fa mpu.
+Any members that were allocated implicitly (passed as NULL to
+.Fn M6502_new )
+are deallocated.  Members that were initialised from non-NULL
+arguments are not deallocated.
+.\" ----------------------------------------------------------------
+.Sh IMPLEMENTATION NOTES
+.\" 
+You can share the
+.Fa memory
+and
+.Fa callbacks
+members of
+.Vt M6502
+between multiple instances to simulate multiprocessor hardware.
+.\" ----------------------------------------------------------------
+.Sh RETURN VALUES
+.\" 
+.Fn M6502_new
+returns a pointer to a
+.Vt M6502
+structure.
+.Fn M6502_getVector
+and
+.Fn M6502_setVector
+return the contents of the given
+.Fa vector .
+.Fn M6502_getCallback
+and
+.Fn M6502_setCallback
+return the
+.Vt M6502_Callback
+function associated with the given
+.Fa address
+and access
+.Fa type .
+.Fn M6502_disassemble
+returns the size (in bytes) of the instruction at the given
+.Fa address .
+.Fn M6502_reset ,
+.Fn M6502_nmi ,
+.Fn M6502_irq ,
+.Fn M6502_run ,
+.Fn M6502_dump
+and
+.Fn M6502_delete
+don't return anything (unless you forgot to include
+.In lib6502.h ) .
+.\" ----------------------------------------------------------------
+.Sh EXAMPLES
+.\" 
+The following program creates a 6502 processor, sets up callbacks for
+printing characters and halting after a BRK instruction, stores a
+program into memory that prints the alphabet, disassembles the program
+on stdout, and then executes the program.
+.Bd -literal -offset indent -compact
+
+#include <stdint.h>
+#include <stdlib.h>
+#include <stdio.h>
+
+#include "lib6502.h"
+
+#define WRCH    0xFFEE
+
+int wrch(M6502 *mpu, uint16_t address, uint8_t data)
+{
+  int pc;
+  putchar(mpu->registers->a);
+  pc  = mpu->memory[++mpu->registers->s + 0x100];
+  pc |= mpu->memory[++mpu->registers->s + 0x100] << 8;
+  return pc + 1;  /* JSR pushes next insn addr - 1 */
+}
+
+int done(M6502 *mpu, uint16_t address, uint8_t data)
+{
+  char buffer[64];
+  M6502_dump(mpu, buffer);
+  printf("\\nBRK instruction\\n%s\\n", buffer);
+  exit(0);
+}
+
+int main(int argc, char **argv)
+{
+  M6502    *mpu = M6502_new(0, 0, 0);
+  unsigned  pc  = 0x1000;
+
+  mpu->callbacks->call[WRCH] = wrch;     /* write character */
+  mpu->callbacks->call[0000] = done;     /* reached after BRK */
+
+# define gen1(X)        (mpu->memory[pc++] = (uint8_t)(X))
+# define gen2(X,Y)      gen1(X); gen1(Y)
+# define gen3(X,Y,Z)    gen1(X); gen2(Y,Z)
+
+  gen2(0xA2, 'A'     );  /* LDX #'A'   */
+  gen1(0x8A          );  /* TXA        */
+  gen3(0x20,0xEE,0xFF);  /* JSR FFEE   */
+  gen1(0xE8          );  /* INX        */
+  gen2(0xE0, 'Z'+1   );  /* CPX #'Z'+1 */
+  gen2(0xD0, -9      );  /* BNE 1002   */
+  gen2(0xA9, '\\n'    );  /* LDA #'\\n'  */
+  gen3(0x20,0xEE,0xFF);  /* JSR FFEE   */
+  gen2(0x00,0x00     );  /* BRK        */
+
+  {
+    uint16_t ip = 0x1000;
+    while (ip < pc)
+      {
+        char insn[64];
+        ip += M6502_disassemble(mpu, ip, insn);
+        printf("%04X %s\\n", ip, insn);
+      }
+  }
+
+  M6502_setVector(mpu, RST, 0x1000);
+
+  M6502_reset(mpu);
+  M6502_run(mpu);
+  M6502_delete(mpu);
+
+  return 0;
+}
+.Ed
+.\" ----------------------------------------------------------------
+.Sh DIAGNOSTICS
+.\" 
+If
+.Fn M6502_new
+cannot allocate sufficient memory it prints "out of memory" to stderr
+and exits with a non-zero status.
+.Pp
+If
+.Fn M6502_run
+encounters an illegal or undefined instruction, it prints "undefined
+instruction" and the processor's state to stderr, then exits with a
+non-zero status.
+.\" ----------------------------------------------------------------
+.Sh COMPATIBILITY
+.\" 
+M6502 is a generic name. The initial letter is mandated by C naming
+conventions and chosen in deference to MOS Technology, the original
+designers of the processor.  To the best of my knowledge the 'M'
+prefix was never stamped on a physical 6502.
+.Pp
+The emulator implements the CMOS version of the processor (NMOS bugs
+in effective address calculations involving page boundaries are
+corrected) but does not tolerate the execution of undefined
+instructions (which were all no-ops in the first-generation CMOS
+hardware).  It would be nice to support the several alternative
+instruction sets (model-specific undocumented instructions in NMOS
+models, and various documented extensions in the later CMOS models)
+but there are currently no plans to do so.
+.Pp
+The emulated 6502 will run much faster than real hardware on any
+modern computer.  The fastest 6502 hardware available at the time of
+writing has a clock speed of 14 MHz.  On a 2 GHz PowerPC, the emulated
+6502 runs at almost 300 MHz.
+.\" ----------------------------------------------------------------
+.Sh SEE ALSO
+.\" 
+.Xr run6502 1
+.Pp
+For development tools, documentation and source code:
+.Pa http://6502.org
+.\" ----------------------------------------------------------------
+.Sh AUTHORS
+.\" 
+The software and manual pages were written by Ian Piumarta.
+.Pp
+The software is provided as-is, with absolutely no warranty, in the
+hope that you will enjoy and benefit from it.  You may use (entirely
+at your own risk) and redistribute it under the terms of a very
+liberal license that does not seek to restrict your rights in any way
+(unlike certain so-called 'open source' licenses that significantly
+limit your freedom in the name of 'free' software that is, ultimately,
+anything but free).  See the file COPYING for details.
+.\" ----------------------------------------------------------------
+.Sh BUGS
+.\" 
+.Fn M6502_getVector
+and
+.Fn M6502_setVector
+evaluate their arguments more than once.
+.Pp
+The out-of-memory condition and attempted execution of
+illegal/undefined instructions should not be fatal errors.
+.Pp
+There is no way to limit the duration of execution within
+.Fn M6502_run
+to a certain number of instructions or cycles.
+.Pp
+The emulator should support some means of implicit interrupt
+generation, either by polling or in response to (Unix) signals.
+.Pp
+The
+.Sx COMPATIBILITY
+section in this manual page has been diverted from its legitimate
+purpose.
+.Pp
+The plural of 'callback' really aught to be 'callsback'.
+.Pp
+Please send bug reports (and feature requests) to the author at:
+firstName (at) lastName (dot) com.  (See
+.Sx AUTHORS
+above for suitable values of firstName and lastName.)
