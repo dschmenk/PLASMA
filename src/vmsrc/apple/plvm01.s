@@ -1098,7 +1098,9 @@ JUMP    INY
         JMP     FETCHOP
 A1CMD   !SOURCE "vmsrc/apple/a1cmd.a"
 SEGEND  =       *
-VMINIT  LDY     #$10        ; INSTALL PAGE 0 FETCHOP ROUTINE
+VMINIT  LDX     #$FE        ; INIT STACK LEAVING ROOM FOR INBUFF SIZE
+        TXS
+        LDY     #$10        ; INSTALL PAGE 0 FETCHOP ROUTINE
 -       LDA     PAGE0-1,Y
         STA     DROP-1,Y
         DEY

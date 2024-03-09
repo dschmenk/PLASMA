@@ -584,7 +584,7 @@ enum {
   tick(ticks);								\
   fflush(stdout);							\
   fprintf(stderr, "\nundefined instruction %02X\n", memory[PC-1]);	\
-  return;
+  return 0;
 
 #define phR(ticks, adrmode, R)			\
   fetch();					\
@@ -744,7 +744,7 @@ static void oops(void)
 }
 
 
-void M6502_run(M6502 *mpu)
+int M6502_run(M6502 *mpu)
 {
 #if defined(__GNUC__) && !defined(__STRICT_ANSI__)
 
@@ -768,9 +768,10 @@ void M6502_run(M6502 *mpu)
   register void **itabp= &itab[0];
   register void  *tpc;
 
-# define begin()				fetch();  next()
+//# define begin()				fetch();  next()
+# define begin()				goto *(itabp[memory[PC++]])
 # define fetch()				tpc= itabp[memory[PC++]]
-# define next()					goto *tpc
+# define next()					if (STEP) { PC--; externalise(); return 1; } goto *tpc
 # define dispatch(num, name, mode, cycles)	_##num: name(cycles, mode) oops();  next()
 # define end()
 
@@ -778,7 +779,7 @@ void M6502_run(M6502 *mpu)
 
 # define begin()				for (;;) switch (memory[PC++]) {
 # define fetch()
-# define next()					break
+# define next()					if (STEP) { externalise(); return 1; } break
 # define dispatch(num, name, mode, cycles)	case 0x##num: name(cycles, mode);  next()
 # define end()					}
 
@@ -790,8 +791,9 @@ void M6502_run(M6502 *mpu)
   byte		  A, X, Y, P, S;
   M6502_Callback *readCallback=  mpu->callbacks->read;
   M6502_Callback *writeCallback= mpu->callbacks->write;
+  unsigned int STEP; 
 
-# define internalise()	A= mpu->registers->a;  X= mpu->registers->x;  Y= mpu->registers->y;  P= mpu->registers->p;  S= mpu->registers->s;  PC= mpu->registers->pc
+# define internalise()	STEP=mpu->flags&M6502_SingleStep; A= mpu->registers->a;  X= mpu->registers->x;  Y= mpu->registers->y;  P= mpu->registers->p;  S= mpu->registers->s;  PC= mpu->registers->pc
 # define externalise()	mpu->registers->a= A;  mpu->registers->x= X;  mpu->registers->y= Y;  mpu->registers->p= P;  mpu->registers->s= S;  mpu->registers->pc= PC
 
   internalise();
@@ -809,6 +811,7 @@ void M6502_run(M6502 *mpu)
 # undef end
 
   (void)oops;
+  return 0;
 }
 
 
