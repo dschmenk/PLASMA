@@ -1,7 +1,7 @@
-/* run6502.c -- 6502 emulator shell			-*- C -*- */
+/* run6502.c -- 6502 emulator shell     -*- C -*- */
 
 /* Copyright (c) 2005 Ian Piumarta
- * 
+ *
  * All rights reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
@@ -36,7 +36,7 @@
 #include "config.h"
 #include "lib6502.h"
 
-#define VERSION	PACKAGE_NAME " " PACKAGE_VERSION " " PACKAGE_COPYRIGHT
+#define VERSION PACKAGE_NAME " " PACKAGE_VERSION " " PACKAGE_COPYRIGHT
 
 typedef uint8_t  byte;
 typedef uint16_t word;
@@ -50,12 +50,12 @@ void pfail(const char *msg)
   exit(1);
 }
 
-#define rts							\
-  {								\
-    word pc;							\
-    pc  = mpu->memory[++mpu->registers->s + 0x100];		\
-    pc |= mpu->memory[++mpu->registers->s + 0x100] << 8;	\
-    return pc + 1;						\
+#define rts             \
+  {               \
+    word pc;              \
+    pc  = mpu->memory[++mpu->registers->s + 0x100];   \
+    pc |= mpu->memory[++mpu->registers->s + 0x100] << 8;  \
+    return pc + 1;            \
   }
 
 int save(M6502 *mpu, word address, unsigned length, const char *path)
@@ -108,10 +108,10 @@ int cffa1(M6502 *mpu, word address, byte data)
 
   switch (mpu->registers->x)
   {
-    case 0x02:	/* quit */
+    case 0x02:  /* quit */
       exit(0);
       break;
-    case 0x14:	/* find dir entry */
+    case 0x14:  /* find dir entry */
       addr = mpu->memory[CFFAFileName] | (mpu->memory[CFFAFileName + 1] << 8);
       memset(filename, 0, 64);
       strncpy(filename, (char *)(mpu->memory + addr + 1), mpu->memory[addr]);
@@ -128,7 +128,7 @@ int cffa1(M6502 *mpu, word address, byte data)
       else
         mpu->registers->a = -1;
       break;
-    case 0x22:	/* load file */
+    case 0x22:  /* load file */
       addr = mpu->memory[CFFAFileName] | (mpu->memory[CFFAFileName + 1] << 8);
       memset(filename, 0, 64);
       strncpy(filename, (char *)(mpu->memory + addr + 1), mpu->memory[addr]);
@@ -138,27 +138,34 @@ int cffa1(M6502 *mpu, word address, byte data)
       break;
     default:
       {
-	      char state[64];
+        char state[64];
         fprintf(stderr, "Unimplemented CFFA function: %02X\n", mpu->registers->x);
-	      M6502_dump(mpu, state);
-	      fflush(stdout);
-	      fprintf(stderr, "\nCFFA1 %s\n", state);
-	      pfail("ABORT");
+        M6502_dump(mpu, state);
+        fflush(stdout);
+        fprintf(stderr, "\nCFFA1 %s\n", state);
+        pfail("ABORT");
       }
       break;
   }
   rts;
 }
 
-int bye(M6502 *mpu, word addr, byte data)	{ exit(0); return 0; }
-int cout(M6502 *mpu, word addr, byte data)	{ if (mpu->registers->a == 0x8D) putchar('\n'); putchar(mpu->registers->a & 0x7F); fflush(stdout); rts; }
+int bye(M6502 *mpu, word addr, byte data) { exit(0); return 0; }
+int cout(M6502 *mpu, word addr, byte data)  { if (mpu->registers->a == 0x8D) putchar('\n'); putchar(mpu->registers->a & 0x7F); fflush(stdout); rts; }
 
 unsigned keypending = 0;
 unsigned char keypressed(void)
 {
-  unsigned char cin;
+  unsigned char cin, cext[2];
   if (read(STDIN_FILENO, &cin, 1) > 0)
+  {
+    if (cin == 0x1B) // Look for left arrow
+    {
+      if (read(STDIN_FILENO, cext, 2) == 2 && cext[0] == '[' && cext[1] == 'D')
+        cin = 0x08;
+    }
     keypending = cin | 0x80;
+  }
   return keypending & 0x80;
 }
 unsigned char keyin(void)
@@ -173,9 +180,9 @@ unsigned char keyin(void)
 }
 int rd6820kbdctl(M6502 *mpu, word addr, byte data) { return keypressed(); }
 int rd6820vidctl(M6502 *mpu, word addr, byte data) { return 0x00; }
-int rd6820kbd(M6502 *mpu, word addr, byte data)	   { return keyin(); }
-int rd6820vid(M6502 *mpu, word addr, byte data)	   { return 0x80; }
-int wr6820vid(M6502 *mpu, word addr, byte data)	   { if (data == 0x8D) putchar('\n'); putchar(data & 0x7F); fflush(stdout); return 0; }
+int rd6820kbd(M6502 *mpu, word addr, byte data)    { return keyin(); }
+int rd6820vid(M6502 *mpu, word addr, byte data)    { return 0x80; }
+int wr6820vid(M6502 *mpu, word addr, byte data)    { if (data == 0x8D) putchar('\n'); putchar(data & 0x7F); fflush(stdout); return 0; }
 
 int setTraps(M6502 *mpu)
 {
