@@ -153,12 +153,18 @@ int cffa1(M6502 *mpu, word address, byte data)
 int bye(M6502 *mpu, word addr, byte data) { exit(0); return 0; }
 int cout(M6502 *mpu, word addr, byte data)  { if (mpu->registers->a == 0x8D) putchar('\n'); putchar(mpu->registers->a & 0x7F); fflush(stdout); rts; }
 
-unsigned keypending = 0;
-unsigned char keypressed(void)
+int paused = 0;
+unsigned char keypending = 0;
+unsigned char keypressed(M6502 *mpu)
 {
   unsigned char cin, cext[2];
   if (read(STDIN_FILENO, &cin, 1) > 0)
   {
+    if (cin == 0x03) // CTRL-C
+    {
+      mpu->flags |= M6502_SingleStep;
+      paused = 1;
+    }
     if (cin == 0x1B) // Look for left arrow
     {
       if (read(STDIN_FILENO, cext, 2) == 2 && cext[0] == '[' && cext[1] == 'D')
@@ -168,19 +174,19 @@ unsigned char keypressed(void)
   }
   return keypending & 0x80;
 }
-unsigned char keyin(void)
+unsigned char keyin(M6502 *mpu)
 {
   unsigned char cin;
 
   if (!keypending)
-    keypressed();
+    keypressed(mpu);
   cin = keypending;
   keypending = 0;
   return cin;
 }
-int rd6820kbdctl(M6502 *mpu, word addr, byte data) { return keypressed(); }
+int rd6820kbdctl(M6502 *mpu, word addr, byte data) { return keypressed(mpu); }
 int rd6820vidctl(M6502 *mpu, word addr, byte data) { return 0x00; }
-int rd6820kbd(M6502 *mpu, word addr, byte data)    { return keyin(); }
+int rd6820kbd(M6502 *mpu, word addr, byte data)    { return keyin(mpu); }
 int rd6820vid(M6502 *mpu, word addr, byte data)    { return 0x80; }
 int wr6820vid(M6502 *mpu, word addr, byte data)    { if (data == 0x8D) putchar('\n'); putchar(data & 0x7F); fflush(stdout); return 0; }
 
@@ -244,7 +250,17 @@ int main(int argc, char **argv)
     char insn[64];
     M6502_dump(mpu, state);
     M6502_disassemble(mpu, mpu->registers->pc, insn);
-    printf("%s : %s\n", state, insn);
+    printf("%s : %s\r\n", state, insn);
+    if (paused || (keypressed(mpu) && keypending == 0x83))
+    {
+      keypending = 0;
+      while (!keypressed(mpu));
+      if (keypending == (0x80|'C'))
+        paused = 0;
+      else if (keypending == (0x80|'Q'))
+        break;
+      keypending = 0;
+    }
   }
   M6502_delete(mpu);
   return 0;
