@@ -1,67 +1,91 @@
 include "inc/cmdsys.plh"
 
-word readline
+def is_num(c); return c >= '0' and c <= '9'; end
+def is_alpha(c); c=toupper(c); return c >= 'A' and c <= 'Z'; end
+def is_alphanum(c); return is_alpha(c) or is_num(c); end
 
-def num_parse(instr)
-  while ^instr >= '0' and ^instr <= '9'
-    putc(^instr)
-    instr++
+def num_parse(numptr)
+  while ^numptr >= '0' and ^numptr <= '9'
+    putc(^numptr)
+    numptr++
   loop
-  return instr
+  return numptr
 end
 
-def sym_parse(instr)
-  while ^instr > ')' and toupper(^instr) <= 'Z'
-    putc(toupper(^instr))
-    instr++
+def sym_parse(symptr)
+  while is_alphanum(^symptr)
+    putc(toupper(^symptr))
+    symptr++
   loop
-  return instr
+  return symptr
 end
 
-def exp_parse(instr)
-  while ^instr
-    when ^instr
+def expr_parse(evalptr, depth)
+  while TRUE
+    when ^evalptr
+      is 0
+        if depth > 0
+          // Refill input buffer
+          evalptr = gets('>'|$80)
+          ^(evalptr + ^evalptr + 1) = 0
+          evalptr++
+        else
+          return evalptr
+        fin
+        break
       is '!'
-        return 0
+        return FALSE
       is ' '
-        instr++
+        evalptr++
         break
       is '('
         putln
-        instr = exp_parse(instr + 1)
+        evalptr++
+        evalptr = expr_parse(evalptr, depth + 1)
         break
       is ')'
         putln
-        return instr + 1
-      is '0'
-      is '1'
-      is '2'
-      is '3'
-      is '4'
-      is '5'
-      is '6'
-      is '7'
-      is '8'
-      is '9'
-        putc('.')
-        instr = num_parse(instr)
-        break
+        return evalptr
       otherwise
-        if  ^instr > ')' and toupper(^instr) <= 'Z'
+        if depth == 0
+          puts("Invalid S-Expression\n")
+          ^evalptr = 0
+          return evalptr
+        fin
+        if is_alpha(^evalptr)
           putc('.')
-          instr = sym_parse(instr)
+          evalptr = sym_parse(evalptr)
+        elsif is_num(^evalptr)
+          putc('.')
+          evalptr = num_parse(evalptr)
         else
           putc('\\')
-          putc(^instr)
-          instr++
+          putc(^evalptr)
+          evalptr++
         fin
     wend
   loop
-  return instr
+  return evalptr
 end
 
-repeat
-  readline = gets('?'|$80)
-  ^(readline + ^readline + 1) = 0
-until not exp_parse(readline + 1)
+def read
+  word readline
+
+  repeat
+    readline = gets('?'|$80)
+    ^(readline + ^readline + 1) = 0
+    readline++
+  until ^readline
+  return expr_parse(readline, 0)
+end
+
+def eval(s_expr)
+  return s_expr
+end
+
+def print(s_expr)
+  return s_expr)
+end
+
+while print(eval(read)); loop
 done
