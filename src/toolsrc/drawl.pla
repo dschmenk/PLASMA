@@ -1,27 +1,101 @@
 include "inc/cmdsys.plh"
 
-def is_num(c); return c >= '0' and c <= '9'; end
-def is_alpha(c); c=toupper(c); return c >= 'A' and c <= 'Z'; end
-def is_alphanum(c); return is_alpha(c) or is_num(c); end
+const TYPE_MASK = $70
+const CONS_TYPE = $10
+const NUM_TYPE  = $20
+const SYM_TYPE  = $30
+const SYM_LEN   = $0F
 
-def num_parse(numptr)
-  while ^numptr >= '0' and ^numptr <= '9'
-    putc(^numptr)
-    numptr++
-  loop
+struc t_elem
+  byte type
+end
+struc t_cons
+  res[t_elem]
+  var car
+  var cdr
+end
+struc t_num
+  res[t_elem]
+  var val
+end
+struc t_sym
+  res[t_elem]
+  char[0] name
+end
+
+predef print(s_expr)#0
+
+def new_cons
+  var consptr
+
+  consptr = heapalloc(t_cons)
+  consptr->type = CONS_TYPE
+  consptr=>car  = NULL
+  consptr=>cdr  = NULL
+  return consptr
+end
+
+def new_num(num)
+  var numptr
+
+  numptr = heapalloc(t_num)
+  numptr->type = NUM_TYPE
+  numptr=>val  = num
+  puts("New number: "); puti(num); putln
   return numptr
 end
 
-def sym_parse(symptr)
-  while is_alphanum(^symptr)
-    putc(toupper(^symptr))
-    symptr++
-  loop
+def new_sym(sym, len)
+  var symptr
+
+  symptr = heapalloc(t_sym + len)
+  symptr->type = len
+  memcpy(symptr + name, sym, len)
+  puts("New symbol: "); puts(symptr + type); putln
+  symptr->type = SYM_TYPE | len
   return symptr
 end
 
-def expr_parse(evalptr, depth)
+def is_num(c); return c >= '0' and c <= '9'; end
+def is_alphasym(c); c=toupper(c); return c >= '*' and c <= 'Z' and c <> '.'; end
+
+def parse_num(evalptr)#2 // return evalptr, numptr
+  var num, sign
+
+  num  = 0
+  sign = 1
+  if ^evalptr == '-'
+    sign = -1
+    evalptr++
+  fin
+  while ^evalptr >= '0' and ^evalptr <= '9'
+    putc(^evalptr)
+    num = num * 10 + ^evalptr - '0'
+    evalptr++
+  loop
+  return evalptr, new_num(sign * num)
+end
+
+def parse_sym(evalptr)#2 // return evalptr, symptr
+  var symptr
+  symptr = evalptr
+  while is_alphasym(^evalptr)
+    putc(^evalptr)
+    evalptr++
+  loop
+  return evalptr, new_sym(symptr, evalptr - symptr)
+end
+
+def parse_expr(evalptr, depth)#2 // return evalptr, exprptr
+  var exprptr, consptr, elemptr
+
+  exprptr = NULL
+  consptr = NULL
   while TRUE
+    //
+    // Parse textual S-expression
+    //
+    elemptr = NULL
     when ^evalptr
       is 0
         if depth > 0
@@ -30,61 +104,105 @@ def expr_parse(evalptr, depth)
           ^(evalptr + ^evalptr + 1) = 0
           evalptr++
         else
-          return evalptr
+          return evalptr, exprptr
         fin
         break
       is '!'
-        return FALSE
+        return NULL, NULL
       is ' '
         evalptr++
         break
       is '('
-        putln
         evalptr++
-        evalptr = expr_parse(evalptr, depth + 1)
+        evalptr, elemptr = parse_expr(evalptr, depth + 1)
         break
       is ')'
         putln
-        return evalptr
+        return evalptr, exprptr
       otherwise
         if depth == 0
           puts("Invalid S-Expression\n")
           ^evalptr = 0
-          return evalptr
+          return evalptr, NULL
         fin
-        if is_alpha(^evalptr)
-          putc('.')
-          evalptr = sym_parse(evalptr)
-        elsif is_num(^evalptr)
-          putc('.')
-          evalptr = num_parse(evalptr)
+        if (^evalptr == '-' and is_num(^(evalptr+1))) or is_num(^evalptr)
+          evalptr, elemptr = parse_num(evalptr)
+        elsif is_alphasym(^evalptr)
+          evalptr, elemptr = parse_sym(evalptr)
         else
           putc('\\')
           putc(^evalptr)
           evalptr++
         fin
     wend
+    if elemptr
+      //
+      // Add element to S-expression
+      //
+      if not consptr
+        consptr = elemptr
+        exprptr = consptr
+      else
+        if consptr=>car
+          consptr=>cdr = new_cons
+          consptr      = consptr=>cdr
+        fin
+        consptr=>car = elemptr
+      fin
+    fin
   loop
-  return evalptr
+  return evalptr, exprptr
 end
 
 def read
-  word readline
+  var readline, s_expr
 
   repeat
     readline = gets('?'|$80)
     ^(readline + ^readline + 1) = 0
     readline++
   until ^readline
-  return expr_parse(readline, 0)
+  drop, s_expr = parse_expr(readline, 0)
+  return s_expr
 end
 
 def eval(s_expr)
   return s_expr
 end
 
-def print(s_expr)
-  return s_expr)
+def print_elem(s_expr)#0
+  byte t
+
+  when s_expr->type & TYPE_MASK
+    is CONS_TYPE
+      print(s_expr)
+      break
+    is NUM_TYPE
+      puti(s_expr=>val)
+      break
+    is SYM_TYPE
+      t = s_expr->type
+      s_expr->type = t & SYM_LEN
+      puts(s_expr + type)
+      s_expr->type = t
+      break;
+    is NULL
+      puts("NIL")
+  wend
+end
+
+def print(s_expr)#0
+  putc('(')
+  while s_expr
+    if s_expr->type == CONS_TYPE
+      print_elem(s_expr=>car)
+      s_expr = s_expr=>cdr
+    else
+      print_elem(s_expr)
+      s_expr = NULL
+    fin
+  loop
+  putc(')')
 end
 
 while print(eval(read)); loop
