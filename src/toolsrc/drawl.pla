@@ -23,7 +23,8 @@ struc t_sym
   char[0] name
 end
 
-predef print(s_expr)#0
+predef parse_expr(evalptr, depth)#2
+predef print(s_expr)
 
 def new_cons
   var consptr
@@ -86,6 +87,24 @@ def parse_sym(evalptr)#2 // return evalptr, symptr
   return evalptr, new_sym(symptr, evalptr - symptr)
 end
 
+def parse_elem(evalptr, depth)#2 // return evalptr, exprptr
+  var elemptr
+
+  if ^evalptr == '('
+    evalptr++
+    evalptr, elemptr = parse_expr(evalptr, depth + 1)
+  elsif (^evalptr == '-' and is_num(^(evalptr+1))) or is_num(^evalptr)
+    evalptr, elemptr = parse_num(evalptr)
+  elsif is_alphasym(^evalptr)
+    evalptr, elemptr = parse_sym(evalptr)
+  else
+    putc('\\')
+    putc(^evalptr)
+    evalptr++
+  fin
+  return evalptr, elemptr
+end
+
 def parse_expr(evalptr, depth)#2 // return evalptr, exprptr
   var exprptr, consptr, elemptr
 
@@ -112,27 +131,33 @@ def parse_expr(evalptr, depth)#2 // return evalptr, exprptr
       is ' '
         evalptr++
         break
-      is '('
-        evalptr++
-        evalptr, elemptr = parse_expr(evalptr, depth + 1)
-        break
       is ')'
         putln
-        return evalptr, exprptr
-      otherwise
+        return evalptr + 1, exprptr
+      is '('
+        evalptr++
         if depth == 0
-          puts("Invalid S-Expression\n")
-          ^evalptr = 0
+          depth++
+        else
+          evalptr, elemptr = parse_expr(evalptr, depth + 1)
+        fin
+        break
+      is '.'
+        evalptr++
+        evalptr, elemptr = parse_expr(evalptr, 0)
+        //
+        // Add expression to CDR
+        //
+        if not (consptr and consptr=>car)
+          puts("Invalid . operator\n")
           return evalptr, NULL
         fin
-        if (^evalptr == '-' and is_num(^(evalptr+1))) or is_num(^evalptr)
-          evalptr, elemptr = parse_num(evalptr)
-        elsif is_alphasym(^evalptr)
-          evalptr, elemptr = parse_sym(evalptr)
-        else
-          putc('\\')
-          putc(^evalptr)
-          evalptr++
+        consptr=>cdr = elemptr
+        return evalptr, exprptr
+      otherwise
+        evalptr, elemptr = parse_elem(evalptr, depth)
+        if depth == 0
+          return evalptr, elemptr
         fin
     wend
     if elemptr
@@ -140,15 +165,13 @@ def parse_expr(evalptr, depth)#2 // return evalptr, exprptr
       // Add element to S-expression
       //
       if not consptr
-        consptr = elemptr
+        consptr = new_cons
         exprptr = consptr
       else
-        if consptr=>car
-          consptr=>cdr = new_cons
-          consptr      = consptr=>cdr
-        fin
-        consptr=>car = elemptr
+        consptr=>cdr = new_cons
+        consptr      = consptr=>cdr
       fin
+      consptr=>car = elemptr
     fin
   loop
   return evalptr, exprptr
@@ -173,37 +196,39 @@ end
 def print_elem(s_expr)#0
   byte t
 
-  when s_expr->type & TYPE_MASK
-    is CONS_TYPE
-      print(s_expr)
-      break
-    is NUM_TYPE
-      puti(s_expr=>val)
-      break
-    is SYM_TYPE
-      t = s_expr->type
-      s_expr->type = t & SYM_LEN
-      puts(s_expr + type)
-      s_expr->type = t
-      break;
-    is NULL
-      puts("NIL")
-  wend
+  if not s_expr
+    puts("NIL")
+  else
+    when s_expr->type & TYPE_MASK
+      is CONS_TYPE
+        print(s_expr)
+        break
+      is NUM_TYPE
+        puti(s_expr=>val)
+        break
+      is SYM_TYPE
+        t = s_expr->type
+        s_expr->type = t & SYM_LEN
+        puts(s_expr + type)
+        s_expr->type = t
+        break;
+    wend
+  fin
 end
 
-def print(s_expr)#0
-  putc('(')
-  while s_expr
-    if s_expr->type == CONS_TYPE
-      print_elem(s_expr=>car)
-      s_expr = s_expr=>cdr
-    else
-      print_elem(s_expr)
-      s_expr = NULL
-    fin
-  loop
-  putc(')')
+def print(s_expr)
+  if not s_expr; return FALSE; fin
+  if s_expr->type == CONS_TYPE
+    putc('(')
+    print_elem(s_expr=>car)
+    putc('.')
+    print_elem(s_expr=>cdr)
+    putc(')')
+  else
+    print_elem(s_expr)
+  fin
+  return TRUE
 end
 
-while print(eval(read)); loop
+while print(eval(read)); putln; loop
 done
