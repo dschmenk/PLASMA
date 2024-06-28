@@ -7,6 +7,7 @@ const SYM_TYPE  = $30
 const SYM_LEN   = $0F
 
 struc t_elem
+  var  link
   byte type
 end
 struc t_cons
@@ -23,7 +24,11 @@ struc t_sym
   char[0] name
 end
 
-predef parse_expr(evalptr, depth)#2
+var sym_list = NULL
+var lit_list = NULL
+var con_list = NULL
+
+predef parse_expr(evalptr, level)#2
 predef print(s_expr)
 
 def new_cons
@@ -46,11 +51,41 @@ def new_num(num)
   return numptr
 end
 
-def new_sym(sym, len)
+def match_sym(sym, len)
+  var symptr
+  byte typelen, i
+
+  typelen = SYM_TYPE | len
+  len--
+  symptr = sym_list
+  while symptr
+    if symptr->type == typelen
+      for i = 0 to len
+        if symptr->name[i] <> sym->[i]; break; fin
+      next
+      if i > len
+        typelen = symptr->type
+        symptr->type = len + 1
+        puts("Match symbol: ")
+        puts(symptr + type); putln
+        symptr->type = typelen
+        return symptr
+      fin
+    fin
+    symptr = symptr=>link
+  loop
+  return NULL
+end
+
+def add_sym(sym, len)
   var symptr
 
-  symptr = heapalloc(t_sym + len)
+  symptr = match_sym(sym, len)
+  if symptr; return symptr; fin // Return already existing symbol
+  symptr       = heapalloc(t_sym + len)
   symptr->type = len
+  symptr=>link = sym_list
+  sym_list     = symptr
   memcpy(symptr + name, sym, len)
   puts("New symbol: "); puts(symptr + type); putln
   symptr->type = SYM_TYPE | len
@@ -84,15 +119,15 @@ def parse_sym(evalptr)#2 // return evalptr, symptr
     putc(^evalptr)
     evalptr++
   loop
-  return evalptr, new_sym(symptr, evalptr - symptr)
+  return evalptr, add_sym(symptr, evalptr - symptr)
 end
 
-def parse_elem(evalptr, depth)#2 // return evalptr, exprptr
+def parse_elem(evalptr, level)#2 // return evalptr, exprptr
   var elemptr
 
   if ^evalptr == '('
     evalptr++
-    evalptr, elemptr = parse_expr(evalptr, depth + 1)
+    evalptr, elemptr = parse_expr(evalptr, level + 1)
   elsif (^evalptr == '-' and is_num(^(evalptr+1))) or is_num(^evalptr)
     evalptr, elemptr = parse_num(evalptr)
   elsif is_alphasym(^evalptr)
@@ -105,7 +140,7 @@ def parse_elem(evalptr, depth)#2 // return evalptr, exprptr
   return evalptr, elemptr
 end
 
-def parse_expr(evalptr, depth)#2 // return evalptr, exprptr
+def parse_expr(evalptr, level)#2 // return evalptr, exprptr
   var exprptr, consptr, elemptr
 
   exprptr = NULL
@@ -117,7 +152,7 @@ def parse_expr(evalptr, depth)#2 // return evalptr, exprptr
     elemptr = NULL
     when ^evalptr
       is 0
-        if depth > 0
+        if level > 0
           // Refill input buffer
           evalptr = gets('>'|$80)
           ^(evalptr + ^evalptr + 1) = 0
@@ -136,10 +171,10 @@ def parse_expr(evalptr, depth)#2 // return evalptr, exprptr
         return evalptr + 1, exprptr
       is '('
         evalptr++
-        if depth == 0
-          depth++
+        if level == 0
+          level++
         else
-          evalptr, elemptr = parse_expr(evalptr, depth + 1)
+          evalptr, elemptr = parse_expr(evalptr, level + 1)
         fin
         break
       is '.'
@@ -155,8 +190,8 @@ def parse_expr(evalptr, depth)#2 // return evalptr, exprptr
         consptr=>cdr = elemptr
         return evalptr, exprptr
       otherwise
-        evalptr, elemptr = parse_elem(evalptr, depth)
-        if depth == 0
+        evalptr, elemptr = parse_elem(evalptr, level)
+        if level == 0
           return evalptr, elemptr
         fin
     wend
@@ -171,6 +206,9 @@ def parse_expr(evalptr, depth)#2 // return evalptr, exprptr
         consptr=>cdr = new_cons
         consptr      = consptr=>cdr
       fin
+      //
+      // Add element to CAR
+      //
       consptr=>car = elemptr
     fin
   loop
