@@ -1,74 +1,127 @@
 include "inc/cmdsys.plh"
 
 const TYPE_MASK = $70
+const QUOTE     = $70
 const CONS_TYPE = $10
-const NUM_TYPE  = $20
+const LIT_TYPE  = $20
+const LIT_NUM   = $21
+const LIT_CHR   = $22
+const LIT_STR   = $23
 const SYM_TYPE  = $30
 const SYM_LEN   = $0F
+const FUNC_TYPE = $40
+const FUNC_EXPR = $41
+const FUNC_NATV = $42
+const VAR_TYPE  = $50
+const VAR_NUM   = $51
+const VAR_CHR   = $52
+const VAR_STR   = $53
 
 struc t_elem
-  var  link
+  word link
   byte type
 end
 struc t_cons
   res[t_elem]
-  var car
-  var cdr
+  word car
+  word cdr
 end
 struc t_num
   res[t_elem]
-  var val
+  var numval
+end
+struc t_chr
+  res[t_elem]
+  char chrval
+end
+struc t_str
+  res[t_elem]
+  char[1] string
 end
 struc t_sym
   res[t_elem]
+  word prop
   char[0] name
 end
+struc t_func
+  res[t_elem]
+  word lamda
+end
 
-var sym_list = NULL
-var lit_list = NULL
-var con_list = NULL
+var cons_list = NULL
+var cons_free = NULL
+var func_list = NULL
+var func_free = NULL
+var var_list  = NULL
+var var_free  = NULL
+var sym_list  = NULL
+var sym_free  = NULL
+var lit_list  = NULL
+var lit_free  = NULL
 
-predef parse_expr(evalptr, level)#2
-predef print(s_expr)
+byte quit = FALSE
+
+//
+// Build ATOMS
+//
 
 def new_cons
   var consptr
 
   consptr = heapalloc(t_cons)
+  consptr=>link = cons_list
+  cons_list     = consptr
   consptr->type = CONS_TYPE
   consptr=>car  = NULL
   consptr=>cdr  = NULL
   return consptr
 end
 
-def new_num(num)
+def match_litnum(num)
   var numptr
 
+  numptr = lit_list
+  while numptr
+    if numptr->type == LIT_NUM and numptr=>numval == num
+      puts("Match number: ")
+      puti(num); putln
+      return numptr
+    fin
+    numptr = numptr=>link
+  loop
+  return NULL
+end
+
+def add_litnum(num)
+  var numptr
+
+  numptr = match_litnum(num)
+  if numptr; return numptr; fin
   numptr = heapalloc(t_num)
-  numptr->type = NUM_TYPE
-  numptr=>val  = num
+  numptr=>link   = lit_list
+  lit_list       = numptr
+  numptr->type   = LIT_NUM
+  numptr=>numval = num
   puts("New number: "); puti(num); putln
   return numptr
 end
 
-def match_sym(sym, len)
+def match_sym(symstr)
   var symptr
-  byte typelen, i
+  byte len, typelen, i
 
+  len     = ^symstr
   typelen = SYM_TYPE | len
-  len--
-  symptr = sym_list
+  len--; symstr++
+  symptr  = sym_list
   while symptr
     if symptr->type == typelen
       for i = 0 to len
-        if symptr->name[i] <> sym->[i]; break; fin
+        if symptr->name[i] <> symstr->[i]; break; fin
       next
       if i > len
-        typelen = symptr->type
-        symptr->type = len + 1
         puts("Match symbol: ")
-        puts(symptr + type); putln
-        symptr->type = typelen
+        puts(symstr - 1); putln
         return symptr
       fin
     fin
@@ -77,20 +130,39 @@ def match_sym(sym, len)
   return NULL
 end
 
-def add_sym(sym, len)
+def add_sym(symstr)
   var symptr
 
-  symptr = match_sym(sym, len)
+  symptr = match_sym(symstr)
   if symptr; return symptr; fin // Return already existing symbol
-  symptr       = heapalloc(t_sym + len)
-  symptr->type = len
+  symptr       = heapalloc(t_sym + ^symstr)
   symptr=>link = sym_list
   sym_list     = symptr
-  memcpy(symptr + name, sym, len)
-  puts("New symbol: "); puts(symptr + type); putln
-  symptr->type = SYM_TYPE | len
+  symptr->type = ^symstr | SYM_TYPE
+  symptr=>prop = NULL
+  memcpy(symptr + name, symstr + 1, ^symstr)
+  puts("New symbol: "); puts(symstr); putln
   return symptr
 end
+
+def add_natvfn(funstr, funaddr)
+  var funsym, funptr
+
+  funsym = add_sym(funstr)
+  if funsym=>prop; puts(" Property already assinged:"); puts(funstr); putln; return 0; fin
+  funptr = heapalloc(t_func)
+  funptr=>link  = func_list
+  func_list     = funptr
+  funptr->type  = FUNC_NATV
+  funptr=>lamda = funaddr
+  funsym=>prop  = funptr
+  puts("New native function: "); puts(funstr); putln
+  return funstr
+end
+
+//
+// Parse textual representation of S-expressions
+//
 
 def is_num(c); return c >= '0' and c <= '9'; end
 def is_alphasym(c); c=toupper(c); return c >= '*' and c <= 'Z' and c <> '.'; end
@@ -105,39 +177,21 @@ def parse_num(evalptr)#2 // return evalptr, numptr
     evalptr++
   fin
   while ^evalptr >= '0' and ^evalptr <= '9'
-    putc(^evalptr)
     num = num * 10 + ^evalptr - '0'
     evalptr++
   loop
-  return evalptr, new_num(sign * num)
+  return evalptr, add_litnum(sign * num)
 end
 
 def parse_sym(evalptr)#2 // return evalptr, symptr
-  var symptr
-  symptr = evalptr
+  var symstr
+  symstr = evalptr - 1
   while is_alphasym(^evalptr)
-    putc(^evalptr)
     evalptr++
   loop
-  return evalptr, add_sym(symptr, evalptr - symptr)
-end
-
-def parse_elem(evalptr, level)#2 // return evalptr, exprptr
-  var elemptr
-
-  if ^evalptr == '('
-    evalptr++
-    evalptr, elemptr = parse_expr(evalptr, level + 1)
-  elsif (^evalptr == '-' and is_num(^(evalptr+1))) or is_num(^evalptr)
-    evalptr, elemptr = parse_num(evalptr)
-  elsif is_alphasym(^evalptr)
-    evalptr, elemptr = parse_sym(evalptr)
-  else
-    putc('\\')
-    putc(^evalptr)
-    evalptr++
-  fin
-  return evalptr, elemptr
+  ^symstr = evalptr - symstr - 1
+  if ^symstr > 31; ^symstr = 31; fin
+  return evalptr, add_sym(symstr)
 end
 
 def parse_expr(evalptr, level)#2 // return evalptr, exprptr
@@ -152,7 +206,7 @@ def parse_expr(evalptr, level)#2 // return evalptr, exprptr
     elemptr = NULL
     when ^evalptr
       is 0
-        if level > 0
+        if level
           // Refill input buffer
           evalptr = gets('>'|$80)
           ^(evalptr + ^evalptr + 1) = 0
@@ -161,8 +215,6 @@ def parse_expr(evalptr, level)#2 // return evalptr, exprptr
           return evalptr, exprptr
         fin
         break
-      is '!'
-        return NULL, NULL
       is ' '
         evalptr++
         break
@@ -174,7 +226,7 @@ def parse_expr(evalptr, level)#2 // return evalptr, exprptr
         if level == 0
           level++
         else
-          evalptr, elemptr = parse_expr(evalptr, level + 1)
+          evalptr, elemptr = parse_expr(evalptr, 1)
         fin
         break
       is '.'
@@ -190,7 +242,15 @@ def parse_expr(evalptr, level)#2 // return evalptr, exprptr
         consptr=>cdr = elemptr
         return evalptr, exprptr
       otherwise
-        evalptr, elemptr = parse_elem(evalptr, level)
+        if (^evalptr == '-' and is_num(^(evalptr+1))) or is_num(^evalptr)
+          evalptr, elemptr = parse_num(evalptr)
+        elsif is_alphasym(^evalptr)
+          evalptr, elemptr = parse_sym(evalptr)
+        else
+          putc('\\')
+          putc(^evalptr)
+          evalptr++
+        fin
         if level == 0
           return evalptr, elemptr
         fin
@@ -215,6 +275,42 @@ def parse_expr(evalptr, level)#2 // return evalptr, exprptr
   return evalptr, exprptr
 end
 
+//
+// REPL routines
+//
+
+def print(s_expr)#0
+  char prstr[32]
+
+  if not s_expr
+    puts("NIL")
+  else
+    when s_expr->type & TYPE_MASK
+      is CONS_TYPE
+        putc('(')
+        print(s_expr=>car)
+        putc('.')
+        print(s_expr=>cdr)
+        putc(')')
+        break
+      is LIT_TYPE
+      is VAR_TYPE
+        when s_expr->type
+          is LIT_NUM
+          is VAR_NUM
+            puti(s_expr=>numval)
+            break
+        wend
+        break
+      is SYM_TYPE
+        prstr = s_expr->type & SYM_LEN
+        memcpy(@prstr + 1, s_expr + name, prstr)
+        puts(@prstr)
+        break;
+    wend
+  fin
+end
+
 def read
   var readline, s_expr
 
@@ -223,50 +319,58 @@ def read
     ^(readline + ^readline + 1) = 0
     readline++
   until ^readline
+  if ^readline == '!'; quit = TRUE; return NULL; fin // Quick exit from REPL
   drop, s_expr = parse_expr(readline, 0)
+  print(s_expr); putln // DEBUG - print parsed expression
   return s_expr
 end
 
 def eval(s_expr)
+  if s_expr
+    when s_expr->type & TYPE_MASK
+      is CONS_TYPE
+        if s_expr=>car->type & TYPE_MASK == SYM_TYPE and s_expr=>car=>prop->type == FUNC_NATV
+          return s_expr=>car=>prop=>lamda(s_expr=>cdr)
+        else
+          puts("Bad function expression\n")
+          return NULL
+        fin
+    wend
+  fin
   return s_expr
 end
 
-def print_elem(s_expr)#0
-  byte t
+//
+// Install default native functions
+//
 
-  if not s_expr
-    puts("NIL")
-  else
-    when s_expr->type & TYPE_MASK
-      is CONS_TYPE
-        print(s_expr)
+def natv_add(expr)
+  var sum
+
+  sum = 0
+  while expr
+    when expr=>car->type
+      is LIT_NUM
+      is VAR_NUM
+        sum = sum + expr=>car=>numval
         break
-      is NUM_TYPE
-        puti(s_expr=>val)
-        break
-      is SYM_TYPE
-        t = s_expr->type
-        s_expr->type = t & SYM_LEN
-        puts(s_expr + type)
-        s_expr->type = t
-        break;
+      otherwise
+        puts("Invalid type for add")
+        putln
+        return NULL
     wend
-  fin
+    expr = expr=>cdr
+  loop
+  return add_litnum(sum)
 end
 
-def print(s_expr)
-  if not s_expr; return FALSE; fin
-  if s_expr->type == CONS_TYPE
-    putc('(')
-    print_elem(s_expr=>car)
-    putc('.')
-    print_elem(s_expr=>cdr)
-    putc(')')
-  else
-    print_elem(s_expr)
-  fin
-  return TRUE
+def add_defaults#0
+  add_natvfn("+", @natv_add)
+  //add_natvfn("-", @natv_sub)
+  //add_natvfn("*", @natv_mul)
+  //add_natvfn("/", @natv_div)
 end
 
-while print(eval(read)); putln; loop
+add_defaults
+while not quit; print(eval(read)); putln; loop
 done
