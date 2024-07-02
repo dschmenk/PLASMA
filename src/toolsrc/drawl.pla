@@ -1,21 +1,25 @@
 include "inc/cmdsys.plh"
 
-const TYPE_MASK = $70
-const QUOTE     = $70
-const CONS_TYPE = $10
-const LIT_TYPE  = $20
-const LIT_NUM   = $21
-const LIT_CHR   = $22
-const LIT_STR   = $23
-const SYM_TYPE  = $30
-const SYM_LEN   = $0F
-const FUNC_TYPE = $40
-const FUNC_EXPR = $41
-const FUNC_NATV = $42
-const VAR_TYPE  = $50
-const VAR_NUM   = $51
-const VAR_CHR   = $52
-const VAR_STR   = $53
+const TYPE_MASK  = $70
+const QUOTE      = $70
+const BOOL_FALSE = $00
+const BOOL_TRUE  = $01
+const CONS_TYPE  = $10
+const LIT_TYPE   = $20
+const LIT_NUM    = $21
+const LIT_CHR    = $22
+const LIT_STR    = $23
+const SYM_TYPE   = $30
+const SYM_LEN    = $0F
+const FUNC_TYPE  = $40
+const FUNC_EXPR  = $41
+const FUNC_NATV  = $42
+const VAR_TYPE   = $50
+const VAR_NUM    = $51
+const VAR_CHR    = $52
+const VAR_STR    = $53
+const VAR_BOOL   = $54
+const VAR_FALSE  = $55
 
 struc t_elem
   word link
@@ -47,6 +51,10 @@ struc t_func
   res[t_elem]
   word lamda
 end
+
+var sym_true, sym_false, sym_quote
+res[t_elem] pred_true  = 0, 0, BOOL_TRUE
+res[t_elem] pred_false = 0, 0, BOOL_FALSE
 
 var cons_list = NULL
 var cons_free = NULL
@@ -195,7 +203,7 @@ def parse_sym(evalptr)#2 // return evalptr, symptr
 end
 
 def parse_expr(evalptr, level)#2 // return evalptr, exprptr
-  var exprptr, consptr, elemptr
+  var exprptr, consptr, elemptr, quotecons
 
   exprptr = NULL
   consptr = NULL
@@ -228,6 +236,15 @@ def parse_expr(evalptr, level)#2 // return evalptr, exprptr
         else
           evalptr, elemptr = parse_expr(evalptr, 1)
         fin
+        break
+      is '\''
+        evalptr++
+        evalptr, elemptr    = parse_expr(evalptr, 0)
+        quotecons           = new_cons
+        quotecons=>car      = sym_quote
+        quotecons=>cdr      = new_cons
+        quotecons=>cdr=>car = elemptr
+        elemptr             = quotecons
         break
       is '.'
         evalptr++
@@ -279,32 +296,32 @@ end
 // REPL routines
 //
 
-def print(s_expr)#0
+def print(expr)#0
   char prstr[32]
 
-  if not s_expr
+  if not expr
     puts("NIL")
   else
-    when s_expr->type & TYPE_MASK
+    when expr->type & TYPE_MASK
       is CONS_TYPE
         putc('(')
-        print(s_expr=>car)
+        print(expr=>car)
         putc('.')
-        print(s_expr=>cdr)
+        print(expr=>cdr)
         putc(')')
         break
       is LIT_TYPE
       is VAR_TYPE
-        when s_expr->type
+        when expr->type
           is LIT_NUM
           is VAR_NUM
-            puti(s_expr=>numval)
+            puti(expr=>numval)
             break
         wend
         break
       is SYM_TYPE
-        prstr = s_expr->type & SYM_LEN
-        memcpy(@prstr + 1, s_expr + name, prstr)
+        prstr = expr->type & SYM_LEN
+        memcpy(@prstr + 1, expr + name, prstr)
         puts(@prstr)
         break;
     wend
@@ -312,7 +329,7 @@ def print(s_expr)#0
 end
 
 def read
-  var readline, s_expr
+  var readline, expr
 
   repeat
     readline = gets('?'|$80)
@@ -320,55 +337,113 @@ def read
     readline++
   until ^readline
   if ^readline == '!'; quit = TRUE; return NULL; fin // Quick exit from REPL
-  drop, s_expr = parse_expr(readline, 0)
-  print(s_expr); putln // DEBUG - print parsed expression
-  return s_expr
+  drop, expr = parse_expr(readline, 0)
+  print(expr); putln // DEBUG - print parsed expression
+  return expr
 end
 
-def eval(s_expr)
-  if s_expr
-    when s_expr->type & TYPE_MASK
+def eval(expr)
+  if expr
+    when expr->type & TYPE_MASK
       is CONS_TYPE
-        if s_expr=>car->type & TYPE_MASK == SYM_TYPE and s_expr=>car=>prop->type == FUNC_NATV
-          return s_expr=>car=>prop=>lamda(s_expr=>cdr)
+        if expr=>car->type & TYPE_MASK == SYM_TYPE and expr=>car=>prop->type == FUNC_NATV
+          return expr=>car=>prop=>lamda(expr=>cdr)
         else
-          puts("Bad function expression\n")
+          puts("Bad function expression: \n"); print(expr); putln
           return NULL
         fin
     wend
   fin
-  return s_expr
+  return expr
 end
 
 //
 // Install default native functions
 //
 
+def natv_quote(expr)
+  return expr=>cdr=>car
+end
+
+def eval_num(expr)
+  var result
+
+  result = expr=>car
+  if result->type == CONS_TYPE
+    result = eval(result)
+  fin
+  if result->type == LIT_NUM or result->type == VAR_NUM
+    return result
+  else
+    puts("Not a number\n")
+  fin
+  return NULL
+end
+
 def natv_add(expr)
-  var sum
+  var sum, result
 
   sum = 0
   while expr
-    when expr=>car->type
-      is LIT_NUM
-      is VAR_NUM
-        sum = sum + expr=>car=>numval
-        break
-      otherwise
-        puts("Invalid type for add")
-        putln
-        return NULL
-    wend
+    sum = sum + eval_num(expr)=>numval
     expr = expr=>cdr
   loop
   return add_litnum(sum)
 end
 
+def natv_sub(expr)
+  var diff
+
+  diff = eval_num(expr)=>numval
+  expr = expr=>cdr
+  while expr
+    diff = diff - eval_num(expr)=>numval
+    expr = expr=>cdr
+  loop
+  return add_litnum(diff)
+end
+
+def natv_mul(expr)
+  var mults
+
+  mults = eval_num(expr)=>numval
+  expr = expr=>cdr
+  while expr
+    mults = mults * eval_num(expr)=>numval
+    expr = expr=>cdr
+  loop
+  return add_litnum(mults)
+end
+
+def natv_div(expr)
+  var divs
+
+  divs = eval_num(expr)=>numval
+  expr = expr=>cdr
+  while expr
+    divs = divs * eval_num(expr)=>numval
+    expr = expr=>cdr
+  loop
+  return add_litnum(divs)
+end
+
 def add_defaults#0
-  add_natvfn("+", @natv_add)
-  //add_natvfn("-", @natv_sub)
-  //add_natvfn("*", @natv_mul)
-  //add_natvfn("/", @natv_div)
+
+  sym_true        = add_sym("T")
+  sym_true=>prop  = @pred_true
+  sym_false       = add_sym("F")
+  sym_false=>prop = @pred_false
+  sym_quote       = add_sym("QUOTE")
+  add_natvfn("QUOTE", @natv_quote)
+  //add_natvfn("CONS", @natv_cons)
+  //add_natvfn("CAR",  @natv_car)
+  //add_natvfn("CDR",  @natv_cdr)
+  //add_natvfn("ATOM", @natv_atom)
+  //add_natvfn("EQ",   @natv_eq)
+  add_natvfn("+",    @natv_add)
+  add_natvfn("-",    @natv_sub)
+  add_natvfn("*",    @natv_mul)
+  add_natvfn("/",    @natv_div)
 end
 
 add_defaults
