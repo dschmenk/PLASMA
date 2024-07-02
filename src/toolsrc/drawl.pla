@@ -1,7 +1,7 @@
 include "inc/cmdsys.plh"
 
 const TYPE_MASK  = $70
-const QUOTE      = $70
+const NIL        = $00
 const BOOL_FALSE = $00
 const BOOL_TRUE  = $01
 const CONS_TYPE  = $10
@@ -20,6 +20,8 @@ const VAR_CHR    = $52
 const VAR_STR    = $53
 const VAR_BOOL   = $54
 const VAR_FALSE  = $55
+const ARG_TYPE   = $60
+const QUOTE      = $70
 
 struc t_elem
   word link
@@ -52,7 +54,7 @@ struc t_func
   word lamda
 end
 
-var sym_true, sym_false, sym_quote
+var sym_true, sym_false, sym_nil, sym_quote
 res[t_elem] pred_true  = 0, 0, BOOL_TRUE
 res[t_elem] pred_false = 0, 0, BOOL_FALSE
 
@@ -310,6 +312,9 @@ def print(expr)#0
         print(expr=>cdr)
         putc(')')
         break
+      is NIL
+        putc(expr->type ?? 'T' :: 'F')
+        break
       is LIT_TYPE
       is VAR_TYPE
         when expr->type
@@ -361,8 +366,56 @@ end
 // Install default native functions
 //
 
-def natv_quote(expr)
-  return expr=>cdr=>car
+def natv_atom(expr)
+  return expr->type <> CONS_TYPE ?? @pred_true :: @pred_false
+end
+
+def natv_eq(expr)
+  var atom1, atom2, val1, val2
+
+  atom1 = expr=>car=>prop
+  atom2 = expr=>cdr=>car=>prop
+
+  if atom1->type == LIT_NUM or atom1->type == VAR_NUM
+    val1 = atom1=>numval
+  fin
+  if atom2->type == LIT_NUM or atom2->type == VAR_NUM
+    val2 = atom2=>numval
+  fin
+  return NULL
+end
+
+def natv_cons(expr)
+  return NULL
+end
+
+def natv_car(expr)
+  if expr->TYPE == CONS_TYPE
+    return expr=>car
+  fin
+  return NULL
+end
+
+def natv_cdr(expr)
+  if expr->TYPE == CONS_TYPE
+    return expr=>cdr
+  fin
+  return NULL
+end
+
+def natv_cadr(expr)
+  if expr->TYPE == CONS_TYPE and expr=>cdr->type == CONS_TYPE
+    return expr=>cdr=>car
+  fin
+  return NULL
+end
+
+def natv_evcon(expr)
+  return NULL
+end
+
+def natv_defn(expr)
+  return NULL
 end
 
 def eval_num(expr)
@@ -433,17 +486,21 @@ def add_defaults#0
   sym_true=>prop  = @pred_true
   sym_false       = add_sym("F")
   sym_false=>prop = @pred_false
+  sym_nil         = add_sym("NIL")
+  sym_nil=>prop   = @pred_false
   sym_quote       = add_sym("QUOTE")
-  add_natvfn("QUOTE", @natv_quote)
-  //add_natvfn("CONS", @natv_cons)
-  //add_natvfn("CAR",  @natv_car)
-  //add_natvfn("CDR",  @natv_cdr)
-  //add_natvfn("ATOM", @natv_atom)
-  //add_natvfn("EQ",   @natv_eq)
-  add_natvfn("+",    @natv_add)
-  add_natvfn("-",    @natv_sub)
-  add_natvfn("*",    @natv_mul)
-  add_natvfn("/",    @natv_div)
+  add_natvfn("ATOM",   @natv_atom)
+  add_natvfn("EQ",     @natv_eq)
+  add_natvfn("CONS",   @natv_cons)
+  add_natvfn("CAR",    @natv_car)
+  add_natvfn("CDR",    @natv_cdr)
+  add_natvfn("QUOTE",  @natv_cadr)
+  add_natvfn("COND",   @natv_evcon)
+  add_natvfn("DEFINE", @natv_defn)
+  add_natvfn("+",      @natv_add)
+  add_natvfn("-",      @natv_sub)
+  add_natvfn("*",      @natv_mul)
+  add_natvfn("/",      @natv_div)
 end
 
 add_defaults
