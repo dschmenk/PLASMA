@@ -9,6 +9,8 @@ const SYM_TYPE   = $20
 const SYM_LEN    = $0F
 const NUM_TYPE   = $30
 const NUM_INT    = $31
+const MARK_BIT   = $80
+const MARK_MASK  = $7F
 
 struc t_elem
   word link
@@ -38,12 +40,93 @@ res[t_elem] pred_false = 0, 0, BOOL_FALSE
 
 var cons_list  = NULL
 var cons_free  = NULL
-var sym_list   = NULL
-var sym_free   = NULL
 var int_list   = NULL
 var int_free   = NULL
+var sym_list   = NULL
 var assoc_list = NULL // SYM->value association list
 byte quit = FALSE
+
+//
+// Garbage collector
+//
+
+const GC_RESET  = 2
+byte gc_trigger = GC_RESET
+
+def mark_list(listptr)#0
+  while listptr
+    listptr->type = listptr->type | MARK_BIT
+    listptr = listptr=>link
+  loop
+end
+
+def mark_elems#0
+  mark_list(cons_list)
+  mark_list(int_list)
+end
+
+def sweep_expr(expr)#0
+  while expr
+    expr->type = expr->type & MARK_MASK
+    if expr->type == CONS_TYPE
+      sweep_expr(expr=>car)
+      expr = expr=>cdr
+    else
+      expr = NULL
+    fin
+  loop
+end
+
+def sweep_used#0
+  var symptr
+
+  sweep_expr(assoc_list)
+  symptr = sym_list
+  while symptr
+    if symptr=>lambda
+      sweep_expr(symptr=>lambda)
+    fin
+    symptr = symptr=>link
+  loop
+end
+
+def collect_list(listhead, freehead)#2
+  var listptr, prevptr
+
+  prevptr = NULL
+  listptr = listhead
+  while listptr
+    if listptr->type & MARK_BIT
+      if prevptr
+        prevptr=>link = listptr=>link
+        listptr=>link = freehead
+        freehead      = listptr
+        listptr       = prevptr=>link
+      else
+        listhead      = listptr=>link
+        listptr=>link = freehead
+        freehead      = listptr
+        listptr       = listhead
+      fin
+    else
+      prevptr = listptr
+      listptr = listptr=>link
+    fin
+  loop
+  return listhead, freehead
+end
+
+def collect_unused#0
+  cons_list, cons_free = collect_list(cons_list, cons_free)
+  int_list,  int_free  = collect_list(int_list,  int_free)
+end
+
+def gc#0
+  mark_elems
+  sweep_used
+  collect_unused
+  gc_trigger = GC_RESET
+end
 
 //
 // Build ATOMS
@@ -52,7 +135,14 @@ byte quit = FALSE
 def new_cons
   var consptr
 
-  consptr = heapalloc(t_cons)
+  if cons_free
+    consptr   = cons_free
+    cons_free = cons_free=>link
+    //puts("Recycle cons\n")
+  else
+    consptr = heapalloc(t_cons)
+    //puts("Alloc cons\n")
+  fin
   consptr=>link = cons_list
   cons_list     = consptr
   consptr->type = CONS_TYPE
@@ -81,7 +171,14 @@ def new_int(int)
 
   intptr = match_int(int)
   if intptr; return intptr; fin
-  intptr = heapalloc(t_numint)
+  if int_free
+    intptr   = int_free
+    int_free = int_free=>link
+    //puts("Recycle int\n")
+  else
+    intptr = heapalloc(t_numint)
+    //puts("Alloc int\n")
+  fin
   intptr=>link   = int_list
   int_list       = intptr
   intptr->type   = NUM_INT
@@ -126,7 +223,7 @@ def new_sym(symstr)
   symptr=>natv   = NULL
   symptr=>lambda = NULL
   memcpy(symptr + name, symstr + 1, ^symstr)
-  puts("New symbol: "); puts(symstr); putln
+  //puts("New symbol: "); puts(symstr); putln
   return symptr
 end
 
@@ -561,6 +658,11 @@ def natv_rem(expr)
   return new_int(eval_num(expr) % eval_num(expr=>cdr))
 end
 
+def natv_bye(expr)
+  quit = TRUE
+  return NULL // Quick exit from REPL
+end
+
 //
 // Install default functions
 //
@@ -588,6 +690,7 @@ def install_defaults#0
   new_sym("*")=>natv      = @natv_mul)
   new_sym("/")=>natv      = @natv_div)
   new_sym("REM")=>natv    = @natv_rem)
+  new_sym("BYE")=>natv    = @natv_bye)
 end
 
 //
@@ -613,12 +716,15 @@ def read_keybd
     ^(readline + ^readline + 1) = 0
     readline++
   until ^readline
-  if ^readline == '!'; quit = TRUE; return NULL; fin // Quick exit from REPL
   drop, expr = parse_expr(readline, 0, @refill_keybd)
-  print_expr(expr); putln // DEBUG - print parsed expression
+  //print_expr(expr); putln // DEBUG - print parsed expression
   return expr
 end
 
+puts("DRAWL (LISP 1.5) symbolic processing")
 install_defaults
-while not quit; print_expr(eval_expr(read_keybd)); loop
+while not quit
+  putln; print_expr(eval_expr(read_keybd))
+  gc_trigger--; if gc_trigger == 0; gc; gc_trigger = GC_RESET; fin
+loop
 done
