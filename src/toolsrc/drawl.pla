@@ -67,8 +67,8 @@ def match_int(int)
   intptr = int_list
   while intptr
     if intptr=>intval == int
-      puts("Match int: ")
-      puti(int); putln
+      //puts("Match int: ")
+      //puti(int); putln
       return intptr
     fin
     intptr = intptr=>link
@@ -86,7 +86,7 @@ def new_int(int)
   int_list       = intptr
   intptr->type   = NUM_INT
   intptr=>intval = int
-  puts("New int: "); puti(int); putln
+  //puts("New int: "); puti(int); putln
   return intptr
 end
 
@@ -104,8 +104,8 @@ def match_sym(symstr)
         if symptr->name[i] <> symstr->[i]; break; fin
       next
       if i > len
-        puts("Match symbol: ")
-        puts(symstr - 1); putln
+        //puts("Match symbol: ")
+        //puts(symstr - 1); putln
         return symptr
       fin
     fin
@@ -126,7 +126,7 @@ def new_sym(symstr)
   symptr=>natv   = NULL
   symptr=>lambda = NULL
   memcpy(symptr + name, symstr + 1, ^symstr)
-  puts("New symbol: "); puts(symstr); putln
+  //puts("New symbol: "); puts(symstr); putln
   return symptr
 end
 
@@ -144,7 +144,7 @@ def assoc(symptr)
     pair = assoc_list
     while pair
       if (pair=>car=>car == symptr)
-        return pair
+        return pair=>car
       fin
       pair = pair=>cdr
     loop
@@ -176,7 +176,7 @@ def set_assoc(symptr, valptr)#0
   //
   pair = assoc(symptr)
   if pair
-    pair=>car=>cdr = valptr // update association
+    pair=>cdr = valptr // update association
   else
     new_assoc(symptr, valptr) // add association if unknown
   fin
@@ -300,7 +300,9 @@ def parse_expr(evalptr, level, refill)#2 // return evalptr, exprptr
         evalptr++
         break
       is ')'
-        putln
+        if not exprptr
+          exprptr = new_cons // NIL
+        fin
         return evalptr + 1, exprptr
       is '('
         evalptr++
@@ -376,7 +378,7 @@ def eval_atom(atom)
   var pair
 
   if atom->type & TYPE_MASK == SYM_TYPE
-    atom = assoc(atom)=>car=>cdr
+    atom = assoc(atom)=>cdr
   fin
   return atom
 end
@@ -384,7 +386,7 @@ end
 def eval_lambda(expr, params)
   var args, assoc_org, result
 
-  if expr=>car <> sym_lambda
+  if !expr or expr=>car <> sym_lambda
     puts("Invalid LAMBDA expression: ")
     print_expr(expr)
     return NULL
@@ -407,13 +409,13 @@ def eval_expr(expr)
       if expr=>car->type & TYPE_MASK == SYM_TYPE
         if expr=>car=>natv
           return expr=>car=>natv(expr=>cdr)
-        else
+        elsif expr=>car=>lambda
           return eval_lambda(expr=>car=>lambda, expr=>cdr)
+        else
+          return eval_lambda(assoc(expr=>car)=>cdr, expr=>cdr)
         fin
-      elsif expr=>car->type == CONS_TYPE
-        if expr=>car=>car == @sym_lambda
-          eval_lambda(expr=>car=>car, expr=>cdr)
-        fin
+      elsif expr=>car->type == CONS_TYPE and expr=>car=>car == sym_lambda
+          return eval_lambda(expr=>car, expr=>cdr)
       fin
     else
       return eval_atom(expr)
@@ -467,6 +469,21 @@ def natv_cond(expr)
   return NULL
 end
 
+def natv_null(expr)
+  var result
+
+  result = eval_expr(expr=>car)
+  return !result or !result->type ?? @pred_true :: @pred_false
+end
+
+def natv_label(expr)
+  var valptr
+
+  valptr = expr=>cdr=>car
+  set_assoc(expr=>car, valptr)
+  return valptr
+end
+
 def natv_define(expr)
 
   var symptr, funclist, funcptr
@@ -489,28 +506,19 @@ def natv_define(expr)
   return funclist
 end
 
-def natv_null(expr)
-  var result
-
-  result = eval_expr(expr=>car)
-  return !result or !result->type ?? @pred_true :: @pred_false
-end
-
 def natv_set(expr)
-  var symptr, valptr
+  var valptr
 
-  symptr = eval_expr(expr=>car)
   valptr = eval_expr(expr=>cdr=>car)
-  set_assoc(symptr, valptr)
+  set_assoc(eval_expr(expr=>car), valptr)
   return valptr
 end
 
 def natv_setq(expr)
-  var symptr, valptr
+  var valptr
 
-  symptr = expr=>car
   valptr = eval_expr(expr=>cdr=>car)
-  set_assoc(symptr, valptr)
+  set_assoc(expr=>car, valptr)
   return valptr
 end
 
@@ -537,39 +545,19 @@ def natv_add(expr)
 end
 
 def natv_sub(expr)
-  var diff
-
-  diff = eval_num(expr)
-  expr = expr=>cdr
-  while expr
-    diff = diff - eval_num(expr)
-    expr = expr=>cdr
-  loop
-  return new_int(diff)
+  return new_int(eval_num(expr) - eval_num(expr=>cdr))
 end
 
 def natv_mul(expr)
-  var mults
-
-  mults = eval_num(expr)
-  expr = expr=>cdr
-  while expr
-    mults = mults * eval_num(expr)
-    expr = expr=>cdr
-  loop
-  return new_int(mults)
+  return new_int(eval_num(expr) * eval_num(expr=>cdr))
 end
 
 def natv_div(expr)
-  var divs
+  return new_int(eval_num(expr) / eval_num(expr=>cdr))
+end
 
-  divs = eval_num(expr)
-  expr = expr=>cdr
-  while expr
-    divs = divs * eval_num(expr)
-    expr = expr=>cdr
-  loop
-  return new_int(divs)
+def natv_rem(expr)
+  return new_int(eval_num(expr) % eval_num(expr=>cdr))
 end
 
 //
@@ -592,11 +580,13 @@ def install_defaults#0
   new_sym("SET")=>natv    = @natv_set)
   new_sym("SETQ")=>natv   = @natv_setq)
   new_sym("NULL")=>natv   = @natv_null)
+  new_sym("LABEL")=>natv  = @natv_label)
   new_sym("DEFINE")=>natv = @natv_define)
   new_sym("+")=>natv      = @natv_add)
   new_sym("-")=>natv      = @natv_sub)
   new_sym("*")=>natv      = @natv_mul)
   new_sym("/")=>natv      = @natv_div)
+  new_sym("REM")=>natv    = @natv_rem)
 end
 
 //
@@ -629,5 +619,5 @@ def read_keybd
 end
 
 install_defaults
-while not quit; print_expr(eval_expr(read_keybd)); putln; loop
+while not quit; print_expr(eval_expr(read_keybd)); loop
 done
