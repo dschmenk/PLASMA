@@ -1,4 +1,6 @@
 include "inc/cmdsys.plh"
+include "inc/args.plh"
+include "inc/fileio.plh"
 
 const TYPE_MASK  = $70
 const NIL        = $00
@@ -44,7 +46,11 @@ var int_list   = NULL
 var int_free   = NULL
 var sym_list   = NULL
 var assoc_list = NULL // SYM->value association list
-byte quit = FALSE
+
+const FILEBUF_SIZE = 128
+var readfn            // read input routine
+var fileref, filebuf  // file read vars
+byte quit = FALSE     // quit interpreter flag
 
 //
 // Garbage collector
@@ -658,6 +664,22 @@ def natv_rem(expr)
   return new_int(eval_num(expr) % eval_num(expr=>cdr))
 end
 
+def natv_gt(expr)
+  return new_int(eval_num(expr) > eval_num(expr=>cdr))
+end
+
+def natv_ge(expr)
+  return new_int(eval_num(expr) >= eval_num(expr=>cdr))
+end
+
+def natv_lt(expr)
+  return new_int(eval_num(expr) < eval_num(expr=>cdr))
+end
+
+def natv_le(expr)
+  return new_int(eval_num(expr) <= eval_num(expr=>cdr))
+end
+
 def natv_bye(expr)
   quit = TRUE
   return NULL // Quick exit from REPL
@@ -690,6 +712,10 @@ def install_defaults#0
   new_sym("*")=>natv      = @natv_mul)
   new_sym("/")=>natv      = @natv_div)
   new_sym("REM")=>natv    = @natv_rem)
+  new_sym(">")=>natv      = @natv_gt)
+  new_sym(">=")=>natv     = @natv_ge)
+  new_sym("<")=>natv      = @natv_lt)
+  new_sym("<=")=>natv     = @natv_le)
   new_sym("BYE")=>natv    = @natv_bye)
 end
 
@@ -721,10 +747,63 @@ def read_keybd
   return expr
 end
 
-puts("DRAWL (LISP 1.5) symbolic processing")
+def read_fileline
+  var len
+
+  repeat
+    len = fileio:read(fileref, filebuf, FILEBUF_SIZE-1)
+    if len
+      if ^(filebuf + len - 1) == $0D
+        len-- // Remove trailing carriage return
+      fin
+      ^(filebuf + len) = 0 // NULL terminate
+    else
+      fileio:close(fileref)
+      readfn = @read_keybd
+      return FALSE
+    fin
+  until len
+  return TRUE
+end
+
+def refill_file
+  if not read_fileline
+    puts("File input prematurely ended\n")
+    return refill_keybd
+  fin
+  return filebuf
+end
+
+def read_file
+  var expr
+
+  if not read_fileline
+    return read_keybd
+  fin
+  drop, expr = parse_expr(filebuf, 0, @refill_file)
+  return expr
+end
+
+def parse_cmdline#0
+  var filename
+
+  puts("DRAWL (LISP 1.5) symbolic processing")
+  readfn = @read_keybd
+  filename = argNext(argFirst)
+  if ^filename
+    fileref = fileio:open(filename)
+    if fileref
+      fileio:newline(fileref, $7F, $0D)
+      readfn = @read_file
+      filebuf = heapalloc(FILEBUF_SIZE)
+    fin
+  fin
+end
+
+parse_cmdline
 install_defaults
 while not quit
-  putln; print_expr(eval_expr(read_keybd))
+  putln; print_expr(eval_expr(readfn()))
   gc_trigger--; if gc_trigger == 0; gc; gc_trigger = GC_RESET; fin
 loop
 done
