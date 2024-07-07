@@ -1,4 +1,5 @@
 include "inc/cmdsys.plh"
+include "inc/int32.plh"
 include "inc/args.plh"
 include "inc/fileio.plh"
 
@@ -31,7 +32,7 @@ struc t_sym
 end
 struc t_numint
   res[t_elem]
-  var intval
+  var intval[2]
 end
 
 predef eval_expr(expr)
@@ -157,12 +158,12 @@ def new_cons
   return consptr
 end
 
-def match_int(int)
+def match_int(intlo, inthi)
   var intptr
 
   intptr = int_list
   while intptr
-    if intptr=>intval == int
+    if intptr=>intval[0] == intlo and intptr=>intval[1] == inthi
       //puts("Match int: ")
       //puti(int); putln
       return intptr
@@ -172,10 +173,10 @@ def match_int(int)
   return NULL
 end
 
-def new_int(int)
+def new_int(intlo, inthi)
   var intptr
 
-  intptr = match_int(int)
+  intptr = match_int(intlo, inthi)
   if intptr; return intptr; fin
   if int_free
     intptr   = int_free
@@ -185,10 +186,11 @@ def new_int(int)
     intptr = heapalloc(t_numint)
     //puts("Alloc int\n")
   fin
-  intptr=>link   = int_list
-  int_list       = intptr
-  intptr->type   = NUM_INT
-  intptr=>intval = int
+  intptr=>link      = int_list
+  int_list          = intptr
+  intptr->type      = NUM_INT
+  intptr=>intval[0] = intlo
+  intptr=>intval[1] = inthi
   //puts("New int: "); puti(int); putln
   return intptr
 end
@@ -302,7 +304,7 @@ def print_atom(atom)#0
       is NUM_TYPE
         when atom->type
           is NUM_INT
-            puti(atom=>intval)
+            puti32(atom + intval)
             break
         wend
         break
@@ -352,20 +354,22 @@ def is_int(c); return c >= '0' and c <= '9'; end
 def is_alphasym(c); c=toupper(c); return c >= '*' and c <= 'Z' and c <> '.'; end
 
 def parse_int(evalptr)#2 // return evalptr, intptr
-  var int
+  var int[2]
   byte sign
 
-  int  = 0
+  zero32
   sign = FALSE
   if ^evalptr == '-'
     sign = TRUE
     evalptr++
   fin
   while ^evalptr >= '0' and ^evalptr <= '9'
-    int = int * 10 + ^evalptr - '0'
+    muli16(10); addi16(^evalptr - '0')
     evalptr++
   loop
-  return evalptr, new_int(sign ?? -int :: int)
+  if sign; neg32; fin
+  store32(@int)
+  return evalptr, new_int(int[0], int[1])
 end
 
 def parse_sym(evalptr)#2 // return evalptr, symptr
@@ -624,58 +628,95 @@ def natv_setq(expr)
   return valptr
 end
 
-def eval_num(expr)
+def eval_num(expr)#2
   var result
 
   result = eval_expr(expr=>car)
   if result->type == NUM_INT
-    return result=>intval
+    return result=>intval[0], result=>intval[1]
   fin
   puts("Not an number\n")
-  return 0
+  return 0, 0
 end
 
 def natv_add(expr)
-  var sum, result
+  var num[2]
 
-  sum = 0
+  zero32
   while expr
-    sum = sum + eval_num(expr)
+    num[0], num[1] = eval_num(expr)
+    add32(@num)
     expr = expr=>cdr
   loop
-  return new_int(sum)
+  store32(@num)
+  return new_int(num[0], num[1])
 end
 
 def natv_sub(expr)
-  return new_int(eval_num(expr) - eval_num(expr=>cdr))
+  var num[2]
+
+  num[0], num[1] = eval_num(expr)
+  load32(@num)
+  num[0], num[1] = eval_num(expr=>cdr)
+  sub32(@num)
+  store32(@num)
+  return new_int(num[0], num[1])
 end
 
 def natv_mul(expr)
-  return new_int(eval_num(expr) * eval_num(expr=>cdr))
+  var num[2]
+
+  num[0], num[1] = eval_num(expr)
+  load32(@num)
+  num[0], num[1] = eval_num(expr=>cdr)
+  mul32(@num)
+  store32(@num)
+  return new_int(num[0], num[1])
 end
 
 def natv_div(expr)
-  return new_int(eval_num(expr) / eval_num(expr=>cdr))
+  var num[2]
+
+  num[0], num[1] = eval_num(expr)
+  load32(@num)
+  num[0], num[1] = eval_num(expr=>cdr)
+  div32(@num)
+  store32(@num)
+  return new_int(num[0], num[1])
 end
 
 def natv_rem(expr)
-  return new_int(eval_num(expr) % eval_num(expr=>cdr))
+  var num[2]
+
+  num[0], num[1] = eval_num(expr)
+  load32(@num)
+  num[0], num[1] = eval_num(expr=>cdr)
+  num[0], num[1] = div32(@num)
+  return new_int(num[0], num[1])
 end
 
 def natv_gt(expr)
-  return new_int(eval_num(expr) > eval_num(expr=>cdr))
-end
+  var num[2]
 
-def natv_ge(expr)
-  return new_int(eval_num(expr) >= eval_num(expr=>cdr))
+  num[0], num[1] = eval_num(expr)
+  load32(@num)
+  num[0], num[1] = eval_num(expr=>cdr)
+  return isgt32(@num) ?? @pred_true :: @pred_false
 end
 
 def natv_lt(expr)
-  return new_int(eval_num(expr) < eval_num(expr=>cdr))
+  var num[2]
+
+  num[0], num[1] = eval_num(expr)
+  load32(@num)
+  num[0], num[1] = eval_num(expr=>cdr)
+  return islt32(@num) ?? @pred_true :: @pred_false
 end
 
-def natv_le(expr)
-  return new_int(eval_num(expr) <= eval_num(expr=>cdr))
+def natv_print(expr)
+  print_expr(eval_expr(expr=>car))
+  putln
+  return NULL
 end
 
 def natv_bye(expr)
@@ -711,9 +752,8 @@ def install_defaults#0
   new_sym("/")=>natv      = @natv_div)
   new_sym("REM")=>natv    = @natv_rem)
   new_sym(">")=>natv      = @natv_gt)
-  new_sym(">=")=>natv     = @natv_ge)
   new_sym("<")=>natv      = @natv_lt)
-  new_sym("<=")=>natv     = @natv_le)
+  new_sym("PRINT")=>natv  = @natv_print)
   new_sym("BYE")=>natv    = @natv_bye)
 end
 
@@ -802,6 +842,6 @@ parse_cmdline
 install_defaults
 while not quit
   putln; print_expr(eval_expr(readfn()))
-  //gc_trigger--; if gc_trigger == 0; gc; gc_trigger = GC_RESET; fin
+  gc_trigger--; if gc_trigger == 0; gc; gc_trigger = GC_RESET; fin
 loop
 done
