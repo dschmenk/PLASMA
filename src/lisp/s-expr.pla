@@ -1,0 +1,786 @@
+include "inc/cmdsys.plh"
+include "inc/int32.plh"
+
+const TYPE_MASK  = $70
+const NIL        = $00
+const BOOL_FALSE = $00
+const BOOL_TRUE  = $01
+const CONS_TYPE  = $10
+const SYM_TYPE   = $20
+const SYM_LEN    = $0F
+const NUM_TYPE   = $30
+const NUM_INT    = $31
+const MARK_BIT   = $80
+const MARK_MASK  = $7F
+
+struc t_elem
+  word link
+  byte type
+end
+struc t_cons
+  res[t_elem]
+  word car
+  word cdr
+end
+struc t_sym
+  res[t_elem]
+  var natv
+  var lambda
+  char[0] name
+end
+struc t_numint
+  res[t_elem]
+  var intval[2]
+end
+
+predef eval_expr(expr)
+
+var sym_quote, sym_lambda
+res[t_elem] pred_true  = 0, 0, BOOL_TRUE
+res[t_elem] pred_false = 0, 0, BOOL_FALSE
+
+var cons_list  = NULL
+var cons_free  = NULL
+var int_list   = NULL
+var int_free   = NULL
+var sym_list   = NULL
+var assoc_list = NULL // SYM->value association list
+
+//
+// Garbage collector
+//
+
+def mark_list(listptr)#0
+  while listptr
+    listptr->type = listptr->type | MARK_BIT
+    listptr = listptr=>link
+  loop
+end
+
+def mark_elems#0
+  mark_list(cons_list)
+  mark_list(int_list)
+end
+
+def sweep_expr(expr)#0
+  while expr
+    expr->type = expr->type & MARK_MASK
+    if expr->type == CONS_TYPE
+      sweep_expr(expr=>car)
+      expr = expr=>cdr
+    else
+      expr = NULL
+    fin
+  loop
+end
+
+def sweep_used#0
+  var symptr
+
+  sweep_expr(assoc_list)
+  symptr = sym_list
+  while symptr
+    if symptr=>lambda
+      sweep_expr(symptr=>lambda)
+    fin
+    symptr = symptr=>link
+  loop
+end
+
+def collect_list(listhead, freehead)#2
+  var listptr, prevptr
+
+  prevptr = NULL
+  listptr = listhead
+  while listptr
+    if listptr->type & MARK_BIT
+      if prevptr
+        prevptr=>link = listptr=>link
+        listptr=>link = freehead
+        freehead      = listptr
+        listptr       = prevptr=>link
+      else
+        listhead      = listptr=>link
+        listptr=>link = freehead
+        freehead      = listptr
+        listptr       = listhead
+      fin
+    else
+      prevptr = listptr
+      listptr = listptr=>link
+    fin
+  loop
+  return listhead, freehead
+end
+
+def collect_unused#0
+  cons_list, cons_free = collect_list(cons_list, cons_free)
+  int_list,  int_free  = collect_list(int_list,  int_free)
+end
+
+export def gc#0
+  mark_elems
+  sweep_used
+  collect_unused
+end
+
+//
+// Build ATOMS
+//
+
+def new_cons
+  var consptr
+
+  if cons_free
+    consptr   = cons_free
+    cons_free = cons_free=>link
+    //puts("Recycle cons\n")
+  else
+    consptr = heapalloc(t_cons)
+    //puts("Alloc cons\n")
+  fin
+  consptr=>link = cons_list
+  cons_list     = consptr
+  consptr->type = CONS_TYPE
+  consptr=>car  = NULL
+  consptr=>cdr  = NULL
+  return consptr
+end
+
+def match_int(intlo, inthi)
+  var intptr
+
+  intptr = int_list
+  while intptr
+    if intptr=>intval[0] == intlo and intptr=>intval[1] == inthi
+      //puts("Match int: ")
+      //puti(int); putln
+      return intptr
+    fin
+    intptr = intptr=>link
+  loop
+  return NULL
+end
+
+def new_int(intlo, inthi)
+  var intptr
+
+  intptr = match_int(intlo, inthi)
+  if intptr; return intptr; fin
+  if int_free
+    intptr   = int_free
+    int_free = int_free=>link
+    //puts("Recycle int\n")
+  else
+    intptr = heapalloc(t_numint)
+    //puts("Alloc int\n")
+  fin
+  intptr=>link      = int_list
+  int_list          = intptr
+  intptr->type      = NUM_INT
+  intptr=>intval[0] = intlo
+  intptr=>intval[1] = inthi
+  //puts("New int: "); puti(int); putln
+  return intptr
+end
+
+def match_sym(symstr)
+  var symptr
+  byte len, typelen, i
+
+  len     = ^symstr
+  typelen = SYM_TYPE | len
+  len--; symstr++
+  symptr  = sym_list
+  while symptr
+    if symptr->type == typelen
+      for i = 0 to len
+        if symptr->name[i] <> symstr->[i]; break; fin
+      next
+      if i > len
+        //puts("Match symbol: ")
+        //puts(symstr - 1); putln
+        return symptr
+      fin
+    fin
+    symptr = symptr=>link
+  loop
+  return NULL
+end
+
+def new_sym(symstr)
+  var symptr
+
+  symptr = match_sym(symstr)
+  if symptr; return symptr; fin // Return already existing symbol
+  symptr         = heapalloc(t_sym + ^symstr)
+  symptr=>link   = sym_list
+  sym_list       = symptr
+  symptr->type   = ^symstr | SYM_TYPE
+  symptr=>natv   = NULL
+  symptr=>lambda = NULL
+  memcpy(symptr + name, symstr + 1, ^symstr)
+  //puts("New symbol: "); puts(symstr); putln
+  return symptr
+end
+
+//
+// Build/set association between symbols and values
+//
+
+def assoc(symptr)
+  var pair
+
+  if symptr->type & TYPE_MASK == SYM_TYPE
+    //
+    // Search association list for symbol
+    //
+    pair = assoc_list
+    while pair
+      if (pair=>car=>car == symptr)
+        return pair=>car
+      fin
+      pair = pair=>cdr
+    loop
+  fin
+  return NULL // SYM not associated
+end
+
+export def new_assoc(symptr, valptr)#0
+  var pair, newlist
+
+  if symptr and (symptr->type & TYPE_MASK <> SYM_TYPE)
+    puts("Not a SYM in new_assoc\n")
+    return
+  fin
+  pair         = new_cons
+  pair=>car    = symptr
+  pair=>cdr    = valptr
+  newlist      = new_cons
+  newlist=>car = pair
+  newlist=>cdr = assoc_list
+  assoc_list   = newlist
+end
+
+def set_assoc(symptr, valptr)#0
+  var pair
+
+  //
+  // Search association list for symbol
+  //
+  pair = assoc(symptr)
+  if pair
+    pair=>cdr = valptr // update association
+  else
+    new_assoc(symptr, valptr) // add association if unknown
+  fin
+end
+
+//
+// Print textual representation of S-expression
+//
+
+def print_atom(atom)#0
+  char prstr[32]
+
+  if not atom
+    puts("NIL")
+  else
+    when atom->type & TYPE_MASK
+      is NIL
+        putc(atom->type ?? 'T' :: 'F')
+        break
+      is NUM_TYPE
+        when atom->type
+          is NUM_INT
+            puti32(atom + intval)
+            break
+        wend
+        break
+      is SYM_TYPE
+        prstr = atom->type & SYM_LEN
+        memcpy(@prstr + 1, atom + name, prstr)
+        puts(@prstr)
+        break;
+      otherwise
+        puts("Unkown atom type\n")
+    wend
+  fin
+end
+
+export def print_expr(expr)#0
+  if not expr
+    puts("NIL")
+  else
+    if expr->type == CONS_TYPE
+      putc('(')
+      while expr and expr->type == CONS_TYPE
+        print_expr(expr=>car)
+        expr = expr=>cdr
+        if expr
+          if expr->type <> CONS_TYPE
+            putc('.')
+            print_atom(expr)
+            expr = NULL
+          else
+            putc(' ')
+          fin
+        fin
+      loop
+      putc(')')
+    else
+      print_atom(expr)
+    fin
+  fin
+end
+
+//
+// Parse textual representation of S-expression
+//
+
+def is_int(c); return c >= '0' and c <= '9'; end
+
+def is_alphasym(c)
+  c=toupper(c)
+  return c >= '*' and c <= 'Z' and c <> '.'
+end
+
+def parse_int(evalptr)#2 // return evalptr, intptr
+  var int[2]
+  byte sign
+
+  zero32
+  sign = FALSE
+  if ^evalptr == '-'
+    sign = TRUE
+    evalptr++
+  fin
+  while ^evalptr >= '0' and ^evalptr <= '9'
+    muli16(10); addi16(^evalptr - '0')
+    evalptr++
+  loop
+  if sign; neg32; fin
+  store32(@int)
+  return evalptr, new_int(int[0], int[1])
+end
+
+def parse_sym(evalptr)#2 // return evalptr, symptr
+  var symstr
+  symstr = evalptr - 1
+  while is_alphasym(^evalptr)
+    ^evalptr = toupper(^evalptr)
+    evalptr++
+  loop
+  ^symstr = evalptr - symstr - 1
+  if ^symstr > 31; ^symstr = 31; fin
+  return evalptr, new_sym(symstr)
+end
+
+export def parse_expr(evalptr, level, refill)#2 // return evalptr, exprptr
+  var exprptr, consptr, elemptr, quotecons
+
+  exprptr = NULL
+  consptr = NULL
+  while TRUE
+    //
+    // Parse textual S-expression
+    //
+    elemptr = NULL
+    when ^evalptr
+      is 0
+        if level
+          // Refill input buffer
+          evalptr = refill()
+        else
+          return evalptr, exprptr
+        fin
+        break
+      is ' '
+      is ','
+        evalptr++
+        break
+      is ')'
+        if not exprptr
+          exprptr = new_cons // NIL
+        fin
+        return evalptr + 1, exprptr
+      is '('
+        evalptr++
+        if level == 0
+          level++
+        else
+          evalptr, elemptr = parse_expr(evalptr, 1, refill)
+        fin
+        break
+      is '\''
+        evalptr++
+        evalptr, elemptr    = parse_expr(evalptr, 0, refill)
+        quotecons           = new_cons
+        quotecons=>car      = sym_quote
+        quotecons=>cdr      = new_cons
+        quotecons=>cdr=>car = elemptr
+        elemptr             = quotecons
+        if level == 0
+          return evalptr, elemptr
+        fin
+        break
+      is '.'
+        evalptr++
+        evalptr, elemptr = parse_expr(evalptr, 0, refill)
+        //
+        // Add expression to CDR
+        //
+        if not (consptr and consptr=>car)
+          puts("Invalid . operator\n")
+          return evalptr, NULL
+        fin
+        consptr=>cdr = elemptr
+        return evalptr, exprptr
+      otherwise
+        if (^evalptr == '-' and is_int(^(evalptr+1))) or is_int(^evalptr)
+          evalptr, elemptr = parse_int(evalptr)
+        elsif is_alphasym(^evalptr)
+          evalptr, elemptr = parse_sym(evalptr)
+        else
+          putc('\\')
+          putc(^evalptr)
+          evalptr++
+        fin
+        if level == 0
+          return evalptr, elemptr
+        fin
+    wend
+    if elemptr
+      //
+      // Add element to S-expression
+      //
+      if not consptr
+        consptr = new_cons
+        exprptr = consptr
+      else
+        consptr=>cdr = new_cons
+        consptr      = consptr=>cdr
+      fin
+      //
+      // Add element to CAR
+      //
+      consptr=>car = elemptr
+    fin
+  loop
+  return evalptr, exprptr
+end
+
+//
+// Evaluate expression
+//
+
+def eval_atom(atom)
+  var pair
+
+  if atom->type & TYPE_MASK == SYM_TYPE
+    atom = assoc(atom)=>cdr
+  fin
+  return atom
+end
+
+def eval_lambda(expr, params)
+  var args, assoc_org, result
+
+  if !expr or expr=>car <> sym_lambda
+    puts("Invalid LAMBDA expression: ")
+    print_expr(expr)
+    return NULL
+  fin
+  assoc_org = assoc_list
+  args      = expr=>cdr=>car
+  while args
+    new_assoc(args=>car, eval_expr(params=>car))
+    args   = args=>cdr
+    params = params=>cdr
+  loop
+  result     = eval_expr(expr=>cdr=>cdr=>car)
+  assoc_list = assoc_org
+  return result
+end
+
+export def eval_expr(expr)#1
+  if expr
+    if expr->type == CONS_TYPE
+      if expr=>car->type & TYPE_MASK == SYM_TYPE
+        if expr=>car=>natv
+          return expr=>car=>natv(expr=>cdr)
+        elsif expr=>car=>lambda
+          return eval_lambda(expr=>car=>lambda, expr=>cdr)
+        else
+          return eval_lambda(assoc(expr=>car)=>cdr, expr=>cdr)
+        fin
+      elsif expr=>car->type == CONS_TYPE and expr=>car=>car == sym_lambda
+          return eval_lambda(expr=>car, expr=>cdr)
+      fin
+    else
+      return eval_atom(expr)
+    fin
+  fin
+  return NULL
+end
+
+//
+// Base native functions
+//
+
+export def bool_pred(bool)
+  return bool ?? @pred_true :: @pred_false
+end
+
+def natv_atom(expr)
+  var result
+
+  result = eval_expr(expr=>car)
+  return bool_pred(!result or result->type <> CONS_TYPE))
+end
+
+def natv_null(expr)
+  var result
+
+  result = eval_expr(expr=>car)
+  return bool_pred(!result or !result->type)
+end
+
+def natv_eq(expr)
+  return bool_pred(eval_expr(expr=>car) == eval_expr(expr=>cdr=>car))
+end
+
+def natv_not(expr)
+  return bool_pred(eval_expr(expr=>car) == @pred_false)
+end
+
+def natv_and(expr)
+  while (expr and eval_expr(expr=>car) == @pred_true)
+    expr = expr=>cdr
+  loop
+  return bool_pred(!expr)
+end
+
+def natv_or(expr)
+  while (expr and eval_expr(expr=>car) == @pred_false)
+    expr = expr=>cdr
+  loop
+  return bool_pred(expr)
+end
+
+def natv_cons(expr)
+  var consptr
+
+  consptr = new_cons
+  consptr=>car = eval_expr(expr=>car)
+  consptr=>cdr = eval_expr(expr=>cdr=>car)
+  return consptr
+end
+
+def natv_car(expr)
+  return eval_expr(expr=>car)=>car
+end
+
+def natv_cdr(expr)
+  return eval_expr(expr=>car)=>cdr
+end
+
+def natv_quote(expr)
+  return expr=>car
+end
+
+def natv_cond(expr)
+  while expr
+    if eval_expr(expr=>car=>car) == @pred_true
+      return eval_expr(expr=>car=>cdr=>car)
+    fin
+    expr = expr=>cdr
+  loop
+  return NULL
+end
+
+def natv_label(expr)
+  var valptr
+
+  valptr = expr=>cdr=>car
+  set_assoc(expr=>car, valptr)
+  return valptr
+end
+
+def natv_define(expr)
+
+  var symptr, funclist, funcptr
+
+  funclist = NULL
+  if expr
+    funclist = new_cons
+    funcptr  = funclist
+  fin
+  while expr
+    symptr         = expr=>car=>car
+    symptr=>lambda = expr=>car=>cdr=>car
+    funcptr=>car = symptr
+    expr          = expr=>cdr
+    if expr
+      funcptr=>cdr   = new_cons
+      funcptr        = funcptr=>cdr
+    fin
+  loop
+  return funclist
+end
+
+def natv_set(expr)
+  var valptr
+
+  valptr = eval_expr(expr=>cdr=>car)
+  set_assoc(eval_expr(expr=>car), valptr)
+  return valptr
+end
+
+def natv_setq(expr)
+  var valptr
+
+  valptr = eval_expr(expr=>cdr=>car)
+  set_assoc(expr=>car, valptr)
+  return valptr
+end
+
+export def eval_num(expr)#2
+  var result
+
+  result = eval_expr(expr=>car)
+  if result->type == NUM_INT
+    return result=>intval[0], result=>intval[1]
+  fin
+  puts("Not an number\n")
+  return 0, 0
+end
+
+def natv_add(expr)
+  var num[2]
+
+  zero32
+  while expr
+    num[0], num[1] = eval_num(expr)
+    add32(@num)
+    expr = expr=>cdr
+  loop
+  store32(@num)
+  return new_int(num[0], num[1])
+end
+
+def natv_sub(expr)
+  var num[2]
+
+  num[0], num[1] = eval_num(expr)
+  load32(@num)
+  num[0], num[1] = eval_num(expr=>cdr)
+  sub32(@num)
+  store32(@num)
+  return new_int(num[0], num[1])
+end
+
+def natv_mul(expr)
+  var num[2]
+
+  num[0], num[1] = eval_num(expr)
+  load32(@num)
+  num[0], num[1] = eval_num(expr=>cdr)
+  mul32(@num)
+  store32(@num)
+  return new_int(num[0], num[1])
+end
+
+def natv_div(expr)
+  var num[2]
+
+  num[0], num[1] = eval_num(expr)
+  load32(@num)
+  num[0], num[1] = eval_num(expr=>cdr)
+  div32(@num)
+  store32(@num)
+  return new_int(num[0], num[1])
+end
+
+def natv_rem(expr)
+  var num[2]
+
+  num[0], num[1] = eval_num(expr)
+  load32(@num)
+  num[0], num[1] = eval_num(expr=>cdr)
+  num[1], num[0] = div32(@num)
+  return new_int(num[0], num[1])
+end
+
+def natv_neg(expr)
+  var num[2]
+
+  num[0], num[1] = eval_num(expr)
+  load32(@num)
+  neg32
+  store32(@num)
+  return new_int(num[0], num[1])
+end
+
+def natv_gt(expr)
+  var num[2]
+
+  num[0], num[1] = eval_num(expr)
+  load32(@num)
+  num[0], num[1] = eval_num(expr=>cdr)
+  return bool_pred(isgt32(@num))
+end
+
+def natv_lt(expr)
+  var num[2]
+
+  num[0], num[1] = eval_num(expr)
+  load32(@num)
+  num[0], num[1] = eval_num(expr=>cdr)
+  return bool_pred(islt32(@num))
+end
+
+def natv_print(expr)
+  print_expr(eval_expr(expr=>car))
+  putln
+  return NULL
+end
+
+//
+// Install default functions
+//
+
+export def install_natv(symstr, funcptr)#0
+  new_sym(symstr)=>natv = funcptr)
+end
+
+new_assoc(new_sym("NIL"), NULL)
+new_assoc(new_sym("T"),   @pred_true)
+new_assoc(new_sym("F"),   @pred_false)
+sym_lambda = new_sym("LAMBDA")
+sym_quote  = new_sym("QUOTE")
+sym_quote=>natv         = @natv_quote)
+new_sym("CAR")=>natv    = @natv_car)
+new_sym("CDR")=>natv    = @natv_cdr)
+new_sym("CONS")=>natv   = @natv_cons)
+new_sym("ATOM")=>natv   = @natv_atom)
+new_sym("EQ")=>natv     = @natv_eq)
+new_sym("NOT")=>natv    = @natv_not)
+new_sym("AND")=>natv    = @natv_and)
+new_sym("OR")=>natv     = @natv_or)
+new_sym("COND")=>natv   = @natv_cond)
+new_sym("SET")=>natv    = @natv_set)
+new_sym("SETQ")=>natv   = @natv_setq)
+new_sym("NULL")=>natv   = @natv_null)
+new_sym("LABEL")=>natv  = @natv_label)
+new_sym("DEFINE")=>natv = @natv_define)
+new_sym("+")=>natv      = @natv_add)
+new_sym("-")=>natv      = @natv_sub)
+new_sym("*")=>natv      = @natv_mul)
+new_sym("/")=>natv      = @natv_div)
+new_sym("REM")=>natv    = @natv_rem)
+new_sym("NEG")=>natv    = @natv_neg)
+new_sym(">")=>natv      = @natv_gt)
+new_sym("<")=>natv      = @natv_lt)
+new_sym("PRINT")=>natv  = @natv_print)
+done
