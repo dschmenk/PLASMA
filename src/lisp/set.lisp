@@ -1,4 +1,14 @@
 (define
+  (equal (lambda (x y)
+    (cond ((atom x) (cond ((atom y) (eq x y))
+                           ( t f)
+                      )
+          )
+          ((equal (car x) (car y)) (equal (cdr x) (cdr y)))
+          ( t f)
+    ))
+  )
+
   (member (lambda (a x)
     (cond ((null x) f)
           ((eq a (car x)) t)
