@@ -172,9 +172,9 @@ $(PLFORTH): toolsrc/plforth.pla
 	./$(PLASM) -AMOW toolsrc/plforth.pla
 	acme --setpc 4094 -o $(PLFORTH) toolsrc/plforth.a
 
-$(DRAWL): toolsrc/drawl.pla
-	./$(PLASM) -AMOW toolsrc/drawl.pla
-	acme --setpc 4094 -o $(DRAWL) toolsrc/drawl.a
+$(DRAWL): lisp/drawl.pla
+	./$(PLASM) -AMOW lisp/drawl.pla
+	acme --setpc 4094 -o $(DRAWL) lisp/drawl.a
 
 #
 # PLASMA VMs
