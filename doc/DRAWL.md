@@ -7,6 +7,7 @@ LISP interpreted on a bytecode VM running on a 1 MHz 6502 is going to be sssllll
 - The PROG feature isn't present. Programming is limited to interpreting lambda S-expressions
 - Number values are limited to 32 bit integers, no floating point
 - Deep recursion. The 6502 architecture limits recursion, so don't expect too much here
+- Arrays not implemented
 
 However, the code is partitioned to allow for easy extension so some of these missing features could be implemented.
 
@@ -26,6 +27,6 @@ Here are some links to get you started.
 
 LISP 1.5 Manual: https://archive.org/details/bitsavers_mitrlelisprammersManual2ed1985_9279667
 
-Video showing DRAWL in action:
+Video showing DRAWL in action: https://youtu.be/wBMivg6xfSg
 
 Preconfigured PLASMA ProDOS boot floppy for DRAWL: https://github.com/dschmenk/PLASMA/blob/master/images/apple/DRAWL.po
