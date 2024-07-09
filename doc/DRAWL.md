@@ -1,6 +1,6 @@
 # LISP 1.5 implemented in PLASMA
 
-LISP interpreted in a bytecode VM runnin on a 1 MHz 6502 is going to be sssllllooooowwwww. So I called this implementation DRAWL in keeping with the speech impediment theme.
+LISP interpreted on a bytecode VM running on a 1 MHz 6502 is going to be sssllllooooowwwww. So I called this implementation DRAWL in keeping with the speech impediment theme.
 
 DRAWL represents an exploration REPL language for the PLASMA environment.
 
