@@ -237,7 +237,7 @@ def assoc(symptr)
 end
 
 export def new_assoc(symptr, valptr)#0
-  var pair, newlist
+  var pair, addlist
 
   if symptr and (symptr->type & TYPE_MASK <> SYM_TYPE)
     puts("Not a SYM in new_assoc\n")
@@ -246,13 +246,21 @@ export def new_assoc(symptr, valptr)#0
   pair         = new_cons
   pair=>car    = symptr
   pair=>cdr    = valptr
-  newlist      = new_cons
-  newlist=>car = pair
-  newlist=>cdr = assoc_list
-  assoc_list   = newlist
+  if assoc_list // Add to end of assoc_list
+    addlist = assoc_list
+    while addlist=>cdr
+      addlist = addlist=>cdr
+    loop
+    addlist=>cdr = new_cons
+    addlist      = addlist=>cdr
+  else // New list
+    assoc_list = new_cons
+    addlist    = assoc_list
+  fin
+  addlist=>car = pair
 end
 
-def set_assoc(symptr, valptr)#0
+export def set_assoc(symptr, valptr)#0
   var pair
 
   //
@@ -330,9 +338,12 @@ end
 
 def is_int(c); return c >= '0' and c <= '9'; end
 
+def is_alpha(c)
+  return c >= 'A' and c <= 'z'
+end
+
 def is_alphasym(c)
-  c=toupper(c)
-  return c >= '*' and c <= 'Z' and c <> '.'
+  return c >= '0' and c <= 'z'
 end
 
 def parse_int(evalptr)#2 // return evalptr, intptr
@@ -356,6 +367,7 @@ end
 
 def parse_sym(evalptr)#2 // return evalptr, symptr
   var symstr
+
   symstr = evalptr - 1
   while is_alphasym(^evalptr)
     ^evalptr = toupper(^evalptr)
@@ -429,7 +441,7 @@ export def parse_expr(evalptr, level, refill)#2 // return evalptr, exprptr
       otherwise
         if (^evalptr == '-' and is_int(^(evalptr+1))) or is_int(^evalptr)
           evalptr, elemptr = parse_int(evalptr)
-        elsif is_alphasym(^evalptr)
+        elsif is_alpha(^evalptr)
           evalptr, elemptr = parse_sym(evalptr)
         else
           putc('\\')
@@ -468,18 +480,8 @@ end
 // Evaluate expression
 //
 
-def eval_atom(atom)
-  var pair
-
-  if atom->type & TYPE_MASK == SYM_TYPE
-    atom = assoc(atom)=>cdr
-  fin
-  return atom
-end
-
-def eval_lambda(expr, params)
-  var args, assoc_org, result
-  var newlist, pairlist, pair
+def enter_lambda(expr, params)
+  var args, arglist, pairlist, pair
 
   if !expr or expr=>car <> sym_lambda
     puts("Invalid LAMBDA expression: ")
@@ -489,16 +491,15 @@ def eval_lambda(expr, params)
   //
   // Build arg list before prepending to assoc_list
   //
-  assoc_org = assoc_list
-  args      = expr=>cdr=>car
-  newlist   = NULL
+  args    = expr=>cdr=>car
+  arglist = NULL
   while args
-    if newlist
+    if arglist
       pairlist=>cdr = new_cons
       pairlist      = pairlist=>cdr
     else
-      newlist  = new_cons
-      pairlist = newlist
+      arglist  = new_cons
+      pairlist = arglist
     fin
     pair          = new_cons
     pair=>car     = args=>car
@@ -507,40 +508,49 @@ def eval_lambda(expr, params)
     args          = args=>cdr
     params        = params=>cdr
   loop
-  if newlist
+  if arglist
     pairlist=>cdr = assoc_list
-    assoc_list    = newlist
+    assoc_list    = arglist
   fin
-  result     = eval_expr(expr=>cdr=>cdr=>car)
-  assoc_list = assoc_org
-  return result
+  return expr=>cdr=>cdr=>car
 end
 
 export def eval_expr(expr)#1
-  if expr
+  var alist_enter, result
+
+  result      = NULL
+  alist_enter = assoc_list
+  while expr
     if expr->type == CONS_TYPE
       //
       // List - first element better be a function
       //
       if expr=>car->type & TYPE_MASK == SYM_TYPE
-        if expr=>car=>natv // Native function
-          return expr=>car=>natv(expr=>cdr)
+        if expr=>car=>natv
+          result = expr=>car=>natv(expr=>cdr) // Native function
+          expr   = NULL
         elsif expr=>car=>lambda // DEFINEd lambda S-expression
-          return eval_lambda(expr=>car=>lambda, expr=>cdr)
+          expr = enter_lambda(expr=>car=>lambda, expr=>cdr)
         else // Symbol associated with lambda
-          return eval_lambda(assoc(expr=>car)=>cdr, expr=>cdr)
+          expr = enter_lambda(assoc(expr=>car)=>cdr, expr=>cdr)
         fin
       elsif expr=>car->type == CONS_TYPE and expr=>car=>car == sym_lambda
-          return eval_lambda(expr=>car, expr=>cdr)
+          expr = enter_lambda(expr=>car, expr=>cdr) // Inline lambda
       fin
     else
       //
       // Atom
       //
-      return expr->type & TYPE_MASK == SYM_TYPE ?? assoc(expr)=>cdr :: expr
+      if expr->type & TYPE_MASK == SYM_TYPE
+        result = assoc(expr)=>cdr
+      else
+        result = expr
+      fin
+      expr   = NULL
     fin
-  fin
-  return NULL
+  loop
+  assoc_list = alist_enter
+  return result
 end
 
 //
@@ -638,8 +648,8 @@ def natv_define(expr)
   while expr
     symptr         = expr=>car=>car
     symptr=>lambda = expr=>car=>cdr=>car
-    funcptr=>car = symptr
-    expr          = expr=>cdr
+    funcptr=>car   = symptr
+    expr           = expr=>cdr
     if expr
       funcptr=>cdr   = new_cons
       funcptr        = funcptr=>cdr
