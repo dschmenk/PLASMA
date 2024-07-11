@@ -6,6 +6,6 @@ s-expr.pla is the guts of the system. Some features missing from the LISP 1.5 ma
 
 drawl.pla because this is a sslloowwww implementation of LISP, so named DRAWL in keeping with the speech theme. The file reading and REPL functions are contained here. DRAWL is meant to be extensible so adding PROG and floating point is easily possible.
 
-The sample LISP code comes from the LISP 1.5 manual. These are the only LISP programs that have been run on DRAWL, so other LISP programs may uncover bugs or limitations of DRAWL.
+The sample LISP code comes from the LISP 1.5 manual. These are the only LISP programs that have been run on DRAWL, so other LISP programs may uncover bugs or limitations of DRAWL. HOwever, tail recursion is supported - check out loop.lisp
 
 More information and links can be found here: https://github.com/dschmenk/PLASMA/blob/master/doc/DRAWL.md

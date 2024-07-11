@@ -6,7 +6,7 @@ LISP interpreted on a bytecode VM running on a 1 MHz 6502 is going to be sssllll
 
 - The PROG feature isn't present. Programming is limited to interpreting lambda S-expressions
 - Number values are limited to 32 bit integers, no floating point
-- Deep recursion. The 6502 architecture limits recursion, so don't expect too much here
+- General recursion. The 6502 architecture limits recursion (but see tail recursion below), so don't expect too much here
 - Arrays not implemented
 
 However, the code is partitioned to allow for easy extension so some of these missing features could be implemented.
@@ -14,7 +14,7 @@ However, the code is partitioned to allow for easy extension so some of these mi
 ## Features of DRAWL
 
 - 32 bit integers and basic math operators. Hey, better than you probably expected
-- Recursion handles about nine levels deep. Better than nothing
+- Tail recursion handles handles deep recursion. Check out [loop.lisp](https://github.com/dschmenk/PLASMA/blob/master/src/lisp/loop.lisp)
 - Fully garbage collected behind the scenes
 - Optionally read LISP source file at startup
 - SET and SETQ implemented for setting variables

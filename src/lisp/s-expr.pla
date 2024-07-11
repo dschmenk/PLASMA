@@ -476,44 +476,56 @@ end
 // Evaluate expression
 //
 
-def enter_lambda(expr, params)
+def enter_lambda(curl, expr, params)#2 // curl, expr
   var args, arglist, pairlist, pair
 
   if !expr or expr=>car <> sym_lambda
     puts("Invalid LAMBDA expression: ")
     print_expr(expr)
-    return NULL
+    return NULL, NULL
   fin
-  //
-  // Build arg list before prepending to assoc_list
-  //
-  args    = expr=>cdr=>car
-  arglist = NULL
-  while args
+  args = expr=>cdr=>car
+  if curl == expr
+    //
+    // Update current associations during tail recursion
+    //
+    while args
+      assoc(args=>car)=>cdr = eval_expr(params=>car)
+      args                  = args=>cdr
+      params                = params=>cdr
+    loop
+  else
+    //
+    // Build arg list before prepending to assoc_list
+    //
+    arglist = NULL
+    while args
+      if arglist
+        pairlist=>cdr = new_cons
+        pairlist      = pairlist=>cdr
+      else
+        arglist  = new_cons
+        pairlist = arglist
+      fin
+      pair          = new_cons
+      pair=>car     = args=>car
+      pair=>cdr     = eval_expr(params=>car)
+      pairlist=>car = pair
+      args          = args=>cdr
+      params        = params=>cdr
+    loop
     if arglist
-      pairlist=>cdr = new_cons
-      pairlist      = pairlist=>cdr
-    else
-      arglist  = new_cons
-      pairlist = arglist
+      pairlist=>cdr = assoc_list
+      assoc_list    = arglist
     fin
-    pair          = new_cons
-    pair=>car     = args=>car
-    pair=>cdr     = eval_expr(params=>car)
-    pairlist=>car = pair
-    args          = args=>cdr
-    params        = params=>cdr
-  loop
-  if arglist
-    pairlist=>cdr = assoc_list
-    assoc_list    = arglist
   fin
-  return expr=>cdr=>cdr=>car
+  return expr, expr=>cdr=>cdr=>car
 end
 
 export def eval_expr(expr)#1
-  var alist_enter, expr_car
+  var alist_enter, curl, expr_car
 
+  curl        = NULL // Current lambda
   alist_enter = assoc_list
   while expr
     if expr->type == CONS_TYPE
@@ -526,7 +538,7 @@ export def eval_expr(expr)#1
           expr = expr_car=>natv(expr=>cdr) // Native function
           break
         elsif expr_car=>lambda // DEFINEd lambda S-expression
-          expr = enter_lambda(expr_car=>lambda, expr=>cdr)
+          curl, expr = enter_lambda(curl, expr_car=>lambda, expr=>cdr)
         elsif expr_car == sym_cond // Inline cond() evaluation
           expr = expr=>cdr
 	  while expr
@@ -537,10 +549,10 @@ export def eval_expr(expr)#1
 	    expr = expr=>cdr
 	  loop
         else // Symbol associated with lambda
-          expr = enter_lambda(assoc(expr_car)=>cdr, expr=>cdr)
+          curl, expr = enter_lambda(curl, assoc(expr_car)=>cdr, expr=>cdr)
         fin
       elsif expr_car->type == CONS_TYPE and expr_car=>car == sym_lambda
-          expr = enter_lambda(expr_car, expr=>cdr) // Inline lambda
+          curl, expr = enter_lambda(NULL, expr_car, expr=>cdr) // Inline lambda
       fin
     else
       //
