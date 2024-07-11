@@ -512,41 +512,37 @@ def enter_lambda(expr, params)
 end
 
 export def eval_expr(expr)#1
-  var alist_enter, result
+  var alist_enter, expr_car
 
-  result      = NULL
   alist_enter = assoc_list
   while expr
     if expr->type == CONS_TYPE
       //
       // List - first element better be a function
       //
-      if expr=>car->type & TYPE_MASK == SYM_TYPE
-        if expr=>car=>natv
-          result = expr=>car=>natv(expr=>cdr) // Native function
-          expr   = NULL
-        elsif expr=>car=>lambda // DEFINEd lambda S-expression
-          expr = enter_lambda(expr=>car=>lambda, expr=>cdr)
+      expr_car = expr=>car
+      if expr_car->type & TYPE_MASK == SYM_TYPE
+        if expr_car=>natv
+          expr = expr_car=>natv(expr=>cdr) // Native function
+          break
+        elsif expr_car=>lambda // DEFINEd lambda S-expression
+          expr = enter_lambda(expr_car=>lambda, expr=>cdr)
         else // Symbol associated with lambda
-          expr = enter_lambda(assoc(expr=>car)=>cdr, expr=>cdr)
+          expr = enter_lambda(assoc(expr_car)=>cdr, expr=>cdr)
         fin
-      elsif expr=>car->type == CONS_TYPE and expr=>car=>car == sym_lambda
-          expr = enter_lambda(expr=>car, expr=>cdr) // Inline lambda
+      elsif expr_car->type == CONS_TYPE and expr_car=>car == sym_lambda
+          expr = enter_lambda(expr_car, expr=>cdr) // Inline lambda
       fin
     else
       //
       // Atom
       //
-      if expr->type & TYPE_MASK == SYM_TYPE
-        result = assoc(expr)=>cdr
-      else
-        result = expr
-      fin
-      expr = NULL
+      if expr->type & TYPE_MASK == SYM_TYPE; expr = assoc(expr)=>cdr; fin
+      break
     fin
   loop
   assoc_list = alist_enter
-  return result
+  return expr
 end
 
 //
