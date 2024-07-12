@@ -4,7 +4,6 @@ LISP interpreted on a bytecode VM running on a 1 MHz 6502 is going to be sssllll
 
 ## Missing features of LISP 1.5 in DRAWL
 
-- The PROG feature isn't present. Programming is limited to interpreting lambda S-expressions
 - Number values are limited to 32 bit integers, no floating point
 - General recursion. The 6502 architecture limits recursion (but see tail recursion below), so don't expect too much here
 - Arrays not implemented
@@ -17,7 +16,7 @@ However, the code is partitioned to allow for easy extension so some of these mi
 - Tail recursion handles handles deep recursion. Check out [loop.lisp](https://github.com/dschmenk/PLASMA/blob/master/src/lisp/loop.lisp)
 - Fully garbage collected behind the scenes
 - Optionally read LISP source file at startup
-- SET and SETQ implemented for setting variables
+- The PROG feature now present!
 
 LISP is one of the earliest computer languages. As such, it holds a special place in the anals of computer science. I've always wanted to learn why LISP is held in such high regard by so many, so I went about learning LISP by actually implementing a LISP interpreter in PLASMA. PLASMA is well suited to implement other languages due to its rich syntax, performance and libraries.
 

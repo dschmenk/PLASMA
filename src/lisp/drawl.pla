@@ -49,16 +49,85 @@ import sexpr
 end
 
 //
-// REPL interface to S-expression evaluator
+// REPL and extension interface to S-expression evaluator
 //
 
+var prog, prog_expr, prog_return // Current PROG expressions
+var sym_cond                     // Symbol for cond()
+var pred_true                    // Predicate for TRUE
 const FILEBUF_SIZE = 128
-var readfn            // read input routine
-var fileref, filebuf  // file read vars
-byte quit = FALSE     // quit interpreter flag
+var readfn                       // Read input routine
+var fileref, filebuf             // File read vars
+byte quit = FALSE                // Quit interpreter flag
 
 //
-// Native functions
+// (PROG ...) language extension
+//
+
+def natv_prog(expr)
+  var prog_enter, prog_car, cond_expr
+
+  prog_expr  = expr=>cdr
+  prog       = prog_expr // Update current PROG expression
+  prog_enter = prog      // Save current prog
+  expr = expr=>car       // Set up local variables
+  while expr
+    new_assoc(expr=>car, NULL)
+    expr = expr=>cdr
+  loop
+  prog_return = NULL
+  while prog_expr and not prog_return
+    prog_car  = prog_expr=>car
+    prog_expr = prog_expr=>cdr // Assume continuation
+    if prog_car->type == CONS_TYPE
+      //
+      // List - check for (COND (...))
+      //
+      if prog_car=>car == sym_cond // Inline cond() evaluation
+        cond_expr = prog_car=>cdr
+        while cond_expr
+          if eval_expr(cond_expr=>car=>car) == pred_true
+            eval_expr(cond_expr=>car=>cdr=>car) // Drop result
+            break
+          fin
+          cond_expr = cond_expr=>cdr
+        loop
+      else
+        eval_expr(prog_car) // Drop result
+      fin
+    //else
+      //
+      // Atom - skip, i.e. (GO ) destination
+      //
+    fin
+  loop
+  prog = prog_enter
+  return eval_expr(prog_return)
+end
+
+def natv_return(expr)
+  prog_return = expr=>car
+  return NULL // This value will be dropped in natv_prog
+end
+
+def natv_go(expr)
+  var label, go
+
+  expr  = expr=>car
+  label = prog // Scan prog list looking for matching SYM
+  while label
+    if label=>car == expr
+      prog_expr = label=>cdr
+      return NULL
+    fin
+    label = label=>cdr
+  loop
+  puts("(GO ...) destination not found:"); print_expr(expr); putln
+  return NULL
+end
+
+//
+// REPL native helper functions
 //
 
 def natv_bye(expr)
@@ -149,6 +218,8 @@ def parse_cmdline#0
       fileio:newline(fileref, $7F, $0D)
       readfn = @read_file
       filebuf = heapalloc(FILEBUF_SIZE)
+    else
+      puts("Unable to open: "); puts(filename); putln
     fin
   fin
 end
@@ -157,9 +228,14 @@ end
 // REPL
 //
 
+pred_true = eval_expr(new_sym("T")) // Capture value of TRUE
+sym_cond  = new_sym("COND") // This should actually match COND
+new_sym("PROG")=>natv   = @natv_prog
+new_sym("GO")=>natv     = @natv_go
+new_sym("RETURN")=>natv = @natv_return
+new_sym("BYE")=>natv    = @natv_bye
+new_sym("MEM")=>natv    = @natv_memavail
 parse_cmdline
-new_sym("BYE")=>natv = @natv_bye
-new_sym("MEM")=>natv = @natv_memavail
 while not quit
   putln; print_expr(eval_expr(readfn()))
   gc
