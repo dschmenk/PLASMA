@@ -13,7 +13,7 @@ However, the code is partitioned to allow for easy extension so some of these mi
 ## Features of DRAWL
 
 - 32 bit integers and basic math operators. Hey, better than you probably expected
-- Tail recursion handles handles deep recursion. Check out [loop.lisp](https://github.com/dschmenk/PLASMA/blob/master/src/lisp/loop.lisp)
+- Tail recursion handles deep recursion. Check out [loop.lisp](https://github.com/dschmenk/PLASMA/blob/master/src/lisp/loop.lisp)
 - Fully garbage collected behind the scenes
 - Optionally read LISP source file at startup
 - The PROG feature now present!
