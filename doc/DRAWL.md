@@ -6,7 +6,6 @@ LISP interpreted on a bytecode VM running on a 1 MHz 6502 is going to be sssllll
 
 - FUNCTION operation. Use QUOTE for functions that don't use higher up bound variables
 - General recursion. The 6502 architecture limits recursion (but see tail recursion below), so don't expect too much here
-- Arrays not implemented
 
 However, the code is partitioned to allow for easy extension so some of these missing features could be implemented.
 
@@ -17,6 +16,7 @@ However, the code is partitioned to allow for easy extension so some of these mi
 - Fully garbage collected behind the scenes
 - Optionally read LISP source file at startup
 - The PROG feature now present!
+- Arrays of up to four dimensions
 
 LISP is one of the earliest computer languages. As such, it holds a special place in the anals of computer science. I've always wanted to learn why LISP is held in such high regard by so many, so I went about learning LISP by actually implementing a LISP interpreter in PLASMA. PLASMA is well suited to implement other languages due to its rich syntax, performance and libraries.
 
