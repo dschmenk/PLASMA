@@ -4,6 +4,7 @@ LISP interpreted on a bytecode VM running on a 1 MHz 6502 is going to be sssllll
 
 ## Missing features of LISP 1.5 in DRAWL
 
+- FUNCTION operation. Use QUOTE for functions that don't use higher up bound variables
 - General recursion. The 6502 architecture limits recursion (but see tail recursion below), so don't expect too much here
 - Arrays not implemented
 
@@ -11,7 +12,7 @@ However, the code is partitioned to allow for easy extension so some of these mi
 
 ## Features of DRAWL
 
-- 32 bit integers and 80 bir floating point with transcendental math operators
+- 32 bit integers and 80 bit floating point with transcendental math operators by way of the SANE library
 - Tail recursion handles deep recursion. Check out [loop.lisp](https://github.com/dschmenk/PLASMA/blob/master/src/lisp/loop.lisp)
 - Fully garbage collected behind the scenes
 - Optionally read LISP source file at startup

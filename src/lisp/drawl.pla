@@ -13,6 +13,7 @@ import sexpr
   const NUM_TYPE   = $30
   const NUM_INT    = $31
   const NUM_FLOAT  = $32
+  const ARRAY_TYPE = $40
   const MARK_BIT   = $80
   const MARK_MASK  = $7F
 
@@ -29,8 +30,17 @@ import sexpr
     res[t_elem]
     word natv
     word lambda
-    char[0] name
+    word array
+    word apval
+    char name[0]
   end
+  struc t_numint
+    res[t_elem]
+    word intval[2]
+  end
+
+  var fmt_fpint
+  var fmt_fpfrac
 
   predef gc#0
   predef print_expr(expr)#0
@@ -44,11 +54,12 @@ import sexpr
 end
 
 import smath
+  predef eval_int(expr)#1
 end
 
 var prog, prog_expr, prog_return // Current PROG expressions
-var sym_cond                     // Symbol for cond()
-var pred_true                    // Predicate for TRUE
+var sym_cond, sym_fpint, sym_fpfrac
+var pred_true
 
 const FILEBUF_SIZE = 128
 var readfn                       // Read input routine
@@ -59,7 +70,7 @@ byte quit = FALSE                // Quit interpreter flag
 // (PROG ...) language extension
 //
 
-def natv_prog(expr)
+def natv_prog(symptr, expr)
   var prog_enter, prog_car, cond_expr
 
   prog_expr  = expr=>cdr
@@ -100,54 +111,66 @@ def natv_prog(expr)
   return eval_expr(prog_return)
 end
 
-def natv_return(expr)
+def natv_return(symptr, expr)
   prog_return = expr=>car
   return NULL // This value will be dropped in natv_prog
 end
 
-def natv_go(expr)
-  var label, go
-
-  expr  = expr=>car
-  label = prog // Scan prog list looking for matching SYM
-  while label
-    if label=>car == expr
-      prog_expr = label=>cdr
+def natv_go(symptr, expr)
+  expr   = expr=>car
+  symptr = prog // Scan prog list looking for matching SYM
+  while symptr
+    if symptr=>car == expr
+      prog_expr = symptr=>cdr
       return NULL
     fin
-    label = label=>cdr
+    symptr = symptr=>cdr
   loop
   puts("(GO ...) destination not found:"); print_expr(expr); putln
   return NULL
 end
 
-def natv_set(expr)
-  var valptr
-
-  valptr = eval_expr(expr=>cdr=>car)
-  set_assoc(eval_expr(expr=>car), valptr)
-  return valptr
+def natv_set(symptr, expr)
+  symptr = eval_expr(expr=>cdr=>car)
+  set_assoc(eval_expr(expr=>car), symptr)
+  return symptr
 end
 
-def natv_setq(expr)
-  var valptr
-
-  valptr = eval_expr(expr=>cdr=>car)
-  set_assoc(expr=>car, valptr)
-  return valptr
+def natv_setq(symptr, expr)
+  symptr = eval_expr(expr=>cdr=>car)
+  set_assoc(expr=>car, symptr)
+  return symptr
 end
 
 //
 // REPL native helper functions
 //
 
-def natv_bye(expr)
-  quit = TRUE
-  return new_sym("GOODBYE!")
+def natv_fpint(symptr, expr)
+  var fmt
+
+  fmt_fpint = eval_int(expr)=>intval
+  fmt = new_int(fmt_fpint,  0)
+  set_assoc(sym_fpint, fmt)
+  return fmt
 end
 
-def natv_memavail(expr)
+def natv_fpfrac(symptr, expr)
+  var fmt
+
+  fmt_fpfrac = eval_int(expr)=>intval
+  fmt = new_int(fmt_fpfrac,  0)
+  set_assoc(sym_fpfrac, fmt)
+  return fmt
+end
+
+def natv_memavail(symptr, expr)
   return new_int(heapavail, 0)
+end
+
+def natv_bye(symptr, expr)
+  quit = TRUE
+  return new_sym("GOODBYE!")
 end
 
 //
@@ -220,7 +243,6 @@ end
 def parse_cmdline#0
   var filename
 
-  puts("DRAWL (LISP 1.5) symbolic processor\n")
   readfn = @read_keybd
   filename = argNext(argFirst)
   if ^filename
@@ -239,15 +261,22 @@ end
 // REPL
 //
 
-pred_true = bool_pred(TRUE) // Capture value of TRUE
-sym_cond  = new_sym("COND") // This should actually match COND
+puts("DRAWL (LISP 1.5) symbolic processor\n")
+pred_true  = bool_pred(TRUE) // Capture value of TRUE
+sym_fpint  = new_sym("FMTFPI")
+sym_fpfrac = new_sym("FMTFPF")
+sym_fpint=>natv  = @natv_fpint
+sym_fpfrac=>natv = @natv_fpfrac
+new_assoc(sym_fpint,  new_int(fmt_fpint,  0))
+new_assoc(sym_fpfrac, new_int(fmt_fpfrac, 0))
+sym_cond = new_sym("COND") // This should actually match COND
 new_sym("PROG")=>natv   = @natv_prog
 new_sym("GO")=>natv     = @natv_go
 new_sym("RETURN")=>natv = @natv_return
 new_sym("SET")=>natv    = @natv_set
 new_sym("SETQ")=>natv   = @natv_setq
 new_sym("BYE")=>natv    = @natv_bye
-new_sym("MEM")=>natv    = @natv_memavail
+
 parse_cmdline
 while not quit
   putln; print_expr(eval_expr(readfn()))

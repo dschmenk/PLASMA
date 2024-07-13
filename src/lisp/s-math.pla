@@ -13,6 +13,7 @@ import sexpr
   const NUM_TYPE   = $30
   const NUM_INT    = $31
   const NUM_FLOAT  = $32
+  const ARRAY_TYPE = $40
   const MARK_BIT   = $80
   const MARK_MASK  = $7F
 
@@ -29,15 +30,17 @@ import sexpr
     res[t_elem]
     word natv
     word lambda
-    char[0] name
+    word array
+    word apval
+    char name[0]
   end
   struc t_numint
     res[t_elem]
-    word[2] intval
+    word intval[2]
   end
   struc t_numfloat
     res[t_elem]
-    res[t_fpureg] floatval
+    res floatval[10]
   end
 
   predef new_sym(symstr)#1
@@ -58,6 +61,20 @@ def eval_num(expr)
   fin
   puts("Not an number\n")
   return @nan
+end
+
+export def eval_int(expr)#1 // Always return an int
+  var result
+  var[2] int
+
+  result = eval_num(expr)
+  if result->type == NUM_FLOAT
+    fpu:pushExt(result + floatval)
+    fpu:pullInt(@int)
+    int[1] = int[0] < 0 ?? -1 :: 0
+    return new_int(int[0], int[1])
+  fin
+  return result
 end
 
 def push_int32(intptr)#0
@@ -97,7 +114,7 @@ def push_num(numptr)#0
   fin
 end
 
-def natv_add(expr)
+def natv_add(symptr, expr)
   var num
   var[2] intsum
   var[5] extsum
@@ -142,7 +159,7 @@ def natv_add(expr)
   return new_int(intsum[0], intsum[1])
 end
 
-def natv_sub(expr)
+def natv_sub(symptr, expr)
   var num1, num2
   var[2] dif
   var[5] ext
@@ -162,7 +179,7 @@ def natv_sub(expr)
   return new_float(@ext)
 end
 
-def natv_mul(expr)
+def natv_mul(symptr, expr)
   var num1, num2
   var[2] mul
   var[5] ext
@@ -182,7 +199,7 @@ def natv_mul(expr)
   return new_float(@ext)
 end
 
-def natv_div(expr)
+def natv_div(symptr, expr)
   var num1, num2
   var[2] div
   var[5] ext
@@ -202,7 +219,7 @@ def natv_div(expr)
   return new_float(@ext)
 end
 
-def natv_rem(expr)
+def natv_rem(symptr, expr)
   var num1, num2
   var[2] rem, div
   var[5] ext
@@ -221,7 +238,7 @@ def natv_rem(expr)
   return new_float(@ext)
 end
 
-def natv_neg(expr)
+def natv_neg(symptr, expr)
   var num
   var[2] neg
   var[5] ext
@@ -239,7 +256,7 @@ def natv_neg(expr)
   return new_float(@ext)
 end
 
-def natv_gt(expr)
+def natv_gt(symptr, expr)
   var num1, num2
   var[5] ext
 
@@ -256,7 +273,7 @@ def natv_gt(expr)
   return bool_pred(ext[4] < 0)
 end
 
-def natv_lt(expr)
+def natv_lt(symptr, expr)
   var num1, num2
   var[5] ext
 
