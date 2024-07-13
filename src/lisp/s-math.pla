@@ -1,0 +1,290 @@
+include "inc/cmdsys.plh"
+include "inc/int32.plh"
+include "inc/fpu.plh"
+
+import sexpr
+  const TYPE_MASK  = $70
+  const NIL        = $00
+  const BOOL_FALSE = $00
+  const BOOL_TRUE  = $01
+  const CONS_TYPE  = $10
+  const SYM_TYPE   = $20
+  const SYM_LEN    = $0F
+  const NUM_TYPE   = $30
+  const NUM_INT    = $31
+  const NUM_FLOAT  = $32
+  const MARK_BIT   = $80
+  const MARK_MASK  = $7F
+
+  struc t_elem
+    word link
+    byte type
+  end
+  struc t_cons
+    res[t_elem]
+    word car
+    word cdr
+  end
+  struc t_sym
+    res[t_elem]
+    word natv
+    word lambda
+    char[0] name
+  end
+  struc t_numint
+    res[t_elem]
+    word[2] intval
+  end
+  struc t_numfloat
+    res[t_elem]
+    res[t_fpureg] floatval
+  end
+
+  predef new_sym(symstr)#1
+  predef new_int(intlo, inthi)#1
+  predef new_float(extptr)#1
+  predef eval_expr(expr)#1
+  predef bool_pred(bool)#1
+end
+
+res[t_numint] nan = 0, 0, NUM_INT, 0, 0, 0, 128 // NaN
+
+def eval_num(expr)
+  var result
+
+  result = eval_expr(expr=>car)
+  if result and (result->type & TYPE_MASK == NUM_TYPE)
+    return result
+  fin
+  puts("Not an number\n")
+  return @nan
+end
+
+def push_int32(intptr)#0
+  var[2] int
+  byte isneg
+
+  isneg  = FALSE
+  if intptr=>[1] < 0
+    load32(intptr)
+    isneg = TRUE
+    neg32
+    store32(@int)
+  else
+    int[0] = intptr=>[0]
+    int[1] = intptr=>[1]
+  fin
+  fpu:pushInt(@int[1])
+  fpu:scalebXInt(16)
+  fpu:pushInt(@int[0])
+  fpu:addXY()
+  if isneg
+    fpu:negX()
+  fin
+end
+
+def push_num(numptr)#0
+  var int
+
+  if numptr->type == NUM_FLOAT
+    fpu:pushExt(numptr + floatval)
+  elsif numptr->type == NUM_INT
+    push_int32(numptr + intval)
+  else
+    puts("Pushing non number!\n")
+    int = 0
+    fpu:pushInt(@int)
+  fin
+end
+
+def natv_add(expr)
+  var num
+  var[2] intsum
+  var[5] extsum
+
+  intsum[0] = 0
+  intsum[1] = 0
+  num       = eval_num(expr)
+  expr      = expr=>cdr
+  if num->type == NUM_INT
+    //
+    // Sum as integers unless a float is encountered
+    //
+    intsum[0] = num=>intval[0]
+    intsum[1] = num=>intval[1]
+    while expr
+      num  = eval_num(expr)
+      expr = expr=>cdr
+      if num->type == NUM_FLOAT
+        break
+      fin
+      load32(@intsum)
+      add32(num + intval)
+      store32(@intsum)
+    loop
+  fin
+  if num->type == NUM_FLOAT
+    //
+    // Sum as floating point numbers
+    //
+    push_int32(@intsum)
+    push_num(num)
+    fpu:addXY()
+    while expr
+      num = eval_num(expr)
+      push_num(num)
+      fpu:addXY()
+      expr = expr=>cdr
+    loop
+    fpu:pullExt(@extsum)
+    return new_float(@extsum)
+  fin
+  return new_int(intsum[0], intsum[1])
+end
+
+def natv_sub(expr)
+  var num1, num2
+  var[2] dif
+  var[5] ext
+
+  num1 = eval_num(expr)
+  num2 = eval_num(expr=>cdr)
+  if num1->type == NUM_INT and num2->type == NUM_INT
+    load32(num1 + intval)
+    sub32(num2 + intval)
+    store32(@dif)
+    return new_int(dif[0], dif[1])
+  fin
+  push_num(num1)
+  push_num(num2)
+  fpu:subXY()
+  fpu:pullExt(@ext)
+  return new_float(@ext)
+end
+
+def natv_mul(expr)
+  var num1, num2
+  var[2] mul
+  var[5] ext
+
+  num1 = eval_num(expr)
+  num2 = eval_num(expr=>cdr)
+  if num1->type == NUM_INT and num2->type == NUM_INT
+    load32(num1 + intval)
+    mul32(num2 + intval)
+    store32(@mul)
+    return new_int(mul[0], mul[1])
+  fin
+  push_num(num1)
+  push_num(num2)
+  fpu:mulXY()
+  fpu:pullExt(@ext)
+  return new_float(@ext)
+end
+
+def natv_div(expr)
+  var num1, num2
+  var[2] div
+  var[5] ext
+
+  num1 = eval_num(expr)
+  num2 = eval_num(expr=>cdr)
+  if num1->type == NUM_INT and num2->type == NUM_INT
+    load32(num1 + intval)
+    div32(num2 + intval)
+    store32(@div)
+    return new_int(div[0], div[1])
+  fin
+  push_num(num1)
+  push_num(num2)
+  fpu:divXY()
+  fpu:pullExt(@ext)
+  return new_float(@ext)
+end
+
+def natv_rem(expr)
+  var num1, num2
+  var[2] rem, div
+  var[5] ext
+
+  num1 = eval_num(expr)
+  num2 = eval_num(expr=>cdr)
+  if num1->type == NUM_INT and num2->type == NUM_INT
+    load32(num1 + intval)
+    rem[1], rem[0] = div32(num2 + intval)
+    return new_int(rem[0], rem[1])
+  fin
+  push_num(num1)
+  push_num(num2)
+  fpu:remXY()
+  fpu:pullExt(@ext)
+  return new_float(@ext)
+end
+
+def natv_neg(expr)
+  var num
+  var[2] neg
+  var[5] ext
+
+  num = eval_num(expr)
+  if num=>type == NUM_INT
+    load32(num + intval)
+    neg32
+    store32(@neg)
+    return new_int(neg[0], neg[1])
+  fin
+  push_num(num)
+  fpu:negX()
+  fpu:pullExt(@ext)
+  return new_float(@ext)
+end
+
+def natv_gt(expr)
+  var num1, num2
+  var[5] ext
+
+  num1 = eval_num(expr)
+  num2 = eval_num(expr=>cdr)
+  if num1->type == NUM_INT and num2->type == NUM_INT
+    load32(num1 + intval)
+    return bool_pred(isgt32(num2 + intval))
+  fin
+  push_num(num2)
+  push_num(num1)
+  fpu:subXY()
+  fpu:pullExt(@ext)
+  return bool_pred(ext[4] < 0)
+end
+
+def natv_lt(expr)
+  var num1, num2
+  var[5] ext
+
+  num1 = eval_num(expr)
+  num2 = eval_num(expr=>cdr)
+  if num1->type == NUM_INT and num2->type == NUM_INT
+    load32(num1 + intval)
+    return bool_pred(islt32(num2 + intval))
+  fin
+  push_num(num1)
+  push_num(num2)
+  fpu:subXY()
+  fpu:pullExt(@ext)
+  return bool_pred(ext[4] < 0)
+end
+
+//
+// Install math functions
+//
+
+new_sym("+")=>natv      = @natv_add
+new_sym("-")=>natv      = @natv_sub
+new_sym("*")=>natv      = @natv_mul
+new_sym("/")=>natv      = @natv_div
+new_sym("REM")=>natv    = @natv_rem
+new_sym("NEG")=>natv    = @natv_neg
+new_sym(">")=>natv      = @natv_gt
+new_sym("<")=>natv      = @natv_lt
+fpu:reset()
+return modkeep | modinitkeep
+done

@@ -4,7 +4,6 @@ LISP interpreted on a bytecode VM running on a 1 MHz 6502 is going to be sssllll
 
 ## Missing features of LISP 1.5 in DRAWL
 
-- Number values are limited to 32 bit integers, no floating point
 - General recursion. The 6502 architecture limits recursion (but see tail recursion below), so don't expect too much here
 - Arrays not implemented
 
@@ -12,7 +11,7 @@ However, the code is partitioned to allow for easy extension so some of these mi
 
 ## Features of DRAWL
 
-- 32 bit integers and basic math operators. Hey, better than you probably expected
+- 32 bit integers and 80 bir floating point with transcendental math operators
 - Tail recursion handles deep recursion. Check out [loop.lisp](https://github.com/dschmenk/PLASMA/blob/master/src/lisp/loop.lisp)
 - Fully garbage collected behind the scenes
 - Optionally read LISP source file at startup

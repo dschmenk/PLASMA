@@ -1,7 +1,6 @@
 include "inc/cmdsys.plh"
 include "inc/int32.plh"
 include "inc/fpstr.plh"
-include "inc/fpu.plh"
 
 const TYPE_MASK  = $70
 const NIL        = $00
@@ -37,7 +36,7 @@ struc t_numint
 end
 struc t_numfloat
   res[t_elem]
-  res[t_fpureg] floatval
+  res[10] floatval
 end
 
 predef eval_expr(expr)
@@ -45,7 +44,6 @@ predef eval_expr(expr)
 var sym_quote, sym_lambda, sym_cond
 res[t_elem]   pred_true  = 0, 0, BOOL_TRUE
 res[t_elem]   pred_false = 0, 0, BOOL_FALSE
-res[t_numint] nan = 0, 0, NUM_INT, 0, 0, 0, 128 // NaN
 
 var cons_list  = NULL
 var cons_free  = NULL
@@ -222,7 +220,7 @@ export def new_float(extptr)#1
   floatptr=>link = float_list
   float_list     = floatptr
   floatptr->type = NUM_FLOAT
-  memcpy(floatptr + floatval, extptr, t_fpureg)
+  memcpy(floatptr + floatval, extptr, 10)
   return floatptr
 end
 
@@ -340,6 +338,7 @@ def print_atom(atom)#0
       is NUM_TYPE
         when atom->type
           is NUM_INT
+            if atom=>intval[1] >= 0; putc(' '); fin // Add space for pos
             puti32(atom + intval)
             break
           is NUM_FLOAT
@@ -388,7 +387,10 @@ end
 // Parse textual representation of S-expression
 //
 
-def is_num(c); return c >= '0' and c <= '9'; end
+def is_num(cptr)
+  if ^cptr == '-' or ^cptr == '+'; cptr++; fin
+  return ^cptr >= '0' and ^cptr <= '9'
+end
 
 def is_alphasym(c)
   return (c >= '*' and c <= 'z') and (c <> '.') and (c <> ',')
@@ -403,6 +405,8 @@ def parse_num(evalptr)#2 // return evalptr, intptr
   if ^evalptr == '-'
     sign = TRUE
     evalptr++
+  elsif ^evalptr == '+'
+    evalptr++
   fin
   startptr = evalptr
   while ^evalptr >= '0' and ^evalptr <= '9'
@@ -416,7 +420,6 @@ def parse_num(evalptr)#2 // return evalptr, intptr
       loop
     fin
     if toupper(^evalptr) == 'E'
-      ^evalptr = 'E'
       evalptr++
       if ^evalptr == '-' or ^evalptr == '+'; evalptr++; fin
       while ^evalptr >= '0' and ^evalptr <= '9'
@@ -512,7 +515,7 @@ export def parse_expr(evalptr, level, refill)#2 // return evalptr, exprptr
         elemptr = NULL
         break
       otherwise
-        if is_num(^evalptr) or (^evalptr == '-' and is_num(^(evalptr+1)))
+        if is_num(evalptr)
           evalptr, elemptr = parse_num(evalptr)
         elsif is_alphasym(^evalptr)
           evalptr, elemptr = parse_sym(evalptr)
@@ -738,246 +741,6 @@ def natv_define(expr)
   return funclist
 end
 
-def natv_set(expr)
-  var valptr
-
-  valptr = eval_expr(expr=>cdr=>car)
-  set_assoc(eval_expr(expr=>car), valptr)
-  return valptr
-end
-
-def natv_setq(expr)
-  var valptr
-
-  valptr = eval_expr(expr=>cdr=>car)
-  set_assoc(expr=>car, valptr)
-  return valptr
-end
-
-export def eval_num(expr)
-  var result
-
-  result = eval_expr(expr=>car)
-  if result and (result->type & TYPE_MASK == NUM_TYPE)
-    return result
-  fin
-  puts("Not an number\n")
-  return @nan
-end
-
-def push_int32(intptr)#0
-  var[2] int
-  byte isneg
-
-  isneg  = FALSE
-  if intptr=>[1] < 0
-    load32(intptr)
-    isneg = TRUE
-    neg32
-    store32(@int)
-  else
-    int[0] = intptr=>[0]
-    int[1] = intptr=>[1]
-  fin
-  fpu:pushInt(@int[1])
-  fpu:scalebXInt(16)
-  fpu:pushInt(@int[0])
-  fpu:addXY()
-  if isneg
-    fpu:negX()
-  fin
-end
-
-def push_num(numptr)#0
-  var int
-
-  if numptr->type == NUM_FLOAT
-    fpu:pushExt(numptr + floatval)
-  elsif numptr->type == NUM_INT
-    push_int32(numptr + intval)
-  else
-    puts("Pushing non number!\n")
-    int = 0
-    fpu:pushInt(@int)
-  fin
-end
-
-def natv_add(expr)
-  var num
-  var[2] intsum
-  var[5] extsum
-
-  intsum[0] = 0
-  intsum[1] = 0
-  num       = eval_num(expr)
-  expr      = expr=>cdr
-  if num->type == NUM_INT
-    //
-    // Sum as integers unless a float is encountered
-    //
-    intsum[0] = num=>intval[0]
-    intsum[1] = num=>intval[1]
-    while expr
-      num  = eval_num(expr)
-      expr = expr=>cdr
-      if num->type == NUM_FLOAT
-        break
-      fin
-      load32(@intsum)
-      add32(num + intval)
-      store32(@intsum)
-    loop
-  fin
-  if num->type == NUM_FLOAT
-    //
-    // Sum as floating point numbers
-    //
-    push_int32(@intsum)
-    push_num(num)
-    fpu:addXY()
-    while expr
-      num = eval_num(expr)
-      push_num(num)
-      fpu:addXY()
-      expr = expr=>cdr
-    loop
-    fpu:pullExt(@extsum)
-    return new_float(@extsum)
-  fin
-  return new_int(intsum[0], intsum[1])
-end
-
-def natv_sub(expr)
-  var num1, num2
-  var[2] dif
-  var[5] ext
-
-  num1 = eval_num(expr)
-  num2 = eval_num(expr=>cdr)
-  if num1->type == NUM_INT and num2->type == NUM_INT
-    load32(num1 + intval)
-    sub32(num2 + intval)
-    store32(@dif)
-    return new_int(dif[0], dif[1])
-  fin
-  push_num(num1)
-  push_num(num2)
-  fpu:subXY()
-  fpu:pullExt(@ext)
-  return new_float(@ext)
-end
-
-def natv_mul(expr)
-  var num1, num2
-  var[2] mul
-  var[5] ext
-
-  num1 = eval_num(expr)
-  num2 = eval_num(expr=>cdr)
-  if num1->type == NUM_INT and num2->type == NUM_INT
-    load32(num1 + intval)
-    mul32(num2 + intval)
-    store32(@mul)
-    return new_int(mul[0], mul[1])
-  fin
-  push_num(num1)
-  push_num(num2)
-  fpu:mulXY()
-  fpu:pullExt(@ext)
-  return new_float(@ext)
-end
-
-def natv_div(expr)
-  var num1, num2
-  var[2] div
-  var[5] ext
-
-  num1 = eval_num(expr)
-  num2 = eval_num(expr=>cdr)
-  if num1->type == NUM_INT and num2->type == NUM_INT
-    load32(num1 + intval)
-    div32(num2 + intval)
-    store32(@div)
-    return new_int(div[0], div[1])
-  fin
-  push_num(num1)
-  push_num(num2)
-  fpu:divXY()
-  fpu:pullExt(@ext)
-  return new_float(@ext)
-end
-
-def natv_rem(expr)
-  var num1, num2
-  var[2] rem, div
-  var[5] ext
-
-  num1 = eval_num(expr)
-  num2 = eval_num(expr=>cdr)
-  if num1->type == NUM_INT and num2->type == NUM_INT
-    load32(num1 + intval)
-    rem[1], rem[0] = div32(num2 + intval)
-    return new_int(rem[0], rem[1])
-  fin
-  push_num(num1)
-  push_num(num2)
-  fpu:remXY()
-  fpu:pullExt(@ext)
-  return new_float(@ext)
-end
-
-def natv_neg(expr)
-  var num
-  var[2] neg
-  var[5] ext
-
-  num = eval_num(expr)
-  if num=>type == NUM_INT
-    load32(num + intval)
-    neg32
-    store32(@neg)
-    return new_int(neg[0], neg[1])
-  fin
-  push_num(num)
-  fpu:negX()
-  fpu:pullExt(@ext)
-  return new_float(@ext)
-end
-
-def natv_gt(expr)
-  var num1, num2
-  var[5] ext
-
-  num1 = eval_num(expr)
-  num2 = eval_num(expr=>cdr)
-  if num1->type == NUM_INT and num2->type == NUM_INT
-    load32(num1 + intval)
-    return bool_pred(isgt32(num2 + intval))
-  fin
-  push_num(num2)
-  push_num(num1)
-  fpu:subXY()
-  fpu:pullExt(@ext)
-  return bool_pred(ext[4] < 0)
-end
-
-def natv_lt(expr)
-  var num1, num2
-  var[5] ext
-
-  num1 = eval_num(expr)
-  num2 = eval_num(expr=>cdr)
-  if num1->type == NUM_INT and num2->type == NUM_INT
-    load32(num1 + intval)
-    return bool_pred(islt32(num2 + intval))
-  fin
-  push_num(num1)
-  push_num(num2)
-  fpu:subXY()
-  fpu:pullExt(@ext)
-  return bool_pred(ext[4] < 0)
-end
-
 def natv_print(expr)
   expr = eval_expr(expr=>car)
   print_expr(expr)
@@ -1004,20 +767,9 @@ new_sym("EQ")=>natv     = @natv_eq
 new_sym("NOT")=>natv    = @natv_not
 new_sym("AND")=>natv    = @natv_and
 new_sym("OR")=>natv     = @natv_or
-new_sym("SET")=>natv    = @natv_set
-new_sym("SETQ")=>natv   = @natv_setq
 new_sym("NULL")=>natv   = @natv_null
 new_sym("LABEL")=>natv  = @natv_label
 new_sym("DEFINE")=>natv = @natv_define
-new_sym("+")=>natv      = @natv_add
-new_sym("-")=>natv      = @natv_sub
-new_sym("*")=>natv      = @natv_mul
-new_sym("/")=>natv      = @natv_div
-new_sym("REM")=>natv    = @natv_rem
-new_sym("NEG")=>natv    = @natv_neg
-new_sym(">")=>natv      = @natv_gt
-new_sym("<")=>natv      = @natv_lt
 new_sym("PRINT")=>natv  = @natv_print
-fpu:reset()
 return modkeep | modinitkeep
 done

@@ -12,6 +12,7 @@ import sexpr
   const SYM_LEN    = $0F
   const NUM_TYPE   = $30
   const NUM_INT    = $31
+  const NUM_FLOAT  = $32
   const MARK_BIT   = $80
   const MARK_MASK  = $7F
 
@@ -30,31 +31,25 @@ import sexpr
     word lambda
     char[0] name
   end
-  struc t_numint
-    res[t_elem]
-    word[2] intval
-  end
 
   predef gc#0
   predef print_expr(expr)#0
   predef parse_expr(evalptr, level, refill)#2
   predef eval_expr(expr)#1
-  predef eval_num(expr)#2
   predef bool_pred(bool)#1
-  predef new_cons#1
   predef new_int(intlo, inthi)#1
   predef new_sym(symstr)#1
   predef new_assoc(symptr, valptr)#0
   predef set_assoc(symptr, valptr)#0
 end
 
-//
-// REPL and extension interface to S-expression evaluator
-//
+import smath
+end
 
 var prog, prog_expr, prog_return // Current PROG expressions
 var sym_cond                     // Symbol for cond()
 var pred_true                    // Predicate for TRUE
+
 const FILEBUF_SIZE = 128
 var readfn                       // Read input routine
 var fileref, filebuf             // File read vars
@@ -124,6 +119,22 @@ def natv_go(expr)
   loop
   puts("(GO ...) destination not found:"); print_expr(expr); putln
   return NULL
+end
+
+def natv_set(expr)
+  var valptr
+
+  valptr = eval_expr(expr=>cdr=>car)
+  set_assoc(eval_expr(expr=>car), valptr)
+  return valptr
+end
+
+def natv_setq(expr)
+  var valptr
+
+  valptr = eval_expr(expr=>cdr=>car)
+  set_assoc(expr=>car, valptr)
+  return valptr
 end
 
 //
@@ -228,11 +239,13 @@ end
 // REPL
 //
 
-pred_true = eval_expr(new_sym("T")) // Capture value of TRUE
+pred_true = bool_pred(TRUE) // Capture value of TRUE
 sym_cond  = new_sym("COND") // This should actually match COND
 new_sym("PROG")=>natv   = @natv_prog
 new_sym("GO")=>natv     = @natv_go
 new_sym("RETURN")=>natv = @natv_return
+new_sym("SET")=>natv    = @natv_set
+new_sym("SETQ")=>natv   = @natv_setq
 new_sym("BYE")=>natv    = @natv_bye
 new_sym("MEM")=>natv    = @natv_memavail
 parse_cmdline
