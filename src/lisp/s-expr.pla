@@ -36,6 +36,7 @@ end
 struc t_array
   res[t_elem]
   word dimension[4]
+  word offset[4]
   word arraymem
 end
 struc t_numint
@@ -50,8 +51,8 @@ end
 predef eval_expr(expr)
 
 var sym_quote, sym_lambda, sym_cond, sym_set
-res[t_elem]   pred_true  = 0, 0, BOOL_TRUE
-res[t_elem]   pred_nil   = 0, 0, NIL
+res[t_elem] pred_true  = 0, 0, BOOL_TRUE
+res[t_elem] pred_nil   = 0, 0, NIL
 
 var cons_list  = NULL
 var cons_free  = NULL
@@ -240,16 +241,25 @@ export def new_float(extptr)#1
 end
 
 def new_array(dim0, dim1, dim2, dim3)
+  var ofst0, ofst1, ofst2, ofst3
   var size, aptr, memptr
 
-  size = dim0 * 2
-  if dim1; size = size * dim1; fin
-  if dim2; size = size * dim2; fin
-  if dim3; size = size * dim3; fin
-  if not size
-    puts("Zero sized array!\n")
-    return NULL
+  if dim3
+    ofst3 = 2
+    ofst2 = dim3  * 2
+    ofst1 = ofst2 * dim2
+    ofst0 = ofst1 * dim1
+  elsif dim2
+    ofst2 = 2
+    ofst1 = dim2 * 2
+    ofst0 = ofst1 * dim1
+  elsif dim1
+    ofst1 = 2
+    ofst0 = dim1 * 2
+  else
+    ofst0 = 2
   fin
+  size = dim0 * ofst0
   memptr = heapalloc(size)
   if not memptr
     puts("Array too large!\n")
@@ -263,6 +273,10 @@ def new_array(dim0, dim1, dim2, dim3)
   aptr=>dimension[1] = dim1
   aptr=>dimension[2] = dim2
   aptr=>dimension[3] = dim3
+  aptr=>offset[0]    = ofst0
+  aptr=>offset[1]    = ofst1
+  aptr=>offset[2]    = ofst2
+  aptr=>offset[3]    = ofst3
   aptr=>arraymem     = memptr
   return aptr
 end
@@ -372,7 +386,7 @@ end
 
 def print_atom(atom)#0
   char prstr[32]
-  var elemptr, d, i
+  var elemptr, i, j, k, l
 
   if not atom
     puts("NIL")
@@ -399,16 +413,39 @@ def print_atom(atom)#0
         break;
       is ARRAY_TYPE
         elemptr = atom=>arraymem
-        for d = 3 downto 0
-          if atom=>dimension[d]
-            puts("[ ")
-            for i = 1 to atom=>dimension[d]
-              print_atom(*elemptr); putc(' ')
-              elemptr = elemptr + 2
+        puts("[ ")
+        for i = 1 to atom=>dimension[0]
+          if atom=>dimension[1]
+            puts("\n[ ")
+            for j = 1 to atom=>dimension[1]
+              if atom=>dimension[2]
+                puts("\n[ ")
+                for k = 1 to atom=>dimension[2]
+                  if atom=>dimension[3]
+                    puts("\n[ ")
+                    for l = 1 to atom=>dimension[3]
+                      print_atom(*elemptr); putc(' ')
+                      elemptr = elemptr + 2
+                    next
+                    puts("]")
+                  else
+                    print_atom(*elemptr); putc(' ')
+                    elemptr = elemptr + 2
+                  fin
+                next
+                puts("]")
+              else
+                print_atom(*elemptr); putc(' ')
+                elemptr = elemptr + 2
+              fin
             next
-            puts("]\n")
+            puts("]")
+          else
+            print_atom(*elemptr); putc(' ')
+            elemptr = elemptr + 2
           fin
         next
+        puts("]\n")
         break
       otherwise
         puts("Unkown atom type\n")
@@ -700,6 +737,7 @@ export def eval_expr(expr)#1
       if expr->type & TYPE_MASK == SYM_TYPE
         if expr=>apval
           expr = expr=>apval
+          if expr == @pred_nil; expr = NULL; fin
         elsif expr=>array
           expr = expr=>array
         else
@@ -801,13 +839,9 @@ def natv_define(symptr, expr)
 end
 
 def eval_index(arrayptr, expr)
-  var idx[4], ii, index
+  var idx[4], i, ii, index
 
-  idx[0] = 0
-  idx[1] = 0
-  idx[2] = 0
-  idx[3] = 0
-  ii     = 0
+  ii = 0
   while expr and ii < 4
     index = eval_expr(expr=>car)
     if index->type <> NUM_INT or isuge(index=>intval, arrayptr=>dimension[ii])
@@ -821,9 +855,9 @@ def eval_index(arrayptr, expr)
   index = 0
   while ii
     ii--
-    index = idx[ii] + index * arrayptr=>dimension[ii])
+    index = index + idx[ii] * arrayptr=>offset[ii]
   loop
-  return arrayptr=>arraymem + index * 2
+  return arrayptr=>arraymem + index
 end
 
 def natv_index(symptr, expr)
