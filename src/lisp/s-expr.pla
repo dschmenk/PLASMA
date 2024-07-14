@@ -15,7 +15,7 @@ const NUM_FLOAT  = $32
 const ARRAY_TYPE = $40
 const MARK_BIT   = $80
 const MARK_MASK  = $7F
-const APVAL_HACK = 1  // Hack so we can set APVAL to NULL
+const NULL_HACK  = 1  // Hack so we can set elements to NULL
 
 struc t_elem
   word link
@@ -51,7 +51,7 @@ end
 
 predef eval_expr(expr)
 
-var sym_quote, sym_lambda, sym_cond, sym_set
+var sym_nil, sym_quote, sym_lambda, sym_cond, sym_set
 res[t_elem] pred_true  = 0, 0, BOOL_TRUE
 
 var cons_list  = NULL
@@ -574,7 +574,7 @@ export def parse_expr(evalptr, level, refill)#2 // return evalptr, exprptr
         break
       is ')'
         if not exprptr
-          exprptr = new_cons // NIL
+          exprptr = sym_nil
         fin
         return evalptr + 1, exprptr
       is '('
@@ -736,7 +736,7 @@ export def eval_expr(expr)#1
       //
       if expr->type & TYPE_MASK == SYM_TYPE
         if expr=>apval
-          expr = expr=>apval ^ APVAL_HACK
+          expr = expr=>apval ^ NULL_HACK
         elsif expr=>array
           expr = expr=>array
         else
@@ -764,16 +764,11 @@ def natv_atom(symptr, expr)
 end
 
 def natv_null(symptr, expr)
-  symptr = eval_expr(expr=>car)
-  return bool_pred(!symptr or !symptr->type)
+  return bool_pred(!eval_expr(expr=>car))
 end
 
 def natv_eq(symptr, expr)
   return bool_pred(eval_expr(expr=>car) == eval_expr(expr=>cdr=>car))
-end
-
-def natv_not(symptr, expr)
-  return bool_pred(eval_expr(expr=>car) == NULL)
 end
 
 def natv_and(symptr, expr)
@@ -903,16 +898,31 @@ def natv_array(symptr, expr)
     aptr=>car     = symptr
     expr          = expr=>cdr
     if expr
-      aptr=>cdr   = new_cons
-      aptr        = aptr=>cdr
+      aptr=>cdr = new_cons
+      aptr      = aptr=>cdr
     fin
   loop
   return arraylist
 end
 
 def natv_cset(symptr, expr)
+  symptr = eval_expr(expr=>car)
+  if symptr->type & TYPE_MASK <> SYM_TYPE
+    puts("CSET: Not a SYM\n")
+    return NULL
+  fin
+  expr          = eval_expr(expr=>cdr=>car)
+  symptr=>apval = expr ^ NULL_HACK
+  return symptr
+end
+
+def natv_csetq(symptr, expr)
+  if symptr->type & TYPE_MASK <> SYM_TYPE
+    puts("CSETQ: Not a SYM\n")
+    return NULL
+  fin
   symptr = eval_expr(expr=>cdr=>car)
-  expr=>car=>apval = symptr ^ APVAL_HACK
+  expr=>car=>apval = symptr ^ NULL_HACK
   return symptr
 end
 
@@ -927,13 +937,14 @@ end
 // Install default functions
 //
 
-new_sym("NIL")=>apval = NULL       ^ APVAL_HACK
-new_sym("F")=>apval   = NULL       ^ APVAL_HACK
-new_sym("T")=>apval   = @pred_true ^ APVAL_HACK
-sym_lambda = new_sym("LAMBDA")
-sym_quote  = new_sym("QUOTE")
-sym_cond   = new_sym("COND")
-sym_set    = new_sym("SET")
+new_sym("T")=>apval     = @pred_true ^ NULL_HACK
+new_sym("F")=>apval     = NULL_HACK
+sym_nil                 = new_sym("NIL")
+sym_nil=>apval          = NULL_HACK
+sym_lambda              = new_sym("LAMBDA")
+sym_cond                = new_sym("COND")
+sym_set                 = new_sym("SET")
+sym_quote               = new_sym("QUOTE")
 sym_quote=>natv         = @natv_quote
 new_sym("CAR")=>natv    = @natv_car
 new_sym("CDR")=>natv    = @natv_cdr
@@ -941,7 +952,8 @@ new_sym("CONS")=>natv   = @natv_cons
 new_sym("ATOM")=>natv   = @natv_atom
 new_sym("EQ")=>natv     = @natv_eq
 new_sym("CSET")=>natv   = @natv_cset
-new_sym("NOT")=>natv    = @natv_not
+new_sym("CSETQ")=>natv  = @natv_csetq
+new_sym("NOT")=>natv    = @natv_null
 new_sym("AND")=>natv    = @natv_and
 new_sym("OR")=>natv     = @natv_or
 new_sym("NULL")=>natv   = @natv_null
