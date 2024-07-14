@@ -15,6 +15,7 @@ const NUM_FLOAT  = $32
 const ARRAY_TYPE = $40
 const MARK_BIT   = $80
 const MARK_MASK  = $7F
+const APVAL_HACK = 1  // Hack so we can set APVAL to NULL
 
 struc t_elem
   word link
@@ -52,7 +53,6 @@ predef eval_expr(expr)
 
 var sym_quote, sym_lambda, sym_cond, sym_set
 res[t_elem] pred_true  = 0, 0, BOOL_TRUE
-res[t_elem] pred_nil   = 0, 0, NIL
 
 var cons_list  = NULL
 var cons_free  = NULL
@@ -736,8 +736,7 @@ export def eval_expr(expr)#1
       //
       if expr->type & TYPE_MASK == SYM_TYPE
         if expr=>apval
-          expr = expr=>apval
-          if expr == @pred_nil; expr = NULL; fin
+          expr = expr=>apval ^ APVAL_HACK
         elsif expr=>array
           expr = expr=>array
         else
@@ -756,7 +755,7 @@ end
 //
 
 export def bool_pred(bool)
-  return bool ?? @pred_true :: @pred_nil
+  return bool ?? @pred_true :: NULL
 end
 
 def natv_atom(symptr, expr)
@@ -774,7 +773,7 @@ def natv_eq(symptr, expr)
 end
 
 def natv_not(symptr, expr)
-  return bool_pred(eval_expr(expr=>car) == @pred_nil)
+  return bool_pred(eval_expr(expr=>car) == NULL)
 end
 
 def natv_and(symptr, expr)
@@ -785,7 +784,7 @@ def natv_and(symptr, expr)
 end
 
 def natv_or(symptr, expr)
-  while (expr and eval_expr(expr=>car) == @pred_nil)
+  while (expr and eval_expr(expr=>car) == NULL)
     expr = expr=>cdr
   loop
   return bool_pred(expr)
@@ -864,10 +863,10 @@ def natv_index(symptr, expr)
   var elemptr
 
   if expr=>car == sym_set
-    elemptr = eval_index(symptr=>array, expr=>cdr=>car)
-    if elemptr; *elemptr = eval_expr(expr=>cdr=>cdr=>car); fin
+    elemptr = eval_index(symptr=>array, expr=>cdr=>cdr)
+    if elemptr; *elemptr = eval_expr(expr=>cdr=>car); fin
   else
-    elemptr = eval_index(symptr=>array, expr=>car)
+    elemptr = eval_index(symptr=>array, expr)
   fin
   return elemptr ?? *elemptr :: NULL
 end
@@ -913,9 +912,8 @@ end
 
 def natv_cset(symptr, expr)
   symptr = eval_expr(expr=>cdr=>car)
-  expr=>car=>apval = symptr
-//  return symptr
-  return eval_expr(expr=>car)
+  expr=>car=>apval = symptr ^ APVAL_HACK
+  return symptr
 end
 
 def natv_print(symptr, expr)
@@ -929,9 +927,9 @@ end
 // Install default functions
 //
 
-new_sym("NIL")=>apval = @pred_nil)
-new_sym("T")=>apval   = @pred_true)
-new_sym("F")=>apval   = @pred_nil)
+new_sym("NIL")=>apval = NULL       ^ APVAL_HACK
+new_sym("F")=>apval   = NULL       ^ APVAL_HACK
+new_sym("T")=>apval   = @pred_true ^ APVAL_HACK
 sym_lambda = new_sym("LAMBDA")
 sym_quote  = new_sym("QUOTE")
 sym_cond   = new_sym("COND")
