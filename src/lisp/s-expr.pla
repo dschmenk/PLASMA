@@ -46,6 +46,7 @@ struc t_array
   res[t_elem]
   word dimension[4]
   word offset[4]
+  word arraysize
   word arraymem
 end
 
@@ -56,25 +57,26 @@ export var fmt_fpfrac = 4
 var assoc_list = NULL // SYM->value association list
 var cons_list  = NULL
 var cons_free  = NULL
-var cons_last  = NULL
 var int_list   = NULL
 var int_free   = NULL
-var int_last   = NULL
 var float_list = NULL
 var float_free = NULL
-var float_last = NULL
 var sym_list   = NULL
+var build_list = NULL
+var eval_last  = NULL
 
 var sym_nil, sym_quote, sym_lambda, sym_cond, sym_set
 res[t_elem] pred_true  = 0, 0, BOOL_TRUE
 
-byte parsing = 0 // Flag for GC to skip during parsing
-
-predef eval_expr(expr)
+predef print_expr(expr)#0
+predef eval_expr(expr)#1
 
 //
 // Garbage collector
 //
+
+const GC_TRIGGER = 50
+byte gc_pull     = 0
 
 def mark_list(list)#0
   while list
@@ -106,6 +108,8 @@ def sweep_used#0
   var symptr
 
   sweep_expr(assoc_list)
+  sweep_expr(build_list)
+  sweep_expr(eval_last)
   symptr = sym_list
   while symptr
     if symptr=>lambda
@@ -116,9 +120,6 @@ def sweep_used#0
     fin
     symptr = symptr=>link
   loop
-  sweep_expr(cons_last)
-  sweep_expr(int_last)
-  sweep_expr(float_last)
 end
 
 def collect_list(listhead, freehead)#2
@@ -128,6 +129,8 @@ def collect_list(listhead, freehead)#2
   elemptr = listhead
   while elemptr
     if elemptr->type & MARK_BIT
+      elemptr->type = elemptr->type & MARK_MASK
+      //puts("Free: "); print_expr(elemptr); putln
       if prevptr
         prevptr=>link = elemptr=>link
         elemptr=>link = freehead
@@ -154,10 +157,10 @@ def collect_unused#0
 end
 
 export def gc#0
-  if parsing; return; fin
   mark_elems
   sweep_used
   collect_unused
+  gc_pull = 0
 end
 
 //
@@ -171,6 +174,7 @@ export def new_cons#1
     consptr   = cons_free
     cons_free = cons_free=>link
   else
+    gc_pull++
     consptr = heapalloc(t_cons)
   fin
   consptr=>link = cons_list
@@ -188,6 +192,7 @@ export def new_int(intlo, inthi)#1
     intptr   = int_free
     int_free = int_free=>link
   else
+    gc_pull++
     intptr = heapalloc(t_numint)
   fin
   intptr=>link      = int_list
@@ -205,6 +210,7 @@ export def new_float(extptr)#1
     floatptr   = float_free
     float_free = float_free=>link
   else
+    gc_pull++
     floatptr = heapalloc(t_numfloat)
   fin
   floatptr=>link = float_list
@@ -251,6 +257,7 @@ def new_array(dim0, dim1, dim2, dim3)
   aptr=>offset[1]    = ofst1
   aptr=>offset[2]    = ofst2
   aptr=>offset[3]    = ofst3
+  aptr=>arraysize    = size
   aptr=>arraymem     = memptr
   return aptr
 end
@@ -362,7 +369,7 @@ def print_atom(atom)#0
         puts("]\n")
         break
       otherwise
-        puts("Unknown atom type\n")
+        puts("Unknown atom type: $"); putb(atom->type); putln
     wend
   fin
 end
@@ -467,7 +474,6 @@ end
 export def parse_expr(evalptr, level, refill)#2 // return evalptr, exprptr
   var exprptr, consptr, elemptr, quotecons
 
-  parsing++
   exprptr = NULL
   consptr = NULL
   while TRUE
@@ -480,7 +486,6 @@ export def parse_expr(evalptr, level, refill)#2 // return evalptr, exprptr
         if level
           evalptr = refill() // Refill input buffer
         else
-          parsing--
           return evalptr, exprptr
         fin
         break
@@ -492,7 +497,6 @@ export def parse_expr(evalptr, level, refill)#2 // return evalptr, exprptr
         if not exprptr
           exprptr = sym_nil
         fin
-        parsing--
         return evalptr + 1, exprptr
       is '('
         evalptr++
@@ -511,7 +515,6 @@ export def parse_expr(evalptr, level, refill)#2 // return evalptr, exprptr
         quotecons=>cdr=>car = elemptr
         elemptr             = quotecons
         if level == 0
-          parsing--
           return evalptr, elemptr
         fin
         break
@@ -523,7 +526,6 @@ export def parse_expr(evalptr, level, refill)#2 // return evalptr, exprptr
         //
         if not (consptr and consptr=>car)
           puts("Invalid . operator\n")
-          parsing--
           return evalptr, exprptr
         fin
         consptr=>cdr = elemptr
@@ -540,7 +542,6 @@ export def parse_expr(evalptr, level, refill)#2 // return evalptr, exprptr
           evalptr++
         fin
         if level == 0
-          parsing--
           return evalptr, elemptr
         fin
     wend
@@ -554,7 +555,6 @@ export def parse_expr(evalptr, level, refill)#2 // return evalptr, exprptr
       else
         if consptr=>cdr
           puts("Improperly formed .\n")
-          parsing--
           return evalptr, exprptr
         fin
         consptr=>cdr = new_cons
@@ -566,7 +566,6 @@ export def parse_expr(evalptr, level, refill)#2 // return evalptr, exprptr
       consptr=>car = elemptr
     fin
   loop
-  parsing--
   return evalptr, exprptr
 end
 
@@ -649,29 +648,51 @@ end
 //
 
 def enter_lambda(curl, expr, params)#2 // curl, expr
-  var args, arglist, pairlist, pair
+  var args, arglist, pairlist
+  var paramvals[16]
+  byte paramcnt
 
   if !expr or expr=>car <> sym_lambda
-    puts("Invalid LAMBDA expression: ")
-    print_expr(expr)
+    puts("Invalid LAMBDA expression: "); print_expr(expr); putln
     return NULL, NULL
   fin
+  //
+  // Evaluate the parameters
+  //
+  paramcnt = 0
+  while params
+    paramvals[paramcnt] = eval_expr(params=>car)
+    params              = params=>cdr
+    paramcnt++
+    if paramcnt > 15
+      puts("Parameter overflow:"); print_expr(expr); putln
+      break
+    fin
+  loop
   args = expr=>cdr=>car
+  paramcnt = 0
   if curl == expr
+    //puts("Tail: "); print_expr(expr); putln
     //
-    // Update current associations during tail recursion
+    // Set associations
     //
+    arglist = assoc_list
     while args
-      assoc_pair(args=>car)=>cdr = eval_expr(params=>car)
-      args                       = args=>cdr
-      params                     = params=>cdr
+      arglist=>car=>cdr = paramvals[paramcnt]
+      arglist           = arglist=>cdr
+      args              = args=>cdr
+      paramcnt++
     loop
   else
+    //puts("Enter: "); print_expr(expr); putln
     //
     // Build arg list before prepending to assoc_list
     //
     arglist = NULL
     while args
+      //
+      // Build argument/value pairs
+      //
       if arglist
         pairlist=>cdr = new_cons
         pairlist      = pairlist=>cdr
@@ -679,24 +700,25 @@ def enter_lambda(curl, expr, params)#2 // curl, expr
         arglist  = new_cons
         pairlist = arglist
       fin
-      pair          = new_cons
-      pair=>car     = args=>car
-      pair=>cdr     = eval_expr(params=>car)
-      pairlist=>car = pair
-      args          = args=>cdr
-      params        = params=>cdr
+      pairlist=>car      = new_cons
+      pairlist=>car=>car = args=>car
+      pairlist=>car=>cdr = paramvals[paramcnt]
+      args               = args=>cdr
+      paramcnt++
     loop
     if arglist
       pairlist=>cdr = assoc_list
       assoc_list    = arglist
     fin
   fin
+  //print_expr(assoc_list); putln; getc
   return expr, expr=>cdr=>cdr=>car
 end
 
 export def eval_expr(expr)#1
   var alist_enter, curl, expr_car
 
+  if gc_pull > GC_TRIGGER; gc; fin
   curl        = NULL // Current lambda
   alist_enter = assoc_list
   while expr
@@ -748,6 +770,13 @@ export def eval_expr(expr)#1
   return expr
 end
 
+export def eval_quote(expr)#1
+  eval_last = expr
+  expr      = eval_expr(expr)
+  eval_last = NULL
+  return expr
+end
+
 //
 // Base native functions
 //
@@ -767,48 +796,61 @@ end
 
 def natv_eq(symptr, expr)
   byte iseq, i
+  var int[2], ext[5]
 
+  iseq   = FALSE
   symptr = eval_expr(expr=>car)
-  expr   = eval_expr(expr=>cdr=>car)
-  if symptr == expr
-    return @pred_true
-  fin
-  iseq = FALSE
-  if symptr->type == NUM_INT and expr->type == NUM_INT
-    iseq = symptr=>intval[0] == expr=>intval[0]
-    if iseq
-      iseq = symptr=>intval[1] == expr=>intval[1]
+  if symptr->type == NUM_INT
+    int[0] = symptr=>intval[0]
+    int[1] = symptr=>intval[1]
+    expr   = eval_expr(expr=>cdr=>car)
+    if expr->type == NUM_INT
+      iseq = int[0] == expr=>intval[0] and int[1] == expr=>intval[1]
     fin
-  elsif symptr->type == NUM_FLOAT and expr->type == NUM_FLOAT
-    iseq = TRUE
-    for i = 0 to 4
-      if symptr=>floatval[i] <> expr=>floatval[i]
-        iseq = FALSE
-        break
-      fin
-    next
+  elsif symptr->type == NUM_FLOAT
+    ext[0] = symptr=>floatval[0]
+    ext[1] = symptr=>floatval[1]
+    ext[2] = symptr=>floatval[2]
+    ext[3] = symptr=>floatval[3]
+    ext[4] = symptr=>floatval[4]
+    expr   = eval_expr(expr=>cdr=>car)
+    if expr->type == NUM_FLOAT
+      iseq = TRUE
+      for i = 0 to 4
+        if ext[i] <> expr=>floatval[i]
+          iseq = FALSE
+          break
+        fin
+      next
+    fin
+  else
+    iseq = symptr == eval_expr(expr=>cdr=>car)
   fin
   return bool_pred(iseq)
 end
 
 def natv_and(symptr, expr)
-  while (expr and eval_expr(expr=>car) == @pred_true)
+  while expr and eval_expr(expr=>car) == @pred_true
     expr = expr=>cdr
   loop
   return bool_pred(!expr)
 end
 
 def natv_or(symptr, expr)
-  while (expr and eval_expr(expr=>car) == NULL)
+  while expr and eval_expr(expr=>car) == NULL
     expr = expr=>cdr
   loop
   return bool_pred(expr)
 end
 
 def natv_cons(symptr, expr)
-  symptr      = new_cons
-  symptr=>car = eval_expr(expr=>car)
-  symptr=>cdr = eval_expr(expr=>cdr=>car)
+  symptr         = new_cons
+  symptr=>cdr    = build_list // Don't let this cons get freed up in GC
+  build_list     = symptr
+  symptr=>car    = eval_expr(expr=>car)
+  expr           = eval_expr(expr=>cdr=>car)
+  build_list     = symptr=>cdr
+  symptr=>cdr    = expr
   return symptr
 end
 
