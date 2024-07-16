@@ -34,12 +34,6 @@ struc t_sym
   word apval
   char name[0]
 end
-struc t_array
-  res[t_elem]
-  word dimension[4]
-  word offset[4]
-  word arraymem
-end
 struc t_numint
   res[t_elem]
   word intval[2]
@@ -48,33 +42,44 @@ struc t_numfloat
   res[t_elem]
   res floatval[10]
 end
-
-predef eval_expr(expr)
-
-var sym_nil, sym_quote, sym_lambda, sym_cond, sym_set
-res[t_elem] pred_true  = 0, 0, BOOL_TRUE
-
-var cons_list  = NULL
-var cons_free  = NULL
-var int_list   = NULL
-var int_free   = NULL
-var float_list = NULL
-var float_free = NULL
-var sym_list   = NULL
-var assoc_list = NULL // SYM->value association list
+struc t_array
+  res[t_elem]
+  word dimension[4]
+  word offset[4]
+  word arraymem
+end
 
 const fmt_fp          = FPSTR_FIXED|FPSTR_STRIP|FPSTR_FLEX
 export var fmt_fpint  = 6
 export var fmt_fpfrac = 4
 
+var assoc_list = NULL // SYM->value association list
+var cons_list  = NULL
+var cons_free  = NULL
+var cons_last  = NULL
+var int_list   = NULL
+var int_free   = NULL
+var int_last   = NULL
+var float_list = NULL
+var float_free = NULL
+var float_last = NULL
+var sym_list   = NULL
+
+var sym_nil, sym_quote, sym_lambda, sym_cond, sym_set
+res[t_elem] pred_true  = 0, 0, BOOL_TRUE
+
+byte parsing = 0 // Flag for GC to skip during parsing
+
+predef eval_expr(expr)
+
 //
 // Garbage collector
 //
 
-def mark_list(listptr)#0
-  while listptr
-    listptr->type = listptr->type | MARK_BIT
-    listptr = listptr=>link
+def mark_list(list)#0
+  while list
+    list->type = list->type | MARK_BIT
+    list = list=>link
   loop
 end
 
@@ -86,6 +91,7 @@ end
 
 def sweep_expr(expr)#0
   while expr
+    if not expr->type & MARK_BIT; return; fin // Stop if MARK_BIT clear
     expr->type = expr->type & MARK_MASK
     if expr->type == CONS_TYPE
       sweep_expr(expr=>car)
@@ -110,29 +116,32 @@ def sweep_used#0
     fin
     symptr = symptr=>link
   loop
+  sweep_expr(cons_last)
+  sweep_expr(int_last)
+  sweep_expr(float_last)
 end
 
 def collect_list(listhead, freehead)#2
-  var listptr, prevptr
+  var elemptr, prevptr
 
   prevptr = NULL
-  listptr = listhead
-  while listptr
-    if listptr->type & MARK_BIT
+  elemptr = listhead
+  while elemptr
+    if elemptr->type & MARK_BIT
       if prevptr
-        prevptr=>link = listptr=>link
-        listptr=>link = freehead
-        freehead      = listptr
-        listptr       = prevptr=>link
+        prevptr=>link = elemptr=>link
+        elemptr=>link = freehead
+        freehead      = elemptr
+        elemptr       = prevptr=>link
       else
-        listhead      = listptr=>link
-        listptr=>link = freehead
-        freehead      = listptr
-        listptr       = listhead
+        listhead      = elemptr=>link
+        elemptr=>link = freehead
+        freehead      = elemptr
+        elemptr       = listhead
       fin
     else
-      prevptr = listptr
-      listptr = listptr=>link
+      prevptr = elemptr
+      elemptr = elemptr=>link
     fin
   loop
   return listhead, freehead
@@ -145,6 +154,7 @@ def collect_unused#0
 end
 
 export def gc#0
+  if parsing; return; fin
   mark_elems
   sweep_used
   collect_unused
@@ -171,24 +181,9 @@ export def new_cons#1
   return consptr
 end
 
-def match_int(intlo, inthi)
-  var intptr
-
-  intptr = int_list
-  while intptr
-    if intptr=>intval[0] == intlo and intptr=>intval[1] == inthi
-      return intptr
-    fin
-    intptr = intptr=>link
-  loop
-  return NULL
-end
-
 export def new_int(intlo, inthi)#1
   var intptr
 
-  intptr = match_int(intlo, inthi)
-  if intptr; return intptr; fin
   if int_free
     intptr   = int_free
     int_free = int_free=>link
@@ -203,30 +198,9 @@ export def new_int(intlo, inthi)#1
   return intptr
 end
 
-def match_float(extptr)
-  var floatptr
-  byte i
-
-  floatptr = float_list
-  while floatptr
-    for i = 0 to 4
-      if floatptr=>floatval[i] <> extptr=>[i]
-        break
-      fin
-    next
-    if i > 4
-      return floatptr
-    fin
-    floatptr = floatptr=>link
-  loop
-  return NULL
-end
-
 export def new_float(extptr)#1
   var floatptr
 
-  floatptr = match_float(extptr)
-  if floatptr; return floatptr; fin
   if float_free
     floatptr   = float_free
     float_free = float_free=>link
@@ -321,66 +295,6 @@ export def new_sym(symstr)#1
 end
 
 //
-// Build/set association between symbols and values
-//
-
-def assoc(symptr)
-  var pair
-
-  if symptr->type & TYPE_MASK == SYM_TYPE
-    //
-    // Search association list for symbol
-    //
-    pair = assoc_list
-    while pair
-      if (pair=>car=>car == symptr)
-        return pair=>car
-      fin
-      pair = pair=>cdr
-    loop
-  fin
-  return NULL // SYM not associated
-end
-
-export def new_assoc(symptr, valptr)#0
-  var pair, addlist
-
-  if symptr and (symptr->type & TYPE_MASK <> SYM_TYPE)
-    puts("Not a SYM in new_assoc\n")
-    return
-  fin
-  pair         = new_cons
-  pair=>car    = symptr
-  pair=>cdr    = valptr
-  if assoc_list // Add to end of assoc_list
-    addlist = assoc_list
-    while addlist=>cdr
-      addlist = addlist=>cdr
-    loop
-    addlist=>cdr = new_cons
-    addlist      = addlist=>cdr
-  else // New list
-    assoc_list = new_cons
-    addlist    = assoc_list
-  fin
-  addlist=>car = pair
-end
-
-export def set_assoc(symptr, valptr)#0
-  var pair
-
-  //
-  // Search association list for symbol
-  //
-  pair = assoc(symptr)
-  if pair
-    pair=>cdr = valptr // update association
-  else
-    new_assoc(symptr, valptr) // add association if unknown
-  fin
-end
-
-//
 // Print textual representation of S-expression
 //
 
@@ -448,7 +362,7 @@ def print_atom(atom)#0
         puts("]\n")
         break
       otherwise
-        puts("Unkown atom type\n")
+        puts("Unknown atom type\n")
     wend
   fin
 end
@@ -553,6 +467,7 @@ end
 export def parse_expr(evalptr, level, refill)#2 // return evalptr, exprptr
   var exprptr, consptr, elemptr, quotecons
 
+  parsing++
   exprptr = NULL
   consptr = NULL
   while TRUE
@@ -565,6 +480,7 @@ export def parse_expr(evalptr, level, refill)#2 // return evalptr, exprptr
         if level
           evalptr = refill() // Refill input buffer
         else
+          parsing--
           return evalptr, exprptr
         fin
         break
@@ -576,6 +492,7 @@ export def parse_expr(evalptr, level, refill)#2 // return evalptr, exprptr
         if not exprptr
           exprptr = sym_nil
         fin
+        parsing--
         return evalptr + 1, exprptr
       is '('
         evalptr++
@@ -594,6 +511,7 @@ export def parse_expr(evalptr, level, refill)#2 // return evalptr, exprptr
         quotecons=>cdr=>car = elemptr
         elemptr             = quotecons
         if level == 0
+          parsing--
           return evalptr, elemptr
         fin
         break
@@ -605,6 +523,7 @@ export def parse_expr(evalptr, level, refill)#2 // return evalptr, exprptr
         //
         if not (consptr and consptr=>car)
           puts("Invalid . operator\n")
+          parsing--
           return evalptr, exprptr
         fin
         consptr=>cdr = elemptr
@@ -621,6 +540,7 @@ export def parse_expr(evalptr, level, refill)#2 // return evalptr, exprptr
           evalptr++
         fin
         if level == 0
+          parsing--
           return evalptr, elemptr
         fin
     wend
@@ -634,6 +554,7 @@ export def parse_expr(evalptr, level, refill)#2 // return evalptr, exprptr
       else
         if consptr=>cdr
           puts("Improperly formed .\n")
+          parsing--
           return evalptr, exprptr
         fin
         consptr=>cdr = new_cons
@@ -645,7 +566,82 @@ export def parse_expr(evalptr, level, refill)#2 // return evalptr, exprptr
       consptr=>car = elemptr
     fin
   loop
+  parsing--
   return evalptr, exprptr
+end
+
+//
+// Build/set association between symbols and values
+//
+
+export def new_assoc(symptr, valptr)#0
+  var pair, addlist
+
+  if symptr and (symptr->type & TYPE_MASK <> SYM_TYPE)
+    puts("Not a SYM in new_assoc\n")
+    return
+  fin
+  pair         = new_cons
+  pair=>car    = symptr
+  pair=>cdr    = valptr
+  if assoc_list // Add to end of assoc_list
+    addlist = assoc_list
+    while addlist=>cdr
+      addlist = addlist=>cdr
+    loop
+    addlist=>cdr = new_cons
+    addlist      = addlist=>cdr
+  else // New list
+    assoc_list = new_cons
+    addlist    = assoc_list
+  fin
+  addlist=>car = pair
+end
+
+def assoc_pair(symptr)
+  var pair
+
+  //
+  // Search association list for symbol
+  //
+  pair = assoc_list
+  while pair
+    if (pair=>car=>car == symptr)
+      return pair=>car
+    fin
+    pair = pair=>cdr
+  loop
+  return NULL // SYM not associated
+end
+
+export def set_assoc(symptr, valptr)#0
+  var pair
+
+  //
+  // Search association list for symbol
+  //
+  pair = assoc_pair(symptr)
+  if pair
+    pair=>cdr = valptr // update association
+  else
+    new_assoc(symptr, valptr) // add association if unknown
+  fin
+end
+
+def assoc(symptr)
+  var pair
+
+  //
+  // Search association list for symbol
+  //
+  pair = assoc_list
+  while pair
+    if (pair=>car=>car == symptr)
+      return pair=>car=>cdr
+    fin
+    pair = pair=>cdr
+  loop
+  return NULL // SYM not associated
 end
 
 //
@@ -666,9 +662,9 @@ def enter_lambda(curl, expr, params)#2 // curl, expr
     // Update current associations during tail recursion
     //
     while args
-      assoc(args=>car)=>cdr = eval_expr(params=>car)
-      args                  = args=>cdr
-      params                = params=>cdr
+      assoc_pair(args=>car)=>cdr = eval_expr(params=>car)
+      args                       = args=>cdr
+      params                     = params=>cdr
     loop
   else
     //
@@ -725,22 +721,24 @@ export def eval_expr(expr)#1
             expr = expr=>cdr
           loop
         else // Symbol associated with lambda
-          curl, expr = enter_lambda(curl, assoc(expr_car)=>cdr, expr=>cdr)
+          curl, expr = enter_lambda(curl, assoc(expr_car), expr=>cdr)
         fin
       elsif expr_car->type == CONS_TYPE and expr_car=>car == sym_lambda
           curl, expr = enter_lambda(NULL, expr_car, expr=>cdr) // Inline lambda
       fin
     else
       //
-      // Atom
+      // Atom - return the symbol value or the atom itself
       //
       if expr->type & TYPE_MASK == SYM_TYPE
-        if expr=>apval
+        if expr=>apval // Constant
           expr = expr=>apval ^ NULL_HACK
-        elsif expr=>array
+        elsif expr=>lambda // DEFINEd lambda S-expression
+          expr = expr=>lambda
+        elsif expr=>array // Array
           expr = expr=>array
-        else
-          expr = assoc(expr)=>cdr
+        else // Look on the association list last
+          expr = assoc(expr)
         fin
       fin
       break
@@ -768,7 +766,29 @@ def natv_null(symptr, expr)
 end
 
 def natv_eq(symptr, expr)
-  return bool_pred(eval_expr(expr=>car) == eval_expr(expr=>cdr=>car))
+  byte iseq, i
+
+  symptr = eval_expr(expr=>car)
+  expr   = eval_expr(expr=>cdr=>car)
+  if symptr == expr
+    return @pred_true
+  fin
+  iseq = FALSE
+  if symptr->type == NUM_INT and expr->type == NUM_INT
+    iseq = symptr=>intval[0] == expr=>intval[0]
+    if iseq
+      iseq = symptr=>intval[1] == expr=>intval[1]
+    fin
+  elsif symptr->type == NUM_FLOAT and expr->type == NUM_FLOAT
+    iseq = TRUE
+    for i = 0 to 4
+      if symptr=>floatval[i] <> expr=>floatval[i]
+        iseq = FALSE
+        break
+      fin
+    next
+  fin
+  return bool_pred(iseq)
 end
 
 def natv_and(symptr, expr)
@@ -926,6 +946,18 @@ def natv_csetq(symptr, expr)
   return symptr
 end
 
+def natv_set(symptr, expr)
+  symptr = eval_expr(expr=>cdr=>car)
+  set_assoc(eval_expr(expr=>car), symptr)
+  return symptr
+end
+
+def natv_setq(symptr, expr)
+  symptr = eval_expr(expr=>cdr=>car)
+  set_assoc(expr=>car, symptr)
+  return symptr
+end
+
 def natv_print(symptr, expr)
   expr = eval_expr(expr=>car)
   print_expr(expr)
@@ -951,8 +983,6 @@ new_sym("CDR")=>natv    = @natv_cdr
 new_sym("CONS")=>natv   = @natv_cons
 new_sym("ATOM")=>natv   = @natv_atom
 new_sym("EQ")=>natv     = @natv_eq
-new_sym("CSET")=>natv   = @natv_cset
-new_sym("CSETQ")=>natv  = @natv_csetq
 new_sym("NOT")=>natv    = @natv_null
 new_sym("AND")=>natv    = @natv_and
 new_sym("OR")=>natv     = @natv_or
@@ -960,6 +990,10 @@ new_sym("NULL")=>natv   = @natv_null
 new_sym("LABEL")=>natv  = @natv_label
 new_sym("DEFINE")=>natv = @natv_define
 new_sym("ARRAY")=>natv  = @natv_array
+new_sym("CSET")=>natv   = @natv_cset
+new_sym("CSETQ")=>natv  = @natv_csetq
+new_sym("SET")=>natv    = @natv_set
+new_sym("SETQ")=>natv   = @natv_setq
 new_sym("PRINT")=>natv  = @natv_print
 return modkeep | modinitkeep
 done

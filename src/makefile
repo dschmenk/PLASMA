@@ -178,11 +178,11 @@ $(SEXPR): lisp/s-expr.pla
 	./$(PLASM) -AMOW lisp/s-expr.pla
 	acme --setpc 4094 -o $(SEXPR) lisp/s-expr.a
 
-$(SMATH): lisp/s-math.pla
+$(SMATH): lisp/s-expr.pla lisp/s-math.pla
 	./$(PLASM) -AMOW lisp/s-math.pla
 	acme --setpc 4094 -o $(SMATH) lisp/s-math.a
 
-$(DRAWL): lisp/drawl.pla
+$(DRAWL): lisp/s-expr.pla lisp/drawl.pla
 	./$(PLASM) -AMOW lisp/drawl.pla
 	acme --setpc 4094 -o $(DRAWL) lisp/drawl.a
 
