@@ -65,6 +65,10 @@ var sym_list   = NULL
 var build_list = NULL
 var eval_last  = NULL
 
+const MAX_PARAMS = 64
+var param_vals[MAX_PARAMS] // In-flight evaluated argument values
+var param_cnt
+
 var sym_nil, sym_quote, sym_lambda, sym_cond, sym_set
 res[t_elem] pred_true  = 0, 0, BOOL_TRUE
 
@@ -112,6 +116,9 @@ def sweep_used#0
   sweep_expr(eval_last)
   symptr = sym_list
   while symptr
+    //
+    // Sweep symbol properties
+    //
     if symptr=>apval
       sweep_expr(symptr=>apval)
     elsif symptr=>lambda
@@ -125,6 +132,14 @@ def sweep_used#0
     fin
     symptr = symptr=>link
   loop
+  if param_cnt
+    //
+    // Sweep in-flight lambda argument parameters
+    //
+    for i = 0 to param_cnt - 1
+      sweep_expr(param_vals[i])
+    next
+  fin
 end
 
 def collect_list(listhead, freehead)#2
@@ -653,9 +668,7 @@ end
 //
 
 def enter_lambda(curl, expr, params)#2 // curl, expr
-  var args, arglist, pairlist
-  var paramvals[16]
-  byte paramcnt
+  var args, arglist, pairlist, parambase, i
 
   if !expr or expr=>car <> sym_lambda
     puts("Invalid LAMBDA expression: "); print_expr(expr); putln
@@ -664,18 +677,18 @@ def enter_lambda(curl, expr, params)#2 // curl, expr
   //
   // Evaluate the parameters
   //
-  paramcnt = 0
+  parambase = param_cnt
   while params
-    paramvals[paramcnt] = eval_expr(params=>car)
-    params              = params=>cdr
-    paramcnt++
-    if paramcnt > 15
+    param_vals[param_cnt] = eval_expr(params=>car)
+    params                = params=>cdr
+    param_cnt++
+    if param_cnt > MAX_PARAMS
       puts("Parameter overflow:"); print_expr(expr); putln
       break
     fin
   loop
   args = expr=>cdr=>car
-  paramcnt = 0
+  i = parambase
   if curl == expr
     //puts("Tail: "); print_expr(expr); putln
     //
@@ -683,10 +696,10 @@ def enter_lambda(curl, expr, params)#2 // curl, expr
     //
     arglist = assoc_list
     while args
-      arglist=>car=>cdr = paramvals[paramcnt]
+      arglist=>car=>cdr = param_vals[i]
       arglist           = arglist=>cdr
       args              = args=>cdr
-      paramcnt++
+      i++
     loop
   else
     //puts("Enter: "); print_expr(expr); putln
@@ -707,15 +720,16 @@ def enter_lambda(curl, expr, params)#2 // curl, expr
       fin
       pairlist=>car      = new_cons
       pairlist=>car=>car = args=>car
-      pairlist=>car=>cdr = paramvals[paramcnt]
+      pairlist=>car=>cdr = param_vals[i]
       args               = args=>cdr
-      paramcnt++
+      i++
     loop
     if arglist
       pairlist=>cdr = assoc_list
       assoc_list    = arglist
     fin
   fin
+  param_cnt = parambase
   //print_expr(assoc_list); putln; getc
   return expr, expr=>cdr=>cdr=>car
 end

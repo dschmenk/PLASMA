@@ -57,7 +57,7 @@ def eval_num(expr)
   var result
 
   result = eval_expr(expr=>car)
-  if result and (result->type & TYPE_MASK == NUM_TYPE)
+  if result and result->type & TYPE_MASK == NUM_TYPE
     return result
   fin
   puts("Evaluated not an number type: "); print_expr(expr=>car); putln
@@ -82,7 +82,7 @@ def push_int32(intptr)#0
   var[2] int
   byte isneg
 
-  isneg  = FALSE
+  isneg = FALSE
   if intptr=>[1] < 0
     load32(intptr)
     isneg = TRUE
@@ -148,13 +148,14 @@ def natv_add(symptr, expr)
     push_int32(@intsum)
     push_num(num)
     fpu:addXY()
+    fpu:pullExt(@extsum)
     while expr
-      num = eval_num(expr)
-      push_num(num)
+      push_num(eval_num(expr))
+      fpu:pushExt(@extsum)
       fpu:addXY()
+      fpu:pullExt(@extsum)
       expr = expr=>cdr
     loop
-    fpu:pullExt(@extsum)
     return new_float(@extsum)
   fin
   return new_int(intsum[0], intsum[1])
@@ -245,21 +246,40 @@ def natv_neg(symptr, expr)
   var[5] ext
 
   num = eval_num(expr)
-  if num=>type == NUM_INT
+  if num->type == NUM_INT
     load32(num + intval)
     neg32
     store32(@neg)
     return new_int(neg[0], neg[1])
   fin
-  push_num(num)
-  fpu:negX()
-  fpu:pullExt(@ext)
-  return new_float(@ext)
+  num->floatval[9] = num->floatval[9] ^ $80 // Fun with float bits
+  return new_float(num + floatval)
+end
+
+def natv_abs(symptr, expr)
+  var num
+  var[2] abs
+  var[5] ext
+
+  num = eval_num(expr)
+  if num->type == NUM_INT
+    if num=>intval[1] < 0
+      load32(num + intval)
+      neg32
+      store32(@abs)
+    else
+      abs[0] = num=>intval[0]
+      abs[1] = num=>intval[1]
+    fin
+    return new_int(abs[0], abs[1])
+  fin
+  num->floatval[9] = num->floatval[9] & $7F // Fun with float bits
+  return new_float(num + floatval)
 end
 
 def natv_gt(symptr, expr)
   res[t_numfloat] num1, num2
-  var[5] ext
+  byte[10] ext
 
   memcpy(@num1, eval_num(expr),      t_numfloat)
   memcpy(@num2, eval_num(expr=>cdr), t_numfloat)
@@ -271,12 +291,12 @@ def natv_gt(symptr, expr)
   push_num(@num1)
   fpu:subXY()
   fpu:pullExt(@ext)
-  return bool_pred(ext[4] < 0)
+  return bool_pred(ext[9] & $80) // Check sign bit
 end
 
 def natv_lt(symptr, expr)
   res[t_numfloat] num1, num2
-  var[5] ext
+  byte[10] ext
 
   memcpy(@num1, eval_num(expr),      t_numfloat)
   memcpy(@num2, eval_num(expr=>cdr), t_numfloat)
@@ -288,21 +308,405 @@ def natv_lt(symptr, expr)
   push_num(@num2)
   fpu:subXY()
   fpu:pullExt(@ext)
-  return bool_pred(ext[4] < 0)
+  return bool_pred(ext[9] & $80) // Check sign bit
+end
+
+def natv_min(symptr, expr)
+  var num
+  var[2] intmin
+  var[5] extmin, ext
+
+  num  = eval_num(expr)
+  expr = expr=>cdr
+  if num->type == NUM_INT
+    //
+    // Find min as integers unless a float is encountered
+    //
+    intmin[0] = num=>intval[0]
+    intmin[1] = num=>intval[1]
+    while expr
+      num = eval_num(expr)
+      if num->type == NUM_FLOAT
+        push_int32(@intmin)
+        fpu:pullExt(@extmin)
+        break
+      fin
+      load32(@intmin)
+      if isgt32(num + intval)
+        intmin[0] = num=>intval[0]
+        intmin[1] = num=>intval[1]
+      fin
+      expr = expr=>cdr
+    loop
+    if !expr; return new_int(intmin[0], intmin[1]); fin
+  else
+    extmin[0] = num=>floatval[0]
+    extmin[1] = num=>floatval[1]
+    extmin[2] = num=>floatval[2]
+    extmin[3] = num=>floatval[3]
+    extmin[4] = num=>floatval[4]
+    if expr; num = eval_num(expr); fin
+  fin
+  while expr
+    push_num(num)
+    fpu:pushExt(@extmin)
+    fpu:subXY()
+    fpu:pullExt(@ext)
+    if ext[4] < 0
+      if num->type == NUM_INT
+        push_int32(num + intval)
+        fpu:pullExt(@ext)
+        extmin[0] = ext[0]
+        extmin[1] = ext[1]
+        extmin[2] = ext[2]
+        extmin[3] = ext[3]
+        extmin[4] = ext[4]
+      else
+        extmin[0] = num=>floatval[0]
+        extmin[1] = num=>floatval[1]
+        extmin[2] = num=>floatval[2]
+        extmin[3] = num=>floatval[3]
+        extmin[4] = num=>floatval[4]
+      fin
+    fin
+    expr = expr=>cdr
+    if expr; num = eval_num(expr); fin
+  loop
+  return new_float(@extmin)
+end
+
+def natv_max(symptr, expr)
+  var num
+  var[2] intmax
+  var[5] extmax, ext
+
+  num  = eval_num(expr)
+  expr = expr=>cdr
+  if num->type == NUM_INT
+    //
+    // Find max as integers unless a float is encountered
+    //
+    intmax[0] = num=>intval[0]
+    intmax[1] = num=>intval[1]
+    while expr
+      num = eval_num(expr)
+      if num->type == NUM_FLOAT
+        push_int32(@intmax)
+        fpu:pullExt(@extmax)
+        break
+      fin
+      load32(@intmax)
+      if islt32(num + intval)
+        intmax[0] = num=>intval[0]
+        intmax[1] = num=>intval[1]
+      fin
+      expr = expr=>cdr
+    loop
+    if !expr; return new_int(intmax[0], intmax[1]); fin
+  else
+    extmax[0] = num=>floatval[0]
+    extmax[1] = num=>floatval[1]
+    extmax[2] = num=>floatval[2]
+    extmax[3] = num=>floatval[3]
+    extmax[4] = num=>floatval[4]
+    if expr; num = eval_num(expr); fin
+  fin
+  while expr
+    fpu:pushExt(@extmax)
+    push_num(num)
+    fpu:subXY()
+    fpu:pullExt(@ext)
+    if ext[4] < 0
+      if num->type == NUM_INT
+        push_int32(num + intval)
+        fpu:pullExt(@ext)
+        extmax[0] = ext[0]
+        extmax[1] = ext[1]
+        extmax[2] = ext[2]
+        extmax[3] = ext[3]
+        extmax[4] = ext[4]
+      else
+        extmax[0] = num=>floatval[0]
+        extmax[1] = num=>floatval[1]
+        extmax[2] = num=>floatval[2]
+        extmax[3] = num=>floatval[3]
+        extmax[4] = num=>floatval[4]
+      fin
+    fin
+    expr = expr=>cdr
+    if expr; num = eval_num(expr); fin
+  loop
+  return new_float(@extmax)
+end
+
+def natv_pi(symptr, expr)
+  var[5] ext
+
+  fpu:constPi()
+  fpu:pullExt(@ext)
+  return new_float(@ext)
+end
+
+def natv_e(symptr, expr)
+  var[5] ext
+
+  fpu:constE()
+  fpu:pullExt(@ext)
+  return new_float(@ext)
+end
+
+def natv_logb(symptr, expr)
+  var[5] ext
+
+  push_num(eval_num(expr))
+  fpu:logbX()
+  fpu:pullExt(@ext)
+  return new_float(@ext)
+end
+
+def natv_scalebI(symptr, expr)
+  var[5] ext
+
+  push_num(eval_num(expr))
+  push_int32(eval_expr(expr=>cdr) + intval)
+  fpu:scalebXInt()
+  fpu:pullExt(@ext)
+  return new_float(@ext)
+end
+
+def natv_trunc(symptr, expr)
+  var[5] ext
+
+  push_num(eval_num(expr))
+  fpu:truncX()
+  fpu:pullExt(@ext)
+  return new_float(@ext)
+end
+
+def natv_round(symptr, expr)
+  var[5] ext
+
+  push_num(eval_num(expr))
+  fpu:roundX()
+  fpu:pullExt(@ext)
+  return new_float(@ext)
+end
+
+def natv_sqrt(symptr, expr)
+  var[5] ext
+
+  push_num(eval_num(expr))
+  fpu:sqrtX()
+  fpu:pullExt(@ext)
+  return new_float(@ext)
+end
+
+def natv_cos(symptr, expr)
+  var[5] ext
+
+  push_num(eval_num(expr))
+  fpu:cosX()
+  fpu:pullExt(@ext)
+  return new_float(@ext)
+end
+
+def natv_sin(symptr, expr)
+  var[5] ext
+
+  push_num(eval_num(expr))
+  fpu:sinX()
+  fpu:pullExt(@ext)
+  return new_float(@ext)
+end
+
+def natv_tan(symptr, expr)
+  var[5] ext
+
+  push_num(eval_num(expr))
+  fpu:tanX()
+  fpu:pullExt(@ext)
+  return new_float(@ext)
+end
+
+def natv_atan(symptr, expr)
+  var[5] ext
+
+  push_num(eval_num(expr))
+  fpu:atanX()
+  fpu:pullExt(@ext)
+  return new_float(@ext)
+end
+
+def natv_log2(symptr, expr)
+  var[5] ext
+
+  push_num(eval_num(expr))
+  fpu:log2X()
+  fpu:pullExt(@ext)
+  return new_float(@ext)
+end
+
+def natv_log21(symptr, expr)
+  var[5] ext
+
+  push_num(eval_num(expr))
+  fpu:log21X()
+  fpu:pullExt(@ext)
+  return new_float(@ext)
+end
+
+def natv_ln(symptr, expr)
+  var[5] ext
+
+  push_num(eval_num(expr))
+  fpu:lnX()
+  fpu:pullExt(@ext)
+  return new_float(@ext)
+end
+
+def natv_ln1(symptr, expr)
+  var[5] ext
+
+  push_num(eval_num(expr))
+  fpu:ln1X()
+  fpu:pullExt(@ext)
+  return new_float(@ext)
+end
+
+def natv_pow2(symptr, expr)
+  var[5] ext
+
+  push_num(eval_num(expr))
+  fpu:pow2X()
+  fpu:pullExt(@ext)
+  return new_float(@ext)
+end
+
+def natv_pow21(symptr, expr)
+  var[5] ext
+
+  push_num(eval_num(expr))
+  fpu:pow21X()
+  fpu:pullExt(@ext)
+  return new_float(@ext)
+end
+
+def natv_powE(symptr, expr)
+  var[5] ext
+
+  push_num(eval_num(expr))
+  fpu:powEX()
+  fpu:pullExt(@ext)
+  return new_float(@ext)
+end
+
+def natv_powE1(symptr, expr)
+  var[5] ext
+
+  push_num(eval_num(expr))
+  fpu:powE1X()
+  fpu:pullExt(@ext)
+  return new_float(@ext)
+end
+
+def natv_powE21(symptr, expr)
+  var[5] ext
+
+  push_num(eval_num(expr))
+  fpu:powE21X()
+  fpu:pullExt(@ext)
+  return new_float(@ext)
+end
+
+def natv_powI(symptr, expr)
+  var[5] ext
+
+  push_num(eval_num(expr))
+  push_int32(eval_int(expr=>cdr) + intval)
+  fpu:powXInt()
+  fpu:pullExt(@ext)
+  return new_float(@ext)
+end
+
+def natv_powY(symptr, expr)
+  var[5] ext
+
+  push_num(eval_num(expr))
+  push_num(eval_num(expr=>cdr))
+  fpu:pow2X()
+  fpu:pullExt(@ext)
+  return new_float(@ext)
+end
+
+def natv_compY(symptr, expr)
+  var[5] ext
+
+  push_num(eval_num(expr))
+  push_num(eval_num(expr=>cdr))
+  fpu:pow2X()
+  fpu:pullExt(@ext)
+  return new_float(@ext)
+end
+
+def natv_annuityY(symptr, expr)
+  var[5] ext
+
+  push_num(eval_num(expr))
+  push_num(eval_num(expr=>cdr))
+  fpu:annuityXY()
+  fpu:pullExt(@ext)
+  return new_float(@ext)
+end
+
+def natv_randNum(symptr, expr)
+  var[5] ext
+
+  push_num(eval_num(expr))
+  fpu:randNum()
+  fpu:pullExt(@ext)
+  return new_float(@ext)
 end
 
 //
 // Install math functions
 //
 
-new_sym("+")=>natv      = @natv_add
-new_sym("-")=>natv      = @natv_sub
-new_sym("*")=>natv      = @natv_mul
-new_sym("/")=>natv      = @natv_div
-new_sym("REM")=>natv    = @natv_rem
-new_sym("NEG")=>natv    = @natv_neg
-new_sym(">")=>natv      = @natv_gt
-new_sym("<")=>natv      = @natv_lt
+new_sym("+")=>natv        = @natv_add
+new_sym("-")=>natv        = @natv_sub
+new_sym("*")=>natv        = @natv_mul
+new_sym("/")=>natv        = @natv_div
+new_sym("REM")=>natv      = @natv_rem
+new_sym("NEG")=>natv      = @natv_neg
+new_sym("ABS")=>natv      = @natv_abs
+new_sym(">")=>natv        = @natv_gt
+new_sym("<")=>natv        = @natv_lt
+new_sym("MIN")=>natv      = @natv_min
+new_sym("MAX")=>natv      = @natv_max
+new_sym("PI")=>natv       = @natv_pi
+new_sym("MATH_E")=>natv   = @natv_e
+new_sym("LOGB")=>natv     = @natv_logb
+new_sym("SCALEB_I")=>natv = @natv_scalebI
+new_sym("TRUNCATE")=>natv = @natv_trunc
+new_sym("ROUND")=>natv    = @natv_round
+new_sym("SQRT")=>natv     = @natv_sqrt
+new_sym("COS")=>natv      = @natv_cos
+new_sym("SIN")=>natv      = @natv_sin
+new_sym("TAN")=>natv      = @natv_tan
+new_sym("ATAN")=>natv     = @natv_atan
+new_sym("LOG2")=>natv     = @natv_log2
+new_sym("LOG2_1")=>natv   = @natv_log21
+new_sym("LN")=>natv       = @natv_ln
+new_sym("LN_1")=>natv     = @natv_ln1
+new_sym("POW2")=>natv     = @natv_pow2
+new_sym("POW2_1")=>natv   = @natv_pow21
+new_sym("POWE")=>natv     = @natv_powE
+new_sym("POWE_1")=>natv   = @natv_powE1
+new_sym("POWE2_1")=>natv  = @natv_powE21
+new_sym("POW_I")=>natv    = @natv_powI
+new_sym("POWY")=>natv     = @natv_powY
+new_sym("COMP")=>natv     = @natv_compY
+new_sym("ANNUITY")=>natv  = @natv_annuityY
+new_sym("RANDOM")=>natv   = @natv_randNum
 fpu:reset()
 return modkeep | modinitkeep
 done
