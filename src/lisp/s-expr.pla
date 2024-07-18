@@ -13,6 +13,7 @@ const NUM_TYPE   = $30
 const NUM_INT    = $31
 const NUM_FLOAT  = $32
 const ARRAY_TYPE = $40
+const FUNC_TYPE  = $50
 const MARK_BIT   = $80
 const MARK_MASK  = $7F
 const NULL_HACK  = 1  // Hack so we can set elements to NULL
@@ -26,13 +27,20 @@ struc t_cons
   word car
   word cdr
 end
-struc t_sym
+struc t_func
   res[t_elem]
   word natv
   word lambda
+end
+struc t_sym
+  res[t_func]
   word array
   word apval
   char name[0]
+end
+struc t_funcenv
+  res[t_func]
+  word environ
 end
 struc t_numint
   res[t_elem]
@@ -54,20 +62,17 @@ const fmt_fp          = FPSTR_FIXED|FPSTR_STRIP|FPSTR_FLEX
 export var fmt_fpint  = 6
 export var fmt_fpfrac = 4
 
-var assoc_list = NULL // SYM->value association list
-var cons_list  = NULL
-var cons_free  = NULL
-var int_list   = NULL
-var int_free   = NULL
-var float_list = NULL
-var float_free = NULL
-var sym_list   = NULL
-var build_list = NULL
-var eval_last  = NULL
-
-const MAX_PARAMS = 64
-var param_vals[MAX_PARAMS] // In-flight evaluated argument values
-var param_cnt
+var assoc_list  = NULL // Local SYM->value association list
+var global_list = NULL // Global SYM->value association list
+var cons_list   = NULL
+var cons_free   = NULL
+var int_list    = NULL
+var int_free    = NULL
+var float_list  = NULL
+var float_free  = NULL
+var func_list   = NULL
+var func_free   = NULL
+var sym_list    = NULL
 
 var sym_nil, sym_quote, sym_lambda, sym_set
 var sym_cond, sym_if, sym_for, sym_space, sym_cr
@@ -78,6 +83,12 @@ predef eval_expr(expr)#1
 //
 // Garbage collector
 //
+
+const SWEEPSTACK_MAX  = 64
+byte  sweep_stack_top = 0
+var   sweep_stack[SWEEPSTACK_MAX] // In-flight expressions
+
+var eval_last = NULL
 
 const GC_TRIGGER = 50
 byte gc_pull     = 0
@@ -93,6 +104,7 @@ def mark_elems#0
   mark_list(cons_list)
   mark_list(int_list)
   mark_list(float_list)
+  mark_list(func_list)
 end
 
 def sweep_expr(expr)#0
@@ -111,8 +123,8 @@ end
 def sweep_used#0
   var symptr, i, memptr, size
 
+  sweep_expr(global_list)
   sweep_expr(assoc_list)
-  sweep_expr(build_list)
   sweep_expr(eval_last)
   symptr = sym_list
   while symptr
@@ -132,14 +144,33 @@ def sweep_used#0
     fin
     symptr = symptr=>link
   loop
-  if param_cnt
+  if sweep_stack_top
     //
-    // Sweep in-flight lambda argument parameters
+    // Sweep in-flight parameters
     //
-    for i = 0 to param_cnt - 1
-      sweep_expr(param_vals[i])
+    for i = 0 to sweep_stack_top - 1
+      sweep_expr(sweep_stack[i])
     next
   fin
+end
+
+def push_sweep_stack(expr)
+  if sweep_stack_top == SWEEPSTACK_MAX - 1
+    puts("Sweep stack overflow\n")
+    return NULL
+  fin
+  sweep_stack[sweep_stack_top] = expr
+  sweep_stack_top++
+  return expr
+end
+
+def pop_sweep_stack
+  if sweep_stack_top == 0
+    puts("Sweep stack underflow\n")
+    return NULL
+  fin
+  sweep_stack_top--
+  return sweep_stack[sweep_stack_top]
 end
 
 def collect_list(listhead, freehead)#2
@@ -174,6 +205,7 @@ def collect_unused#0
   cons_list,  cons_free  = collect_list(cons_list,  cons_free)
   int_list,   int_free   = collect_list(int_list,   int_free)
   float_list, float_free = collect_list(float_list, float_free)
+  func_list,  func_free =  collect_list(func_list,  func_free)
 end
 
 export def gc#0
@@ -238,6 +270,25 @@ export def new_float(extptr)#1
   floatptr->type = NUM_FLOAT
   memcpy(floatptr + floatval, extptr, 10)
   return floatptr
+end
+
+def new_func
+  var funcptr
+
+  if func_free
+    funcptr   = func_free
+    func_free = func_free=>link
+  else
+    gc_pull++
+    funcptr = heapalloc(t_func)
+  fin
+  funcptr=>link    = func_list
+  func_list        = funcptr
+  funcptr->type    = FUNC_TYPE
+  funcptr=>natv    = NULL
+  funcptr=>lambda  = NULL
+  funcptr=>environ = NULL
+  return funcptr
 end
 
 def new_array(dim0, dim1, dim2, dim3)
@@ -387,6 +438,14 @@ def print_atom(atom)#0
           fin
         next
         puts("]\n")
+        break
+      is FUNC_TYPE
+        puts("FUNCTION:\n")
+        if    atom=>natv;   puts("NATV")
+        elsif atom=>lambda; print_expr(atom=>lambda)
+        else  puts("???")
+        fin
+        puts("\nENVIRON:\n"); print_expr(atom=>environ); putln
         break
       otherwise
         puts("Unknown atom type: $"); putb(atom->type); putln
@@ -603,16 +662,16 @@ export def new_assoc(symptr, valptr)#0
   pair         = new_cons
   pair=>car    = symptr
   pair=>cdr    = valptr
-  if assoc_list // Add to end of assoc_list
-    addlist = assoc_list
+  if global_list // Add to end of global_list
+    addlist = global_list
     while addlist=>cdr
       addlist = addlist=>cdr
     loop
     addlist=>cdr = new_cons
     addlist      = addlist=>cdr
   else // New list
-    assoc_list = new_cons
-    addlist    = assoc_list
+    global_list = new_cons
+    addlist    = global_list
   fin
   addlist=>car = pair
 end
@@ -621,9 +680,19 @@ def assoc_pair(symptr)
   var pair
 
   //
-  // Search association list for symbol
+  // Search local association list for symbol
   //
   pair = assoc_list
+  while pair
+    if (pair=>car=>car == symptr)
+      return pair=>car
+    fin
+    pair = pair=>cdr
+  loop
+  //
+  // Search global association list for symbol
+  //
+  pair = global_list
   while pair
     if (pair=>car=>car == symptr)
       return pair=>car
@@ -641,9 +710,9 @@ export def set_assoc(symptr, valptr)#0
   //
   pair = assoc_pair(symptr)
   if pair
-    pair=>cdr = valptr // update association
+    pair=>cdr = valptr // Update association
   else
-    new_assoc(symptr, valptr) // add association if unknown
+    new_assoc(symptr, valptr) // Add global association if unknown
   fin
 end
 
@@ -651,9 +720,19 @@ def assoc(symptr)
   var pair
 
   //
-  // Search association list for symbol
+  // Search local association list for symbol
   //
   pair = assoc_list
+  while pair
+    if (pair=>car=>car == symptr)
+      return pair=>car=>cdr
+    fin
+    pair = pair=>cdr
+  loop
+  //
+  // Search global association list for symbol
+  //
+  pair = global_list
   while pair
     if (pair=>car=>car == symptr)
       return pair=>car=>cdr
@@ -668,7 +747,7 @@ end
 //
 
 def enter_lambda(curl, expr, params)#2 // curl, expr
-  var args, arglist, pairlist, parambase, i
+  var args, arglist, pairlist, parambase
 
   if !expr or expr=>car <> sym_lambda
     puts("Invalid LAMBDA expression: "); print_expr(expr); putln
@@ -676,33 +755,32 @@ def enter_lambda(curl, expr, params)#2 // curl, expr
   fin
   //
   // Evaluate the parameters
+  // - manipulate sweep_stack directly for performance
   //
-  parambase = param_cnt
+  parambase = sweep_stack_top
   while params
-    param_vals[param_cnt] = eval_expr(params=>car)
-    params                = params=>cdr
-    param_cnt++
-    if param_cnt > MAX_PARAMS
+    sweep_stack[sweep_stack_top] = eval_expr(params=>car)
+    sweep_stack_top++
+    if sweep_stack_top >= SWEEPSTACK_MAX
       puts("Parameter overflow:"); print_expr(expr); putln
-      break
+      return NULL, NULL
     fin
+    params = params=>cdr
   loop
   args = expr=>cdr=>car
-  i = parambase
+  sweep_stack_top = parambase
   if curl == expr
-    //puts("Tail: "); print_expr(expr); putln
     //
     // Set associations
     //
     arglist = assoc_list
     while args
-      arglist=>car=>cdr = param_vals[i]
+      arglist=>car=>cdr = sweep_stack[parambase]
       arglist           = arglist=>cdr
       args              = args=>cdr
-      i++
+      parambase++
     loop
   else
-    //puts("Enter: "); print_expr(expr); putln
     //
     // Build arg list before prepending to assoc_list
     //
@@ -720,17 +798,15 @@ def enter_lambda(curl, expr, params)#2 // curl, expr
       fin
       pairlist=>car      = new_cons
       pairlist=>car=>car = args=>car
-      pairlist=>car=>cdr = param_vals[i]
+      pairlist=>car=>cdr = sweep_stack[parambase]
       args               = args=>cdr
-      i++
+      parambase++
     loop
     if arglist
       pairlist=>cdr = assoc_list
       assoc_list    = arglist
     fin
   fin
-  param_cnt = parambase
-  //print_expr(assoc_list); putln; getc
   return expr, expr=>cdr=>cdr=>car
 end
 
@@ -755,7 +831,7 @@ export def eval_expr(expr)#1
         elsif expr_car == sym_cond // Inline cond() evaluation
           expr = expr=>cdr
           while expr
-            if eval_expr(expr=>car=>car) == @pred_true
+            if eval_expr(expr=>car=>car)
               expr = expr=>car=>cdr=>car
               break
             fin
@@ -763,7 +839,7 @@ export def eval_expr(expr)#1
           loop
         elsif expr_car == sym_if // Inline if() evaluation
           expr = expr=>cdr
-          if eval_expr(expr=>car) == @pred_true
+          if eval_expr(expr=>car)
             expr = expr=>cdr=>car // THEN clause
           else
             expr = expr=>cdr=>cdr
@@ -859,57 +935,40 @@ def natv_eq(symptr, expr)
 end
 
 def natv_and(symptr, expr)
-  while expr and eval_expr(expr=>car) == @pred_true
+  while expr and eval_expr(expr=>car)
     expr = expr=>cdr
   loop
   return bool_pred(!expr)
 end
 
 def natv_or(symptr, expr)
-  while expr and eval_expr(expr=>car) == NULL
+  while expr and !eval_expr(expr=>car)
     expr = expr=>cdr
   loop
   return bool_pred(expr)
 end
 
 def natv_cons(symptr, expr)
-  symptr         = new_cons
-  symptr=>cdr    = build_list // Don't let this cons get freed up in GC
-  build_list     = symptr
+  symptr         = push_sweep_stack(new_cons)
   symptr=>car    = eval_expr(expr=>car)
-  expr           = eval_expr(expr=>cdr=>car)
-  build_list     = symptr=>cdr
-  symptr=>cdr    = expr
-  return symptr
+  symptr=>cdr    = eval_expr(expr=>cdr=>car)
+  return pop_sweep_stack
 end
 
 def natv_list(symptr, expr)
-  var list, lastbuild
-
-  lastbuild = build_list
-  if build_list
-    while lastbuild=>cdr
-      lastbuild = lastbuild=>cdr
-    loop
-    symptr = lastbuild
-  else
-    build_list = new_cons
-    symptr     = build_list
+  if expr
+    symptr = push_sweep_stack(new_cons)
+    repeat
+      symptr=>car = eval_expr(expr=>car)
+      expr        = expr=>cdr
+      if expr
+        symptr=>cdr = new_cons
+        symptr      = symptr=>cdr
+      fin
+    until !expr
+    return pop_sweep_stack
   fin
-  list = NULL
-  while expr
-    symptr=>cdr = new_cons
-    symptr      = symptr=>cdr
-    if !list; list = symptr; fin
-    symptr=>car = eval_expr(expr=>car)
-    expr        = expr=>cdr
-  loop
-  if lastbuild
-    lastbuild=>cdr = NULL // Cut new list off of build_list
-  else
-    build_list = NULL // No previous build_list
-  fin
-  return list
+  return NULL
 end
 
 def natv_car(symptr, expr)
@@ -1031,30 +1090,29 @@ def natv_cset(symptr, expr)
     puts("CSET: Not a SYM\n")
     return NULL
   fin
-  expr          = eval_expr(expr=>cdr=>car)
-  symptr=>apval = expr ^ NULL_HACK
+  symptr=>apval = eval_expr(expr=>cdr=>car) ^ NULL_HACK
   return symptr
 end
 
 def natv_csetq(symptr, expr)
+  symptr = expr=>car
   if symptr->type & TYPE_MASK <> SYM_TYPE
     puts("CSETQ: Not a SYM\n")
     return NULL
   fin
-  symptr = eval_expr(expr=>cdr=>car)
-  expr=>car=>apval = symptr ^ NULL_HACK
+  symptr=>apval = eval_expr(expr=>cdr=>car) ^ NULL_HACK
   return symptr
 end
 
 def natv_set(symptr, expr)
-  symptr = eval_expr(expr=>cdr=>car)
-  set_assoc(eval_expr(expr=>car), symptr)
+  symptr = eval_expr(expr=>car)
+  set_assoc(symptr, eval_expr(expr=>cdr=>car))
   return symptr
 end
 
 def natv_setq(symptr, expr)
-  symptr = eval_expr(expr=>cdr=>car)
-  set_assoc(expr=>car, symptr)
+  symptr = expr=>car
+  set_assoc(symptr, eval_expr(expr=>cdr=>car))
   return symptr
 end
 
@@ -1082,8 +1140,9 @@ def natv_println(symptr, expr)
   putln
   return expr
 end
+
 def natv_for(symptr, expr)
-  var index, ufunc, dlist, result
+  var index, ufunc, dlist
   var[2] incval, stepval
 
   index = expr=>car
@@ -1109,23 +1168,70 @@ def natv_for(symptr, expr)
   fin
   stepval[0] = symptr=>intval[0]
   stepval[1] = symptr=>intval[1]
-  ufunc = expr=>car
-  expr = expr=>cdr
-  dlist = expr
+  ufunc      = expr=>car
+  dlist      = expr=>cdr
   //
   // Enter loop
   //
+  push_sweep_stack(NULL)
   while eval_expr(ufunc)
     expr = dlist
     while expr
-      result = eval_expr(expr=>car)
-      expr   = expr=>cdr
+      //
+      // Keep result from getting GC'ed
+      //
+      sweep_stack[sweep_stack_top - 1] = eval_expr(expr=>car)
+      expr                             = expr=>cdr
     loop
     load32((index=>apval ^ NULL_HACK) + intval)
     add32(@stepval)
     store32((index=>apval ^ NULL_HACK) + intval)
   loop
-  return result
+  return pop_sweep_stack
+end
+
+def natv_while(symptr, expr)
+  var ufunc, dlist
+
+  ufunc = expr=>car
+  dlist = expr=>cdr
+  //
+  // Enter loop
+  //
+  push_sweep_stack(NULL)
+  while eval_expr(ufunc)
+    expr = dlist
+    while expr
+      //
+      // Keep result from getting GC'ed
+      //
+      sweep_stack[sweep_stack_top - 1] = eval_expr(expr=>car)
+      expr                             = expr=>cdr
+    loop
+  loop
+  return pop_sweep_stack
+end
+
+def natv_until(symptr, expr)
+  var ufunc, dlist
+
+  ufunc = expr=>car
+  dlist = expr=>cdr
+  //
+  // Enter loop
+  //
+  push_sweep_stack(NULL)
+  repeat
+    expr = dlist
+    while expr
+      //
+      // Keep result from getting GC'ed
+      //
+      sweep_stack[sweep_stack_top - 1] = eval_expr(expr=>car)
+      expr                             = expr=>cdr
+    loop
+  until eval_expr(ufunc)
+  return pop_sweep_stack
 end
 
 //
@@ -1164,5 +1270,7 @@ new_sym("SETQ")=>natv    = @natv_setq
 new_sym("PRINT")=>natv   = @natv_print
 new_sym("PRINTLN")=>natv = @natv_println
 new_sym("FOR")=>natv     = @natv_for
+new_sym("WHILE")=>natv   = @natv_while
+new_sym("UNTIL")=>natv   = @natv_until
 return modkeep | modinitkeep
 done
