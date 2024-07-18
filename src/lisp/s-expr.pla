@@ -69,9 +69,9 @@ const MAX_PARAMS = 64
 var param_vals[MAX_PARAMS] // In-flight evaluated argument values
 var param_cnt
 
-var sym_nil, sym_quote, sym_lambda, sym_cond, sym_set
+var sym_nil, sym_quote, sym_lambda, sym_set
+var sym_cond, sym_if, sym_for, sym_space, sym_cr
 res[t_elem] pred_true  = 0, 0, BOOL_TRUE
-
 predef print_expr(expr)#0
 predef eval_expr(expr)#1
 
@@ -761,6 +761,16 @@ export def eval_expr(expr)#1
             fin
             expr = expr=>cdr
           loop
+        elsif expr_car == sym_if // Inline if() evaluation
+          expr = expr=>cdr
+          if eval_expr(expr=>car) == @pred_true
+            expr = expr=>cdr=>car // THEN clause
+          else
+            expr = expr=>cdr=>cdr
+            if expr // Check for ELSE clause
+              expr = expr=>car
+            fin
+          fin
         else // Symbol associated with lambda
           curl, expr = enter_lambda(curl, assoc(expr_car), expr=>cdr)
         fin
@@ -871,6 +881,35 @@ def natv_cons(symptr, expr)
   build_list     = symptr=>cdr
   symptr=>cdr    = expr
   return symptr
+end
+
+def natv_list(symptr, expr)
+  var list, lastbuild
+
+  lastbuild = build_list
+  if build_list
+    while lastbuild=>cdr
+      lastbuild = lastbuild=>cdr
+    loop
+    symptr = lastbuild
+  else
+    build_list = new_cons
+    symptr     = build_list
+  fin
+  list = NULL
+  while expr
+    symptr=>cdr = new_cons
+    symptr      = symptr=>cdr
+    if !list; list = symptr; fin
+    symptr=>car = eval_expr(expr=>car)
+    expr        = expr=>cdr
+  loop
+  if lastbuild
+    lastbuild=>cdr = NULL // Cut new list off of build_list
+  else
+    build_list = NULL // No previous build_list
+  fin
+  return list
 end
 
 def natv_car(symptr, expr)
@@ -1020,41 +1059,110 @@ def natv_setq(symptr, expr)
 end
 
 def natv_print(symptr, expr)
-  expr = eval_expr(expr=>car)
-  print_expr(expr)
+  var result
+
+  while expr
+    if expr=>car == sym_space
+      result = sym_space
+      putc(' ')
+    elsif expr=>car == sym_cr
+      result = sym_cr
+      putln
+    else
+      result = eval_expr(expr=>car)
+      print_expr(result)
+    fin
+    expr = expr=>cdr
+  loop
+  return result
+end
+
+def natv_println(symptr, expr)
+  expr = natv_print(symptr, expr)
   putln
   return expr
+end
+def natv_for(symptr, expr)
+  var index, ufunc, dlist, result
+  var[2] incval, stepval
+
+  index = expr=>car
+  expr  = expr=>cdr
+  if index->type & TYPE_MASK <> SYM_TYPE
+    puts("For index not symbol\n")
+    return NULL
+  fin
+  symptr = eval_expr(expr=>car)
+  expr   = expr=>cdr
+  if symptr->type <> NUM_INT
+    puts("FOR initial not integer\n")
+    return NULL
+  fin
+  incval[0] = symptr=>intval[0]
+  incval[1] = symptr=>intval[1]
+  index=>apval = symptr ^ NULL_HACK
+  symptr = eval_expr(expr=>car)
+  expr   = expr=>cdr
+  if symptr->type <> NUM_INT
+    puts("FOR step not integer\n")
+    return NULL
+  fin
+  stepval[0] = symptr=>intval[0]
+  stepval[1] = symptr=>intval[1]
+  ufunc = expr=>car
+  expr = expr=>cdr
+  dlist = expr
+  //
+  // Enter loop
+  //
+  while eval_expr(ufunc)
+    expr = dlist
+    while expr
+      result = eval_expr(expr=>car)
+      expr   = expr=>cdr
+    loop
+    load32((index=>apval ^ NULL_HACK) + intval)
+    add32(@stepval)
+    store32((index=>apval ^ NULL_HACK) + intval)
+  loop
+  return result
 end
 
 //
 // Install default functions
 //
 
-new_sym("T")=>apval     = @pred_true ^ NULL_HACK
-new_sym("F")=>apval     = NULL_HACK
-sym_nil                 = new_sym("NIL")
-sym_nil=>apval          = NULL_HACK
-sym_lambda              = new_sym("LAMBDA")
-sym_cond                = new_sym("COND")
-sym_set                 = new_sym("SET")
-sym_quote               = new_sym("QUOTE")
-sym_quote=>natv         = @natv_quote
-new_sym("CAR")=>natv    = @natv_car
-new_sym("CDR")=>natv    = @natv_cdr
-new_sym("CONS")=>natv   = @natv_cons
-new_sym("ATOM")=>natv   = @natv_atom
-new_sym("EQ")=>natv     = @natv_eq
-new_sym("NOT")=>natv    = @natv_null
-new_sym("AND")=>natv    = @natv_and
-new_sym("OR")=>natv     = @natv_or
-new_sym("NULL")=>natv   = @natv_null
-new_sym("LABEL")=>natv  = @natv_label
-new_sym("DEFINE")=>natv = @natv_define
-new_sym("ARRAY")=>natv  = @natv_array
-new_sym("CSET")=>natv   = @natv_cset
-new_sym("CSETQ")=>natv  = @natv_csetq
-new_sym("SET")=>natv    = @natv_set
-new_sym("SETQ")=>natv   = @natv_setq
-new_sym("PRINT")=>natv  = @natv_print
+new_sym("T")=>apval      = @pred_true ^ NULL_HACK
+new_sym("F")=>apval      = NULL_HACK
+sym_space                = new_sym("SPACE")
+sym_cr                   = new_sym("CR")
+sym_nil                  = new_sym("NIL")
+sym_nil=>apval           = NULL_HACK
+sym_lambda               = new_sym("LAMBDA")
+sym_cond                 = new_sym("COND")
+sym_if                   = new_sym("IF")
+sym_set                  = new_sym("SET")
+sym_quote                = new_sym("QUOTE")
+sym_quote=>natv          = @natv_quote
+new_sym("CAR")=>natv     = @natv_car
+new_sym("CDR")=>natv     = @natv_cdr
+new_sym("CONS")=>natv    = @natv_cons
+new_sym("LIST")=>natv    = @natv_list
+new_sym("ATOM")=>natv    = @natv_atom
+new_sym("EQ")=>natv      = @natv_eq
+new_sym("NOT")=>natv     = @natv_null
+new_sym("AND")=>natv     = @natv_and
+new_sym("OR")=>natv      = @natv_or
+new_sym("NULL")=>natv    = @natv_null
+new_sym("LABEL")=>natv   = @natv_label
+new_sym("DEFINE")=>natv  = @natv_define
+new_sym("ARRAY")=>natv   = @natv_array
+new_sym("CSET")=>natv    = @natv_cset
+new_sym("CSETQ")=>natv   = @natv_csetq
+new_sym("SET")=>natv     = @natv_set
+new_sym("SETQ")=>natv    = @natv_setq
+new_sym("PRINT")=>natv   = @natv_print
+new_sym("PRINTLN")=>natv = @natv_println
+new_sym("FOR")=>natv     = @natv_for
 return modkeep | modinitkeep
 done
