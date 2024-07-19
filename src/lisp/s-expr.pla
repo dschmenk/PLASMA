@@ -13,7 +13,6 @@ const NUM_TYPE   = $30
 const NUM_INT    = $31
 const NUM_FLOAT  = $32
 const ARRAY_TYPE = $40
-const FUNC_TYPE  = $50
 const MARK_BIT   = $80
 const MARK_MASK  = $7F
 const NULL_HACK  = 1  // Hack so we can set elements to NULL
@@ -27,20 +26,13 @@ struc t_cons
   word car
   word cdr
 end
-struc t_func
+struc t_sym
   res[t_elem]
   word natv
   word lambda
-end
-struc t_sym
-  res[t_func]
   word array
   word apval
   char name[0]
-end
-struc t_funcenv
-  res[t_func]
-  word environ
 end
 struc t_numint
   res[t_elem]
@@ -62,19 +54,18 @@ const fmt_fp          = FPSTR_FIXED|FPSTR_STRIP|FPSTR_FLEX
 export var fmt_fpint  = 6
 export var fmt_fpfrac = 4
 
-var assoc_list  = NULL // Local SYM->value association list
-var global_list = NULL // Global SYM->value association list
+byte prhex = FALSE // Hex output flag for integers
+
+var assoc_list  = NULL // SYM->value association list
 var cons_list   = NULL
 var cons_free   = NULL
 var int_list    = NULL
 var int_free    = NULL
 var float_list  = NULL
 var float_free  = NULL
-var func_list   = NULL
-var func_free   = NULL
 var sym_list    = NULL
 
-var sym_nil, sym_quote, sym_lambda, sym_set
+var sym_nil, sym_quote, sym_lambda, sym_funarg, sym_set
 var sym_cond, sym_if, sym_for, sym_space, sym_cr
 res[t_elem] pred_true  = 0, 0, BOOL_TRUE
 predef print_expr(expr)#0
@@ -82,6 +73,10 @@ predef eval_expr(expr)#1
 
 //
 // Garbage collector
+// - note, anytime eval_expr is called there is the possibility of
+//   garbage collecting. If there are any in-flight elements (cons,
+//   int, float) they may be collected and returned to the free list.
+//   Use the sweep_stack to temporarily keep a reference to these elements.
 //
 
 const SWEEPSTACK_MAX  = 64
@@ -104,7 +99,6 @@ def mark_elems#0
   mark_list(cons_list)
   mark_list(int_list)
   mark_list(float_list)
-  mark_list(func_list)
 end
 
 def sweep_expr(expr)#0
@@ -123,7 +117,6 @@ end
 def sweep_used#0
   var symptr, i, memptr, size
 
-  sweep_expr(global_list)
   sweep_expr(assoc_list)
   sweep_expr(eval_last)
   symptr = sym_list
@@ -205,7 +198,6 @@ def collect_unused#0
   cons_list,  cons_free  = collect_list(cons_list,  cons_free)
   int_list,   int_free   = collect_list(int_list,   int_free)
   float_list, float_free = collect_list(float_list, float_free)
-  func_list,  func_free =  collect_list(func_list,  func_free)
 end
 
 export def gc#0
@@ -270,25 +262,6 @@ export def new_float(extptr)#1
   floatptr->type = NUM_FLOAT
   memcpy(floatptr + floatval, extptr, 10)
   return floatptr
-end
-
-def new_func
-  var funcptr
-
-  if func_free
-    funcptr   = func_free
-    func_free = func_free=>link
-  else
-    gc_pull++
-    funcptr = heapalloc(t_func)
-  fin
-  funcptr=>link    = func_list
-  func_list        = funcptr
-  funcptr->type    = FUNC_TYPE
-  funcptr=>natv    = NULL
-  funcptr=>lambda  = NULL
-  funcptr=>environ = NULL
-  return funcptr
 end
 
 def new_array(dim0, dim1, dim2, dim3)
@@ -390,8 +363,13 @@ def print_atom(atom)#0
       is NUM_TYPE
         when atom->type
           is NUM_INT
-            if atom=>intval[1] >= 0; putc(' '); fin // Add space for pos
-            puti32(atom + intval)
+            if prhex
+              putc('$')
+              puth(atom=>intval[1]); puth(atom=>intval[0])
+            else
+              if atom=>intval[1] >= 0; putc(' '); fin // Add space for pos
+              puti32(atom + intval)
+            fin
             break
           is NUM_FLOAT
             puts(ext2str(atom + floatval, @prstr, fmt_fpint, fmt_fpfrac, fmt_fp))
@@ -439,14 +417,6 @@ def print_atom(atom)#0
         next
         puts("]\n")
         break
-      is FUNC_TYPE
-        puts("FUNCTION:\n")
-        if    atom=>natv;   puts("NATV")
-        elsif atom=>lambda; print_expr(atom=>lambda)
-        else  puts("???")
-        fin
-        puts("\nENVIRON:\n"); print_expr(atom=>environ); putln
-        break
       otherwise
         puts("Unknown atom type: $"); putb(atom->type); putln
     wend
@@ -485,6 +455,12 @@ end
 
 def is_num(cptr)
   if ^cptr == '-' or ^cptr == '+'; cptr++; fin
+  if ^cptr == '$'
+    cptr++
+    if toupper(^cptr) >= 'A' and toupper(^cptr) <= 'F'
+      return TRUE
+    fin
+  fin
   return ^cptr >= '0' and ^cptr <= '9'
 end
 
@@ -495,7 +471,7 @@ end
 def parse_num(evalptr)#2 // return evalptr, intptr
   var startptr
   var int[2], ext[5]
-  byte sign
+  byte sign, h
 
   sign = FALSE
   if ^evalptr == '-'
@@ -504,34 +480,51 @@ def parse_num(evalptr)#2 // return evalptr, intptr
   elsif ^evalptr == '+'
     evalptr++
   fin
-  startptr = evalptr
-  while ^evalptr >= '0' and ^evalptr <= '9'
+  if ^evalptr == '$'
     evalptr++
-  loop
-  if (evalptr - startptr > 10) or ^evalptr == '.' or toupper(^evalptr) == 'E'
-    if ^evalptr == '.'
+    h = toupper(^evalptr)
+    zero32
+    while h >= '0' and h <= 'F'
+      if h > '9'
+        h = h - 'A' + 10
+        if h > 16; break; fin
+      else
+        h = h - '0'
+      fin
+      muli16(16); addi16(h)
       evalptr++
-      while ^evalptr >= '0' and ^evalptr <= '9'
-        evalptr++
-      loop
-    fin
-    if toupper(^evalptr) == 'E'
+      h = toupper(^evalptr)
+    loop
+  else
+    startptr = evalptr
+    while ^evalptr >= '0' and ^evalptr <= '9'
       evalptr++
-      if ^evalptr == '-' or ^evalptr == '+'; evalptr++; fin
-      while ^evalptr >= '0' and ^evalptr <= '9'
+    loop
+    if (evalptr - startptr > 10) or ^evalptr == '.' or toupper(^evalptr) == 'E'
+      if ^evalptr == '.'
         evalptr++
-      loop
+        while ^evalptr >= '0' and ^evalptr <= '9'
+          evalptr++
+        loop
+      fin
+      if toupper(^evalptr) == 'E'
+        evalptr++
+        if ^evalptr == '-' or ^evalptr == '+'; evalptr++; fin
+        while ^evalptr >= '0' and ^evalptr <= '9'
+          evalptr++
+        loop
+      fin
+      if sign; startptr--; fin
+      ^(startptr - 1) = evalptr - startptr
+      str2ext(startptr - 1, @ext)
+      return evalptr, new_float(@ext)
     fin
-    if sign; startptr--; fin
-    ^(startptr - 1) = evalptr - startptr
-    str2ext(startptr - 1, @ext)
-    return evalptr, new_float(@ext)
+    zero32
+    while startptr <> evalptr
+      muli16(10); addi16(^startptr - '0')
+      startptr++
+    loop
   fin
-  zero32
-  while startptr <> evalptr
-    muli16(10); addi16(^startptr - '0')
-    startptr++
-  loop
   if sign; neg32; fin
   store32(@int)
   return evalptr, new_int(int[0], int[1])
@@ -653,27 +646,19 @@ end
 //
 
 export def new_assoc(symptr, valptr)#0
-  var pair, addlist
+  var pair, pairlist
 
   if symptr and (symptr->type & TYPE_MASK <> SYM_TYPE)
     puts("Not a SYM in new_assoc\n")
     return
   fin
-  pair         = new_cons
-  pair=>car    = symptr
-  pair=>cdr    = valptr
-  if global_list // Add to end of global_list
-    addlist = global_list
-    while addlist=>cdr
-      addlist = addlist=>cdr
-    loop
-    addlist=>cdr = new_cons
-    addlist      = addlist=>cdr
-  else // New list
-    global_list = new_cons
-    addlist    = global_list
-  fin
-  addlist=>car = pair
+  pair          = new_cons
+  pair=>car     = symptr
+  pair=>cdr     = valptr
+  pairlist      = new_cons
+  pairlist=>car = pair
+  pairlist=>cdr = assoc_list
+  assoc_list    = pairlist
 end
 
 def assoc_pair(symptr)
@@ -689,20 +674,10 @@ def assoc_pair(symptr)
     fin
     pair = pair=>cdr
   loop
-  //
-  // Search global association list for symbol
-  //
-  pair = global_list
-  while pair
-    if (pair=>car=>car == symptr)
-      return pair=>car
-    fin
-    pair = pair=>cdr
-  loop
   return NULL // SYM not associated
 end
 
-export def set_assoc(symptr, valptr)#0
+export def set_assoc(symptr, valptr)#1
   var pair
 
   //
@@ -711,9 +686,8 @@ export def set_assoc(symptr, valptr)#0
   pair = assoc_pair(symptr)
   if pair
     pair=>cdr = valptr // Update association
-  else
-    new_assoc(symptr, valptr) // Add global association if unknown
   fin
+  return pair
 end
 
 def assoc(symptr)
@@ -729,16 +703,6 @@ def assoc(symptr)
     fin
     pair = pair=>cdr
   loop
-  //
-  // Search global association list for symbol
-  //
-  pair = global_list
-  while pair
-    if (pair=>car=>car == symptr)
-      return pair=>car=>cdr
-    fin
-    pair = pair=>cdr
-  loop
   return NULL // SYM not associated
 end
 
@@ -746,8 +710,8 @@ end
 // Evaluate expression
 //
 
-def enter_lambda(curl, expr, params)#2 // curl, expr
-  var args, arglist, pairlist, parambase
+def apply_args(curl, expr, argvals)#2 // curl, expr
+  var argsyms, arglist, pairlist, argbase
 
   if !expr or expr=>car <> sym_lambda
     puts("Invalid LAMBDA expression: "); print_expr(expr); putln
@@ -757,35 +721,35 @@ def enter_lambda(curl, expr, params)#2 // curl, expr
   // Evaluate the parameters
   // - manipulate sweep_stack directly for performance
   //
-  parambase = sweep_stack_top
-  while params
-    sweep_stack[sweep_stack_top] = eval_expr(params=>car)
+  argbase = sweep_stack_top
+  while argvals
+    sweep_stack[sweep_stack_top] = eval_expr(argvals=>car)
     sweep_stack_top++
     if sweep_stack_top >= SWEEPSTACK_MAX
-      puts("Parameter overflow:"); print_expr(expr); putln
+      puts("Arg val overflow:"); print_expr(expr); putln
       return NULL, NULL
     fin
-    params = params=>cdr
+    argvals = argvals=>cdr
   loop
-  args = expr=>cdr=>car
-  sweep_stack_top = parambase
+  argsyms         = expr=>cdr=>car
+  sweep_stack_top = argbase
   if curl == expr
     //
     // Set associations
     //
     arglist = assoc_list
-    while args
-      arglist=>car=>cdr = sweep_stack[parambase]
+    while argsyms
+      arglist=>car=>cdr = sweep_stack[argbase]
       arglist           = arglist=>cdr
-      args              = args=>cdr
-      parambase++
+      argsyms           = argsyms=>cdr
+      argbase++
     loop
   else
     //
     // Build arg list before prepending to assoc_list
     //
     arglist = NULL
-    while args
+    while argsyms
       //
       // Build argument/value pairs
       //
@@ -797,10 +761,10 @@ def enter_lambda(curl, expr, params)#2 // curl, expr
         pairlist = arglist
       fin
       pairlist=>car      = new_cons
-      pairlist=>car=>car = args=>car
-      pairlist=>car=>cdr = sweep_stack[parambase]
-      args               = args=>cdr
-      parambase++
+      pairlist=>car=>car = argsyms=>car
+      pairlist=>car=>cdr = sweep_stack[argbase]
+      argsyms            = argsyms=>cdr
+      argbase++
     loop
     if arglist
       pairlist=>cdr = assoc_list
@@ -810,12 +774,64 @@ def enter_lambda(curl, expr, params)#2 // curl, expr
   return expr, expr=>cdr=>cdr=>car
 end
 
+def eval_funarg(funarg, argvals)
+  var funexpr, argsyms, arglist, pairlist, argbase
+
+  funexpr = funarg=>cdr=>car // Lambda expression
+  argsyms = funexpr=>cdr=>car
+  //
+  // Evaluate the parameters
+  // - manipulate sweep_stack directly for performance
+  //
+  argbase = sweep_stack_top
+  while argvals
+    sweep_stack[sweep_stack_top] = eval_expr(argvals=>car)
+    sweep_stack_top++
+    if sweep_stack_top >= SWEEPSTACK_MAX
+      puts("Parameter overflow:"); print_expr(funexpr); putln
+      return NULL
+    fin
+    argvals = argvals=>cdr
+  loop
+  sweep_stack_top = argbase
+  //
+  // Build arg list before prepending to new assoc_list
+  //
+  arglist = NULL
+  while argsyms
+    //
+    // Build argument/value pairs
+    //
+    if arglist
+      pairlist=>cdr = new_cons
+      pairlist      = pairlist=>cdr
+    else
+      arglist  = new_cons
+      pairlist = arglist
+    fin
+    pairlist=>car      = new_cons
+    pairlist=>car=>car = argsyms=>car
+    pairlist=>car=>cdr = sweep_stack[argbase]
+    argsyms            = argsyms=>cdr
+    argbase++
+  loop
+  push_sweep_stack(assoc_list)
+  assoc_list = funarg=>cdr=>cdr=>car // Swap associcate list pointer
+  if arglist
+    pairlist=>cdr = assoc_list
+    assoc_list    = arglist
+  fin
+  funexpr               = eval_expr(funexpr=>cdr=>cdr=>car)
+  funarg=>cdr=>cdr=>car = assoc_list // Save current environ
+  assoc_list            = pop_sweep_stack
+  return funexpr
+end
+
 export def eval_expr(expr)#1
-  var alist_enter, curl, expr_car
+  var curl, expr_car
 
   if gc_pull > GC_TRIGGER; gc; fin
   curl        = NULL // Current lambda
-  alist_enter = assoc_list
   while expr
     if expr->type == CONS_TYPE
       //
@@ -827,7 +843,7 @@ export def eval_expr(expr)#1
           expr = expr_car=>natv(expr_car, expr=>cdr) // Native function
           break
         elsif expr_car=>lambda // DEFINEd lambda S-expression
-          curl, expr = enter_lambda(curl, expr_car=>lambda, expr=>cdr)
+          curl, expr = apply_args(curl, expr_car=>lambda, expr=>cdr)
         elsif expr_car == sym_cond // Inline cond() evaluation
           expr = expr=>cdr
           while expr
@@ -847,11 +863,22 @@ export def eval_expr(expr)#1
               expr = expr=>car
             fin
           fin
-        else // Symbol associated with lambda
-          curl, expr = enter_lambda(curl, assoc(expr_car), expr=>cdr)
+        else // Associated symbol
+          expr_car = assoc(expr_car)
+          if expr_car->type == CONS_TYPE
+            if expr_car=>car == sym_funarg
+              expr = eval_funarg(expr_car, expr=>cdr)
+              break
+            elsif expr_car=>car == sym_lambda
+              curl, expr = apply_args(NULL, expr_car, expr=>cdr)
+            else
+              puts("Unknown function:"); print_expr(expr); putln
+              expr = NULL
+            fin
+          fin
         fin
       elsif expr_car->type == CONS_TYPE and expr_car=>car == sym_lambda
-          curl, expr = enter_lambda(NULL, expr_car, expr=>cdr) // Inline lambda
+        curl, expr = apply_args(NULL, expr_car, expr=>cdr) // Inline lambda
       fin
     else
       //
@@ -871,7 +898,6 @@ export def eval_expr(expr)#1
       break
     fin
   loop
-  assoc_list = alist_enter
   return expr
 end
 
@@ -882,6 +908,37 @@ export def eval_quote(expr)#1
   return expr
 end
 
+//
+// Make a copy of an expr
+//
+
+def copy_expr(expr)
+  var copy
+
+  if expr and expr->type == CONS_TYPE
+    //
+    // Copy cons structure
+    //
+    copy = push_sweep_stack(new_cons)
+    while expr
+      if expr=>car and expr=>car->type == CONS_TYPE
+        copy=>car = copy_expr(expr=>car)
+      else
+        copy=>car = expr=>car
+      fin
+      if expr=>cdr and expr=>cdr->type == CONS_TYPE
+        copy=>cdr = new_cons
+        copy = copy=>cdr
+        expr = expr=>cdr
+      else // End of list
+        copy=>cdr = expr=>cdr
+        expr = NULL
+      fin
+    loop
+    return pop_sweep_stack
+  fin
+  return expr
+end
 //
 // Base native functions
 //
@@ -985,18 +1042,35 @@ end
 
 def natv_label(symptr, expr)
   symptr = expr=>cdr=>car
-  set_assoc(expr=>car, symptr)
+  if !set_assoc(expr=>car, symptr)
+    new_assoc(expr=>car, symptr)
+  fin
   return symptr
+end
+
+def natv_function(symptr, expr)
+  var funptr
+
+  funptr      = new_cons
+  symptr      = funptr
+  symptr=>car = sym_funarg
+  symptr=>cdr = new_cons
+  symptr      = symptr=>cdr
+  symptr=>car = expr=>car
+  symptr=>cdr = new_cons
+  symptr      = symptr=>cdr
+  symptr=>car = copy_expr(assoc_list)
+  return funptr
 end
 
 def natv_define(symptr, expr)
 
-  var funclist, funcptr
+  var deflist, funcptr
 
-  funclist = NULL
+  deflist = NULL
   if expr
-    funclist = new_cons
-    funcptr  = funclist
+    deflist  = new_cons
+    funcptr  = deflist
   fin
   while expr
     symptr         = expr=>car=>car
@@ -1008,7 +1082,7 @@ def natv_define(symptr, expr)
       funcptr      = funcptr=>cdr
     fin
   loop
-  return funclist
+  return deflist
 end
 
 def eval_index(arrayptr, expr)
@@ -1116,9 +1190,10 @@ def natv_setq(symptr, expr)
   return symptr
 end
 
-def natv_print(symptr, expr)
+def natv_pri(symptr, expr)
   var result
 
+  result = NULL
   while expr
     if expr=>car == sym_space
       result = sym_space
@@ -1135,8 +1210,15 @@ def natv_print(symptr, expr)
   return result
 end
 
-def natv_println(symptr, expr)
-  expr = natv_print(symptr, expr)
+def natv_prhex(symptr, expr)
+  if expr
+    prhex = eval_expr(expr=>car)
+  fin
+  return bool_pred(prhex)
+end
+
+def natv_print(symptr, expr)
+  expr = natv_pri(symptr, expr)
   putln
   return expr
 end
@@ -1238,39 +1320,42 @@ end
 // Install default functions
 //
 
-new_sym("T")=>apval      = @pred_true ^ NULL_HACK
-new_sym("F")=>apval      = NULL_HACK
-sym_space                = new_sym("SPACE")
-sym_cr                   = new_sym("CR")
-sym_nil                  = new_sym("NIL")
-sym_nil=>apval           = NULL_HACK
-sym_lambda               = new_sym("LAMBDA")
-sym_cond                 = new_sym("COND")
-sym_if                   = new_sym("IF")
-sym_set                  = new_sym("SET")
-sym_quote                = new_sym("QUOTE")
-sym_quote=>natv          = @natv_quote
-new_sym("CAR")=>natv     = @natv_car
-new_sym("CDR")=>natv     = @natv_cdr
-new_sym("CONS")=>natv    = @natv_cons
-new_sym("LIST")=>natv    = @natv_list
-new_sym("ATOM")=>natv    = @natv_atom
-new_sym("EQ")=>natv      = @natv_eq
-new_sym("NOT")=>natv     = @natv_null
-new_sym("AND")=>natv     = @natv_and
-new_sym("OR")=>natv      = @natv_or
-new_sym("NULL")=>natv    = @natv_null
-new_sym("LABEL")=>natv   = @natv_label
-new_sym("DEFINE")=>natv  = @natv_define
-new_sym("ARRAY")=>natv   = @natv_array
-new_sym("CSET")=>natv    = @natv_cset
-new_sym("CSETQ")=>natv   = @natv_csetq
-new_sym("SET")=>natv     = @natv_set
-new_sym("SETQ")=>natv    = @natv_setq
-new_sym("PRINT")=>natv   = @natv_print
-new_sym("PRINTLN")=>natv = @natv_println
-new_sym("FOR")=>natv     = @natv_for
-new_sym("WHILE")=>natv   = @natv_while
-new_sym("UNTIL")=>natv   = @natv_until
+new_sym("T")=>apval       = @pred_true ^ NULL_HACK
+new_sym("F")=>apval       = NULL_HACK
+sym_space                 = new_sym("SPACE")
+sym_cr                    = new_sym("CR")
+sym_nil                   = new_sym("NIL")
+sym_nil=>apval            = NULL_HACK
+sym_lambda                = new_sym("LAMBDA")
+sym_funarg                = new_sym("FUNARG")
+sym_cond                  = new_sym("COND")
+sym_if                    = new_sym("IF")
+sym_set                   = new_sym("SET")
+sym_quote                 = new_sym("QUOTE")
+sym_quote=>natv           = @natv_quote
+new_sym("CAR")=>natv      = @natv_car
+new_sym("CDR")=>natv      = @natv_cdr
+new_sym("CONS")=>natv     = @natv_cons
+new_sym("LIST")=>natv     = @natv_list
+new_sym("ATOM")=>natv     = @natv_atom
+new_sym("EQ")=>natv       = @natv_eq
+new_sym("NOT")=>natv      = @natv_null
+new_sym("AND")=>natv      = @natv_and
+new_sym("OR")=>natv       = @natv_or
+new_sym("NULL")=>natv     = @natv_null
+new_sym("FUNCTION")=>natv = @natv_function
+new_sym("LABEL")=>natv    = @natv_label
+new_sym("DEFINE")=>natv   = @natv_define
+new_sym("ARRAY")=>natv    = @natv_array
+new_sym("CSET")=>natv     = @natv_cset
+new_sym("CSETQ")=>natv    = @natv_csetq
+new_sym("SET")=>natv      = @natv_set
+new_sym("SETQ")=>natv     = @natv_setq
+new_sym("PRI")=>natv      = @natv_pri
+new_sym("PRHEX")=>natv    = @natv_prhex
+new_sym("PRINT")=>natv    = @natv_print
+new_sym("FOR")=>natv      = @natv_for
+new_sym("WHILE")=>natv    = @natv_while
+new_sym("UNTIL")=>natv    = @natv_until
 return modkeep | modinitkeep
 done

@@ -1,7 +1,7 @@
 (define
   (ydot
     (lambda (x y)
-      (maplist x '(lambda (j) (cons (car j) y)))
+      (maplist x (function (lambda (j) (cons (car j) y))))
     )
   )
   (maplist

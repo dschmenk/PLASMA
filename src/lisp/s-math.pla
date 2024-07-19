@@ -659,6 +659,119 @@ def natv_annuityY(symptr, expr)
 end
 
 //
+// Bit-wise operations
+//
+
+def natv_bitnot(symptr, expr)
+  symptr = eval_int(expr)
+  return new_int(~symptr=>intval[0], ~symptr=>intval[1])
+end
+
+def natv_bitand(symptr, expr)
+  var[2] bitval
+
+  symptr    = eval_int(expr)
+  bitval[0] = symptr=>intval[0]
+  bitval[1] = symptr=>intval[1]
+  symptr    = eval_int(expr=>cdr)
+  return new_int(bitval[0] & symptr=>intval[0], bitval[1] & symptr=>intval[1])
+end
+
+def natv_bitor(symptr, expr)
+  var[2] bitval
+
+  symptr    = eval_int(expr)
+  bitval[0] = symptr=>intval[0]
+  bitval[1] = symptr=>intval[1]
+  symptr    = eval_int(expr=>cdr)
+  return new_int(bitval[0] | symptr=>intval[0], bitval[1] | symptr=>intval[1])
+end
+
+def natv_bitxor(symptr, expr)
+  var[2] bitval
+
+  symptr    = eval_int(expr)
+  bitval[0] = symptr=>intval[0]
+  bitval[1] = symptr=>intval[1]
+  symptr    = eval_int(expr=>cdr)
+  return new_int(bitval[0] ^ symptr=>intval[0], bitval[1] ^ symptr=>intval[1])
+end
+
+def natv_shift(symptr, expr)
+  var[2] bitval
+  var shift
+
+  symptr    = eval_int(expr)
+  bitval[0] = symptr=>intval[0]
+  bitval[1] = symptr=>intval[1]
+  symptr    = eval_int(expr=>cdr)
+  shift     = symptr=>intval[0]
+  if shift < 0
+    //
+    // Shift right
+    //
+    while shift < 0
+      bitval[0] = bitval[0] >> 1
+      if bitval[1] & 1
+        bitval[0] = bitval[0] | $8000
+      else
+        bitval[0] = bitval[0] & $7FFF
+      fin
+      bitval[1] = bitval[1] >> 1
+      shift++
+    loop
+  else
+    //
+    // Shift left
+    //
+    while shift > 0
+      bitval[1] = bitval[1] << 1
+      if bitval[0] & $8000
+        bitval[1] = bitval[1] | 1
+      fin
+      bitval[0] = bitval[0] << 1
+      shift--
+    loop
+  fin
+  return new_int(bitval[0], bitval[1])
+end
+
+def natv_rotate(symptr, expr)
+  var[2] bitval
+  var rotate, wrap
+
+  symptr    = eval_int(expr)
+  bitval[0] = symptr=>intval[0]
+  bitval[1] = symptr=>intval[1]
+  symptr    = eval_int(expr=>cdr)
+  rotate    = symptr=>intval[0]
+  if rotate < 0
+    while rotate < 0
+      wrap      = bitval[0] & 1 ?? $8000 :: 0
+      bitval[0] = bitval[0] >> 1
+      if bitval[1] & 1
+        bitval[0] = bitval[0] | $8000
+      else
+        bitval[0] = bitval[0] & $7FFF
+      fin
+      bitval[1] = wrap | (bitval[1] >> 1)
+      rotate++
+    loop
+  else
+    while rotate > 0
+      wrap      = bitval[1] & $8000 ?? 1 :: 0
+      bitval[1] = bitval[1] << 1
+      if bitval[0] & $8000
+        bitval[1] = bitval[1] | 1
+      fin
+      bitval[0] = wrap | (bitval[0] << 1)
+      rotate--
+    loop
+  fin
+  return new_int(bitval[0], bitval[1])
+end
+
+//
 // Install math functions
 //
 
@@ -697,6 +810,12 @@ new_sym("POW_I")=>natv    = @natv_powI
 new_sym("POWY")=>natv     = @natv_powY
 new_sym("COMP")=>natv     = @natv_compY
 new_sym("ANNUITY")=>natv  = @natv_annuityY
+new_sym("BITNOT")=>natv   = @natv_bitnot
+new_sym("BITAND")=>natv   = @natv_bitand
+new_sym("BITOR")=>natv    = @natv_bitor
+new_sym("BITXOR")=>natv   = @natv_bitxor
+new_sym("SHIFT")=>natv    = @natv_shift
+new_sym("ROTATE")=>natv   = @natv_rotate
 fpu:reset()
 return modkeep | modinitkeep
 done
