@@ -18,6 +18,8 @@ However, the code is partitioned to allow for easy extension so some of these mi
 - Arrays of up to four dimensions
 - FUNCTION operation with bound variables
 - Additional testing/looping construct: IF, FOR, WHILE, UNTIL
+- Bit-wise logic operations on 32 bit integers
+- Hexadecimal input/output
 
 LISP is one of the earliest computer languages. As such, it holds a special place in the anals of computer science. I've always wanted to learn why LISP is held in such high regard by so many, so I went about learning LISP by actually implementing a LISP interpreter in PLASMA. PLASMA is well suited to implement other languages due to its rich syntax, performance and libraries.
 

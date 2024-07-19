@@ -50,6 +50,8 @@ struc t_array
   word arraymem
 end
 
+byte trace = FALSE
+
 const fmt_fp          = FPSTR_FIXED|FPSTR_STRIP|FPSTR_FLEX
 export var fmt_fpint  = 6
 export var fmt_fpfrac = 4
@@ -744,6 +746,9 @@ def apply_args(curl, expr, argvals)#2 // curl, expr
       argsyms           = argsyms=>cdr
       argbase++
     loop
+    if trace
+      puts("TAIL call:")
+    fin
   else
     //
     // Build arg list before prepending to assoc_list
@@ -770,6 +775,15 @@ def apply_args(curl, expr, argvals)#2 // curl, expr
       pairlist=>cdr = assoc_list
       assoc_list    = arglist
     fin
+    if trace
+      puts("APPLY call:")
+    fin
+  fin
+  if trace
+    print_expr(expr)
+    putln
+    print_expr(assoc_list)
+    putln
   fin
   return expr, expr=>cdr=>cdr=>car
 end
@@ -824,6 +838,13 @@ def eval_funarg(funarg, argvals)
   funexpr               = eval_expr(funexpr=>cdr=>cdr=>car)
   funarg=>cdr=>cdr=>car = assoc_list // Save current environ
   assoc_list            = pop_sweep_stack
+  if trace
+    puts("FUNARG call:")
+    print_expr(funarg)
+    putln
+    print_expr(assoc_list)
+    putln
+  fin
   return funexpr
 end
 
@@ -832,6 +853,9 @@ export def eval_expr(expr)#1
 
   if gc_pull > GC_TRIGGER; gc; fin
   curl        = NULL // Current lambda
+  if trace
+    puts("EVAL: "); print_expr(expr); putln
+  fin
   while expr
     if expr->type == CONS_TYPE
       //
@@ -875,6 +899,8 @@ export def eval_expr(expr)#1
               puts("Unknown function:"); print_expr(expr); putln
               expr = NULL
             fin
+          else
+            expr = expr_car
           fin
         fin
       elsif expr_car->type == CONS_TYPE and expr_car=>car == sym_lambda
@@ -898,6 +924,9 @@ export def eval_expr(expr)#1
       break
     fin
   loop
+  if trace
+    puts("RESULT: "); print_expr(expr); putln
+  fin
   return expr
 end
 
@@ -1212,7 +1241,7 @@ end
 
 def natv_prhex(symptr, expr)
   if expr
-    prhex = eval_expr(expr=>car)
+    prhex = eval_expr(expr=>car) ?? TRUE :: FALSE
   fin
   return bool_pred(prhex)
 end
@@ -1225,7 +1254,7 @@ end
 
 def natv_for(symptr, expr)
   var index, ufunc, dlist
-  var[2] incval, stepval
+  var[2] indexval, incval, stepval
 
   index = expr=>car
   expr  = expr=>cdr
@@ -1233,6 +1262,13 @@ def natv_for(symptr, expr)
     puts("For index not symbol\n")
     return NULL
   fin
+  symptr = eval_expr(index)
+  if symptr->type <> NUM_INT
+    puts("FOR index not integer\n")
+    return NULL
+  fin
+  indexval[0] = symptr=>intval[0]
+  indexval[1] = symptr=>intval[1]
   symptr = eval_expr(expr=>car)
   expr   = expr=>cdr
   if symptr->type <> NUM_INT
@@ -1241,7 +1277,6 @@ def natv_for(symptr, expr)
   fin
   incval[0] = symptr=>intval[0]
   incval[1] = symptr=>intval[1]
-  index=>apval = symptr ^ NULL_HACK
   symptr = eval_expr(expr=>car)
   expr   = expr=>cdr
   if symptr->type <> NUM_INT
@@ -1265,9 +1300,10 @@ def natv_for(symptr, expr)
       sweep_stack[sweep_stack_top - 1] = eval_expr(expr=>car)
       expr                             = expr=>cdr
     loop
-    load32((index=>apval ^ NULL_HACK) + intval)
+    load32(@indexval)
     add32(@stepval)
-    store32((index=>apval ^ NULL_HACK) + intval)
+    store32(@indexval)
+    set_assoc(index, new_int(indexval[0], indexval[1]))
   loop
   return pop_sweep_stack
 end
@@ -1316,6 +1352,14 @@ def natv_until(symptr, expr)
   return pop_sweep_stack
 end
 
+def natv_trace(symptr, expr)
+  if expr
+    trace = eval_expr(expr=>car) ?? TRUE :: FALSE
+  fin
+  return bool_pred(prhex)
+end
+
+
 //
 // Install default functions
 //
@@ -1357,5 +1401,6 @@ new_sym("PRINT")=>natv    = @natv_print
 new_sym("FOR")=>natv      = @natv_for
 new_sym("WHILE")=>natv    = @natv_while
 new_sym("UNTIL")=>natv    = @natv_until
+new_sym("TRACE")=>natv    = @natv_trace
 return modkeep | modinitkeep
 done
