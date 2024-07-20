@@ -21,6 +21,132 @@ However, the code is partitioned to allow for easy extension so some of these mi
 - Bit-wise logic operations on 32 bit integers
 - Hexadecimal input/output
 
+Thes DRAWL implementation comes with the follwoing built-in:
+
+### Constants
+- T = True
+- F = False
+- NIL = NULL
+- SPACE = SPACE character on output
+- CR = Carriage Return character on output
+- CSET()
+- CSETQ()
+- DEFINE()
+
+### Function types
+
+- LAMBDA
+- FUNARG
+- FUNCTION
+
+
+### Predicates
+
+- ATOM()
+- EQ()
+- NOT()
+- AND(...)
+- OR(...)
+- NULL()
+
+### Misc
+
+- SET
+- QUOTE()
+- ARRAY
+- TRACE() = Turn tracing on/off
+- GC() = Run garbage collector and return free memory amount
+- QUIT() = Exit REPL
+
+### List manipulation
+
+- CAR()
+- CDR()
+- CONS()
+- LIST(...)
+
+### Conditionals
+
+- COND(...)
+- IF()
+
+### Output
+
+- PRHEX() = Turn hexadecimal output on/off
+- PRI(...) = Print without newline
+- PRINT(...) = Print with newline
+- FMTFPI() = Floating point format integer digits
+- FMTFPF() = Floating point format fractional digits
+- PRINTER() = Turn printer echo on/off on slot#
+
+### Looping
+
+- FOR()
+- WHILE()
+- UNTIL()
+
+### Associations
+
+- LABEL()
+- SET()
+- SETQ()
+
+### Program feature
+
+- PROG
+- GO()
+- RETURN()
+
+### Numbers
+
+- +()
+- -()
+- '\*'()
+- /()
+- REM()
+- NEG()
+- ABS()
+- >()
+- <()
+- MIN()
+- MAX()
+
+### Integers
+
+- BITNOT() = Bit-wise NOT
+- BITAND() = Bit-wise AND
+- BITOR() = Bit-wise OR
+- BITXOR= Bit-wise XOR
+- SHIFT() = Bit-wise SHIFT (positive = left, negative = right)
+- ROTATE() = Bit-wise ROTATE (positive = left, negative = right)
+
+### Floating Point (from the SANE library)
+
+- PI()
+- MATH_E()
+- LOGB()
+- SCALEB_I()
+- TRUNCATE()
+- ROUND()
+- SQRT()
+- COS()
+- SIN()
+- TAN()
+- ATAN()
+- LOG2()
+- LOG2_1()
+- LN()
+- LN_1()
+- POW2()
+- POW2_1()
+- POWE()
+- POWE_1()
+- POWE2_1()
+- POW_I()
+- POWY()
+- COMP()
+- ANNUITY()
+
 LISP is one of the earliest computer languages. As such, it holds a special place in the anals of computer science. I've always wanted to learn why LISP is held in such high regard by so many, so I went about learning LISP by actually implementing a LISP interpreter in PLASMA. PLASMA is well suited to implement other languages due to its rich syntax, performance and libraries.
 
 ## Links
@@ -28,6 +154,10 @@ LISP is one of the earliest computer languages. As such, it holds a special plac
 Here are some links to get you started.
 
 LISP 1.5 Manual: https://archive.org/details/bitsavers_mitrlelisprammersManual2ed1985_9279667
+
+LISP 1.5 Primer: https://www.softwarepreservation.org/projects/LISP/book/Weismann_LISP1.5_Primer_1967.pdf
+
+Apple Numerics Manual (SANE): https://vintageapple.org/inside_o/pdf/Apple_Numerics_Manual_Second_Edition_1988.pdf
 
 Video showing DRAWL in action: https://youtu.be/wBMivg6xfSg
 

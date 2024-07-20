@@ -59,9 +59,13 @@ import smath
   predef eval_int(expr)#1
 end
 
+
 var prog, prog_expr, prog_return // Current PROG expressions
 var sym_cond, sym_if, sym_fpint, sym_fpfrac
 var pred_true
+
+const csw   = $0036              // Output switch vector
+var scrncsw = 0                  // Output screen value
 
 const FILEBUF_SIZE = 128
 var readfn                       // Read input routine
@@ -174,6 +178,24 @@ def natv_gc(symptr, expr)
   return new_int(heapavail, 0)
 end
 
+def natv_printer(symptr, expr)
+  byte slot
+
+  slot = eval_int(expr)=>intval & 7
+  if slot
+    if !scrncsw
+      scrncsw = *csw
+    fin
+    *csw = $C000 | (slot << 8)
+  else
+    if scrncsw
+      *csw = scrncsw
+    fin
+    scrncsw = 0
+  fin
+  return new_int(slot, 0)
+end
+
 def natv_bye(symptr, expr)
   quit = TRUE
   return new_sym("GOODBYE!")
@@ -267,22 +289,23 @@ end
 //
 
 puts("DRAWL (LISP 1.5) symbolic processor\n")
-pred_true               = bool_pred(TRUE) // Capture value of TRUE
-sym_fpint               = new_sym("FMTFPI")
-sym_fpfrac              = new_sym("FMTFPF")
-sym_fpint=>natv         = @natv_fpint
-sym_fpfrac=>natv        = @natv_fpfrac
-sym_fpint=>apval        = new_int(fmt_fpint,  0) ^ NULL_HACK
-sym_fpfrac=>apval       = new_int(fmt_fpfrac, 0) ^ NULL_HACK
-sym_cond                = new_sym("COND") // This should actually match COND
-sym_if                  = new_sym("IF")   // This should actually match IF
-new_sym("PROG")=>natv   = @natv_prog
-new_sym("GO")=>natv     = @natv_go
-new_sym("RETURN")=>natv = @natv_return
-new_sym("SET")=>natv    = @natv_set
-new_sym("SETQ")=>natv   = @natv_setq
-new_sym("GC")=>natv     = @natv_gc
-new_sym("QUIT")=>natv   = @natv_bye
+pred_true                = bool_pred(TRUE) // Capture value of TRUE
+sym_fpint                = new_sym("FMTFPI")
+sym_fpfrac               = new_sym("FMTFPF")
+sym_fpint=>natv          = @natv_fpint
+sym_fpfrac=>natv         = @natv_fpfrac
+sym_fpint=>apval         = new_int(fmt_fpint,  0) ^ NULL_HACK
+sym_fpfrac=>apval        = new_int(fmt_fpfrac, 0) ^ NULL_HACK
+sym_cond                 = new_sym("COND") // This should actually match COND
+sym_if                   = new_sym("IF")   // This should actually match IF
+new_sym("PROG")=>natv    = @natv_prog
+new_sym("GO")=>natv      = @natv_go
+new_sym("RETURN")=>natv  = @natv_return
+new_sym("SET")=>natv     = @natv_set
+new_sym("SETQ")=>natv    = @natv_setq
+new_sym("GC")=>natv      = @natv_gc
+new_sym("PRINTER")=>natv = @natv_printer
+new_sym("QUIT")=>natv    = @natv_bye
 
 parse_cmdline
 while not quit
