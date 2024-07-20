@@ -21,7 +21,7 @@ However, the code is partitioned to allow for easy extension so some of these mi
 - Bit-wise logic operations on 32 bit integers
 - Hexadecimal input/output
 
-Thes DRAWL implementation comes with the follwoing built-in:
+The DRAWL implementation comes with the follwoing built-in:
 
 ### Constants
 - T = True
@@ -35,9 +35,9 @@ Thes DRAWL implementation comes with the follwoing built-in:
 
 ### Function types
 
-- LAMBDA
-- FUNARG
-- FUNCTION
+- LAMBDA(...)
+- FUNARG() = List constructed by FUNCTION()
+- FUNCTION()
 
 
 ### Predicates
@@ -53,7 +53,7 @@ Thes DRAWL implementation comes with the follwoing built-in:
 
 - SET
 - QUOTE()
-- ARRAY
+- ARRAY()
 - TRACE() = Turn tracing on/off
 - GC() = Run garbage collector and return free memory amount
 - QUIT() = Exit REPL
@@ -93,23 +93,23 @@ Thes DRAWL implementation comes with the follwoing built-in:
 
 ### Program feature
 
-- PROG
-- GO()
-- RETURN()
+- PROG() = Algol like programming in LISP
+- GO() = Goto label inside PROG
+- RETURN() = Return from PROG with value
 
 ### Numbers
 
-- +()
+- +(...)
 - -()
-- '\*'()
+- \*()
 - /()
 - REM()
 - NEG()
 - ABS()
 - >()
 - <()
-- MIN()
-- MAX()
+- MIN(...)
+- MAX(...)
 
 ### Integers
 
