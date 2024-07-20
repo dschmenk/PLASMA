@@ -5,6 +5,7 @@ LISP interpreted on a bytecode VM running on a 1 MHz 6502 is going to be sssllll
 ## Missing features of LISP 1.5 in DRAWL
 
 - General recursion. The 6502 architecture limits recursion (but see tail recursion below), so don't expect too much here
+- Many of the built-in functions from the LISP 1.5 manual. Most can be coded in LISP and loaded at startup
 
 However, the code is partitioned to allow for easy extension so some of these missing features could be implemented.
 
@@ -21,7 +22,7 @@ However, the code is partitioned to allow for easy extension so some of these mi
 - Bit-wise logic operations on 32 bit integers
 - Hexadecimal input/output
 
-The DRAWL implementation comes with the follwoing built-in:
+The DRAWL implementation comes with the follwoing built-in functions:
 
 ### Constants
 - T = True
@@ -81,9 +82,9 @@ The DRAWL implementation comes with the follwoing built-in:
 
 ### Looping
 
-- FOR()
-- WHILE()
-- UNTIL()
+- FOR(...)
+- WHILE(...)
+- UNTIL(...)
 
 ### Associations
 
