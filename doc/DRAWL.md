@@ -158,6 +158,8 @@ LISP 1.5 Manual: https://archive.org/details/bitsavers_mitrlelisprammersManual2e
 
 LISP 1.5 Primer: https://www.softwarepreservation.org/projects/LISP/book/Weismann_LISP1.5_Primer_1967.pdf
 
+P-LISP Manual (newer than LISP 1.5): https://archive.org/details/gLISP/gnosisLISPManual
+
 Apple Numerics Manual (SANE): https://vintageapple.org/inside_o/pdf/Apple_Numerics_Manual_Second_Edition_1988.pdf
 
 Video showing DRAWL in action: https://youtu.be/wBMivg6xfSg
