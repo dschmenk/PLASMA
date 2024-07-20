@@ -106,7 +106,7 @@ The DRAWL implementation comes with the follwoing built-in:
 - REM()
 - NEG()
 - ABS()
-- >()
+- \>()
 - <()
 - MIN(...)
 - MAX(...)
