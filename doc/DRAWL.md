@@ -22,7 +22,7 @@ However, the code is partitioned to allow for easy extension so some of these mi
 - Bit-wise logic operations on 32 bit integers
 - Hexadecimal input/output
 
-The DRAWL implementation comes with the follwoing built-in functions:
+The DRAWL implementation comes with the following built-in functions:
 
 ### Constants
 - T = True
