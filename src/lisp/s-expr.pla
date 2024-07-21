@@ -68,7 +68,7 @@ var float_free  = NULL
 var sym_list    = NULL
 
 var sym_nil, sym_quote, sym_lambda, sym_funarg, sym_set
-var sym_cond, sym_if, sym_for, sym_space, sym_cr
+var sym_cond, sym_if, sym_label, sym_for, sym_space, sym_cr
 res[t_elem] pred_true  = 0, 0, BOOL_TRUE
 predef print_expr(expr)#0
 predef eval_expr(expr)#1
@@ -712,29 +712,47 @@ end
 // Evaluate expression
 //
 
-def apply_args(curl, expr, argvals)#2 // curl, expr
-  var argsyms, arglist, pairlist, argbase
+def eval_args(argvals)
+  var argstart
 
-  if !expr or expr=>car <> sym_lambda
-    puts("Invalid LAMBDA expression: "); print_expr(expr); putln
-    return NULL, NULL
-  fin
   //
-  // Evaluate the parameters
+  // Evaluate the argument parameters
   // - manipulate sweep_stack directly for performance
   //
-  argbase = sweep_stack_top
+  argstart = sweep_stack_top
   while argvals
     sweep_stack[sweep_stack_top] = eval_expr(argvals=>car)
     sweep_stack_top++
     if sweep_stack_top >= SWEEPSTACK_MAX
-      puts("Arg val overflow:"); print_expr(expr); putln
-      return NULL, NULL
+      puts("Arg val overflow\n")
+      return NULL
     fin
     argvals = argvals=>cdr
   loop
-  argsyms         = expr=>cdr=>car
-  sweep_stack_top = argbase
+  sweep_stack_top = argstart
+  return sweep_stack_top
+end
+
+def apply_args(curl, expr, argvals)#2 // curl, expr
+  var argsyms, arglist, pairlist, argbase
+
+  if expr and expr->type <> CONS_TYPE
+    if expr->type & TYPE_MASK == SYM_TYPE
+      if expr=>natv
+        return curl, expr=>natv(expr, argvals) // Native function
+      elsif expr=>lambda // DEFINEd lambda S-expression
+        expr = expr=>lambda
+      else
+        expr = assoc(expr)
+      fin
+    fin
+  fin
+  if !expr or expr=>car <> sym_lambda
+    puts("Invalid LAMBDA expression: "); print_expr(expr); putln
+    return NULL, NULL
+  fin
+  argsyms = expr=>cdr=>car
+  argbase = eval_args(argvals)
   if curl == expr
     //
     // Set associations
@@ -780,10 +798,8 @@ def apply_args(curl, expr, argvals)#2 // curl, expr
     fin
   fin
   if trace
-    print_expr(expr)
-    putln
-    print_expr(assoc_list)
-    putln
+    print_expr(expr); putln
+    print_expr(assoc_list); putln
   fin
   return expr, expr=>cdr=>cdr=>car
 end
@@ -792,26 +808,27 @@ def eval_funarg(funarg, argvals)
   var funexpr, argsyms, arglist, pairlist, argbase
 
   funexpr = funarg=>cdr=>car // Lambda expression
-  argsyms = funexpr=>cdr=>car
-  //
-  // Evaluate the parameters
-  // - manipulate sweep_stack directly for performance
-  //
-  argbase = sweep_stack_top
-  while argvals
-    sweep_stack[sweep_stack_top] = eval_expr(argvals=>car)
-    sweep_stack_top++
-    if sweep_stack_top >= SWEEPSTACK_MAX
-      puts("Parameter overflow:"); print_expr(funexpr); putln
-      return NULL
+  if funexpr->type <> CONS_TYPE
+    if funexpr->type & TYPE_MASK == SYM_TYPE
+      if funexpr=>natv
+        return funexpr=>natv(funexpr, argvals) // Native function
+      elsif funexpr=>lambda // DEFINEd lambda S-expression
+        funexpr = funexpr=>lambda
+      else
+        funexpr = assoc(funexpr)
+      fin
     fin
-    argvals = argvals=>cdr
-  loop
-  sweep_stack_top = argbase
+  fin
+  if !funexpr or funexpr->type <> CONS_TYPE or funexpr=>car <> sym_lambda
+    puts("Unknown FUNCTION:"); print_expr(funarg); putln
+    return NULL
+  fin
   //
   // Build arg list before prepending to new assoc_list
   //
   arglist = NULL
+  argbase = eval_args(argvals)
+  argsyms = funexpr=>cdr=>car
   while argsyms
     //
     // Build argument/value pairs
@@ -835,16 +852,13 @@ def eval_funarg(funarg, argvals)
     pairlist=>cdr = assoc_list
     assoc_list    = arglist
   fin
+  if trace
+    puts("FUNARG call:"); print_expr(funarg); putln
+    print_expr(assoc_list); putln
+  fin
   funexpr               = eval_expr(funexpr=>cdr=>cdr=>car)
   funarg=>cdr=>cdr=>car = assoc_list // Save current environ
   assoc_list            = pop_sweep_stack
-  if trace
-    puts("FUNARG call:")
-    print_expr(funarg)
-    putln
-    print_expr(assoc_list)
-    putln
-  fin
   return funexpr
 end
 
@@ -888,24 +902,28 @@ export def eval_expr(expr)#1
               expr = expr=>car
             fin
           fin
+        elsif expr_car == sym_label // LABEL
+          expr_car = expr=>cdr=>car
+          expr     = expr=>cdr=>cdr=>car
+          if !set_assoc(expr_car, expr)
+            new_assoc(expr_car, expr)
+            alist_enter = assoc_list // Is this correct?
+          fin
+          break
         else // Associated symbol
           expr_car = assoc(expr_car)
-          if expr_car->type == CONS_TYPE
-            if expr_car=>car == sym_funarg
-              expr = eval_funarg(expr_car, expr=>cdr)
-              break
-            elsif expr_car=>car == sym_lambda
-              curl, expr = apply_args(NULL, expr_car, expr=>cdr)
-            else
-              puts("Unknown function:"); print_expr(expr); putln
-              expr = NULL
-            fin
-          else
-            expr = expr_car
-          fin
         fin
-      elsif expr_car->type == CONS_TYPE and expr_car=>car == sym_lambda
-        curl, expr = apply_args(NULL, expr_car, expr=>cdr) // Inline lambda
+      else
+        curl = NULL // Set-up for in-line LAMBDA
+      fin
+      if expr_car->type == CONS_TYPE
+        if expr_car=>car == sym_funarg // FUNARG
+          expr = eval_funarg(expr_car, expr=>cdr)
+          break
+        fin
+        if expr_car=>car == sym_lambda // FUNARG
+          curl, expr = apply_args(curl, expr_car, expr=>cdr)
+        fin
       fin
     else
       //
@@ -1069,14 +1087,6 @@ end
 
 def natv_quote(symptr, expr)
   return expr=>car
-end
-
-def natv_label(symptr, expr)
-  symptr = expr=>cdr=>car
-  if !set_assoc(expr=>car, symptr)
-    new_assoc(expr=>car, symptr)
-  fin
-  return symptr
 end
 
 def natv_function(symptr, expr)
@@ -1345,7 +1355,6 @@ def natv_trace(symptr, expr)
   return bool_pred(prhex)
 end
 
-
 //
 // Install default functions
 //
@@ -1361,6 +1370,7 @@ sym_funarg                = new_sym("FUNARG")
 sym_cond                  = new_sym("COND")
 sym_if                    = new_sym("IF")
 sym_set                   = new_sym("SET")
+sym_label                 = new_sym("LABEL")
 sym_quote                 = new_sym("QUOTE")
 sym_quote=>natv           = @natv_quote
 new_sym("CAR")=>natv      = @natv_car
@@ -1374,7 +1384,7 @@ new_sym("AND")=>natv      = @natv_and
 new_sym("OR")=>natv       = @natv_or
 new_sym("NULL")=>natv     = @natv_null
 new_sym("FUNCTION")=>natv = @natv_function
-new_sym("LABEL")=>natv    = @natv_label
+//new_sym("LABEL")=>natv    = @natv_label
 new_sym("DEFINE")=>natv   = @natv_define
 new_sym("ARRAY")=>natv    = @natv_array
 new_sym("CSET")=>natv     = @natv_cset
