@@ -16,6 +16,7 @@ import sexpr
   const ARRAY_TYPE = $40
   const MARK_BIT   = $80
   const MARK_MASK  = $7F
+  const NULL_HACK  = 1  // Hack so we can set APVALs to NULL
 
   struc t_elem
     word link
@@ -52,6 +53,8 @@ import sexpr
 end
 
 res[t_numint] nan = 0, 0, NUM_INT, 0, 0, 0, 128 // NaN
+
+res[10] tempext
 
 def eval_num(expr)
   var result
@@ -113,6 +116,11 @@ def push_num(numptr)#0
     int = 0
     fpu:pushInt(@int)
   fin
+end
+
+def natv_numberp(symptr, expr)
+  expr = eval_expr(expr)
+  return bool_pred(expr and (expr->type & TYPE_MASK == NUM_TYPE))
 end
 
 def natv_sum(symptr, expr)
@@ -437,22 +445,6 @@ def natv_max(symptr, expr)
     if expr; num = eval_num(expr); fin
   loop
   return new_float(@extmax)
-end
-
-def natv_pi(symptr, expr)
-  var[5] ext
-
-  fpu:constPi()
-  fpu:pullExt(@ext)
-  return new_float(@ext)
-end
-
-def natv_e(symptr, expr)
-  var[5] ext
-
-  fpu:constE()
-  fpu:pullExt(@ext)
-  return new_float(@ext)
 end
 
 def natv_logb(symptr, expr)
@@ -784,9 +776,19 @@ def natv_rotate(symptr, expr)
 end
 
 //
-// Install math functions
+// Install numerical constants and functions
 //
 
+
+fpu:reset()
+fpu:constPi()
+fpu:pullExt(@tempext)
+new_sym("PI")=>apval      = new_float(@tempext) ^ NULL_HACK
+fpu:constE()
+fpu:pullExt(@tempext)
+new_sym("MATH_E")=>apval  = new_float(@tempext) ^ NULL_HACK
+fpu:sinX() // Force load of ELEMS library
+new_sym("NUMBERP")=>natv  = @natv_numberp
 new_sym("SUM")=>natv      = @natv_sum
 new_sym("+")=>natv        = @natv_sum
 new_sym("-")=>natv        = @natv_sub
@@ -799,8 +801,6 @@ new_sym(">")=>natv        = @natv_gt
 new_sym("<")=>natv        = @natv_lt
 new_sym("MIN")=>natv      = @natv_min
 new_sym("MAX")=>natv      = @natv_max
-new_sym("PI")=>natv       = @natv_pi
-new_sym("MATH_E")=>natv   = @natv_e
 new_sym("LOGB")=>natv     = @natv_logb
 new_sym("SCALEB_I")=>natv = @natv_scalebI
 new_sym("TRUNCATE")=>natv = @natv_trunc
@@ -829,6 +829,5 @@ new_sym("BITOR")=>natv    = @natv_bitor
 new_sym("BITXOR")=>natv   = @natv_bitxor
 new_sym("SHIFT")=>natv    = @natv_shift
 new_sym("ROTATE")=>natv   = @natv_rotate
-fpu:reset()
 return modkeep | modinitkeep
 done

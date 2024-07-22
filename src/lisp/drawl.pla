@@ -18,7 +18,7 @@ import sexpr
   const ARRAY_TYPE = $40
   const MARK_BIT   = $80
   const MARK_MASK  = $7F
-  const NULL_HACK  = 1  // Hack so we can set elements to NULL
+  const NULL_HACK  = 1  // Hack so we can set APVALs to NULL
 
   struc t_elem
     word link
@@ -65,7 +65,7 @@ var prog, prog_expr, prog_return // Current PROG expressions
 var sym_cond, sym_if, sym_fpint, sym_fpfrac
 var pred_true
 
-res[t_except] break_repl	 // Breeak out of eval processing
+res[t_except] break_repl   // Breeak out of eval processing
 
 const csw   = $0036              // Output switch vector
 var scrncsw = 0                  // Output screen value
@@ -179,6 +179,10 @@ def natv_gc(symptr, expr)
   return new_int(heapavail, 0)
 end
 
+//
+// Useful Apple II features
+//
+
 def natv_printer(symptr, expr)
   byte slot
 
@@ -195,6 +199,30 @@ def natv_printer(symptr, expr)
     scrncsw = 0
   fin
   return new_int(slot, 0)
+end
+
+def natv_gr(symptr, expr)
+
+  if eval_expr(expr=>car)
+    conio:grmode(TRUE) // Mixed mode
+  else
+    conio:textmode(40) // 40 column text
+  fin
+  return expr
+end
+
+def natv_color(symptr, expr)
+  conio:grcolor(eval_int(expr)=>intval & $0F)
+  return expr
+end
+
+def natv_plot(symptr, expr)
+  byte x, y
+
+  x = eval_int(expr)=>intval
+  y = eval_int(expr=>cdr)=>intval
+  conio:grplot(x, y)
+  return expr
 end
 
 def natv_bye(symptr, expr)
@@ -319,6 +347,9 @@ new_sym("SET")=>natv     = @natv_set
 new_sym("SETQ")=>natv    = @natv_setq
 new_sym("GC")=>natv      = @natv_gc
 new_sym("PRINTER")=>natv = @natv_printer
+new_sym("GR")=>natv      = @natv_gr
+new_sym("COLOR")=>natv   = @natv_color
+new_sym("PLOT")=>natv    = @natv_plot
 new_sym("QUIT")=>natv    = @natv_bye
 
 parse_cmdline
