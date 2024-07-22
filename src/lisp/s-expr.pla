@@ -85,8 +85,6 @@ const SWEEPSTACK_MAX  = 64
 byte  sweep_stack_top = 0
 var   sweep_stack[SWEEPSTACK_MAX] // In-flight expressions
 
-var eval_last = NULL
-
 const GC_TRIGGER = 50
 byte gc_pull     = 0
 
@@ -120,19 +118,18 @@ def sweep_used#0
   var symptr, i, memptr, size
 
   sweep_expr(assoc_list)
-  sweep_expr(eval_last)
   symptr = sym_list
   while symptr
     //
     // Sweep symbol properties
     //
     if symptr=>apval
-      sweep_expr(symptr=>apval)
+      sweep_expr(symptr=>apval ^ NULL_HACK)
     elsif symptr=>lambda
       sweep_expr(symptr=>lambda)
     elsif symptr=>array
       memptr = symptr=>array=>arraymem
-      size   = symptr=>array=>arraysize -1
+      size   = symptr=>array=>arraysize - 1
       for i = 0 to size
         sweep_expr(memptr=>[i])
       next
@@ -149,7 +146,7 @@ def sweep_used#0
   fin
 end
 
-def push_sweep_stack(expr)
+def push_sweep_stack(expr)#1
   if sweep_stack_top == SWEEPSTACK_MAX - 1
     puts("Sweep stack overflow\n")
     return NULL
@@ -159,7 +156,7 @@ def push_sweep_stack(expr)
   return expr
 end
 
-def pop_sweep_stack
+def pop_sweep_stack#1
   if sweep_stack_top == 0
     puts("Sweep stack underflow\n")
     return NULL
@@ -360,7 +357,7 @@ def print_atom(atom)#0
   else
     when atom->type & TYPE_MASK
       is NIL
-        putc(atom->type ?? 'T' :: 'F')
+        puts(atom->type ?? "*T*" :: "NIL")
         break
       is NUM_TYPE
         when atom->type
@@ -956,9 +953,12 @@ export def eval_expr(expr)#1
 end
 
 export def eval_quote(expr)#1
-  eval_last = expr
-  expr      = eval_expr(expr)
-  eval_last = NULL
+  push_sweep_stack(assoc_list)
+  assoc_list = NULL
+  push_sweep_stack(expr) // Keep expr from being GC'ed
+  expr = eval_expr(expr)
+  pop_sweep_stack
+  assoc_list = pop_sweep_stack
   return expr
 end
 
@@ -1210,8 +1210,9 @@ def natv_cset(symptr, expr)
     puts("CSET: Not a SYM\n")
     return NULL
   fin
-  symptr=>apval = eval_expr(expr=>cdr=>car) ^ NULL_HACK
-  return symptr
+  expr = eval_expr(expr=>cdr=>car)
+  symptr=>apval = expr ^ NULL_HACK
+  return expr
 end
 
 def natv_csetq(symptr, expr)
@@ -1220,8 +1221,9 @@ def natv_csetq(symptr, expr)
     puts("CSETQ: Not a SYM\n")
     return NULL
   fin
-  symptr=>apval = eval_expr(expr=>cdr=>car) ^ NULL_HACK
-  return symptr
+  expr = eval_expr(expr=>cdr=>car)
+  symptr=>apval = expr ^ NULL_HACK
+  return expr
 end
 
 def natv_pri(symptr, expr)
@@ -1389,7 +1391,6 @@ new_sym("AND")=>natv      = @natv_and
 new_sym("OR")=>natv       = @natv_or
 new_sym("NULL")=>natv     = @natv_null
 new_sym("FUNCTION")=>natv = @natv_function
-//new_sym("LABEL")=>natv    = @natv_label
 new_sym("DEFINE")=>natv   = @natv_define
 new_sym("ARRAY")=>natv    = @natv_array
 new_sym("CSET")=>natv     = @natv_cset
