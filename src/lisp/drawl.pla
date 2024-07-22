@@ -1,6 +1,8 @@
 include "inc/cmdsys.plh"
 include "inc/args.plh"
 include "inc/fileio.plh"
+include "inc/conio.plh"
+include "inc/longjmp.plh"
 
 import sexpr
   const TYPE_MASK  = $70
@@ -51,7 +53,7 @@ import sexpr
   predef print_expr(expr)#0
   predef parse_expr(evalptr, level, refill)#2
   predef eval_expr(expr)#1
-  predef eval_quote(expr)#1
+  predef eval_quote(expr, hook)#1
   predef bool_pred(bool)#1
 end
 
@@ -59,10 +61,11 @@ import smath
   predef eval_int(expr)#1
 end
 
-
 var prog, prog_expr, prog_return // Current PROG expressions
 var sym_cond, sym_if, sym_fpint, sym_fpfrac
 var pred_true
+
+res[t_except] break_repl	 // Breeak out of eval processing
 
 const csw   = $0036              // Output switch vector
 var scrncsw = 0                  // Output screen value
@@ -282,6 +285,19 @@ def parse_cmdline#0
   fin
 end
 
+def hookfn
+  if conio:keypressed() == $83 // CTRL-C
+    conio:getkey() // Clear KB
+    puts("\n^C\n")
+    if fileref
+      fileio:close(fileref)
+      readfn = @read_keybd
+    fin
+    throw(@break_repl, FALSE)
+  fin
+  return 0
+end
+
 //
 // REPL
 //
@@ -306,8 +322,9 @@ new_sym("PRINTER")=>natv = @natv_printer
 new_sym("QUIT")=>natv    = @natv_bye
 
 parse_cmdline
+except(@break_repl)
 while not quit
-  putln; print_expr(eval_quote(readfn()))
+  putln; print_expr(eval_quote(readfn(), @hookfn))
 loop
 putln
 done
