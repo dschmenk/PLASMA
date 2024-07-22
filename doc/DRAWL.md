@@ -21,6 +21,7 @@ However, the code is partitioned to allow for easy extension so some of these mi
 - Additional testing/looping construct: IF, FOR, WHILE, UNTIL
 - Bit-wise logic operations on 32 bit integers
 - Hexadecimal input/output
+- LoRes Apple II graphics
 
 The DRAWL implementation comes with the following built-in functions:
 
@@ -49,6 +50,7 @@ The DRAWL implementation comes with the following built-in functions:
 - AND(...)
 - OR(...)
 - NULL()
+- NUMBERP()
 
 ### Misc
 
@@ -111,6 +113,7 @@ The DRAWL implementation comes with the following built-in functions:
 - <()
 - MIN(...)
 - MAX(...)
+- NUMBERP()
 
 ### Integers
 
@@ -147,6 +150,12 @@ The DRAWL implementation comes with the following built-in functions:
 - POWY()
 - COMP()
 - ANNUITY()
+
+### Lo-Res Graphics
+
+- GR()
+- COLOR()
+- PLOT()
 
 LISP is one of the earliest computer languages. As such, it holds a special place in the anals of computer science. I've always wanted to learn why LISP is held in such high regard by so many, so I went about learning LISP by actually implementing a LISP interpreter in PLASMA. PLASMA is well suited to implement other languages due to its rich syntax, performance and libraries.
 
