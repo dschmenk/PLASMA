@@ -20,8 +20,8 @@
   )
 )
 
-(setq l1 '(a b c d e f))
-(setq l2 '(a c e g i k))
-(union l1 l2)
-(intersection l1 l2)
+'(union '(a b c d e f) '(a c e g i k))
+(union '(a b c d e f) '(a c e g i k))
+'(intersection '(a b c d e f) '(a c e g i k))
+(intersection '(a b c d e f) '(a c e g i k))
 
