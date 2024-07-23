@@ -57,6 +57,7 @@ The DRAWL implementation comes with the following built-in functions:
 - SET
 - QUOTE()
 - ARRAY()
+- EVAL()
 - TRACE() = Turn tracing on/off
 - GC() = Run garbage collector and return free memory amount
 - QUIT() = Exit REPL
@@ -85,8 +86,6 @@ The DRAWL implementation comes with the following built-in functions:
 ### Looping
 
 - FOR(...)
-- WHILE(...)
-- UNTIL(...)
 
 ### Associations
 

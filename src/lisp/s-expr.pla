@@ -1200,7 +1200,14 @@ def natv_csetq(symptr, expr)
   return expr
 end
 
-def natv_pri(symptr, expr)
+def natv_prhex(symptr, expr)
+  if expr
+    prhex = eval_expr(expr=>car) ?? TRUE :: FALSE
+  fin
+  return bool_pred(prhex)
+end
+
+def natv_prin(symptr, expr)
   var result
 
   result = NULL
@@ -1220,17 +1227,21 @@ def natv_pri(symptr, expr)
   return result
 end
 
-def natv_prhex(symptr, expr)
-  if expr
-    prhex = eval_expr(expr=>car) ?? TRUE :: FALSE
-  fin
-  return bool_pred(prhex)
-end
-
 def natv_print(symptr, expr)
-  expr = natv_pri(symptr, expr)
+  expr = natv_prin(symptr, expr)
   putln
   return expr
+end
+
+def natv_eval(symptr, expr)
+  return eval_expr(eval_expr(expr=>car))
+end
+
+def natv_trace(symptr, expr)
+  if expr
+    trace = eval_expr(expr=>car) ?? TRUE :: FALSE
+  fin
+  return bool_pred(prhex)
 end
 
 def natv_for(symptr, expr)
@@ -1285,57 +1296,6 @@ def natv_for(symptr, expr)
   return pop_sweep_stack
 end
 
-def natv_while(symptr, expr)
-  var ufunc, dlist
-
-  ufunc = expr=>car
-  dlist = expr=>cdr
-  //
-  // Enter loop
-  //
-  push_sweep_stack(NULL)
-  while eval_expr(ufunc)
-    expr = dlist
-    while expr
-      //
-      // Keep result from getting GC'ed
-      //
-      sweep_stack[sweep_stack_top - 1] = eval_expr(expr=>car)
-      expr                             = expr=>cdr
-    loop
-  loop
-  return pop_sweep_stack
-end
-
-def natv_until(symptr, expr)
-  var ufunc, dlist
-
-  ufunc = expr=>car
-  dlist = expr=>cdr
-  //
-  // Enter loop
-  //
-  push_sweep_stack(NULL)
-  repeat
-    expr = dlist
-    while expr
-      //
-      // Keep result from getting GC'ed
-      //
-      sweep_stack[sweep_stack_top - 1] = eval_expr(expr=>car)
-      expr                             = expr=>cdr
-    loop
-  until eval_expr(ufunc)
-  return pop_sweep_stack
-end
-
-def natv_trace(symptr, expr)
-  if expr
-    trace = eval_expr(expr=>car) ?? TRUE :: FALSE
-  fin
-  return bool_pred(prhex)
-end
-
 //
 // Install default functions
 //
@@ -1370,12 +1330,11 @@ new_sym("DEFINE")=>natv   = @natv_define
 new_sym("ARRAY")=>natv    = @natv_array
 new_sym("CSET")=>natv     = @natv_cset
 new_sym("CSETQ")=>natv    = @natv_csetq
-new_sym("PRI")=>natv      = @natv_pri
 new_sym("PRHEX")=>natv    = @natv_prhex
+new_sym("PRIN")=>natv     = @natv_prin
 new_sym("PRINT")=>natv    = @natv_print
-new_sym("FOR")=>natv      = @natv_for
-new_sym("WHILE")=>natv    = @natv_while
-new_sym("UNTIL")=>natv    = @natv_until
+new_sym("EVAL")=>natv     = @natv_eval
 new_sym("TRACE")=>natv    = @natv_trace
+new_sym("FOR")=>natv      = @natv_for
 return modkeep | modinitkeep
 done
