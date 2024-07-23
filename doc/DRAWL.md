@@ -4,6 +4,7 @@ LISP interpreted on a bytecode VM running on a 1 MHz 6502 is going to be sssllll
 
 ## Missing features of LISP 1.5 in DRAWL
 
+- Minimal I/O facilities
 - General recursion. The 6502 architecture limits recursion (but see tail recursion below), so don't expect too much here
 - Many of the built-in functions from the LISP 1.5 manual. Most can be coded in LISP and loaded at startup
 
@@ -15,17 +16,19 @@ However, the code is partitioned to allow for easy extension so some of these mi
 - Tail recursion handles deep recursion. Check out [loop.lisp](https://github.com/dschmenk/PLASMA/blob/master/src/lisp/loop.lisp)
 - Fully garbage collected behind the scenes
 - Optionally read LISP source file at startup
-- The PROG feature now present!
 - Arrays of up to four dimensions
-- FUNCTION operation with bound variables
-- Additional testing/looping construct: IF, FOR, WHILE, UNTIL
 - Bit-wise logic operations on 32 bit integers
+- FUNCTION operation with bound variables
+- The PROG Alogol-like programming construct
+- Additional testing/looping constructs: IF and FOR
 - Hexadecimal input/output
 - LoRes Apple II graphics
+- Ctrl-C break into running program
 
 The DRAWL implementation comes with the following built-in functions:
 
 ### Constants
+
 - T = True
 - F = False
 - NIL = NULL
@@ -72,7 +75,7 @@ The DRAWL implementation comes with the following built-in functions:
 ### Conditionals
 
 - COND(...)
-- IF()
+- IF() = IF THEN w/ optional ELSE
 
 ### Output
 
@@ -95,7 +98,9 @@ The DRAWL implementation comes with the following built-in functions:
 
 ### Program feature
 
-- PROG() = Algol like programming in LISP
+- PROG(...) = Algol like programming in LISP
+- COND(...) = Fall-through COND()
+- IF() = Fall-through IF THEN w/ optional ELSE
 - GO() = Goto label inside PROG
 - RETURN() = Return from PROG with value
 
@@ -126,8 +131,8 @@ The DRAWL implementation comes with the following built-in functions:
 
 ### Floating Point (from the SANE library)
 
-- PI()
-- MATH_E()
+- PI() = Constant value of pi
+- MATH_E() = Constant value of e
 - LOGB()
 - SCALEB_I()
 - TRUNCATE()
@@ -145,9 +150,8 @@ The DRAWL implementation comes with the following built-in functions:
 - POW2_1()
 - POWE()
 - POWE_1()
-- POWE2_1()
 - POW_I()
-- POWY()
+- POW()
 - COMP()
 - ANNUITY()
 
