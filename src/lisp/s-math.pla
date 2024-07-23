@@ -587,7 +587,7 @@ def natv_bitxor(symptr, expr)
   return new_int(bitval[0] ^ symptr=>intval[0], bitval[1] ^ symptr=>intval[1])
 end
 
-def natv_shift(symptr, expr)
+def natv_arithshift(symptr, expr)
   var[2] bitval
   var shift
 
@@ -612,6 +612,55 @@ def natv_shift(symptr, expr)
           bitval[0] = bitval[0] & $7FFF
         fin
         bitval[1] = bitval[1] >> 1
+        shift++
+      loop
+    fin
+  else
+    //
+    // Shift left
+    //
+    if shift > 31
+      bitval[0] = 0
+      bitval[1] = 0
+    else
+      while shift > 0
+        bitval[1] = bitval[1] << 1
+        if bitval[0] & $8000
+          bitval[1] = bitval[1] | 1
+        fin
+        bitval[0] = bitval[0] << 1
+        shift--
+      loop
+    fin
+  fin
+  return new_int(bitval[0], bitval[1])
+end
+
+def natv_logicshift(symptr, expr)
+  var[2] bitval
+  var shift
+
+  symptr    = eval_int(expr)
+  bitval[0] = symptr=>intval[0]
+  bitval[1] = symptr=>intval[1]
+  symptr    = eval_int(expr=>cdr)
+  shift     = symptr=>intval[0]
+  if shift < 0
+    //
+    // Shift right
+    //
+    if shift < -31
+      bitval[1] = 0
+      bitval[0] = 0
+    else
+      while shift < 0
+        bitval[0] = bitval[0] >> 1
+        if bitval[1] & 1
+          bitval[0] = bitval[0] | $8000
+        else
+          bitval[0] = bitval[0] & $7FFF
+        fin
+        bitval[1] = (bitval[1] >> 1) & $7FFF
         shift++
       loop
     fin
@@ -678,49 +727,53 @@ end
 //
 
 sane:initFP()
-new_sym("PI")=>apval      = new_float(@ext_pi) ^ NULL_HACK
-new_sym("MATH_E")=>apval  = new_float(@ext_e)  ^ NULL_HACK
+new_sym("PI")=>apval        = new_float(@ext_pi) ^ NULL_HACK
+new_sym("MATH_E")=>apval    = new_float(@ext_e)  ^ NULL_HACK
+new_sym("SUM")=>natv        = @natv_sum
+new_sym("+")=>natv          = @natv_sum
+new_sym("-")=>natv          = @natv_sub
+new_sym("*")=>natv          = @natv_mul
+new_sym("/")=>natv          = @natv_div
+new_sym("REM")=>natv        = @natv_rem
+new_sym("NEG")=>natv        = @natv_neg
+new_sym("ABS")=>natv        = @natv_abs
+new_sym(">")=>natv          = @natv_gt
+new_sym("<")=>natv          = @natv_lt
+new_sym("MIN")=>natv        = @natv_min
+new_sym("MAX")=>natv        = @natv_max
+new_sym("LOGB")=>natv       = @natv_logb
+new_sym("SCALEB_I")=>natv   = @natv_scalebI
+new_sym("TRUNCATE")=>natv   = @natv_trunc
+new_sym("ROUND")=>natv      = @natv_round
+new_sym("SQRT")=>natv       = @natv_sqrt
+new_sym("COS")=>natv        = @natv_cos
+new_sym("SIN")=>natv        = @natv_sin
+new_sym("TAN")=>natv        = @natv_tan
+new_sym("ATAN")=>natv       = @natv_atan
+new_sym("LOG2")=>natv       = @natv_log2
+new_sym("LOG2_1")=>natv     = @natv_log21
+new_sym("LN")=>natv         = @natv_ln
+new_sym("LN_1")=>natv       = @natv_ln1
+new_sym("POW2")=>natv       = @natv_pow2
+new_sym("POW2_1")=>natv     = @natv_pow21
+new_sym("POWE")=>natv       = @natv_powE
+new_sym("POWE_1")=>natv     = @natv_powE1
+new_sym("POW_I")=>natv      = @natv_powI
+new_sym("POWY")=>natv       = @natv_pow
+new_sym("COMP")=>natv       = @natv_comp
+new_sym("ANNUITY")=>natv    = @natv_annuity
+new_sym("BITNOT")=>natv     = @natv_bitnot
+new_sym("BITAND")=>natv     = @natv_bitand
+new_sym("BITOR")=>natv      = @natv_bitor
+new_sym("BITXOR")=>natv     = @natv_bitxor
+new_sym("ARITHSHIFT")=>natv = @natv_arithshift
+new_sym("LOGICSHIFT")=>natv = @natv_logicshift
+new_sym("ROTATE")=>natv     = @natv_rotate
 memcpy(@tempext, @ext_pi, t_extended)
+//
+// Force load of ELEM library
+//
 sane:saveZP()
-sane:restoreZP(sane:op1ELEM(FOSINX, @tempext)) // Force load of ELEMS library
-new_sym("SUM")=>natv      = @natv_sum
-new_sym("+")=>natv        = @natv_sum
-new_sym("-")=>natv        = @natv_sub
-new_sym("*")=>natv        = @natv_mul
-new_sym("/")=>natv        = @natv_div
-new_sym("REM")=>natv      = @natv_rem
-new_sym("NEG")=>natv      = @natv_neg
-new_sym("ABS")=>natv      = @natv_abs
-new_sym(">")=>natv        = @natv_gt
-new_sym("<")=>natv        = @natv_lt
-new_sym("MIN")=>natv      = @natv_min
-new_sym("MAX")=>natv      = @natv_max
-new_sym("LOGB")=>natv     = @natv_logb
-new_sym("SCALEB_I")=>natv = @natv_scalebI
-new_sym("TRUNCATE")=>natv = @natv_trunc
-new_sym("ROUND")=>natv    = @natv_round
-new_sym("SQRT")=>natv     = @natv_sqrt
-new_sym("COS")=>natv      = @natv_cos
-new_sym("SIN")=>natv      = @natv_sin
-new_sym("TAN")=>natv      = @natv_tan
-new_sym("ATAN")=>natv     = @natv_atan
-new_sym("LOG2")=>natv     = @natv_log2
-new_sym("LOG2_1")=>natv   = @natv_log21
-new_sym("LN")=>natv       = @natv_ln
-new_sym("LN_1")=>natv     = @natv_ln1
-new_sym("POW2")=>natv     = @natv_pow2
-new_sym("POW2_1")=>natv   = @natv_pow21
-new_sym("POWE")=>natv     = @natv_powE
-new_sym("POWE_1")=>natv   = @natv_powE1
-new_sym("POW_I")=>natv    = @natv_powI
-new_sym("POWY")=>natv     = @natv_pow
-new_sym("COMP")=>natv     = @natv_comp
-new_sym("ANNUITY")=>natv  = @natv_annuity
-new_sym("BITNOT")=>natv   = @natv_bitnot
-new_sym("BITAND")=>natv   = @natv_bitand
-new_sym("BITOR")=>natv    = @natv_bitor
-new_sym("BITXOR")=>natv   = @natv_bitxor
-new_sym("SHIFT")=>natv    = @natv_shift
-new_sym("ROTATE")=>natv   = @natv_rotate
+sane:restoreZP(sane:op1ELEM(FOSINX, @tempext))
 return modkeep | modinitkeep
 done

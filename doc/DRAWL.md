@@ -120,7 +120,8 @@ The DRAWL implementation comes with the following built-in functions:
 - BITAND() = Bit-wise AND
 - BITOR() = Bit-wise OR
 - BITXOR= Bit-wise XOR
-- SHIFT() = Bit-wise SHIFT (positive = left, negative = right)
+- ARITHSHIFT() = Bit-wise arithmetic SHIFT (positive = left, negative = right)
+- LOGICSHIFT() = Bit-wise logicalal SHIFT (positive = left, negative = right)
 - ROTATE() = Bit-wise ROTATE (positive = left, negative = right)
 
 ### Floating Point (from the SANE library)
