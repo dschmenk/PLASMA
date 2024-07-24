@@ -201,23 +201,48 @@ def natv_sub(symptr, expr)
 end
 
 def natv_mul(symptr, expr)
-  res[t_numfloat] num1, num2
-  word[2] mul
-  res[t_extended] ext1, ext2
+  var num, extptr
+  word[2]         intmul
+  res[t_extended] extmul
 
-  memcpy(@num1, eval_num(expr),      t_numfloat)
-  memcpy(@num2, eval_num(expr=>cdr), t_numfloat)
-  if num1.type == NUM_INT and num2.type == NUM_INT
-    load32(@num1 + intval)
-    mul32(@num2 + intval)
-    store32(@mul)
-    return new_int(mul[0], mul[1])
+  intmul[0] = 0
+  intmul[1] = 0
+  num       = eval_num(expr)
+  expr      = expr=>cdr
+  if num->type == NUM_INT
+    //
+    // Multiply as integers unless a float is encountered
+    //
+    intmul[0] = num=>intval[0]
+    intmul[1] = num=>intval[1]
+    while expr
+      num  = eval_num(expr)
+      expr = expr=>cdr
+      if num->type == NUM_FLOAT
+        break
+      fin
+      load32(@intmul)
+      mul32(num + intval)
+      store32(@intmul)
+    loop
   fin
-  memcpy(@ext1, num_ext(@num1), t_extended)
-  memcpy(@ext2, num_ext(@num2), t_extended)
-  sane:saveZP()
-  sane:restoreZP(sane:op2FP(FOMUL, @ext1, @ext2))
-  return new_float(@ext1)
+  if num->type == NUM_FLOAT
+    //
+    // Multiply as floating point numbers
+    //
+    int32_ext(@intmul)
+    memcpy(@extmul, num + floatval, t_extended)
+    sane:saveZP()
+    sane:restoreZP(sane:op2FP(FOMUL, @extmul, @tempext))
+    while expr
+      extptr = eval_ext(expr)
+      sane:saveZP()
+      sane:restoreZP(sane:op2FP(FOMUL, @extmul, extptr))
+      expr = expr=>cdr
+    loop
+    return new_float(@extmul)
+  fin
+  return new_int(intmul[0], intmul[1])
 end
 
 def natv_div(symptr, expr)

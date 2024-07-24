@@ -108,7 +108,7 @@ The DRAWL implementation comes with the following built-in functions:
 
 - +(...)
 - -()
-- \*()
+- \*(...)
 - /()
 - REM()
 - NEG()
