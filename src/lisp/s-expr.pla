@@ -65,7 +65,13 @@ var int_list    = NULL
 var int_free    = NULL
 var float_list  = NULL
 var float_free  = NULL
-var sym_list    = NULL
+
+//
+// Symbol hash table
+//
+const HASH_SIZE = 64 // Must be power of two!
+const HASH_MASK = HASH_SIZE-1
+word hashtbl[HASH_SIZE]
 
 var sym_nil, sym_true, sym_quote, sym_lambda, sym_funarg, sym_set
 var sym_cond, sym_if, sym_label, sym_for, sym_space, sym_cr
@@ -114,27 +120,29 @@ def sweep_expr(expr)#0
 end
 
 def sweep_used#0
-  var symptr, i, memptr, size
+  var symptr, h, i, memptr, size
 
   sweep_expr(assoc_list)
-  symptr = sym_list
-  while symptr
-    //
-    // Sweep symbol properties
-    //
-    if symptr=>apval
-      sweep_expr(symptr=>apval ^ NULL_HACK)
-    elsif symptr=>lambda
-      sweep_expr(symptr=>lambda)
-    elsif symptr=>array
-      memptr = symptr=>array=>arraymem
-      size   = symptr=>array=>arraysize - 1
-      for i = 0 to size
-        sweep_expr(memptr=>[i])
-      next
-    fin
-    symptr = symptr=>link
-  loop
+  for h = 0 to HASH_SIZE-1
+    symptr = hashtbl[h]
+    while symptr
+      //
+      // Sweep symbol properties
+      //
+      if symptr=>apval
+        sweep_expr(symptr=>apval ^ NULL_HACK)
+      elsif symptr=>lambda
+        sweep_expr(symptr=>lambda)
+      elsif symptr=>array
+        memptr = symptr=>array=>arraymem
+        size   = symptr=>array=>arraysize - 1
+        for i = 0 to size
+          sweep_expr(memptr=>[i])
+        next
+      fin
+      symptr = symptr=>link
+    loop
+  next
   if sweep_stack_top
     //
     // Sweep in-flight parameters
@@ -304,14 +312,14 @@ def new_array(dim0, dim1, dim2, dim3)
   return aptr
 end
 
-def match_sym(symstr)
+def match_sym(symstr, sym_list)
   var symptr
   byte len, typelen, i
 
   len     = ^symstr
   typelen = SYM_TYPE | len
   len--; symstr++
-  symptr  = sym_list
+  symptr = sym_list
   while symptr
     if symptr->type == typelen
       for i = 0 to len
@@ -327,13 +335,14 @@ def match_sym(symstr)
 end
 
 export def new_sym(symstr)#1
-  var symptr
+  var symptr, index
 
-  symptr = match_sym(symstr)
+  index  = (^symstr ^ ((^(symstr+1) << 1) ^ ^(symstr+1 + ^symstr / 2) << 2)) & HASH_MASK
+  symptr = match_sym(symstr, hashtbl[index])
   if symptr; return symptr; fin // Return already existing symbol
   symptr         = heapalloc(t_sym + ^symstr)
-  symptr=>link   = sym_list
-  sym_list       = symptr
+  symptr=>link   = hashtbl[index]
+  hashtbl[index] = symptr
   symptr->type   = ^symstr | SYM_TYPE
   symptr=>natv   = NULL
   symptr=>lambda = NULL
