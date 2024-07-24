@@ -11,7 +11,7 @@
       (RETURN I)
   )))
   (FORLOOP (LAMBDA (I M)
-    (FOR I 1 1 (< I M) (PRIN I))
+    (FOR I I 1 (< I M) (PRIN I))
   ))
 )
 
