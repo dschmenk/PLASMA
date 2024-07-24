@@ -4,7 +4,7 @@
       (FOR I 0 1 (< I 40)
         (SETQ X (/ (- I 19.5) 20.0))
         (SETQ Y (FN X))
-        (AND (AND (> Y -1.0) (< Y 1.0))
+        (AND (> Y -1.0) (< Y 1.0)
           (PLOT I (- 19.5 (* Y 20.0))))
       )
       (RETURN 0)
