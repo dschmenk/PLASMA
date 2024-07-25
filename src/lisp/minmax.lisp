@@ -1,7 +1,7 @@
 (DEFINE
   (MINL (LAMBDA (M L)
     (COND ((NULL L), M)
-          ((< M (CAR L), (MINL M (CDR L))))
+          ((< M (CAR L)), (MINL M (CDR L)))
           (T, (MINL (CAR L) (CDR L)))
     ))
   )
@@ -13,7 +13,7 @@
   )
   (MAXL (LAMBDA (M L)
     (COND ((NULL L), M)
-          ((> M (CAR L), (MINL M (CDR L))))
+          ((> M (CAR L)), (MINL M (CDR L)))
           (T, (MINL (CAR L) (CDR L)))
     ))
   )
