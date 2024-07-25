@@ -11,7 +11,7 @@
     )
   ))
   (PLOTSIN (LAMBDA ()
-    (PLOTFUNC '(LAMBDA (S) (SIN (* S PI))))
+    (PLOTFUNC (FUNCTION (LAMBDA (S) (SIN (* S PI)))))
   ))
   (PLOTCOS (LAMBDA ()
     (PLOTFUNC '(LAMBDA (S) (COS (* S PI))))
