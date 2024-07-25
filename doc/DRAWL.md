@@ -178,3 +178,5 @@ Apple Numerics Manual (SANE): https://vintageapple.org/inside_o/pdf/Apple_Numeri
 Video showing DRAWL in action: https://youtu.be/wBMivg6xfSg
 
 Preconfigured PLASMA ProDOS boot floppy for DRAWL: https://github.com/dschmenk/PLASMA/blob/master/images/apple/DRAWL.po
+
+My blog post about LISP 1.5 and DRAWL: http://schmenk.is-a-geek.com/wordpress/?p=365
