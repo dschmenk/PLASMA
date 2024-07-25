@@ -34,9 +34,9 @@ The DRAWL implementation comes with the following built-in functions:
 - NIL = NULL
 - SPACE = SPACE character on output
 - CR = Carriage Return character on output
-- CSET()
-- CSETQ()
-- DEFINE()
+- CSET() = Set constant value
+- CSETQ() = Set constant value
+- DEFINE() = Define function
 
 ### Function types
 
@@ -57,10 +57,10 @@ The DRAWL implementation comes with the following built-in functions:
 
 ### Misc
 
-- SET
+- SET = Used in array access to set element value
 - QUOTE()
-- ARRAY()
-- EVAL()
+- ARRAY() = Arrays up to four dimensions
+- EVAL() = Evaluate S-expression
 - TRACE() = Turn tracing on/off
 - GC() = Run garbage collector and return free memory amount
 - QUIT() = Exit REPL
@@ -99,6 +99,8 @@ The DRAWL implementation comes with the following built-in functions:
 ### Program feature
 
 - PROG(...) = Algol like programming in LISP
+- SET() = Update variable value
+- SETQ() = Update variable value
 - COND(...) = Fall-through COND()
 - IF() = Fall-through IF THEN w/ optional ELSE
 - GO() = Goto label inside PROG
@@ -157,9 +159,9 @@ The DRAWL implementation comes with the following built-in functions:
 
 ### Lo-Res Graphics
 
-- GR()
-- COLOR()
-- PLOT()
+- GR() = Turn lo-res graphics mode on/off
+- COLOR() = Set plotting color
+- PLOT() = Plot pixel at X,Y coordinate
 
 LISP is one of the earliest computer languages. As such, it holds a special place in the anals of computer science. I've always wanted to learn why LISP is held in such high regard by so many, so I went about learning LISP by actually implementing a LISP interpreter in PLASMA. PLASMA is well suited to implement other languages due to its rich syntax, performance and libraries.
 
@@ -175,7 +177,9 @@ P-LISP Manual (newer than LISP 1.5): https://archive.org/details/gLISP/gnosisLIS
 
 Apple Numerics Manual (SANE): https://vintageapple.org/inside_o/pdf/Apple_Numerics_Manual_Second_Edition_1988.pdf
 
-Video showing DRAWL in action: https://youtu.be/wBMivg6xfSg
+Part 1 of DRAWL in action (S-expressions): https://youtu.be/wBMivg6xfSg
+
+Part 2 of DRAWL in action (The rest of LISP 1.5): https://youtu.be/MdKZIrfPN7s
 
 Preconfigured PLASMA ProDOS boot floppy for DRAWL: https://github.com/dschmenk/PLASMA/blob/master/images/apple/DRAWL.po
 
