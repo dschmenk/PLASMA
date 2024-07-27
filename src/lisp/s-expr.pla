@@ -738,7 +738,20 @@ def eval_args(argvals)
   return sweep_stack_top
 end
 
-def build_args(argsyms, argbase)#0
+def set_args(argsyms, argbase)#0
+  var arglist
+
+  if argsyms == sym_nil; return; fin
+  arglist = assoc_list
+  while argsyms
+    arglist=>car=>cdr = sweep_stack[argbase]
+    arglist           = arglist=>cdr
+    argsyms           = argsyms=>cdr
+    argbase++
+  loop
+end
+
+def pair_args(argsyms, argbase)#0
   var arglist, pairlist
 
   if argsyms == sym_nil; return; fin
@@ -760,80 +773,24 @@ def build_args(argsyms, argbase)#0
     argsyms            = argsyms=>cdr
     argbase++
   loop
-  if arglist
-    pairlist=>cdr = assoc_list
-    assoc_list    = arglist
-  fin
+  pairlist=>cdr = assoc_list
+  assoc_list    = arglist
 end
 
-def copy_args(argsyms, argbase)#0
-  var arglist
-
-  if argsyms == sym_nil; return; fin
-  arglist = assoc_list
-  while argsyms
-    arglist=>car=>cdr = sweep_stack[argbase]
-    arglist           = arglist=>cdr
-    argsyms           = argsyms=>cdr
-    argbase++
-  loop
-end
-
-def apply_args(curl, expr, argvals)#2 // curl, expr
-  if !expr or expr=>car <> sym_lambda
-    puts("Bad LAMBDA: "); print_expr(expr); putln
-    return NULL, NULL
-  fin
-  if curl == expr
-    //
-    // Overwrite argument associations
-    //
-    copy_args(expr=>cdr=>car, eval_args(argvals))
-  else
-    //
-    // Build argument association list
-    //
-    build_args(expr=>cdr=>car, eval_args(argvals))
-  fin
-  if trace
-    puts("\nTRACE:"); print_expr(expr)
-    puts("\n ASSOC:"); print_expr(assoc_list); putln
-  fin
-  return expr, expr=>cdr=>cdr=>car
-end
-
-def eval_funarg(funarg, argvals)
-  var funexpr, argsyms, arglist, pairlist, argbase
+def apply_funargs(funarg, argvals)
+  var funexpr, argbase
 
   funexpr = funarg=>cdr=>car // Lambda expression
   if funexpr->type <> CONS_TYPE
-    if funexpr->type & TYPE_MASK == SYM_TYPE
-      if funexpr=>natv
-        return funexpr=>natv(funexpr, argvals) // Native function
-      elsif funexpr=>lambda // DEFINEd lambda S-expression
-        funexpr = funexpr=>lambda
-      else
-        funexpr = assoc(funexpr)
-      fin
-    fin
-  fin
-  if !funexpr or funexpr->type <> CONS_TYPE or funexpr=>car <> sym_lambda
-    puts("Unknown FUNCTION:"); print_expr(funarg); putln
-    return NULL
+    return funexpr=>natv(funexpr, argvals) // Native function
   fin
   //
   // Build arg list before prepending to new assoc_list
   //
-  arglist = NULL
   push_sweep_stack(assoc_list) // Save current association list
   argbase    = eval_args(argvals)
-  assoc_list = funarg=>cdr=>cdr=>car // Swap associcate list pointer
-  argsyms    = funexpr=>cdr=>car
-  build_args(funexpr=>cdr=>car, argbase)
-  if trace
-    puts("\nFUNARG:"); print_expr(funarg)
-    puts("\n ASSOC:"); print_expr(assoc_list); putln
-  fin
+  assoc_list = funarg=>cdr=>cdr=>car // Swap association list pointer
+  pair_args(funexpr=>cdr=>car, argbase)
   funexpr               = eval_expr(funexpr=>cdr=>cdr=>car)
   funarg=>cdr=>cdr=>car = assoc_list // Save updated FUNARG associations
   assoc_list            = pop_sweep_stack // Restore association list
@@ -858,7 +815,7 @@ export def eval_expr(expr)#1
           expr = expr_car=>natv(expr_car, expr=>cdr) // Native function
           break
         elsif expr_car=>lambda // DEFINEd lambda S-expression
-          curl, expr = apply_args(curl, expr_car=>lambda, expr=>cdr)
+          expr_car = expr_car=>lambda
         elsif expr_car == sym_cond // Inline cond() evaluation
           expr = expr=>cdr
           while expr
@@ -879,29 +836,42 @@ export def eval_expr(expr)#1
             fin
           fin
         else // Associated symbol
-          expr_car = assoc(expr_car)
+          if expr_car=>apval
+            expr_car = expr_car=>apval ^ NULL_HACK
+          else
+            expr_car = assoc(expr_car)
+            if !expr_car // Make sure we don't hang
+              puts("NULL EVAL:"); print_expr(expr); putln
+              expr = NULL
+              break
+            fin
+          fin
         fin
       else
         curl = NULL // Set-up for in-line LAMBDA
       fin
-      if !expr_car // Make sure we don't hang
-        puts("Invalid function:"); print_expr(expr); putln
-        expr = NULL
-        break
-      fin
       if expr_car->type == CONS_TYPE
-        if expr_car=>car == sym_funarg // FUNARG
-          expr = eval_funarg(expr_car, expr=>cdr)
-          break
-        fin
         if expr_car=>car == sym_label // LABEL
           new_assoc(expr_car=>cdr=>car, expr_car=>cdr=>cdr=>car) // Add LABEL
-          expr_car = expr_car=>cdr=>cdr=>car  // Continue evaluating LAMBDA expression
+          expr_car = expr_car=>cdr=>cdr=>car  // Continue evaluating LAMBDA
         fin
         if expr_car=>car == sym_lambda // LAMBDA
-          curl, expr = apply_args(curl, expr_car, expr=>cdr)
+          if curl == expr_car // Tail recursion: overwrite associations
+            set_args(expr_car=>cdr=>car, eval_args(expr=>cdr))
+          else // Add argument association pair list
+            pair_args(expr_car=>cdr=>car, eval_args(expr=>cdr))
+            curl = expr_car
+          fin
+          expr = expr_car=>cdr=>cdr=>car
+          if trace
+            puts("\nTRACE:"); print_expr(expr_car)
+            puts("\n ASSOC:"); print_expr(assoc_list); putln
+          fin
+        elsif expr_car=>car == sym_funarg // FUNARG
+          expr = apply_funargs(expr_car, expr=>cdr)
+          break
         else
-          puts("LAMBDA expected:"); print_expr(expr); putln
+          puts("Invalid EVAL:"); print_expr(expr); putln
           expr = NULL
           break
         fin
@@ -930,12 +900,11 @@ end
 
 export def eval_quote(expr, hook)#1
   hook_eval = hook
-  push_sweep_stack(assoc_list)
   assoc_list = NULL
   push_sweep_stack(expr) // Keep expr from being GC'ed
   expr = eval_expr(expr)
   pop_sweep_stack
-  assoc_list = pop_sweep_stack
+  assoc_list = NULL
   return expr
 end
 
@@ -1080,12 +1049,26 @@ end
 def natv_function(symptr, expr)
   var funptr
 
+  expr = expr=>car
+  if expr->type & TYPE_MASK == SYM_TYPE
+    if !expr=>natv // Not native function
+      if expr=>lambda // DEFINEd lambda S-expression
+        expr = expr=>lambda
+      else
+        expr = assoc(expr)
+      fin
+      if !expr or expr->type <> CONS_TYPE or expr=>car <> sym_lambda
+        puts("Invalid FUNCTION:"); print_expr(expr); putln
+        return NULL
+      fin
+    fin
+  fin
   funptr      = new_cons
   symptr      = funptr
   symptr=>car = sym_funarg
   symptr=>cdr = new_cons
   symptr      = symptr=>cdr
-  symptr=>car = expr=>car
+  symptr=>car = expr
   symptr=>cdr = new_cons
   symptr      = symptr=>cdr
   symptr=>car = copy_expr(assoc_list)
