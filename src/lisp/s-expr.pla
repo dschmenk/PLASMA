@@ -75,7 +75,7 @@ const HASH_MASK = HASH_SIZE-1
 word hashtbl[HASH_SIZE]
 
 var sym_nil, sym_true, sym_quote, sym_lambda, sym_funarg, sym_set
-var sym_cond, sym_if, sym_label, sym_for, sym_space, sym_cr
+var sym_macro, sym_cond, sym_if, sym_label, sym_for, sym_space, sym_cr
 predef print_expr(expr)#0
 predef eval_expr(expr)#1
 
@@ -798,6 +798,9 @@ def apply_funargs(funarg, argvals)
   return funexpr
 end
 
+def apply_macro(macro, args)
+end
+
 def eval_atom(atom)#1
   //
   // Atom - return the symbol value or the atom itself
@@ -862,7 +865,7 @@ export def eval_expr(expr)#1
             fin
           fin
         else
-          curl = NULL // Set-up for in-line LAMBDA
+          curl = NULL // Set-up for in-line function
         fin
         if func->type == CONS_TYPE
           if func=>car == sym_label // LABEL
@@ -877,16 +880,25 @@ export def eval_expr(expr)#1
               curl = func
             fin
             expr = func=>cdr=>cdr=>car
-            if trace
-              puts("\nTRACE:"); print_expr(func)
-              puts("\n ASSOC:"); print_expr(assoc_list); putln
-            fin
           elsif func=>car == sym_funarg // FUNARG
             expr = apply_funargs(func, expr=>cdr)
             break
+          elsif func=>car == sym_macro // MACRO
+            curl           = new_cons // Add args to assoc_list
+            curl=>car      = new_cons
+            curl=>car=>car = func=>cdr=>car=>car
+            curl=>car=>cdr = args
+            curl=>cdr      = assoc_list
+            assoc_list     = curl
+            curl           = NULL
+            expr           = func=>cdr=>cdr=>car
           else
             puts("Non-LAMBDA EVAL:"); print_expr(expr); putln
             expr = NULL
+          fin
+          if trace
+            puts("\nTRACE:"); print_expr(func)
+            puts("\n ASSOC:"); print_expr(assoc_list); putln
           fin
         fin
       else
@@ -1304,6 +1316,7 @@ sym_space                 = new_sym("SPACE")
 sym_cr                    = new_sym("CR")
 sym_lambda                = new_sym("LAMBDA")
 sym_funarg                = new_sym("FUNARG")
+sym_macro                 = new_sym("MACRO")
 sym_cond                  = new_sym("COND")
 sym_if                    = new_sym("IF")
 sym_set                   = new_sym("SET")
