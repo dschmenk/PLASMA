@@ -24,6 +24,7 @@ However, the code is partitioned to allow for easy extension so some of these mi
 - Hexadecimal input/output
 - LoRes Apple II graphics
 - Ctrl-C break into running program
+- MACROs for meta-programming. See [defun.lisp](https://github.com/dschmenk/PLASMA/blob/master/src/lisp/defun.lisp)
 
 The DRAWL implementation comes with the following built-in functions:
 
@@ -43,7 +44,7 @@ The DRAWL implementation comes with the following built-in functions:
 - LAMBDA(...)
 - FUNARG() = List constructed by FUNCTION()
 - FUNCTION()
-
+- MACRO(...) = Operate on non-evaluated argument list
 
 ### Predicates
 
