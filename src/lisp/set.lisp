@@ -1,3 +1,6 @@
+;
+; Example from LISP 1.5 manual
+;
 (define
   (member (lambda (a x)
     (cond ((null x) , f)

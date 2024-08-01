@@ -1,3 +1,6 @@
+;
+; Recursive factorial
+;
 (define
   (fact (lambda (n)
     (cond ((eq n 0) , 1)

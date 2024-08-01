@@ -1,3 +1,6 @@
+;
+; Example from LISP 1.5 manual
+;
 (define
   (equal (lambda (x y)
     (cond ((and (atom x) (atom y)) (eq x y))

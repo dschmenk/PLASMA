@@ -1,3 +1,6 @@
+;
+; Sample from LISP 1.5 Manual
+;
 (define
   (ydot
     (lambda (x y)

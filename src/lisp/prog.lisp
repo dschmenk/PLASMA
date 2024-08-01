@@ -1,5 +1,8 @@
 (define
   (lengthc (lambda (l)
+    ;
+    ; Use cond() inside prog()
+    ;
     (prog (u v)
       (setq v 0)
       (setq u l)
@@ -10,6 +13,9 @@
      )
   ))
   (lengthi (lambda (l)
+    ;
+    ; Use if/then/else inside prog()
+    ;
     (prog (u v)
       (setq v 0)
       (setq u l)
