@@ -5,6 +5,7 @@ LISP interpreted on a bytecode VM running on a 1 MHz 6502 is going to be sssllll
 ## Missing features of LISP 1.5 in DRAWL
 
 - Minimal I/O facilities
+- Properrty lists. Only DEFINE() and CSETQ()/CSET() property functions supported
 - General recursion. The 6502 architecture limits recursion (but see tail recursion below), so don't expect too much here
 - Many of the built-in functions from the LISP 1.5 manual. Most can be coded in LISP and loaded at startup
 
