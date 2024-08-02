@@ -123,7 +123,7 @@ const SWEEPSTACK_MAX  = 16
 byte  sweep_stack_top = 0
 var   sweep_stack[SWEEPSTACK_MAX] // In-flight expressions
 
-const GC_TRIGGER = 50
+const GC_TRIGGER = 200
 byte gc_pull     = 0
 
 def mark_list(list)#0
@@ -252,6 +252,7 @@ end
 def new(size)
   var memptr
 
+  gc_pull++
   memptr = heapalloc(size)
   if !memptr
     throw(exception, ERR_OUT_OF_MEM)
@@ -262,11 +263,11 @@ end
 export def new_cons#1
   var consptr
 
+  gc_pull++
   if cons_free
     consptr   = cons_free
     cons_free = cons_free=>link
   else
-    gc_pull++
     consptr = new(t_cons)
   fin
   consptr=>link = cons_list
@@ -280,11 +281,11 @@ end
 export def new_int(intlo, inthi)#1
   var intptr
 
+  gc_pull++
   if int_free
     intptr   = int_free
     int_free = int_free=>link
   else
-    gc_pull++
     intptr = new(t_numint)
   fin
   intptr=>link      = int_list
@@ -298,11 +299,11 @@ end
 export def new_float(extptr)#1
   var floatptr
 
+  gc_pull++
   if float_free
     floatptr   = float_free
     float_free = float_free=>link
   else
-    gc_pull++
     floatptr = new(t_numfloat)
   fin
   floatptr=>link = float_list
@@ -316,6 +317,7 @@ def new_array(dim0, dim1, dim2, dim3)
   var ofst0, ofst1, ofst2, ofst3
   var size, aptr, memptr
 
+  gc_pull++
   if dim3
     ofst3 = 2
     ofst2 = dim3  * 2
@@ -378,6 +380,7 @@ export def new_string(strptr)#1
   stringptr = match_string(strptr)
   if stringptr; return stringptr; fin // Return matching string
   alloclen = ^strptr | 15 // Round up size to 15 chars in length
+  gc_pull++
   if string_free
     prevptr   = NULL
     stringptr = string_free
@@ -432,6 +435,7 @@ export def new_sym(symstr)#1
   index  = (^symstr ^ ^(symstr + 1 + ^symstr/2) << 2) & HASH_MASK
   symptr = match_sym(symstr, hashtbl[index])
   if symptr; return symptr; fin // Return already existing symbol
+  gc_pull++
   symptr         = new(t_sym + ^symstr)
   symptr=>link   = hashtbl[index]
   hashtbl[index] = symptr
