@@ -36,8 +36,6 @@ The DRAWL implementation comes with the following built-in functions:
 - T = True
 - F = False
 - NIL = NULL
-- SPACE = SPACE character on output
-- CR = Carriage Return character on output
 - CSET() = Set constant value
 - CSETQ() = Set constant value
 - DEFINE() = Define function
@@ -172,6 +170,16 @@ The DRAWL implementation comes with the following built-in functions:
 - LENS() = LENgth String
 - CHARS() = CHARacter String from integer value
 - ASCII() = ASCII value of first character in string
+
+### I/O functions
+
+- HOME()
+- GOTOXY()
+- KEYPRESSED()
+- READKEY()
+- READ()
+- READFILE()
+- READSTRING()
 
 ### Lo-Res Graphics
 
