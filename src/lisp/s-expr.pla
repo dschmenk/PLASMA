@@ -1280,41 +1280,6 @@ def natv_print(symptr, expr)
   return expr
 end
 
-def natv_syms(symptr, expr)
-  var count
-  byte h
-
-  count = 0
-  for h = 0 to HASH_SIZE-1
-    symptr = hashtbl[h]
-    puti(h); puts(" -----\n")
-    while symptr
-      //
-      // Sweep symbol properties
-      //
-      print_atom(symptr); putc(':')
-      if symptr=>natv
-        puts("NATIVE")
-      elsif symptr=>lambda
-        print_expr(symptr=>lambda)
-      elsif symptr=>apval
-        print_expr(symptr=>apval ^ NULL_HACK)
-      elsif symptr=>array
-        print_expr(symptr)
-      elsif symptr=>array
-        print_expr(assoc(symptr))
-      fin
-      putln
-      count++
-      if !(count & 15)
-        getc()
-      fin
-      symptr = symptr=>link
-    loop
-  next
-  return new_int(count, 0) // Total symbols
-end
-
 def natv_eval(symptr, expr)
   return eval_expr(eval_expr(expr=>car))
 end
@@ -1512,13 +1477,15 @@ def natv_lens(symptr, expr)
 end
 
 def natv_chars(symptr, expr)
-  symptr = eval_expr(expr=>car)
-  if symptr->type <> NUM_INT
-    err_expr = symptr
-    throw(exception, ERR_NOT_INT)
-  fin
-  tempstr->[0] = 1
-  tempstr->[1] = symptr=>intval[0]
+  ^tempstr = 0
+  while expr
+    symptr = eval_expr(expr=>car)
+    if symptr->type == NUM_INT
+      ^tempstr++
+      ^(tempstr + ^tempstr) = symptr=>intval[0]
+    fin
+    expr = expr=>cdr
+  loop
   return new_string(tempstr)
 end
 
@@ -1665,6 +1632,42 @@ def natv_setq(symptr, expr)
 end
 
 //
+// Debug
+//
+
+//def natv_syms(symptr, expr)
+//  var count
+//  byte h
+//
+//  count = 0
+//  for h = 0 to HASH_SIZE-1
+//    symptr = hashtbl[h]
+//    puti(h); puts(" -----\n")
+//    while symptr
+//      print_atom(symptr); putc(':')
+//      if symptr=>natv
+//        puts("NATIVE")
+//      elsif symptr=>lambda
+//        print_expr(symptr=>lambda)
+//      elsif symptr=>apval
+//        print_expr(symptr=>apval ^ NULL_HACK)
+//      elsif symptr=>array
+//        print_expr(symptr)
+//      elsif symptr=>array
+//        print_expr(assoc(symptr))
+//      fin
+//      putln
+//      count++
+//      if !(count & 15)
+//        getc()
+//      fin
+//      symptr = symptr=>link
+//    loop
+//  next
+//  return new_int(count, 0) // Total symbols
+//end
+
+//
 // Install default functions
 //
 
@@ -1705,7 +1708,6 @@ new_sym(":=")=>natv       = @natv_csetq
 new_sym("PRHEX")=>natv    = @natv_prhex
 new_sym("PRIN")=>natv     = @natv_prin
 new_sym("PRINT")=>natv    = @natv_print
-new_sym("SYMS")=>natv     = @natv_syms
 new_sym("EVAL")=>natv     = @natv_eval
 new_sym("TRACE")=>natv    = @natv_trace
 new_sym("FOR")=>natv      = @natv_for
@@ -1723,6 +1725,7 @@ new_sym("CATS")=>natv     = @natv_cats
 new_sym("LENS")=>natv     = @natv_lens
 new_sym("CHARS")=>natv    = @natv_chars
 new_sym("ASCII")=>natv    = @natv_ascii
+//new_sym("SYMS")=>natv     = @natv_syms
 tempstr = heapalloc(256)
 return modkeep | modinitkeep
 done

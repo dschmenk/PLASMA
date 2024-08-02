@@ -178,7 +178,7 @@ The DRAWL implementation comes with the following built-in functions:
 - SUBS() = SUB String offset length
 - CATS(...) = conCATenate Strings
 - LENS() = LENgth String
-- CHARS() = CHARacter String from integer value
+- CHARS(...) = CHARacter String from integer values
 - ASCII() = ASCII value of first character in string
 
 ### I/O functions
