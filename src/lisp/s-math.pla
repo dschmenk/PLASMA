@@ -1,6 +1,7 @@
 include "inc/cmdsys.plh"
 include "inc/int32.plh"
 include "inc/sane.plh"
+include "inc/longjmp.plh"
 
 import sexpr
   const TYPE_MASK  = $70
@@ -43,6 +44,24 @@ import sexpr
     res[t_elem]
     res floatval[10]
   end
+
+  const ERR_INTERNAL     = -1
+  const ERR_OUT_OF_MEM   = -2
+  const ERR_SWEEP_OVRFLW = -3
+  const ERR_SWEEP_UNDFLW = -4
+  const ERR_BAD_DOT      = -5
+  const ERR_NOT_SYM      = -6
+  const ERR_NOT_ASSOC    = -7
+  const ERR_NOT_FUN      = -8
+  const ERR_NOT_NUM      = -9
+  const ERR_NOT_INT      = -10
+  const ERR_NOT_FLOAT    = -11
+  const ERR_NOT_STR      = -12
+  const ERR_BAD_INDEX    = -13
+  const ERR_BAD_GO       = -14
+
+  var exception
+  var err_expr
 
   predef new_sym(symstr)#1
   predef new_int(intlo, inthi)#1
@@ -92,11 +111,11 @@ def eval_num(expr)
   var result
 
   result = eval_expr(expr=>car)
-  if result and result->type & TYPE_MASK == NUM_TYPE
-    return result
+  if !result or result->type & TYPE_MASK <> NUM_TYPE
+    err_expr = expr
+    throw(exception, ERR_NOT_NUM)
   fin
-  puts("Evaluated not an number type: "); print_expr(expr=>car); putln
-  return @nan
+  return result
 end
 
 def eval_ext(expr)
@@ -777,8 +796,8 @@ end
 //
 
 sane:initFP()
-new_sym("PI")=>apval        = new_float(@ext_pi) ^ NULL_HACK
-new_sym("MATH_E")=>apval    = new_float(@ext_e)  ^ NULL_HACK
+new_sym("*PI*")=>apval      = new_float(@ext_pi) ^ NULL_HACK
+new_sym("*E*")=>apval       = new_float(@ext_e)  ^ NULL_HACK
 new_sym("INTEGER")=>natv    = @natv_integer
 new_sym("SUM")=>natv        = @natv_sum
 new_sym("+")=>natv          = @natv_sum
@@ -793,7 +812,7 @@ new_sym("<")=>natv          = @natv_lt
 new_sym("MIN")=>natv        = @natv_min
 new_sym("MAX")=>natv        = @natv_max
 new_sym("LOGB")=>natv       = @natv_logb
-new_sym("SCALEB_I")=>natv   = @natv_scalebI
+new_sym("SCALEB")=>natv     = @natv_scalebI
 new_sym("TRUNCATE")=>natv   = @natv_trunc
 new_sym("ROUND")=>natv      = @natv_round
 new_sym("SQRT")=>natv       = @natv_sqrt
@@ -804,5 +823,12 @@ new_sym("BITXOR")=>natv     = @natv_bitxor
 new_sym("ARITHSHIFT")=>natv = @natv_arithshift
 new_sym("LOGICSHIFT")=>natv = @natv_logicshift
 new_sym("ROTATE")=>natv     = @natv_rotate
+new_sym("~")=>natv          = @natv_bitnot
+new_sym("&")=>natv          = @natv_bitand
+new_sym("|")=>natv          = @natv_bitor
+new_sym("^")=>natv          = @natv_bitxor
+new_sym("<<-")=>natv        = @natv_arithshift
+new_sym("<<")=>natv         = @natv_logicshift
+new_sym("<<<")=>natv        = @natv_rotate
 return modkeep | modinitkeep
 done

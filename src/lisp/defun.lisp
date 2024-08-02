@@ -18,4 +18,7 @@
                ))
           ))
         ))
+        (DEFVAL (MACRO (L)
+          (EVAL (CONS 'CSETQ L))
+        ))
 )

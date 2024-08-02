@@ -54,12 +54,36 @@ struc t_string
   byte stringstr[1]
 end
 
+//
+// Errors
+//
+
+const ERR_INTERNAL     = -1
+const ERR_OUT_OF_MEM   = -2
+const ERR_SWEEP_OVRFLW = -3
+const ERR_SWEEP_UNDFLW = -4
+const ERR_BAD_DOT      = -5
+const ERR_NOT_SYM      = -6
+const ERR_NOT_ASSOC    = -7
+const ERR_NOT_FUN      = -8
+const ERR_NOT_NUM      = -9
+const ERR_NOT_INT      = -10
+const ERR_NOT_FLOAT    = -11
+const ERR_NOT_STR      = -12
+const ERR_BAD_INDEX    = -13
+const ERR_BAD_GO       = -14
+
+//
+// Variables
+//
+
 byte prhex             = FALSE // Hex output flag for integers
 const fmt_fp           = FPSTR_FIXED|FPSTR_STRIP|FPSTR_FLEX
 export var fmt_fpint   = 6
 export var fmt_fpfrac  = 4
 export byte trace      = FALSE
 export var exception   = NULL
+export var err_expr    = NULL
 export var hook_eval   = NULL // Installable hook for eval_expr()
 var assoc_list  = NULL // SYM->value association list
 var cons_list          = NULL
@@ -165,8 +189,7 @@ end
 
 def push_sweep_stack(expr)#1
   if sweep_stack_top == SWEEPSTACK_MAX - 1
-    puts("Sweep stack overflow\n")
-    return NULL
+    throw(exception, ERR_SWEEP_OVRFLW)
   fin
   sweep_stack[sweep_stack_top] = expr
   sweep_stack_top++
@@ -175,8 +198,7 @@ end
 
 def pop_sweep_stack#1
   if sweep_stack_top == 0
-    puts("Sweep stack underflow\n")
-    return NULL
+    throw(exception, ERR_SWEEP_UNDFLW)
   fin
   sweep_stack_top--
   return sweep_stack[sweep_stack_top]
@@ -227,6 +249,16 @@ end
 // Build ATOMS
 //
 
+def new(size)
+  var memptr
+
+  memptr = heapalloc(size)
+  if !memptr
+    throw(exception, ERR_OUT_OF_MEM)
+  fin
+  return memptr
+end
+
 export def new_cons#1
   var consptr
 
@@ -235,8 +267,7 @@ export def new_cons#1
     cons_free = cons_free=>link
   else
     gc_pull++
-    consptr = heapalloc(t_cons)
-    if !consptr; throw(exception, -1); fin
+    consptr = new(t_cons)
   fin
   consptr=>link = cons_list
   cons_list     = consptr
@@ -254,8 +285,7 @@ export def new_int(intlo, inthi)#1
     int_free = int_free=>link
   else
     gc_pull++
-    intptr = heapalloc(t_numint)
-    if !intptr; throw(exception, -1); fin
+    intptr = new(t_numint)
   fin
   intptr=>link      = int_list
   int_list          = intptr
@@ -273,8 +303,7 @@ export def new_float(extptr)#1
     float_free = float_free=>link
   else
     gc_pull++
-    floatptr = heapalloc(t_numfloat)
-    if !floatptr; throw(exception, -1); fin
+    floatptr = new(t_numfloat)
   fin
   floatptr=>link = float_list
   float_list     = floatptr
@@ -302,15 +331,10 @@ def new_array(dim0, dim1, dim2, dim3)
   else
     ofst0 = 2
   fin
-  size = dim0 * ofst0
-  memptr = heapalloc(size)
-  if not memptr
-    puts("Array too large!\n")
-    return NULL
-  fin
+  size   = dim0 * ofst0
+  memptr = new(size)
   memset(memptr, NULL, size)
-  aptr               = heapalloc(t_array)
-  if !aptr; throw(exception, -1); fin
+  aptr               = new(t_array)
   aptr=>link         = NULL
   aptr->type         = ARRAY_TYPE
   aptr=>dimension[0] = dim0
@@ -371,8 +395,7 @@ export def new_string(strptr)#1
   fin
   if !stringptr // Nothing free
     gc_pull++
-    stringptr = heapalloc(t_string + alloclen)
-    if !stringptr; throw(exception, -1); fin
+    stringptr = new(t_string + alloclen)
   fin
   stringptr=>link = string_list
   string_list     = stringptr
@@ -409,8 +432,7 @@ export def new_sym(symstr)#1
   index  = (^symstr ^ ((^(symstr+1) << 1) ^ ^(symstr+1 + ^symstr / 2) << 2)) & HASH_MASK
   symptr = match_sym(symstr, hashtbl[index])
   if symptr; return symptr; fin // Return already existing symbol
-  symptr         = heapalloc(t_sym + ^symstr)
-  if !symptr; throw(exception, -1); fin
+  symptr         = new(t_sym + ^symstr)
   symptr=>link   = hashtbl[index]
   hashtbl[index] = symptr
   symptr->type   = ^symstr | SYM_TYPE
@@ -495,7 +517,8 @@ def print_atom(atom)#0
         puts(atom + stringstr)
         break
       otherwise
-        puts("Unknown atom type: $"); putb(atom->type); putln
+        err_expr = atom
+        throw(exception, ERR_INTERNAL)
     wend
   fin
 end
@@ -688,8 +711,8 @@ export def parse_expr(evalptr, level, refill)#2 // return evalptr, exprptr
         // Add expression to CDR
         //
         if not (consptr and consptr=>car)
-          puts("Invalid . operator\n")
-          return evalptr, exprptr
+          err_expr = consptr
+          throw(exception, ERR_BAD_DOT)
         fin
         consptr=>cdr = elemptr
         elemptr = NULL
@@ -719,8 +742,8 @@ export def parse_expr(evalptr, level, refill)#2 // return evalptr, exprptr
         exprptr = consptr
       else
         if consptr=>cdr
-          puts("Improperly formed .\n")
-          return evalptr, exprptr
+          err_expr = consptr
+          throw(exception, ERR_BAD_DOT)
         fin
         consptr=>cdr = new_cons
         consptr      = consptr=>cdr
@@ -742,8 +765,8 @@ def new_assoc(symptr, valptr)#0
   var pair, pairlist
 
   if symptr and (symptr->type & TYPE_MASK <> SYM_TYPE)
-    puts("NEW ASSOC: Not a SYM\n")
-    return
+    err_expr = symptr
+    throw(exception, ERR_NOT_SYM)
   fin
   pair          = new_cons
   pair=>car     = symptr
@@ -783,7 +806,8 @@ def set_assoc(symptr, valptr)#1
   if pair
     pair=>cdr = valptr // Update association
   else
-    puts("Unknown association: "); print_expr(symptr); putln
+    err_expr = symptr
+    throw(exception, ERR_NOT_ASSOC)
   fin
   return pair
 end
@@ -820,8 +844,8 @@ def eval_args(argvals)
     sweep_stack[sweep_stack_top] = eval_expr(argvals=>car)
     sweep_stack_top++
     if sweep_stack_top >= SWEEPSTACK_MAX
-      puts("Arg overflow\n")
-      return NULL
+      err_expr = argvals
+      throw(exception, ERR_SWEEP_OVRFLW)
     fin
     argvals = argvals=>cdr
   loop
@@ -948,8 +972,8 @@ export def eval_expr(expr)#1
           else // Associated symbol
             func = eval_atom(func)
             if !func or func->type <> CONS_TYPE
-              puts("Non-function EVAL:"); print_expr(expr); putln
-              expr = NULL
+              err_expr = expr
+              throw(exception, ERR_NOT_FUN)
             fin
           fin
         else
@@ -976,8 +1000,8 @@ export def eval_expr(expr)#1
             curl = NULL
             expr = func=>cdr=>cdr=>car
           else
-            puts("Non-LAMBDA EVAL:"); print_expr(expr); putln
-            expr = NULL
+            err_expr = expr
+            throw(exception, ERR_NOT_FUN)
           fin
           if trace
             puts("\nTRACE:"); print_expr(func)
@@ -1170,8 +1194,8 @@ def natv_function(symptr, expr)
         expr = assoc(expr)
       fin
       if !expr or expr->type <> CONS_TYPE or expr=>car <> sym_lambda
-        puts("Invalid FUNCTION:"); print_expr(expr); putln
-        return NULL
+        err_expr = expr
+        throw(exception, ERR_NOT_FUN)
       fin
     fin
   fin
@@ -1209,6 +1233,72 @@ def natv_define(symptr, expr)
   return deflist
 end
 
+def natv_cset(symptr, expr)
+  symptr = eval_expr(expr=>car)
+  if symptr->type & TYPE_MASK <> SYM_TYPE
+    err_expr = symptr
+    throw(exception, ERR_NOT_SYM)
+  fin
+  expr = eval_expr(expr=>cdr=>car)
+  symptr=>apval = expr ^ NULL_HACK
+  return expr
+end
+
+def natv_csetq(symptr, expr)
+  symptr = expr=>car
+  if symptr->type & TYPE_MASK <> SYM_TYPE
+    err_expr = symptr
+    throw(exception, ERR_NOT_SYM)
+  fin
+  expr = eval_expr(expr=>cdr=>car)
+  symptr=>apval = expr ^ NULL_HACK
+  return expr
+end
+
+def natv_prhex(symptr, expr)
+  if expr
+    prhex = eval_expr(expr=>car) ?? TRUE :: FALSE
+  fin
+  return bool_pred(prhex)
+end
+
+def natv_prin(symptr, expr)
+  var result
+
+  result = NULL
+  while expr
+    result = eval_expr(expr=>car)
+    print_expr(result)
+    expr = expr=>cdr
+  loop
+  return result
+end
+
+def natv_print(symptr, expr)
+  expr = natv_prin(symptr, expr)
+  putln
+  return expr
+end
+
+def natv_eval(symptr, expr)
+  return eval_expr(eval_expr(expr=>car))
+end
+
+def natv_trace(symptr, expr)
+  if expr
+    trace = eval_expr(expr=>car) ?? TRUE :: FALSE
+  fin
+  return bool_pred(trace)
+end
+
+def natv_copy(symptr, expr)
+  return copy_expr(expr=>car)
+end
+
+//
+// Arrays
+//
+
 def eval_index(arrayptr, expr)
   var idx[4], i, ii, index
 
@@ -1216,8 +1306,8 @@ def eval_index(arrayptr, expr)
   while expr and ii < 4
     index = eval_expr(expr=>car)
     if index->type <> NUM_INT or isuge(index=>intval, arrayptr=>dimension[ii])
-      puts("Invalid array index: "); print_expr(expr=>car); putln
-      return NULL
+      err_expr = expr
+      throw(exception, ERR_BAD_INDEX)
     fin
     idx[ii] = index=>intval
     expr    = expr=>cdr
@@ -1264,8 +1354,8 @@ def natv_array(symptr, expr)
     while idx_expr and ii < 4
       index = eval_expr(idx_expr=>car)
       if index->type <> NUM_INT
-        puts("Invalid array dimension\n"); print_expr(idx_expr=>car); putln
-        return NULL
+        err_expr = index
+        throw(exception, ERR_BAD_INDEX)
       fin
       idx[ii]  = index=>intval
       idx_expr = idx_expr=>cdr
@@ -1282,64 +1372,128 @@ def natv_array(symptr, expr)
   return arraylist
 end
 
-def natv_cset(symptr, expr)
-  symptr = eval_expr(expr=>car)
-  if symptr->type & TYPE_MASK <> SYM_TYPE
-    puts("CSET: Not a SYM\n")
+//
+// Strings language extension
+//
+
+def natv_string(symptr, expr)
+  expr = eval_expr(expr=>car)
+  if not expr; return NULL; fin
+  ^tempstr = 0
+  when expr->type & TYPE_MASK
+    is NUM_TYPE
+      when expr->type
+        is NUM_INT
+          i32tos(expr + intval, tempstr)
+          break
+        is NUM_FLOAT
+          ext2str(expr + floatval, tempstr, fmt_fpint, fmt_fpfrac, fmt_fp)
+          if ^(tempstr + 1) == ' ' // Remove leading space
+            memcpy (tempstr + 1, tempstr + 2, ^tempstr)
+            ^tempstr--
+          fin
+          break
+      wend
+      break
+    is SYM_TYPE
+      ^tempstr = expr->type & SYM_LEN
+      memcpy(tempstr + 1, expr + name, ^tempstr)
+      break;
+    is ARRAY_TYPE
+      ^tempstr = 2
+      ^(tempstr + 1) = '['
+      ^(tempstr + 2) = ']'
+      break;
+  wend
+  return new_string(tempstr)
+end
+
+def natv_stringp(symptr, expr)
+  return bool_pred(eval_expr(expr=>car)->type == STRING_TYPE)
+end
+
+def natv_subs(symptr, expr)
+  var stringptr
+  byte ofst, len
+
+  stringptr = eval_expr(expr=>car)
+  if stringptr->type <> STRING_TYPE
+    err_expr = stringptr
+    throw(exception, ERR_NOT_STR)
+  fin
+  symptr = eval_expr(expr=>cdr=>car)
+  if symptr->type <> NUM_INT
+    err_expr = symptr
+    throw(exception, ERR_NOT_INT)
+  fin
+  ofst = symptr=>intval[0]
+  symptr = eval_expr(expr=>cdr=>cdr=>car)
+  if symptr->type <> NUM_INT
+    err_expr = symptr
+    throw(exception, ERR_NOT_INT)
+  fin
+  len = symptr=>intval[0]
+  if ofst > stringptr->stringstr
     return NULL
   fin
-  expr = eval_expr(expr=>cdr=>car)
-  symptr=>apval = expr ^ NULL_HACK
-  return expr
-end
-
-def natv_csetq(symptr, expr)
-  symptr = expr=>car
-  if symptr->type & TYPE_MASK <> SYM_TYPE
-    puts("CSETQ: Not a SYM\n")
-    return NULL
+  if ofst + len > stringptr->stringstr
+    len = stringptr->stringstr - ofst
   fin
-  expr = eval_expr(expr=>cdr=>car)
-  symptr=>apval = expr ^ NULL_HACK
-  return expr
+  memcpy(tempstr + 1, stringptr + stringstr + ofst + 1, len)
+  ^tempstr = len
+  return new_string(tempstr)
 end
 
+def natv_cats(symptr, expr)
+  var len, stringptr
 
-def natv_prhex(symptr, expr)
-  if expr
-    prhex = eval_expr(expr=>car) ?? TRUE :: FALSE
-  fin
-  return bool_pred(prhex)
-end
-
-def natv_prin(symptr, expr)
-  var result
-
-  result = NULL
+  len = 0
   while expr
-    result = eval_expr(expr=>car)
-    print_expr(result)
+    stringptr = eval_expr(expr=>car)
+    if stringptr->type == STRING_TYPE
+      if len + stringptr->stringstr < 255
+        memcpy(tempstr + len + 1, stringptr + stringstr + 1, stringptr->stringstr)
+        len = len + stringptr->stringstr
+      fin
+    fin
     expr = expr=>cdr
   loop
-  return result
+  ^tempstr = len
+  return new_string(tempstr)
 end
 
-def natv_print(symptr, expr)
-  expr = natv_prin(symptr, expr)
-  putln
-  return expr
-end
-
-def natv_eval(symptr, expr)
-  return eval_expr(eval_expr(expr=>car))
-end
-
-def natv_trace(symptr, expr)
-  if expr
-    trace = eval_expr(expr=>car) ?? TRUE :: FALSE
+def natv_lens(symptr, expr)
+  symptr = eval_expr(expr=>car)
+  if symptr->type <> STRING_TYPE
+    err_expr = symptr
+    throw(exception, ERR_NOT_STR)
   fin
-  return bool_pred(trace)
+  return new_int(symptr->stringstr, 0)
 end
+
+def natv_chars(symptr, expr)
+  symptr = eval_expr(expr=>car)
+  if symptr->type <> NUM_INT
+    err_expr = symptr
+    throw(exception, ERR_NOT_INT)
+  fin
+  tempstr->[0] = 1
+  tempstr->[1] = symptr=>intval[0]
+  return new_string(tempstr)
+end
+
+def natv_ascii(symptr, expr)
+  symptr = eval_expr(expr=>car)
+  if symptr->type <> STRING_TYPE
+    err_expr = symptr
+    throw(exception, ERR_NOT_STR)
+  fin
+  return new_int(symptr->stringstr ?? symptr->stringstr[1] :: 0, 0)
+end
+
+//
+// FOR(...) loop language extension
+//
 
 def natv_for(symptr, expr)
   var index, ufunc, dlist
@@ -1347,15 +1501,15 @@ def natv_for(symptr, expr)
 
   index = expr=>car
   if index->type & TYPE_MASK <> SYM_TYPE
-    puts("For index not symbol\n")
-    return NULL
+    err_expr = index
+    throw(exception, ERR_NOT_SYM)
   fin
   expr   = expr=>cdr
   symptr = eval_expr(expr=>car)
   expr   = expr=>cdr
   if symptr->type <> NUM_INT
-    puts("FOR initial not integer\n")
-    return NULL
+    err_expr = symptr
+    throw(exception, ERR_NOT_INT)
   fin
   idxval[0] = symptr=>intval[0]
   idxval[1] = symptr=>intval[1]
@@ -1363,8 +1517,8 @@ def natv_for(symptr, expr)
   symptr = eval_expr(expr=>car)
   expr   = expr=>cdr
   if symptr->type <> NUM_INT
-    puts("FOR step not integer\n")
-    return NULL
+    err_expr = symptr
+    throw(exception, ERR_NOT_INT)
   fin
   stepval[0] = symptr=>intval[0]
   stepval[1] = symptr=>intval[1]
@@ -1391,12 +1545,8 @@ def natv_for(symptr, expr)
   return pop_sweep_stack
 end
 
-def natv_copy(symptr, expr)
-  return copy_expr(expr=>car)
-end
-
 //
-// (PROG ...) language extension
+// PROG(...) language extension
 //
 
 def natv_prog(symptr, expr)
@@ -1461,135 +1611,17 @@ def natv_go(symptr, expr)
     fin
     symptr = symptr=>cdr
   loop
-  puts("GO destination not found:"); print_expr(expr); putln
+  err_expr = expr
+  throw(exception, ERR_BAD_GO)
   return NULL
 end
 
 def natv_set(symptr, expr)
-  symptr = eval_expr(expr=>car)
-  expr   = set_assoc(symptr, eval_expr(expr=>cdr=>car))
-  return expr ?? expr=>cdr :: NULL
+  return set_assoc(eval_expr(expr=>car), eval_expr(expr=>cdr=>car))=>cdr
 end
 
 def natv_setq(symptr, expr)
-  symptr = expr=>car
-  expr   = set_assoc(symptr, eval_expr(expr=>cdr=>car))
-  return expr ?? expr=>cdr :: NULL
-end
-
-def natv_string(symptr, expr)
-  expr = eval_expr(expr=>car)
-  if not expr; return NULL; fin
-  ^tempstr = 0
-  when expr->type & TYPE_MASK
-    is NUM_TYPE
-      when expr->type
-        is NUM_INT
-          i32tos(expr + intval, tempstr)
-          break
-        is NUM_FLOAT
-          ext2str(expr + floatval, tempstr, fmt_fpint, fmt_fpfrac, fmt_fp)
-          if ^(tempstr + 1) == ' ' // Remove leading space
-            memcpy (tempstr + 1, tempstr + 2, ^tempstr)
-            ^tempstr--
-          fin
-          break
-      wend
-      break
-    is SYM_TYPE
-      ^tempstr = expr->type & SYM_LEN
-      memcpy(tempstr + 1, expr + name, ^tempstr)
-      break;
-    is ARRAY_TYPE
-      ^tempstr = 2
-      ^(tempstr + 1) = '['
-      ^(tempstr + 2) = ']'
-      break;
-  wend
-  return new_string(tempstr)
-end
-
-def natv_stringp(symptr, expr)
-  return bool_pred(eval_expr(expr=>car)->type == STRING_TYPE)
-end
-
-def natv_subs(symptr, expr)
-  var stringptr
-  byte ofst, len
-
-  stringptr = eval_expr(expr=>car)
-  if stringptr->type <> STRING_TYPE
-    puts("Not string in subs:"); print_expr(expr); putln
-    return NULL
-  fin
-  symptr = eval_expr(expr=>cdr=>car)
-  if symptr->type <> NUM_INT
-    puts("SUBS offset not integer\n")
-    return NULL
-  fin
-  ofst = symptr=>intval[0]
-  symptr = eval_expr(expr=>cdr=>cdr=>car)
-  if symptr->type <> NUM_INT
-    puts("SUBS len not integer\n")
-    return NULL
-  fin
-  len = symptr=>intval[0]
-  if ofst > stringptr->stringstr
-    return NULL
-  fin
-  if ofst + len > stringptr->stringstr
-    len = stringptr->stringstr - ofst
-  fin
-  memcpy(tempstr + 1, stringptr + stringstr + ofst + 1, len)
-  ^tempstr = len
-  return new_string(tempstr)
-end
-
-def natv_cats(symptr, expr)
-  var len, stringptr
-
-  len = 0
-  while expr
-    stringptr = eval_expr(expr=>car)
-    if stringptr->type == STRING_TYPE
-      if len + stringptr->stringstr < 255
-        memcpy(tempstr + len + 1, stringptr + stringstr + 1, stringptr->stringstr)
-        len = len + stringptr->stringstr
-      fin
-    fin
-    expr = expr=>cdr
-  loop
-  ^tempstr = len
-  return new_string(tempstr)
-end
-
-def natv_lens(symptr, expr)
-  symptr = eval_expr(expr=>car)
-  if symptr->type <> STRING_TYPE
-    puts("Not string in LENS:"); print_expr(expr); putln
-    return NULL
-  fin
-  return new_int(symptr->stringstr, 0)
-end
-
-def natv_chars(symptr, expr)
-  symptr = eval_expr(expr=>car)
-  if symptr->type <> NUM_INT
-    puts("CHRS not integer\n")
-    return NULL
-  fin
-  tempstr->[0] = 1
-  tempstr->[1] = symptr=>intval[0]
-  return new_string(tempstr)
-end
-
-def natv_ascii(symptr, expr)
-  symptr = eval_expr(expr=>car)
-  if symptr->type <> STRING_TYPE
-    puts("Not string in ASCII:"); print_expr(expr); putln
-    return NULL
-  fin
-  return new_int(symptr->stringstr ?? symptr->stringstr[1] :: 0, 0)
+  return set_assoc(expr=>car, eval_expr(expr=>cdr=>car))=>cdr
 end
 
 //
@@ -1617,7 +1649,7 @@ new_sym("CONS")=>natv     = @natv_cons
 new_sym("LIST")=>natv     = @natv_list
 new_sym("ATOM")=>natv     = @natv_atom
 new_sym("EQ")=>natv       = @natv_eq
-new_sym("NUMBERP")=>natv  = @natv_numberp
+new_sym("NUMBER?")=>natv  = @natv_numberp
 new_sym("NUMBER")=>natv   = @natv_number
 new_sym("NOT")=>natv      = @natv_null
 new_sym("AND")=>natv      = @natv_and
@@ -1628,6 +1660,7 @@ new_sym("DEFINE")=>natv   = @natv_define
 new_sym("ARRAY")=>natv    = @natv_array
 new_sym("CSET")=>natv     = @natv_cset
 new_sym("CSETQ")=>natv    = @natv_csetq
+new_sym(":=")=>natv       = @natv_csetq
 new_sym("PRHEX")=>natv    = @natv_prhex
 new_sym("PRIN")=>natv     = @natv_prin
 new_sym("PRINT")=>natv    = @natv_print
@@ -1640,7 +1673,8 @@ new_sym("GO")=>natv       = @natv_go
 new_sym("RETURN")=>natv   = @natv_return
 new_sym("SET")=>natv      = @natv_set
 new_sym("SETQ")=>natv     = @natv_setq
-new_sym("STRINGP")=>natv  = @natv_stringp
+new_sym("=")=>natv        = @natv_setq
+new_sym("STRING?")=>natv  = @natv_stringp
 new_sym("STRING")=>natv   = @natv_string
 new_sym("SUBS")=>natv     = @natv_subs
 new_sym("CATS")=>natv     = @natv_cats

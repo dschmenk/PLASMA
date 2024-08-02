@@ -38,6 +38,7 @@ The DRAWL implementation comes with the following built-in functions:
 - NIL = NULL
 - CSET() = Set constant value
 - CSETQ() = Set constant value
+- :=() = Alias got CSETQ()
 - DEFINE() = Define function
 
 ### Function types
@@ -55,8 +56,8 @@ The DRAWL implementation comes with the following built-in functions:
 - AND(...)
 - OR(...)
 - NULL()
-- NUMBERP()
-- STRINGP()
+- NUMBER?()
+- STRING?()
 
 ### Misc
 
@@ -98,12 +99,14 @@ The DRAWL implementation comes with the following built-in functions:
 - LABEL()
 - SET()
 - SETQ()
+- =() = Alias got SETQ()
 
 ### Program feature
 
 - PROG(...) = Algol like programming in LISP
 - SET() = Update variable value
 - SETQ() = Update variable value
+- = = Alias for SETQ
 - COND(...) = Fall-through COND()
 - IF() = Fall-through IF THEN w/ optional ELSE
 - GO() = Goto label inside PROG
@@ -122,26 +125,33 @@ The DRAWL implementation comes with the following built-in functions:
 - <()
 - MIN(...)
 - MAX(...)
-- NUMBERP()
+- NUMBER?()
 
 ### Integers
 
 - BITNOT() = Bit-wise NOT
+- ~() = Alias for BITNOT()
 - BITAND() = Bit-wise AND
+- &() = Alias for BITAND()
 - BITOR() = Bit-wise OR
-- BITXOR= Bit-wise XOR
+- |() = Alias for BITOR()
+- BITXOR = Bit-wise XOR
+- ^() = Alias for BITXOR()
 - ARITHSHIFT() = Bit-wise arithmetic SHIFT (positive = left, negative = right)
+- <<-() = Alias for ARITHSHIFT()
 - LOGICSHIFT() = Bit-wise logicalal SHIFT (positive = left, negative = right)
+- <<() = Alias for LOGICSHIFT()
 - ROTATE() = Bit-wise ROTATE (positive = left, negative = right)
+- <<<() = Alias for ROTATE()
 
 ### Floating Point (from the SANE library)
 
-- PI() = Constant value of pi
-- MATH_E() = Constant value of e
+- *PI* = Constant value of pi
+- *E* = Constant value of e
 - NUMBER() = Convert atom to number (symbol and array return NIL)
 - INTEGER() = Convert number to integer
 - LOGB()
-- SCALEB_I()
+- SCALEB()
 - TRUNCATE()
 - ROUND()
 - SQRT()
@@ -175,7 +185,7 @@ The DRAWL implementation comes with the following built-in functions:
 
 - HOME()
 - GOTOXY()
-- KEYPRESSED()
+- KEYPRESSED?()
 - READKEY()
 - READ()
 - READFILE()
