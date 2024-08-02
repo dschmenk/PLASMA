@@ -42,6 +42,8 @@ import sexpr
     word intval[2]
   end
 
+  var hook_eval
+  var assoc_list
   byte trace
 
   var fmt_fpint
@@ -50,12 +52,10 @@ import sexpr
   predef gc#0
   predef new_int(intlo, inthi)#1
   predef new_sym(symstr)#1
-  predef new_assoc(symptr, valptr)#0
-  predef set_assoc(symptr, valptr)#1
   predef print_expr(expr)#0
   predef parse_expr(evalptr, level, refill)#2
   predef eval_expr(expr)#1
-  predef eval_quote(expr, hook)#1
+  predef eval_quote(expr)#1
   predef bool_pred(bool)#1
 end
 
@@ -65,10 +65,9 @@ import smath
   predef load_elem#0
 end
 
-var prog, prog_expr, prog_return // Current PROG expressions
-var sym_cond, sym_if, sym_fpint, sym_fpfrac
+var sym_fpint, sym_fpfrac
 
-res[t_except] break_repl   // Breeak out of eval processing
+res[t_except] break_repl         // Break out of eval processing
 
 const csw   = $0036              // Output switch vector
 var scrncsw = 0                  // Output screen value
@@ -78,85 +77,6 @@ var readfn                       // Read input routine
 var fileref, filebuf             // File read vars
 byte quit = FALSE                // Quit interpreter flag
 
-//
-// (PROG ...) language extension
-//
-
-def natv_prog(symptr, expr)
-  var prog_enter, prog_car, cond_expr
-
-  prog_expr  = expr=>cdr
-  prog       = prog_expr // Update current PROG expression
-  prog_enter = prog      // Save current prog
-  expr = expr=>car       // Set up local variables
-  while expr
-    new_assoc(expr=>car, NULL)
-    expr = expr=>cdr
-  loop
-  prog_return = NULL
-  while prog_expr and not prog_return
-    prog_car  = prog_expr=>car
-    prog_expr = prog_expr=>cdr // Assume continuation
-    if prog_car->type == CONS_TYPE
-      if prog_car=>car == sym_cond // Inline COND(...) evaluation
-        cond_expr = prog_car=>cdr
-        while cond_expr
-          if eval_expr(cond_expr=>car=>car)
-            eval_expr(cond_expr=>car=>cdr=>car) // Drop result
-            break
-          fin
-          cond_expr = cond_expr=>cdr
-        loop
-      elsif prog_car=>car == sym_if // Inline IF(...) evaluation
-        cond_expr = prog_car=>cdr
-        if eval_expr(cond_expr=>car)
-          eval_expr(cond_expr=>cdr=>car) // Drop result
-        elsif cond_expr=>cdr=>cdr=>car
-          eval_expr(cond_expr=>cdr=>cdr=>car) // Drop result
-        fin
-      else
-        eval_expr(prog_car) // Drop result
-      fin
-    //else Atom - skip, i.e. GO() destination
-    fin
-    if prog_return // Check for RETURN()
-      expr        = prog_return ^ NULL_HACK
-      prog_return = NULL
-      prog_expr   = NULL
-    fin
-  loop
-  prog = prog_enter
-  return expr
-end
-
-def natv_return(symptr, expr)
-  prog_return = eval_expr(expr=>car) ^ NULL_HACK
-  return NULL // This value will be dropped in natv_prog
-end
-
-def natv_go(symptr, expr)
-  expr   = expr=>car
-  symptr = prog // Scan prog list looking for matching SYM
-  while symptr
-    if symptr=>car == expr
-      prog_expr = symptr=>cdr
-      return NULL
-    fin
-    symptr = symptr=>cdr
-  loop
-  puts("GO destination not found:"); print_expr(expr); putln
-  return NULL
-end
-
-def natv_set(symptr, expr)
-  symptr = eval_expr(expr=>car)
-  return set_assoc(symptr, eval_expr(expr=>cdr=>car))=>cdr
-end
-
-def natv_setq(symptr, expr)
-  symptr = expr=>car
-  return set_assoc(symptr, eval_expr(expr=>cdr=>car))=>cdr
-end
 
 //
 // REPL native helper functions
@@ -174,6 +94,11 @@ def natv_fpfrac(symptr, expr)
   return sym_fpfrac
 end
 
+def natv_clear(symptr, expr)
+  assoc_list = NULL
+  return NULL
+end
+
 def natv_gc(symptr, expr)
   gc
   return new_int(heapavail, 0)
@@ -182,6 +107,10 @@ end
 //
 // Useful Apple II features
 //
+
+def natv_read(symptr, expr)
+  return readfn()
+end
 
 def natv_printer(symptr, expr)
   byte slot
@@ -351,14 +280,9 @@ sym_fpint=>natv          = @natv_fpint
 sym_fpfrac=>natv         = @natv_fpfrac
 sym_fpint=>apval         = new_int(fmt_fpint,  0) ^ NULL_HACK
 sym_fpfrac=>apval        = new_int(fmt_fpfrac, 0) ^ NULL_HACK
-sym_cond                 = new_sym("COND") // This should actually match COND
-sym_if                   = new_sym("IF")   // This should actually match IF
-new_sym("PROG")=>natv    = @natv_prog
-new_sym("GO")=>natv      = @natv_go
-new_sym("RETURN")=>natv  = @natv_return
-new_sym("SET")=>natv     = @natv_set
-new_sym("SETQ")=>natv    = @natv_setq
+new_sym("CLEAR")=>natv   = @natv_clear
 new_sym("GC")=>natv      = @natv_gc
+new_sym("READ")=>natv    = @natv_read
 new_sym("PRINTER")=>natv = @natv_printer
 new_sym("GR")=>natv      = @natv_gr
 new_sym("COLOR")=>natv   = @natv_color
@@ -366,9 +290,10 @@ new_sym("PLOT")=>natv    = @natv_plot
 new_sym("QUIT")=>natv    = @natv_bye
 
 parse_cmdline
+hook_eval = @hookfn
 except(@break_repl)
 while not quit
-  putln; print_expr(eval_quote(readfn(), @hookfn))
+  putln; print_expr(eval_quote(readfn()))
 loop
 putln
 done

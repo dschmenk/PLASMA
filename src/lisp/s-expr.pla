@@ -2,18 +2,19 @@ include "inc/cmdsys.plh"
 include "inc/int32.plh"
 include "inc/fpstr.plh"
 
-const TYPE_MASK  = $70
-const NIL        = $00
-const CONS_TYPE  = $10
-const SYM_TYPE   = $20
-const SYM_LEN    = $0F
-const NUM_TYPE   = $30
-const NUM_INT    = $31
-const NUM_FLOAT  = $32
-const ARRAY_TYPE = $40
-const MARK_BIT   = $80
-const MARK_MASK  = $7F
-const NULL_HACK  = 1  // Hack so we can set APVALs to NULL
+const TYPE_MASK   = $70
+const NIL         = $00
+const CONS_TYPE   = $10
+const SYM_TYPE    = $20
+const SYM_LEN     = $0F
+const NUM_TYPE    = $30
+const NUM_INT     = $31
+const NUM_FLOAT   = $32
+const ARRAY_TYPE  = $40
+const STRING_TYPE = $50
+const MARK_BIT    = $80
+const MARK_MASK   = $7F
+const NULL_HACK   = 1  // Hack so we can set APVALs to NULL
 
 struc t_elem
   word link
@@ -47,24 +48,26 @@ struc t_array
   word arraysize
   word arraymem
 end
+struc t_string
+  res[t_elem]
+  byte stringstr[1]
+end
 
-var hook_eval = NULL // Installable hook for eval_expr()
-
-export byte trace = FALSE
-
-const fmt_fp          = FPSTR_FIXED|FPSTR_STRIP|FPSTR_FLEX
-export var fmt_fpint  = 6
-export var fmt_fpfrac = 4
-
-byte prhex = FALSE // Hex output flag for integers
-
-var assoc_list  = NULL // SYM->value association list
-var cons_list   = NULL
-var cons_free   = NULL
-var int_list    = NULL
-var int_free    = NULL
-var float_list  = NULL
-var float_free  = NULL
+byte prhex             = FALSE // Hex output flag for integers
+const fmt_fp           = FPSTR_FIXED|FPSTR_STRIP|FPSTR_FLEX
+export var fmt_fpint   = 6
+export var fmt_fpfrac  = 4
+export byte trace      = FALSE
+export var hook_eval   = NULL // Installable hook for eval_expr()
+export var assoc_list  = NULL // SYM->value association list
+var cons_list          = NULL
+var cons_free          = NULL
+var int_list           = NULL
+var int_free           = NULL
+var float_list         = NULL
+var float_free         = NULL
+var string_list        = NULL
+var string_free        = NULL
 
 //
 // Symbol hash table
@@ -76,6 +79,9 @@ word hashtbl[HASH_SIZE]
 
 var sym_nil, sym_true, sym_quote, sym_lambda, sym_funarg, sym_set
 var sym_macro, sym_cond, sym_if, sym_label, sym_for, sym_space, sym_cr
+var prog, prog_expr, prog_return // Current PROG expressions
+var tempstr
+
 predef print_expr(expr)#0
 predef eval_expr(expr)#1
 
@@ -105,6 +111,7 @@ def mark_elems#0
   mark_list(cons_list)
   mark_list(int_list)
   mark_list(float_list)
+  mark_list(string_list)
 end
 
 def sweep_expr(expr)#0
@@ -201,9 +208,10 @@ def collect_list(listhead, freehead)#2
 end
 
 def collect_unused#0
-  cons_list,  cons_free  = collect_list(cons_list,  cons_free)
-  int_list,   int_free   = collect_list(int_list,   int_free)
-  float_list, float_free = collect_list(float_list, float_free)
+  cons_list,   cons_free   = collect_list(cons_list,   cons_free)
+  int_list,    int_free    = collect_list(int_list,    int_free)
+  float_list,  float_free  = collect_list(float_list,  float_free)
+  string_list, string_free = collect_list(string_list, string_free)
 end
 
 export def gc#0
@@ -310,6 +318,60 @@ def new_array(dim0, dim1, dim2, dim3)
   aptr=>arraysize    = size/2
   aptr=>arraymem     = memptr
   return aptr
+end
+
+def match_string(strptr)
+  var stringptr
+  byte len, i
+
+  len       = ^strptr
+  stringptr = string_list
+  while stringptr
+    if stringptr->stringstr== len
+      for i = len downto 1
+        if stringptr->stringstr[i] <> ^(strptr + i)
+          break
+        fin
+      next
+      if i == 0
+        return stringptr
+      fin
+    fin
+    stringptr = stringptr=>link
+  loop
+  return NULL
+end
+
+export def new_string(strptr)#1
+  var stringptr, alloclen, prevptr
+
+  stringptr = match_string(strptr)
+  if stringptr; return stringptr; fin // Return matching string
+  alloclen = ^strptr | 15 // Round up size to 15 chars in length
+  if string_free
+    prevptr   = NULL
+    stringptr = string_free
+    while stringptr and (stringptr->stringstr | 15) <> alloclen
+      prevptr   = stringptr
+      stringptr = stringptr=>link
+    loop
+    if stringptr
+      if prevptr
+        prevptr=>link = stringptr=>link
+      else
+        string_free = stringptr=>link
+      fin
+    fin
+  fin
+  if !stringptr // Nothing free
+    gc_pull++
+    stringptr = heapalloc(t_string + alloclen)
+  fin
+  stringptr=>link = string_list
+  string_list     = stringptr
+  stringptr->type = STRING_TYPE
+  memcpy(stringptr + stringstr, strptr, ^strptr + 1)
+  return stringptr
 end
 
 def match_sym(symstr, sym_list)
@@ -420,6 +482,9 @@ def print_atom(atom)#0
           fin
         next
         puts("]\n")
+        break
+      is STRING_TYPE
+        puts(atom + stringstr)
         break
       otherwise
         puts("Unknown atom type: $"); putb(atom->type); putln
@@ -547,6 +612,19 @@ def parse_sym(evalptr)#2 // return evalptr, symptr
   return evalptr, new_sym(symstr)
 end
 
+def parse_str(evalptr)#2 // return evalptr, symptr
+  var strptr
+
+  strptr = evalptr
+  ^strptr = 0
+  evalptr++
+  while ^evalptr and ^evalptr <> '"'
+    ^strptr++
+    evalptr++
+  loop
+  return evalptr + (^evalptr ?? 1 :: 0), new_string(strptr)
+end
+
 export def parse_expr(evalptr, level, refill)#2 // return evalptr, exprptr
   var exprptr, consptr, elemptr, quotecons
 
@@ -613,6 +691,8 @@ export def parse_expr(evalptr, level, refill)#2 // return evalptr, exprptr
           evalptr, elemptr = parse_num(evalptr)
         elsif is_alphasym(^evalptr)
           evalptr, elemptr = parse_sym(evalptr)
+        elsif ^evalptr == '"'
+          evalptr, elemptr = parse_str(evalptr)
         else
           putc('\\')
           putc(^evalptr)
@@ -650,7 +730,7 @@ end
 // Build/set association between symbols and values
 //
 
-export def new_assoc(symptr, valptr)#0
+def new_assoc(symptr, valptr)#0
   var pair, pairlist
 
   if symptr and (symptr->type & TYPE_MASK <> SYM_TYPE)
@@ -685,7 +765,7 @@ def assoc_pair(symptr)
   return NULL // SYM not associated
 end
 
-export def set_assoc(symptr, valptr)#1
+def set_assoc(symptr, valptr)#1
   var pair
 
   //
@@ -694,6 +774,8 @@ export def set_assoc(symptr, valptr)#1
   pair = assoc_pair(symptr)
   if pair
     pair=>cdr = valptr // Update association
+  else
+    puts("Unknown association: "); print_expr(symptr); putln
   fin
   return pair
 end
@@ -904,12 +986,10 @@ export def eval_expr(expr)#1
   return expr
 end
 
-export def eval_quote(expr, hook)#1
-  hook_eval = hook
+export def eval_quote(expr)#1
   push_sweep_stack(expr) // Keep expr from being GC'ed
   expr = eval_expr(expr)
   pop_sweep_stack
-  assoc_list = NULL
   return expr
 end
 
@@ -1197,6 +1277,7 @@ def natv_csetq(symptr, expr)
   return expr
 end
 
+
 def natv_prhex(symptr, expr)
   if expr
     prhex = eval_expr(expr=>car) ?? TRUE :: FALSE
@@ -1296,6 +1377,167 @@ def natv_copy(symptr, expr)
 end
 
 //
+// (PROG ...) language extension
+//
+
+def natv_prog(symptr, expr)
+  var prog_enter, prog_car, cond_expr
+
+  prog_expr  = expr=>cdr
+  prog       = prog_expr // Update current PROG expression
+  prog_enter = prog      // Save current prog
+  expr = expr=>car       // Set up local variables
+  while expr
+    new_assoc(expr=>car, NULL)
+    expr = expr=>cdr
+  loop
+  prog_return = NULL
+  while prog_expr and not prog_return
+    prog_car  = prog_expr=>car
+    prog_expr = prog_expr=>cdr // Assume continuation
+    if prog_car->type == CONS_TYPE
+      if prog_car=>car == sym_cond // Inline COND(...) evaluation
+        cond_expr = prog_car=>cdr
+        while cond_expr
+          if eval_expr(cond_expr=>car=>car)
+            eval_expr(cond_expr=>car=>cdr=>car) // Drop result
+            break
+          fin
+          cond_expr = cond_expr=>cdr
+        loop
+      elsif prog_car=>car == sym_if // Inline IF(...) evaluation
+        cond_expr = prog_car=>cdr
+        if eval_expr(cond_expr=>car)
+          eval_expr(cond_expr=>cdr=>car) // Drop result
+        elsif cond_expr=>cdr=>cdr=>car
+          eval_expr(cond_expr=>cdr=>cdr=>car) // Drop result
+        fin
+      else
+        eval_expr(prog_car) // Drop result
+      fin
+    //else Atom - skip, i.e. GO() destination
+    fin
+    if prog_return // Check for RETURN()
+      expr        = prog_return ^ NULL_HACK
+      prog_return = NULL
+      prog_expr   = NULL
+    fin
+  loop
+  prog = prog_enter
+  return expr
+end
+
+def natv_return(symptr, expr)
+  prog_return = eval_expr(expr=>car) ^ NULL_HACK
+  return NULL // This value will be dropped in natv_prog
+end
+
+def natv_go(symptr, expr)
+  expr   = expr=>car
+  symptr = prog // Scan prog list looking for matching SYM
+  while symptr
+    if symptr=>car == expr
+      prog_expr = symptr=>cdr
+      return NULL
+    fin
+    symptr = symptr=>cdr
+  loop
+  puts("GO destination not found:"); print_expr(expr); putln
+  return NULL
+end
+
+def natv_set(symptr, expr)
+  symptr = eval_expr(expr=>car)
+  expr   = set_assoc(symptr, eval_expr(expr=>cdr=>car))
+  return expr ?? expr=>cdr :: NULL
+end
+
+def natv_setq(symptr, expr)
+  symptr = expr=>car
+  expr   = set_assoc(symptr, eval_expr(expr=>cdr=>car))
+  return expr ?? expr=>cdr :: NULL
+end
+
+def natv_subs(symptr, expr)
+  var stringptr
+  byte ofst, len
+
+  stringptr = eval_expr(expr=>car)
+  if stringptr->type <> STRING_TYPE
+    puts("Not string in subs:"); print_expr(expr); putln
+    return NULL
+  fin
+  symptr = eval_expr(expr=>cdr=>car)
+  if symptr->type <> NUM_INT
+    puts("SUBS offset not integer\n")
+    return NULL
+  fin
+  ofst = symptr=>intval[0]
+  symptr = eval_expr(expr=>cdr=>cdr=>car)
+  if symptr->type <> NUM_INT
+    puts("SUBS len not integer\n")
+    return NULL
+  fin
+  len = symptr=>intval[0]
+  if ofst > stringptr->stringstr
+    return NULL
+  fin
+  if ofst + len > stringptr->stringstr
+    len = stringptr->stringstr - ofst
+  fin
+  memcpy(tempstr + 1, stringptr + stringstr + ofst + 1, len)
+  ^tempstr = len
+  return new_string(tempstr)
+end
+
+def natv_cats(symptr, expr)
+  var len, stringptr
+
+  len = 0
+  while expr
+    stringptr = eval_expr(expr=>car)
+    if stringptr->type == STRING_TYPE
+      if len + stringptr->stringstr < 255
+        memcpy(tempstr + len + 1, stringptr + stringstr + 1, stringptr->stringstr)
+        len = len + stringptr->stringstr
+      fin
+    fin
+    expr = expr=>cdr
+  loop
+  ^tempstr = len
+  return new_string(tempstr)
+end
+
+def natv_lens(symptr, expr)
+  symptr = eval_expr(expr=>car)
+  if symptr->type <> STRING_TYPE
+    puts("Not string in LENS:"); print_expr(expr); putln
+    return NULL
+  fin
+  return new_int(symptr->stringstr, 0)
+end
+
+def natv_chars(symptr, expr)
+  symptr = eval_expr(expr=>car)
+  if symptr->type <> NUM_INT
+    puts("CHRS not integer\n")
+    return NULL
+  fin
+  tempstr->[0] = 1
+  tempstr->[1] = symptr=>intval[0]
+  return new_string(tempstr)
+end
+
+def natv_ascii(symptr, expr)
+  symptr = eval_expr(expr=>car)
+  if symptr->type <> STRING_TYPE
+    puts("Not string in ASCII:"); print_expr(expr); putln
+    return NULL
+  fin
+  return new_int(symptr->stringstr ?? symptr->stringstr[1] :: 0, 0)
+end
+
+//
 // Install default functions
 //
 
@@ -1339,5 +1581,16 @@ new_sym("EVAL")=>natv     = @natv_eval
 new_sym("TRACE")=>natv    = @natv_trace
 new_sym("FOR")=>natv      = @natv_for
 new_sym("COPY")=>natv     = @natv_copy
+new_sym("PROG")=>natv     = @natv_prog
+new_sym("GO")=>natv       = @natv_go
+new_sym("RETURN")=>natv   = @natv_return
+new_sym("SET")=>natv      = @natv_set
+new_sym("SETQ")=>natv     = @natv_setq
+new_sym("SUBS")=>natv     = @natv_subs
+new_sym("CATS")=>natv     = @natv_cats
+new_sym("LENS")=>natv     = @natv_lens
+new_sym("CHARS")=>natv    = @natv_chars
+new_sym("ASCII")=>natv    = @natv_ascii
+tempstr = heapalloc(256)
 return modkeep | modinitkeep
 done

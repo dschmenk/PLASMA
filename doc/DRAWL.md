@@ -27,6 +27,7 @@ However, the code is partitioned to allow for easy extension so some of these mi
 - Ctrl-C break into running program
 - MACROs for meta-programming. See [defun.lisp](https://github.com/dschmenk/PLASMA/blob/master/src/lisp/defun.lisp)
 - End-of-line comment using ';'
+- String handling functions
 
 The DRAWL implementation comes with the following built-in functions:
 
@@ -159,6 +160,14 @@ The DRAWL implementation comes with the following built-in functions:
 - POW()
 - COMP()
 - ANNUITY()
+
+### Strings
+
+- SUBS = SUB String offset length
+- CATS = conCATenate Strings
+- LENS = LENgth String
+- CHARS = CHARacter String from integer value
+- ASCII = ASCII value of first character in string
 
 ### Lo-Res Graphics
 
