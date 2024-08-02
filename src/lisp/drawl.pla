@@ -5,20 +5,21 @@ include "inc/conio.plh"
 include "inc/longjmp.plh"
 
 import sexpr
-  const TYPE_MASK  = $70
-  const NIL        = $00
-  const BOOL_FALSE = $00
-  const BOOL_TRUE  = $01
-  const CONS_TYPE  = $10
-  const SYM_TYPE   = $20
-  const SYM_LEN    = $0F
-  const NUM_TYPE   = $30
-  const NUM_INT    = $31
-  const NUM_FLOAT  = $32
-  const ARRAY_TYPE = $40
-  const MARK_BIT   = $80
-  const MARK_MASK  = $7F
-  const NULL_HACK  = 1  // Hack so we can set APVALs to NULL
+  const TYPE_MASK   = $70
+  const NIL         = $00
+  const BOOL_FALSE  = $00
+  const BOOL_TRUE   = $01
+  const CONS_TYPE   = $10
+  const SYM_TYPE    = $20
+  const SYM_LEN     = $0F
+  const NUM_TYPE    = $30
+  const NUM_INT     = $31
+  const NUM_FLOAT   = $32
+  const ARRAY_TYPE  = $40
+  const STRING_TYPE = $50
+  const MARK_BIT    = $80
+  const MARK_MASK   = $7F
+  const NULL_HACK   = 1  // Hack so we can set APVALs to NULL
 
   struc t_elem
     word link
@@ -41,6 +42,10 @@ import sexpr
     res[t_elem]
     word intval[2]
   end
+  struc t_string
+    res[t_elem]
+    byte stringstr[1]
+  end
 
   var hook_eval
   var assoc_list
@@ -51,6 +56,7 @@ import sexpr
 
   predef gc#0
   predef new_int(intlo, inthi)#1
+  predef new_string(strptr)#1
   predef new_sym(symstr)#1
   predef print_expr(expr)#0
   predef parse_expr(evalptr, level, refill)#2
@@ -104,31 +110,14 @@ def natv_gc(symptr, expr)
   return new_int(heapavail, 0)
 end
 
+def natv_bye(symptr, expr)
+  quit = TRUE
+  return new_sym("GOODBYE!")
+end
+
 //
 // Useful Apple II features
 //
-
-def natv_read(symptr, expr)
-  return readfn()
-end
-
-def natv_printer(symptr, expr)
-  byte slot
-
-  slot = eval_int16(expr) & 7
-  if slot
-    if !scrncsw
-      scrncsw = *csw
-    fin
-    *csw = $C000 | (slot << 8)
-  else
-    if scrncsw
-      *csw = scrncsw
-    fin
-    scrncsw = 0
-  fin
-  return new_int(slot, 0)
-end
 
 def natv_gr(symptr, expr)
 
@@ -154,9 +143,43 @@ def natv_plot(symptr, expr)
   return expr
 end
 
-def natv_bye(symptr, expr)
-  quit = TRUE
-  return new_sym("GOODBYE!")
+def natv_printer(symptr, expr)
+  byte slot
+
+  slot = eval_int16(expr) & 7
+  if slot
+    if !scrncsw
+      scrncsw = *csw
+    fin
+    *csw = $C000 | (slot << 8)
+  else
+    if scrncsw
+      *csw = scrncsw
+    fin
+    scrncsw = 0
+  fin
+  return new_int(slot, 0)
+end
+
+def natv_read(symptr, expr)
+  return readfn()
+end
+
+def natv_readstring(symptr, expr)
+  var len
+
+  if fileref // Reading from file
+    len = fileio:read(fileref, filebuf, FILEBUF_SIZE-1)
+    if len
+      if ^(filebuf + len - 1) == $0D
+        len-- // Remove trailing carriage return
+      fin
+      return new_string(filebuf)
+    fin
+    fileio:close(fileref) // End of file, fall through to keyboard
+    fileref = 0
+  fin
+  return new_string(gets(':'|$80))
 end
 
 //
@@ -196,7 +219,8 @@ def read_fileline
       ^(filebuf + len) = 0 // NULL terminate
     else
       fileio:close(fileref)
-      readfn = @read_keybd
+      fileref = 0
+      readfn  = @read_keybd
       return FALSE
     fin
   until len
@@ -219,6 +243,26 @@ def read_file
   fin
   drop, expr = parse_expr(filebuf, 0, @refill_file)
   return expr
+end
+
+def natv_readfile(symptr, expr)
+  symptr = eval_expr(expr=>car)
+  if symptr->type <> STRING_TYPE
+    puts("Not string in READFILE:"); print_expr(expr); putln
+    return NULL
+  fin
+  fileref = fileio:open(symptr + stringstr)
+  if fileref
+    fileio:newline(fileref, $7F, $0D)
+    readfn  = @read_file
+    if !filebuf
+      filebuf = heapalloc(FILEBUF_SIZE)
+    fin
+  else
+    puts("Unable to open: "); puts(symptr + stringstr); putln
+    symptr = NULL
+  fin
+  return symptr
 end
 
 //
@@ -274,20 +318,22 @@ end
 //
 
 puts("DRAWL (LISP 1.5) v1.0 symbolic processor\n")
-sym_fpint                = new_sym("FMTFPI")
-sym_fpfrac               = new_sym("FMTFPF")
-sym_fpint=>natv          = @natv_fpint
-sym_fpfrac=>natv         = @natv_fpfrac
-sym_fpint=>apval         = new_int(fmt_fpint,  0) ^ NULL_HACK
-sym_fpfrac=>apval        = new_int(fmt_fpfrac, 0) ^ NULL_HACK
-new_sym("CLEAR")=>natv   = @natv_clear
-new_sym("GC")=>natv      = @natv_gc
-new_sym("READ")=>natv    = @natv_read
-new_sym("PRINTER")=>natv = @natv_printer
-new_sym("GR")=>natv      = @natv_gr
-new_sym("COLOR")=>natv   = @natv_color
-new_sym("PLOT")=>natv    = @natv_plot
-new_sym("QUIT")=>natv    = @natv_bye
+sym_fpint                   = new_sym("FMTFPI")
+sym_fpfrac                  = new_sym("FMTFPF")
+sym_fpint=>natv             = @natv_fpint
+sym_fpfrac=>natv            = @natv_fpfrac
+sym_fpint=>apval            = new_int(fmt_fpint,  0) ^ NULL_HACK
+sym_fpfrac=>apval           = new_int(fmt_fpfrac, 0) ^ NULL_HACK
+new_sym("CLEAR")=>natv      = @natv_clear
+new_sym("QUIT")=>natv       = @natv_bye
+new_sym("GC")=>natv         = @natv_gc
+new_sym("GR")=>natv         = @natv_gr
+new_sym("COLOR")=>natv      = @natv_color
+new_sym("PLOT")=>natv       = @natv_plot
+new_sym("PRINTER")=>natv    = @natv_printer
+new_sym("READ")=>natv       = @natv_read
+new_sym("READSTRING")=>natv = @natv_readstring
+new_sym("READFILE")=>natv   = @natv_readfile
 
 parse_cmdline
 hook_eval = @hookfn

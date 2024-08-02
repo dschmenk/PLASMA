@@ -58,6 +58,7 @@ The DRAWL implementation comes with the following built-in functions:
 - OR(...)
 - NULL()
 - NUMBERP()
+- STRINGP()
 
 ### Misc
 
@@ -139,6 +140,8 @@ The DRAWL implementation comes with the following built-in functions:
 
 - PI() = Constant value of pi
 - MATH_E() = Constant value of e
+- NUMBER() = Convert atom to number (symbol and array return NIL)
+- INTEGER() = Convert number to integer
 - LOGB()
 - SCALEB_I()
 - TRUNCATE()
@@ -163,11 +166,12 @@ The DRAWL implementation comes with the following built-in functions:
 
 ### Strings
 
-- SUBS = SUB String offset length
-- CATS = conCATenate Strings
-- LENS = LENgth String
-- CHARS = CHARacter String from integer value
-- ASCII = ASCII value of first character in string
+- STRING() = Convert atom to string
+- SUBS() = SUB String offset length
+- CATS(...) = conCATenate Strings
+- LENS() = LENgth String
+- CHARS() = CHARacter String from integer value
+- ASCII() = ASCII value of first character in string
 
 ### Lo-Res Graphics
 

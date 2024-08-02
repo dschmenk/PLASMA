@@ -1077,6 +1077,25 @@ def natv_eq(symptr, expr)
   return bool_pred(iseq)
 end
 
+def natv_number(symptr, expr)
+  var num
+
+  expr = eval_expr(expr=>car)
+  if not expr; return NULL; fin
+  when expr->type & TYPE_MASK
+    is STRING_TYPE // Convert string to number
+      memcpy(tempstr, expr + stringstr, expr->stringstr + 1)
+      ^(tempstr + ^tempstr + 1) = 0
+      drop, expr = parse_num(tempstr + 1)
+      break
+    is SYM_TYPE
+    is ARRAY_TYPE
+      expr = NULL
+    is NUM_TYPE
+  wend
+  return expr
+end
+
 def natv_numberp(symptr, expr)
   expr = eval_expr(expr=>car)
   return bool_pred(expr and (expr->type & TYPE_MASK == NUM_TYPE))
@@ -1458,6 +1477,42 @@ def natv_setq(symptr, expr)
   return expr ?? expr=>cdr :: NULL
 end
 
+def natv_string(symptr, expr)
+  expr = eval_expr(expr=>car)
+  if not expr; return NULL; fin
+  ^tempstr = 0
+  when expr->type & TYPE_MASK
+    is NUM_TYPE
+      when expr->type
+        is NUM_INT
+          i32tos(expr + intval, tempstr)
+          break
+        is NUM_FLOAT
+          ext2str(expr + floatval, tempstr, fmt_fpint, fmt_fpfrac, fmt_fp)
+          if ^(tempstr + 1) == ' ' // Remove leading space
+            memcpy (tempstr + 1, tempstr + 2, ^tempstr)
+            ^tempstr--
+          fin
+          break
+      wend
+      break
+    is SYM_TYPE
+      ^tempstr = expr->type & SYM_LEN
+      memcpy(tempstr + 1, expr + name, ^tempstr)
+      break;
+    is ARRAY_TYPE
+      ^tempstr = 2
+      ^(tempstr + 1) = '['
+      ^(tempstr + 2) = ']'
+      break;
+  wend
+  return new_string(tempstr)
+end
+
+def natv_stringp(symptr, expr)
+  return bool_pred(eval_expr(expr=>car)->type == STRING_TYPE)
+end
+
 def natv_subs(symptr, expr)
   var stringptr
   byte ofst, len
@@ -1565,6 +1620,7 @@ new_sym("LIST")=>natv     = @natv_list
 new_sym("ATOM")=>natv     = @natv_atom
 new_sym("EQ")=>natv       = @natv_eq
 new_sym("NUMBERP")=>natv  = @natv_numberp
+new_sym("NUMBER")=>natv   = @natv_number
 new_sym("NOT")=>natv      = @natv_null
 new_sym("AND")=>natv      = @natv_and
 new_sym("OR")=>natv       = @natv_or
@@ -1586,6 +1642,8 @@ new_sym("GO")=>natv       = @natv_go
 new_sym("RETURN")=>natv   = @natv_return
 new_sym("SET")=>natv      = @natv_set
 new_sym("SETQ")=>natv     = @natv_setq
+new_sym("STRINGP")=>natv  = @natv_stringp
+new_sym("STRING")=>natv   = @natv_string
 new_sym("SUBS")=>natv     = @natv_subs
 new_sym("CATS")=>natv     = @natv_cats
 new_sym("LENS")=>natv     = @natv_lens
