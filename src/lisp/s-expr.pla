@@ -1,6 +1,7 @@
 include "inc/cmdsys.plh"
 include "inc/int32.plh"
 include "inc/fpstr.plh"
+include "inc/longjmp.plh"
 
 const TYPE_MASK   = $70
 const NIL         = $00
@@ -58,6 +59,7 @@ const fmt_fp           = FPSTR_FIXED|FPSTR_STRIP|FPSTR_FLEX
 export var fmt_fpint   = 6
 export var fmt_fpfrac  = 4
 export byte trace      = FALSE
+export var exception   = NULL
 export var hook_eval   = NULL // Installable hook for eval_expr()
 export var assoc_list  = NULL // SYM->value association list
 var cons_list          = NULL
@@ -234,6 +236,7 @@ export def new_cons#1
   else
     gc_pull++
     consptr = heapalloc(t_cons)
+    if !consptr; throw(exception, -1); fin
   fin
   consptr=>link = cons_list
   cons_list     = consptr
@@ -252,6 +255,7 @@ export def new_int(intlo, inthi)#1
   else
     gc_pull++
     intptr = heapalloc(t_numint)
+    if !intptr; throw(exception, -1); fin
   fin
   intptr=>link      = int_list
   int_list          = intptr
@@ -270,6 +274,7 @@ export def new_float(extptr)#1
   else
     gc_pull++
     floatptr = heapalloc(t_numfloat)
+    if !floatptr; throw(exception, -1); fin
   fin
   floatptr=>link = float_list
   float_list     = floatptr
@@ -305,6 +310,7 @@ def new_array(dim0, dim1, dim2, dim3)
   fin
   memset(memptr, NULL, size)
   aptr               = heapalloc(t_array)
+  if !aptr; throw(exception, -1); fin
   aptr=>link         = NULL
   aptr->type         = ARRAY_TYPE
   aptr=>dimension[0] = dim0
@@ -366,6 +372,7 @@ export def new_string(strptr)#1
   if !stringptr // Nothing free
     gc_pull++
     stringptr = heapalloc(t_string + alloclen)
+    if !stringptr; throw(exception, -1); fin
   fin
   stringptr=>link = string_list
   string_list     = stringptr
@@ -403,6 +410,7 @@ export def new_sym(symstr)#1
   symptr = match_sym(symstr, hashtbl[index])
   if symptr; return symptr; fin // Return already existing symbol
   symptr         = heapalloc(t_sym + ^symstr)
+  if !symptr; throw(exception, -1); fin
   symptr=>link   = hashtbl[index]
   hashtbl[index] = symptr
   symptr->type   = ^symstr | SYM_TYPE
