@@ -119,7 +119,7 @@ predef eval_expr(expr)#1
 //   Use the sweep_stack to temporarily keep a reference to these elements.
 //
 
-const SWEEPSTACK_MAX  = 64
+const SWEEPSTACK_MAX  = 16
 byte  sweep_stack_top = 0
 var   sweep_stack[SWEEPSTACK_MAX] // In-flight expressions
 
@@ -429,7 +429,7 @@ end
 export def new_sym(symstr)#1
   var symptr, index
 
-  index  = (^symstr ^ ((^(symstr+1) << 1) ^ ^(symstr+1 + ^symstr / 2) << 2)) & HASH_MASK
+  index  = (^symstr ^ ^(symstr + 1 + ^symstr/2) << 2) & HASH_MASK
   symptr = match_sym(symstr, hashtbl[index])
   if symptr; return symptr; fin // Return already existing symbol
   symptr         = new(t_sym + ^symstr)
@@ -1280,6 +1280,41 @@ def natv_print(symptr, expr)
   return expr
 end
 
+def natv_syms(symptr, expr)
+  var count
+  byte h
+
+  count = 0
+  for h = 0 to HASH_SIZE-1
+    symptr = hashtbl[h]
+    puti(h); puts(" -----\n")
+    while symptr
+      //
+      // Sweep symbol properties
+      //
+      print_atom(symptr); putc(':')
+      if symptr=>natv
+        puts("NATIVE")
+      elsif symptr=>lambda
+        print_expr(symptr=>lambda)
+      elsif symptr=>apval
+        print_expr(symptr=>apval ^ NULL_HACK)
+      elsif symptr=>array
+        print_expr(symptr)
+      elsif symptr=>array
+        print_expr(assoc(symptr))
+      fin
+      putln
+      count++
+      if !(count & 15)
+        getc()
+      fin
+      symptr = symptr=>link
+    loop
+  next
+  return new_int(count, 0) // Total symbols
+end
+
 def natv_eval(symptr, expr)
   return eval_expr(eval_expr(expr=>car))
 end
@@ -1670,6 +1705,7 @@ new_sym(":=")=>natv       = @natv_csetq
 new_sym("PRHEX")=>natv    = @natv_prhex
 new_sym("PRIN")=>natv     = @natv_prin
 new_sym("PRINT")=>natv    = @natv_print
+new_sym("SYMS")=>natv     = @natv_syms
 new_sym("EVAL")=>natv     = @natv_eval
 new_sym("TRACE")=>natv    = @natv_trace
 new_sym("FOR")=>natv      = @natv_for
