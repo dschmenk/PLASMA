@@ -189,8 +189,9 @@ $(DRAWL): lisp/s-expr.pla lisp/drawl.pla
 #
 # PLASMA VMs
 #
-$(PLVM): vmsrc/plvm.c
-	cc vmsrc/plvm.c -o $(PLVM)
+$(PLVM): vmsrc/plvm.c vmsrc/lib6502/lib6502.a
+	make -C vmsrc/lib6502
+	cc vmsrc/plvm.c vmsrc/lib6502/lib6502.a -o $(PLVM)
 
 $(PLVMZP_APL): FORCE
 	-mkdir -p rel

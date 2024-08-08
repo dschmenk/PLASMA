@@ -1,51 +1,72 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdarg.h>
+#include <string.h>
 #include <unistd.h>
 #include <fcntl.h>
-#include <string.h>
 #include <ctype.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <termios.h>
 
-typedef unsigned char  code;
-typedef unsigned char  byte;
-typedef signed   short word;
-typedef unsigned short uword;
-typedef unsigned short address;
+#include "lib6502/config.h"
+#include "lib6502/lib6502.h"
+
+typedef uint8_t  code;
+typedef uint8_t  byte;
+typedef int16_t  word;
+typedef uint16_t uword;
+typedef uint16_t address;
+
 /*
- * Debug
+ * Debug flag
  */
 int show_state = 0;
 /*
  * Bytecode memory
  */
+#ifdef __LITTLE_ENDIAN__
+#define BYTE_PTR(bp)    (*(byte *)bp)
+#define WORD_PTR(bp)    (*(word *)bp)
+#define UWORD_PTR(bp)   (*(uword *)bp)
+#else
 #define BYTE_PTR(bp)    ((byte)((bp)[0]))
 #define WORD_PTR(bp)    ((word)((bp)[0]  | ((bp)[1] << 8)))
 #define UWORD_PTR(bp)   ((uword)((bp)[0] | ((bp)[1] << 8)))
-#define TO_UWORD(w) ((uword)((w)))
-#define MOD_ADDR    0x1000
-#define DEF_CALL    0x0800
-#define DEF_CALLSZ  0x0800
-#define DEF_ENTRYSZ 6
-#define MEM_SIZE    65536
-byte mem_data[MEM_SIZE];
-uword sp = 0x01FE, fp = 0xFFFF, heap = 0x0200, deftbl = DEF_CALL, lastdef = DEF_CALL;
-#define PHA(b)      (mem_data[sp--]=(b))
-#define PLA     (mem_data[++sp])
+#endif
+#define TO_UWORD(w)     ((uword)((w)))
+/*
+ * 6502 memory map
+ */
+#define MOD_ADDR        0x1000
+#define DEF_CALL        0x0300
+#define DEF_CALLSZ      0x0B00
+#define DEF_ENTRYSZ     6
+#define MEM_SIZE        0x00010000
+byte mem6502[MEM_SIZE];
+uword sp = 0x01FE, fp = 0xFF00, heap = 0x0200, deftbl = DEF_CALL, lastdef = DEF_CALL;
+/*
+ * 6502 H/W stack
+ */
+#define PHA(b)          (mem6502[sp--]=(b))
+#define PLA             (mem6502[++sp])
 #define EVAL_STACKSZ    16
-#define PUSH(v) (*(--esp))=(v)
-#define POP     ((word)(*(esp++)))
-#define UPOP        ((uword)(*(esp++)))
-#define TOS     (esp[0])
+/*
+ * VM eval stack
+ */
+#define PUSH(v)         (*(--esp))=(v)
+#define POP             ((word)(*(esp++)))
+#define UPOP            ((uword)(*(esp++)))
+#define TOS             (esp[0])
 word eval_stack[EVAL_STACKSZ];
 word *esp = &eval_stack[EVAL_STACKSZ];
-
+/*
+ * Symbol table
+ */
 #define SYMTBLSZ    1024
 #define SYMSZ       16
 byte symtbl[SYMTBLSZ];
 byte *lastsym = symtbl;
-/*
- * Predef.
- */
-void interp(code *ip);
 /*
  * CMDSYS exports
  */
@@ -80,7 +101,196 @@ char *syslib_exp[] = {
     "ISULE",
     0
 };
+/*
+ * TERM I/O structure for CLI interface
+ */
+struct termios org_tio;
+/*
+ * Predefine
+ */
+void interp(code *ip);
 
+void pfail(const char *msg)
+{
+    fflush(stdout);
+    perror(msg);
+    exit(1);
+}
+
+/*
+ * Simple I/O routines
+ */
+#define rts             \
+    {               \
+        word pc;              \
+        pc  = mpu->memory[++mpu->registers->s + 0x100];   \
+        pc |= mpu->memory[++mpu->registers->s + 0x100] << 8;  \
+        return pc + 1;            \
+    }
+//
+// CFFA1 emulation
+//
+#define CFFADest     0x00
+#define CFFAFileName 0x02
+#define CFFAOldName  0x04
+#define CFFAFileType 0x06
+#define CFFAAuxType  0x07
+#define CFFAFileSize 0x09
+#define CFFAEntryPtr 0x0B
+int save(M6502 *mpu, uword address, unsigned length, const char *path)
+{
+    FILE *file;
+    int   count;
+    if (!(file = fopen(path, "wb")))
+        return 0;
+    while ((count = fwrite(mpu->memory + address, 1, length, file)))
+    {
+        address += count;
+        length -= count;
+    }
+    fclose(file);
+    return 1;
+}
+
+int load(M6502 *mpu, uword address, const char *path)
+{
+    FILE  *file;
+    int    count;
+    size_t max   = 0x10000 - address;
+    if (!(file = fopen(path, "rb")))
+        return 0;
+    while ((count = fread(mpu->memory + address, 1, max, file)) > 0)
+    {
+        address += count;
+        max -= count;
+    }
+    fclose(file);
+    return 1;
+}
+int cffa1(M6502 *mpu, uword address, byte data)
+{
+    char *fileptr, filename[64];
+    int addr;
+    struct stat sbuf;
+
+    switch (mpu->registers->x)
+    {
+        case 0x02:  /* quit */
+            exit(0);
+            break;
+        case 0x14:  /* find dir entry */
+            addr = mpu->memory[CFFAFileName] | (mpu->memory[CFFAFileName + 1] << 8);
+            memset(filename, 0, 64);
+            strncpy(filename, (char *)(mpu->memory + addr + 1), mpu->memory[addr]);
+            strcat(filename, "#FE1000");
+            if (!(stat(filename, &sbuf)))
+            {
+                /* DirEntry @ $9100 */
+                mpu->memory[CFFAEntryPtr]     = 0x00;
+                mpu->memory[CFFAEntryPtr + 1] = 0x91;
+                mpu->memory[0x9115] = sbuf.st_size;
+                mpu->memory[0x9116] = sbuf.st_size >> 8;
+                mpu->registers->a = 0;
+            }
+            else
+            mpu->registers->a = -1;
+            break;
+        case 0x22:  /* load file */
+            addr = mpu->memory[CFFAFileName] | (mpu->memory[CFFAFileName + 1] << 8);
+            memset(filename, 0, 64);
+            strncpy(filename, (char *)(mpu->memory + addr + 1), mpu->memory[addr]);
+            strcat(filename, "#FE1000");
+            addr = mpu->memory[CFFADest] | (mpu->memory[CFFADest + 1] << 8);
+            mpu->registers->a = load(mpu, addr, filename) - 1;
+            break;
+        default:
+            {
+                char state[64];
+                fprintf(stderr, "Unimplemented CFFA function: %02X\n", mpu->registers->x);
+                M6502_dump(mpu, state);
+                fflush(stdout);
+                fprintf(stderr, "\nCFFA1 %s\n", state);
+                pfail("ABORT");
+            }
+        break;
+    }
+    rts;
+}
+//
+// Character I/O emulation
+//
+int paused = 0;
+unsigned char keypending = 0;
+int bye(M6502 *mpu, uword addr, byte data) { exit(0); return 0; }
+int cout(M6502 *mpu, uword addr, byte data)  { if (mpu->registers->a == 0x8D) putchar('\n'); putchar(mpu->registers->a & 0x7F); fflush(stdout); rts; }
+unsigned char keypressed(M6502 *mpu)
+{
+    unsigned char cin, cext[2];
+    if (read(STDIN_FILENO, &cin, 1) > 0)
+    {
+        if (cin == 0x03) // CTRL-C
+        {
+            mpu->flags |= M6502_SingleStep;
+            paused = 1;
+        }
+        if (cin == 0x1B) // Look for left arrow
+        {
+            if (read(STDIN_FILENO, cext, 2) == 2 && cext[0] == '[' && cext[1] == 'D')
+            cin = 0x08;
+        }
+        keypending = cin | 0x80;
+    }
+    return keypending & 0x80;
+}
+unsigned char keyin(M6502 *mpu)
+{
+    unsigned char cin;
+
+    if (!keypending)
+        keypressed(mpu);
+    cin = keypending;
+    keypending = 0;
+    return cin;
+}
+int rd6820kbdctl(M6502 *mpu, uword addr, byte data) { return keypressed(mpu); }
+int rd6820vidctl(M6502 *mpu, uword addr, byte data) { return 0x00; }
+int rd6820kbd(M6502 *mpu, uword addr, byte data)    { return keyin(mpu); }
+int rd6820vid(M6502 *mpu, uword addr, byte data)    { return 0x80; }
+int wr6820vid(M6502 *mpu, uword addr, byte data)    { if (data == 0x8D) putchar('\n'); putchar(data & 0x7F); fflush(stdout); return 0; }
+int setTraps(M6502 *mpu)
+{
+    /* Apple 1 memory-mapped IO */
+    M6502_setCallback(mpu, read,  0xD010, rd6820kbd);
+    M6502_setCallback(mpu, read,  0xD011, rd6820kbdctl);
+    M6502_setCallback(mpu, read,  0xD012, rd6820vid);
+    M6502_setCallback(mpu, write, 0xD012, wr6820vid);
+    M6502_setCallback(mpu, read,  0xD013, rd6820vidctl);
+    /* CFFA1 and ROM calls */
+    M6502_setCallback(mpu, call, 0x9000, bye);
+    M6502_setCallback(mpu, call, 0x900C, cffa1);
+    M6502_setCallback(mpu, call, 0xFFEF, cout);
+    return 0;
+}
+void resetInput(void)
+{
+    tcsetattr(STDIN_FILENO, TCSANOW, &org_tio);
+}
+void setRawInput(void)
+{
+    struct termios termio;
+
+    // Save input settings.
+    tcgetattr(STDIN_FILENO, &termio); /* save current port settings */
+    memcpy(&org_tio, &termio, sizeof(struct termios));
+    termio.c_cflag     = /*BAUDRATE | CRTSCTS |*/ CS8 | CLOCAL | CREAD;
+    termio.c_iflag     = IGNPAR;
+    termio.c_oflag     = 0;
+    termio.c_lflag     = 0; /* set input mode (non-canonical, no echo,...) */
+    termio.c_cc[VTIME] = 0; /* inter-character timer unused */
+    termio.c_cc[VMIN]  = 0; /* non-blocking read */
+    tcsetattr(STDIN_FILENO, TCSANOW, &termio);
+    atexit(resetInput);
+}
 /*
  * Utility routines.
  *
@@ -190,7 +400,6 @@ uword add_tbl(byte *dci, int val, byte **last)
     *(*last)++ = val >> 8;
     return 0;
 }
-
 /*
  * Symbol table routines.
  */
@@ -207,15 +416,14 @@ uword add_sym(byte *sym, int addr)
 {
     return add_tbl(sym, addr, &lastsym);
 }
-
 /*
  * Module routines.
  */
 uword defcall_add(int bank, int addr)
 {
-    mem_data[lastdef]     = bank ? 2 : 1;
-    mem_data[lastdef + 1] = addr;
-    mem_data[lastdef + 2] = addr >> 8;
+    mem6502[lastdef]     = bank ? 2 : 1;
+    mem6502[lastdef + 1] = addr;
+    mem6502[lastdef + 2] = addr >> 8;
     return lastdef++;
 }
 uword def_lookup(byte *cdd, int defaddr)
@@ -225,7 +433,7 @@ uword def_lookup(byte *cdd, int defaddr)
     {
         if ((cdd[i * 4 + 1] | (cdd[i * 4 + 2] << 8)) == defaddr)
         {
-            calldef = cdd + i * 4 - mem_data;
+            calldef = cdd + i * 4 - mem6502;
             break;
         }
     }
@@ -308,8 +516,8 @@ int load_mod(byte *mod)
         /*
          * Read in remainder of module into memory for fixups.
          */
-        memcpy(mem_data + modaddr, moddep, len);
-        while ((len = read(fd, mem_data + end, 4096)) > 0)
+        memcpy(mem6502 + modaddr, moddep, len);
+        while ((len = read(fd, mem6502 + end, 4096)) > 0)
             end += len;
         close(fd);
         /*
@@ -318,7 +526,7 @@ int load_mod(byte *mod)
         modfix    = modaddr - hdrlen + 2; // - MOD_ADDR;
         bytecode += modfix - MOD_ADDR;
         end       = modaddr - hdrlen + modsize + 2;
-        rld       = mem_data + end; // Re-Locatable Directory
+        rld       = mem6502 + end; // Re-Locatable Directory
         esd       = rld;            // Extern+Entry Symbol Directory
         while (*esd != 0x00)        // Scan to end of RLD
             esd += 4;
@@ -357,7 +565,7 @@ int load_mod(byte *mod)
                 rld[0] = 0; // Set call code to 0
                 rld[1] = addr;
                 rld[2] = addr >> 8;
-                end = rld - mem_data + 4;
+                end = rld - mem6502 + 4;
             }
             else
             {
@@ -366,9 +574,9 @@ int load_mod(byte *mod)
                 {
                     addr += modfix;
                     if (rld[0] & 0x80)
-                        fixup = (mem_data[addr] | (mem_data[addr + 1] << 8));
+                        fixup = (mem6502[addr] | (mem6502[addr + 1] << 8));
                     else
-                        fixup = mem_data[addr];
+                        fixup = mem6502[addr];
                     if (rld[0] & 0x10)
                     {
                         if (show_state) printf("\tEXTERN[$%02X]       ", rld[3]);
@@ -392,13 +600,13 @@ int load_mod(byte *mod)
                     if (rld[0] & 0x80)
                     {
                         if (show_state) printf("WORD");
-                        mem_data[addr]     = fixup;
-                        mem_data[addr + 1] = fixup >> 8;
+                        mem6502[addr]     = fixup;
+                        mem6502[addr + 1] = fixup >> 8;
                     }
                     else
                     {
                         if (show_state) printf("BYTE");
-                        mem_data[addr] = fixup;
+                        mem6502[addr] = fixup;
                     }
                 }
                 else
@@ -444,14 +652,12 @@ int load_mod(byte *mod)
      */
     if (init)
     {
-        interp(mem_data + init + modfix - MOD_ADDR);
+        interp(mem6502 + init + modfix - MOD_ADDR);
 //        release_heap(init + modfix - MOD_ADDR); // Free up init code
         return POP;
     }
     return 0;
 }
-void interp(code *ip);
-
 void call(uword pc)
 {
     unsigned int i, s;
@@ -459,11 +665,11 @@ void call(uword pc)
     char c, sz[64];
 
     if (show_state)
-        printf("\nCall: %s\n", mem_data[pc] ? syslib_exp[mem_data[pc] - 1] : "BYTECODE");
-    switch (mem_data[pc++])
+        printf("\nCall: %s\n", mem6502[pc] ? syslib_exp[mem6502[pc] - 1] : "BYTECODE");
+    switch (mem6502[pc++])
     {
-        case 0: // BYTECODE in mem_data
-            interp(mem_data + (mem_data[pc] + (mem_data[pc + 1] << 8)));
+        case 0: // BYTECODE in mem6502
+            interp(mem6502 + (mem6502[pc] + (mem6502[pc + 1] << 8)));
             break;
         case 1: // CMDSYS call
             printf("CMD call code!\n");
@@ -483,10 +689,10 @@ void call(uword pc)
             break;
         case 5: // LIBRARY STDLIB::PUTS
             s = POP;
-            i = mem_data[s++];
+            i = mem6502[s++];
             while (i--)
             {
-                c = mem_data[s++];
+                c = mem6502[s++];
                 if (c == 0x0D)
                     c = '\n';
                 putchar(c);
@@ -504,9 +710,9 @@ void call(uword pc)
             putchar(c);
             fgets(sz, 63, stdin);
             for (i = 0; sz[i]; i++)
-                mem_data[0x200 + i] = sz[i];
-            mem_data[0x200 + i] = 0;
-            mem_data[0x1FF] = i;
+                mem6502[0x200 + i] = sz[i];
+            mem6502[0x200 + i] = 0;
+            mem6502[0x1FF] = i;
             PUSH(0x1FF);
             break;
         case 9: // LIBRARY STDLIB::PUTB
@@ -524,11 +730,10 @@ void call(uword pc)
             PUSH(b % a);
             break;
         default:
-            printf("\nUnimplemented call code:$%02X\n", mem_data[pc - 1]);
+            printf("\nUnimplemented call code:$%02X\n", mem6502[pc - 1]);
             exit(1);
     }
 }
-
 /*
  * OPCODE TABLE
  *
@@ -544,6 +749,7 @@ OPTBL   DW CN,CN,CN,CN,CN,CN,CN,CN                                 ; 00 02 04 06
         DW NEG,COMP,BAND,IOR,XOR,SHL,SHR,IDXW                      ; 90 92 94 96 98 9A 9C 9E
         DW BRGT,BRLT,INCBRLE,ADDBRLE,DECBRGE,SUBBRGE,BRAND,BROR    ; A0 A2 A4 A6 A8 AA AC AE
         DW ADDLB,ADDLW,ADDAB,ADDAW,IDXLB,IDXLW,IDXAB,IDXAW         ; B0 B2 B4 B6 B8 BA BC BE
+        DW NATV,JUMPZ,JUMP                                         ; C0 C2 C4
 */
 void interp(code *ip)
 {
@@ -554,16 +760,16 @@ void interp(code *ip)
     {
         if ((esp - eval_stack) < 0 || (esp - eval_stack) > EVAL_STACKSZ)
         {
-            printf("Eval stack over/underflow! - $%04X: $%02X [%d]\n", previp - mem_data, *previp, EVAL_STACKSZ - (esp - eval_stack));
+            printf("Eval stack over/underflow! - $%04X: $%02X [%d]\n", (unsigned int)(previp - mem6502), (unsigned int)*previp, (int)(EVAL_STACKSZ - (esp - eval_stack)));
             show_state = 1;
         }
         if (show_state)
         {
             char cmdline[16];
             word *dsp = &eval_stack[EVAL_STACKSZ - 1];
-            printf("$%04X: $%02X [ ", ip - mem_data, *ip);
+            printf("$%04X: $%02X [ ", (unsigned int)(ip - mem6502), (unsigned int)*ip);
             while (dsp >= esp)
-                printf("$%04X ", (*dsp--) & 0xFFFF);
+                printf("$%04X ", (unsigned int)((*dsp--) & 0xFFFF));
             printf("]\n");
             fgets(cmdline, 15, stdin);
         }
@@ -628,7 +834,7 @@ void interp(code *ip)
                 ip += 2;
                 break;
             case 0x2E: // CS: TOS = CONSTANTSTRING (IP)
-                PUSH(ip - mem_data);
+                PUSH(ip - mem6502);
                 ip += BYTE_PTR(ip) + 1;
                 break;
                 /*
@@ -732,7 +938,7 @@ void interp(code *ip)
                         break;
                     }
                     else
-                        ip += 4;                        
+                        ip += 4;
                 }
                 break;
             case 0x54: // CALL : TOFP = IP, IP = (IP) ; call
@@ -754,10 +960,10 @@ void interp(code *ip)
                 while (parmcnt--)
                 {
                     val = POP;
-                    mem_data[fp + parmcnt * 2 + 0] = val;
-                    mem_data[fp + parmcnt * 2 + 1] = val >> 8;
+                    mem6502[fp + parmcnt * 2 + 0] = val;
+                    mem6502[fp + parmcnt * 2 + 1] = val >> 8;
                     if (show_state)
-                        printf("< $%04X: $%04X > ", fp + parmcnt * 2 + 0, mem_data[fp + parmcnt * 2 + 0] | (mem_data[fp + parmcnt * 2 + 1] >> 8));
+                        printf("< $%04X: $%04X > ", fp + parmcnt * 2 + 0, mem6502[fp + parmcnt * 2 + 0] | (mem6502[fp + parmcnt * 2 + 1] >> 8));
                 }
                 if (show_state)
                     printf("\n");
@@ -775,39 +981,39 @@ void interp(code *ip)
                  */
             case 0x60: // LB : TOS = BYTE (TOS)
                 ea = TO_UWORD(POP);
-                PUSH(mem_data[ea]);
+                PUSH(mem6502[ea]);
                 break;
             case 0x62: // LW : TOS = WORD (TOS)
                 ea = UPOP;
-                PUSH(mem_data[ea] | (mem_data[ea + 1] << 8));
+                PUSH(mem6502[ea] | (mem6502[ea + 1] << 8));
                 break;
             case 0x64: // LLB : TOS = LOCALBYTE [IP]
-                PUSH(mem_data[TO_UWORD(fp + BYTE_PTR(ip))]);
+                PUSH(mem6502[TO_UWORD(fp + BYTE_PTR(ip))]);
                 ip++;
                 break;
             case 0x66: // LLW : TOS = LOCALWORD [IP]
                 ea = TO_UWORD(fp + BYTE_PTR(ip));
-                PUSH(mem_data[ea] | (mem_data[ea + 1] << 8));
+                PUSH(mem6502[ea] | (mem6502[ea + 1] << 8));
                 ip++;
                 break;
             case 0x68: // LAB : TOS = BYTE (IP)
-                PUSH(mem_data[UWORD_PTR(ip)]);
+                PUSH(mem6502[UWORD_PTR(ip)]);
                 ip += 2;
                 break;
             case 0x6A: // LAW : TOS = WORD (IP)
                 ea = UWORD_PTR(ip);
-                PUSH(mem_data[ea] | (mem_data[ea + 1] << 8));
+                PUSH(mem6502[ea] | (mem6502[ea + 1] << 8));
                 ip += 2;
                 break;
             case 0x6C: // DLB : TOS = TOS, LOCALBYTE [IP] = TOS
-                mem_data[TO_UWORD(fp + BYTE_PTR(ip))] = TOS;
+                mem6502[TO_UWORD(fp + BYTE_PTR(ip))] = TOS;
                 TOS = TOS & 0xFF;
                 ip++;
                 break;
             case 0x6E: // DLW : TOS = TOS, LOCALWORD [IP] = TOS
                 ea = TO_UWORD(fp + BYTE_PTR(ip));
-                mem_data[ea]     = TOS;
-                mem_data[ea + 1] = TOS >> 8;
+                mem6502[ea]     = TOS;
+                mem6502[ea + 1] = TOS >> 8;
                 ip++;
                 break;
                 /*
@@ -816,45 +1022,45 @@ void interp(code *ip)
             case 0x70: // SB : BYTE (TOS-1) = TOS
                 ea  = UPOP;
                 val = POP;
-                mem_data[ea] = val;
+                mem6502[ea] = val;
                 break;
             case 0x72: // SW : WORD (TOS-1) = TOS
                 ea  = UPOP;
                 val = POP;
-                mem_data[ea]     = val;
-                mem_data[ea + 1] = val >> 8;
+                mem6502[ea]     = val;
+                mem6502[ea + 1] = val >> 8;
                 break;
             case 0x74: // SLB : LOCALBYTE [TOS] = TOS-1
-                mem_data[TO_UWORD(fp + BYTE_PTR(ip))] = POP;
+                mem6502[TO_UWORD(fp + BYTE_PTR(ip))] = POP;
                 ip++;
                 break;
             case 0x76: // SLW : LOCALWORD [TOS] = TOS-1
                 ea  = TO_UWORD(fp + BYTE_PTR(ip));
                 val = POP;
-                mem_data[ea]     = val;
-                mem_data[ea + 1] = val >> 8;
+                mem6502[ea]     = val;
+                mem6502[ea + 1] = val >> 8;
                 ip++;
                 break;
             case 0x78: // SAB : BYTE (IP) = TOS
-                mem_data[UWORD_PTR(ip)] = POP;
+                mem6502[UWORD_PTR(ip)] = POP;
                 ip += 2;
                 break;
             case 0x7A: // SAW : WORD (IP) = TOS
                 ea = UWORD_PTR(ip);
                 val = POP;
-                mem_data[ea]     = val;
-                mem_data[ea + 1] = val >> 8;
+                mem6502[ea]     = val;
+                mem6502[ea + 1] = val >> 8;
                 ip += 2;
                 break;
             case 0x7C: // DAB : TOS = TOS, BYTE (IP) = TOS
-                mem_data[UWORD_PTR(ip)] = TOS;
+                mem6502[UWORD_PTR(ip)] = TOS;
                 TOS = TOS & 0xFF;
                 ip += 2;
                 break;
             case 0x7E: // DAW : TOS = TOS, WORD (IP) = TOS
                 ea = UWORD_PTR(ip);
-                mem_data[ea]     = TOS;
-                mem_data[ea + 1] = TOS >> 8;
+                mem6502[ea]     = TOS;
+                mem6502[ea + 1] = TOS >> 8;
                 ip += 2;
                 break;
                 /*
@@ -1016,100 +1222,134 @@ void interp(code *ip)
                  * 0xB0-0xBF
                  */
             case 0xB0: // ADDLB : TOS = TOS + LOCALBYTE[IP]
-                val = POP + mem_data[TO_UWORD(fp + BYTE_PTR(ip))];
+                val = POP + mem6502[TO_UWORD(fp + BYTE_PTR(ip))];
                 PUSH(val);
                 ip++;
                 break;
             case 0xB2: // ADDLW : TOS = TOS + LOCALWORD[IP]
                 ea  = TO_UWORD(fp + BYTE_PTR(ip));
-                val = POP + (mem_data[ea] | (mem_data[ea + 1] << 8)); 
+                val = POP + (mem6502[ea] | (mem6502[ea + 1] << 8));
                 PUSH(val);
                 ip++;
                 break;
             case 0xB4: // ADDAB : TOS = TOS + BYTE[IP]
-                val = POP + mem_data[UWORD_PTR(ip)];
+                val = POP + mem6502[UWORD_PTR(ip)];
                 PUSH(val);
                 ip  += 2;
                 break;
             case 0xB6: // ADDAW : TOS = TOS + WORD[IP]
                 ea  = UWORD_PTR(ip);
-                val = POP + (mem_data[ea] | (mem_data[ea + 1] << 8));
+                val = POP + (mem6502[ea] | (mem6502[ea + 1] << 8));
                 PUSH(val);
                 ip  += 2;
                 break;
             case 0xB8: // IDXLB : TOS = TOS + LOCALBYTE[IP]*2
-                val = POP + mem_data[TO_UWORD(fp + BYTE_PTR(ip))] * 2;
+                val = POP + mem6502[TO_UWORD(fp + BYTE_PTR(ip))] * 2;
                 PUSH(val);
                 ip++;
                 break;
             case 0xBA: // IDXLW : TOS = TOS + LOCALWORD[IP]*2
                 ea  = TO_UWORD(fp + BYTE_PTR(ip));
-                val = POP + (mem_data[ea] | (mem_data[ea + 1] << 8)) * 2;
+                val = POP + (mem6502[ea] | (mem6502[ea + 1] << 8)) * 2;
                 PUSH(val);
                 ip++;
                 break;
             case 0xBC: // IDXAB : TOS = TOS + BYTE[IP]*2
-                val = POP + mem_data[UWORD_PTR(ip)] * 2;
+                val = POP + mem6502[UWORD_PTR(ip)] * 2;
                 PUSH(val);
                 ip  += 2;
                 break;
             case 0xBE: // IDXAW : TOS = TOS + WORD[IP]*2
                 ea  = UWORD_PTR(ip);
-                val = POP + (mem_data[ea] | (mem_data[ea + 1] << 8)) * 2;
+                val = POP + (mem6502[ea] | (mem6502[ea + 1] << 8)) * 2;
                 PUSH(val);
                 ip  += 2;
+                break;
+            case 0xC0: // NATV - unused inthis VM
+                break;
+            case 0xC2: // JUMPZ
+                if (!POP)
+                    ip = &mem6502[WORD_PTR(ip)] ;
+                else
+                    ip += 2;
+                break;
+            case 0xC4: // JUMP
+                ip = &mem6502[WORD_PTR(ip)];
                 break;
                 /*
                  * Odd codes and everything else are errors.
                  */
             default:
-                fprintf(stderr, "Illegal opcode 0x%02X @ 0x%04X\n", ip[-1], ip - mem_data);
+                fprintf(stderr, "Illegal opcode 0x%02X @ 0x%04X\n", (unsigned int)ip[-1], (unsigned int)(ip - mem6502));
                 exit(-1);
         }
     }
 }
-
 int main(int argc, char **argv)
 {
-    byte dci[32];
-    int i;
-
+    byte   dci[32];
+    int    i;
+    char  *interpfile = "A1PLASMA#060280";
+    M6502 *mpu = M6502_new(0, mem6502, 0);
     if (--argc)
     {
         argv++;
-        if ((*argv)[0] == '-' && (*argv)[1] == 's')
+        while (argc && (*argv)[0] == '-')
         {
-            show_state = 1;
-            argc--;
-            argv++;
-        }
-        /*
-         * Add default library.
-         */
-        for (i = 0; syslib_exp[i]; i++)
-        {
-            mem_data[i] = i;
-            stodci(syslib_exp[i], dci);
-            add_sym(dci, i+1);
-        }
-        if (argc)
-        {
-            stodci(*argv, dci);
-            if (show_state) dump_sym();
-            load_mod(dci);
-            if (show_state) dump_sym();
+            if ((*argv)[1] == 's')
+                show_state = 1;
+            else if ((*argv)[1] == 't')
+                mpu->flags |= M6502_SingleStep;
             argc--;
             argv++;
         }
         if (argc)
+            interpfile = *argv;
+    }
+    /*
+     * Add default library.
+     */
+    for (i = 0; syslib_exp[i]; i++)
+    {
+        mem6502[i] = i;
+        stodci(syslib_exp[i], dci);
+        add_sym(dci, i+1);
+    }
+    /*
+     * Load module from command line
+     */
+    // PLVMC version
+    //stodci(interpfile, dci);
+    //if (show_state) dump_sym();
+    //load_mod(dci);
+    //if (show_state) dump_sym();
+    // lib6502 version
+    if (!load(mpu, 0x280, interpfile))
+        pfail(interpfile);
+    setRawInput();
+    setTraps(mpu);
+    M6502_reset(mpu);
+    mpu->registers->pc = 0x0280;
+    while (M6502_run(mpu))
+    {
+        char state[64];
+        char insn[64];
+        M6502_dump(mpu, state);
+        M6502_disassemble(mpu, mpu->registers->pc, insn);
+        printf("%s : %s\r\n", state, insn);
+        if (paused || (keypressed(mpu) && keypending == 0x83))
         {
-            stodci(*argv, dci);
-            call(lookup_sym(dci));
-        }
-        if (esp != &eval_stack[EVAL_STACKSZ])
-        {
-            printf("Eval stack pointer mismatch at end of execution = %d.\n", EVAL_STACKSZ - (esp - eval_stack));
+            keypending = 0;
+            while (!keypressed(mpu));
+            if (keypending == (0x80|'C'))
+                paused = 0;
+            else if (keypending == (0x80|'Q'))
+                break;
+            keypending = 0;
         }
     }
+    M6502_delete(mpu);
+    if (esp != &eval_stack[EVAL_STACKSZ])
+        printf("Eval stack pointer mismatch at end of execution = %d.\n", (unsigned int)(EVAL_STACKSZ - (esp - eval_stack)));
     return 0;
 }
