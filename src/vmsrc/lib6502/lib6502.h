@@ -20,6 +20,17 @@ enum {
   M6502_IRQVector= 0xfffe,  M6502_IRQVectorLSB= 0xfffe,  M6502_IRQVectorMSB= 0xffff
 };
 
+enum {
+  flagN= (1<<7),        /* negative          */
+  flagV= (1<<6),        /* overflow          */
+  flagX= (1<<5),        /* unused            */
+  flagB= (1<<4),        /* irq from brk  */
+  flagD= (1<<3),        /* decimal mode  */
+  flagI= (1<<2),        /* irq disable   */
+  flagZ= (1<<1),        /* zero          */
+  flagC= (1<<0)                /* carry         */
+};
+
 struct _M6502_Registers
 {
   uint8_t   a;  /* accumulator */

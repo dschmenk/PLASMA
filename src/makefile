@@ -192,8 +192,8 @@ $(DRAWL): lisp/s-expr.pla lisp/drawl.pla
 vmsrc/lib6502/lib6502.a: vmsrc/lib6502/lib6502.h vmsrc/lib6502/lib6502.c
 	make -C vmsrc/lib6502
 
-$(PLVM): vmsrc/plvm.c vmsrc/lib6502/lib6502.a
-	cc vmsrc/plvm.c vmsrc/lib6502/lib6502.a -o $(PLVM)
+$(PLVM): vmsrc/plvm.c vmsrc/cmdsys.c vmsrc/lib6502/lib6502.a
+	cc vmsrc/plvm.c vmsrc/cmdsys.c vmsrc/lib6502/lib6502.a -o $(PLVM)
 
 $(PLVMZP_APL): FORCE
 	-mkdir -p rel

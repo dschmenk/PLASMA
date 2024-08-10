@@ -35,17 +35,6 @@
 typedef uint8_t  byte;
 typedef uint16_t word;
 
-enum {
-  flagN= (1<<7),        /* negative          */
-  flagV= (1<<6),        /* overflow          */
-  flagX= (1<<5),        /* unused            */
-  flagB= (1<<4),        /* irq from brk  */
-  flagD= (1<<3),        /* decimal mode  */
-  flagI= (1<<2),        /* irq disable   */
-  flagZ= (1<<1),        /* zero          */
-  flagC= (1<<0)                /* carry         */
-};
-
 #define getN()        (P & flagN)
 #define getV()        (P & flagV)
 #define getB()        (P & flagB)
@@ -540,42 +529,22 @@ enum {
   PC++;                                                \
   fetch();                                        \
   next();
+/*
+ * Make believe return to native opcode
+ */
+#define rtn(ticks, adrmode)                        \
+  tick(ticks);                                        \
+  externalise(); return -1;
 
 #define brk(ticks, adrmode)                                        \
   tick(ticks);                                                        \
   PC++;                                                                \
   push(PC >> 8);                                                \
   push(PC & 0xff);                                                \
-  P |= flagB;                                                        \
-  push(P | flagX);                                                \
+  push(P | flagB | flagX);                                                \
   P |= flagI;                                                        \
   {                                                                \
     word hdlr= getMemory(0xfffe) + (getMemory(0xffff) << 8);        \
-    if (mpu->callbacks->call[hdlr])                                \
-      {                                                                \
-        word addr;                                                \
-        externalise();                                                \
-        if ((addr= mpu->callbacks->call[hdlr](mpu, PC - 2, 0)))        \
-          {                                                        \
-            internalise();                                        \
-            hdlr= addr;                                                \
-          }                                                        \
-      }                                                                \
-    PC= hdlr;                                                        \
-  }                                                                \
-  fetch();                                                        \
-  next();
-
-#define cop(ticks, adrmode)                                        \
-  tick(ticks);                                                        \
-  PC++;                                                                \
-  push(PC >> 8);                                                \
-  push(PC & 0xff);                                                \
-  P |= flagB;                                                        \
-  push(P | flagX);                                                \
-  P |= flagI;                                                        \
-  {                                                                \
-    word hdlr= getMemory(0xfff4) + (getMemory(0xfff5) << 8);        \
     if (mpu->callbacks->call[hdlr])                                \
       {                                                                \
         word addr;                                                \
@@ -661,7 +630,7 @@ enum {
 #define sei(ticks, adrmode)        seF(ticks, adrmode, flagI)
 
 #define do_insns(_)                                                                                                \
-  _(00, brk, implied,   7);  _(01, ora, indx,      6);  _(02, cop, implied,   2);  _(03, ill, implied, 2);      \
+  _(00, brk, implied,   7);  _(01, ora, indx,      6);  _(02, ill, implied,   7);  _(03, ill, implied, 2);      \
   _(04, tsb, zp,        3);  _(05, ora, zp,        3);  _(06, asl, zp,        5);  _(07, ill, implied, 2);      \
   _(08, php, implied,   3);  _(09, ora, immediate, 3);  _(0a, asla,implied,   2);  _(0b, ill, implied, 2);      \
   _(0c, tsb, abs,       4);  _(0d, ora, abs,       4);  _(0e, asl, abs,       6);  _(0f, ill, implied, 2);      \
@@ -724,7 +693,7 @@ enum {
   _(f0, beq, relative,  2);  _(f1, sbc, indy,      5);  _(f2, sbc, indzp,     3);  _(f3, ill, implied, 2);      \
   _(f4, ill, implied,   2);  _(f5, sbc, zpx,       4);  _(f6, inc, zpx,       6);  _(f7, ill, implied, 2);      \
   _(f8, sed, implied,   2);  _(f9, sbc, absy,      4);  _(fa, plx, implied,   4);  _(fb, ill, implied, 2);      \
-  _(fc, ill, implied,   2);  _(fd, sbc, absx,      4);  _(fe, inc, absx,      7);  _(ff, ill, implied, 2);
+  _(fc, ill, implied,   2);  _(fd, sbc, absx,      4);  _(fe, inc, absx,      7);  _(ff, rtn, implied, 2);
 
 
 
@@ -771,6 +740,9 @@ static void oops(void)
 
 int M6502_run(M6502 *mpu)
 {
+# define internalise()        STEP=mpu->flags&M6502_SingleStep; A= mpu->registers->a;  X= mpu->registers->x;  Y= mpu->registers->y;  P= mpu->registers->p;  S= mpu->registers->s;  PC= mpu->registers->pc
+# define externalise()        mpu->registers->a= A;  mpu->registers->x= X;  mpu->registers->y= Y;  mpu->registers->p= P;  mpu->registers->s= S;  mpu->registers->pc= PC
+
 #if defined(__GNUC__) && !defined(__STRICT_ANSI__)
 
   static void *itab[256]= { &&_00, &&_01, &&_02, &&_03, &&_04, &&_05, &&_06, &&_07, &&_08, &&_09, &&_0a, &&_0b, &&_0c, &&_0d, &&_0e, &&_0f,
@@ -817,9 +789,6 @@ int M6502_run(M6502 *mpu)
   M6502_Callback *readCallback=  mpu->callbacks->read;
   M6502_Callback *writeCallback= mpu->callbacks->write;
   unsigned int STEP;
-
-# define internalise()        STEP=mpu->flags&M6502_SingleStep; A= mpu->registers->a;  X= mpu->registers->x;  Y= mpu->registers->y;  P= mpu->registers->p;  S= mpu->registers->s;  PC= mpu->registers->pc
-# define externalise()        mpu->registers->a= A;  mpu->registers->x= X;  mpu->registers->y= Y;  mpu->registers->p= P;  mpu->registers->s= S;  mpu->registers->pc= PC
 
   internalise();
 
