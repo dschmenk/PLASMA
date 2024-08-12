@@ -15,131 +15,25 @@
  */
 struct termios org_tio;
 /*
+ * Load module defines
+ */
+#define REL_ADDR            0x1000 // Address modules are compiled at to be subtracted off
+#define SYSFLAG_KEEP        0x2000
+#define SYSFLAG_INITKEEP    0x4000
+/*
  * Symbol table
  */
-#define SYMTBLSZ    1024
-#define SYMSZ       16
-#define MOD_ADDR        0x1000
-#define DEF_CALL        0x0300
-#define DEF_CALLSZ      0x0B00
-#define DEF_ENTRYSZ     6
-byte  symtbl[SYMTBLSZ];
-byte *lastsym = symtbl;
-uword heap    = 0x0200;
-uword deftbl  = DEF_CALL;
-uword lastdef = DEF_CALL;
+#define SYMTBL_SIZE         1024
+#define SYM_LEN             16
+#define DEF_ENTRY_SIZE      5
+byte  symtbl[SYMTBL_SIZE];     // Symbol table outside mem_6502 for PLVM
+byte *lastsym  = symtbl;
+uword keybdbuf = 0x0200;
+uword heap     = 0x0300;
 /*
- * CMDSYS exports
+ * Standard Library exported functions.
  */
-char *syslib_exp[] = {
-    "CMDSYS",
-    "MACHID",
-    "PUTC",
-    "PUTLN",
-    "PUTS",
-    "PUTI",
-    "GETC",
-    "GETS",
-    "PUTB",
-    "PUTH",
-    "TOUPPER",
-    "CALL",
-    "SYSCALL",
-    "HEAPMARK",
-    "HEAPALLOCALLIGN",
-    "HEAPALLOC",
-    "HEAPRELEASE",
-    "HEAPAVAIL",
-    "MEMSET",
-    "MEMCPY",
-    "STRCPY",
-    "STRCAT",
-    "SEXT",
-    "DIVMOD",
-    "ISUGT",
-    "ISUGE",
-    "ISULT",
-    "ISULE",
-    0
-};
-#if 0
-void call(M6502 *mpu, uword pc)
-{
-    unsigned int i, s;
-    int a, b;
-    char c, sz[64];
 
-    if (show_state)
-        printf("\nCall: %s\n", mem_6502[pc] ? syslib_exp[mem_6502[pc] - 1] : "BYTECODE");
-    switch (mem_6502[pc++])
-    {
-        case 0: // BYTECODE in mem_6502
-            vm_interp(mpu, mem_6502 + (mem_6502[pc] + (mem_6502[pc + 1] << 8)));
-            break;
-        case 1: // CMDSYS call
-            printf("CMD call code!\n");
-            break;
-        case 2: // MACHID
-            printf("MACHID call code!\n");
-            break;
-        case 3: // LIBRARY STDLIB::PUTC
-            c = POP;
-            if (c == 0x0D)
-                c = '\n';
-            putchar(c);
-            break;
-        case 4: // LIBRARY STDLIB::PUTNL
-            putchar('\n');
-            fflush(stdout);
-            break;
-        case 5: // LIBRARY STDLIB::PUTS
-            s = POP;
-            i = mem_6502[s++];
-            while (i--)
-            {
-                c = mem_6502[s++];
-                if (c == 0x0D)
-                    c = '\n';
-                putchar(c);
-            }
-            break;
-        case 6: // LIBRARY STDLIB::PUTI
-            i = POP;
-            printf("%d", i);
-            break;
-        case 7: // LIBRARY STDLIB::GETC
-            PUSH(getchar());
-            break;
-        case 8: // LIBRARY STDLIB::GETS
-            c = POP;
-            putchar(c);
-            fgets(sz, 63, stdin);
-            for (i = 0; sz[i]; i++)
-                mem_6502[0x200 + i] = sz[i];
-            mem_6502[0x200 + i] = 0;
-            mem_6502[0x1FF] = i;
-            PUSH(0x1FF);
-            break;
-        case 9: // LIBRARY STDLIB::PUTB
-            i = UPOP;
-            printf("%02X", i);
-            break;
-        case 10: // LIBRARY STDLIB::PUTH
-            i = UPOP;
-            printf("%04X", i);
-            break;
-        case 24: // LIBRARY CMDSYS::DIVMOD
-            a = POP;
-            b = POP;
-            PUSH(b / a);
-            PUSH(b % a);
-            break;
-        default:
-            printf("\nUnimplemented call code:$%02X\n", mem_6502[pc - 1]);
-            exit(1);
-    }
-}
-#endif
 /*
  * Simple I/O routines
  */
@@ -289,7 +183,18 @@ int rd6820vidctl(M6502 *mpu, uword addr, byte data) { return 0x00; }
 int rd6820kbd(M6502 *mpu, uword addr, byte data)    { return keyin(mpu); }
 int rd6820vid(M6502 *mpu, uword addr, byte data)    { return 0x80; }
 int wr6820vid(M6502 *mpu, uword addr, byte data)    { if (data == 0x8D) putchar('\n'); putchar(data & 0x7F); fflush(stdout); return 0; }
-int setTraps(M6502 *mpu)
+int setPLVMTraps(M6502 *mpu)
+{
+    //
+    // Hooks for BRK, enter VM or native code
+    //
+    M6502_setCallback(mpu, call, VM_INLINE_ENTRY, vm_indef);
+    M6502_setCallback(mpu, call, VM_EXT_ENTRY,    vm_exdef);
+    M6502_setCallback(mpu, call, VM_NATV_ENTRY,   vm_natvdef);
+    M6502_setCallback(mpu, call, 0x0000, vm_irq);
+    return 0;
+}
+int setApple1Traps(M6502 *mpu)
 {
     //
     // Apple 1 memory-mapped IO
@@ -306,14 +211,7 @@ int setTraps(M6502 *mpu)
     M6502_setCallback(mpu, call, 0x900C, cffa1);
     M6502_setCallback(mpu, call, 0xFFEF, cout);
     //
-    // Hook BRK to enter VM or native code
-    //
-    M6502_setCallback(mpu, call, VM_INLINE_ENTRY, vm_indef);
-    M6502_setCallback(mpu, call, VM_EXT_ENTRY,    vm_exdef);
-    M6502_setCallback(mpu, call, VM_NATV_ENTRY,   vm_natvdef);
-    M6502_setCallback(mpu, call, 0x0000, vm_irq);
-    //
-    // Hook Apple 1 IINTERP entrypoint
+    // !!! Hook Apple 1 VM entrypoints for testing purposes !!!
     //
     M6502_setCallback(mpu, call, 0x0283, vm_indef);
     M6502_setCallback(mpu, call, 0x0293, vm_iidef);
@@ -401,16 +299,13 @@ uword avail_heap(void)
     uword vm_fp = UWORD_PTR(&mem_6502[FP]);
     return vm_fp - heap;
 }
-uword alloc_heap(int size)
+uword alloc_heap(uword size)
 {
     uword vm_fp = UWORD_PTR(&mem_6502[FP]);
     uword addr = heap;
     heap += size;
     if (heap >= vm_fp)
-    {
-        printf("Error: heap/frame collision.\n");
-        exit (1);
-    }
+        pfail("heap/frame collision.");
     return addr;
 }
 uword free_heap(int size)
@@ -430,12 +325,15 @@ uword release_heap(uword newheap)
     return vm_fp - heap;
 }
 /*
- * DCI table routines,
+ * Symbol table routines.
  */
-void dump_tbl(byte *tbl)
+void dump_sym(void)
 {
     int len;
-    byte *entbl;
+    byte *tbl;
+
+    tbl = symtbl;
+    printf("\nSystem Symbol Table:\n");
     while (*tbl)
     {
         len = 0;
@@ -452,76 +350,85 @@ void dump_tbl(byte *tbl)
         tbl += 2;
     }
 }
-uword lookup_tbl(byte *dci, byte *tbl)
+uword lookup_sym(byte *dci)
 {
     char str[20];
-    byte *match, *entry = tbl;
+    byte *match, *entry = symtbl;
     while (*entry)
     {
         match = dci;
         while (*entry == *match)
         {
-            if (!(*entry & 0x80))
-                return entry[1] | (entry[2] << 8);
-            entry++;
+            if (!(*entry++ & 0x80)) // End of DCI string
+                return *(uword *)entry;
             match++;
         }
-        while (*entry++ & 0x80);
+        while (*entry++ & 0x80); // Skip to next entry
         entry += 2;
     }
     dcitos(dci, str);
-    printf("\nError: symbols %s not found in symbol table.\n", str);
+    fprintf(stderr, "\nSymbol %s ", str);
+    pfail("not found in symbol table");
     return 0;
 }
-uword add_tbl(byte *dci, int val, byte **last)
+int add_sym(byte *dci, uword addr)
 {
     while (*dci & 0x80)
-        *(*last)++ = *dci++;
-    *(*last)++ = *dci;
-    *(*last)++ = val;
-    *(*last)++ = val >> 8;
+        *lastsym++ = *dci++;
+    *lastsym++ = *dci;
+    *(uword *)lastsym = addr;
+    lastsym += 2;
+    if (lastsym >= &symtbl[SYMTBL_SIZE])
+        pfail("Symbol table overflow");
     return 0;
 }
 /*
- * Symbol table routines.
+ * DEF routines - Create entryoint for 6502 that calls out to PLVM or native code
  */
-void dump_sym(void)
+byte *add_def(byte type, uword haddr, byte *lastdef)
 {
-    printf("\nSystem Symbol Table:\n");
-    dump_tbl(symtbl);
-}
-uword lookup_sym(byte *sym)
-{
-    return lookup_tbl(sym, symtbl);
-}
-uword add_sym(byte *sym, int addr)
-{
-    return add_tbl(sym, addr, &lastsym);
-}
-/*
- * Module routines.
- */
-uword defcall_add(int bank, int addr)
-{
-    mem_6502[lastdef]     = bank ? 2 : 1;
-    mem_6502[lastdef + 1] = addr;
-    mem_6502[lastdef + 2] = addr >> 8;
-    return lastdef++;
-}
-uword def_lookup(byte *cdd, int defaddr)
-{
-    int i, calldef = 0;
-    for (i = 0; cdd[i * 4] == 0x00; i++)
+    *lastdef++ = 0x20; // JSR opcode
+    switch (type)
     {
-        if ((cdd[i * 4 + 1] | (cdd[i * 4 + 2] << 8)) == defaddr)
+        case VM_NATV_DEF:
+            *lastdef++ = VM_NATV_ENTRY & 0xFF;
+            *lastdef++ = VM_NATV_ENTRY >> 8;
+            break;
+        case VM_EXT_DEF:
+            *lastdef++ = VM_EXT_ENTRY & 0xFF;
+            *lastdef++ = VM_EXT_ENTRY >> 8;
+            break;
+        case VM_INLINE_DEF: // Never happed
+            *lastdef++ = VM_INLINE_ENTRY & 0xFF;
+            *lastdef++ = VM_INLINE_ENTRY >> 8;
+        default:
+            pfail("Add unknown DEF type");
+    }
+    //
+    // Follow with memory handle
+    //
+    *lastdef++ = haddr;
+    *lastdef++ = haddr >> 8;
+    return lastdef;
+}
+uword lookup_def(byte *deftbl, int defaddr)
+{
+    int calldef = 0;
+    while (*deftbl)
+    {
+        if ((deftbl[3] | (deftbl[4] << 8)) == defaddr)
         {
-            calldef = cdd + i * 4 - mem_6502;
+            calldef = deftbl - mem_6502;
             break;
         }
+        deftbl += 5;
     }
-    return calldef;
+    return (uword)calldef;
 }
-uword extern_lookup(byte *esd, int index)
+/*
+ * Relocation routines.
+ */
+uword lookup_extern(byte *esd, int index)
 {
     byte *sym;
     char string[32];
@@ -533,21 +440,26 @@ uword extern_lookup(byte *esd, int index)
             return lookup_sym(sym);
         esd += 3;
     }
-    printf("\nError: extern index %d not found in ESD.\n", index);
+    fprintf(stderr, "Extern index %d", index);
+    pfail(" not found in ESD");
     return 0;
 }
+/*
+ * Load module routine - most compilcated routine in all PLVM. Sorry
+ */
 int load_mod(M6502 *mpu, byte *mod)
 {
-    uword modsize, hdrlen, len, end, magic, bytecode, fixup, addr, sysflags, defcnt = 0, init = 0, modaddr = mark_heap();
-    word modfix;
-    byte *moddep, *rld, *esd, *cdd, *sym;
+    uword modsize, hdrlen, len, end, magic, bytecode, fixup, addr, modaddr;
+    uword sysflags = 0, defcnt = 0, init = 0;
+    word modfix, modofst;
+    byte *deftbl, *deflast, *moddep, *rld, *esd, *sym;
     byte header[128];
     int fd;
     char filename[48], string[17];
 
     dcitos(mod, filename);
     printf("Load module %s\n", filename);
-    if (strlen(filename) < 8 || (filename[strlen(filename) - 7] != '#'))
+    if (strlen(filename) < 4 || (filename[strlen(filename) - 4] != '.'))
         strcat(filename, ".mod");
     fd = open(filename, O_RDONLY, 0);
     if ((fd > 0) && (len = read(fd, header, 128)) > 0)
@@ -583,10 +495,19 @@ int load_mod(M6502 *mpu, byte *mod)
             }
             if (fd == 0)
             {
+                //
+                // Re-read first 128 bytes of module
+                //
                 fd = open(filename, O_RDONLY, 0);
                 len = read(fd, header, 128);
             }
         }
+        //
+        // Allocate heap space for DEF table.
+        //
+        deftbl   = &mem_6502[alloc_heap(defcnt * 5 + 1)];
+        deflast  = deftbl;
+        *deflast = 0;
         //
         // Alloc heap space for relocated module (data + bytecode).
         //
@@ -605,15 +526,14 @@ int load_mod(M6502 *mpu, byte *mod)
         //
         // Apply all fixups and symbol import/export.
         //
-        modfix    = modaddr - hdrlen + 2; // - MOD_ADDR;
-        bytecode += modfix - MOD_ADDR;
-        end       = modaddr - hdrlen + modsize + 2;
+        modfix    = modaddr  - hdrlen + 2;
+        modofst   = modfix - REL_ADDR;
+        bytecode += modofst;
+        end       = modfix + modsize;
         rld       = mem_6502 + end;       // Re-Locatable Directory
         esd       = rld;                  // Extern+Entry Symbol Directory
-        while (*esd != 0x00)              // Scan to end of RLD
-            esd += 4;
-        esd++;
-        cdd = rld;
+        for (esd = rld; *esd; esd += 4);  // Scan to end of RLD
+        esd++;                            // ESD starts just past RLD
         if (show_state)
         {
             //
@@ -626,7 +546,7 @@ int load_mod(M6502 *mpu, byte *mod)
             printf("Module sysflags: $%04X\n", sysflags);
             printf("Module bytecode: $%04X\n", bytecode);
             printf("Module def count: $%04X\n", defcnt);
-            printf("Module init: $%04X\n", init ? init + modfix - MOD_ADDR : 0);
+            printf("Module init: $%04X\n", init ? init + modofst : 0);
         }
         //
         // Add module to symbol table.
@@ -637,84 +557,110 @@ int load_mod(M6502 *mpu, byte *mod)
         //
         if (show_state)
             printf("\nRe-Location Dictionary:\n");
-        while (*rld)
+        while (rld[0])
         {
+            addr = rld[1] | (rld[2] << 8);
             if (rld[0] == 0x02)
             {
                 if (show_state) printf("\tDEF               CODE");
-                addr = rld[1] | (rld[2] << 8);
-                addr += modfix - MOD_ADDR;
-                rld[0] = 0; // Set call code to 0
-                rld[1] = addr;
-                rld[2] = addr >> 8;
-                end = rld - mem_6502 + 4;
+                //
+                // This is a bytcode def entry - add it to the def directory.
+                //
+                addr   += modofst;
+                deflast = add_def(VM_EXT_DEF, addr, deflast);
             }
             else
             {
-                addr = rld[1] | (rld[2] << 8);
-                if (addr > 12)
+                addr += modfix;
+                if (rld[0] & 0x80)
+                    //
+                    // 16 bit fixup
+                    //
+                    fixup = (mem_6502[addr] | (mem_6502[addr + 1] << 8));
+                else
                 {
-                    addr += modfix;
-                    if (rld[0] & 0x80)
-                        fixup = (mem_6502[addr] | (mem_6502[addr + 1] << 8));
+                    //
+                    // 8 bit fixups
+                    //
+                    if (rld[0] & 0x40)
+                        fixup = rld[3] + (mem_6502[addr] << 8);
                     else
                         fixup = mem_6502[addr];
-                    if (rld[0] & 0x10)
-                    {
-                        if (show_state) printf("\tEXTERN[$%02X]       ", rld[3]);
-                        fixup += extern_lookup(esd, rld[3]);
-                    }
-                    else
-                    {
-                        fixup += modfix - MOD_ADDR;
-                        if (fixup >= bytecode)
-                        {
-                            //
-                            // Replace with call def dictionary.
-                            //
-                            if (show_state) printf("\tDEF[$%04X->", fixup);
-                            fixup = def_lookup(cdd, fixup);
-                            if (show_state) printf("$%04X] ", fixup);
-                        }
-                        else
-                            if (show_state) printf("\tINTERN            ");
-                    }
-                    if (rld[0] & 0x80)
-                    {
-                        if (show_state) printf("WORD");
-                        mem_6502[addr]     = fixup;
-                        mem_6502[addr + 1] = fixup >> 8;
-                    }
-                    else
-                    {
-                        if (show_state) printf("BYTE");
-                        mem_6502[addr] = fixup;
-                    }
+                }
+                if (rld[0] & 0x10)
+                {
+                    //
+                    // Resolve external symbol
+                    //
+                    if (show_state) printf("\tEXTERN[$%02X]       ", rld[3]);
+                    fixup += lookup_extern(esd, rld[3]);
                 }
                 else
                 {
-                    if (show_state) printf("\tIGNORE (HDR)    ");
+                    //
+                    // Internal symbol
+                    //
+                    fixup += modofst;
+                    if (fixup >= bytecode)
+                    {
+                        //
+                        // Replace with call def dictionary.
+                        //
+                        if (show_state) printf("\tDEF[$%04X->", fixup);
+                        fixup = lookup_def(deftbl, fixup);
+                        if (show_state) printf("$%04X] ", fixup);
+                    }
+                    else
+                        if (show_state) printf("\tINTERN            ");
+                }
+                if (rld[0] & 0x80)
+                {
+                    //
+                    // 16 bit fixup
+                    //
+                    if (show_state) printf("WORD");
+                    mem_6502[addr]     = fixup;
+                    mem_6502[addr + 1] = fixup >> 8;
+                }
+                else
+                {
+                    if (show_state) printf(rld[0] & 0x40 ? "MSBYTE" : "LSBYTE");
+                    if (rld[0] & 0x40)
+                        //
+                        // 8 bit MSB fixup
+                        //
+                        mem_6502[addr] = fixup >> 8;
+                    else
+                        //
+                        // 8 bit LSB fixup
+                        //
+                        mem_6502[addr] = fixup;
                 }
             }
             if (show_state) printf("@$%04X\n", addr);
             rld += 4;
         }
         if (show_state) printf("\nExternal/Entry Symbol Directory:\n");
-        while (*esd)
+        while (esd[0])
         {
             sym = esd;
             esd += dcitos(esd, string);
-            if (esd[0] & 0x10)
+            if (esd[0] & 0x08)
             {
-                if (show_state) printf("\tIMPORT %s[$%02X]\n", string, esd[1]);
-            }
-            else if (esd[0] & 0x08)
-            {
+                //
+                // Export symbol
+                //
                 addr = esd[1] | (esd[2] << 8);
-                addr += modfix - MOD_ADDR;
+                addr += modofst;
                 if (show_state) printf("\tEXPORT %s@$%04X\n", string, addr);
                 if (addr >= bytecode)
-                    addr = def_lookup(cdd, addr);
+                    //
+                    // Convert to def entry address
+                    //
+                    addr = lookup_def(deftbl, addr);
+                //
+                // Add symbol to PLASMA symbol table
+                //
                 add_sym(sym, addr);
             }
             esd += 3;
@@ -722,8 +668,8 @@ int load_mod(M6502 *mpu, byte *mod)
     }
     else
     {
-        printf("Error: Unable to load module %s\n", filename);
-        exit (1);
+        fprintf(stderr, "Unable to load module %s", filename);
+        pfail("");
     }
     //
     // Reserve heap space for relocated module.
@@ -734,20 +680,140 @@ int load_mod(M6502 *mpu, byte *mod)
     //
     if (init)
     {
-        vm_interp(mpu, mem_6502 + init + modfix - MOD_ADDR);
-//        release_heap(init + modfix - MOD_ADDR); // Free up init code
+        vm_interp(mpu, mem_6502 + init + modfix - REL_ADDR);
+        if (!(sysflags & SYSFLAG_INITKEEP))
+            release_heap(init + modofst); // Free up init code
         init  = mem_6502[++mpu->registers->s + 0x100];
         init |= mem_6502[++mpu->registers->s + 0x100] << 8;
         return init;
     }
     return 0;
 }
+/*
+ * Native CMDSYS routines
+ */
+void sysputs(M6502 *mpu)
+{
+    uword strptr;
+    char cstr[256];
+    //
+    // Pop string pointer off stack, copy into C string, and puts it
+    //
+    strptr  = mem_6502[ESTKL + mpu->registers->x];
+    strptr |= mem_6502[ESTKH + mpu->registers->x] << 8;
+    memcpy(cstr, mem_6502 + strptr + 1, mem_6502[strptr]);
+    cstr[mem_6502[strptr]] = '\0';
+    puts(cstr);
+}
+void sysputln(M6502 *mpu)
+{
+    puts("\n");
+}
+/*
+ * CMDSYS exports
+ */
+void export_cmdsys(void)
+{
+    byte dci[16];
+    uword haddr, defaddr, cmdsys = alloc_heap(23);
+    byte  *lastdef = mem_6502 + alloc_heap(26*2);
+    *lastdef     = 0;
+    stodci("CMDSYS", dci); add_sym(dci, cmdsys);
+    haddr   = vm_addnatv(sysputs);
+    defaddr = (uword)(lastdef - mem_6502);
+    lastdef = add_def(VM_NATV_DEF, haddr, lastdef);
+    stodci("PUTS", dci); add_sym(dci, defaddr);
+    haddr   = vm_addnatv(sysputln);
+    defaddr = (uword)(lastdef - mem_6502);
+    lastdef = add_def(VM_NATV_DEF, haddr, lastdef);
+    stodci("PUTLN", dci); add_sym(dci, defaddr);
+#if 0
+word version      = 0x0211; // 02.11
+word syspath;
+word cmdlnptr;
+word              = sysexecmod, sysopen, sysclose, sysread, syswrite;
+byte perr;
+byte jitcount     = 0;
+byte jitsize      = 0;
+byte refcons      = 0;
+byte devcons      = 0;
+word              = syslookuptbl
+
+char machidstr[]  = "MACHID";
+char sysstr[]     = "SYSCALL";
+char callstr[]    = "CALL";
+char putcstr[]    = "PUTC";
+char putlnstr[]   = "PUTLN";
+char putsstr[]    = "PUTS";
+char putistr[]    = "PUTI";
+char putbstr[]    = "PUTB";
+char putwstr[]    = "PUTH";
+char getcstr[]    = "GETC";
+char getsstr[]    = "GETS";
+char toupstr[]    = "TOUPPER";
+char strcpystr[]  = "STRCPY";
+char strcatstr[]  = "STRCAT";
+char hpmarkstr[]  = "HEAPMARK";
+char hpalignstr[] = "HEAPALLOCALIGN";
+char hpallocstr[] = "HEAPALLOC";
+char hprelstr[]   = "HEAPRELEASE";
+char hpavlstr[]   = "HEAPAVAIL";
+char memsetstr[]  = "MEMSET";
+char memcpystr[]  = "MEMCPY";
+char uisgtstr[]   = "ISUGT";
+char uisgestr[]   = "ISUGE";
+char uisltstr[]   = "ISULT";
+char uislestr[]   = "ISULE";
+char sextstr[]    = "SEXT";
+char divmodstr[]  = "DIVMOD";
+char
+
+word exports[]    = @sysmodstr, @version
+word              = @sysstr,    @syscall
+word              = @callstr,   @call
+word              = @putcstr,   @cout
+word              = @putlnstr,  @crout
+word              = @putsstr,   @prstr
+word              = @putistr,   @print
+word              = @putbstr,   @prbyte
+word              = @putwstr,   @prword
+word              = @getcstr,   @cin
+word              = @getsstr,   @rdstr
+word              = @toupstr,   @toupper
+word              = @hpmarkstr, @markheap
+word              = @hpallocstr,@allocheap
+word              = @hpalignstr,@allocalignheap
+word              = @hprelstr,  @releaseheap
+word              = @hpavlstr,  @availheap
+word              = @memsetstr, @memset
+word              = @memcpystr, @memcpy
+word              = @strcpystr, @strcpy
+word              = @strcatstr, @strcat
+word              = @uisgtstr,  @uword_isgt
+word              = @uisgestr,  @uword_isge
+word              = @uisltstr,  @uword_islt
+word              = @uislestr,  @uword_isle
+word              = @sextstr,   @sext
+word              = @divmodstr, @divmod
+word              = @machidstr, @machid
+word              = 0
+#endif
+}
 int main(int argc, char **argv)
 {
     byte   dci[32];
     int    i;
-    char  *interpfile = "a1plasma.bin";
+    char  *cmdfile    = "a1plasma.bin";
+    char  *modfile = NULL;
+    //
+    // Init 6502 emulator/VM
+    //
     M6502 *mpu = M6502_new(0, mem_6502, 0);
+    M6502_reset(mpu);
+    mpu->registers->x = ESTK_SIZE;
+    //
+    // Parse command line options
+    //
     if (--argc)
     {
         argv++;
@@ -761,38 +827,49 @@ int main(int argc, char **argv)
             argv++;
         }
         if (argc)
-            interpfile = *argv;
+            modfile = *argv;
     }
     //
-    // Add default library.
+    // Run PLVM or Apple1 environment based on passed in modfile
     //
-    for (i = 0; syslib_exp[i]; i++)
+    if (modfile)
     {
-        mem_6502[i] = i; // ???
-        stodci(syslib_exp[i], dci);
-        add_sym(dci, i+1);
+        setPLVMTraps(mpu);
+        //
+        // 64K - 256 RAM
+        //
+        mem_6502[FPL] = 0x00;
+        mem_6502[FPH] = 0xFF;
+        mem_6502[PPL] = 0x00;
+        mem_6502[PPH] = 0xFF;
+        //
+        // Load module from command line - PLVM version
+        //
+        export_cmdsys();
+        stodci(modfile, dci);
+        if (show_state) dump_sym();
+        load_mod(mpu, dci);
+        if (show_state) dump_sym();
     }
-    //
-    // Load module from command line
-    //
-    // PLVMC version
-    //stodci(interpfile, dci);
-    //if (show_state) dump_sym();
-    //load_mod(dci);
-    //if (show_state) dump_sym();
-    // lib6502 version
-    if (!load(0x280, interpfile))
-        pfail(interpfile);
-    setRawInput();
-    setTraps(mpu);
-    M6502_reset(mpu);
-    mpu->registers->pc = 0x0280;
-    mem_6502[ESP]      = ESTK_SIZE;
-    mem_6502[FPL]      = 0x00;
-    mem_6502[FPH]      = 0x80;
-    mem_6502[PPL]      = 0x00;
-    mem_6502[PPH]      = 0x80;
-    M6502_exec(mpu);
+    else
+    {
+        setApple1Traps(mpu);
+        //
+        // 32K RAM
+        //
+        mem_6502[FPL] = 0x00;
+        mem_6502[FPH] = 0x80;
+        mem_6502[PPL] = 0x00;
+        mem_6502[PPH] = 0x80;
+        //
+        // Load Apple 1 emulation - lib6502 version
+        //
+        if (!load(0x280, cmdfile))
+            pfail(cmdfile);
+        setRawInput();
+        mpu->registers->pc = 0x0280;
+        M6502_exec(mpu);
+    }
     M6502_delete(mpu);
     return 0;
 }

@@ -43,7 +43,7 @@ typedef uint16_t address;
     }
 
 /*
- * VM eval stack
+ * PLVM eval stack
  */
 #define PUSH(v)         (*(--esp))=(v)
 #define POP             ((word)(*(esp++)))
@@ -52,7 +52,7 @@ typedef uint16_t address;
 /*
  * 6502 memory map
  */
-#define MEM_SIZE        0x00010000
+#define MEM6502_SIZE    0x00010000
 #define ESTK_SIZE       16
 /*
  * Zero page VM locations matching Apple ZP
@@ -69,9 +69,12 @@ typedef uint16_t address;
 /*
  * VM entrypoints
  */
-#define VM_INLINE_ENTRY 0xFFF0
-#define VM_EXT_ENTRY    0xFFF4
+#define VM_NATV_DEF     2
+#define VM_EXT_DEF      1
+#define VM_INLINE_DEF   0
 #define VM_NATV_ENTRY   0xFFF8
+#define VM_EXT_ENTRY    0xFFF4
+#define VM_INLINE_ENTRY 0xFFF0
 /*
  * VM callouts
  */
@@ -79,6 +82,7 @@ void M6502_exec(M6502 *mpu);
 typedef void (*VM_Callout)(M6502 *mpu);
 extern int show_state;
 extern byte mem_6502[];
+extern byte mem_PLVM[];
 extern char *syslib_exp[];
 extern int vm_adddef(code * defaddr);
 extern int vm_addnatv(VM_Callout);

@@ -26,7 +26,7 @@ int natv_count = 0;
 /*
  * Memory for 6502 and VM
  */
-byte mem_6502[MEM_SIZE];
+byte mem_6502[MEM6502_SIZE];
 word eval_stack[ESTK_SIZE];
 word *esp = &eval_stack[ESTK_SIZE];
 /*
@@ -102,13 +102,13 @@ int vm_natvdef(M6502 *mpu, uword address, byte data)
 }
 int vm_adddef(code * defaddr)
 {
-    vm_def[def_count++] = defaddr;
-    return def_count;
+    vm_def[def_count] = defaddr;
+    return def_count++;
 }
 int vm_addnatv(VM_Callout vm_callout)
 {
-    vm_natv[natv_count++] = vm_callout;
-    return natv_count;
+    vm_natv[natv_count] = vm_callout;
+    return natv_count++;
 }
 /*
  * OPCODE TABLE
