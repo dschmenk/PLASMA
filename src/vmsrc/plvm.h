@@ -41,7 +41,21 @@ typedef uint16_t address;
         pc |= mem_6502[++mpu->registers->s + 0x100] << 8;   \
         return pc + 1;                                      \
     }
-
+/*
+ * 6502 VM eval stack
+ */
+#define PUSH_ESTK(v)                                        \
+    {                                                       \
+        --mpu->registers->x;                                \
+        mem_6502[ESTKL + mpu->registers->x] = (v);          \
+        mem_6502[ESTKH + mpu->registers->x] = (v) >> 8;     \
+    }
+#define POP_ESTK(v)                                         \
+    {                                                       \
+        (v) = mem_6502[ESTKL + mpu->registers->x]           \
+            | mem_6502[ESTKH + mpu->registers->x] << 8;     \
+        ++mpu->registers->x;                                \
+    }
 /*
  * PLVM eval stack
  */
@@ -69,12 +83,14 @@ typedef uint16_t address;
 /*
  * VM entrypoints
  */
-#define VM_NATV_DEF     2
-#define VM_EXT_DEF      1
-#define VM_INLINE_DEF   0
-#define VM_NATV_ENTRY   0xFFF8
-#define VM_EXT_ENTRY    0xFFF4
-#define VM_INLINE_ENTRY 0xFFF0
+#define VM_NATV_DEF         3
+#define VM_EXT_DEF          2
+#define VM_DEF              1
+#define VM_INLINE_DEF       0
+#define VM_NATV_ENTRY       0xFFFC
+#define VM_EXT_ENTRY        0xFFF8
+#define VM_INDIRECT_ENTRY   0xFFF4
+#define VM_INLINE_ENTRY     0xFFF0
 /*
  * VM callouts
  */
@@ -84,7 +100,7 @@ extern int show_state;
 extern byte mem_6502[];
 extern byte mem_PLVM[];
 extern char *syslib_exp[];
-extern int vm_adddef(code * defaddr);
+extern int vm_addxdef(code * defaddr);
 extern int vm_addnatv(VM_Callout);
 extern int vm_irq(M6502 *mpu, uword address, byte data);
 extern int vm_indef(M6502 *mpu, uword address, byte data);

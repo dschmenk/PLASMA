@@ -188,9 +188,10 @@ int setPLVMTraps(M6502 *mpu)
     //
     // Hooks for BRK, enter VM or native code
     //
-    M6502_setCallback(mpu, call, VM_INLINE_ENTRY, vm_indef);
-    M6502_setCallback(mpu, call, VM_EXT_ENTRY,    vm_exdef);
-    M6502_setCallback(mpu, call, VM_NATV_ENTRY,   vm_natvdef);
+    M6502_setCallback(mpu, call, VM_INLINE_ENTRY,   vm_indef);
+    M6502_setCallback(mpu, call, VM_INDIRECT_ENTRY, vm_iidef);
+    M6502_setCallback(mpu, call, VM_EXT_ENTRY,      vm_exdef);
+    M6502_setCallback(mpu, call, VM_NATV_ENTRY,     vm_natvdef);
     M6502_setCallback(mpu, call, 0x0000, vm_irq);
     return 0;
 }
@@ -367,8 +368,7 @@ uword lookup_sym(byte *dci)
         entry += 2;
     }
     dcitos(dci, str);
-    fprintf(stderr, "\nSymbol %s ", str);
-    pfail("not found in symbol table");
+    printf("\nSymbol %s not found in symbol table\n", str);
     return 0;
 }
 int add_sym(byte *dci, uword addr)
@@ -398,7 +398,11 @@ byte *add_def(byte type, uword haddr, byte *lastdef)
             *lastdef++ = VM_EXT_ENTRY & 0xFF;
             *lastdef++ = VM_EXT_ENTRY >> 8;
             break;
-        case VM_INLINE_DEF: // Never happed
+        case VM_DEF:
+            *lastdef++ = VM_INDIRECT_ENTRY & 0xFF;
+            *lastdef++ = VM_INDIRECT_ENTRY >> 8;
+            break;
+        case VM_INLINE_DEF: // Never happen
             *lastdef++ = VM_INLINE_ENTRY & 0xFF;
             *lastdef++ = VM_INLINE_ENTRY >> 8;
         default:
@@ -424,6 +428,20 @@ uword lookup_def(byte *deftbl, int defaddr)
         deftbl += 5;
     }
     return (uword)calldef;
+}
+uword add_natv( VM_Callout natvfn)
+{
+    uword handle, defaddr;
+    handle  = vm_addnatv(natvfn);
+    defaddr = alloc_heap(5);
+    add_def(VM_NATV_DEF, handle, mem_6502 + defaddr);
+    return defaddr;
+}
+void export_natv(char *symstr, VM_Callout natvfn)
+{
+    byte dci[16];
+    stodci(symstr, dci);
+    add_sym(dci, add_natv(natvfn));
 }
 /*
  * Relocation routines.
@@ -567,7 +585,7 @@ int load_mod(M6502 *mpu, byte *mod)
                 // This is a bytcode def entry - add it to the def directory.
                 //
                 addr   += modofst;
-                deflast = add_def(VM_EXT_DEF, addr, deflast);
+                deflast = add_def(VM_DEF, addr, deflast);
             }
             else
             {
@@ -692,22 +710,69 @@ int load_mod(M6502 *mpu, byte *mod)
 /*
  * Native CMDSYS routines
  */
+void sysputc(M6502 *mpu)
+{
+    char c;
+    //
+    // Pop char and putchar it
+    //
+    POP_ESTK(c);
+    putchar(c);
+}
 void sysputs(M6502 *mpu)
 {
     uword strptr;
-    char cstr[256];
+    int i;
+    char ch;
+
     //
     // Pop string pointer off stack, copy into C string, and puts it
     //
-    strptr  = mem_6502[ESTKL + mpu->registers->x];
-    strptr |= mem_6502[ESTKH + mpu->registers->x] << 8;
-    memcpy(cstr, mem_6502 + strptr + 1, mem_6502[strptr]);
-    cstr[mem_6502[strptr]] = '\0';
-    puts(cstr);
+    POP_ESTK(strptr);
+    for (i = 1; i <= mem_6502[strptr]; i++)
+    {
+        ch = mem_6502[strptr + i] & 0x7F;
+        switch (ch)
+        {
+            case '\r':
+            case '\n':
+                putchar('\n');
+                break;
+            default:
+                putchar(ch);
+        }
+    }
 }
 void sysputln(M6502 *mpu)
 {
-    puts("\n");
+    putchar('\n');
+}
+void sysputi(M6502 *mpu)
+{
+    word print;
+    //
+    // Pop int off stack, copy into C string, and puts it
+    //
+    POP_ESTK(print);
+    printf("%d", print);
+}
+void sysputh(M6502 *mpu)
+{
+    word prhex;
+    //
+    // Pop int off stack, copy into C string, and puts it
+    //
+    POP_ESTK(prhex);
+    printf("%04X", prhex);
+}
+void sysdivmod(M6502 *mpu)
+{
+    word prhex;
+    //
+    // Pop int off stack, copy into C string, and puts it
+    //
+    POP_ESTK(prhex);
+    printf("%04X", prhex);
 }
 /*
  * CMDSYS exports
@@ -715,18 +780,8 @@ void sysputln(M6502 *mpu)
 void export_cmdsys(void)
 {
     byte dci[16];
-    uword haddr, defaddr, cmdsys = alloc_heap(23);
-    byte  *lastdef = mem_6502 + alloc_heap(26*2);
-    *lastdef     = 0;
-    stodci("CMDSYS", dci); add_sym(dci, cmdsys);
-    haddr   = vm_addnatv(sysputs);
-    defaddr = (uword)(lastdef - mem_6502);
-    lastdef = add_def(VM_NATV_DEF, haddr, lastdef);
-    stodci("PUTS", dci); add_sym(dci, defaddr);
-    haddr   = vm_addnatv(sysputln);
-    defaddr = (uword)(lastdef - mem_6502);
-    lastdef = add_def(VM_NATV_DEF, haddr, lastdef);
-    stodci("PUTLN", dci); add_sym(dci, defaddr);
+    uword cmdsys = alloc_heap(23);
+    uword machid = alloc_heap(2);
 #if 0
 word version      = 0x0211; // 02.11
 word syspath;
@@ -738,14 +793,18 @@ byte jitsize      = 0;
 byte refcons      = 0;
 byte devcons      = 0;
 word              = syslookuptbl
-
-char machidstr[]  = "MACHID";
+#endif
+    mem_6502[machid] = 0x08; // Apple 1 (NA in ProDOS Tech Ref)
+    stodci("CMDSYS", dci); add_sym(dci, cmdsys);
+    stodci("MACHID", dci); add_sym(dci, machid);
+    export_natv("PUTC",  sysputc);
+    export_natv("PUTS",  sysputs);
+    export_natv("PUTLN", sysputln);
+    export_natv("PUTI",  sysputi);
+    export_natv("PUTH",  sysputh);
+#if 0
 char sysstr[]     = "SYSCALL";
 char callstr[]    = "CALL";
-char putcstr[]    = "PUTC";
-char putlnstr[]   = "PUTLN";
-char putsstr[]    = "PUTS";
-char putistr[]    = "PUTI";
 char putbstr[]    = "PUTB";
 char putwstr[]    = "PUTH";
 char getcstr[]    = "GETC";
@@ -798,6 +857,15 @@ word              = @divmodstr, @divmod
 word              = @machidstr, @machid
 word              = 0
 #endif
+    //
+    // Hack DIVMOD into system
+    //
+    stodci("DIVMOD", dci); add_sym(dci, heap);
+    mem_6502[heap++] = 0x20; // JSR
+    mem_6502[heap++] = VM_INLINE_ENTRY & 0xFF;
+    mem_6502[heap++] = VM_INLINE_ENTRY >> 8;
+    mem_6502[heap++] = 0x36; // DIVMOD
+    mem_6502[heap++] = 0x5C; // RET
 }
 int main(int argc, char **argv)
 {

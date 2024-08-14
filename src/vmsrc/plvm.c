@@ -100,7 +100,7 @@ int vm_natvdef(M6502 *mpu, uword address, byte data)
     vm_natv[mem_6502[addr + 1]](mpu);
     RTS;
 }
-int vm_adddef(code * defaddr)
+int vm_addxdef(code * defaddr)
 {
     vm_def[def_count] = defaddr;
     return def_count++;
@@ -248,6 +248,10 @@ void vm_interp(M6502 *mpu, code *vm_ip)
                 PUSH(val);
                 break;
             case 0x36: // DIVMOD
+                val = POP;
+                ea  = POP;
+                PUSH(ea % val);
+                PUSH(ea / val);
                 break;
             case 0x38: // ADDI
                 val = POP + BYTE_PTR(vm_ip);
