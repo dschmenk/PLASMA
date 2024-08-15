@@ -68,6 +68,8 @@ typedef uint16_t address;
  */
 #define MEM6502_SIZE    0x00010000
 #define ESTK_SIZE       16
+#define CMDLINE_STR     0x01FF
+#define CMDLINE_BUF     0x0200
 /*
  * Zero page VM locations matching Apple ZP
  */
@@ -99,7 +101,7 @@ typedef void (*VM_Callout)(M6502 *mpu);
 extern int show_state;
 extern byte mem_6502[];
 extern byte mem_PLVM[];
-extern char *syslib_exp[];
+extern byte *perr;
 extern int vm_addxdef(code * defaddr);
 extern int vm_addnatv(VM_Callout);
 extern int vm_irq(M6502 *mpu, uword address, byte data);

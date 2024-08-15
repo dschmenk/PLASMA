@@ -28,6 +28,7 @@ struct termios org_tio;
 #define DEF_ENTRY_SIZE      5
 byte  symtbl[SYMTBL_SIZE];     // Symbol table outside mem_6502 for PLVM
 byte *lastsym  = symtbl;
+byte *perr;
 uword keybdbuf = 0x0200;
 uword heap     = 0x0300;
 /*
@@ -710,6 +711,24 @@ int load_mod(M6502 *mpu, byte *mod)
 /*
  * Native CMDSYS routines
  */
+void sysexecmod(M6502 *mpu)
+{
+}
+void sysopen(M6502 *mpu)
+{
+}
+void sysclose(M6502 *mpu)
+{
+}
+void sysread(M6502 *mpu)
+{
+}
+void syswrite(M6502 *mpu)
+{
+}
+void syslookuptbl(M6502 *mpu)
+{
+}
 void sysputc(M6502 *mpu)
 {
     char c;
@@ -751,16 +770,25 @@ void sysputi(M6502 *mpu)
 {
     word print;
     //
-    // Pop int off stack, copy into C string, and puts it
+    // Pop int off stack, copy into C string, and print it
     //
     POP_ESTK(print);
     printf("%d", print);
+}
+void sysputb(M6502 *mpu)
+{
+    word prbyte;
+    //
+    // Pop byte off stack, copy into C string, and print it
+    //
+    POP_ESTK(prbyte);
+    printf("%02X", prbyte & 0xFF);
 }
 void sysputh(M6502 *mpu)
 {
     word prhex;
     //
-    // Pop int off stack, copy into C string, and puts it
+    // Pop int off stack, copy into C string, and print it
     //
     POP_ESTK(prhex);
     printf("%04X", prhex);
@@ -769,7 +797,7 @@ void sysdivmod(M6502 *mpu)
 {
     word prhex;
     //
-    // Pop int off stack, copy into C string, and puts it
+    // Pop int off stack, copy into C string, and print it
     //
     POP_ESTK(prhex);
     printf("%04X", prhex);
@@ -781,19 +809,37 @@ void export_cmdsys(void)
 {
     byte dci[16];
     uword cmdsys = alloc_heap(23);
-    uword machid = alloc_heap(2);
-#if 0
-word version      = 0x0211; // 02.11
-word syspath;
-word cmdlnptr;
-word              = sysexecmod, sysopen, sysclose, sysread, syswrite;
-byte perr;
-byte jitcount     = 0;
-byte jitsize      = 0;
-byte refcons      = 0;
-byte devcons      = 0;
-word              = syslookuptbl
-#endif
+    uword machid = alloc_heap(1);
+    uword defaddr;
+    mem_6502[cmdsys + 0] = 0x11; // Version 2.11
+    mem_6502[cmdsys + 1] = 0x02;
+    mem_6502[cmdsys + 2] = 0x80; // syspath
+    mem_6502[cmdsys + 3] = 0x02;
+    mem_6502[cmdsys + 4] = (byte)CMDLINE_STR; // cmdline
+    mem_6502[cmdsys + 5] = (byte)(CMDLINE_STR >> 8);
+    defaddr = add_natv(sysexecmod); // sysexecmod
+    mem_6502[cmdsys + 6] = (byte)defaddr;
+    mem_6502[cmdsys + 7] = (byte)(defaddr >> 8);
+    defaddr = add_natv(sysopen); // sysopen
+    mem_6502[cmdsys + 8] = (byte)defaddr;
+    mem_6502[cmdsys + 9] = (byte)(defaddr >> 8);
+    defaddr = add_natv(sysclose); // sysclose
+    mem_6502[cmdsys + 10] = (byte)defaddr;
+    mem_6502[cmdsys + 11] = (byte)(defaddr >> 8);
+    defaddr = add_natv(sysread); // sysread
+    mem_6502[cmdsys + 12] = (byte)defaddr;
+    mem_6502[cmdsys + 13] = (byte)(defaddr >> 8);
+    defaddr = add_natv(syswrite); // syswrite
+    mem_6502[cmdsys + 14] = (byte)defaddr;
+    mem_6502[cmdsys + 15] = (byte)(defaddr >> 8);
+    perr = mem_6502 + cmdsys + 16; *perr = 0;
+    mem_6502[cmdsys + 17] = 0; // jitcount
+    mem_6502[cmdsys + 18] = 0; // jitsize
+    mem_6502[cmdsys + 19] = 0; // refcons
+    mem_6502[cmdsys + 20] = 0; // devcons
+    defaddr = add_natv(syslookuptbl); // syslookuptbl
+    mem_6502[cmdsys + 21] = (byte)defaddr;
+    mem_6502[cmdsys + 22] = (byte)(defaddr >> 8);
     mem_6502[machid] = 0x08; // Apple 1 (NA in ProDOS Tech Ref)
     stodci("CMDSYS", dci); add_sym(dci, cmdsys);
     stodci("MACHID", dci); add_sym(dci, machid);
@@ -801,12 +847,11 @@ word              = syslookuptbl
     export_natv("PUTS",  sysputs);
     export_natv("PUTLN", sysputln);
     export_natv("PUTI",  sysputi);
+    export_natv("PUTB",  sysputb);
     export_natv("PUTH",  sysputh);
 #if 0
 char sysstr[]     = "SYSCALL";
 char callstr[]    = "CALL";
-char putbstr[]    = "PUTB";
-char putwstr[]    = "PUTH";
 char getcstr[]    = "GETC";
 char getsstr[]    = "GETS";
 char toupstr[]    = "TOUPPER";
@@ -824,52 +869,21 @@ char uisgestr[]   = "ISUGE";
 char uisltstr[]   = "ISULT";
 char uislestr[]   = "ISULE";
 char sextstr[]    = "SEXT";
-char divmodstr[]  = "DIVMOD";
-char
-
-word exports[]    = @sysmodstr, @version
-word              = @sysstr,    @syscall
-word              = @callstr,   @call
-word              = @putcstr,   @cout
-word              = @putlnstr,  @crout
-word              = @putsstr,   @prstr
-word              = @putistr,   @print
-word              = @putbstr,   @prbyte
-word              = @putwstr,   @prword
-word              = @getcstr,   @cin
-word              = @getsstr,   @rdstr
-word              = @toupstr,   @toupper
-word              = @hpmarkstr, @markheap
-word              = @hpallocstr,@allocheap
-word              = @hpalignstr,@allocalignheap
-word              = @hprelstr,  @releaseheap
-word              = @hpavlstr,  @availheap
-word              = @memsetstr, @memset
-word              = @memcpystr, @memcpy
-word              = @strcpystr, @strcpy
-word              = @strcatstr, @strcat
-word              = @uisgtstr,  @uword_isgt
-word              = @uisgestr,  @uword_isge
-word              = @uisltstr,  @uword_islt
-word              = @uislestr,  @uword_isle
-word              = @sextstr,   @sext
-word              = @divmodstr, @divmod
-word              = @machidstr, @machid
-word              = 0
 #endif
     //
     // Hack DIVMOD into system
     //
     stodci("DIVMOD", dci); add_sym(dci, heap);
     mem_6502[heap++] = 0x20; // JSR
-    mem_6502[heap++] = VM_INLINE_ENTRY & 0xFF;
-    mem_6502[heap++] = VM_INLINE_ENTRY >> 8;
+    mem_6502[heap++] = (byte)VM_INLINE_ENTRY;
+    mem_6502[heap++] = (byte)(VM_INLINE_ENTRY >> 8);
     mem_6502[heap++] = 0x36; // DIVMOD
     mem_6502[heap++] = 0x5C; // RET
 }
 int main(int argc, char **argv)
 {
     byte   dci[32];
+    char   cmdline[128];
     int    i;
     char  *cmdfile    = "a1plasma.bin";
     char  *modfile = NULL;
@@ -895,7 +909,20 @@ int main(int argc, char **argv)
             argv++;
         }
         if (argc)
+        {
+            //
+            // Everything after the module file is passed in as arguments
+            //
             modfile = *argv;
+            cmdline[0] = '\0';
+            while (argc--)
+            {
+                strcat(cmdline, *argv++);
+                strcat(cmdline," ");
+            }
+            mem_6502[CMDLINE_STR] = strlen(cmdline) - 1;
+            memcpy(mem_6502 + CMDLINE_BUF, &cmdline, mem_6502[CMDLINE_STR]);
+        }
     }
     //
     // Run PLVM or Apple1 environment based on passed in modfile
