@@ -370,7 +370,7 @@ uword lookup_sym(byte *dci)
         entry += 2;
     }
     dcitos(dci, str);
-    printf("\nSymbol %s not found in symbol table\n", str);
+    if (trace) printf("\nSymbol %s not found in symbol table\n", str);
     return 0;
 }
 int add_sym(byte *dci, uword addr)
@@ -737,7 +737,7 @@ int load_mod(M6502 *mpu, byte *mod)
     }
     else
     {
-        fprintf(stderr, "Unable to load module %s", filename);
+        fprintf(stderr, "\nUnable to load module %s: ", filename);
         pfail("");
     }
     //
@@ -776,6 +776,16 @@ int vm_syscall(M6502 *mpu, uword address, byte data)
 }
 void syscall6502(M6502 *mpu)
 {
+    uword params;
+    byte  cmd, status;
+
+    PULL_ESTK(params);
+    PULL_ESTK(cmd);
+    status = 0;
+    switch (cmd)
+    {
+    }
+    PUSH_ESTK(status);
 }
 void sysexecmod(M6502 *mpu)
 {
@@ -794,6 +804,11 @@ void syswrite(M6502 *mpu)
 }
 void syslookuptbl(M6502 *mpu)
 {
+    uword sym, addr;
+
+    PULL_ESTK(sym);
+    addr = lookup_sym(mem_6502 + sym);
+    PUSH_ESTK(addr);
 }
 void sysputc(M6502 *mpu)
 {
@@ -1029,9 +1044,10 @@ void sysdivmod(M6502 *mpu)
 void export_cmdsys(void)
 {
     byte dci[16];
+    uword defaddr;
     uword cmdsys = alloc_heap(23);
     uword machid = alloc_heap(1);
-    uword defaddr;
+    mem_6502[SYSPATH_STR] = strlen(strcat(getcwd((char *)mem_6502 + SYSPATH_BUF, 128), "/sys/"));
     mem_6502[cmdsys + 0] = 0x11; // Version 2.11
     mem_6502[cmdsys + 1] = 0x02;
     mem_6502[cmdsys + 2] = (byte)SYSPATH_STR; // syspath
@@ -1056,12 +1072,12 @@ void export_cmdsys(void)
     perr = mem_6502 + cmdsys + 16; *perr = 0;
     mem_6502[cmdsys + 17] = 0; // jitcount
     mem_6502[cmdsys + 18] = 0; // jitsize
-    mem_6502[cmdsys + 19] = 0; // refcons
+    mem_6502[cmdsys + 19] = 1; // refcons
     mem_6502[cmdsys + 20] = 0; // devcons
     defaddr = add_natv(syslookuptbl); // syslookuptbl
     mem_6502[cmdsys + 21] = (byte)defaddr;
     mem_6502[cmdsys + 22] = (byte)(defaddr >> 8);
-    mem_6502[machid] = 0x08; // Apple 1 (NA in ProDOS Tech Ref)
+    mem_6502[machid] = 0xF2; // Apple ///
     stodci("CMDSYS", dci); add_sym(dci, cmdsys);
     stodci("MACHID", dci); add_sym(dci, machid);
     export_natv("PUTC",  sysputc);

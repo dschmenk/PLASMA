@@ -265,7 +265,7 @@ test:	samplesrc/test.pla samplesrc/testlib.pla $(PLVM) $(PLASM)
 	acme --setpc 4094 -o $(TEST) samplesrc/test.a
 	./$(PLASM) -AMOW samplesrc/testlib.pla
 	acme --setpc 4094 -o $(TESTLIB) samplesrc/testlib.a
-	./$(PLVM) TEST
+	./$(PLVM) test.mod 
 
 $(ED): toolsrc/ed.pla $(PLVM02) $(PLASM) toolsrc/ed.pla
 	./$(PLASM) -AMOW toolsrc/ed.pla
