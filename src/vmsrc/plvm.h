@@ -28,17 +28,17 @@ typedef uint16_t address;
 #define PLP             (mpu->registers->p=mem_6502[++mpu->registers->s + 0x100])
 #define RTI                                                 \
     {                                                       \
-        word pc;                                            \
+        uword pc;                                           \
         PLP;                                                \
         pc  = mem_6502[++mpu->registers->s + 0x100];        \
-        pc |= mem_6502[++mpu->registers->s + 0x100] << 8;   \
+        pc |= mem_6502[++mpu->registers->s + 0x100]<<8;     \
         return pc;                                          \
     }
 #define RTS                                                 \
     {                                                       \
-        word pc;                                            \
+        uword pc;                                           \
         pc  = mem_6502[++mpu->registers->s + 0x100];        \
-        pc |= mem_6502[++mpu->registers->s + 0x100] << 8;   \
+        pc |= mem_6502[++mpu->registers->s + 0x100]<<8;     \
         return pc + 1;                                      \
     }
 /*
@@ -47,22 +47,15 @@ typedef uint16_t address;
 #define PUSH_ESTK(v)                                        \
     {                                                       \
         --mpu->registers->x;                                \
-        mem_6502[ESTKL + mpu->registers->x] = (v);          \
-        mem_6502[ESTKH + mpu->registers->x] = (v) >> 8;     \
+        mem_6502[ESTKL + mpu->registers->x] = (byte)(v);    \
+        mem_6502[ESTKH + mpu->registers->x] = (byte)(v)>>8; \
     }
 #define POP_ESTK(v)                                         \
     {                                                       \
         (v) = mem_6502[ESTKL + mpu->registers->x]           \
-            | mem_6502[ESTKH + mpu->registers->x] << 8;     \
+            | mem_6502[ESTKH + mpu->registers->x]<<8;       \
         ++mpu->registers->x;                                \
     }
-/*
- * PLVM eval stack
- */
-#define PUSH(v)         (*(--esp))=(v)
-#define POP             ((word)(*(esp++)))
-#define UPOP            ((uword)(*(esp++)))
-#define TOS             (esp[0])
 /*
  * 6502 memory map
  */
@@ -70,6 +63,8 @@ typedef uint16_t address;
 #define ESTK_SIZE       16
 #define CMDLINE_STR     0x01FF
 #define CMDLINE_BUF     0x0200
+#define SYSPATH_STR     0x0280
+#define SYSPATH_BUF     0x0281
 /*
  * Zero page VM locations matching Apple ZP
  */
@@ -89,16 +84,23 @@ typedef uint16_t address;
 #define VM_EXT_DEF          2
 #define VM_DEF              1
 #define VM_INLINE_DEF       0
-#define VM_NATV_ENTRY       0xFFFC
-#define VM_EXT_ENTRY        0xFFF8
-#define VM_INDIRECT_ENTRY   0xFFF4
-#define VM_INLINE_ENTRY     0xFFF0
+#define VM_NATV_ENTRY       0xFF0E
+#define VM_EXT_ENTRY        0xFF0C
+#define VM_INDIRECT_ENTRY   0xFF08
+#define VM_INLINE_ENTRY     0xFF04
+#define VM_IRQ_ENTRY        0xFF00
+/*
+ * Allocate external code memory
+ */
+#define code_alloc(size)    malloc(size)
+#define TRACE               1
+#define SINGLE_STEP         2
 /*
  * VM callouts
  */
 void M6502_exec(M6502 *mpu);
 typedef void (*VM_Callout)(M6502 *mpu);
-extern int show_state;
+extern int trace;
 extern byte mem_6502[];
 extern byte mem_PLVM[];
 extern byte *perr;

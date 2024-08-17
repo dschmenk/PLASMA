@@ -6,11 +6,17 @@
 #include <ctype.h>
 #include <sys/types.h>
 #include "plvm.h"
-
+/*
+ * PLVM eval stack
+ */
+#define PUSH(v) (*(--esp))=(v)
+#define POP     ((word)(*(esp++)))
+#define UPOP    ((uword)(*(esp++)))
+#define TOS     (esp[0])
 /*
  * Debug flag
  */
-int show_state = 0;
+int trace = 0;
 /*
  * VM def routines
  */
@@ -27,8 +33,6 @@ int natv_count = 0;
  * Memory for 6502 and VM
  */
 byte mem_6502[MEM6502_SIZE];
-word eval_stack[ESTK_SIZE];
-word *esp = &eval_stack[ESTK_SIZE];
 /*
  * BRK and VM entrypoint hooks
  */
@@ -36,6 +40,7 @@ int vm_irq(M6502 *mpu, uword address, byte data)
 {
     uword addr, handle;
 
+    fflush(stdout);
     if (mem_6502[mpu->registers->s + 0x101] & flagB)
     {
         //
@@ -49,10 +54,10 @@ int vm_irq(M6502 *mpu, uword address, byte data)
         //    default:
         //        fprintf(stderr, "Unkonw BRK value!\n");
         //}
-        fprintf(stderr, "BRK: $%04X\r\n", addr);
+        fprintf(stderr, "\nBRK: $%04X\r\n", address);
         exit (-1);
     }
-    fprintf(stderr, "Unkonw IRQ!\n");
+    fprintf(stderr, "\nUnkonw IRQ!\n");
     RTI;
 }
 //
@@ -134,23 +139,24 @@ OPTBL   DW CN,CN,CN,CN,CN,CN,CN,CN                                 ; 00 02 04 06
     for (val = ESTK_SIZE - 1; val >= mpu->registers->x; val--)      \
         PUSH(mem_6502[ESTKL + val] | (mem_6502[ESTKH + val] << 8))
 #define externalize()                                               \
-    mem_6502[FPL] = vm_fp;                                          \
-    mem_6502[FPH] = vm_fp >> 8;                                     \
-    mem_6502[PPL] = vm_pp;                                          \
-    mem_6502[PPH] = vm_pp >> 8;                                     \
+    mem_6502[FPL] = (byte)vm_fp;                                    \
+    mem_6502[FPH] = (byte)(vm_fp >> 8);                             \
+    mem_6502[PPL] = (byte)vm_pp;                                    \
+    mem_6502[PPH] = (byte)(vm_pp >> 8);                             \
     ea = ESTK_SIZE-1;                                               \
+    { word *vm_sp;                                                  \
     for (vm_sp = &eval_stack[ESTK_SIZE-1]; vm_sp >= esp; vm_sp--) { \
-        mem_6502[ESTKL + ea] = *vm_sp;                              \
-        mem_6502[ESTKH + ea] = *vm_sp >> 8;                         \
+        mem_6502[ESTKL + ea] = (byte)*vm_sp;                        \
+        mem_6502[ESTKH + ea] = (byte)(*vm_sp >> 8);                 \
         ea--;                                                       \
-    }                                                               \
+    }}                                                              \
     mpu->registers->x = ea + 1
 
 void vm_interp(M6502 *mpu, code *vm_ip)
 {
     int val, ea, frmsz, parmcnt;
     uword vm_fp, vm_pp;
-    word *vm_sp;
+    word eval_stack[ESTK_SIZE], *esp;
 
     internalize();
     while (1)
@@ -158,17 +164,21 @@ void vm_interp(M6502 *mpu, code *vm_ip)
         if ((esp - eval_stack) < 0 || (esp - eval_stack) > ESTK_SIZE)
         {
             printf("Eval stack over/underflow! - $%04X: $%02X [%d]\r\n", (unsigned int)(vm_ip - mem_6502), (unsigned int)*vm_ip, (int)(ESTK_SIZE - (esp - eval_stack)));
-            show_state = 1;
+            exit(-1);
         }
-        if (show_state)
+        if (trace)
         {
             char cmdline[16];
             word *dsp = &eval_stack[ESTK_SIZE - 1];
-            printf("$%04X: $%02X [ ", (unsigned int)(vm_ip - mem_6502), (unsigned int)*vm_ip);
+            if (vm_ip >= mem_6502 && vm_ip < (mem_6502 + MEM6502_SIZE))
+                printf("$%04X: $%02X [ ", (unsigned int)(vm_ip - mem_6502), (unsigned int)*vm_ip);
+            else
+                printf("0x%08X: $%02X [ ", (unsigned int)vm_ip, (unsigned int)*vm_ip);
             while (dsp >= esp)
                 printf("$%04X ", (unsigned int)((*dsp--) & 0xFFFF));
             printf("]\r\n");
-            fgets(cmdline, 15, stdin);
+            if (trace == SINGLE_STEP)
+                fgets(cmdline, 15, stdin);
         }
         switch (*vm_ip++)
         {
@@ -230,7 +240,48 @@ void vm_interp(M6502 *mpu, code *vm_ip)
                 vm_ip += 2;
                 break;
             case 0x2E: // CS: TOS = CONSTANTSTRING (IP)
-                PUSH(vm_ip - mem_6502);
+                if (vm_ip >= mem_6502 && vm_ip < (mem_6502 + MEM6502_SIZE))
+                {
+                    //
+                    // Main memory code, just push address of string
+                    //
+                    PUSH(vm_ip - mem_6502);
+                }
+                else
+                {
+                    //
+                    // Copy string to string pool
+                    //
+                    for (val = vm_pp; val < vm_fp; val++)
+                    {
+                        if (mem_6502[val] == *vm_ip)
+                        {
+                            //
+                            // Look for mathing string
+                            //
+                            for (ea = BYTE_PTR(vm_ip); ea; ea--)
+                                if (mem_6502[val + ea] != vm_ip[ea])
+                                    break;
+                            if (!ea)
+                            {
+                                //
+                                // Already in string pool
+                                //
+                                PUSH(val);
+                                break;
+                            }
+                        }
+                    }
+                    if (val >= vm_fp)
+                    {
+                        //
+                        // Not found, allocate in pool
+                        //
+                        vm_pp -= BYTE_PTR(vm_ip) + 1;
+                        memcpy(mem_6502 + vm_pp, vm_ip, BYTE_PTR(vm_ip) + 1);
+                        PUSH(vm_pp);
+                    }
+                }
                 vm_ip += BYTE_PTR(vm_ip) + 1;
                 break;
                 /*
@@ -343,34 +394,35 @@ void vm_interp(M6502 *mpu, code *vm_ip)
                 break;
             case 0x54: // CALL : TOFP = IP, IP = (IP) ; call
                 mpu->registers->pc = UWORD_PTR(vm_ip);
-                mem_6502[0x00FF] = 0xFF; // RTN instruction
-                mem_6502[mpu->registers->s-- + 0x100] = 0x00; // Address of $FF (RTN) instruction
+                mem_6502[mpu->registers->s-- + 0x100] = 0xFF; // Address of $FF (RTN) instruction
                 mem_6502[mpu->registers->s-- + 0x100] = 0xFE;
                 //mpu->flags |= M6502_SingleStep;
-                externalize();
-                if (show_state)
+                if (trace)
                     printf("CALL: $%04X\r\n", mpu->registers->pc);
+                externalize();
                 M6502_exec(mpu);
                 internalize();
                 vm_ip += 2;
                 break;
             case 0x56: // ICALL : IP = TOS ; indirect call
                 mpu->registers->pc = UPOP;
-                mem_6502[0x00FF] = 0xFF; // RTN instruction
-                mem_6502[mpu->registers->s-- + 0x100] = 0x00; // Address of $FF (RTN) instruction
+                mem_6502[mpu->registers->s-- + 0x100] = 0xFF; // Address of $FF (RTN) instruction
                 mem_6502[mpu->registers->s-- + 0x100] = 0xFE;
-                externalize();
-                if (show_state)
+                if (trace)
                     printf("ICAL: $%04X\r\n", mpu->registers->pc);
+                externalize();
                 M6502_exec(mpu);
                 internalize();
                 break;
             case 0x58: // ENTER : NEW FRAME, FOREACH PARAM LOCALVAR = TOS
                 frmsz = BYTE_PTR(vm_ip);
                 vm_ip++;
-                if (show_state)
-                    printf("< $%04X: $%04X > ", vm_fp - frmsz, vm_fp);
-                vm_fp -= frmsz;
+                if (trace)
+                    printf("<PP:$%04X  FP:$%04X FRMSZ:$%02X> ", vm_pp, vm_fp, frmsz);
+                mem_6502[--vm_pp] = (byte)(vm_fp >> 8);
+                mem_6502[--vm_pp] = (byte)vm_fp;
+                vm_fp = vm_pp - frmsz;
+                vm_pp = vm_fp;
                 parmcnt = BYTE_PTR(vm_ip);
                 vm_ip++;
                 while (parmcnt--)
@@ -378,14 +430,18 @@ void vm_interp(M6502 *mpu, code *vm_ip)
                     val = POP;
                     mem_6502[vm_fp + parmcnt * 2 + 0] = val;
                     mem_6502[vm_fp + parmcnt * 2 + 1] = val >> 8;
-                    if (show_state)
+                    if (trace)
                         printf("< $%04X: $%04X > ", vm_fp + parmcnt * 2 + 0, mem_6502[vm_fp + parmcnt * 2 + 0] | (mem_6502[vm_fp + parmcnt * 2 + 1] >> 8));
                 }
-                if (show_state)
+                if (trace)
                     printf("\n");
                 break;
             case 0x5A: // LEAVE : DEL FRAME, IP = TOFP
-                vm_fp += BYTE_PTR(vm_ip);
+                vm_pp  = vm_fp + BYTE_PTR(vm_ip);
+                vm_fp  = mem_6502[vm_pp++];
+                vm_fp |= mem_6502[vm_pp++] << 8;
+                if (trace)
+                    printf("<PP:$%04X  FP:$%04X>\n", vm_pp, vm_fp);
             case 0x5C: // RET : IP = TOFP
                 externalize();
                 return;

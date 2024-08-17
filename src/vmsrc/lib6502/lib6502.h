@@ -28,7 +28,7 @@ enum {
   flagD= (1<<3),        /* decimal mode  */
   flagI= (1<<2),        /* irq disable   */
   flagZ= (1<<1),        /* zero          */
-  flagC= (1<<0)                /* carry         */
+  flagC= (1<<0)         /* carry         */
 };
 
 struct _M6502_Registers
