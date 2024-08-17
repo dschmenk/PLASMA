@@ -50,7 +50,7 @@ typedef uint16_t address;
         mem_6502[ESTKL + mpu->registers->x] = (byte)(v);    \
         mem_6502[ESTKH + mpu->registers->x] = (byte)(v)>>8; \
     }
-#define POP_ESTK(v)                                         \
+#define PULL_ESTK(v)                                        \
     {                                                       \
         (v) = mem_6502[ESTKL + mpu->registers->x]           \
             | mem_6502[ESTKH + mpu->registers->x]<<8;       \
@@ -84,6 +84,7 @@ typedef uint16_t address;
 #define VM_EXT_DEF          2
 #define VM_DEF              1
 #define VM_INLINE_DEF       0
+#define VM_SYSCALL          0xFF10
 #define VM_NATV_ENTRY       0xFF0E
 #define VM_EXT_ENTRY        0xFF0C
 #define VM_INDIRECT_ENTRY   0xFF08

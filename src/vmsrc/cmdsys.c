@@ -770,6 +770,13 @@ int load_mod(M6502 *mpu, byte *mod)
 /*
  * Native CMDSYS routines
  */
+int vm_syscall(M6502 *mpu, uword address, byte data)
+{
+    return address + 1;
+}
+void syscall6502(M6502 *mpu)
+{
+}
 void sysexecmod(M6502 *mpu)
 {
 }
@@ -794,7 +801,7 @@ void sysputc(M6502 *mpu)
     //
     // Pop char and putchar it
     //
-    POP_ESTK(c);
+    PULL_ESTK(c);
     putchar(c);
 }
 void sysputs(M6502 *mpu)
@@ -806,7 +813,7 @@ void sysputs(M6502 *mpu)
     //
     // Pop string pointer off stack, copy into C string, and puts it
     //
-    POP_ESTK(strptr);
+    PULL_ESTK(strptr);
     for (i = 1; i <= mem_6502[strptr]; i++)
     {
         ch = mem_6502[strptr + i] & 0x7F;
@@ -831,7 +838,7 @@ void sysputi(M6502 *mpu)
     //
     // Pop int off stack, copy into C string, and print it
     //
-    POP_ESTK(print);
+    PULL_ESTK(print);
     printf("%d", print);
 }
 void sysputb(M6502 *mpu)
@@ -840,7 +847,7 @@ void sysputb(M6502 *mpu)
     //
     // Pop byte off stack, copy into C string, and print it
     //
-    POP_ESTK(prbyte);
+    PULL_ESTK(prbyte);
     printf("%02X", prbyte & 0xFF);
 }
 void sysputh(M6502 *mpu)
@@ -849,7 +856,7 @@ void sysputh(M6502 *mpu)
     //
     // Pop int off stack, copy into C string, and print it
     //
-    POP_ESTK(prhex);
+    PULL_ESTK(prhex);
     printf("%04X", prhex);
 }
 void sysgetc(M6502 *mpu)
@@ -877,13 +884,143 @@ void sysgets(M6502 *mpu)
     memcpy(mem_6502 + CMDLINE_BUF, instr, len);
     PUSH_ESTK(CMDLINE_STR);
 }
+void systoupper(M6502 *mpu)
+{
+    char c;
+    PULL_ESTK(c);
+    c = toupper(c);
+    PUSH_ESTK(c);
+}
+void sysstrcpy(M6502 *mpu)
+{
+    uword src, dst;
+    PULL_ESTK(dst);
+    PULL_ESTK(src);
+    memcpy(mem_6502 + dst, mem_6502 + src, mem_6502[src]);
+    PUSH_ESTK(dst);
+}
+void sysstrcat(M6502 *mpu)
+{
+    uword src, dst;
+    PULL_ESTK(dst);
+    PULL_ESTK(src);
+    memcpy(mem_6502 + dst + mem_6502[dst] +  1, mem_6502 + src + 1, mem_6502[src] - 1);
+    mem_6502[dst] += mem_6502[src];
+    PUSH_ESTK(dst);
+}
+void sysmemset(M6502 *mpu)
+{
+    uword dst, val, size;
+    PULL_ESTK(dst);
+    PULL_ESTK(val);
+    PULL_ESTK(size);
+    while (size > 1)
+    {
+        mem_6502[dst++] = (byte)val;
+        mem_6502[dst++] = (byte)(val >> 8);
+        size -= 2;
+    }
+    if (size)
+        mem_6502[dst] = (byte)val;
+}
+void sysmemcpy(M6502 *mpu)
+{
+    uword dst, src, size;
+    PULL_ESTK(dst);
+    PULL_ESTK(src);
+    PULL_ESTK(size);
+    memcpy(mem_6502 + dst, mem_6502 + src, size);
+}
+void sysheapmark(M6502 *mpu)
+{
+    PUSH_ESTK(heap);
+}
+void sysheapallocalign(M6502 *mpu)
+{
+    uword size, pow2, align, addr, freeaddr;
+
+    PULL_ESTK(size);
+    PULL_ESTK(pow2);
+    PULL_ESTK(freeaddr);
+    align = (1 << pow2) - 1;
+    mem_6502[freeaddr]     = (byte)heap;
+    mem_6502[freeaddr + 1] = (byte)(heap >> 8);
+    addr  = (heap + align) & ~align;
+    heap += size;
+    PUSH_ESTK(addr);
+}
+void sysheapalloc(M6502 *mpu)
+{
+    uword size, addr;
+
+    PULL_ESTK(size);
+    addr = alloc_heap(size);
+    PUSH_ESTK(addr);
+}
+void sysheaprelease(M6502 *mpu)
+{
+    PULL_ESTK(heap);
+}
+void sysheapavail(M6502 *mpu)
+{
+    uword avail = avail_heap();
+    PUSH_ESTK(avail);
+}
+void sysisugt(M6502 *mpu)
+{
+    uword a, b;
+    word result;
+
+    PULL_ESTK(a);
+    PULL_ESTK(b);
+    result = a > b ? -1 : 0;
+    PUSH_ESTK(result);
+}
+void sysisult(M6502 *mpu)
+{
+    uword a, b;
+    word result;
+
+    PULL_ESTK(a);
+    PULL_ESTK(b);
+    result = a < b ? -1 : 0;
+    PUSH_ESTK(result);
+}
+void sysisuge(M6502 *mpu)
+{
+    uword a, b;
+    word result;
+
+    PULL_ESTK(a);
+    PULL_ESTK(b);
+    result = a >= b ? -1 : 0;
+    PUSH_ESTK(result);
+}
+void sysisule(M6502 *mpu)
+{
+    uword a, b;
+    word result;
+
+    PULL_ESTK(a);
+    PULL_ESTK(b);
+    result = a <= b ? -1 : 0;
+    PUSH_ESTK(result);
+}
+void syssext(M6502 *mpu)
+{
+    uword a;
+
+    PULL_ESTK(a);
+    a = a & 0x0080 ? (a | 0xFF00) : (a & 0x00FF);
+    PUSH_ESTK(a);
+}
 void sysdivmod(M6502 *mpu)
 {
     word prhex;
     //
     // Pop int off stack, copy into C string, and print it
     //
-    POP_ESTK(prhex);
+    PULL_ESTK(prhex);
     printf("%04X", prhex);
 }
 /*
@@ -935,27 +1072,23 @@ void export_cmdsys(void)
     export_natv("PUTH",  sysputh);
     export_natv("GETC",  sysgetc);
     export_natv("GETS",  sysgets);
-#if 0
-char sysstr[]     = "SYSCALL";
-char callstr[]    = "CALL";
-char getcstr[]    = "GETC";
-char getsstr[]    = "GETS";
-char toupstr[]    = "TOUPPER";
-char strcpystr[]  = "STRCPY";
-char strcatstr[]  = "STRCAT";
-char hpmarkstr[]  = "HEAPMARK";
-char hpalignstr[] = "HEAPALLOCALIGN";
-char hpallocstr[] = "HEAPALLOC";
-char hprelstr[]   = "HEAPRELEASE";
-char hpavlstr[]   = "HEAPAVAIL";
-char memsetstr[]  = "MEMSET";
-char memcpystr[]  = "MEMCPY";
-char uisgtstr[]   = "ISUGT";
-char uisgestr[]   = "ISUGE";
-char uisltstr[]   = "ISULT";
-char uislestr[]   = "ISULE";
-char sextstr[]    = "SEXT";
-#endif
+    stodci("SYSCALL", dci); add_sym(dci, VM_SYSCALL);
+    export_natv("CALL",  syscall6502);
+    export_natv("TOUPPER",  systoupper);
+    export_natv("STRCPY",  sysstrcpy);
+    export_natv("STRCAT",  sysstrcat);
+    export_natv("MEMSET",  sysmemset);
+    export_natv("MEMCPY",  sysmemcpy);
+    export_natv("HEAPMARK",  sysheapmark);
+    export_natv("HEAPALLOCALIGN",  sysheapallocalign);
+    export_natv("HEAPALLOC",  sysheapalloc);
+    export_natv("HEAPRELEASE",  sysheaprelease);
+    export_natv("HEAPAVAIL",  sysheapavail);
+    export_natv("ISUGT",  sysisugt);
+    export_natv("ISUGE",  sysisuge);
+    export_natv("ISULT",  sysisult);
+    export_natv("ISULE",  sysisule);
+    export_natv("SEXT",  syssext);
     //
     // Hack DIVMOD into system
     //
