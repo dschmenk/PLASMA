@@ -491,8 +491,8 @@ int load_mod(M6502 *mpu, byte *mod)
     char filename[128], string[17];
 
     dcitos(mod, filename);
-    printf("Load module %s\n", filename);
-    if (strlen(filename) > 4 && (filename[strlen(filename) - 4] != '.'))
+    if (trace) printf("Load module %s\n", filename);
+    if (strlen(filename) < 4 || (filename[strlen(filename) - 4] != '.'))
         strcat(filename, ".mod");
     fd = open(filename, O_RDONLY, 0);
     if (fd <= 0 && filename[0] != '/' && strlen(filename) < 17)
@@ -770,36 +770,7 @@ int load_mod(M6502 *mpu, byte *mod)
 /*
  * Native CMDSYS routines
  */
-int vm_syscall(M6502 *mpu, uword address, byte data)
-{
-    return address + 1;
-}
-void syscall6502(M6502 *mpu)
-{
-    uword params;
-    byte  cmd, status;
-
-    PULL_ESTK(params);
-    PULL_ESTK(cmd);
-    status = 0;
-    switch (cmd)
-    {
-    }
-    PUSH_ESTK(status);
-}
 void sysexecmod(M6502 *mpu)
-{
-}
-void sysopen(M6502 *mpu)
-{
-}
-void sysclose(M6502 *mpu)
-{
-}
-void sysread(M6502 *mpu)
-{
-}
-void syswrite(M6502 *mpu)
 {
 }
 void syslookuptbl(M6502 *mpu)

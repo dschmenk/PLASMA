@@ -113,3 +113,13 @@ extern int vm_iidef(M6502 *mpu, uword address, byte data);
 extern int vm_exdef(M6502 *mpu, uword address, byte data);
 extern int vm_natvdef(M6502 *mpu, uword address, byte data);
 extern void vm_interp(M6502 *mpu, code *vm_ip);
+/*
+ * System I/O routines
+ */
+extern void sysio_init(void);
+extern void syscall6502(M6502 *mpu);
+extern void sysopen(M6502 *mpu);
+extern void sysclose(M6502 *mpu);
+extern void sysread(M6502 *mpu);
+extern void syswrite(M6502 *mpu);
+
