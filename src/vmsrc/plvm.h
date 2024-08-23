@@ -22,10 +22,10 @@ typedef uint16_t address;
 /*
  * 6502 H/W stack
  */
-#define PHA             (mem_6502[mpu->registers->s-- + 0x100]=mpu->registers->a)
-#define PLA             (mpu->registers->a=mem_6502[++mpu->registers->s + 0x100])
-#define PHP             (mem_6502[mpu->registers->s-- + 0x100]=mpu->registers->p)
-#define PLP             (mpu->registers->p=mem_6502[++mpu->registers->s + 0x100])
+#define PHA             (mem_6502[0x0100 + mpu->registers->s--]=mpu->registers->a)
+#define PLA             (mpu->registers->a=mem_6502[++mpu->registers->s + 0x0100])
+#define PHP             (mem_6502[0x0100 + mpu->registers->s--]=mpu->registers->p)
+#define PLP             (mpu->registers->p=mem_6502[++mpu->registers->s + 0x0100])
 #define RTI                                                 \
     {                                                       \
         uword pc;                                           \
@@ -38,7 +38,9 @@ typedef uint16_t address;
     {                                                       \
         uword pc;                                           \
         pc  = mem_6502[++mpu->registers->s + 0x100];        \
+        if (!mpu->registers->s) pfail("SP underflow");      \
         pc |= mem_6502[++mpu->registers->s + 0x100]<<8;     \
+        if (!mpu->registers->s) pfail("SP underflow");      \
         return pc + 1;                                      \
     }
 /*
@@ -47,13 +49,13 @@ typedef uint16_t address;
 #define PUSH_ESTK(v)                                        \
     {                                                       \
         --mpu->registers->x;                                \
-        mem_6502[ESTKL + mpu->registers->x] = (byte)(v);    \
-        mem_6502[ESTKH + mpu->registers->x] = (byte)(v)>>8; \
+        mem_6502[ESTKL+mpu->registers->x] = (byte)(v);      \
+        mem_6502[ESTKH+mpu->registers->x] = (byte)((v)>>8); \
     }
 #define PULL_ESTK(v)                                        \
     {                                                       \
-        (v) = mem_6502[ESTKL + mpu->registers->x]           \
-            | mem_6502[ESTKH + mpu->registers->x]<<8;       \
+        (v) = mem_6502[ESTKL+mpu->registers->x]             \
+            | mem_6502[ESTKH+mpu->registers->x]<<8;         \
         ++mpu->registers->x;                                \
     }
 /*
@@ -97,14 +99,19 @@ typedef uint16_t address;
 #define TRACE               1
 #define SINGLE_STEP         2
 /*
+ * Fatal error
+ */
+extern void pfail(const char *msg);
+/*
  * VM callouts
  */
-void M6502_exec(M6502 *mpu);
+extern void M6502_exec(M6502 *mpu);
 typedef void (*VM_Callout)(M6502 *mpu);
 extern int trace;
 extern byte mem_6502[];
 extern byte mem_PLVM[];
 extern byte *perr;
+extern uword cmdsys;
 extern int vm_addxdef(code * defaddr);
 extern int vm_addnatv(VM_Callout);
 extern int vm_irq(M6502 *mpu, uword address, byte data);
@@ -114,10 +121,20 @@ extern int vm_exdef(M6502 *mpu, uword address, byte data);
 extern int vm_natvdef(M6502 *mpu, uword address, byte data);
 extern void vm_interp(M6502 *mpu, code *vm_ip);
 /*
+ * Heap routines
+ */
+uword alloc_heap(uword size);
+/*
+ * Symbol export routines
+ */
+extern int stodci(char *str, byte *dci);
+extern uword add_sym(byte *dci, uword addr);
+extern uword add_natv( VM_Callout natvfn);
+extern uword export_natv(char *symstr, VM_Callout natvfn);
+/*
  * System I/O routines
  */
-extern void sysio_init(void);
-extern void syscall6502(M6502 *mpu);
+extern void export_sysio(void);
 extern void sysopen(M6502 *mpu);
 extern void sysclose(M6502 *mpu);
 extern void sysread(M6502 *mpu);

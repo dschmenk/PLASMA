@@ -31,6 +31,7 @@ byte *lastsym  = symtbl;
 byte *perr;
 uword keybdbuf = 0x0200;
 uword heap     = 0x0300;
+uword cmdsys;
 typedef struct {
     uword modofst;
     uword defaddr;
@@ -373,7 +374,7 @@ uword lookup_sym(byte *dci)
     if (trace) printf("\nSymbol %s not found in symbol table\n", str);
     return 0;
 }
-int add_sym(byte *dci, uword addr)
+uword add_sym(byte *dci, uword addr)
 {
     while (*dci & 0x80)
         *lastsym++ = *dci++;
@@ -382,7 +383,7 @@ int add_sym(byte *dci, uword addr)
     lastsym += 2;
     if (lastsym >= &symtbl[SYMTBL_SIZE])
         pfail("Symbol table overflow");
-    return 0;
+    return addr;
 }
 /*
  * DEF routines - Create entryoint for 6502 that calls out to PLVM or native code
@@ -405,28 +406,28 @@ byte *add_def(byte type, uword haddr, byte *lastdef)
     switch (type)
     {
         case VM_NATV_DEF:
-            *lastdef++ = VM_NATV_ENTRY & 0xFF;
-            *lastdef++ = VM_NATV_ENTRY >> 8;
+            *lastdef++ = (byte)VM_NATV_ENTRY;
+            *lastdef++ = (byte)(VM_NATV_ENTRY >> 8);
             break;
         case VM_EXT_DEF:
-            *lastdef++ = VM_EXT_ENTRY & 0xFF;
-            *lastdef++ = VM_EXT_ENTRY >> 8;
+            *lastdef++ = (byte)VM_EXT_ENTRY;
+            *lastdef++ = (byte)(VM_EXT_ENTRY >> 8);
             break;
         case VM_DEF:
-            *lastdef++ = VM_INDIRECT_ENTRY & 0xFF;
-            *lastdef++ = VM_INDIRECT_ENTRY >> 8;
+            *lastdef++ = (byte)VM_INDIRECT_ENTRY;
+            *lastdef++ = (byte)(VM_INDIRECT_ENTRY >> 8);
             break;
         case VM_INLINE_DEF: // Never happen
-            *lastdef++ = VM_INLINE_ENTRY & 0xFF;
-            *lastdef++ = VM_INLINE_ENTRY >> 8;
+            *lastdef++ = (byte)VM_INLINE_ENTRY;
+            *lastdef++ = (byte)(VM_INLINE_ENTRY >> 8);
         default:
             pfail("Add unknown DEF type");
     }
     //
     // Follow with memory handle
     //
-    *lastdef++ = haddr;
-    *lastdef++ = haddr >> 8;
+    *lastdef++ = (byte)haddr;
+    *lastdef++ = (byte)(haddr >> 8);
     return lastdef;
 }
 void xlat_def(uword addr, uword ofst, defxlat_t *defxtbl)
@@ -450,11 +451,11 @@ uword add_natv( VM_Callout natvfn)
     add_def(VM_NATV_DEF, handle, mem_6502 + defaddr);
     return defaddr;
 }
-void export_natv(char *symstr, VM_Callout natvfn)
+uword export_natv(char *symstr, VM_Callout natvfn)
 {
     byte dci[16];
     stodci(symstr, dci);
-    add_sym(dci, add_natv(natvfn));
+    return add_sym(dci, add_natv(natvfn));
 }
 /*
  * Relocation routines.
@@ -761,8 +762,7 @@ int load_mod(M6502 *mpu, byte *mod)
         vm_interp(mpu, extcode + init + modofst - bytecode);
         //if (!(sysflags & SYSFLAG_INITKEEP))
         //    release_heap(init + modofst); // Free up init code
-        init  = mem_6502[++mpu->registers->s + 0x100];
-        init |= mem_6502[++mpu->registers->s + 0x100] << 8;
+        PULL_ESTK(init);
         return init;
     }
     return 0;
@@ -772,6 +772,7 @@ int load_mod(M6502 *mpu, byte *mod)
  */
 void sysexecmod(M6502 *mpu)
 {
+    fprintf(stderr, "SYSEXECMOD unimplemented!\n");
 }
 void syslookuptbl(M6502 *mpu)
 {
@@ -780,95 +781,21 @@ void syslookuptbl(M6502 *mpu)
     PULL_ESTK(sym);
     addr = lookup_sym(mem_6502 + sym);
     PUSH_ESTK(addr);
+    if (trace) printf("LOOKUPSYM\n");
 }
-void sysputc(M6502 *mpu)
+void syscall6502(M6502 *mpu)
 {
-    char c;
-    //
-    // Pop char and putchar it
-    //
-    PULL_ESTK(c);
-    putchar(c);
-}
-void sysputs(M6502 *mpu)
-{
-    uword strptr;
-    int i;
-    char ch;
+    uword params;
+    byte  cmd, status;
 
-    //
-    // Pop string pointer off stack, copy into C string, and puts it
-    //
-    PULL_ESTK(strptr);
-    for (i = 1; i <= mem_6502[strptr]; i++)
+    PULL_ESTK(params);
+    PULL_ESTK(cmd);
+    status = 0;
+    switch (cmd)
     {
-        ch = mem_6502[strptr + i] & 0x7F;
-        switch (ch)
-        {
-            case '\r':
-            case '\n':
-                putchar('\n');
-                break;
-            default:
-                putchar(ch);
-        }
     }
-}
-void sysputln(M6502 *mpu)
-{
-    putchar('\n');
-}
-void sysputi(M6502 *mpu)
-{
-    word print;
-    //
-    // Pop int off stack, copy into C string, and print it
-    //
-    PULL_ESTK(print);
-    printf("%d", print);
-}
-void sysputb(M6502 *mpu)
-{
-    word prbyte;
-    //
-    // Pop byte off stack, copy into C string, and print it
-    //
-    PULL_ESTK(prbyte);
-    printf("%02X", prbyte & 0xFF);
-}
-void sysputh(M6502 *mpu)
-{
-    word prhex;
-    //
-    // Pop int off stack, copy into C string, and print it
-    //
-    PULL_ESTK(prhex);
-    printf("%04X", prhex);
-}
-void sysgetc(M6502 *mpu)
-{
-    char c;
-    //
-    // Push getchar()
-    //
-    c = getchar();
-    PUSH_ESTK(c);
-}
-void sysgets(M6502 *mpu)
-{
-    uword strptr;
-    int len;
-    char instr[256];
-
-    //
-    // Push gets(), limiting it to 128 chars
-    //
-    len = strlen(gets(instr));
-    if (len > 128)
-        len = 128;
-    mem_6502[CMDLINE_STR] = len;
-    memcpy(mem_6502 + CMDLINE_BUF, instr, len);
-    PUSH_ESTK(CMDLINE_STR);
+    fprintf(stderr, "SYSCALL6502 unimplemented!\n");
+    PUSH_ESTK(status);
 }
 void systoupper(M6502 *mpu)
 {
@@ -876,30 +803,33 @@ void systoupper(M6502 *mpu)
     PULL_ESTK(c);
     c = toupper(c);
     PUSH_ESTK(c);
+    if (trace) printf("TOUPPER\n");
 }
 void sysstrcpy(M6502 *mpu)
 {
     uword src, dst;
-    PULL_ESTK(dst);
     PULL_ESTK(src);
-    memcpy(mem_6502 + dst, mem_6502 + src, mem_6502[src]);
+    PULL_ESTK(dst);
+    memcpy(mem_6502 + dst, mem_6502 + src, mem_6502[src] + 1);
     PUSH_ESTK(dst);
+    if (trace) printf("STRCPY\n");
 }
 void sysstrcat(M6502 *mpu)
 {
     uword src, dst;
-    PULL_ESTK(dst);
     PULL_ESTK(src);
+    PULL_ESTK(dst);
     memcpy(mem_6502 + dst + mem_6502[dst] +  1, mem_6502 + src + 1, mem_6502[src] - 1);
     mem_6502[dst] += mem_6502[src];
     PUSH_ESTK(dst);
+    if (trace) printf("STRCAT\n");
 }
 void sysmemset(M6502 *mpu)
 {
     uword dst, val, size;
-    PULL_ESTK(dst);
-    PULL_ESTK(val);
     PULL_ESTK(size);
+    PULL_ESTK(val);
+    PULL_ESTK(dst);
     while (size > 1)
     {
         mem_6502[dst++] = (byte)val;
@@ -908,32 +838,36 @@ void sysmemset(M6502 *mpu)
     }
     if (size)
         mem_6502[dst] = (byte)val;
+    if (trace) printf("MEMSET\n");
 }
 void sysmemcpy(M6502 *mpu)
 {
     uword dst, src, size;
-    PULL_ESTK(dst);
-    PULL_ESTK(src);
     PULL_ESTK(size);
+    PULL_ESTK(src);
+    PULL_ESTK(dst);
     memcpy(mem_6502 + dst, mem_6502 + src, size);
+    if (trace) printf("MEMCPY\n");
 }
 void sysheapmark(M6502 *mpu)
 {
     PUSH_ESTK(heap);
+    if (trace) printf("HEAPMARK\n");
 }
 void sysheapallocalign(M6502 *mpu)
 {
     uword size, pow2, align, addr, freeaddr;
 
-    PULL_ESTK(size);
-    PULL_ESTK(pow2);
     PULL_ESTK(freeaddr);
+    PULL_ESTK(pow2);
+    PULL_ESTK(size);
     align = (1 << pow2) - 1;
     mem_6502[freeaddr]     = (byte)heap;
     mem_6502[freeaddr + 1] = (byte)(heap >> 8);
     addr  = (heap + align) & ~align;
     heap += size;
     PUSH_ESTK(addr);
+    if (trace) printf("HEAPALLOCALIGN\n");
 }
 void sysheapalloc(M6502 *mpu)
 {
@@ -942,55 +876,65 @@ void sysheapalloc(M6502 *mpu)
     PULL_ESTK(size);
     addr = alloc_heap(size);
     PUSH_ESTK(addr);
+    if (trace) printf("HEAPALLOC\n");
 }
 void sysheaprelease(M6502 *mpu)
 {
+    uword avail, vm_fp = UWORD_PTR(&mem_6502[FP]);
     PULL_ESTK(heap);
+    avail = vm_fp - heap;
+    PUSH_ESTK(avail);
+    if (trace) printf("HEAPRELEASE\n");
 }
 void sysheapavail(M6502 *mpu)
 {
     uword avail = avail_heap();
     PUSH_ESTK(avail);
+    if (trace) printf("HEAPAVAIL\n");
 }
 void sysisugt(M6502 *mpu)
 {
     uword a, b;
     word result;
 
-    PULL_ESTK(a);
     PULL_ESTK(b);
+    PULL_ESTK(a);
     result = a > b ? -1 : 0;
     PUSH_ESTK(result);
+    if (trace) printf("ISUGT\n");
 }
 void sysisult(M6502 *mpu)
 {
     uword a, b;
     word result;
 
-    PULL_ESTK(a);
     PULL_ESTK(b);
+    PULL_ESTK(a);
     result = a < b ? -1 : 0;
     PUSH_ESTK(result);
+    if (trace) printf("ISULT\n");
 }
 void sysisuge(M6502 *mpu)
 {
     uword a, b;
     word result;
 
-    PULL_ESTK(a);
     PULL_ESTK(b);
+    PULL_ESTK(a);
     result = a >= b ? -1 : 0;
     PUSH_ESTK(result);
+    if (trace) printf("ISUGE\n");
 }
 void sysisule(M6502 *mpu)
 {
     uword a, b;
     word result;
 
-    PULL_ESTK(a);
     PULL_ESTK(b);
+    PULL_ESTK(a);
     result = a <= b ? -1 : 0;
     PUSH_ESTK(result);
+    if (trace) printf("ISULE\n");
 }
 void syssext(M6502 *mpu)
 {
@@ -1000,15 +944,6 @@ void syssext(M6502 *mpu)
     a = a & 0x0080 ? (a | 0xFF00) : (a & 0x00FF);
     PUSH_ESTK(a);
 }
-void sysdivmod(M6502 *mpu)
-{
-    word prhex;
-    //
-    // Pop int off stack, copy into C string, and print it
-    //
-    PULL_ESTK(prhex);
-    printf("%04X", prhex);
-}
 /*
  * CMDSYS exports
  */
@@ -1016,8 +951,9 @@ void export_cmdsys(void)
 {
     byte dci[16];
     uword defaddr;
-    uword cmdsys = alloc_heap(23);
     uword machid = alloc_heap(1);
+    cmdsys = alloc_heap(23);
+    stodci("CMDSYS", dci); add_sym(dci, cmdsys);
     mem_6502[SYSPATH_STR] = strlen(strcat(getcwd((char *)mem_6502 + SYSPATH_BUF, 128), "/sys/"));
     mem_6502[cmdsys + 0] = 0x11; // Version 2.11
     mem_6502[cmdsys + 1] = 0x02;
@@ -1028,18 +964,6 @@ void export_cmdsys(void)
     defaddr = add_natv(sysexecmod); // sysexecmod
     mem_6502[cmdsys + 6] = (byte)defaddr;
     mem_6502[cmdsys + 7] = (byte)(defaddr >> 8);
-    defaddr = add_natv(sysopen); // sysopen
-    mem_6502[cmdsys + 8] = (byte)defaddr;
-    mem_6502[cmdsys + 9] = (byte)(defaddr >> 8);
-    defaddr = add_natv(sysclose); // sysclose
-    mem_6502[cmdsys + 10] = (byte)defaddr;
-    mem_6502[cmdsys + 11] = (byte)(defaddr >> 8);
-    defaddr = add_natv(sysread); // sysread
-    mem_6502[cmdsys + 12] = (byte)defaddr;
-    mem_6502[cmdsys + 13] = (byte)(defaddr >> 8);
-    defaddr = add_natv(syswrite); // syswrite
-    mem_6502[cmdsys + 14] = (byte)defaddr;
-    mem_6502[cmdsys + 15] = (byte)(defaddr >> 8);
     perr = mem_6502 + cmdsys + 16; *perr = 0;
     mem_6502[cmdsys + 17] = 0; // jitcount
     mem_6502[cmdsys + 18] = 0; // jitsize
@@ -1048,18 +972,6 @@ void export_cmdsys(void)
     defaddr = add_natv(syslookuptbl); // syslookuptbl
     mem_6502[cmdsys + 21] = (byte)defaddr;
     mem_6502[cmdsys + 22] = (byte)(defaddr >> 8);
-    mem_6502[machid] = 0xF2; // Apple ///
-    stodci("CMDSYS", dci); add_sym(dci, cmdsys);
-    stodci("MACHID", dci); add_sym(dci, machid);
-    export_natv("PUTC",  sysputc);
-    export_natv("PUTS",  sysputs);
-    export_natv("PUTLN", sysputln);
-    export_natv("PUTI",  sysputi);
-    export_natv("PUTB",  sysputb);
-    export_natv("PUTH",  sysputh);
-    export_natv("GETC",  sysgetc);
-    export_natv("GETS",  sysgets);
-    stodci("SYSCALL", dci); add_sym(dci, VM_SYSCALL);
     export_natv("CALL",  syscall6502);
     export_natv("TOUPPER",  systoupper);
     export_natv("STRCPY",  sysstrcpy);
@@ -1085,6 +997,22 @@ void export_cmdsys(void)
     mem_6502[heap++] = (byte)(VM_INLINE_ENTRY >> 8);
     mem_6502[heap++] = 0x36; // DIVMOD
     mem_6502[heap++] = 0x5C; // RET
+    //
+    // Hack SYSCALL into system (required for PLFORTH)
+    //
+    stodci("SYSCALL", dci); add_sym(dci, heap);
+    mem_6502[heap++] = 0xA5;  // LDA ZP,X
+    mem_6502[heap++] = ESTKL;
+    mem_6502[heap++] = 0xA5;  // LDY ZP,X
+    mem_6502[heap++] = ESTKH;
+    mem_6502[heap++] = 0x20; // JSR
+    mem_6502[heap++] = (byte)VM_SYSCALL;
+    mem_6502[heap++] = (byte)(VM_SYSCALL >> 8);
+    //
+    // Fake MACHID
+    //
+    mem_6502[machid] = 0x08; // Apple 1 (NA in ProDOS Tech Ref)
+    stodci("MACHID", dci); add_sym(dci, machid);
 }
 int main(int argc, char **argv)
 {
@@ -1099,7 +1027,6 @@ int main(int argc, char **argv)
     M6502 *mpu = M6502_new(0, mem_6502, 0);
     M6502_reset(mpu);
     M6502_setVector(mpu, IRQ, VM_IRQ_ENTRY); // Dummy address to BRK/IRQ on
-    mpu->registers->x = ESTK_SIZE;
     //
     // Parse command line options
     //
@@ -1146,14 +1073,19 @@ int main(int argc, char **argv)
         //
         // 64K - 256 RAM
         //
-        mem_6502[FPL]    = 0x00; // Frame pointer = $FF00
-        mem_6502[FPH]    = 0xFF;
-        mem_6502[PPL]    = 0x00; // Pool pointer = $FF00
-        mem_6502[PPH]    = 0xFF;
+        mem_6502[FPL]     = 0x00; // Frame pointer = $FF00
+        mem_6502[FPH]     = 0xFF;
+        mem_6502[PPL]     = 0x00; // Pool pointer = $FF00
+        mem_6502[PPH]     = 0xFF;
+        mem_6502[0x01FE]  = 0xFF; // Address of $FF (RTN) instruction
+        mem_6502[0x01FD]  = 0xFE;
+        mpu->registers->s = 0xFC;
+        mpu->registers->x = ESTK_SIZE;
         //
         // Load module from command line - PLVM version
         //
         export_cmdsys();
+        export_sysio();
         stodci(modfile, dci);
         if (trace) dump_sym();
         load_mod(mpu, dci);

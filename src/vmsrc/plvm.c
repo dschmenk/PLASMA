@@ -41,14 +41,16 @@ int vm_irq(M6502 *mpu, uword address, byte data)
     uword addr, handle;
 
     fflush(stdout);
-    if (mem_6502[mpu->registers->s + 0x101] & flagB)
+    if (mem_6502[mpu->registers->s + 0x0101] & flagB)
     {
         //
         // Handle BRK instructions
         //
         PLP; // restore status reg
-        addr  = mem_6502[++mpu->registers->s + 0x100];
-        addr |= mem_6502[++mpu->registers->s + 0x100] << 8;
+        addr  = mem_6502[++mpu->registers->s + 0x0100];
+        if (!mpu->registers->s) pfail("SP underflow");
+        addr |= mem_6502[++mpu->registers->s + 0x0100] << 8;
+        if (!mpu->registers->s) pfail("SP underflow");
         //switch (mem_6502[addr]) // BRK type
         //{
         //    default:
@@ -67,8 +69,10 @@ int vm_indef(M6502 *mpu, uword address, byte data)
 {
     uword addr;
 
-    addr  = mem_6502[++mpu->registers->s + 0x100];
-    addr |= mem_6502[++mpu->registers->s + 0x100] << 8;
+    addr  = mem_6502[++mpu->registers->s + 0x0100];
+    if (!mpu->registers->s) pfail("SP underflow");
+    addr |= mem_6502[++mpu->registers->s + 0x0100] << 8;
+    if (!mpu->registers->s) pfail("SP underflow");
     vm_interp(mpu, &mem_6502[addr + 1]);
     RTS;
 }
@@ -76,8 +80,10 @@ int vm_iidef(M6502 *mpu, uword address, byte data)
 {
     uword addr;
 
-    addr  = mem_6502[++mpu->registers->s + 0x100];
-    addr |= mem_6502[++mpu->registers->s + 0x100] << 8;
+    addr  = mem_6502[++mpu->registers->s + 0x0100];
+    if (!mpu->registers->s) pfail("SP underflow");
+    addr |= mem_6502[++mpu->registers->s + 0x0100] << 8;
+    if (!mpu->registers->s) pfail("SP underflow");
     vm_interp(mpu, mem_6502 + UWORD_PTR(&mem_6502[addr + 1]));
     RTS;
 }
@@ -88,8 +94,10 @@ int vm_exdef(M6502 *mpu, uword address, byte data)
 {
     uword addr;
 
-    addr  = mem_6502[++mpu->registers->s + 0x100];
-    addr |= mem_6502[++mpu->registers->s + 0x100] << 8;
+    addr  = mem_6502[++mpu->registers->s + 0x0100];
+    if (!mpu->registers->s) pfail("SP underflow");
+    addr |= mem_6502[++mpu->registers->s + 0x0100] << 8;
+    if (!mpu->registers->s) pfail("SP underflow");
     vm_interp(mpu, vm_def[UWORD_PTR(&mem_6502[addr + 1])]);
     RTS;
 }
@@ -100,8 +108,10 @@ int vm_natvdef(M6502 *mpu, uword address, byte data)
 {
     uword addr;
 
-    addr  = mem_6502[++mpu->registers->s + 0x100];
-    addr |= mem_6502[++mpu->registers->s + 0x100] << 8;
+    addr  = mem_6502[++mpu->registers->s + 0x0100];
+    if (!mpu->registers->s) pfail("SP underflow");
+    addr |= mem_6502[++mpu->registers->s + 0x0100] << 8;
+    if (!mpu->registers->s) pfail("SP underflow");
     vm_natv[mem_6502[addr + 1]](mpu);
     RTS;
 }
@@ -394,8 +404,8 @@ void vm_interp(M6502 *mpu, code *vm_ip)
                 break;
             case 0x54: // CALL : TOFP = IP, IP = (IP) ; call
                 mpu->registers->pc = UWORD_PTR(vm_ip);
-                mem_6502[mpu->registers->s-- + 0x100] = 0xFF; // Address of $FF (RTN) instruction
-                mem_6502[mpu->registers->s-- + 0x100] = 0xFE;
+                mem_6502[0x0100 + mpu->registers->s--] = 0xFF; // Address of $FF (RTN) instruction
+                mem_6502[0x0100 + mpu->registers->s--] = 0xFE;
                 //mpu->flags |= M6502_SingleStep;
                 if (trace)
                     printf("CALL: $%04X\r\n", mpu->registers->pc);
@@ -406,8 +416,8 @@ void vm_interp(M6502 *mpu, code *vm_ip)
                 break;
             case 0x56: // ICALL : IP = TOS ; indirect call
                 mpu->registers->pc = UPOP;
-                mem_6502[mpu->registers->s-- + 0x100] = 0xFF; // Address of $FF (RTN) instruction
-                mem_6502[mpu->registers->s-- + 0x100] = 0xFE;
+                mem_6502[0x0100 + mpu->registers->s--] = 0xFF; // Address of $FF (RTN) instruction
+                mem_6502[0x0100 + mpu->registers->s--] = 0xFE;
                 if (trace)
                     printf("ICAL: $%04X\r\n", mpu->registers->pc);
                 externalize();
@@ -431,7 +441,7 @@ void vm_interp(M6502 *mpu, code *vm_ip)
                     mem_6502[vm_fp + parmcnt * 2 + 0] = val;
                     mem_6502[vm_fp + parmcnt * 2 + 1] = val >> 8;
                     if (trace)
-                        printf("< $%04X: $%04X > ", vm_fp + parmcnt * 2 + 0, mem_6502[vm_fp + parmcnt * 2 + 0] | (mem_6502[vm_fp + parmcnt * 2 + 1] >> 8));
+                        printf("< $%04X: $%04X > ", vm_fp + parmcnt * 2 + 0, mem_6502[vm_fp + parmcnt * 2 + 0] | (mem_6502[vm_fp + parmcnt * 2 + 1] << 8));
                 }
                 if (trace)
                     printf("\n");
