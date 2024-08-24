@@ -13,7 +13,7 @@
 #include <termios.h>
 #include "plvm.h"
 
-char keyqueue = 0;
+byte keyqueue = 0;
 int nlfd[4];
 char nlmask[4], nlchar[4];
 /*
@@ -87,7 +87,7 @@ void syskeypressed(M6502 *mpu)
 {
     int n;
 
-    if (ioctl(STDIN_FILENO, FIONREAD, &n) == 0 && n > 0)
+    if (!(keyqueue & 0x80) && (ioctl(STDIN_FILENO, FIONREAD, &n) == 0) && (n > 0))
         keyqueue = getchar() | 0x80;
     PUSH_ESTK(keyqueue);
 }
@@ -262,7 +262,7 @@ void sysopen(M6502 *mpu)
     fd = open(filename, O_RDWR);
     if (trace) printf("FILEIO:OPEN(%s): %d\n", filename, fd);
     if (fd > 255) fprintf(stderr, "FILEIO:OPEN fd out of range!\n");
-    if (fd < 0) *perr = errno;
+    if (fd < 0){ fd = 0; *perr = errno;}
     PUSH_ESTK(fd);
 }
 void sysclose(M6502 *mpu)

@@ -492,7 +492,6 @@ int load_mod(M6502 *mpu, byte *mod)
     char filename[128], string[17];
 
     dcitos(mod, filename);
-    if (trace) printf("Load module %s\n", filename);
     /*
     if (strlen(filename) < 4 || (filename[strlen(filename) - 4] != '.'))
         strcat(filename, ".mod");
@@ -508,6 +507,7 @@ int load_mod(M6502 *mpu, byte *mod)
         strcat(filename, string);
         fd = open(filename, O_RDONLY, 0);
     }
+    if (trace) printf("Load module %s: %d\n", filename, fd);
     if ((fd > 0) && (len = read(fd, header, 128)) > 0)
     {
         moddep  = header + 1;
@@ -789,11 +789,16 @@ void sysexecmod(M6502 *mpu)
 void syslookuptbl(M6502 *mpu)
 {
     uword sym, addr;
+    char symbol[32];
 
     PULL_ESTK(sym);
     addr = lookup_sym(mem_6502 + sym);
     PUSH_ESTK(addr);
-    if (trace) printf("LOOKUPSYM\n");
+    /*if (trace)*/
+    {
+        dcitos(mem_6502 + sym, symbol);
+        printf("LOOKUPSYM: %s => $%04X\n", symbol, addr);
+    }
 }
 void syscall6502(M6502 *mpu)
 {
@@ -831,7 +836,7 @@ void sysstrcat(M6502 *mpu)
     uword src, dst;
     PULL_ESTK(src);
     PULL_ESTK(dst);
-    memcpy(mem_6502 + dst + mem_6502[dst] +  1, mem_6502 + src + 1, mem_6502[src] - 1);
+    memcpy(mem_6502 + dst + mem_6502[dst] +  1, mem_6502 + src + 1, mem_6502[src]);
     mem_6502[dst] += mem_6502[src];
     PUSH_ESTK(dst);
     if (trace) printf("STRCAT\n");
