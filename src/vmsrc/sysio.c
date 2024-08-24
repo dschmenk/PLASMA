@@ -13,8 +13,9 @@
 #include <termios.h>
 #include "plvm.h"
 
-int keyqueue = 0;
-
+char keyqueue = 0;
+int nlfd[4];
+char nlmask[4], nlchar[4];
 /*
  * Console I/O
  */
@@ -125,47 +126,92 @@ void sysgets(M6502 *mpu)
 }
 void sysecho(M6502 *mpu)
 {
+    int state;
+
+    PULL_ESTK(state);
     fprintf(stderr, "CONIO:ECHO unimplemented!\n");
+    PUSH_ESTK(0);
 }
 void syshome(M6502 *mpu)
 {
-    fprintf(stderr, "CONIO:HOME unimplemented!\n");
+    printf("\x1b[2J");
+    PUSH_ESTK(0);
 }
 void sysgotoxy(M6502 *mpu)
 {
-    fprintf(stderr, "CONIO:GOTOXY unimplemented!\n");
+    int x, y;
+
+    PULL_ESTK(y);
+    PULL_ESTK(x);
+    printf("\x1b[%d;%df", y + 1, x + 1);
+    PUSH_ESTK(0);
 }
 void sysviewport(M6502 *mpu)
 {
+    int x, y, w, h;
+
+    PULL_ESTK(y);
+    PULL_ESTK(x);
+    PULL_ESTK(w);
+    PULL_ESTK(h);
     fprintf(stderr, "CONIO:VIEWPORT unimplemented!\n");
+    PUSH_ESTK(0);
 }
 void systexttype(M6502 *mpu)
 {
+    int mode;
+
+    PULL_ESTK(mode);
     fprintf(stderr, "CONIO:TEXTYPE unimplemented!\n");
+    PUSH_ESTK(0);
 }
 void systextmode(M6502 *mpu)
 {
-    fprintf(stderr, "CONIO:TEXTMODE unimplemented!\n");
+    int cols;
+
+    PULL_ESTK(cols);
+    printf("\x1b[49m\x1b[?25h");
+    syshome(mpu);
 }
 void sysgrmode(M6502 *mpu)
 {
-    fprintf(stderr, "CONIO:GRMODE unimplemented!\n");
+    int split;
+
+    PULL_ESTK(split);
+    printf("\x1b[40m\x1b[?25l");
+    syshome(mpu);
 }
 void sysgrcolor(M6502 *mpu)
 {
-    fprintf(stderr, "CONIO:GRCOLOR unimplemented!\n");
+    int color;
+
+    PULL_ESTK(color);
+    printf("\x1b[%dm", (color & 7) + 40);
+    PUSH_ESTK(0);
 }
 void sysgrplot(M6502 *mpu)
 {
-    fprintf(stderr, "CONIO:GRPLOT unimplemented!\n");
+    int x, y;
+
+    PULL_ESTK(y);
+    PULL_ESTK(x);
+    printf("\x1b[%d;%df", y + 1, x * 2 + 1);
+    puts("  ");
+    PUSH_ESTK(0);
 }
 void systone(M6502 *mpu)
 {
+    int pitch, duration;
+
+    PULL_ESTK(duration);
+    PULL_ESTK(pitch);
     fprintf(stderr, "CONIO:TONE unimplemented!\n");
+    PUSH_ESTK(0);
 }
 void sysrnd(M6502 *mpu)
 {
     fprintf(stderr, "CONIO:RND unimplemented!\n");
+    PUSH_ESTK(rand());
 }
 /*
  * File I/O
@@ -213,8 +259,8 @@ void sysopen(M6502 *mpu)
     PULL_ESTK(filestr);
     memcpy(filename, mem_6502 + filestr + 1, mem_6502[filestr]);
     filename[mem_6502[filestr]] = '\0';
-    if (trace) printf("FILEIO:OPEN(%s)\n", filename);
     fd = open(filename, O_RDWR);
+    if (trace) printf("FILEIO:OPEN(%s): %d\n", filename, fd);
     if (fd > 255) fprintf(stderr, "FILEIO:OPEN fd out of range!\n");
     if (fd < 0) *perr = errno;
     PUSH_ESTK(fd);
@@ -227,8 +273,43 @@ void sysclose(M6502 *mpu)
     result = close(fd);
     if (result < 0) *perr = errno;
     PUSH_ESTK(result);
+    for (result = 0; result < 4; result++)
+    {
+        if (nlfd[result] == fd)
+            nlfd[result] = 0;
+    }
 }
 void sysread(M6502 *mpu)
+{
+    int fd, len, i, rdlen;
+    char rdch;
+    uword buf;
+
+    PULL_ESTK(len);
+    PULL_ESTK(buf);
+    PULL_ESTK(fd);
+    if (trace) printf("FILEIO:READ %d $%04X %d\n", fd, buf, len);
+    for (i = 0; i < 4; i++)
+    {
+        if (nlfd[i] == fd)
+        {
+            rdlen = 0;
+            while (rdlen < len && read(fd, &rdch, 1))
+            {
+                if (rdch == '\n') rdch = 0x0D; // Map newline chars
+                mem_6502[buf + rdlen++] = rdch;
+                if ((rdch & nlmask[i]) == nlchar[i])
+                    break;
+            }
+            PUSH_ESTK(rdlen);
+            return;
+        }
+    }
+    len = read(fd, mem_6502 + buf, len);
+    if (len < 0) *perr = errno;
+    PUSH_ESTK(len);
+}
+void syswrite(M6502 *mpu)
 {
     int fd, len;
     uword buf;
@@ -236,32 +317,82 @@ void sysread(M6502 *mpu)
     PULL_ESTK(len);
     PULL_ESTK(buf);
     PULL_ESTK(fd);
-    len = read(fd, mem_6502 + buf, len);
+    if (trace) printf("FILEIO:WRITE %d $%04X %d\n", fd, buf, len);
+    len = write(fd, mem_6502 + buf, len);
     if (len < 0) *perr = errno;
     PUSH_ESTK(len);
 }
-void syswrite(M6502 *mpu)
-{
-    fprintf(stderr, "FILEIO:WRITE unimplemented!\n");
-}
 void syscreate(M6502 *mpu)
 {
-    fprintf(stderr, "FILEIO:CREATE unimplemented!\n");
+    int fd;
+    uword filestr, type, aux;
+    char filename[128];
+
+    PULL_ESTK(aux);
+    PULL_ESTK(type);
+    PULL_ESTK(filestr);
+    memcpy(filename, mem_6502 + filestr + 1, mem_6502[filestr]);
+    filename[mem_6502[filestr]] = '\0';
+    /*
+    if (type == 0xFE)
+        strcat(filename, ".mod");
+    */
+    fd = creat(filename, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+    if (fd < 0) *perr = errno;
+    else close(fd);
+    PUSH_ESTK(errno);
 }
 void sysdestroy(M6502 *mpu)
 {
-    fprintf(stderr, "FILEIO:DESTROY unimplemented!\n");
+    uword filestr;
+    char filename[128];
+
+    PULL_ESTK(filestr);
+    memcpy(filename, mem_6502 + filestr + 1, mem_6502[filestr]);
+    filename[mem_6502[filestr]] = '\0';
+    unlink(filename);
+    PUSH_ESTK(errno);
 }
 void sysrename(M6502 *mpu)
 {
-    fprintf(stderr, "FILEIO:RENAME unimplemented!\n");
+    uword newstr, filestr;
+    char newname[128], filename[128];
+
+    PULL_ESTK(newstr);
+    PULL_ESTK(filestr);
+    memcpy(newname, mem_6502 + newstr + 1, mem_6502[newstr]);
+    newname[mem_6502[newstr]] = '\0';
+    memcpy(filename, mem_6502 + filestr + 1, mem_6502[filestr]);
+    filename[mem_6502[filestr]] = '\0';
+    rename(filename, newname);
+    PUSH_ESTK(errno);
 }
 void sysnewline(M6502 *mpu)
 {
-    fprintf(stderr, "FILEIO:NEWLINE unimplemented!\n");
+    int fd, mask, nl, i;
+
+    PULL_ESTK(nl);
+    PULL_ESTK(mask);
+    PULL_ESTK(fd);
+    PUSH_ESTK(0);
+    for (i = 0; i < 4; i++)
+    {
+        if (!nlfd[i])
+        {
+            nlfd[i]   = fd;
+            nlmask[i] = mask;
+            nlchar[i] = nl;
+            break;
+        }
+    }
 }
 void sysonline(M6502 *mpu)
 {
+    uword unit, buf;
+
+    PULL_ESTK(buf);
+    PULL_ESTK(unit);
+    PUSH_ESTK(0);
     fprintf(stderr, "FILEIO:ONLINE unimplemented!\n");
 }
 void sysunimpl(M6502 *mpu)
@@ -276,7 +407,7 @@ void export_sysio(void)
     byte dci[16];
     uword defaddr;
     uword fileio = alloc_heap(36);
-    uword conio  = alloc_heap(24);
+    uword conio  = alloc_heap(26);
     //
     // CMDSYS IO functions
     //
@@ -290,20 +421,6 @@ void export_sysio(void)
     //
     // Exported CONIO function table.
     //
-//word conio[]
-//word = @a2keypressed
-//word = @getc
-//word = @a12echo
-//word = @a2home
-//word = @a2gotoxy
-//word = @a2viewport
-//word = @a2texttype
-//word = @a2textmode
-//word = @a2grmode
-//word = @a2grcolor
-//word = @a2grplot
-//word = @a2tone
-//word = @a2rnd
     stodci("CONIO", dci); add_sym(dci, conio);
     defaddr = add_natv(syskeypressed);
     mem_6502[conio + 0] = (byte)defaddr;
@@ -332,22 +449,21 @@ void export_sysio(void)
     defaddr = add_natv(sysgrmode);
     mem_6502[conio + 16] = (byte)defaddr;
     mem_6502[conio + 17] = (byte)(defaddr >> 8);
-    defaddr = add_natv(sysgrplot);
+    defaddr = add_natv(sysgrcolor);
     mem_6502[conio + 18] = (byte)defaddr;
     mem_6502[conio + 19] = (byte)(defaddr >> 8);
-    defaddr = add_natv(systone);
+    defaddr = add_natv(sysgrplot);
     mem_6502[conio + 20] = (byte)defaddr;
     mem_6502[conio + 21] = (byte)(defaddr >> 8);
-    defaddr = add_natv(sysrnd);
+    defaddr = add_natv(systone);
     mem_6502[conio + 22] = (byte)defaddr;
     mem_6502[conio + 23] = (byte)(defaddr >> 8);
+    defaddr = add_natv(sysrnd);
+    mem_6502[conio + 24] = (byte)defaddr;
+    mem_6502[conio + 25] = (byte)(defaddr >> 8);
     //
     // Exported FILEIO function table.
     //
-//word fileio[]
-//word = @a2getpfx, @a2setpfx, @a2getfileinfo, @a2setfileinfo, @a23geteof, @a23seteof, @a2iobufs, @a2open, @a2close
-//word = @a23read, @a2write, @a2create, @a23destroy, @a23rename
-//word = @a2newline, @a2online, @a2readblock, @a2writeblock
     stodci("FILEIO", dci); add_sym(dci, fileio);
     defaddr = add_natv(sysgetpfx);
     mem_6502[fileio + 0] = (byte)defaddr;

@@ -493,8 +493,10 @@ int load_mod(M6502 *mpu, byte *mod)
 
     dcitos(mod, filename);
     if (trace) printf("Load module %s\n", filename);
+    /*
     if (strlen(filename) < 4 || (filename[strlen(filename) - 4] != '.'))
         strcat(filename, ".mod");
+    */
     fd = open(filename, O_RDONLY, 0);
     if (fd <= 0 && filename[0] != '/' && strlen(filename) < 17)
     {
@@ -772,7 +774,17 @@ int load_mod(M6502 *mpu, byte *mod)
  */
 void sysexecmod(M6502 *mpu)
 {
-    fprintf(stderr, "SYSEXECMOD unimplemented!\n");
+    uword modstr;
+    char modfile[128];
+    byte dci[128];
+    int result;
+
+    PULL_ESTK(modstr);
+    memcpy(modfile, mem_6502 + modstr + 1, mem_6502[modstr]);
+    modfile[mem_6502[modstr]] = '\0';
+    stodci(modfile, dci);
+    result = load_mod(mpu, dci);
+    PUSH_ESTK(result);
 }
 void syslookuptbl(M6502 *mpu)
 {
