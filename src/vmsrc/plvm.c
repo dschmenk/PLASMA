@@ -59,7 +59,7 @@ int vm_irq(M6502 *mpu, uword address, byte data)
         fprintf(stderr, "\nBRK: $%04X\r\n", address);
         exit (-1);
     }
-    fprintf(stderr, "\nUnkonw IRQ!\n");
+    fprintf(stderr, "\nUnkonw IRQ!\r\n");
     RTI;
 }
 //
@@ -444,14 +444,14 @@ void vm_interp(M6502 *mpu, code *vm_ip)
                         printf("< $%04X: $%04X > ", vm_fp + parmcnt * 2 + 0, mem_6502[vm_fp + parmcnt * 2 + 0] | (mem_6502[vm_fp + parmcnt * 2 + 1] << 8));
                 }
                 if (trace)
-                    printf("\n");
+                    printf("\r\n");
                 break;
             case 0x5A: // LEAVE : DEL FRAME, IP = TOFP
                 vm_pp  = vm_fp + BYTE_PTR(vm_ip);
                 vm_fp  = mem_6502[vm_pp++];
                 vm_fp |= mem_6502[vm_pp++] << 8;
                 if (trace)
-                    printf("<PP:$%04X  FP:$%04X>\n", vm_pp, vm_fp);
+                    printf("<PP:$%04X  FP:$%04X>\r\n", vm_pp, vm_fp);
             case 0x5C: // RET : IP = TOFP
                 externalize();
                 return;
@@ -761,7 +761,7 @@ void vm_interp(M6502 *mpu, code *vm_ip)
                  * Odd codes and everything else are errors.
                  */
             default:
-                fprintf(stderr, "Illegal opcode 0x%02X @ 0x%04X\n", (unsigned int)vm_ip[-1], (unsigned int)(vm_ip - mem_6502));
+                fprintf(stderr, "Illegal opcode 0x%02X @ 0x%04X\r\n", (unsigned int)vm_ip[-1], (unsigned int)(vm_ip - mem_6502));
                 exit(-1);
         }
     }

@@ -103,11 +103,18 @@ typedef uint16_t address;
  */
 extern void pfail(const char *msg);
 /*
+ * Key handling
+ */
+extern int trace;
+extern int paused;
+extern byte keyqueue;
+byte keypressed(M6502 *mpu);
+byte keyin(M6502 *mpu);
+/*
  * VM callouts
  */
 extern void M6502_exec(M6502 *mpu);
 typedef void (*VM_Callout)(M6502 *mpu);
-extern int trace;
 extern byte mem_6502[];
 extern byte mem_PLVM[];
 extern byte *perr;
@@ -139,4 +146,8 @@ extern void sysopen(M6502 *mpu);
 extern void sysclose(M6502 *mpu);
 extern void sysread(M6502 *mpu);
 extern void syswrite(M6502 *mpu);
+/*
+ * Apple 1 config
+ */
+int initApple1(M6502 *mpu, uword address, const char *path);
 

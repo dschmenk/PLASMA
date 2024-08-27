@@ -13,20 +13,33 @@
 #include <termios.h>
 #include "plvm.h"
 
-byte keyqueue = 0;
 int nlfd[4];
 char nlmask[4], nlchar[4];
 /*
  * Console I/O
  */
+void sysputln(M6502 *mpu)
+{
+    putchar('\r'); putchar('\n');
+    fflush(stdout);
+}
 void sysputc(M6502 *mpu)
 {
-    char c;
+    char ch;
     //
     // Pop char and putchar it
     //
-    PULL_ESTK(c);
-    putchar(c);
+    PULL_ESTK(ch);
+    switch (ch)
+    {
+        case '\r':
+        case '\n':
+            sysputln(mpu);
+            break;
+        default:
+            putchar(ch);
+    }
+    fflush(stdout);
 }
 void sysputs(M6502 *mpu)
 {
@@ -45,16 +58,13 @@ void sysputs(M6502 *mpu)
         {
             case '\r':
             case '\n':
-                putchar('\n');
+                sysputln(mpu);
                 break;
             default:
                 putchar(ch);
         }
     }
-}
-void sysputln(M6502 *mpu)
-{
-    putchar('\n');
+    fflush(stdout);
 }
 void sysputi(M6502 *mpu)
 {
@@ -85,10 +95,8 @@ void sysputh(M6502 *mpu)
 }
 void syskeypressed(M6502 *mpu)
 {
-    int n;
-
-    if (!(keyqueue & 0x80) && (ioctl(STDIN_FILENO, FIONREAD, &n) == 0) && (n > 0))
-        keyqueue = getchar() | 0x80;
+    if (!(keyqueue & 0x80))
+        keypressed(mpu);
     PUSH_ESTK(keyqueue);
 }
 void sysgetc(M6502 *mpu)
@@ -97,29 +105,69 @@ void sysgetc(M6502 *mpu)
     //
     // Push getchar()
     //
-    if (keyqueue)
+    if (keyqueue & 0x80)
     {
         c = keyqueue & 0x7F;
         keyqueue = 0;
     }
     else
-        c = getchar();
+        c = keyin(mpu);
     PUSH_ESTK(c);
 }
 void sysgets(M6502 *mpu)
 {
     uword strptr;
     int len;
-    char instr[256];
+    char cext[2], instr[256];
 
     //
     // Push gets(), limiting it to 128 chars
     //
-    PULL_ESTK(instr[0]);
-    putchar(instr[0] & 0x7F);
+    PULL_ESTK(cext[0]);
+    putchar(cext[0] & 0x7F);
+    len = 0;
+    if (keyqueue)
+    {
+        putchar(keyqueue & 0x7F);
+        instr[len++] = keyqueue & 0x7F;
+        keyqueue = 0;
+    }
+    fflush(stdout);
+    do
+    {
+        switch (keyqueue = keyin(mpu))
+        {
+            case 0x1B:
+                if (read(STDIN_FILENO, cext, 2) == 2)
+                    if (cext[0] == '[' && cext[1] == 'D') // Left arrow
+                        keyqueue = 0x08;
+                    else
+                        break;
+                else
+                    break;
+            case 0x08: // BS
+            case 0x7F: // BS
+                if (len)
+                {
+                    putchar('\x08');
+                    putchar(' ');
+                    putchar('\x08');
+                    len--;
+                }
+                break;
+            default:
+            if (keyqueue >= ' ')
+                putchar(instr[len++] = keyqueue);
+        }
+        fflush(stdout);
+    } while (keyqueue != 0x0D && len < 128);
+    sysputln(mpu);
+    keyqueue = 0;
+/*
     len = strlen(gets(instr));
     if (len > 128)
         len = 128;
+*/
     mem_6502[CMDLINE_STR] = len;
     memcpy(mem_6502 + CMDLINE_BUF, instr, len);
     PUSH_ESTK(CMDLINE_STR);
@@ -129,7 +177,7 @@ void sysecho(M6502 *mpu)
     int state;
 
     PULL_ESTK(state);
-    fprintf(stderr, "CONIO:ECHO unimplemented!\n");
+    fprintf(stderr, "CONIO:ECHO unimplemented!\r\n");
     PUSH_ESTK(0);
 }
 void syshome(M6502 *mpu)
@@ -154,7 +202,7 @@ void sysviewport(M6502 *mpu)
     PULL_ESTK(x);
     PULL_ESTK(w);
     PULL_ESTK(h);
-    fprintf(stderr, "CONIO:VIEWPORT unimplemented!\n");
+    fprintf(stderr, "CONIO:VIEWPORT unimplemented!\r\n");
     PUSH_ESTK(0);
 }
 void systexttype(M6502 *mpu)
@@ -162,7 +210,7 @@ void systexttype(M6502 *mpu)
     int mode;
 
     PULL_ESTK(mode);
-    fprintf(stderr, "CONIO:TEXTYPE unimplemented!\n");
+    fprintf(stderr, "CONIO:TEXTYPE unimplemented!\r\n");
     PUSH_ESTK(0);
 }
 void systextmode(M6502 *mpu)
@@ -205,12 +253,12 @@ void systone(M6502 *mpu)
 
     PULL_ESTK(duration);
     PULL_ESTK(pitch);
-    fprintf(stderr, "CONIO:TONE unimplemented!\n");
+    fprintf(stderr, "CONIO:TONE unimplemented!\r\n");
     PUSH_ESTK(0);
 }
 void sysrnd(M6502 *mpu)
 {
-    fprintf(stderr, "CONIO:RND unimplemented!\n");
+    fprintf(stderr, "CONIO:RND unimplemented!\r\n");
     PUSH_ESTK(rand());
 }
 /*
@@ -218,34 +266,34 @@ void sysrnd(M6502 *mpu)
  */
 void sysgetpfx(M6502 *mpu)
 {
-    fprintf(stderr, "FILEIO:GETPFX unimplemented!\n");
+    fprintf(stderr, "FILEIO:GETPFX unimplemented!\r\n");
 }
 void syssetpfx(M6502 *mpu)
 {
-    fprintf(stderr, "FILEIO:SETPFX unimplemented!\n");
+    fprintf(stderr, "FILEIO:SETPFX unimplemented!\r\n");
 }
 void sysgetfileinfo(M6502 *mpu)
 {
-    fprintf(stderr, "FILEIO:GETFILEINFO unimplemented!\n");
+    fprintf(stderr, "FILEIO:GETFILEINFO unimplemented!\r\n");
 }
 void syssetfileinfo(M6502 *mpu)
 {
-    fprintf(stderr, "FILEIO:SETFILEINFO unimplemented!\n");
+    fprintf(stderr, "FILEIO:SETFILEINFO unimplemented!\r\n");
 }
 void sysgeteof(M6502 *mpu)
 {
-    fprintf(stderr, "FILEIO:GETEOF unimplemented!\n");
+    fprintf(stderr, "FILEIO:GETEOF unimplemented!\r\n");
 }
 void sysseteof(M6502 *mpu)
 {
-    fprintf(stderr, "FILEIO:SETEOF unimplemented!\n");
+    fprintf(stderr, "FILEIO:SETEOF unimplemented!\r\n");
 }
 void sysiobufs(M6502 *mpu)
 {
     uword dummy;
     PULL_ESTK(dummy);
     PUSH_ESTK(0);
-    if (trace) printf("IOBUFS\n");
+    if (trace) printf("IOBUFS\r\n");
 }
 void sysopen(M6502 *mpu)
 {
@@ -260,8 +308,8 @@ void sysopen(M6502 *mpu)
     memcpy(filename, mem_6502 + filestr + 1, mem_6502[filestr]);
     filename[mem_6502[filestr]] = '\0';
     fd = open(filename, O_RDWR);
-    if (trace) printf("FILEIO:OPEN(%s): %d\n", filename, fd);
-    if (fd > 255) fprintf(stderr, "FILEIO:OPEN fd out of range!\n");
+    if (trace) printf("FILEIO:OPEN(%s): %d\r\n", filename, fd);
+    if (fd > 255) fprintf(stderr, "FILEIO:OPEN fd out of range!\r\n");
     if (fd < 0){ fd = 0; *perr = errno;}
     PUSH_ESTK(fd);
 }
@@ -288,7 +336,7 @@ void sysread(M6502 *mpu)
     PULL_ESTK(len);
     PULL_ESTK(buf);
     PULL_ESTK(fd);
-    if (trace) printf("FILEIO:READ %d $%04X %d\n", fd, buf, len);
+    if (trace) printf("FILEIO:READ %d $%04X %d\r\n", fd, buf, len);
     for (i = 0; i < 4; i++)
     {
         if (nlfd[i] == fd)
@@ -317,7 +365,7 @@ void syswrite(M6502 *mpu)
     PULL_ESTK(len);
     PULL_ESTK(buf);
     PULL_ESTK(fd);
-    if (trace) printf("FILEIO:WRITE %d $%04X %d\n", fd, buf, len);
+    if (trace) printf("FILEIO:WRITE %d $%04X %d\r\n", fd, buf, len);
     len = write(fd, mem_6502 + buf, len);
     if (len < 0) *perr = errno;
     PUSH_ESTK(len);
@@ -393,11 +441,11 @@ void sysonline(M6502 *mpu)
     PULL_ESTK(buf);
     PULL_ESTK(unit);
     PUSH_ESTK(0);
-    fprintf(stderr, "FILEIO:ONLINE unimplemented!\n");
+    fprintf(stderr, "FILEIO:ONLINE unimplemented!\r\n");
 }
 void sysunimpl(M6502 *mpu)
 {
-    fprintf(stderr, "FILEIO:??? unimplemented!\n");
+    fprintf(stderr, "FILEIO:??? unimplemented!\r\n");
 }
 /*
  * Create PLVM versions of fileio and conio modules.
