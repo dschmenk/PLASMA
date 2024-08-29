@@ -9,7 +9,6 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/ioctl.h>
-#include <sys/filio.h>
 #include <termios.h>
 #include "plvm.h"
 
@@ -163,11 +162,6 @@ void sysgets(M6502 *mpu)
     } while (keyqueue != 0x0D && len < 128);
     sysputln(mpu);
     keyqueue = 0;
-/*
-    len = strlen(gets(instr));
-    if (len > 128)
-        len = 128;
-*/
     mem_6502[CMDLINE_STR] = len;
     memcpy(mem_6502 + CMDLINE_BUF, instr, len);
     PUSH_ESTK(CMDLINE_STR);
