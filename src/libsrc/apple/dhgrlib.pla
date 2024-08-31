@@ -106,27 +106,27 @@ byte           = $23,$27,$2B,$2F,$33,$37,$3B,$3F
 //word           = $3C00
 //word           = $4000
 //word           = $0000
-byte auxmask[] = $0F
-byte           = $70
-byte           = $00
-byte           = $03|$80
-byte           = $3C|$80
-byte           = $40|$80
-byte           = $00
-//word memmask[] = $0000
+byte auxclrmsk[] = $0F
+byte             = $70
+byte             = $00
+byte             = $03|$80
+byte             = $3C|$80
+byte             = $40|$80
+byte             = $00
+//word memmedmsk[] = $0000
 //word           = $0001
 //word           = $001E
 //word           = $0060
 //word           = $0000
 //word           = $0700
 //word           = $7800
-byte memmask[] = $00
-byte           = $01
-byte           = $1E
-byte           = $60
-byte           = $00
-byte           = $07|$80
-byte           = $78|$80
+byte memclrmsk[] = $00
+byte             = $01
+byte             = $1E
+byte             = $60
+byte             = $00
+byte             = $07|$80
+byte             = $78|$80
 //
 // Solid colors
 //
@@ -295,47 +295,180 @@ byte            = 136+0, 136+1, 136+2, 136+3, 136+4, 136+5, 136+6
 byte            = 144+0, 144+1, 144+2, 144+3, 144+4, 144+5, 144+6
 byte            = 152+0, 152+1, 152+2, 152+3, 152+4, 152+5, 152+6
 //byte            = 160+0, 160+1, 160+2, 160+3, 160+4, 160+5, 160+6
-                
-def dhgrColor(c)#0
-    c = c & $0F
-    auxclrl = auxclrsl[c]
-    auxclrh = auxclrsh[c]
-    memclrl = memclrsl[c]
-    memclrh = memclrsh[c]
-end
-def dhgrPlot(x, y)#0
-    byte pix7, mask
-    word pix7addr
 
-    pix7addr = hgrscanl[y] + (hgrscanh[y] << 8) + ((divmod7[x] & $F8) >> 2)
-    pix7     = divmod7[x] & 7
-    mask = auxmask[pix7]
-    if mask
-        ^page1x
-        if mask & $80 // Flag for hi byte
-            ^(pix7addr+1) = (^(pix7addr+1) & ~mask) | (mask & auxclrh)
-        else
-            ^pix7addr = (^pix7addr & ~mask) | (mask & auxclrl)
-        fin
-    fin
-    mask = memmask[pix7]
-    if mask
-        ^page1m
-        if mask & $80 // Flag for hi byte
-            ^(pix7addr+1) = (^(pix7addr+1) & ~mask) | (mask & memclrh)
-        else
-            ^pix7addr = (^pix7addr & ~mask) | (mask & memclrl)
-        fin
-    fin
+//def dcgrPlot(x, y)#0
+//    byte pix7, mask
+//    word pix7addr
+//
+//    pix7addr = hgrscanl[y] + (hgrscanh[y] << 8) + ((divmod7[x] & $F8) >> 2)
+//    pix7     = divmod7[x] & 7
+//    mask = auxclrmsk[pix7]
+//    if mask
+//        ^page1x
+//        if mask & $80 // Flag for hi byte
+//            ^(pix7addr+1) = (^(pix7addr+1) & ~mask) | (mask & auxclrh)
+//        else
+//            ^pix7addr = (^pix7addr & ~mask) | (mask & auxclrl)
+//        fin
+//    fin
+//    mask = memclrmsk[pix7]
+//    if mask
+//        ^page1m
+//        if mask & $80 // Flag for hi byte
+//            ^(pix7addr+1) = (^(pix7addr+1) & ~mask) | (mask & memclrh)
+//        else
+//            ^pix7addr = (^pix7addr & ~mask) | (mask & memclrl)
+//        fin
+//    fin
+//end
+export asm dcgrPlot(x, y)#0
+!SOURCE    "vmsrc/plvmzp.inc"
+        INX
+        INX
+        STX     ESP
+        LDY     ESTKL-2,X   ; Y COORD
+        CPY     #192
+        BCS     +
 end
-def dhgrHLin(x1, x2, y)#0
+asm     _dcgrPlotA
+        LDA     $1000,Y     ; HGRSCANL
+        STA     DSTL
+        LDA     $2000,Y     ; HGRSCANH
+        STA     DSTH
+        LDY     ESTKL-1,X   ; X COORD
+        CPY     #140
+        BCS     +
+end
+asm     _dcgrPlotB
+        LDA     $3000,Y     ; DIVMOD7
+        TAX
+        AND     #$F8
+        LSR
+        LSR
+        TAY                 ; DIV7
+        TXA
+        AND     #$07
+        TAX                 ; PIX7
+end
+asm     _dcgrPlotC
+        LDA     $4000,X     ; AUXCLRMSK
+        BEQ     ++
+        STA     $C055       ; PAGE1X
+        BMI     +++
+end
+asm     _dcgrPlotD
+        AND     $5000       ; AUXCLRL
+        EOR     (DST),Y
+        STA     (DST),Y
+        BNE     ++
+        BEQ     ++
++++     INY
+end
+asm     _dcgrPlotE
+        AND     $5001       ; AUXCLRH
+        EOR     (DST),Y
+        STA     (DST),Y
+        DEY
+end
+asm     _dcgrPlotF
+++      LDA     $4001,X     ; MEMCLRMSK
+        BEQ     +
+        STA     $C054       ; PAGE1M
+        BMI     +++
+end
+asm     _dcgrPlotG
+        AND     $5002       ; MEMCLRL
+        EOR     (DST),Y
+        STA     (DST),Y
++       LDX     ESP
+        RTS
++++     INY
+end
+asm     _dcgrPlotH
+        AND     $5003       ; MEMCLRH
+        EOR     (DST),Y
+        STA     (DST),Y
+        LDX     ESP
+        RTS
+end
+export asm dcgrXorPlot(x, y)#0
+        INX
+        INX
+        STX     ESP
+        LDY     ESTKL-2,X   ; Y COORD
+        CPY     #192
+        BCS     +
+end
+asm     _dcgrXorPlotA
+        LDA     $1000,Y     ; HGRSCANL
+        STA     DSTL
+        LDA     $2000,Y     ; HGRSCANH
+        STA     DSTH
+        LDY     ESTKL-1,X   ; X COORD
+        CPY     #140
+        BCS     +
+end
+asm     _dcgrXorPlotB
+        LDA     $3000,Y     ; DIVMOD7
+        TAX
+        AND     #$F8
+        LSR
+        LSR
+        TAY                 ; DIV7
+        TXA
+        AND     #$07
+        TAX                 ; PIX7
+end
+asm     _dcgrXorPlotC
+        LDA     $4000,X     ; AUXCLRMSK
+        BEQ     ++
+        STA     $C055       ; PAGE1X
+        BMI     +++
+end
+asm     _dcgrXorPlotD
+        AND     $5000       ; AUXCLRL
+        EOR     (DST),Y
+        STA     (DST),Y
+        BNE     ++
+        BEQ     ++
++++     INY
+end
+asm     _dcgrXorPlotE
+        AND     $5001       ; AUXCLRH
+        EOR     (DST),Y
+        STA     (DST),Y
+        DEY
+end
+asm     _dcgrXorPlotF
+++      LDA     $4001,X     ; MEMCLRMSK
+        BEQ     +
+        STA     $C054       ; PAGE1M
+        BMI     +++
+end
+asm     _dcgrXorPlotG
+        AND     $5002       ; MEMCLRL
+        EOR     (DST),Y
+        STA     (DST),Y
++       LDX     ESP
+        RTS
++++     INY
+end
+asm     _dcgrXorPlotH
+        AND     $5003       ; MEMCLRH
+        EOR     (DST),Y
+        STA     (DST),Y
+        LDX     ESP
+        RTS
+end
+
+def dcgrHLin(x1, x2, y)#0
     byte pix7, mask
     word pix7addr
 
     pix7addr = hgrscanl[y] + (hgrscanh[y] << 8) + ((divmod7[x1] & $F8) >> 2)
     pix7     = divmod7[x1] & 7
     while x1 <= x2
-        mask = auxmask[pix7]
+        mask = auxclrmsk[pix7]
         if mask
             ^page1x
             if mask & $80
@@ -344,7 +477,7 @@ def dhgrHLin(x1, x2, y)#0
                 ^pix7addr = (^pix7addr & ~mask) | (mask & auxclrl)
             fin
         fin
-        mask = memmask[pix7]
+        mask = memclrmsk[pix7]
         if mask
             ^page1m
             if mask & $80
@@ -361,7 +494,7 @@ def dhgrHLin(x1, x2, y)#0
         x1++
     loop
 end
-def dhgrVLin(y1, y2, x)#0
+def dcgrVLin(y1, y2, x)#0
     byte pix7, div7, mask
     word pix7addr
 
@@ -369,7 +502,7 @@ def dhgrVLin(y1, y2, x)#0
     div7 = (divmod7[x] & $F8) >> 2
     while y1 <= y2
         pix7addr = hgrscanl[y1] + (hgrscanh[y1] << 8) + div7
-        mask = auxmask[pix7]
+        mask = auxclrmsk[pix7]
         if mask
             ^page1x
             if mask & $80
@@ -378,7 +511,7 @@ def dhgrVLin(y1, y2, x)#0
                 ^pix7addr = (^pix7addr & ~mask) | (mask & auxclrl)
             fin
         fin
-        mask = memmask[pix7]
+        mask = memclrmsk[pix7]
         if mask
             ^page1m
             if mask & $80
@@ -390,7 +523,7 @@ def dhgrVLin(y1, y2, x)#0
         y1++
     loop
 end
-def dhgrScan(x, y, w, scanptr)#0
+def dcgrScan(x, y, w, scanptr)#0
     byte pix7, c, mask
     word pix7addr
 
@@ -403,8 +536,8 @@ def dhgrScan(x, y, w, scanptr)#0
             c = ^scanptr >> 4
             scanptr++
         fin
-        if (c <> 10) gray 2 is transparent
-            mask = auxmask[pix7]
+        if (c <> 10) // gray 2 is transparent
+            mask = auxclrmsk[pix7]
             if mask
                 ^page1x
                 if mask & $80
@@ -413,7 +546,7 @@ def dhgrScan(x, y, w, scanptr)#0
                     ^pix7addr = (^pix7addr & ~mask) | (mask & auxclrsl[c])
                 fin
             fin
-            mask = memmask[pix7]
+            mask = memclrmsk[pix7]
             if mask
                 ^page1m
                 if mask & $80
@@ -430,12 +563,12 @@ def dhgrScan(x, y, w, scanptr)#0
         fin
     next
 end
-def dhgrBLT(x, y, w, h, srcptr)#0
+def dcgrBLT(x, y, w, h, srcptr)#0
     word i, j
     byte c
 
     for j = y to y + h - 1
-        dhgrScan(x, y, w, srcptr)
+        dcgrScan(x, y, w, srcptr)
         srcptr = srcptr + (w + 1) / 2
     next
 end
@@ -457,7 +590,7 @@ end
 def dhgrDst(x7, y, w7, h, dstptr)#0
     word pix7addr
     byte scan, b
-  
+
     for scan = y to y+h-1
         pix7addr = hgrscan[scan] + x7 * 2
         for b = 1 to w7
@@ -474,7 +607,7 @@ end
 def dhgrSrc(x7, y, w7, h, srcptr)#0
     word pix7addr
     byte scan, b
-  
+
     for scan = y to y+h-1
         pix7addr = hgrscan[scan] + x7 * 2
         for b = 1 to w7
@@ -488,8 +621,15 @@ def dhgrSrc(x7, y, w7, h, srcptr)#0
         next
     next
 end
+def dhgrColor(c)#0
+    c = c & $0F
+    auxclrl = auxclrsl[c]
+    auxclrh = auxclrsh[c]
+    memclrl = memclrsl[c]
+    memclrh = memclrsh[c]
+end
 def dhgrMode(mode)
-    if mode == 0
+    if mode >= 0
         ^page1m
         ^showfull
         ^showhires
@@ -498,6 +638,8 @@ def dhgrMode(mode)
         ^show80col  = 0
         ^dhresena
         ^store80ena = 0
+        if mode == 1 // Turn off color burst
+        fin
         ^page1m
         memset($2000, 0, $2000)
         ^page1x
@@ -512,19 +654,19 @@ def dhgrMode(mode)
     return mode
 end
 
-def dhgrTest#0
+def dcgrTest#0
   byte i, j
   word pixblk
 
-  setlineplot(@dhgrPlot)
-  setlinespans(@dhgrHLin, @dhgrVLin)
+  setlineplot(@dcgrPlot)
+  setlinespans(@dcgrHLin, @dcgrVLin)
   for i = 0 to 191 step 4
     dhgrColor(i)
-    linespans(0, 0, 139, i)
+    line(0, 0, 139, i)
   next
   for i = 139 downto 0 step 4
     dhgrColor(i)
-    linespans(0, 0, i, 191)
+    line(0, 0, i, 191)
   next
   pixblk = heapalloc(16/2*20)
   dhgrDst(0, 0, 2, 20, pixblk)
@@ -542,7 +684,26 @@ def dhgrTest#0
   ^$C010
 end
 
-dhgrmode(0)
-dhgrtest
-dhgrmode(-1)
+_dcgrPlotA:1 = @hgrscanl
+_dcgrPlotA:6 = @hgrscanh
+_dcgrPlotB:1 = @divmod7
+_dcgrPlotC:1 = @auxclrmsk
+_dcgrPlotD:1 = @auxclrl
+_dcgrPlotE:1 = @auxclrh
+_dcgrPlotF:1 = @memclrmsk
+_dcgrPlotG:1 = @memclrl
+_dcgrPlotH:1 = @memclrh
+_dcgrXorPlotA:1 = @hgrscanl
+_dcgrXorPlotA:6 = @hgrscanh
+_dcgrXorPlotB:1 = @divmod7
+_dcgrXorPlotC:1 = @auxclrmsk
+_dcgrXorPlotD:1 = @auxclrl
+_dcgrXorPlotE:1 = @auxclrh
+_dcgrXorPlotF:1 = @memclrmsk
+_dcgrXorPlotG:1 = @memclrl
+_dcgrXorPlotH:1 = @memclrh
+
+dhgrMode(0)
+dcgrTest
+dhgrMode(-1)
 done
