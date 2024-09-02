@@ -470,66 +470,52 @@ asm     _dcgrXorPlotH
 end
 
 def dcgrHLin(x1, x2, y)#0
-    byte pix7, mask
+    byte pix7, div7l, div7r
     word pix7addr
 
-    pix7addr = hgrscanl[y] + (hgrscanh[y] << 8) + ((divmod7[x1] & $F8) >> 2)
-    pix7     = divmod7[x1] & 7
-    while x1 <= x2
-        mask = auxclrmsk[pix7]
-        if mask
-            ^page1x
-            if mask & $80
-                ^(pix7addr+1) = (^(pix7addr+1) & ~mask) | (mask & auxclrh)
-            else
-                ^pix7addr = (^pix7addr & ~mask) | (mask & auxclrl)
-            fin
+    if x1 == x2
+        dcgrPlot(x1, y)
+    else
+        div7l = (divmod7[x1] & $F8) >> 2
+        div7r = (divmod7[x2] & $F8) >> 2
+        pix7  = divmod7[x1] & 7
+        if div7l < div7r
+            while pix7 < 7
+                dcgrPlot(x1, y)
+                x1++
+                pix7++
+            loop
+            div7l++
+            pix7addr = hgrscanl[y] + (hgrscanh[y] << 8) + div7l
+            while div7l < div7r
+                ^page1x
+                ^pix7addr = auxclrl
+                ^page1m
+                ^pix7addr = memclrl
+                pix7addr++
+                ^page1x
+                ^pix7addr = auxclrh
+                ^page1m
+                ^pix7addr = memclrh
+                pix7addr++
+                x1 = x1 + 7
+                div7l++
+            loop
         fin
-        mask = memclrmsk[pix7]
-        if mask
-            ^page1m
-            if mask & $80
-                ^(pix7addr+1) = (^(pix7addr+1) & ~mask) | (mask & memclrh)
-            else
-                ^pix7addr = (^pix7addr & ~mask) | (mask & memclrl)
-            fin
+        if div7l == div7r
+            while x1 <= x2
+                dcgrPlot(x1, y)
+                x1++
+            loop
         fin
-        pix7++
-        if pix7 == 7
-            pix7 = 0;
-            pix7addr = pix7addr + 2
-        fin
-        x1++
-    loop
+    fin
 end
 def dcgrVLin(y1, y2, x)#0
-    byte pix7, div7, mask
-    word pix7addr
-
-    pix7 = divmod7[x] & 7
-    div7 = (divmod7[x] & $F8) >> 2
-    while y1 <= y2
-        pix7addr = hgrscanl[y1] + (hgrscanh[y1] << 8) + div7
-        mask = auxclrmsk[pix7]
-        if mask
-            ^page1x
-            if mask & $80
-                ^(pix7addr+1) = (^(pix7addr+1) & ~mask) | (mask & auxclrh)
-            else
-                ^pix7addr = (^pix7addr & ~mask) | (mask & auxclrl)
-            fin
-        fin
-        mask = memclrmsk[pix7]
-        if mask
-            ^page1m
-            if mask & $80
-                ^(pix7addr+1) = (^(pix7addr+1) & ~mask) | (mask & memclrh)
-            else
-                ^pix7addr = (^pix7addr & ~mask) | (mask & memclrl)
-            fin
-        fin
-        y1++
-    loop
+    byte y
+    
+    for y = y1 to y2
+        dcgrPlot(x, y)
+    next
 end
 def dcgrScan(x, y, w, scanptr)#0
     byte pix7, c, mask
@@ -670,11 +656,11 @@ def dcgrTest#0
   setlinespans(@dcgrHLin, @dcgrVLin)
   for i = 0 to 191 step 4
     dhgrColor(i)
-    line(0, 0, 139, i)
+    linespans(0, 0, 139, i)
   next
   for i = 139 downto 0 step 4
     dhgrColor(i)
-    line(0, 0, i, 191)
+    linespans(0, 0, i, 191)
   next
   pixblk = heapalloc(16/2*20)
   dhgrDst(0, 0, 2, 20, pixblk)
