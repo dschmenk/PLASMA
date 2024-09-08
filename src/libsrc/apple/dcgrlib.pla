@@ -196,44 +196,93 @@ byte            = 248+0, 248+1, 248+2, 248+3, 248+4, 248+5, 248+6
 //
 // Internal routine to clip x7 and width7 to destination width in A REG
 //
-asm _clip7#0
+asm _clipX#0
 !SOURCE    "vmsrc/plvmzp.inc"
-        STA     TMPL        ; DSTWIDTH7
-        LDA     ESTKL-1,X   ; X7 COORD
-        BMI     NEGX7       ; IS NEG?
-        CMP     TMPL        ; > DSTWIDTH7?
-        BCS     INVIS7      ; YEP, X7 OFF RIGHT EDGE
+        STA     TMPL        ; DST_WIDTH
+        LDA     ESTKL-1,X   ; X COORD
+        BMI     NEGX        ; IS NEG?
+        CMP     TMPL        ; > DST_WIDTH?
+        BCS     INVISX      ; YEP, X OFF RIGHT EDGE
         CLC
-        ADC     ESTKL-3,X   ; X7 + WIDTH7
-        CMP     TMPL        ; < DSTWIDTH7?
-        BCC     VIS7        ; YEP, FULLY VISIBLE
-        LDA     TMPL        ; CLIP WIDTH7 TO DSTWIDTH
+        ADC     ESTKL-3,X   ; X + WIDTH
+        CMP     TMPL        ; < DST_WIDTH?
+        BCC     VISX        ; YEP, FULLY VISIBLE
+        LDA     TMPL        ; CLIP WIDTH TO DST_WIDTH
         SEC
         SBC     ESTKL-1,X
-        STA     ESTKL-3,X   ; WIDTH7 = DSTWIDTH7 - X7
-VIS7    LDA     #$00        ; FULLY VISIBLE
+        STA     ESTKL-3,X   ; WIDTH = DST_WIDTH - X
+VISX    LDA     #$00        ; FULLY VISIBLE
         CLC
         RTS
-; X7 NEGATIVE, CHECK WITH W7 ADDED
-NEGX7   CLC
-        ADC     ESTKL-3,X   ; X7 + WIDTH7
-        BMI     INVIS7      ; STILL NEG?, OFF LEFT EDGE
-        BEQ     INVIS7      ; OR ZERO WIDTH7?
-        CMP     TMPL        ; > DSTWIDTH7?
-        BCC     +           ; YEP, SPANS DSTWIDTH7
-        LDA     TMPL        ; WIDTH7 = DSTWIDTH7
-+       STA     ESTKL-3,X   ; WIDTH7 = VISIBLE AMOUNT
+; X NEGATIVE, CHECK WITH W ADDED
+NEGX    CLC
+        ADC     ESTKL-3,X   ; X + WIDTH
+        BMI     INVISX      ; STILL NEG?, OFF LEFT EDGE
+        BEQ     INVISX      ; OR ZERO WIDTH?
+        CMP     TMPL        ; > DST_WIDTH?
+        BCC     +           ; YEP, SPANS DST_WIDTH
+        LDA     TMPL        ; WIDTH = DST_WIDTH
++       STA     ESTKL-3,X   ; WIDTH = VISIBLE AMOUNT
         LDA     #$00
         SEC
-        SBC     ESTKL-1,X   ; -X7 COORD
+        SBC     ESTKL-1,X   ; -X COORD
         PHA                 ; SAVE FOR SRC/DST CLIP OFFSET
         LDA     #$00
-        STA     ESTKL-1,X   ; CLIP X7 COORD TO LEFT EDGE
+        STA     ESTKL-1,X   ; CLIP X COORD TO LEFT EDGE
         STA     ESTKH-1,X
-        PLA                 ; VISIBLE WITH X7 CLIP
+        PLA                 ; VISIBLE WITH X CLIP
         CLC
         RTS
-INVIS7  SEC
+INVISX  SEC
+        RTS
+end
+asm _clipY#0
+        LDA     #$00
+        CLC
+        RTS
+        STA     TMPL        ; DST_HEIGHT
+        LDA     ESTKH-2,X   ; Y COORD
+        BMI     NEGY        ; IS NEG?
+        LDA     ESTKL-2,X   ; Y COORD
+        CMP     TMPL        ; > DST_HEIGHT?
+        BCS     INVISY      ; YEP, Y OFF BOTTOM EDGE
+        CLC
+        ADC     ESTKL-4,X   ; Y + HEIGHT
+        CMP     TMPL        ; < DST_HEIGHT
+        BCC     VISY        ; YEP, FULLY VISIBLE
+        LDA     TMPL        ; CLIP HEIGHT TO DST_HEIGHT
+        SEC
+        SBC     ESTKL-2,X
+        STA     ESTKL-4,X   ; HEIGHT = DST_HEIGHT - Y
+VISY    LDA     #$00        ; FULLY VISIBLE
+        CLC
+        RTS
+; Y NEGATIVE, CHECK WITH H ADDED
+NEGY    LDA     ESTKL-2,X   ; Y COORD
+        CLC
+        ADC     ESTKL-4,X   ; Y + HEIGHT
+        PHA
+        LDA     ESTKH-2,X
+        ADC     ESTKH-4,X
+        BMI     ++          ; STILL NEG?, OFF TOP EDGE
+        PLA
+        BEQ     INVISY      ; OR ZERO HEIGHT?
+        CMP     TMPL        ; > DST_HEIGHT?
+        BCC     +           ; YEP, SPANS DST_HEIGHT
+        LDA     TMPL        ; HEIGHT = DST_HEIGHT
++       STA     ESTKL-4,X   ; HEIGHT = VISIBLE AMOUNT
+        LDA     #$00
+        SEC
+        SBC     ESTKL-2,X   ; -Y COORD
+        PHA                 ; SAVE FOR SRC/DST CLIP OFFSET
+        LDA     #$00
+        STA     ESTKL-2,X   ; CLIP Y COORD TO TOP EDGE
+        STA     ESTKH-2,X
+        PLA                 ; VISIBLE WITH Y CLIP
+        CLC
+        RTS
+++      PLA
+INVISY  SEC
         RTS
 end
 //
@@ -911,9 +960,9 @@ export asm dcgrMemBl7Scr(x7, y, w7, h, srcptr, srcspan)#0
         TAX
         LDA     #20
 end
-asm _clipMemBl7Src
+asm _clipXMemBl7Src
         JSR     $F000
-        BCS     RETM7S
+        BCS     RETS7M
         ASL
         ASL
         ADC     ESTKL-5,X   ; SRCPTR
@@ -921,7 +970,23 @@ asm _clipMemBl7Src
         LDA     #$00
         ADC     ESTKH-5,X
         STA     SRCH
-        LDA     ESTKL-2,X   ; Y COORD
+        LDA     #192
+end
+asm     _clipYMemBl7Scr
+        JSR     $E000       ; CLIPY
+        BCS     RETS7M      ; CLIPPED AWAY
+        BEQ     +
+        TAY
+-       CLC                 ; ADVANCE TO SRC Y SCANLINE
+        LDA     ESTKL-6,X   ; SRCSPAN
+        ADC     SRCL
+        STA     SRCL
+        LDA     ESTKH-6,X
+        ADC     SRCH
+        STA     SRCH
+        DEY
+        BNE     -
++       LDA     ESTKL-2,X   ; Y COORD
         CLC
         ADC     ESTKL-4,X   ; HEIGHT
         STA     ESTKL-4,X   ; -> BOTTOM EDGE
@@ -933,10 +998,8 @@ end
 asm     _dcgrMemBl7ScrA
 YM7S    LDA     ESTKL-2,X   ; Y COORD
         CMP     ESTKL-4,X   ; AT BOTTOM?
-        BCS     RETM7S
+        BNE     RETM7S
         INC     ESTKL-2,X   ; Y COORD++
-        CMP     #192        ; OFF SCREEN?
-        BCS     NXTM7S
         TAY
         LDA     ESTKL-3,X   ; WIDTH7
         STA     TMPL
@@ -990,10 +1053,8 @@ end
 asm     _dcgrOpMemBl7ScrA
 YOM7S   LDA     ESTKL-2,X   ; Y COORD
         CMP     ESTKL-4,X   ; AT BOTTOM?
-        BCS     RETM7S
+        BEQ     RETM7S
         INC     ESTKL-2,X   ; Y COORD++
-        CMP     #192        ; OFF SCREEN?
-        BCS     NXTOM7S
         TAY
         LDA     ESTKL-3,X   ; WIDTH7
         STA     TMPL
@@ -1064,8 +1125,8 @@ export asm dcgrMemBl7Mem(x7, y, w7, h, srcptr, srcspan, dstw7, dsth, dstptr, dst
         TAX
         LDA     ESTKL-7,X
 end
-asm     _clipMemBl7Mem
-        JSR     $F000       ; CLIP7
+asm     _clipXMemBl7Mem
+        JSR     $F000       ; CLIPX
         BCS     RETOM7S     ; CLIPPED AWAY
         ASL
         ASL
@@ -1081,7 +1142,23 @@ asm     _clipMemBl7Mem
         LDA     #$00
         ADC     ESTKH-9,X
         STA     DSTH
-        LDY     ESTKL-2,X   ; Y COORD
+        LDA     ESTKL-8,X   ; DSTHEIGHT
+end
+asm     _clipYMemBl7Mem
+        JSR     $E000       ; CLIPY
+        BCS     RETOM7S     ; CLIPPED AWAY
+        BEQ     +
+        TAY
+-       CLC                 ; ADVANCE TO SRC Y SCANLINE
+        LDA     ESTKL-10,X  ; DSTSPAN
+        ADC     SRCL
+        STA     SRCL
+        LDA     ESTKH-10,X
+        ADC     SRCH
+        STA     SRCH
+        DEY
+        BNE     -
++       LDY     ESTKL-2,X   ; Y COORD
         BEQ     +
 -       CLC                 ; ADVANCE TO Y SCANLINE
         LDA     ESTKL-10,X  ; DSTSPAN
@@ -1119,8 +1196,6 @@ YM7M    LDA     ESTKL-2,X   ; Y COORD
         CMP     ESTKL-4,X   ; AT BOTTOM?
         BEQ     RETM7M
         INC     ESTKL-2,X   ; Y COORD++
-        CMP     ESTKL-8,X   ; OUT OF BOUNDS?
-        BCS     NXTM7M
         LDY     ESTKL-3,X   ; WIDTH7
 XM7M    LDA     (SRC),Y
         DEY
@@ -1156,8 +1231,6 @@ YOM7M   LDA     ESTKL-2,X   ; Y COORD
         CMP     ESTKL-4,X   ; AT BOTTOM?
         BEQ     RETM7M
         INC     ESTKL-2,X   ; Y COORD++
-        CMP     ESTKL-8,X   ; OUT OF BOUNDS?
-        BCS     NXTOM7M
         LDY     ESTKL-3,X   ; WIDTH7
 XOM7M   DEY
         LDA     (SRC),Y
@@ -1207,7 +1280,7 @@ export asm dcgrFillBl7Scr(x7, y, w7, h)#0
         INX
         LDA     #20
 end
-asm     _clipFillBl7Scr
+asm     _clipXFillBl7Scr
         JSR     $F000       ; CLIP7
         BCS     RETFILS
         LDA     ESTKL-2,X   ; Y COORD
@@ -1263,8 +1336,8 @@ export asm dcgrFillBl7Mem(x7, y, w7, h, dstptr, dstspan)#0
         LSR
         LSR
 end
-asm     _clipFillBl7Mem
-        JSR     $F000       ; CLIP7
+asm     _clipXFillBl7Mem
+        JSR     $F000       ; CLIPX
         BCS     RETFILM
         LDA     ESTKL-2,X   ; Y COORD
         ;CLC
@@ -1285,8 +1358,6 @@ YFILM   LDA     ESTKL-2,X   ; Y COORD
         CMP     ESTKL-4,X   ; AT BOTTOM?
         BEQ     RETFILM
         INC     ESTKL-2,X   ; Y COORD++
-        CMP     #192        ; OFF SCREEN?
-        BCS     NXTFILM
         LDY     ESTKL-3,X   ; WIDTH7
 end
 asm     _dcgrFillBl7MemA
@@ -1475,7 +1546,7 @@ _dcgrPixScrB:1      = @_dcgrColorA
 _dcgrPixScrC:1      = @_dcgrPlotScrB
 _dcgrPixScrD:1      = @_dcgrColorA
 _dcgrPixScrE:1      = @_dcgrPlotScrB
-_clipFillBl7Scr:1   = @_clip7
+_clipXFillBl7Scr:1  = @_clipX
 _dcgrFillBl7ScrA:1  = @hgrscanl
 _dcgrFillBl7ScrA:8  = @hgrscanh
 _dcgrFillBl7ScrB:1  = @auxclrh
@@ -1508,7 +1579,7 @@ _dcgrPixMemB:1      = @_dcgrColorA
 _dcgrPixMemC:1      = @_dcgrPlotMemB
 _dcgrPixMemD:1      = @_dcgrColorA
 _dcgrPixMemE:1      = @_dcgrPlotMemB
-_clipFillBl7Mem:1   = @_clip7
+_clipXFillBl7Mem:1  = @_clipX
 _dcgrFillBl7MemA:1  = @memclrh
 _dcgrFillBl7MemA:7  = @auxclrh
 _dcgrFillBl7MemA:13 = @memclrl
@@ -1518,7 +1589,8 @@ _dcgrFillBl7MemA:19 = @auxclrl
 //
 _dcgrScrBl7MemA:1   = @hgrscanl
 _dcgrScrBl7MemA:8   = @hgrscanh
-_clipMemBl7Src:1    = @_clip7
+_clipXMemBl7Src:1   = @_clipX
+_clipYMemBl7Scr:1   = @_clipY
 _dcgrMemBl7ScrB:1   = @hgrscanl
 _dcgrMemBl7ScrB:8   = @hgrscanh
 _dcgrOpMemBl7ScrB:1 = @hgrscanl
@@ -1526,6 +1598,6 @@ _dcgrOpMemBl7ScrB:8 = @hgrscanh
 //
 // Memory <-> Memory Block Transfer fixups
 //
-_clipMemBl7Mem:1    = @_clip7
-
+_clipXMemBl7Mem:1   = @_clipX
+_clipYMemBl7Mem:1   = @_clipY
 done
