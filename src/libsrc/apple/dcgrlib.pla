@@ -199,8 +199,9 @@ byte            = 248+0, 248+1, 248+2, 248+3, 248+4, 248+5, 248+6
 asm _clipX#0
 !SOURCE    "vmsrc/plvmzp.inc"
         STA     TMPL        ; DST_WIDTH
-        LDA     ESTKL-1,X   ; X COORD
+        LDA     ESTKH-1,X   ; X COORD
         BMI     NEGX        ; IS NEG?
+        LDA     ESTKL-1,X   ; X COORD
         CMP     TMPL        ; > DST_WIDTH?
         BCS     INVISX      ; YEP, X OFF RIGHT EDGE
         CLC
@@ -215,9 +216,14 @@ VISX    LDA     #$00        ; FULLY VISIBLE
         CLC
         RTS
 ; X NEGATIVE, CHECK WITH W ADDED
-NEGX    CLC
+NEGX    LDA     ESTKL-1,X   ; X COORD
+        CLC
         ADC     ESTKL-3,X   ; X + WIDTH
-        BMI     INVISX      ; STILL NEG?, OFF LEFT EDGE
+        PHA
+        LDA     ESTKH-1,X
+        ADC     ESTKH-3,X
+        BMI     ++          ; STILL NEG?, OFF LEFT EDGE
+        PLA
         BEQ     INVISX      ; OR ZERO WIDTH?
         CMP     TMPL        ; > DST_WIDTH?
         BCC     +           ; YEP, SPANS DST_WIDTH
@@ -233,6 +239,7 @@ NEGX    CLC
         PLA                 ; VISIBLE WITH X CLIP
         CLC
         RTS
+++      PLA
 INVISX  SEC
         RTS
 end
@@ -463,11 +470,12 @@ export asm dcgrVLinScr(y1, y2, x)#0
         INX
         INX
         STX     ESP
-        INC     ESTKL-2,X   ; ADJUST BCS BELOW
--       LDA     ESTKL-1,X   ; Y1 COORD
-        CMP     ESTKL-2,X   ; Y2 COORD
-        BCS     +
-        TAY
+        LDY     ESTKL-2,X   ; ADJUST BNE BELOW
+        INY
+        STY     TMPL
+-       LDY     ESTKL-1,X   ; Y1 COORD
+        CPY     TMPL        ; Y2 COORD
+        BEQ     +
 end
 asm     _dcgrVLinScrA
         LDA     $1000,Y     ; HGRSCANL
@@ -500,14 +508,13 @@ export asm dcgrPixScr(x, y, w, h, pixptr)#0
         LDA     ESTKL-2,X   ; Y COORD
         CLC
         ADC     ESTKL-4,X   ; HEIGHT
-        STA     ESTKL-4,X   ; -> BOTTOM EDGE
-YPIXS   LDA     ESTKL-2,X   ; Y COORD
-        CMP     ESTKL-4,X   ; AT BOTTOM?
+        STA     TMPH        ; -> BOTTOM EDGE
+YPIXS   LDY     ESTKL-2,X   ; Y COORD
+        CPY     TMPH        ; AT BOTTOM?
         BEQ     RETPIXS
         INC     ESTKL-2,X   ; Y COORD++
-        CMP     #192        ; OFF SCREEN?
+        CPY     #192        ; OFF SCREEN?
         BCS     -
-        TAY
 end
 asm     _dcgrPixScrA
         LDA     $1000,Y     ; HGRSCANL
@@ -734,13 +741,13 @@ export asm dcgrHLinMem(x1, x2, y, dstptr, dstspan)#0
 +       INC     ESTKL-2,X   ; ADJUST BCS BELOW
 XHM     LDA     ESTKL-1,X   ; X1 COORD
         CMP     ESTKL-2,X   ; X2 COORD
-        BCS     +
+        BNE     +
         TAY
 end
 asm     _dcgrHLinMemB
         JSR     $1000       ; PLOT PIX W/ XCOORD IN Y REG
         INC     ESTKL-1,X   ; X1++
-        BNE     XHM           ; BRA
+        BNE     XHM          ; BRA
 +       RTS
 end
 export asm dcgrVLinMem(y1, y2, x, dstptr, dstspan)#0
@@ -768,7 +775,7 @@ export asm dcgrVLinMem(y1, y2, x, dstptr, dstspan)#0
 +       INC     ESTKL-2,X   ; ADJUST BCS BELOW
 YVM     LDA     ESTKL-1,X   ; Y1 COORD
         CMP     ESTKL-2,X   ; Y2 COORD
-        BCS     +
+        BEQ     +
         LDY     ESTKL-3,X   ; X COORD
 end
 asm     _dcgrVLinMemB
@@ -882,7 +889,7 @@ NXTPIXM CLC
 RETPIXM RTS
 end
 //
-// Mem <-> Screen Block Transfers
+// Screen -> Memory Block Transfer
 //
 export asm dcgrScrBl7Mem(x7, y, w7, h, dstptr, dstspan)#0
         TXA
@@ -898,6 +905,10 @@ export asm dcgrScrBl7Mem(x7, y, w7, h, dstptr, dstspan)#0
         ADC     ESTKL-4,X   ; HEIGHT
         STA     ESTKL-4,X   ; -> BOTTOM EDGE
         ASL     ESTKL-1,X   ; X7 COORD * 2
+        LDA     ESTKL-3,X   ; WIDTH7 * 4
+        ASL
+        ASL
+        STA     TMPL
 YS7M    LDA     ESTKL-2,X   ; Y COORD
         CMP     ESTKL-4,X   ; AT BOTTOM?
         BCS     RETS7M
@@ -905,8 +916,6 @@ YS7M    LDA     ESTKL-2,X   ; Y COORD
         CMP     #192        ; OFF SCREEN?
         BCS     NXTS7M
         TAY
-        LDA     ESTKL-3,X   ; WIDTH7
-        STA     TMPL
         LDA     ESTKL-1,X   ; X7 COORD
 end
 asm     _dcgrScrBl7MemA
@@ -938,7 +947,7 @@ XS7M    STA     $C055       ; PAGE1X
         INC     ESTKH-5,X
 +       STA     (DST),Y
         INY
-        DEC     TMPL
+        CPY     TMPL
         BNE     XS7M
 NXTS7M  CLC
         LDA     ESTKL-6,X   ; SPAN
@@ -950,6 +959,9 @@ NXTS7M  CLC
         BNE     YS7M        ; BRA
 RETS7M  RTS
 end
+//
+// Memory -> Screen Block Transfer
+//
 export asm dcgrMemBl7Scr(x7, y, w7, h, srcptr, srcspan)#0
         TXA
         CLC
@@ -973,6 +985,7 @@ asm     _clipYMemBl7Scr
         JSR     $E000       ; CLIPY
         BCS     RETS7M      ; CLIPPED AWAY
         BEQ     +
+        BNE     +
         TAY
 -       CLC                 ; ADVANCE TO SRC Y SCANLINE
         LDA     ESTKL-6,X   ; SRCSPAN
@@ -988,6 +1001,10 @@ asm     _clipYMemBl7Scr
         ADC     ESTKL-4,X   ; HEIGHT
         STA     ESTKL-4,X   ; -> BOTTOM EDGE
         ASL     ESTKL-1,X   ; X7 COORD * 2
+        LDA     ESTKL-3,X   ; WIDTH7 * 4
+        ASL
+        ASL
+        STA     TMPL
 end
 asm     _jmpOpMemBl7Scr
         JMP     $A000
@@ -995,14 +1012,10 @@ end
 asm     _dcgrMemBl7ScrA
 YM7S    LDA     ESTKL-2,X   ; Y COORD
         CMP     ESTKL-4,X   ; AT BOTTOM?
-        BNE     RETM7S
+        BEQ     RETM7S
         INC     ESTKL-2,X   ; Y COORD++
         TAY
-        LDA     ESTKL-3,X   ; WIDTH7
-        STA     TMPL
         LDA     ESTKL-1,X   ; X7 COORD
-        CMP     #40
-        BCS     NXTM7S
 end
 asm     _dcgrMemBl7ScrB
         ADC     $1000,Y     ; HGRSCANL
@@ -1035,7 +1048,7 @@ XM7S    STA     $C055       ; PAGE1X
         INC     ESTKH-6,X
         BNE     +
         INC     ESTKH-5,X
-+       DEC     TMPL
++       CPY     TMPL
         BNE     XM7S
 NXTM7S  CLC
         LDA     ESTKL-6,X   ; SPAN
@@ -1053,11 +1066,7 @@ YOM7S   LDA     ESTKL-2,X   ; Y COORD
         BEQ     RETM7S
         INC     ESTKL-2,X   ; Y COORD++
         TAY
-        LDA     ESTKL-3,X   ; WIDTH7
-        STA     TMPL
         LDA     ESTKL-1,X   ; X7 COORD
-        CMP     #40
-        BCS     NXTOM7S
 end
 asm     _dcgrOpMemBl7ScrB
         ADC     $1000,Y     ; HGRSCANL
@@ -1100,7 +1109,7 @@ asm     _dcgrOpMemBl7ScrF
         INC     ESTKH-6,X
         BNE     +
         INC     ESTKH-5,X
-+       DEC     TMPL
++       CPY     TMPL
         BNE     XOM7S
 NXTOM7S CLC
         LDA     ESTKL-6,X   ; SPAN
@@ -1113,7 +1122,7 @@ NXTOM7S CLC
 RETOM7S RTS
 end
 //
-// Memory <-> Memory function
+// Memory -> Memory function
 //
 export asm dcgrMemBl7Mem(x7, y, w7, h, srcptr, srcspan, dstw7, dsth, dstptr, dstspan)#0
         TXA
@@ -1280,6 +1289,12 @@ end
 asm     _clipXFillBl7Scr
         JSR     $F000       ; CLIP7
         BCS     RETFILS
+        LDA     #192
+end
+asm     _clipYFillBl7Scr
+        JSR     $E000       ; CLIPY
+        BCS     RETFILS     ; CLIPPED AWAY
+
         LDA     ESTKL-2,X   ; Y COORD
         ;CLC
         ADC     ESTKL-4,X   ; HEIGHT
@@ -1329,17 +1344,6 @@ export asm dcgrFillBl7Mem(x7, y, w7, h, dstptr, dstspan)#0
         CLC
         ADC     #6
         TAX
-        LDA     ESTKL-6,X   ; SPAN
-        LSR
-        LSR
-end
-asm     _clipXFillBl7Mem
-        JSR     $F000       ; CLIPX
-        BCS     RETFILM
-        LDA     ESTKL-2,X   ; Y COORD
-        ;CLC
-        ADC     ESTKL-4,X   ; HEIGHT
-        STA     ESTKL-4,X   ; -> BOTTOM EDGE
         LDA     ESTKL-1,X   ; X7 * 4
         ASL
         ASL
@@ -1349,7 +1353,22 @@ asm     _clipXFillBl7Mem
         LDA     #$00
         ADC     ESTKH-5,X
         STA     DSTH
-        ASL     ESTKL-3,X   ; WIDTH7 * 4
+        LDA     ESTKL-2,X   ; Y COORD
+        BEQ     +
+        TAY
+        ;CLC
+        ADC     ESTKL-4,X   ; HEIGHT
+        STA     ESTKL-4,X   ; -> BOTTOM EDGE
+-       ;CLC                 ; ADVANCE TO DST Y SCANLINE
+        LDA     ESTKL-6,X   ; DSTSPAN
+        ADC     DSTL
+        STA     DSTL
+        LDA     ESTKH-6,X
+        ADC     DSTH
+        STA     DSTH
+        DEY
+        BNE     -
++       ASL     ESTKL-3,X   ; WIDTH7 * 4
         ASL     ESTKL-3,X
 YFILM   LDA     ESTKL-2,X   ; Y COORD
         CMP     ESTKL-4,X   ; AT BOTTOM?
@@ -1357,7 +1376,7 @@ YFILM   LDA     ESTKL-2,X   ; Y COORD
         INC     ESTKL-2,X   ; Y COORD++
         LDY     ESTKL-3,X   ; WIDTH7
 end
-asm     _dcgrFillBl7MemA
+asm     _dcgrFillBl7MemB
 XFILM   LDA     $3003       ; MEMCLRH
         DEY
         STA     (DST),Y
@@ -1372,7 +1391,7 @@ XFILM   LDA     $3003       ; MEMCLRH
         STA     (DST),Y
         BNE     XFILM
 NXTFILM CLC
-        LDA     ESTKL-6,X
+        LDA     ESTKL-6,X   ; DSTSPAN
         ADC     DSTL
         STA     DSTL
         LDA     ESTKH-6,X
@@ -1448,10 +1467,10 @@ export def dcgrOpMem(op)#0
             _dcgrOpPlotMemG.3   = opcode
             _dcgrOpPlotMemH.3   = opcode
             _jmpOpMemBl7Mem:1   = @_dcgrOpMemBl7MemB
-            _dcgrOpMemBl7MemC.0  = opcode
-            _dcgrOpMemBl7MemD.0  = opcode
-            _dcgrOpMemBl7MemE.0  = opcode
-            _dcgrOpMemBl7MemF.0  = opcode
+            _dcgrOpMemBl7MemC.0 = opcode
+            _dcgrOpMemBl7MemD.0 = opcode
+            _dcgrOpMemBl7MemE.0 = opcode
+            _dcgrOpMemBl7MemF.0 = opcode
             break
         otherwise // OP_SRC
             _jmpOpPlotMem:1     = @_dcgrPlotMemC
@@ -1544,6 +1563,7 @@ _dcgrPixScrC:1      = @_dcgrPlotScrB
 _dcgrPixScrD:1      = @_dcgrColorA
 _dcgrPixScrE:1      = @_dcgrPlotScrB
 _clipXFillBl7Scr:1  = @_clipX
+_clipYFillBl7Scr:1  = @_clipY
 _dcgrFillBl7ScrA:1  = @hgrscanl
 _dcgrFillBl7ScrA:8  = @hgrscanh
 _dcgrFillBl7ScrB:1  = @auxclrh
@@ -1576,11 +1596,10 @@ _dcgrPixMemB:1      = @_dcgrColorA
 _dcgrPixMemC:1      = @_dcgrPlotMemB
 _dcgrPixMemD:1      = @_dcgrColorA
 _dcgrPixMemE:1      = @_dcgrPlotMemB
-_clipXFillBl7Mem:1  = @_clipX
-_dcgrFillBl7MemA:1  = @memclrh
-_dcgrFillBl7MemA:7  = @auxclrh
-_dcgrFillBl7MemA:13 = @memclrl
-_dcgrFillBl7MemA:19 = @auxclrl
+_dcgrFillBl7MemB:1  = @memclrh
+_dcgrFillBl7MemB:7  = @auxclrh
+_dcgrFillBl7MemB:13 = @memclrl
+_dcgrFillBl7MemB:19 = @auxclrl
 //
 // Memory <-> Screen Block Transfer fixups
 //
