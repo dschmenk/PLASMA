@@ -1149,6 +1149,17 @@ asm     _clipXMemBl7Mem
         LDA     #$00
         ADC     ESTKH-9,X
         STA     DSTH
+        LDA     ESTKL-1,X   ; X COORD
+        ASL
+        ASL
+        ;CLC
+        ADC     DSTL        ; DSTPTR += X7 * 4
+        STA     DSTL
+        LDA     #$00
+        ADC     DSTH
+        STA     DSTH
+        ASL     ESTKL-3,X   ; WIDTH = WIDTH7 * 4
+        ASL     ESTKL-3,X
         LDA     ESTKL-8,X   ; DSTHEIGHT
 end
 asm     _clipYMemBl7Mem
@@ -1165,8 +1176,12 @@ asm     _clipYMemBl7Mem
         STA     SRCH
         DEY
         BNE     -
-+       LDY     ESTKL-2,X   ; Y COORD
++       LDA     ESTKL-2,X   ; Y COORD
         BEQ     +
+        TAY
+        CLC
+        ADC     ESTKL-4,X   ; HEIGHT
+        STA     ESTKL-4,X   ; -> BOTTOM EDGE
 -       CLC                 ; ADVANCE TO DST Y SCANLINE
         LDA     ESTKL-10,X  ; DSTSPAN
         ADC     DSTL
@@ -1176,34 +1191,15 @@ asm     _clipYMemBl7Mem
         STA     DSTH
         DEY
         BNE     -
-+       LDA     ESTKL-2,X   ; Y COORD
-        CLC
-        ADC     ESTKL-4,X   ; HEIGHT
-        STA     ESTKL-4,X   ; -> BOTTOM EDGE
-        LDA     ESTKL-1,X   ; X COORD
-        ASL
-        ASL
-        ;CLC
-        ADC     DSTL        ; DSTPTR += X7 * 4
-        STA     DSTL
-        LDA     #$00
-        ADC     DSTH
-        STA     DSTH
-        ASL     ESTKL-3,X   ; WIDTH = WIDTH7 * 4
-        ASL     ESTKL-3,X
 end
 asm     _jmpOpMemBl7Mem
-       JMP     $F000
++       JMP     $F000
 end
 asm     _dcgrMemBl7MemB
         DEC     SRCL
         BNE     YM7M
         DEC     SRCH
-YM7M    LDA     ESTKL-2,X   ; Y COORD
-        CMP     ESTKL-4,X   ; AT BOTTOM?
-        BEQ     RETM7M
-        INC     ESTKL-2,X   ; Y COORD++
-        LDY     ESTKL-3,X   ; WIDTH7
+YM7M    LDY     ESTKL-3,X   ; WIDTH7
 XM7M    LDA     (SRC),Y
         DEY
         STA     (DST),Y
@@ -1230,21 +1226,21 @@ NXTM7M  CLC
         LDA     ESTKH-10,X
         ADC     DSTH
         STA     DSTH
-        BNE     YM7M        ; BRA
+        INC     ESTKL-2,X   ; Y COORD++
+        LDA     ESTKL-2,X   ; Y COORD
+        CMP     ESTKL-4,X   ; AT BOTTOM?
+        BNE     YM7M
 RETM7M  RTS
 end
 asm     _dcgrOpMemBl7MemB
-YOM7M   LDA     ESTKL-2,X   ; Y COORD
-        CMP     ESTKL-4,X   ; AT BOTTOM?
-        BEQ     RETM7M
-        INC     ESTKL-2,X   ; Y COORD++
-        LDY     ESTKL-3,X   ; WIDTH7
+YOM7M   LDY     ESTKL-3,X   ; WIDTH7
 XOM7M   DEY
         LDA     (SRC),Y
 end
 asm     _dcgrOpMemBl7MemC
         EOR     (DST),Y
         STA     (DST),Y
+        DEY
         LDA     (SRC),Y
 end
 asm     _dcgrOpMemBl7MemD
@@ -1277,8 +1273,11 @@ NXTOM7M CLC
         LDA     ESTKH-10,X
         ADC     DSTH
         STA     DSTH
+        INC     ESTKL-2,X   ; Y COORD++
+        LDA     ESTKL-2,X   ; Y COORD
+        CMP     ESTKL-4,X   ; AT BOTTOM?
         BNE     YOM7M       ; BRA
-RETOM7M RTS
+        RTS
 end
 export asm dcgrFillBl7Scr(x7, y, w7, h)#0
         INX
@@ -1345,6 +1344,8 @@ export asm dcgrFillBl7Mem(x7, y, w7, h, dstptr, dstspan)#0
         CLC
         ADC     #6
         TAX
+        ASL     ESTKL-3,X   ; WIDTH7 * 4
+        ASL     ESTKL-3,X
         LDA     ESTKL-1,X   ; X7 * 4
         ASL
         ASL
@@ -1355,12 +1356,12 @@ export asm dcgrFillBl7Mem(x7, y, w7, h, dstptr, dstspan)#0
         ADC     ESTKH-5,X
         STA     DSTH
         LDA     ESTKL-2,X   ; Y COORD
-        BEQ     +
+        BEQ     YFILM
         TAY
         ;CLC
         ADC     ESTKL-4,X   ; HEIGHT
         STA     ESTKL-4,X   ; -> BOTTOM EDGE
--       ;CLC                 ; ADVANCE TO DST Y SCANLINE
+-       ;CLC                ; ADVANCE TO DST Y SCANLINE
         LDA     ESTKL-6,X   ; DSTSPAN
         ADC     DSTL
         STA     DSTL
@@ -1369,13 +1370,7 @@ export asm dcgrFillBl7Mem(x7, y, w7, h, dstptr, dstspan)#0
         STA     DSTH
         DEY
         BNE     -
-+       ASL     ESTKL-3,X   ; WIDTH7 * 4
-        ASL     ESTKL-3,X
-YFILM   LDA     ESTKL-2,X   ; Y COORD
-        CMP     ESTKL-4,X   ; AT BOTTOM?
-        BEQ     RETFILM
-        INC     ESTKL-2,X   ; Y COORD++
-        LDY     ESTKL-3,X   ; WIDTH7
+YFILM   LDY     ESTKL-3,X   ; WIDTH7
 end
 asm     _dcgrFillBl7MemB
 XFILM   LDA     $3003       ; MEMCLRH
@@ -1391,15 +1386,18 @@ XFILM   LDA     $3003       ; MEMCLRH
         DEY
         STA     (DST),Y
         BNE     XFILM
-NXTFILM CLC
+        CLC
         LDA     ESTKL-6,X   ; DSTSPAN
         ADC     DSTL
         STA     DSTL
         LDA     ESTKH-6,X
         ADC     DSTH
         STA     DSTH
-        BNE     YFILM       ; BRA
-RETFILM RTS
+        INC     ESTKL-2,X   ; Y COORD++
+        LDA     ESTKL-2,X   ; Y COORD
+        CMP     ESTKL-4,X   ; AT BOTTOM?
+        BNE     YFILM
+        RTS
 end
 //
 // Wait for VLB

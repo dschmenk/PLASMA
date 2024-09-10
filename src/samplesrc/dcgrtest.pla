@@ -24,6 +24,31 @@ byte[]          = $55,$00,$00,$AA,$AA,$00,$00,$55
 byte[]          = $55,$55,$00,$00,$00,$00,$55,$55
 byte[]          = $55,$55,$55,$05,$50,$55,$55,$55
 
+word sprite7mask[7]
+word sprite7[7]
+word sprite7span, sprite7width
+
+def compileSprite#0
+    byte i
+
+    for i = 0 to 6
+        sprite7[i],     sprite7span, sprite7width = dcgrAllocBl7Mem(16, 16)
+        sprite7mask[i], sprite7span, sprite7width = dcgrAllocBl7Mem(16, 16)
+        dcgrColor(DCLR_BLACK)
+        dcgrFillBl7Mem(0, 0, sprite7width, 16, sprite7[i], sprite7span)
+        dcgrColor(DCLR_WHITE)
+        dcgrFillBl7Mem(0, 0, sprite7width, 16, sprite7mask[i], sprite7span)
+        dcgrOpMem(OP_SRC)
+        dcgrPixMem(i + 2, 0, 16, 16, @sprite, sprite7width * 7, 16, sprite7[i], sprite7span)
+        dcgrPixMem(i + 2, 0, 16, 16, @sprite, sprite7width * 7, 16, sprite7mask[i], sprite7span)
+        dcgrOpMem(OP_XOR)
+        dcgrPixMem(i + 2, 0, 16, 16, @sprite, sprite7width * 7, 16, sprite7mask[i], sprite7span)
+
+        dcgrMemBl7Scr(0, i*16, sprite7width, 16, sprite7[i],     sprite7span)
+        dcgrMemBl7Scr(3, i*16, sprite7width, 16, sprite7mask[i], sprite7span)
+    next
+    dcgrOpMem(OP_SRC)
+end
 def dcgrTest#0
     word i, j, k, ok7, om7, inci, incj, inck
     word backblk, backspan, backw7
@@ -55,15 +80,19 @@ def dcgrTest#0
     restrw = restrw7 * 7
     while ^$C000 < 128
         ok7, om7 = divmod(k, 7)
+        if om7 < 0; om7 = 6+om7; fin
         dcgrMemBl7Mem(0, 0, restrw7, 16, backblk + ok7 * 4, backspan, restrw7, 16, restrblk, restrspan)
-        dcgrPixMem(om7 + 2, 0, 16, 16, @sprite, restrw, 16, restrblk, restrspan)
-        //dcgrColor(i)
-        //dcgrFillBl7Mem(0, 0, restrw7, 16, restrblk, restrspan)
+        dcgrOpMem(OP_AND)
+        dcgrMemBl7Mem(0, 0, sprite7width, 16, sprite7mask[om7], sprite7span, restrw7, 16, restrblk, restrspan)
+        dcgrOpMem(OP_XOR)
+        dcgrMemBl7Mem(0, 0, sprite7width, 16, sprite7[om7], sprite7span, restrw7, 16, restrblk, restrspan)
+        dcgrOpMem(OP_SRC)
+        //dcgrPixMem(om7 + 2, 0, 16, 16, @sprite, restrw, 16, restrblk, restrspan)
         dcgrMemBl7Scr(ok7, 170, restrw7, 16, restrblk, restrspan)
-        //dcgrFillBl7Scr(ok7, 170, restrw7, 16)
+        if k < 0; getc; fin
         if k > 136 or k < -16; inck = -inck; fin
         k = k + inck
-        dcgrPixScr(i, j, 16, 16, @sprite)
+        //dcgrPixScr(i, j, 16, 16, @sprite)
         if i > 102 or i < 23; inci = -inci; fin
         i = i + inci
         if j > 145 or j < 32; incj = -incj; fin
@@ -74,6 +103,7 @@ def dcgrTest#0
 end
 
 dcgrMode(0)
+compileSprite
 dcgrTest
 dcgrMode(-1)
 done
