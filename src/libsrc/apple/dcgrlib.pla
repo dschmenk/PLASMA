@@ -448,8 +448,6 @@ export asm dcgrHLinScr(x1, x2, y)#0
         INY
         STY     TMPH
         LDY     ESTKL-3,X   ; Y COORD
-        ;CPY     #192
-        ;BCS     +
 end
 asm     _dcgrHLinScrA
         LDA     $1000,Y     ; HGRSCANL
@@ -459,12 +457,12 @@ asm     _dcgrHLinScrA
         LDY     ESTKL-1,X   ; X1 COORD
 end
 asm     _dcgrHLinScrB
--       JSR     $1000       ; PLOT PIX W/ XCOORD IN Y REG
+XHS     JSR     $1000       ; PLOT PIX W/ XCOORD IN Y REG
         INC     ESTKL-1,X
         LDY     ESTKL-1,X   ; X1 COORD
         CPY     TMPH        ; X2 COORD
-        BNE     -
-+       RTS
+        BNE     XHS
+        RTS
 end
 export asm dcgrVLinScr(y1, y2, x)#0
         INX
@@ -477,7 +475,7 @@ export asm dcgrVLinScr(y1, y2, x)#0
         LDY     ESTKL-1,X   ; Y1 COORD
 end
 asm     _dcgrVLinScrA
--       LDA     $1000,Y     ; HGRSCANL
+YVS     LDA     $1000,Y     ; HGRSCANL
         STA     DSTL
         LDA     $2000,Y     ; HGRSCANH
         STA     DSTH
@@ -488,8 +486,8 @@ asm     _dcgrVLinScrB
         INC     ESTKL-1,X
         LDY     ESTKL-1,X   ; Y1 COORD
         CPY     TMPH        ; Y2 COORD
-        BNE     -
-+       RTS
+        BNE     YVS
+        RTS
 end
 export asm dcgrPixScr(x, y, w, h, pixptr)#0
         INX
@@ -515,7 +513,7 @@ YPIXS   LDY     ESTKL-2,X   ; Y COORD
         BEQ     RETPIXS
         INC     ESTKL-2,X   ; Y COORD++
         CPY     #192        ; OFF SCREEN?
-        BCS     -
+        BCS     YPIXS
 end
 asm     _dcgrPixScrA
         LDA     $1000,Y     ; HGRSCANL
@@ -739,17 +737,18 @@ export asm dcgrHLinMem(x1, x2, y, dstptr, dstspan)#0
         STA     DSTH
         DEY
         BNE     -
-+       INC     ESTKL-2,X   ; ADJUST BCS BELOW
-XHM     LDA     ESTKL-1,X   ; X1 COORD
-        CMP     ESTKL-2,X   ; X2 COORD
-        BNE     +
-        TAY
++       LDY     ESTKL-2,X   ; ADJUST BNE BELOW
+        INY
+        STY     TMPH
+        BNE     +           ; BRA
 end
 asm     _dcgrHLinMemB
-        JSR     $1000       ; PLOT PIX W/ XCOORD IN Y REG
+XHM     JSR     $1000       ; PLOT PIX W/ XCOORD IN Y REG
         INC     ESTKL-1,X   ; X1++
++       LDY     ESTKL-1,X   ; X1 COORD
+        CPY     TMPH        ; X2 COORD
         BNE     XHM          ; BRA
-+       RTS
+        RTS
 end
 export asm dcgrVLinMem(y1, y2, x, dstptr, dstspan)#0
         INX
@@ -773,15 +772,11 @@ export asm dcgrVLinMem(y1, y2, x, dstptr, dstspan)#0
         STA     DSTH
         DEY
         BNE     -
-+       INC     ESTKL-2,X   ; ADJUST BCS BELOW
-YVM     LDA     ESTKL-1,X   ; Y1 COORD
-        CMP     ESTKL-2,X   ; Y2 COORD
-        BEQ     +
-        LDY     ESTKL-3,X   ; X COORD
++       INC     ESTKL-2,X   ; ADJUST BNE BELOW
+YVM     LDY     ESTKL-3,X   ; X COORD
 end
 asm     _dcgrVLinMemB
         JSR     $1000       ; PLOT PIX W/ XCOORD IN Y REG
-        INC     ESTKL-1,X   ; Y1++
         CLC
         LDA     ESTKL-5,X   ; SPAN
         ADC     DSTL
@@ -789,7 +784,10 @@ asm     _dcgrVLinMemB
         LDA     ESTKH-5,X
         ADC     DSTH
         STA     DSTH
-        BNE     YVM         ; BRA
+        INC     ESTKL-1,X   ; Y1++
+        LDA     ESTKL-1,X   ; Y1 COORD
+        CMP     ESTKL-2,X   ; Y2 COORD
+        BNE     YVM
 +       RTS
 end
 export asm dcgrPixMem(x, y, w, h, pixptr, dstw, dsth, dstptr, dstspan)#0
@@ -825,11 +823,8 @@ export asm dcgrPixMem(x, y, w, h, pixptr, dstw, dsth, dstptr, dstspan)#0
         CLC
         ADC     ESTKL-4,X   ; HEIGHT
         STA     ESTKL-4,X   ; -> BOTTOM EDGE
-YPIXM   LDA     ESTKL-2,X   ; Y COORD
-        CMP     ESTKL-4,X   ; AT BOTTOM?
-        BEQ     RETPIXM
-        INC     ESTKL-2,X   ; Y COORD++
-        CMP     ESTKL-7,X   ; OUT OF DST BOUNDS?
+        LDA     ESTKL-2,X   ; Y COORD
+YPIXM   CMP     ESTKL-7,X   ; OUT OF DST BOUNDS?
         BCS     NXTPIXM
 end
 asm     _dcgrPixMemA
@@ -886,8 +881,11 @@ NXTPIXM CLC
         LDA     ESTKH-9,X
         ADC     DSTH
         STA     DSTH
-        BNE     YPIXM      ; NEXT ROW
-RETPIXM RTS
+        INC     ESTKL-2,X   ; Y COORD++
+        LDA     ESTKL-2,X   ; Y COORD
+        CMP     ESTKL-4,X   ; AT BOTTOM?
+        BNE     YPIXM       ; NEXT ROW
+        RTS
 end
 //
 // Screen -> Memory Block Transfer
