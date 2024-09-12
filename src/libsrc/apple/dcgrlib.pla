@@ -204,7 +204,7 @@ asm _clipX#0
         LDA     ESTKL-1,X   ; X COORD
         CMP     TMPL        ; > DST_WIDTH?
         BCS     INVISX      ; YEP, X OFF RIGHT EDGE
-        CLC
+        ;CLC
         ADC     ESTKL-3,X   ; X + WIDTH
         CMP     TMPL        ; < DST_WIDTH?
         BCC     VISX        ; YEP, FULLY VISIBLE
@@ -250,7 +250,7 @@ asm _clipY#0
         LDA     ESTKL-2,X   ; Y COORD
         CMP     TMPL        ; > DST_HEIGHT?
         BCS     INVISY      ; YEP, Y OFF BOTTOM EDGE
-        CLC
+        ;CLC
         ADC     ESTKL-4,X   ; Y + HEIGHT
         CMP     TMPL        ; < DST_HEIGHT
         BCC     VISY        ; YEP, FULLY VISIBLE
@@ -488,6 +488,59 @@ asm     _dcgrVLinScrB
         CPY     TMPH        ; Y2 COORD
         BNE     YVS
         RTS
+end
+export asm dcgrBitScr(x, y, w, h, bitptr)#0
+        INX
+        INX
+        INX
+        INX
+        INX
+        STX     ESP
+        LDA     ESTKL-5,X   ; BITPTR
+        STA     SRCL
+        LDA     ESTKH-5,X
+        STA     SRCH
+YBITS   LDY     ESTKL-2,X   ; Y COORD
+        INC     ESTKL-2,X   ; Y COORD++
+        CPY     #192        ; OFF SCREEN?
+        BCS     NXTBITS
+end
+asm     _dcgrBitScrA
+        LDA     $1000,Y     ; HGRSCANL
+        STA     DSTL
+        LDA     $2000,Y     ; HGRSCANH
+        STA     DSTH
+        LDA     ESTKL-1,X   ; X COORD
+        STA     ESTKH-1,X   ; CURRENT X COORD
+        LDA     ESTKL-3,X   ; WIDTH
+        STA     ESTKH-3,X   ; CURRENT WIDTH
+BITS8   LDA     #8
+        STA     TMPL
+        LDY     #$00
+        LDA     (SRC),Y     ; SRC BITMAP
+        INC     SRCL
+        BNE     +
+        INC     SRCH
++       LDY     ESTKH-1,X   ; CURRENT X COORD
+BITSCR  LSR
+        BCC     +
+        CPY     #140        ; OFF SCREEN?
+        BCS     +
+        PHA
+end
+asm     _dcgrBitScrB
+        JSR     $1000       ; PLOT PIXEL
+        PLA
++       DEC     ESTKH-3,X   ; AT RIGHT EDGE?
+        BEQ     NXTBITS
+        INC     ESTKH-1,X   ; X++
+        LDY     ESTKH-1,X   ; CURRENT X COORD
+        DEC     TMPL
+        BNE     BITSCR
+        BEQ     BITS8
+NXTBITS DEC     ESTKL-4,X   ; HEIGHT
+        BNE     YBITS       ; NEXT ROW
+RETBITS RTS
 end
 export asm dcgrPixScr(x, y, w, h, pixptr)#0
         INX
@@ -790,6 +843,80 @@ asm     _dcgrVLinMemB
         BNE     YVM
 +       RTS
 end
+export asm dcgrBitMem(x, y, w, h, bitptr, dstw, dsth, dstptr, dstspan)#0
+        TXA
+        CLC
+        ADC     #9
+        TAX
+        STX     ESP
+        LDA     ESTKL-8,X   ; DSTPTR
+        STA     DSTL
+        LDA     ESTKH-8,X
+        STA     DSTH
+        LDY     ESTKL-2,X   ; Y COORD
+        BEQ     +
+-       CLC                 ; ADVANCE TO Y SCANLINE
+        LDA     ESTKL-9,X   ; SPAN
+        ADC     DSTL
+        STA     DSTL
+        LDA     ESTKH-9,X
+        ADC     DSTH
+        STA     DSTH
+        DEY
+        BNE     -
++       LDA     ESTKL-5,X   ; BITPTR
+        STA     SRCL
+        LDA     ESTKH-5,X
+        STA     SRCH
+        LDA     ESTKL-1,X   ; X COORD
+        CLC
+        ADC     ESTKL-3,X   ; WIDTH
+        STA     TMPH        ; -> RIGHT EDGE
+YBITM   LDA     ESTKL-2,X   ; Y COORD
+        INC     ESTKL-2,X   ; Y COORD++
+        CMP     ESTKL-7,X   ; OUT OF DST BOUNDS?
+        BCS     NXTBITM
+        TAY
+        LDA     ESTKL-1,X   ; X COORD
+        STA     ESTKH-1,X   ; CURRENT X COORD
+        LDA     ESTKL-3,X   ; WIDTH
+        STA     ESTKH-3,X   ; CURRENT WIDTH
+BITM8   LDA     #8
+        STA     TMPL
+        LDY     #$00
+        LDA     (SRC),Y     ; SRC BITMAP
+        INC     SRCL
+        BNE     +
+        INC     SRCH
++       LDY     ESTKH-1,X   ; CURRENT X COORD
+BITMEM  LSR
+        BCC     +
+        CPY     TMPH        ; OUT OF DST BOUNDS?
+        BCS     +
+        PHA
+end
+asm     _dcgrBitMemA
+        JSR     $1000       ; PLOT PIXEL
+        PLA
++       DEC     ESTKH-3,X   ; AT RIGHT EDGE?
+        BEQ     NXTBITM
+        INC     ESTKH-1,X   ; X++
+        LDY     ESTKH-1,X   ; CURRENT X COORD
+        DEC     TMPL
+        BNE     BITMEM
+        BEQ     BITM8
+NXTBITM CLC
+        LDA     ESTKL-9,X   ; SPAN
+        ADC     DSTL
+        STA     DSTL
+        LDA     ESTKH-9,X
+        ADC     DSTH
+        STA     DSTH
+        DEC     ESTKL-4,X   ; HEIGHT
+        BNE     YBITM       ; NEXT ROW
+RETBITM RTS
+end
+
 export asm dcgrPixMem(x, y, w, h, pixptr, dstw, dsth, dstptr, dstspan)#0
         TXA
         CLC
@@ -1552,6 +1679,9 @@ _dcgrHLinScrB:1     = @_dcgrPlotScrB
 _dcgrVLinScrA:1     = @hgrscanl
 _dcgrVLinScrA:6     = @hgrscanh
 _dcgrVLinScrB:1     = @_dcgrPlotScrB
+_dcgrBitScrA:1      = @hgrscanl
+_dcgrBitScrA:6      = @hgrscanh
+_dcgrBitScrB:1      = @_dcgrPlotScrB
 _dcgrPixScrA:1      = @hgrscanl
 _dcgrPixScrA:6      = @hgrscanh
 _dcgrPixScrB:1      = @_dcgrColorA
@@ -1588,6 +1718,7 @@ _dcgrOpPlotMemG:1   = @memclrl
 _dcgrOpPlotMemH:1   = @memclrh
 _dcgrHLinMemB:1     = @_dcgrPlotMemB
 _dcgrVLinMemB:1     = @_dcgrPlotMemB
+_dcgrBitMemA:1      = @_dcgrPlotMemB
 _dcgrPixMemB:1      = @_dcgrColorA
 _dcgrPixMemC:1      = @_dcgrPlotMemB
 _dcgrPixMemD:1      = @_dcgrColorA
