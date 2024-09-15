@@ -138,6 +138,8 @@ byte = $00,$2C,$1A,$00,$00,$00,$00,$00,$00,$2A,$14,$2A,$14,$2A,$00,$00
 //
 // Test sprite
 //
+const SPR_WIDTH  = 16
+const SPR_HEIGHT = 16
 byte[] sprite   = $55,$55,$55,$05,$50,$55,$55,$55
 byte[]          = $55,$55,$00,$00,$00,$00,$55,$55
 byte[]          = $55,$00,$00,$AA,$AA,$00,$00,$55
@@ -154,79 +156,87 @@ byte[]          = $05,$00,$AA,$AA,$AA,$AA,$00,$50
 byte[]          = $55,$00,$00,$AA,$AA,$00,$00,$55
 byte[]          = $55,$55,$00,$00,$00,$00,$55,$55
 byte[]          = $55,$55,$55,$05,$50,$55,$55,$55
-
-word sprite7mask[7]
+word sprite7msk[7]
 word sprite7[7]
-word sprite7span, sprite7width
+word sprite7span, sprite7w
+//
+// Sliding sprite Y coordinate
+//
+const SLIDE_Y = 170
+//
+// Utility functions
+//
+def dcgrAllocBl7Mem(w, h)#2
+    word memblk, span
 
-def dcgrStrScr(x, y, strptr)#0
+    span   = (w+13)/7 << 2
+    memblk = heapalloc(span * h)
+    return memblk, span
+end
+def dcgrStr(x, y, strptr)#0
     byte i
 
     for i = 1 to ^strptr
-        dcgrBitScr(x, y, 7, 8, @fontBits + (^(strptr + i) + 128) * 8)
+        dcgrBitmap(x, y, 7, 8, @fontBits + (^(strptr + i) + 128) * 8)
         x = x + 7
     next
 end
-def dcgrBoldStrScr(x, y, strptr)#0
+def dcgrBoldStr(x, y, strptr)#0
     byte h, v
 
     for v = y - 1 to y + 1
         for h = x - 1 to x + 1
-            dcgrStrScr(h, v, strptr)
+            dcgrStr(h, v, strptr)
         next
     next
     dcgrColor(DCLR_BLACK)
-    dcgrStrScr(x, y, strptr)
+    dcgrStr(x, y, strptr)
 end
-def dcgrRectMem(x, y, w, h, dstptr, dstspan)#0
+def dcgrRect(x, y, w, h)#0
     byte x2, y2, v
 
-    if x < 0; w = w + x; x = 0; fin
-    if y < 0; h = h + y; y = 0; fin
     x2 = x + w - 1
     y2 = y + h - 1
     for v = y to y2
-        dcgrHLinMem(x, x2, v, dstptr, dstspan)
+        dcgrHLin(x, x2, v)
     next
 end
-def dcgrStrMem(x, y, strptr, dstw, dsth, dstptr, dstspan)#0
-    byte i
-
-    for i = 1 to ^strptr
-        dcgrBitMem(x, y, 7, 8, @fontBits + (^(strptr + i) + 128) * 8, dstw, dsth, dstptr, dstspan)
-        x = x + 7
-    next
-end
+////////////////////////////////////////////////////////////////
+//                                                            //
+//                         Test Harness                       //
+//                                                            //
+////////////////////////////////////////////////////////////////
 def compileSprite#0
     byte i
 
     for i = 0 to 6
-        dcgrOpMem(OP_SRC)
-        sprite7[i],     sprite7span = dcgrAllocBl7Mem(16, 16)
-        sprite7mask[i], sprite7span = dcgrAllocBl7Mem(16, 16)
-        sprite7width = sprite7span >> 2
+        sprite7[i],    sprite7span = dcgrAllocBl7Mem(SPR_WIDTH, SPR_HEIGHT)
+        sprite7msk[i], sprite7span = dcgrAllocBl7Mem(SPR_WIDTH, SPR_HEIGHT)
+        sprite7w = sprite7span >> 2
+        dcgrSurfMem(OP_SRC, SPR_HEIGHT, sprite7[i], sprite7span)
         dcgrColor(DCLR_BLACK)
-        dcgrClearBl7Mem(0, 0, sprite7width, 16, sprite7[i],     sprite7span)
+        dcgrClearBl7(0, 0, sprite7w, SPR_HEIGHT)
+        dcgrPixmap(i + 2, 0, SPR_WIDTH, SPR_HEIGHT, @sprite)
+        dcgrSurfMem(OP_SRC, SPR_HEIGHT, sprite7msk[i], sprite7span)
         dcgrColor(DCLR_WHITE)
-        dcgrClearBl7Mem(0, 0, sprite7width, 16, sprite7mask[i], sprite7span)
-        dcgrPixMem(i + 2, 0, 16, 16, @sprite, sprite7width * 7, 16, sprite7[i],     sprite7span)
-        dcgrPixMem(i + 2, 0, 16, 16, @sprite, sprite7width * 7, 16, sprite7mask[i], sprite7span)
-        dcgrOpMem(OP_XOR)
-        dcgrPixMem(i + 2, 0, 16, 16, @sprite, sprite7width * 7, 16, sprite7mask[i], sprite7span)
-
-        dcgrMemBl7Scr(0, i*16, sprite7width, 16, sprite7[i],     sprite7span)
-        dcgrMemBl7Scr(4, i*16, sprite7width, 16, sprite7mask[i], sprite7span)
+        dcgrClearBl7(0, 0, sprite7w, SPR_HEIGHT)
+        dcgrPixmap(i + 2, 0, SPR_WIDTH, SPR_HEIGHT, @sprite)
+        dcgrOp(OP_XOR)
+        dcgrPixmap(i + 2, 0, SPR_WIDTH, SPR_HEIGHT, @sprite)
+        dcgrSurfScr(OP_SRC)
+        dcgrMemBl7(0,        i * SPR_HEIGHT, sprite7w, SPR_HEIGHT, sprite7[i],    sprite7span)
+        dcgrMemBl7(sprite7w, i * SPR_HEIGHT, sprite7w, SPR_HEIGHT, sprite7msk[i], sprite7span)
     next
-    dcgrOpMem(OP_SRC)
 end
 def dcgrTest#0
     word i, j, k, i7, im7, k7, km7, s7w, inci, incj, inck
-    word backblk, backspan, backw7, backofst
-    word restrblk, restrspan, restrw7, restrw
+    word backblk, backspan
+    word restrblk, restrspan, restr7w, restrw
     byte mode
 
-    setlineplot(@dcgrPlotScr)
-    setlinespans(@dcgrHLinScr, @dcgrVLinScr)
+    dcgrSurfScr(OP_SRC)
+    setlineplot(@dcgrPlot)
+    setlinespans(@dcgrHLin, @dcgrVLin)
     for i = 0 to 191 step 2
         dcgrColor(i)
         linespans(0, 0, 139, i)
@@ -236,22 +246,22 @@ def dcgrTest#0
         linespans(0, 0, i, 191)
     next
     dcgrColor(DCLR_BLACK)
-    dcgrClearBl7Scr(21/7, 30, 100/7, 132)
+    dcgrClearBl7(21/7, 30, 100/7, 132)
     dcgrColor(DCLR_WHITE)
-    dcgrHLinScr((21/7)*7-1, (21/7)*7+(100/7)*7, 29)
-    dcgrHLinScr((21/7)*7-1, (21/7)*7+(100/7)*7, 29+133)
-    dcgrVLinScr(29, 29+133, (21/7)*7-1)
-    dcgrVLinScr(29, 29+133, (21/7)*7+(100/7)*7)
-    dcgrBoldStrScr(30, 10, "Hello, DCGR!")
+    dcgrHLin((21/7)*7-1, (21/7)*7+(100/7)*7, 29)
+    dcgrHLin((21/7)*7-1, (21/7)*7+(100/7)*7, 29+133)
+    dcgrVLin(29, 29+133, (21/7)*7-1)
+    dcgrVLin(29, 29+133, (21/7)*7+(100/7)*7)
+    dcgrBoldStr(30, 10, "Hello, DCGR!")
     i = 64; j = 64; k = 86
     k7 = k/7
     inci = 1; incj = 1; inck = 2
-    backblk, backspan = dcgrAllocBl7Mem(SCR_WIDTH, 16)
-    backw7 = backspan >> 2
-    dcgrScrBl7Mem(0, 170, backw7, 16, backblk, backspan)
-    restrblk, restrspan = dcgrAllocBl7Mem(16, 16)
-    restrw7 = restrspan >> 2
-    restrw  = restrw7 * 7
+    backblk, backspan = dcgrAllocBl7Mem(SCR_WIDTH, SPR_HEIGHT)
+    dcgrSurfMem(OP_SRC, SPR_HEIGHT, backblk, backspan)
+    dcgrScrBl7(0, SLIDE_Y, backspan >> 2, SPR_HEIGHT)
+    restrblk, restrspan = dcgrAllocBl7Mem(SPR_WIDTH, SPR_HEIGHT)
+    restr7w = restrspan >> 2
+    restrw  = restr7w * 7
     mode = 8
     while mode
         if ^$C000 >= 128
@@ -259,50 +269,59 @@ def dcgrTest#0
         fin
         k7, km7 = divmod(k, 7)
         i7, im7 = divmod(i, 7)
-        if i7 + sprite7width < (21/7)+(100/7)
-            s7w = sprite7width
+        if i7 + sprite7w < (21/7)+(100/7)
+            s7w = sprite7w
         else
             s7w = (21/7)+(100/7) - i7
         fin
-        dcgrOpMem(OP_SRC)
         when mode
             is 1
-                dcgrMemBl7Scr(i7, j, s7w, 16, sprite7[im7], sprite7span)
+                dcgrSurfScr(OP_SRC)
+                dcgrMemBl7(i7, j, s7w, SPR_HEIGHT, sprite7[im7], sprite7span)
             is 2
                 if k < 0 and km7  // Handle off left edge special case
                     k7--
                     km7 = 7 + km7
                 fin
-                dcgrMemBl7Mem(0, 0, restrw7, 16, backblk + (k7 << 1), backspan, restrw7, 16, restrblk)
-                dcgrOpMem(OP_AND)
-                dcgrMemBl7Mem(0, 0, sprite7width, 16, sprite7mask[km7], sprite7span, restrw7, 16, restrblk)
-                dcgrOpMem(OP_XOR)
-                dcgrMemBl7Mem(0, 0, sprite7width, 16, sprite7[km7], sprite7span, restrw7, 16, restrblk)
-                dcgrOpMem(OP_SRC)
-                dcgrMemBl7Scr(k7, 170, restrw7, 16, restrblk, restrspan)
+                dcgrSurfMem(OP_SRC, SPR_HEIGHT, restrblk, restrspan)
+                dcgrMemBl7(0, 0, restr7w, SPR_HEIGHT, backblk + (k7 << 1), backspan)
+                dcgrOp(OP_AND)
+                dcgrMemBl7(0, 0, sprite7w, SPR_HEIGHT, sprite7msk[km7], sprite7span)
+                dcgrOp(OP_XOR)
+                dcgrMemBl7(0, 0, sprite7w, SPR_HEIGHT, sprite7[km7], sprite7span)
+                dcgrSurfScr(OP_SRC)
+                dcgrMemBl7(k7, SLIDE_Y, restr7w, SPR_HEIGHT, restrblk, restrspan)
                 break
             is 3
-                dcgrPixScr(i + 2, j, 16, 16, @sprite)
+                dcgrSurfScr(OP_SRC)
+                dcgrPixmap(i, j, SPR_WIDTH, SPR_HEIGHT, @sprite)
             is 4
-                dcgrMemBl7Mem(0, 0, restrw7, 16, backblk + (k7 << 1), backspan, restrw7, 16, restrblk)
-                dcgrPixMem(km7 + 2, 0, 16, 16, @sprite, restrw, 16, restrblk, restrspan)
-                dcgrMemBl7Scr(k7, 170, restrw7, 16, restrblk, restrspan)
+                dcgrSurfMem(OP_SRC, SPR_HEIGHT, restrblk, restrspan)
+                dcgrMemBl7(0, 0, restr7w, SPR_HEIGHT, backblk + (k7 << 1), backspan)
+                dcgrPixmap(km7 + 2, 0, SPR_HEIGHT, SPR_HEIGHT, @sprite)
+                dcgrSurfScr(OP_SRC)
+                dcgrMemBl7(k7, SLIDE_Y, restr7w, SPR_HEIGHT, restrblk, restrspan)
                 break
             is 5
-                dcgrPixScr(i + 2, j, 16, 16, @sprite)
+                dcgrSurfScr(OP_SRC)
+                dcgrPixmap(i, j, SPR_WIDTH, SPR_HEIGHT, @sprite)
             is 6
-                dcgrMemBl7Mem(0, 0, restrw7, 16, backblk + (k7 << 1), backspan, restrw7, 16, restrblk)
+                dcgrSurfMem(OP_SRC, SPR_HEIGHT, restrblk, restrspan)
+                dcgrMemBl7(0, 0, restr7w, SPR_HEIGHT, backblk + (k7 << 1), backspan)
                 dcgrColor(DCLR_BLACK)
-                dcgrRectMem(km7 + 2, 3, 14 + 2, 10, restrblk, restrspan)
+                dcgrRect(km7 + 2, 3, 14 + 2, 10)
                 dcgrColor(DCLR_WHITE)
-                dcgrStrMem(km7 + 3, 4, "DC", restrw, 16, restrblk, restrspan)
-                dcgrMemBl7Scr(k7, 170, restrw7, 16, restrblk, restrspan)
+                dcgrStr(km7 + 3, 4, "DC")
+                dcgrSurfScr(OP_SRC)
+                dcgrMemBl7(k7, SLIDE_Y, restr7w, SPR_HEIGHT, restrblk, restrspan)
                 break
             is 7
-                dcgrMemBl7Scr(i7, j, s7w, 16, sprite7[im7], sprite7span)
+                dcgrSurfScr(OP_SRC)
+                dcgrMemBl7(i7, j, s7w, SPR_HEIGHT, sprite7[im7], sprite7span)
                 break
             is 8
-                dcgrPixScr(i, j, 16, 16, @sprite)
+                dcgrSurfScr(OP_SRC)
+                dcgrPixmap(i, j, SPR_WIDTH, SPR_HEIGHT, @sprite)
                 break
         wend
         if k > 136 or k < -16; inck = -inck; fin
