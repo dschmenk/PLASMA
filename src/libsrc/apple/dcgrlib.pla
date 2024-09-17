@@ -556,18 +556,19 @@ asm dcgrBitMapScr(x, y, bitw, bith, bitptr)#0
         STA     SRCL
         LDA     ESTKH-5,X
         STA     SRCH
-        LDA     ESTKL-1,X   ; X1 COORD
+        LDA     ESTKL-1,X   ; X COORD
         ADC     ESTKL-3,X   ; WIDTH
-        STA     TMPH        ; X2 COORD
+        STA     TMPH        ; RIGHT EDGE
 YBITS   LDY     ESTKL-2,X   ; Y COORD
         INC     ESTKL-2,X   ; Y COORD++
         CPY     #192        ; OFF SCREEN?
         BCC     +
         LDA     ESTKL-3,X   ; WIDTH
+        ADC     #6          ; ROUND UP (WITH CARRY)
         LSR
         LSR
         LSR
-        ADC     SRCL
+        ADC     SRCL        ; NEXT BITMAP ROW
         STA     SRCL
         LDA     #$00
         ADC     SRCH
@@ -581,17 +582,15 @@ asm     _dcgrBitmapScrA
         STA     DSTH
         LDA     ESTKL-1,X   ; X1 COORD
         STA     ESTKH-1,X   ; CURRENT X COORD
-BITS8   LDA     #8
-        STA     TMPL
+BITS8   LDY     #$08
+        STY     TMPL        ; BIT COUNT
         LDY     #$00
-        LDA     (SRC),Y     ; SRC BITMAP
+        LDA     (SRC),Y     ; SRC BITS
         INC     SRCL
-        BNE     BITSCR
+        BNE     +
         INC     SRCH
-BITSCR  LDY     ESTKH-1,X   ; CURRENT X COORD
-        CPY     TMPH        ; X == X2?
-        BEQ     NXTBITS
-        LSR
++       LDY     ESTKH-1,X   ; CURRENT X COORD
+BITSCR  LSR
         BCC     +
         CPY     #140        ; OFF SCREEN?
         BCS     +
@@ -601,7 +600,10 @@ asm     _dcgrBitmapScrB
         JSR     $1000       ; PLOT PIXEL
         PLA
 +       INC     ESTKH-1,X   ; X++
-        DEC     TMPL
+        LDY     ESTKH-1,X   ; CURRENT X COORD
+        CPY     TMPH        ; AT RIGHT EDGE?
+        BEQ     NXTBITS
+        DEC     TMPL        ; BIT COUNT
         BNE     BITSCR
         BEQ     BITS8
 NXTBITS DEC     ESTKL-4,X   ; HEIGHT
@@ -628,8 +630,9 @@ YPIXS   LDY     ESTKL-2,X   ; Y COORD
         CPY     #192        ; OFF SCREEN?
         BCC     +
         LDA     ESTKL-3,X   ; WIDTH
+        ADC     #0          ; ROUND UP (WITH CARRY)
         LSR
-        ADC     SRCL
+        ADC     SRCL        ; NEXT PIXMAP ROW
         STA     SRCL
         LDA     #$00
         ADC     SRCH
@@ -866,7 +869,7 @@ asm dcgrHLinMem(x1, x2, y, memptr, memspan)#0
         LDA     ESTKL-5,X   ; SPAN
         ADC     DSTL
         STA     DSTL
-        LDA     ESTKH-5,X
+        LDA     #$00        ; ESTKH-5,X
         ADC     DSTH
         STA     DSTH
         DEY
@@ -902,7 +905,7 @@ asm dcgrVLinMem(y1, y2, x, memptr, memspan)#0
 -       LDA     ESTKL-5,X   ; SPAN
         ADC     DSTL
         STA     DSTL
-        LDA     ESTKH-5,X
+        LDA     #$00        ; ESTKH-5,X
         ADC     DSTH
         STA     DSTH
         DEY
@@ -916,7 +919,7 @@ asm     _dcgrVLinMemB
         LDA     ESTKL-5,X   ; SPAN
         ADC     DSTL
         STA     DSTL
-        LDA     ESTKH-5,X
+        LDA     #$00        ; ESTKH-5,X
         ADC     DSTH
         STA     DSTH
         LDA     ESTKL-1,X   ; Y1 COORD
@@ -941,7 +944,7 @@ asm dcgrBitMapMem(x, y, bitw, bith, bitptr, memw, memh, memptr, memspan)#0
 -       LDA     ESTKL-9,X   ; SPAN
         ADC     DSTL
         STA     DSTL
-        LDA     ESTKH-9,X
+        LDA     #$00        ; ESTKH-9,X
         ADC     DSTH
         STA     DSTH
         DEY
@@ -958,50 +961,48 @@ YBITM   LDA     ESTKL-2,X   ; Y COORD
         CMP     ESTKL-7,X   ; OUT OF DST BOUNDS?
         BCC     +
         LDA     ESTKL-3,X   ; WIDTH
+        ADC     #6          ; ROUND UP (WITH CARRY)
         LSR
         LSR
         LSR
-        ADC     SRCL
+        ADC     SRCL        ; NEXT BITMAP ROW
         STA     SRCL
         LDA     #$00
         ADC     SRCH
         STA     SRCH
         BNE     NXTBITM     ; BRA
-+       TAY
-        LDA     ESTKL-1,X   ; X COORD
++       LDA     ESTKL-1,X   ; X COORD
         STA     ESTKH-1,X   ; CURRENT X COORD
 BITM8   LDA     #8
-        STA     TMPL
+        STA     ESTKH-2,X   ; BIT COUNT
         LDY     #$00
         LDA     (SRC),Y     ; SRC BITMAP
+        STA     TMPL
         INC     SRCL
         BNE     +
         INC     SRCH
-+       PHA
-BITMEM  LDA     ESTKH-1,X   ; CURRENT X COORD
-        CMP     ESTKH-3,X   ; AT RIGHT EDGE?
-        BEQ     ++          ; NXTBITM - 1
++       LDA     ESTKH-1,X   ; CURRENT X COORD
+BITMEM  LSR     TMPL
+        BCC     +
         CMP     ESTKL-6,X   ; OUT OF DST BOUNDS?
         BCS     +
         TAY
-        PLA
-        LSR
-        PHA
-        BCC     +
         LDA     ESTKL-9,X   ; SPAN
 end
 asm     _dcgrBitmapMemA
         JSR     $1000       ; PLOT PIXEL
 +       INC     ESTKH-1,X   ; X++
-        DEC     TMPL
+        LDA     ESTKH-1,X   ; CURRENT X COORD
+        CMP     ESTKH-3,X   ; AT RIGHT EDGE?
+        BEQ     NXTBITM
+        DEC     ESTKH-2,X   ; BIT COUNT--
         BNE     BITMEM
         BEQ     BITM8
-++      PLA
 NXTBITM CLC
         LDA     ESTKL-9,X   ; SPAN
         ADC     DSTL
         STA     DSTL
-        LDA     ESTKH-9,X
+        LDA     #$00        ; ESTKH-9,X
         ADC     DSTH
         STA     DSTH
         DEC     ESTKL-4,X   ; HEIGHT
@@ -1024,7 +1025,7 @@ asm dcgrPixMapMem(x, y, pixw, pixh, pixptr, memw, memh, memptr, memspan)#0
         LDA     ESTKL-9,X   ; SPAN
         ADC     DSTL
         STA     DSTL
-        LDA     ESTKH-9,X
+        LDA     #$00        ; ESTKH-9,X
         ADC     DSTH
         STA     DSTH
         DEY
@@ -1042,8 +1043,9 @@ YPIXM   LDA     ESTKL-2,X   ; Y COORD
         CMP     ESTKL-7,X   ; OUT OF DST BOUNDS?
         BCC     +
         LDA     ESTKL-3,X   ; WIDTH
+        ADC     #0          ; ROUND UP (WITH CARRY)
         LSR
-        ADC     SRCL
+        ADC     SRCL        ; NEXT PIXMAP ROW
         STA     SRCL
         LDA     #$00
         ADC     SRCH
@@ -1103,7 +1105,7 @@ NXTPIXM CLC
         LDA     ESTKL-9,X   ; SPAN
         ADC     DSTL
         STA     DSTL
-        LDA     ESTKH-9,X
+        LDA     #$00        ; ESTKH-9,X
         ADC     DSTH
         STA     DSTH
         DEC     ESTKL-4,X   ; HEIGHT
@@ -1810,7 +1812,7 @@ export def dcgrSurfScr(op)#0
     surfWidth7 = 20
     surfHeight = 192
     surfPtr    = $2000
-    surfSpan   = 40
+    surfSpan   = 10
     if dcgrSurface == DST_MEMORY
         dcgrSurface    = DST_SCREEN
         dcgrPlot:1     = @dcgrPlotScr
