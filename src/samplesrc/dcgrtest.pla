@@ -162,11 +162,19 @@ word sprite7span, sprite7w
 //
 // Dither matrices
 //
+byte[] dither25 = $00, $00, $AA, $AA, $00, $00, $AA, $AA
+byte[]          = $00, $00, $AA, $AA, $00, $00, $AA, $AA
+byte[]          = $00, $00, $AA, $AA, $00, $00, $AA, $AA
+byte[]          = $00, $00, $AA, $AA, $00, $00, $AA, $AA
 byte[] dither50 = $55, $55, $AA, $AA, $55, $55, $AA, $AA
 byte[]          = $55, $55, $AA, $AA, $55, $55, $AA, $AA
 byte[]          = $55, $55, $AA, $AA, $55, $55, $AA, $AA
 byte[]          = $55, $55, $AA, $AA, $55, $55, $AA, $AA
-
+byte[] dither75 = $55, $55, $FF, $FF, $55, $55, $FF, $FF
+byte[]          = $55, $55, $FF, $FF, $55, $55, $FF, $FF
+byte[]          = $55, $55, $FF, $FF, $55, $55, $FF, $FF
+byte[]          = $55, $55, $FF, $FF, $55, $55, $FF, $FF
+word[] dither   = @dither25, @dither50, @dither75
 //
 // Sliding sprite Y coordinate
 //
@@ -237,7 +245,7 @@ end
 //                                                            //
 ////////////////////////////////////////////////////////////////
 def dcgrTest#0
-    word i, j, k, i7, im7, k7, km7, s7w, inci, incj, inck
+    word i, j, k, oi, oj, i7, im7, k7, km7, s7w, inci, incj, inck
     word backblk, backspan
     word restrblk, restrspan, restr7w, restrw
     byte mode
@@ -331,26 +339,39 @@ def dcgrTest#0
                 dcgrSurfScr(OP_SRC)
                 dcgrPixMap(i, j, SPRW, SPRH, @sprite)
                 break
+            is 9
+                dcgrSurfScr(OP_XOR)
+                dcgrPixMap(oi, oj, SPRW, SPRH, @sprite)
+                dcgrPixMap(i, j, SPRW, SPRH, @sprite)
+                break
         wend
         if k > 136 or k < -16; inck = -inck; fin
         k = k + inck
+        oi = i; oj = j
         if i > 102 or i < 22; inci = -inci; fin
         i = i + inci
         if j > 145 or j < 32; incj = -incj; fin
         j = j + incj
     loop
-    dcgrSurfMem(OP_SRC, SPRH, backblk, backspan)
-    dcgrColor(CLR_WHITE)
-    dcgrClearBl7(0, 0, SCR_WIDTH7, SPRH)
-    dcgrColor(CLR_BLACK)
-    for i = 0 to 139 step 16
-        dcgrBitMap(i, 0, 16, 16, @dither50)
+    //
+    // Re-use the back buffer for a stipple pattern to mask the screen
+    //
+    for k = 0 to 2
+        dcgrSurfMem(OP_SRC, SPRH, backblk, backspan)
+        dcgrColor(CLR_WHITE)
+        dcgrClearBl7(0, 0, SCR_WIDTH7, SPRH)
+        dcgrColor(CLR_BLACK)
+        for i = 0 to 139 step 16
+            dcgrBitMap(i, 0, 16, 16, dither[k])
+        next
+        dcgrSurfScr(OP_AND)
+        for j = 0 to 95 step 16
+            dcgrMemBl7(0, j, SCR_WIDTH7, 16, backblk, backspan)
+            dcgrMemBl7(0, 175 - j, SCR_WIDTH7, 16, backblk, backspan)
+        next
     next
-    dcgrSurfScr(OP_AND)
-    for j = 0 to 191 step 16
-        dcgrMemBl7(0, j, SCR_WIDTH7, 16, backblk, backspan)
-    next
-    getc
+    dcgrSurfScr(OP_SRC)
+    dcgrClearBl7(0, 0, SCR_WIDTH7, SCR_HEIGHT)
 end
 dcgrMode(0)
 dcgrCompSprite
