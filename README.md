@@ -986,7 +986,7 @@ end
 word an_obj // an object pointer
 
 myobject_class:init()
-an_obj = myobject_class:new()
+an_obj = myobject_class:new(10)
 myobject_class:delete(an_obj)
 ```
 
