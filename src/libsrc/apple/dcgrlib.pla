@@ -23,6 +23,15 @@ const dhresdis     = $C05F
 const IOUdis       = $C07E
 const IOUena       = $C07F
 //
+// Tile screen addresses
+//
+byte[] tilebttml = $00,$80,$00,$80,$00,$80,$00,$80
+byte             = $28,$A8,$28,$A8,$28,$A8,$28,$A8
+byte             = $50,$D0,$50,$D0,$50,$D0,$50,$D0
+byte[] tilebttmh = $3C,$3C,$3D,$3D,$3E,$3E,$3F,$3F
+byte             = $3C,$3C,$3D,$3D,$3E,$3E,$3F,$3F
+byte             = $3C,$3C,$3D,$3D,$3E,$3E,$3F,$3F
+//
 // HiRes scanline addresses
 //
 byte hgrscanl[]= $00,$00,$00,$00,$00,$00,$00,$00
@@ -1674,6 +1683,126 @@ asm     _dcgrClearBl7MemB
         RTS
 end
 //
+// Tile -> Screen Transfer
+//
+export asm dcgrTileScr(x, y, strptr, strlen, tileset)#0
+        INX
+        INX
+        INX
+        INX
+        INX
+        LDA     ESTKL-5,X   ; TILESETPTRL
+        STA     DSTL
+        LDA     ESTKH-5,X   ; TILESETPTRH
+        STA     DSTH
+        LDA     ESTKL-3,X   ; STRPTRL
+        STA     TMPL
+        LDA     ESTKH-3,X   ; STRPTRH
+        STA     TMPH
+        LDY     ESTKL-2,X   ; Y COORD
+        LDA     ESTKL-1,X   ; X COORD
+        CLC
+end
+asm     _dcgrTileScrA
+        ADC     $1000,Y     ; SCANBTTML
+        STA     $D700       ; SELF MODIFY LOOP
+        STA     $D600
+        STA     $D500
+        STA     $D400
+        STA     $D300
+        STA     $D200
+        STA     $D100
+        STA     $D000
+end
+asm     _dcgrTileScrB
+        LDA     $2000,Y     ; SCANBTTMH
+        STA     $E700       ; SELF MODIFY LOOP
+        SEC                 ; MOVE TO NEXT SCAN ADDRESS (BOTTOM TO TOP)
+        SBC     #$04
+        STA     $E600
+        SBC     #$04
+        STA     $E500
+        SBC     #$04
+        STA     $E400
+        SBC     #$04
+        STA     $E300
+        SBC     #$04
+        STA     $E200
+        SBC     #$04
+        STA     $E100
+        SBC     #$04
+        STA     $E000
+        LDA     ESTKL-4,X   ; STRLEN
+        BEQ     RETTS
+        STX     ESP
+        ASL                 ; TWO SCREEN BYTES PER TILE
+        TAX                 ; DRAW RIGHT TO LEFT
+        DEX
+        LDY     #$00
+LPTS    STY     SRCH
+        TXA
+        LSR
+        TAY
+        LDA     (TMP),Y     ; TILE INDEX * 32
+        ASL
+        ROL     SRCH
+        ASL
+        ROL     SRCH
+        ASL
+        ROL     SRCH
+        ASL
+        ROL     SRCH
+        ASL
+        ROL     SRCH
+;        CLC                ; CARRY IS CLEAR FROM ABOVE
+        ADC     DSTL        ; ADD TO TILESETPTR
+        STA     SRCL
+        LDA     SRCH
+        ADC     DSTH
+        STA     SRCH
+        LDY     #31         ; START FILLING MAIN MEM HALF OF TILE
+        STA     $C054       ; PAGE1M
+end
+asm     _dcgrTileScrC
+-       LDA     (SRC),Y     ; SCAN 7
+        STA     $2701,X
+        DEY
+        LDA     (SRC),Y     ; SCAN 6
+        STA     $2601,X
+        DEY
+        LDA     (SRC),Y     ; SCAN 5
+        STA     $2501,X
+        DEY
+        LDA     (SRC),Y     ; SCAN 4
+        STA     $2401,X
+        DEY
+        LDA     (SRC),Y     ; SCAN 3
+        STA     $2301,X
+        DEY
+        LDA     (SRC),Y     ; SCAN 2
+        STA     $2201,X
+        DEY
+        LDA     (SRC),Y     ; SCAN 1
+        STA     $2101,X
+        DEY
+        LDA     (SRC),Y     ; SCAN 0
+        STA     $2001,X
+        DEX
+        TXA
+        LSR
+        BCC     -           ; FILL ODD THEN EVEN BYTES
+        TYA
+        BEQ     NXTTS       ; END OF TILE
+        STA     $C055       ; PAGE1X
+        INX
+        INX
+        BNE     -           ; FILL AUX HALF OF TILE
+NXTTS   DEX
+        BPL     LPTS
+        LDX     ESP
+RETTS   RTS
+end
+//
 // Wait for VLB
 //
 export asm dcgrVLB#0
@@ -1717,6 +1846,24 @@ def extMemBl7Mem#0
 end
 def extClearBl7Mem#0
     (@dcgrClearBl7Mem)(surfPtr, surfSpan)#0
+end
+//
+// Convert Block7 to Tile format
+//
+export def dcgrMemBl7Tile(x7, y, tileptr, memptr, memspan)#0
+    byte h, v
+    word rowptr
+
+    if y; memptr = memptr + y * memspan; fin
+    memptr = memptr + x7
+    for h = 0 to 3
+        rowptr = memptr + h
+        for v = 0 to 7
+            tileptr->[v] = ^rowptr
+            rowptr = rowptr + memspan
+        next
+        tileptr = tileptr + 8
+    next
 end
 def dcgrOpScr(op)#0
     byte opcode
@@ -1988,4 +2135,26 @@ _dcgrOpMemBl7ScrB:8  = @hgrscanh
 //
 _clipXMemBl7Mem:1    = @_clipX
 _clipYMemBl7Mem:1    = @_clipY
+//
+// Tile self-modifying code
+//
+_dcgrTileScrA:1   = @tilebttml
+_dcgrTileScrA:4   = @_dcgrTileScrC.3
+_dcgrTileScrA:7   = @_dcgrTileScrC.9
+_dcgrTileScrA:10  = @_dcgrTileScrC.15
+_dcgrTileScrA:13  = @_dcgrTileScrC.21
+_dcgrTileScrA:16  = @_dcgrTileScrC.27
+_dcgrTileScrA:19  = @_dcgrTileScrC.33
+_dcgrTileScrA:22  = @_dcgrTileScrC.39
+_dcgrTileScrA:25  = @_dcgrTileScrC.45
+_dcgrTileScrA:28  = @_dcgrTileScrC.51
+_dcgrTileScrB:1   = @tilebttmh
+_dcgrTileScrB:4   = @_dcgrTileScrC.4
+_dcgrTileScrB:10  = @_dcgrTileScrC.10
+_dcgrTileScrB:15  = @_dcgrTileScrC.16
+_dcgrTileScrB:20  = @_dcgrTileScrC.22
+_dcgrTileScrB:25  = @_dcgrTileScrC.28
+_dcgrTileScrB:30  = @_dcgrTileScrC.34
+_dcgrTileScrB:35  = @_dcgrTileScrC.40
+_dcgrTileScrB:40  = @_dcgrTileScrC.46
 done
