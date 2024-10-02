@@ -239,6 +239,9 @@ end
 export asm dcgrClearBl7(x7, y, w7, h)#0
         JMP     $1000
 end
+export asm dcgrTiles(x7, y8, strptr, strlen, tileset)#0
+        JMP     $1000
+end
 //
 // Internal routine to clip x7 and width7 to destination width in A REG
 //
@@ -1685,7 +1688,7 @@ end
 //
 // Tile -> Screen Transfer
 //
-export asm dcgrTileScr(x, y, strptr, strlen, tileset)#0
+asm dcgrTilesScr(x7, y8, strptr, strlen, tileset)#0
         INX
         INX
         INX
@@ -1699,9 +1702,10 @@ export asm dcgrTileScr(x, y, strptr, strlen, tileset)#0
         STA     TMPL
         LDA     ESTKH-3,X   ; STRPTRH
         STA     TMPH
-        LDY     ESTKL-2,X   ; Y COORD
-        LDA     ESTKL-1,X   ; X COORD
-        CLC
+        LDY     ESTKL-2,X   ; Y8 COORD
+        LDA     ESTKL-1,X   ; X7 COORD*2
+        ASL
+        ;CLC
 end
 asm     _dcgrTileScrA
         ADC     $1000,Y     ; SCANBTTML
@@ -1738,22 +1742,18 @@ asm     _dcgrTileScrB
         ASL                 ; TWO SCREEN BYTES PER TILE
         TAX                 ; DRAW RIGHT TO LEFT
         DEX
-        LDY     #$00
-LPTS    STY     SRCH
-        TXA
+LPTS    TXA
         LSR
         TAY
-        LDA     (TMP),Y     ; TILE INDEX * 32
-        ASL
-        ROL     SRCH
-        ASL
-        ROL     SRCH
-        ASL
-        ROL     SRCH
-        ASL
-        ROL     SRCH
-        ASL
-        ROL     SRCH
+        LDA     (TMP),Y     ; TILE INDEX * 32 = INDEX * 256 / 8
+        LSR
+        STA     SRCH
+        LDA     #$00
+        ROR
+        LSR     SRCH
+        ROR
+        LSR     SRCH
+        ROR
 ;        CLC                ; CARRY IS CLEAR FROM ABOVE
         ADC     DSTL        ; ADD TO TILESETPTR
         STA     SRCL
@@ -1787,12 +1787,12 @@ asm     _dcgrTileScrC
         DEY
         LDA     (SRC),Y     ; SCAN 0
         STA     $2001,X
+        DEY
+        BMI     NXTTS       ; END OF TILE
         DEX
         TXA
         LSR
-        BCC     -           ; FILL ODD THEN EVEN BYTES
-        TYA
-        BEQ     NXTTS       ; END OF TILE
+        BCC     -           ; FILL HI THEN LO BYTES
         STA     $C055       ; PAGE1X
         INX
         INX
@@ -1821,6 +1821,65 @@ export asm dcgrVLB#0
         RTS
 end
 //
+// Slow implementation of Tiles -> Mem
+//
+def dcgrTileMem(tileptr, memptr, memspan)#0
+    byte h, v
+    word rowptr
+
+    for h = 0 to 3
+        rowptr = memptr + h
+        for v = 0 to 7
+            ^rowptr = tileptr->[v]
+            rowptr  = rowptr + memspan
+        next
+        tileptr = tileptr + 8
+    next
+end
+def dcgrTilesMem(x7, y8, strptr, strlen, tileset, memptr, memspan)#0
+
+    if y8; memptr = memptr + y8 * 8 * memspan; fin
+    memptr = memptr + x7 * 2
+    while strlen
+        dcgrTileMem(tileset + ^strptr * 32, memptr, memspan)
+        strptr++
+        strlen--
+    loop
+end
+//
+// Convert Block7 to Tile format
+//
+export def dcgrMemBl7Tile(x7, y, tileptr, memptr, memspan)#0
+    byte h, v
+    word rowptr
+
+    if y; memptr = memptr + y * memspan; fin
+    //
+    // AUX half of Bl7 scanline
+    //
+    memptr = memptr + x7 * 2
+    for h = 0 to 1
+        rowptr = memptr + h
+        for v = 0 to 7
+            ^(tileptr + v) = ^rowptr
+            rowptr = rowptr + memspan
+        next
+        tileptr = tileptr + 8
+    next
+    //
+    // MEM half of Bl7 scan
+    //
+    memptr = memptr + memspan / 2
+    for h = 0 to 1
+        rowptr = memptr + h
+        for v = 0 to 7
+            ^(tileptr + v) = ^rowptr
+            rowptr = rowptr + memspan
+        next
+        tileptr = tileptr + 8
+    next
+end
+//
 // Hack to extend parameters for memory functions
 //
 def extPlotMem#0
@@ -1844,26 +1903,11 @@ end
 def extMemBl7Mem#0
     (@dcgrMemBl7Mem)(surfWidth7, surfHeight, surfPtr)#0
 end
+def extTilesMem#0
+    (@dcgrTilesMem)(surfPtr, surfSpan)#0
+end
 def extClearBl7Mem#0
     (@dcgrClearBl7Mem)(surfPtr, surfSpan)#0
-end
-//
-// Convert Block7 to Tile format
-//
-export def dcgrMemBl7Tile(x7, y, tileptr, memptr, memspan)#0
-    byte h, v
-    word rowptr
-
-    if y; memptr = memptr + y * memspan; fin
-    memptr = memptr + x7
-    for h = 0 to 3
-        rowptr = memptr + h
-        for v = 0 to 7
-            tileptr->[v] = ^rowptr
-            rowptr = rowptr + memspan
-        next
-        tileptr = tileptr + 8
-    next
 end
 def dcgrOpScr(op)#0
     byte opcode
@@ -1970,6 +2014,7 @@ export def dcgrSurfScr(op)#0
         dcgrPixMap:1   = @dcgrPixMapScr
         dcgrMemBl7:1   = @dcgrMemBl7Scr
         dcgrClearBl7:1 = @dcgrClearBl7Scr
+        dcgrTiles:1    = @dcgrTilesScr
     fin
     if op <> opScr
         opScr = op
@@ -1992,6 +2037,7 @@ export def dcgrSurfMem(op, memh, memptr, memspan)#0
         dcgrScrBl7:1   = @extScrBl7Mem
         dcgrMemBl7:1   = @extMemBl7Mem
         dcgrClearBl7:1 = @extClearBl7Mem
+        dcgrTiles:1    = @extTilesMem
     fin
     if op <> opMem
         opMem = op
@@ -2147,7 +2193,6 @@ _dcgrTileScrA:16  = @_dcgrTileScrC.27
 _dcgrTileScrA:19  = @_dcgrTileScrC.33
 _dcgrTileScrA:22  = @_dcgrTileScrC.39
 _dcgrTileScrA:25  = @_dcgrTileScrC.45
-_dcgrTileScrA:28  = @_dcgrTileScrC.51
 _dcgrTileScrB:1   = @tilebttmh
 _dcgrTileScrB:4   = @_dcgrTileScrC.4
 _dcgrTileScrB:10  = @_dcgrTileScrC.10
