@@ -4,28 +4,139 @@ include "inc/dcgrlib.plh"
 
 sysflags restxt1|restxt2|resxtxt1|reshgr1|resxhgr1 //  Reserve all the pages
 
-byte[] sprite1 = $80,$80,$00,$00,$00,$00,$80,$80
-byte[]         = $80,$00,$0A,$0A,$0A,$0A,$00,$80
-byte[]         = $00,$0A,$0F,$0F,$0F,$0F,$0A,$00
-byte[]         = $00,$0A,$0F,$80,$80,$0F,$0A,$00
-byte[]         = $00,$0A,$0F,$80,$80,$0F,$0A,$00
-byte[]         = $00,$0A,$0F,$0F,$0F,$0F,$0A,$00
-byte[]         = $80,$00,$0A,$0A,$0A,$0A,$00,$80
-byte[]         = $80,$80,$00,$00,$00,$00,$80,$80
+byte[8] sprite1 = $85,$85,$00,$00,$00,$00,$85,$85
+byte[8]         = $85,$00,$0A,$0A,$0A,$0A,$00,$85
+byte[8]         = $00,$0A,$0F,$0F,$0F,$0F,$0A,$00
+byte[8]         = $00,$0A,$0F,$85,$85,$0F,$0A,$00
+byte[8]         = $00,$0A,$0F,$85,$85,$0F,$0A,$00
+byte[8]         = $00,$0A,$0F,$0F,$0F,$0F,$0A,$00
+byte[8]         = $85,$00,$0A,$0A,$0A,$0A,$00,$85
+byte[8]         = $85,$85,$00,$00,$00,$00,$85,$85
+byte[40*40] grSprite
+byte[40*20] dcgrSprite
+byte[8*4] tile
 
-byte[] tile1 = $11,$11,$11,$11,$11,$11,$55,$00
-byte[]       = $11,$11,$11,$11,$11,$11,$55,$00
-byte[]       = $11,$11,$11,$11,$11,$11,$55,$00
-byte[]       = $05,$05,$05,$05,$05,$05,$05,$00
+byte quit = 0
+byte xCursor = 20
+byte yCursor = 20
+byte clrCursor = 0
+byte bgTileOfst = 0
 
-def grTest#0
-    grMode(grPage1)
-    grDrawBuf(grPage1)
-    grFill(0, 0, @tile1)
-    grBLT(10, 10, 8, 8, @sprite1)
-    getc
-    grMode(grOff)
+def grViewClr#0
+    word c
+    byte[5] str
+
+    c = clrCursor | (clrCursor << 4)
+    c = c | (c << 8)
+    memset(@tile, c, 8*4)
+    str[0] = 0
+    grTileStr(0, 40, @str, 1, @tile)
 end
 
-grTest
+def grView#0
+    grClear(5)
+    grBLT(0, 0, 40, 40, @grSprite)
+    grViewClr
+end
+
+def grGetKey#1
+    byte c
+
+    ^$C010
+    c = 0
+    while ^$C000 < 128
+        grColor(c)
+        grPlot(xCursor, yCursor)
+        c++
+    loop
+    grColor(grSprite[yCursor * 40 + xCursor] & $0F)
+    grPlot(xCursor, yCursor)
+    return ^$C010 & $7F
+end
+
+def dcgrTestView(bounce)#0
+    byte cl, ch, i, j, inci, incj
+    word pgrSpr, pdcgrSpr
+
+    pgrSpr   = @grSprite
+    pdcgrSpr = @dcgrSprite
+    for j = 0 to 39
+        for i = 0 to 39 step 2
+            cl = ^pgrSpr & $0F
+            pgrSpr++
+            ch = ^pgrSpr & $0F
+            pgrSpr++
+            ^pdcgrSpr = cl | (ch << 4)
+            pdcgrSpr++
+        next
+    next
+    i = 70-20; inci = 0
+    j = 96-20; incj = 0
+    if bounce
+        inci = 1
+        incj = 1
+    fin
+    grMode(grOff)
+    dcgrMode(0)
+    while ^$C000 < 128
+        dcgrPixMap(i, j, 40, 40, @dcgrSprite)
+        i = i + inci
+        if i < 1 or i > 139-40; inci = -inci; fin
+        j = j + incj
+        if j < 1 or j > 191-40; incj = -incj; fin
+    loop
+    ^$C010
+    dcgrMode(-1)
+    grMode(grPage1)
+    grDrawBuf(grPage1)
+    grView
+end
+
+memset(@grSprite, $8585, 40*40)
+for quit = 0 to 8
+    memcpy(@grSprite + quit*40 + 16*40 + 16, @sprite1 + quit*8, 8)
+next
+quit = 0
+grMode(grPage1)
+grDrawBuf(grPage1)
+grView
+while not quit
+    when grGetKey
+        is 'i'
+            if yCursor > 0; yCursor--; fin
+            break
+        is 'm'
+            if yCursor < 39; yCursor++; fin
+            break
+        is 'j'
+            if xCursor > 0; xCursor--; fin
+            break
+        is 'k'
+            if xCursor < 39; xCursor++; fin
+            break
+        is ' '
+            grSprite[yCursor*40 + xCursor] = clrCursor == 5 ?? $85 :: clrCursor
+            grView
+            break
+        is '+'
+        is '='
+            if clrCursor < 15; clrCursor++; fin
+            grViewClr
+            break
+        is '-'
+            if clrCursor > 0; clrCursor--; fin
+            grViewClr
+            break
+        is 'v'
+            dcgrTestView(FALSE)
+            break
+        is 't'
+            dcgrTestView(TRUE)
+            break
+        is 'q'
+            quit = 1
+            break
+    wend
+loop
+grMode(grOff)
 done
