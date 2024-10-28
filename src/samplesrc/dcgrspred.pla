@@ -1,8 +1,8 @@
 include "inc/cmdsys.plh"
-include "inc/fileio.plh"
 include "inc/args.plh"
 include "inc/grlib.plh"
 include "inc/dcgrlib.plh"
+include "inc/dcgrutils.plh"
 
 sysflags restxt1|restxt2|resxtxt1|reshgr1|resxhgr1 //  Reserve all the pages
 
@@ -24,68 +24,6 @@ byte xCursor = 20
 byte yCursor = 24
 byte clrCursor = 0
 byte bgTileOfst = 0
-
-def spriteRead(filestr)#5
-    var sprptr, sprsize, xorg, yorg
-    byte refnum, width, height
-
-    width  = 0
-    height = 0
-    sprptr = 0
-    refnum = fileio:open(filestr)
-    if refnum
-        fileio:read(refnum, @xorg,   1); xorg = sext(xorg)
-        fileio:read(refnum, @yorg,   1); yorg = sext(yorg)
-        fileio:read(refnum, @width,  1)
-        fileio:read(refnum, @height, 1)
-        puts("Sprite width, height = "); puti(width); puts(", "); puti(height); putln
-        if width > 40 or height > 48
-            fileio:close(refnum)
-            return 0, 0, 0, 0, 0
-        fin
-        sprsize = (width + 1) / 2 * height
-        sprptr = heapalloc(sprsize)
-        if not sprptr
-            fileio:close(refnum)
-            return 0, 0, 0, 0, 0
-        fin
-        if fileio:read(refnum, sprptr,  sprsize) <> sprsize
-            fileio:close(refnum)
-            return 0, 0, 0, 0, 0
-        fin
-        fileio:close(refnum)
-    fin
-    return xorg, yorg, width, height, sprptr
-end
-
-def spriteWrite(filestr, xorg, yorg, width, height, sprptr, sprspan)#1
-    var sprsize, result
-    byte refnum, i
-
-    sprsize = (width + 1) / 2 * height
-    result  = FALSE
-    fileio:destroy(filestr)
-    if fileio:create(filestr, $06, $0000) == FILE_ERR_OK
-        refnum = fileio:open(filestr)
-        if refnum
-            fileio:write(refnum, @xorg,   1)
-            fileio:write(refnum, @yorg,   1)
-            fileio:write(refnum, @width,  1)
-            fileio:write(refnum, @height, 1)
-            width = (width + 1) / 2
-            while height
-                if fileio:write(refnum, sprptr,  width) <> width
-                    result = TRUE
-                    break
-                fin
-                sprptr = sprptr + sprspan
-                height--
-            loop
-            fileio:close(refnum)
-        fin
-    fin
-    return result
-end
 
 def dcgr2gr(width, height, pdcgrSpr)#0
     var pgrSpr
@@ -137,7 +75,8 @@ def gr2dcgr#6
             pdcgrSpr++
         next
     next
-    pdcgrSpr = @dcgrSprite + ymin * 20 + (xmin + 1) / 2
+    if xmin & 1; xmin--; fin
+    pdcgrSpr = @dcgrSprite + ymin * 20 + xmin / 2
     return xCursor - xmin, yCursor - ymin, xmax - xmin + 1, ymax - ymin + 1, pdcgrSpr, 20
 end
 
