@@ -6,14 +6,14 @@ include "inc/dcgrutils.plh"
 
 sysflags restxt1|restxt2|resxtxt1|reshgr1|resxhgr1 //  Reserve all the pages
 
-byte[8] sprinit = $05,$05,$00,$00,$00,$00,$05,$05
-byte[8]         = $05,$00,$0A,$0A,$0A,$0A,$00,$05
-byte[8]         = $00,$0A,$0F,$0F,$0F,$0F,$0A,$00
-byte[8]         = $00,$0A,$0F,$05,$05,$0F,$0A,$00
-byte[8]         = $00,$0A,$0F,$05,$05,$0F,$0A,$00
-byte[8]         = $00,$0A,$0F,$0F,$0F,$0F,$0A,$00
-byte[8]         = $05,$00,$0A,$0A,$0A,$0A,$00,$05
-byte[8]         = $05,$05,$00,$00,$00,$00,$05,$05
+byte sprinit = $55,$00,$00,$55
+byte         = $05,$AA,$AA,$50
+byte         = $A0,$FF,$FF,$0A
+byte         = $A0,$5F,$F5,$0A
+byte         = $A0,$5F,$F5,$0A
+byte         = $A0,$FF,$FF,$0A
+byte         = $05,$AA,$AA,$50
+byte         = $55,$00,$00,$55
 byte[40*48] grSprite
 byte[40*24] dcgrSprite
 char[64] filename = "Untitled"
@@ -27,16 +27,15 @@ byte bgTileOfst = 0
 
 def dcgr2gr(width, height, pdcgrSpr)#0
     var pgrSpr
-    byte i, cl, ch
+    byte i
 
     memset(@grSprite, $0505, 40*48)
     pgrSpr = @grSprite + (24 - height / 2) * 40
     pgrSpr = pgrSpr + 20 - width / 2
+    width--
     while height
-        for i = 0 to width-1 step 2
-            cl = ^pdcgrSpr & $0F
-            ch = ^pdcgrSpr >> 4
-            *(pgrSpr + i) = cl | (ch << 8)
+        for i = 0 to width step 2
+            *(pgrSpr + i) = (^pdcgrSpr & $0F) | ((^pdcgrSpr & $F0) << 4)
             pdcgrSpr++
         next
         pgrSpr = pgrSpr + 40
@@ -44,40 +43,38 @@ def dcgr2gr(width, height, pdcgrSpr)#0
     loop
 end
 
-def gr2dcgr#6
+def gr2dcgr#5
     word pgrSpr, pdcgrSpr
-    byte xmin, xmax, ymin, ymax
+    byte xmin, xmax, width, ymin, ymax, height
     byte cl, ch, i, j
 
     xmin = 39; xmax = 0
     ymin = 47; ymax = 0
-    pgrSpr   = @grSprite
-    pdcgrSpr = @dcgrSprite
+    pgrSpr = @grSprite
     for j = 0 to 47
-        for i = 0 to 39 step 2
-            cl = ^pgrSpr & $0F
-            pgrSpr++
-            if cl <> $05 // Transparent
+        for i = 0 to 39
+            if ^(pgrSpr + i) <> $05
                 if xmin > i; xmin = i; fin
                 if xmax < i; xmax = i; fin
                 if ymin > j; ymin = j; fin
                 if ymax < j; ymax = j; fin
             fin
-            ch = ^pgrSpr & $0F
-            pgrSpr++
-            if ch <> $05 // Transparent
-                if xmin > i + 1; xmin = i + 1; fin
-                if xmax < i + 1; xmax = i + 1; fin
-                if ymin > j; ymin = j; fin
-                if ymax < j; ymax = j; fin
-            fin
-            ^pdcgrSpr = cl | (ch << 4)
+        next
+        pgrSpr = pgrSpr + 40
+    next
+    pgrSpr   = @grSprite + ymin * 40
+    pdcgrSpr = @dcgrSprite
+    for j = ymin to ymax
+        for i = xmin to xmax step 2
+            ^pdcgrSpr = ^(pgrSpr + i) | (^(pgrSpr + i + 1) << 4)
             pdcgrSpr++
         next
+        pgrSpr = pgrSpr + 40
     next
-    if xmin & 1; xmin--; fin
-    pdcgrSpr = @dcgrSprite + ymin * 20 + xmin / 2
-    return xCursor - xmin, yCursor - ymin, xmax - xmin + 1, ymax - ymin + 1, pdcgrSpr, 20
+    width  = xmax - xmin + 1
+    height = ymax - ymin + 1
+    pdcgrSpr = @dcgrSprite
+    return xCursor - xmin, yCursor - ymin, width, height, pdcgrSpr
 end
 
 def readFile#1
@@ -92,10 +89,10 @@ def readFile#1
 end
 
 def writeFile#1
-    var xorg, yorg, width, height, sprptr, sprspan
+    var xorg, yorg, width, height, sprptr
 
-    xorg, yorg, width, height, sprptr, sprspan = gr2dcgr
-    return spriteWrite(@filename, xorg, yorg, width, height, sprptr, sprspan)
+    xorg, yorg, width, height, sprptr = gr2dcgr
+    return spriteWrite(@filename, xorg, yorg, width, height, sprptr)
 end
 
 def getCmd#1
@@ -209,9 +206,18 @@ def grGetKey#1
 end
 
 def dcgrTestView(bounce)#0
+    var pgr, pdc
     byte i, j, inci, incj
 
-    gr2dcgr
+    pgr = @grSprite
+    pdc = @dcgrSprite
+    for j = 0 to 47
+        for i = 0 to 39 step 2
+            ^pdc = ^(pgr + i) | (^(pgr + i + 1) << 4)
+            pdc++
+        next
+        pgr = pgr + 40
+    next
     i = 70-20; inci = bounce
     j = 96-24; incj = bounce
     grMode(grOff)
@@ -237,9 +243,7 @@ if ^arg
     modified = readFile
 fin
 if modified
-    for modified = 0 to 8
-        memcpy(@grSprite + modified*40 + 20*40 + 16, @sprinit + modified*8, 8)
-    next
+    dcgr2gr(8, 8, @sprinit)
     modified = 0
 fin
 grMode(grPage1)
