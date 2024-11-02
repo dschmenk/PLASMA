@@ -230,6 +230,9 @@ end
 export asm dcgrPixMap(x, y, pixw, pixh, pixptr)#0
         JMP     $1000
 end
+export asm dcgrRleMap(x, y, pixw, pixh, pixptr)#0
+        JMP     $1000
+end
 export asm dcgrScrBl7(x7, y, w7, h)#0
         JMP     $1000
 end
@@ -614,7 +617,7 @@ asm     _dcgrBitmapScrB
 +       INC     ESTKH-1,X   ; X++
         LDY     ESTKH-1,X   ; CURRENT X COORD
         CPY     TMPH        ; AT RIGHT EDGE?
-        BEQ     NXTBITS
+        BCS     NXTBITS
         DEC     TMPL        ; BIT COUNT
         BNE     BITSCR
         BEQ     BITS8
@@ -676,9 +679,10 @@ asm     _dcgrPixmapScrC
 PIXSCRH INC     TMPL
         LDA     TMPL
         CMP     ESTKH-3,X   ; AT RIGHT EDGE?
-        BEQ     ++
+        BCS     ++
         CMP     #140        ; OFF SCREEN?
         BCS     +
+        LDY     #$00
         LDA     (SRC),Y     ; HI NIBBLE SRC PIXEL
         LSR
         LSR
@@ -701,10 +705,113 @@ asm     _dcgrPixmapScrE
         BNE     +
         INC     SRCH
 +       CMP     ESTKH-3,X   ; AT RIGHT EDGE?
-        BNE     PIXSCRL
+        BCC     PIXSCRL
 NXTPIXS DEC     ESTKL-4,X   ; HEIGHT
         BNE     YPIXS       ; NEXT ROW
 RETPIXS RTS
+end
+asm dcgrRleMapScr(x, y, pixw, pixh, pixptr)#0
+        INX
+        INX
+        INX
+        INX
+        INX
+        STX     ESP
+        LDA     ESTKL-5,X   ; PIXPTR
+        SEC
+        SBC     #$02
+        STA     SRCL
+        LDA     ESTKH-5,X
+        SBC     #$00
+        STA     SRCH
+        LDA     ESTKL-1,X   ; X COORD
+        CLC
+        ADC     ESTKL-3,X   ; WIDTH
+        STA     ESTKH-3,X   ; -> RIGHT EDGE
+YRLES   LDA     ESTKL-1,X   ; X COORD
+        STA     TMPL
+        LDY     ESTKL-2,X   ; Y COORD
+        end
+asm     _dcgrRlemapScrA
+        LDA     $1000,Y     ; HGRSCANL
+        STA     DSTL
+        LDA     $2000,Y     ; HGRSCANH
+        STA     DSTH
+RUNLENS LDA     SRCL        ; NEXT RUN
+        CLC
+        ADC     #$02
+        STA     SRCL
+        BCC     +
+        INC     SRCH
++       LDA     ESTKL-2,X   ; Y COORD
+        CMP     #192        ; OFF SCREEN?
+        BCS     SKPRUNS
+        LDY     #$00
+        LDA     (SRC),Y     ; RUN LENGTH
+        STA     TMPH
+        INY
+        LDA     (SRC),Y     ; SRC PIXELS
+        CMP     #$55        ; FULLY XPARENT RUN
+        BEQ     SKPRUNS
+        LDA     TMPL        ; X COORD
+RLESCRL CMP     #140        ; OFF SCREEN?
+        BCS     RLESCRH
+        LDA     (SRC),Y     ; LO NIBBLE SRC PIXEL
+        AND     #$0F
+        CMP     #$05        ; TRANSPARENT?
+        BEQ     RLESCRH
+        TAY
+end
+asm     _dcgrRLEmapScrB
+        JSR     $2000       ; SET COLOR
+        LDY     TMPL
+end
+asm     _dcgrRlemapScrC
+        JSR     $1000       ; PLOT PIXEL
+        LDY     #$01
+RLESCRH INC     TMPL
+        LDA     TMPL
+        CMP     ESTKH-3,X   ; AT RIGHT EDGE?
+        BCS     NXTRLES
+        DEC     TMPH        ; RUN LENGTH
+        BEQ     RUNLENS
+        CMP     #140        ; OFF SCREEN?
+        BCS     +
+        LDA     (SRC),Y     ; HI NIBBLE SRC PIXEL
+        LSR
+        LSR
+        LSR
+        LSR
+        CMP     #$05        ; TRANSPARENT?
+        BEQ     +
+        TAY
+end
+asm     _dcgrRlemapScrD
+        JSR     $2000       ; SET COLOR
+        LDY     TMPL
+end
+asm     _dcgrRlemapScrE
+        JSR     $1000       ; PLOT PIXEL
+        LDY     #$01
++       INC     TMPL
+        LDA     TMPL
+        CMP     ESTKH-3,X   ; AT RIGHT EDGE?
+        BCS     NXTRLES
+        DEC     TMPH        ; RUN LENGTH
+        BNE     RLESCRL
+        BEQ     RUNLENS
+NXTRLES INC     ESTKL-2,X   ; Y COORD++
+        DEC     ESTKL-4,X   ; HEIGHT
+        BNE     YRLES       ; NEXT ROW
+        RTS
+SKPRUNS LDY     #$00
+        LDA     (SRC),Y     ; RUN LENGTH
+        CLC
+        ADC     TMPL
+        STA     TMPL
+        CMP     ESTKH-3,X   ; AT RIGHT EDGE?
+        BCS     NXTRLES
+        BCC     RUNLENS
 end
 //
 // Memory destination functions
@@ -1006,7 +1113,7 @@ asm     _dcgrBitmapMemA
 +       INC     ESTKH-1,X   ; X++
         LDA     ESTKH-1,X   ; CURRENT X COORD
         CMP     ESTKH-3,X   ; AT RIGHT EDGE?
-        BEQ     NXTBITM
+        BCS     NXTBITM
         DEC     ESTKH-2,X   ; BIT COUNT--
         BNE     BITMEM
         BEQ     BITM8
@@ -1086,7 +1193,7 @@ asm     _dcgrPixmapMemC
 PIXMEMH INC     TMPL
         LDA     TMPL
         CMP     ESTKH-3,X   ; AT RIGHT EDGE?
-        BEQ     ++          ; NEXT ROW
+        BCS     ++          ; NEXT ROW
         CMP     ESTKL-6,X   ; OUT OF DST BOUNDS?
         BCS     +
         LDA     (SRC),Y     ; HI NIBBLE SRC PIXEL
@@ -1112,7 +1219,7 @@ asm     _dcgrPixmapMemE
         BNE     +
         INC     SRCH
 +       CMP     ESTKH-3,X   ; AT RIGHT EDGE?
-        BNE     PIXMEML
+        BCC     PIXMEML
 NXTPIXM CLC
         LDA     ESTKL-9,X   ; SPAN
         ADC     DSTL
@@ -1123,6 +1230,127 @@ NXTPIXM CLC
         DEC     ESTKL-4,X   ; HEIGHT
         BNE     YPIXM       ; NEXT ROW
         RTS
+end
+asm dcgrRleMapMem(x, y, pixw, pixh, pixptr, memw, memh, memptr, memspan)#0
+        TXA
+        CLC
+        ADC     #9
+        TAX
+        STX     ESP
+        LDA     ESTKL-8,X   ; DST PTR
+        STA     DSTL
+        LDA     ESTKH-8,X
+        STA     DSTH
+        LDY     ESTKL-2,X   ; Y COORD
+        BEQ     +
+-       CLC                 ; ADVANCE TO Y SCANLINE
+        LDA     ESTKL-9,X   ; SPAN
+        ADC     DSTL
+        STA     DSTL
+        LDA     #$00        ; ESTKH-9,X
+        ADC     DSTH
+        STA     DSTH
+        DEY
+        BNE     -
++       LDA     ESTKL-5,X   ; PIXPTR
+        SEC
+        SBC     #$02
+        STA     SRCL
+        LDA     ESTKH-5,X
+        SBC     #$00
+        STA     SRCH
+        LDA     ESTKL-1,X   ; X COORD
+        CLC
+        ADC     ESTKL-3,X   ; WIDTH
+        STA     ESTKH-3,X   ; -> RIGHT EDGE
+        BNE     YRLEM       ; BRA
+
+SKPRUNM LDY     #$00
+        LDA     (SRC),Y     ; RUN LENGTH
+        CLC
+        ADC     TMPL
+        STA     TMPL
+        CMP     ESTKH-3,X   ; AT RIGHT EDGE?
+        BCC     RUNLENM
+        ;BCS     NXTRLEM
+NXTRLEM CLC
+        LDA     ESTKL-9,X   ; SPAN
+        ADC     DSTL
+        STA     DSTL
+        LDA     #$00        ; ESTKH-9,X
+        ADC     DSTH
+        STA     DSTH
+        DEC     ESTKL-4,X   ; HEIGHT
+        BNE     YRLEM       ; NEXT ROW
+        RTS
+
+YRLEM   LDA     ESTKL-1,X   ; X COORD
+        STA     TMPL
+RUNLENM LDA     SRCL        ; NEXT RUN
+        CLC
+        ADC     #$02
+        STA     SRCL
+        BCC     +
+        INC     SRCH
++       LDA     ESTKL-2,X   ; Y COORD
+        CMP     ESTKL-7,X   ; OUT OF DST BOUNDS?
+        BCS     SKPRUNM
+        LDY     #$00
+        LDA     (SRC),Y     ; RUN LENGTH
+        STA     ESTKH-4,X
+        INY
+        LDA     (SRC),Y     ; SRC PIXELS
+        CMP     #$55        ; FULLY XPARENT RUN
+        BEQ     SKPRUNM
+        LDA     TMPL        ; X COORD
+RLEMEML CMP     ESTKL-6,X   ; OUT OF DST BOUNDS?
+        BCS     RLEMEMH
+        LDA     (SRC),Y     ; LO NIBBLE SRC PIXEL
+        AND     #$0F
+        CMP     #$05        ; TRANSPARENT?
+        BEQ     RLEMEMH
+        TAY
+end
+asm     _dcgrRlemapMemB
+        JSR     $2000       ; SET COLOR
+        LDA     ESTKL-9,X   ; SPAN
+        LDY     TMPL
+end
+asm     _dcgrRlemapMemC
+        JSR     $1000       ; PLOT PIXEL
+        LDY     #$01
+RLEMEMH INC     TMPL
+        LDA     TMPL
+        CMP     ESTKH-3,X   ; AT RIGHT EDGE?
+        BCS     NXTRLEM     ; NEXT
+        DEC     ESTKH-4,X   ; RUN LENGTH
+        BEQ     RUNLENM
+        CMP     ESTKL-6,X   ; OUT OF DST BOUNDS?
+        BCS     +
+        LDA     (SRC),Y     ; HI NIBBLE SRC PIXEL
+        LSR
+        LSR
+        LSR
+        LSR
+        CMP     #$05        ; TRANSPARENT?
+        BEQ     +
+        TAY
+end
+asm     _dcgrRlemapMemD
+        JSR     $2000       ; SET COLOR
+        LDA     ESTKL-9,X   ; SPAN
+        LDY     TMPL
+end
+asm     _dcgrRlemapMemE
+        JSR     $1000       ; PLOT PIXEL
+        LDY     #$01
++       INC     TMPL
+        LDA     TMPL
+        CMP     ESTKH-3,X   ; AT RIGHT EDGE?
+        BCS     NXTRLEM
+        DEC     ESTKH-4,X   ; RUN LENGTH
+        BNE     RLEMEML
+        BEQ     RUNLENM
 end
 //===================\\
 //                   \\
@@ -1911,6 +2139,9 @@ end
 def extPixMapMem#0
     (@dcgrPixmapMem)(surfWidth, surfHeight, surfPtr, surfSpan)#0
 end
+def extRleMapMem#0
+    (@dcgrRlemapMem)(surfWidth, surfHeight, surfPtr, surfSpan)#0
+end
 def extScrBl7Mem#0
     (@dcgrScrBl7Mem)(surfPtr, surfSpan)#0
 end
@@ -1942,6 +2173,8 @@ def dcgrOpScr(op)#0
             _dcgrBitmapScrB:1   = @_dcgrOpPlotScrB
             _dcgrPixmapScrC:1   = @_dcgrOpPlotScrB
             _dcgrPixmapScrE:1   = @_dcgrOpPlotScrB
+            _dcgrRlemapScrC:1   = @_dcgrOpPlotScrB
+            _dcgrRlemapScrE:1   = @_dcgrOpPlotScrB
             _dcgrOpPlotScrD.3   = opcode
             _dcgrOpPlotScrE.3   = opcode
             _dcgrOpPlotScrG.3   = opcode
@@ -1957,6 +2190,8 @@ def dcgrOpScr(op)#0
             _dcgrBitmapScrB:1   = @_dcgrPlotScrB
             _dcgrPixmapScrC:1   = @_dcgrPlotScrB
             _dcgrPixmapScrE:1   = @_dcgrPlotScrB
+            _dcgrRlemapScrC:1   = @_dcgrPlotScrB
+            _dcgrRlemapScrE:1   = @_dcgrPlotScrB
             _jmpOpMemBl7Scr:1   = @_dcgrMemBl7ScrA
 
     wend
@@ -1980,6 +2215,8 @@ def dcgrOpMem(op)#0
             _dcgrBitmapMemA:1   = @_dcgrOpPlotMemB
             _dcgrPixmapMemC:1   = @_dcgrOpPlotMemB
             _dcgrPixmapMemE:1   = @_dcgrOpPlotMemB
+            _dcgrRlemapMemC:1   = @_dcgrOpPlotMemB
+            _dcgrRlemapMemE:1   = @_dcgrOpPlotMemB
             _dcgrOpPlotMemD.3   = opcode
             _dcgrOpPlotMemE.3   = opcode
             _dcgrOpPlotMemG.3   = opcode
@@ -1997,6 +2234,8 @@ def dcgrOpMem(op)#0
             _dcgrBitmapMemA:1   = @_dcgrPlotMemB
             _dcgrPixmapMemC:1   = @_dcgrPlotMemB
             _dcgrPixmapMemE:1   = @_dcgrPlotMemB
+            _dcgrRlemapMemC:1   = @_dcgrPlotMemB
+            _dcgrRlemapMemE:1   = @_dcgrPlotMemB
             _jmpOpMemBl7Mem:1   = @_dcgrMemBl7MemB
     wend
 end
@@ -2026,6 +2265,7 @@ export def dcgrSurfScr(op)#0
         dcgrVLin:1     = @dcgrVLinScr
         dcgrBitMap:1   = @dcgrBitMapScr
         dcgrPixMap:1   = @dcgrPixMapScr
+        dcgrRleMap:1   = @dcgrRleMapScr
         dcgrMemBl7:1   = @dcgrMemBl7Scr
         dcgrClearBl7:1 = @dcgrClearBl7Scr
         dcgrTiles:1    = @dcgrTilesScr
@@ -2048,6 +2288,7 @@ export def dcgrSurfMem(op, memh, memptr, memspan)#0
         dcgrVLin:1     = @extVLinMem
         dcgrBitMap:1   = @extBitMapMem
         dcgrPixMap:1   = @extPixMapMem
+        dcgrRleMap:1   = @extRleMapMem
         dcgrScrBl7:1   = @extScrBl7Mem
         dcgrMemBl7:1   = @extMemBl7Mem
         dcgrClearBl7:1 = @extClearBl7Mem
@@ -2141,6 +2382,12 @@ _dcgrPixmapScrB:1    = @_dcgrColorA
 _dcgrPixmapScrC:1    = @_dcgrPlotScrB
 _dcgrPixmapScrD:1    = @_dcgrColorA
 _dcgrPixmapScrE:1    = @_dcgrPlotScrB
+_dcgrRlemapScrA:1    = @hgrscanl
+_dcgrRlemapScrA:6    = @hgrscanh
+_dcgrRlemapScrB:1    = @_dcgrColorA
+_dcgrRlemapScrC:1    = @_dcgrPlotScrB
+_dcgrRlemapScrD:1    = @_dcgrColorA
+_dcgrRlemapScrE:1    = @_dcgrPlotScrB
 _clipXClearBl7Scr:1  = @_clipX
 _clipYClearBl7Scr:1  = @_clipY
 _dcgrClearBl7ScrA:1  = @hgrscanl
@@ -2177,6 +2424,10 @@ _dcgrPixmapMemB:1    = @_dcgrColorA
 _dcgrPixmapMemC:1    = @_dcgrPlotMemB
 _dcgrPixmapMemD:1    = @_dcgrColorA
 _dcgrPixmapMemE:1    = @_dcgrPlotMemB
+_dcgrRlemapMemB:1    = @_dcgrColorA
+_dcgrRlemapMemC:1    = @_dcgrPlotMemB
+_dcgrRlemapMemD:1    = @_dcgrColorA
+_dcgrRlemapMemE:1    = @_dcgrPlotMemB
 _dcgrClearBl7MemB:1  = @auxclrh
 _dcgrClearBl7MemB:6  = @memclrh
 _dcgrClearBl7MemB:12 = @auxclrl
