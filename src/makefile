@@ -535,9 +535,9 @@ $(DCGRTEST): samplesrc/dcgrtest.pla $(DCGRLIB) $(DCGRUTILS) $(PLASM)
 	./$(PLASM) -AMOW samplesrc/dcgrtest.pla
 	acme --setpc 4094 -o $(DCGRTEST) samplesrc/dcgrtest.a
 
-$(DCGRSPRED): samplesrc/dcgrspred.pla $(DCGRLIB) $(DCGRUTILS) $(PLASM)
-	./$(PLASM) -AMOW samplesrc/dcgrspred.pla
-	acme --setpc 4094 -o $(DCGRSPRED) samplesrc/dcgrspred.a
+$(DCGRSPRED): utilsrc/apple/dcgrspred.pla $(DCGRLIB) $(DCGRUTILS) $(PLASM)
+	./$(PLASM) -AMOW utilsrc/apple/dcgrspred.pla
+	acme --setpc 4094 -o $(DCGRSPRED) utilsrc/apple/dcgrspred.a
 
 $(MON): utilsrc/apple/mon.pla $(PLASM)
 	./$(PLASM) -AMOW utilsrc/apple/mon.pla
