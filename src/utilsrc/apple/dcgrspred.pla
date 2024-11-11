@@ -77,6 +77,40 @@ def gr2dcgr#5
     return xCursor - xmin, yCursor - ymin, width, height, pdcgrSpr
 end
 
+def greasy2gr(pGreasy)#0
+    var pgrSpr
+    byte i, j
+
+    memset(@grSprite, $0505, 40*48)
+    pgrSpr = @grSprite + (24 - 40 / 2) * 40
+    pgrSpr = pgrSpr + 20 - 40 / 2
+    for j = 0 to 39 step 2
+        for i = 0 to 39
+            ^(pgrSpr + i) = ^(pGreasy + i) & $0F
+        next
+        pgrSpr = pgrSpr + 40
+        for i = 0 to 39
+            ^(pgrSpr + i) = (^(pGreasy + i) & $F0) >> 4
+        next
+        pgrSpr  = pgrSpr  + 40
+        pGreasy = pGreasy + 40
+    next
+end
+
+def importGreasy(frame)
+    var sprptr
+    
+    sprptr = frameRead(@filename, frame)
+    if sprptr
+        heaprelease(sprptr)
+        greasy2gr(sprptr)
+    else
+        putc(7); puts("Error importing frame #")
+        puti(frame); puts(" from "); puts(@filename); putln
+    fin
+    return sprptr == NULL
+end
+
 def readFile#1
     var xorg, yorg, width, height, sprptr
 
@@ -95,9 +129,21 @@ def writeFile#1
     return spriteWrite(@filename, xorg, yorg, width, height, sprptr)
 end
 
+def strnum(strptr)
+    var num
+    
+    num = 0
+    while ^strptr == ' '; strptr++; loop
+    while ^strptr >= '0' and ^strptr <= '9'
+        num = num * 10 + (^strptr - '0')
+        strptr++
+    loop
+    return num
+end
+
 def getCmd#1
     var cmdstr, xorg, yorg, width, height, sprptr, sprspan, grspr
-    byte cl, ch
+    byte frame, i
 
     while 1
     if modified; putc('*'); fin
@@ -105,6 +151,44 @@ def getCmd#1
         cmdstr = gets(':'|$80)
         if ^cmdstr
             when toupper(^(cmdstr + 1))
+                is 'G'
+                    if modified
+                        puts("Lose changes (Y/N)?")
+                        if toupper(getc) <> 'Y'
+                            break
+                        fin
+                        putln
+                    fin
+                    repeat // Skip to filename
+                        ^cmdstr--
+                        memcpy(cmdstr + 1, cmdstr + 2, ^cmdstr)
+                    until ^cmdstr == 0 or ^(cmdstr + 1) <> ' '
+                    frame = 1
+                    if ^cmdstr
+                        for i = 1 to ^cmdstr
+                            if ^(cmdstr + i) == ','
+                                ^(cmdstr + ^cmdstr + 1) = 0
+                                frame = strnum(cmdstr + i + 1)
+                                ^cmdstr = i - 1
+                                break
+                            fin
+                        next
+                        if ^cmdstr
+                            memcpy(@filename, cmdstr, ^cmdstr + 1)
+                        elsif filename[filename - 2] == '.'
+                            filename = filename - 3
+                        fin
+                    fin
+                    if frame                       
+                        modified = importGreasy(frame)
+                        if not modified
+                            filename[filename + 1] = '.'
+                            filename[filename + 2] = '0' + frame / 10
+                            filename[filename + 3] = '0' + frame % 10
+                            filename = filename + 3
+                        fin
+                    fin
+                    break
                 is 'R'
                     if modified
                         puts("Lose changes (Y/N)?")
@@ -194,7 +278,7 @@ def grGetKey#1
                 grPlot(xCursor, yCursor)
                 break
             is 128
-                grColor(c)
+                grColor(c == clrCursor ?? c ^ $0F :: c)
                 grPlot(xCursor, yCursor)
                 break
         wend
@@ -265,7 +349,9 @@ while not quit
         is ' '
             modified = 1
             grSprite[yCursor*40 + xCursor] = clrCursor
-            grView
+            grColor(clrCursor)
+            grPlot(xCursor, yCursor)
+            //grView
             break
         is '+'
         is '='
