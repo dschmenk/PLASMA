@@ -3,6 +3,7 @@ include "inc/args.plh"
 include "inc/grlib.plh"
 include "inc/dcgrlib.plh"
 include "inc/dcgrutils.plh"
+include "inc/fileio.plh"
 
 sysflags restxt1|restxt2|resxtxt1|reshgr1|resxhgr1 //  Reserve all the pages
 
@@ -141,6 +142,58 @@ def strnum(strptr)
     return num
 end
 
+def prfiles(optpath)
+    byte path[64]
+    byte refnum
+    byte firstblk
+    byte entrylen, entriesblk
+    byte i, type, len
+    word databuff, entry
+
+    if ^optpath
+        strcpy(@path, optpath)
+    else
+        fileio:getpfx(@path)
+        puts(@path)
+        putln
+    fin
+    databuff = heapalloc(512)
+    refnum = fileio:open(@path)
+    if perr
+        return perr
+    fin
+    firstblk = 1
+    while fileio:read(refnum, databuff, 512) == 512
+        entry = databuff + 4
+        if firstblk
+            entrylen   = databuff->$23
+            entriesblk = databuff->$24
+            entry      = entry + entrylen
+        fin
+        for i = firstblk to entriesblk
+            type = ^entry
+            if type <> 0
+                len = type & $0F
+                ^entry = len
+                puts(entry)
+                if type & $F0 == $D0 // Is it a directory?
+                    putc('/')
+                    len++
+                fin
+                for len = 20 - len downto 1
+                    putc(' ')
+                next
+            fin
+            entry = entry + entrylen
+        next
+        firstblk = 0
+    loop
+    fileio:close(refnum)
+    heaprelease(databuff)
+    putln
+    return 0
+end
+
 def getCmd#1
     var cmdstr, xorg, yorg, width, height, sprptr, sprspan, grspr
     byte frame, i
@@ -215,6 +268,13 @@ def getCmd#1
                         memcpy(@filename, cmdstr, ^cmdstr + 1)
                     fin
                     modified = writeFile
+                    break
+                is 'C'
+                    repeat // Skip to pathname
+                        ^cmdstr--
+                        memcpy(cmdstr + 1, cmdstr + 2, ^cmdstr)
+                    until ^cmdstr == 0 or ^(cmdstr + 1) <> ' '
+                    prfiles(cmdstr)
                     break
                 is 'Q'
                     if modified
