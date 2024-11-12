@@ -173,6 +173,9 @@ RAMDONE ;CLI UNTIL I KNOW WHAT TO DO WITH THE UNENHANCED IIE
         LDA     #"D"
         INY
         STA     STRBUF,Y
+        LDA     #"."
+        INY
+        STA     STRBUF,Y
         LDA     #"1"
         INY
         STA     STRBUF,Y
@@ -330,7 +333,7 @@ CMDENTRY =      *
 ;
         LDA     STRBUF
         SEC
-        SBC     #$06
+        SBC     #$07
         STA     STRBUF
         JMP     $2000           ; JUMP TO LOADED SYSTEM COMMAND
 ;
