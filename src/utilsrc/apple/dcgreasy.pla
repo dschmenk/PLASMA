@@ -1,0 +1,117 @@
+include "inc/cmdsys.plh"
+include "inc/args.plh"
+include "inc/dcgrlib.plh"
+include "inc/dcgrutils.plh"
+include "inc/fileio.plh"
+
+sysflags restxt1|resxtxt1|reshgr1|resxhgr1 //  Reserve all the pages
+
+char[64] greasyfile = ""
+byte[20*40] frame
+byte pause = FALSE
+
+var arg
+
+def greasy2dcgr(pGreasy)#0
+    byte i, j, cl, ch
+    var pPixmap
+
+    pPixmap = @frame
+    for j = 0 to 39 step 2
+        for i = 0 to 39 step 2
+            cl = ^(pGreasy + i)
+            ch = ^(pGreasy + i + 1)
+            ^(pPixmap + i / 2)      = (cl & $0F) | (ch << 4)
+            ^(pPixmap + i / 2 + 20) = (cl >> 4)  | (ch & $F0)
+        next
+        pPixmap = pPixmap + 40
+        pGreasy = pGreasy + 40
+    next
+end
+
+def greasyRead(filestr, frame)#1
+    var sprptr, sprsize
+    byte refnum, numframes
+
+    sprptr = 0
+    refnum = fileio:open(filestr)
+    if refnum
+        sprsize = 40 * 40  / 2
+        sprptr = heapalloc(sprsize)
+        if sprptr and fileio:read(refnum, @numframes,  1)
+            if numframes < frame
+                heaprelease(sprptr)
+                sprptr = NULL
+            fin
+        fin
+        if sprptr
+            if fileio:setmark(refnum, (frame - 1) * sprsize + 1, 0)
+                heaprelease(sprptr)
+                sprptr = NULL
+            elsif fileio:read(refnum, sprptr,  sprsize) <> sprsize
+                heaprelease(sprptr)
+                sprptr = NULL
+            fin
+        fin
+        fileio:close(refnum)
+    fin
+    return sprptr
+end
+
+def importGreasy#0
+    var grptr
+    byte screennum, framenum, i, j
+    char[64] screenfile
+
+    screennum = 1
+    framenum  = 1
+    dcgrMode(0)
+    while framenum
+        dcgrColor(CLR_GREY1)
+        dcgrClearBl7(0, 0, SCR_WIDTH7, SCR_HEIGHT)
+        for j = 0 to 3
+            for i = 0 to 2
+                grptr = greasyRead(@greasyfile, framenum)
+                if grptr
+                    greasy2dcgr(grptr)
+                    heaprelease(grptr)
+                    dcgrPixMap(i*40+20, j*40+20, 40, 40, @frame)
+                    framenum++
+                else
+                    framenum = 0
+                    break
+                fin
+            next
+            if framenum == 0; break; fin
+        next
+        strcpy(@screenfile, @greasyfile)
+        strcat(@screenfile, ".SCR")
+        screenfile++
+        screenfile[screenfile] = '0' + screennum
+        screennum++
+        if screenWrite(@screenfile)
+            dcgrMode(-1)
+            puts("Error writing: "); puts(@screenfile); putln
+            return
+        fin
+        if pause; getc; fin
+    loop
+    dcgrMode(-1)
+end
+
+arg = argNext(argFirst)
+if ^arg
+    if ^(arg + 1) == '-'
+        if toupper(^(arg + 2)) == 'P'
+            pause = TRUE
+        fin
+        arg = argNext(arg)
+    fin
+    if ^arg
+        strcpy(@greasyfile, arg)
+        importGreasy
+        return 0
+    fin
+fin
+puts("Usage: DCGRGREASY [-P] FRAMEFILE\n")
+done
