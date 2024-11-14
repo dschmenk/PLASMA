@@ -215,7 +215,7 @@ byte dcgrSurface, opScr, opMem
 asm plvmzp#0
 !SOURCE    "vmsrc/plvmzp.inc"
 end
-export asm dcgrPlot(x, y)#0
+export asm dcgrPixel(x, y)#0
         JMP     $1000
 end
 export asm dcgrHLin(x1, x2, y)#0
@@ -404,7 +404,7 @@ asm     _dcgrPlotScrB
         TAY                 ; DIV7
         TXA
         AND     #$07
-        TAX                 ; PIX7
+        TAX                 ; MOD7
 end
 asm     _dcgrPlotScrC
         LDA     $4000,X     ; AUXCLRMSK
@@ -467,7 +467,7 @@ asm     _dcgrOpPlotScrB
         TAY                 ; DIV7
         TXA
         AND     #$07
-        TAX                 ; PIX7
+        TAX                 ; MOD7
 end
 asm     _dcgrOpPlotScrC
         LDA     $4000,X     ; AUXCLRMSK
@@ -855,7 +855,7 @@ asm     _dcgrPlotMemB
         TAY                 ; DIV7
         TXA
         AND     #$07
-        TAX                 ; PIX7
+        TAX                 ; MOD7
 end
 //
 // Plot OP_SRC
@@ -925,7 +925,7 @@ asm     _dcgrOpPlotMemB
         TAY                 ; DIV7
         TXA
         AND     #$07
-        TAX                 ; PIX7
+        TAX                 ; MOD7
 end
 asm     _dcgrOpPlotMemC
         LDA     $4000,X     ; AUXCLRMSK
@@ -2124,9 +2124,9 @@ end
 //
 // Read pixel and return color
 //
-export def dcgrPixel(x, y)#1
+export def dcgrGetPixel(x, y)#1
     byte x7, m7, i
-    word[2] pix7, clr7
+    word[2] pix7
     word amask, mmask
 
     x7 = divmod7[x] >> 3
@@ -2138,14 +2138,11 @@ export def dcgrPixel(x, y)#1
     m7 = divmod7[x] & $07
     amask = auxclrmsk[m7]
     if amask & $80; amask = (amask & $7F) << 8; fin
+    pix7[0] = amask & pix7[0]
     mmask = memclrmsk[m7]
     if mmask & $80; mmask = (mmask & $7F) << 8; fin
-    pix7[0] = pix7[0] & amask
-    pix7[1] = pix7[1] & mmask
+    pix7[1] = mmask & pix7[1]
     for i = 0 to 15
-//        clr7[0] = (auxclrsl[i] | (auxclrsh[i] << 8)) & amask
-//        clr7[1] = (memclrsl[i] | (memclrsh[i] << 8)) & mmask
-//        if pix7[0] == clr7[0] and pix7[1] == clr7[1]
         if pix7[0] == (auxclrsl[i] | (auxclrsh[i] << 8)) & amask
         if pix7[1] == (memclrsl[i] | (memclrsh[i] << 8)) & mmask
             return i // Color match
@@ -2292,7 +2289,7 @@ export def dcgrSurfScr(op)#0
     surfSpan   = 10
     if dcgrSurface == DST_MEMORY
         dcgrSurface    = DST_SCREEN
-        dcgrPlot:1     = @dcgrPlotScr
+        dcgrPixel:1    = @dcgrPlotScr
         dcgrHLin:1     = @dcgrHLinScr
         dcgrVLin:1     = @dcgrVLinScr
         dcgrBitMap:1   = @dcgrBitMapScr
@@ -2315,7 +2312,7 @@ export def dcgrSurfMem(op, memh, memptr, memspan)#0
     surfSpan   = memspan
     if dcgrSurface == DST_SCREEN
         dcgrSurface    = DST_MEMORY
-        dcgrPlot:1     = @extPlotMem
+        dcgrPixel:1    = @extPlotMem
         dcgrHLin:1     = @extHLinMem
         dcgrVLin:1     = @extVLinMem
         dcgrBitMap:1   = @extBitMapMem
