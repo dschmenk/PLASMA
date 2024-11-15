@@ -8,7 +8,9 @@
 
 [LISP 1.5 implemented in PLASMA](https://github.com/dschmenk/PLASMA/blob/master/doc/DRAWL.md)
 
-# The PLASMA Programming Language
+Don't forget to check out the [Wiki](https://github.com/dschmenk/PLASMA/wiki)!
+
+# The PLASMA Programming Language (and Environment)
 
 ![Luc Viatour](https://upload.wikimedia.org/wikipedia/commons/thumb/2/26/Plasma-lamp_2.jpg/1200px-Plasma-lamp_2.jpg)
 image credit: Luc Viatour / www.Lucnix.be
