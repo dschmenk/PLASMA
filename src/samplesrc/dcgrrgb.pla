@@ -1,0 +1,124 @@
+include "inc/cmdsys.plh"
+include "inc/dcgrlib.plh"
+include "inc/dcgrutils.plh"
+
+sysflags resxtxt1|reshgr1|resxhgr1
+
+const BLU_MSK = $001F
+const GRN_MSK = $03E0
+const RED_MSK = $7C00
+const BLU = 0
+const GRN = 1
+const RED = 2
+const cscale = 2
+byte[12] ntscPrev
+//                     B   G   R
+byte[] ntscChrom
+byte[]              = 48,  0,  0
+byte[]              =  8, 48,  0
+byte[]              =  0, 16, 16
+byte[]              =  8,  0, 48
+//byte[] ntscChrom
+//byte[]              = 32,  8,  8
+//byte[]              = 16, 32,  8
+//byte[]              =  0, 16, 16
+//byte[]              = 16,  8, 32
+//byte[] ntscChrom
+//byte[]              = 127/cscale,  51/cscale,  64/cscale
+//byte[]              =  64/cscale, 108/cscale,   0/cscale
+//byte[]              =   1/cscale,  77/cscale,  64/cscale
+//byte[]              =  64/cscale,  20/cscale, 128/cscale
+
+def rgb24to16(r, g, b)
+  return (b>>2)|((g&$F8)<<2)|((r&$F8)<<7)
+end
+
+def abs(n)
+    return n < 0 ?? -n :: n
+end
+
+def rgbpix(r, g, b, x, y)#0
+  var pr, pg, pb
+  var dr, dg, db
+  var zdist, pdist
+  byte i
+
+  //puts("Match: "); puti(x & 3); putln
+  //puti(r); putc(',');puti(g); putc(',');puti(b); putln
+  //puts("Prev:\n")
+  pr = 0
+  pg = 0
+  pb = 0
+  for i = x + 1 to x + 3
+    //puti(ntscPrev[(i&3)*3+RED]); putc(',')
+    //puti(ntscPrev[(i&3)*3+GRN]); putc(',')
+    //puti(ntscPrev[(i&3)*3+BLU]); putln
+    pr = pr + ntscPrev[(i&3)*3+RED]
+    pg = pg + ntscPrev[(i&3)*3+GRN]
+    pb = pb + ntscPrev[(i&3)*3+BLU]
+  next
+  //puts("-------------\n")
+  //puti(pr); putc(',');puti(pg); putc(',');puti(pb); putln
+  dr = r //abs(r - pr)
+  dg = g //abs(g - pg)
+  db = b //abs(b - pb)
+  zdist = dr*dr + dg*dg + db*db
+  i = (x&3)*3
+  dr = dr - ntscChrom[i+RED]
+  dg = dg - ntscChrom[i+GRN]
+  db = db - ntscChrom[i+BLU]
+  //puts("-------------\n")
+  //puti(ntscChrom[i+RED]); putc(',');puti(ntscChrom[i+GRN]); putc(',');puti(ntscChrom[i+BLU]); putln
+  pdist = dr*dr + dg*dg + db*db
+  //puts("Dist to Zero  :"); puti(zdist); putln
+  //puts("Dist to Chroma:"); puti(pdist); putln
+  if pdist < zdist
+    ntscPrev[i+RED] = ntscChrom[i+RED]
+    ntscPrev[i+GRN] = ntscChrom[i+GRN]
+    ntscPrev[i+BLU] = ntscChrom[i+BLU]
+    dhgrSet(x, y)
+  else
+    ntscPrev[i+RED] = 0
+    ntscPrev[i+GRN] = 0
+    ntscPrev[i+BLU] = 0
+  fin
+  //getc
+end
+
+def rgbTest#0
+  var i
+
+  for i = 0 to 64
+    rgbpix(i, 0, 0, i, 0)
+  next
+  memset(@ntscPrev, 0, 12)
+  for i = 0 to 64
+    rgbpix(0, i, 0, i, 2)
+  next
+  memset(@ntscPrev, 0, 12)
+  for i = 0 to 64
+    rgbpix(0, 0, i, i, 4)
+  next
+  memset(@ntscPrev, 0, 12)
+  for i = 0 to 64
+    rgbpix(i, i, i, i, 6)
+  next
+  memset(@ntscPrev, 0, 12)
+  for i = 0 to 64
+    rgbpix(i, i>>2, i>>2, i, 8)
+  next
+  memset(@ntscPrev, 0, 12)
+  for i = 0 to 64
+    rgbpix(i>>2, i, i>>2, i, 10)
+  next
+  memset(@ntscPrev, 0, 12)
+  for i = 0 to 64
+    rgbpix(i>>2, i>>3, i, i, 12)
+  next
+end
+
+dcgrMode(0)
+rgbTest
+getc
+dcgrMode(-1)
+done
