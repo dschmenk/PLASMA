@@ -10,24 +10,26 @@ const RED_MSK = $7C00
 const BLU = 0
 const GRN = 1
 const RED = 2
-const cscale = 2
-byte[12] ntscPrev
-//                     B   G   R
-byte[] ntscChrom
-byte[]              = 48,  0,  0
-byte[]              =  8, 48,  0
-byte[]              =  0, 16, 16
-byte[]              =  8,  0, 48
-//byte[] ntscChrom
-//byte[]              = 32,  8,  8
-//byte[]              = 16, 32,  8
-//byte[]              =  0, 16, 16
-//byte[]              = 16,  8, 32
-//byte[] ntscChrom
-//byte[]              = 127/cscale,  51/cscale,  64/cscale
-//byte[]              =  64/cscale, 108/cscale,   0/cscale
-//byte[]              =   1/cscale,  77/cscale,  64/cscale
-//byte[]              =  64/cscale,  20/cscale, 128/cscale
+byte[12] ntscCycle
+byte[] ntscChroma
+
+// Imperical 0-255       B    G    R
+//byte[]              = 127,  51,  64 // BLUE
+//byte[]              =  64, 108,   0 // GREEN
+//byte[]              =   1,  77,  64 // BROWN
+//byte[]              =  64,  20, 128 // RED
+// Imperical 0-63        B   G   R
+byte[]              = 32, 14, 16 // BLUE
+byte[]              = 16, 28,  0 // GREEN
+byte[]              =  0, 18, 16 // BROWN
+byte[]              = 16,  4, 32 // RED
+// Ideal/simplified 0-63 B   G   R
+//byte[]              = 32, 16, 16 // BLUE
+//byte[]              = 16, 32,  0 // GREEN
+//byte[]              =  0, 16, 16 // BROWN
+//byte[]              = 16,  0, 32 // RED
+
+var er, eg, eb // Running error
 
 def rgb24to16(r, g, b)
   return (b>>2)|((g&$F8)<<2)|((r&$F8)<<7)
@@ -37,50 +39,67 @@ def abs(n)
     return n < 0 ?? -n :: n
 end
 
+def max(a, b)
+    return a < b ?? b :: a
+end
+
 def rgbpix(r, g, b, x, y)#0
-  var pr, pg, pb
+  var cr, cg, cb, cx
   var dr, dg, db
-  var zdist, pdist
+  var zdist, cdist
   byte i
 
+  //r = r - er/4
+  //g = g - eg/4
+  //b = b - eb/4
   //puts("Match: "); puti(x & 3); putln
   //puti(r); putc(',');puti(g); putc(',');puti(b); putln
-  //puts("Prev:\n")
-  pr = 0
-  pg = 0
-  pb = 0
-  for i = x + 1 to x + 3
-    //puti(ntscPrev[(i&3)*3+RED]); putc(',')
-    //puti(ntscPrev[(i&3)*3+GRN]); putc(',')
-    //puti(ntscPrev[(i&3)*3+BLU]); putln
-    pr = pr + ntscPrev[(i&3)*3+RED]
-    pg = pg + ntscPrev[(i&3)*3+GRN]
-    pb = pb + ntscPrev[(i&3)*3+BLU]
+  //puts("Cycle:\n")
+  cr = 0
+  cg = 0
+  cb = 0
+  // Sum current chroma cycle
+  for cx = x - 1 downto x - 3
+    i = (cx & 3) * 3
+    //puti(ntscCycle[i+RED]; putc(',')
+    //puti(ntscCycle[i+GRN]; putc(',')
+    //puti(ntscCycle[i+BLU]; putln
+    cr = cr + ntscCycle[i+RED]
+    cg = cg + ntscCycle[i+GRN]
+    cb = cb + ntscCycle[i+BLU]
   next
   //puts("-------------\n")
-  //puti(pr); putc(',');puti(pg); putc(',');puti(pb); putln
-  dr = r //abs(r - pr)
-  dg = g //abs(g - pg)
-  db = b //abs(b - pb)
-  zdist = dr*dr + dg*dg + db*db
-  i = (x&3)*3
-  dr = dr - ntscChrom[i+RED]
-  dg = dg - ntscChrom[i+GRN]
-  db = db - ntscChrom[i+BLU]
+  //puti(cr); putc(',');puti(cg); putc(',');puti(cb); putln
+  // Subtract off chroma cycle from RGB pixel
+  er = r - cr
+  eg = g - cg
+  eb = b - cb
+  zdist = er*er + eg*eg + eb*eb // Distance to zero (black)
+  i = (x & 3) * 3
+  dr = er - ntscChroma[i+RED]
+  dg = eg - ntscChroma[i+GRN]
+  db = eb - ntscChroma[i+BLU]
+  cdist = dr*dr + dg*dg + db*db // Distance to chroma color
   //puts("-------------\n")
-  //puti(ntscChrom[i+RED]); putc(',');puti(ntscChrom[i+GRN]); putc(',');puti(ntscChrom[i+BLU]); putln
-  pdist = dr*dr + dg*dg + db*db
-  //puts("Dist to Zero  :"); puti(zdist); putln
-  //puts("Dist to Chroma:"); puti(pdist); putln
-  if pdist < zdist
-    ntscPrev[i+RED] = ntscChrom[i+RED]
-    ntscPrev[i+GRN] = ntscChrom[i+GRN]
-    ntscPrev[i+BLU] = ntscChrom[i+BLU]
+  //puti(ntscChroma[i+RED]); putc(',')
+  //puti(ntscChroma[i+GRN]); putc(',')
+  //puti(ntscChroma[i+BLU]); putln
+  //puts("Dist to Zero (Black):"); puti(zdist); putln
+  //puts("Dist to Chroma Color:"); puti(cdist); putln
+  if cdist < zdist
+    // RGB closer to Chroma Color
+    er = dr
+    eg = dg
+    eb = db
+    ntscCycle[i+RED] = ntscChroma[i+RED]
+    ntscCycle[i+GRN] = ntscChroma[i+GRN]
+    ntscCycle[i+BLU] = ntscChroma[i+BLU]
     dhgrSet(x, y)
   else
-    ntscPrev[i+RED] = 0
-    ntscPrev[i+GRN] = 0
-    ntscPrev[i+BLU] = 0
+    // RGB closer to Black
+    ntscCycle[i+RED] = 0
+    ntscCycle[i+GRN] = 0
+    ntscCycle[i+BLU] = 0
   fin
   //getc
 end
@@ -88,32 +107,32 @@ end
 def rgbTest#0
   var i
 
-  for i = 0 to 64
+  for i = 0 to 63
     rgbpix(i, 0, 0, i, 0)
   next
-  memset(@ntscPrev, 0, 12)
-  for i = 0 to 64
+  memset(@ntscCycle, 0, 12)
+  for i = 0 to 63
     rgbpix(0, i, 0, i, 2)
   next
-  memset(@ntscPrev, 0, 12)
-  for i = 0 to 64
+  memset(@ntscCycle, 0, 12)
+  for i = 0 to 63
     rgbpix(0, 0, i, i, 4)
   next
-  memset(@ntscPrev, 0, 12)
-  for i = 0 to 64
+  memset(@ntscCycle, 0, 12)
+  for i = 0 to 63
     rgbpix(i, i, i, i, 6)
   next
-  memset(@ntscPrev, 0, 12)
-  for i = 0 to 64
-    rgbpix(i, i>>2, i>>2, i, 8)
+  memset(@ntscCycle, 0, 12)
+  for i = 0 to 63
+    rgbpix(i, i>>1, i>>1, i, 8)
   next
-  memset(@ntscPrev, 0, 12)
-  for i = 0 to 64
-    rgbpix(i>>2, i, i>>2, i, 10)
+  memset(@ntscCycle, 0, 12)
+  for i = 0 to 63
+    rgbpix(i>>1, i, i>>1, i, 10)
   next
-  memset(@ntscPrev, 0, 12)
-  for i = 0 to 64
-    rgbpix(i>>2, i>>3, i, i, 12)
+  memset(@ntscCycle, 0, 12)
+  for i = 0 to 63
+    rgbpix(i>>1, i>>1, i, i, 12)
   next
 end
 
