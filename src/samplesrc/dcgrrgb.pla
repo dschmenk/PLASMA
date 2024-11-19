@@ -30,14 +30,14 @@ byte[] ntscChroma
 //byte[]                =  0, 16, 16 // BROWN
 //byte[]                = 16,  0, 32 // RED
 // Test             0-63 B   G   R
-byte[]                = 63,  0,  0 // BLUE
-byte[]                =  0, 63,  0 // GREEN
-byte[]                =  0, 31, 31 // BROWN
-byte[]                =  0,  0, 63 // RED
-//byte[]              = 64, 28, 32 // BLUE
-//byte[]              = 32, 56,  0 // GREEN
-//byte[]              =  0, 36, 32 // BROWN
-//byte[]              = 32,  8, 64 // RED
+//byte[]                = 64,  0,  0 // BLUE
+//byte[]                =  0, 64,  0 // GREEN
+//byte[]                =  0,  8,  8 // BROWN
+//byte[]                =  0,  0, 64 // RED
+byte[]                = 63, 28, 32 // BLUE
+byte[]                = 31, 56,  0 // GREEN
+byte[]                =  0, 35, 31 // BROWN
+byte[]                = 32,  7, 63 // RED
 //byte[]                = 64, 32, 32 // BLUE
 //byte[]                = 32, 26,  0 // GREEN
 //byte[]                =  0, 32, 32 // BROWN
@@ -70,37 +70,41 @@ def dotprod(x1, y1, z1, x2, y2, z2)
 end
 
 def rgbpix(r, g, b, x, y)#0
+  var pr, pg, pb
+  var nr, ng, nb
   var cr, cg, cb, cx
-  var zdot, cdot
+  var pdot, cdot, ndot
   byte i
 
   // Error propogation
-  r = r + er/2
-  g = g + eg/2
-  b = b + eb/2
-  cr = 0
-  cg = 0
-  cb = 0
-  // Project RGB on chroma cycle with zero current 1/4 chroma
+  r = r + er/4 //(er+er/2)/2
+  g = g + eg/4 //(eg+eg/2)/2
+  b = b + eb/4 //(eb+eb/2)/2
+  pr = 0
+  pg = 0
+  pb = 0
+  // Project RGB on previous 3/4 chroma cycle
   for cx = x - 1 downto x - 3
-    i = (cx & 3) * 3
-    cr = cr + ntscCycle[i+RED]
-    cg = cg + ntscCycle[i+GRN]
-    cb = cb + ntscCycle[i+BLU]
+    i  = (cx & 3) * 3
+    pr = pr + ntscCycle[i+RED]
+    pg = pg + ntscCycle[i+GRN]
+    pb = pb + ntscCycle[i+BLU]
   next
-  zdot = dotprod(r, g, b, cr, cg, cb)
-  // Save error for zero 1/4 cycle
-  er = r - cr
-  eg = g - cg
-  eb = b - cb
+  pdot = dotprod(r, g, b, pr, pg, pb)
+  // Look ahead for possible better match
+  i  = ((x + 1) & 3) * 3
+  nr = pr - ntscCycle[i+RED] + ntscChroma[i+RED]
+  ng = pg - ntscCycle[i+GRN] + ntscChroma[i+GRN]
+  nb = pb - ntscCycle[i+BLU] + ntscChroma[i+BLU]
+  ndot = dotprod(r, g, b, nr, ng, nb)
   // Add current 1/4 chroma color
-  i = (x & 3) * 3
-  cr = cr + ntscChroma[i+RED]
-  cg = cg + ntscChroma[i+GRN]
-  cb = cb + ntscChroma[i+BLU]
+  i  = (x & 3) * 3
+  cr = pr + ntscChroma[i+RED]
+  cg = pg + ntscChroma[i+GRN]
+  cb = pb + ntscChroma[i+BLU]
   cdot = dotprod(r, g, b, cr, cg, cb)
-  if cdot > zdot
-    // RGB better matched with 1/4 chroma color
+  if cdot > pdot and cdot > ndot
+    // RGB better matched with current 1/4 chroma color
     er = r - cr
     eg = g - cg
     eb = b - cb
@@ -110,6 +114,9 @@ def rgbpix(r, g, b, x, y)#0
     dhgrSet(x, y)
   else
     // RGB closer to black
+    er = r - pr
+    eg = g - pg
+    eb = b - pb
     ntscCycle[i+RED] = 0
     ntscCycle[i+GRN] = 0
     ntscCycle[i+BLU] = 0
@@ -122,38 +129,49 @@ end
 def rgbTest#0
   var i
 
+  er, eg, eb, = -32, -32, -32
   for i = 0 to 63
     rgbpix(i, 0, 0, i, 0)
   next
-  er, eg, eb, = 0, 0, 0
+  er, eg, eb, = -32, -32, -32
   memset(@ntscCycle, 0, 12)
   for i = 0 to 63
     rgbpix(0, i, 0, i, 2)
   next
-  er, eg, eb, = 0, 0, 0
+  er, eg, eb, = -32, -32, -32
   memset(@ntscCycle, 0, 12)
   for i = 0 to 63
     rgbpix(0, 0, i, i, 4)
   next
-  er, eg, eb, = 0, 0, 0
+  er, eg, eb, = -32, -32, -32
   memset(@ntscCycle, 0, 12)
   for i = 0 to 63
     rgbpix(i, i, i, i, 6)
   next
-  er, eg, eb, = 0, 0, 0
+  er, eg, eb, = -32, -32, -32
   memset(@ntscCycle, 0, 12)
   for i = 0 to 63
     rgbpix(i, i>>2, i>>2, i, 8)
   next
-  er, eg, eb, = 0, 0, 0
+  er, eg, eb, = -32, -32, -32
   memset(@ntscCycle, 0, 12)
   for i = 0 to 63
     rgbpix(i>>2, i, i>>2, i, 10)
   next
-  er, eg, eb, = 0, 0, 0
+  er, eg, eb, = -32, -32, -32
   memset(@ntscCycle, 0, 12)
   for i = 0 to 63
     rgbpix(i>>2, i>>2, i, i, 12)
+  next
+  er, eg, eb, = -32, -32, -32
+  memset(@ntscCycle, 0, 12)
+  for i = 0 to 63
+    rgbpix(32, 32, 32, i, 14)
+  next
+  er, eg, eb, = -32, -32, -32
+  memset(@ntscCycle, 0, 12)
+  for i = 0 to 63
+    rgbpix(63, 63, 63, i, 16)
   next
 end
 
