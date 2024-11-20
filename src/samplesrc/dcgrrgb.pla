@@ -10,7 +10,8 @@ const RED_MSK = $7C00
 const BLU = 0
 const GRN = 1
 const RED = 2
-const ERR_DIV = 3
+const ERR_MAX = 32
+const ERR_DIV = 2
 byte[12] ntscCycle
 byte[] ntscChroma
 
@@ -46,7 +47,7 @@ byte[]              = 16,  5, 32 // RED
 //byte[]                = 20, 40,  0 // GREEN
 //byte[]                =  0, 16, 16 // BROWN
 //byte[]                = 20,  0, 40 // RED
-var er, eg, eb // Running error
+var rgberr // Running color error
 
 def packrgb24(r, g, b)#1
   return (b >> 2) | ((g & $F8) << 2) | ((r & $F8) << 7)
@@ -82,6 +83,7 @@ def dotprod(x1, y1, z1, x2, y2, z2)
 end
 
 def rgbpix(r, g, b, x, y)#0
+  var errptr
   var pr, pg, pb
   var nr, ng, nb
   var cr, cg, cb, cx
@@ -89,9 +91,10 @@ def rgbpix(r, g, b, x, y)#0
   byte i
 
   // Error propogation
-  r = r + er/ERR_DIV
-  g = g + eg/ERR_DIV
-  b = b + eb/ERR_DIV
+  errptr = rgberr + x * 3 * 2
+  r = r + errptr=>[RED] / ERR_DIV
+  g = g + errptr=>[GRN] / ERR_DIV
+  b = b + errptr=>[BLU] / ERR_DIV
   pr = 0
   pg = 0
   pb = 0
@@ -117,105 +120,70 @@ def rgbpix(r, g, b, x, y)#0
   cd = dist(r, g, b, cr, cg, cb)
   if cd < pd and cd < nd
     // RGB better matched with current 1/4 chroma color
-    er = r - cr
-    eg = g - cg
-    eb = b - cb
+    r = (r - cr + 1) / 2
+    g = (g - cg + 1) / 2
+    b = (b - cb + 1) / 2
     ntscCycle[i+RED] = ntscChroma[i+RED]
     ntscCycle[i+GRN] = ntscChroma[i+GRN]
     ntscCycle[i+BLU] = ntscChroma[i+BLU]
     dhgrSet(x, y)
   else
     // RGB closer to black
-    er = r - pr
-    eg = g - pg
-    eb = b - pb
+    r = (r - pr + 1) / 2
+    g = (g - pg + 1) / 2
+    b = (b - pb + 1) / 2
     ntscCycle[i+RED] = 0
     ntscCycle[i+GRN] = 0
     ntscCycle[i+BLU] = 0
   fin
-  //er = min(32, max(-32, er))
-  //eg = min(32, max(-32, eg))
-  //eb = min(32, max(-32, eb))
+  // Propogate error down and forward
+  r = min(ERR_MAX, max(-ERR_MAX, r))
+  g = min(ERR_MAX, max(-ERR_MAX, g))
+  b = min(ERR_MAX, max(-ERR_MAX, b))
+  errptr=>[RED] = r
+  errptr=>[GRN] = g
+  errptr=>[BLU] = b
+  errptr = errptr + 6
+  errptr=>[RED] = r + errptr=>[RED]
+  errptr=>[GRN] = g + errptr=>[GRN]
+  errptr=>[BLU] = b + errptr=>[BLU]
+end
+
+def rgb3Spans(rs, gs, bs, re, ge, be, rm, gm, bm, y)#0
+  var i, j
+
+  memset(@ntscCycle, 0, 12)
+  for j = y to y + 2
+    for i = 0 to 63
+      rgbpix((i>>rs)|re, (i>>gs)|ge, (i>>bs)|be, i, j)
+    next
+    for i = 64 to 127
+      rgbpix(rm, gm, bm, i, j)
+    next
+  next
 end
 
 def rgbTest#0
   var i
 
-  er, eg, eb, = -32, -32, -32
-  for i = 0 to 63
-    rgbpix(i, 0, 0, i, 0)
-  next
-  for i = 64 to 127
-    rgbpix(63, 0, 0, i, 0)
-  next
-  er, eg, eb, = -32, -32, -32
-  memset(@ntscCycle, 0, 12)
-  for i = 0 to 63
-    rgbpix(0, i, 0, i, 2)
-  next
-  for i = 64 to 127
-    rgbpix(0, 63, 0, i, 2)
-  next
-  er, eg, eb, = -32, -32, -32
-  memset(@ntscCycle, 0, 12)
-  for i = 0 to 63
-    rgbpix(0, 0, i, i, 4)
-  next
-  for i = 64 to 127
-    rgbpix(0, 0, 63, i, 4)
-  next
-  er, eg, eb, = -32, -32, -32
-  memset(@ntscCycle, 0, 12)
-  for i = 0 to 63
-    rgbpix(i, i, i, i, 6)
-  next
-  for i = 64 to 127
-    rgbpix(63, 63, 63, i, 6)
-  next
-  er, eg, eb, = -32, -32, -32
-  memset(@ntscCycle, 0, 12)
-  for i = 0 to 63
-    rgbpix(i, i/2, i/2, i, 8)
-  next
-  for i = 64 to 127
-    rgbpix(63, 32, 32, i, 8)
-  next
-  er, eg, eb, = -32, -32, -32
-  memset(@ntscCycle, 0, 12)
-  for i = 0 to 63
-    rgbpix(i/2, i, i/2, i, 10)
-  next
-  for i = 64 to 127
-    rgbpix(32, 63, 32, i, 10)
-  next
-  er, eg, eb, = -32, -32, -32
-  memset(@ntscCycle, 0, 12)
-  for i = 0 to 63
-    rgbpix(i/2, i/2, i, i, 12)
-  next
-  for i = 64 to 127
-    rgbpix(32, 32, 63, i, 12)
-  next
-  er, eg, eb, = -32, -32, -32
-  memset(@ntscCycle, 0, 12)
-  for i = 0 to 127
-    rgbpix(16, 16, 16, i, 14)
-  next
-  er, eg, eb, = -32, -32, -32
-  memset(@ntscCycle, 0, 12)
-  for i = 0 to 127
-    rgbpix(32, 32, 32, i, 16)
-  next
-  er, eg, eb, = -32, -32, -32
-  memset(@ntscCycle, 0, 12)
-  for i = 0 to 127
-    rgbpix(48, 48, 48, i, 18)
-  next
-  er, eg, eb, = -32, -32, -32
-  memset(@ntscCycle, 0, 12)
-  for i = 0 to 127
-    rgbpix(63, 63, 63, i, 20)
-  next
+  // Init error propogation array
+  rgberr = heapalloc(561 * 3 * 2)
+  memset(rgberr, 0, 560 * 3 * 2)
+  rgberr=>[RED] = -1
+  rgberr=>[GRN] = -1
+  rgberr=>[BLU] = -1
+
+  rgb3Spans(0,5,5,  0, 0, 0, 63, 0, 0, 0)
+  rgb3Spans(5,0,5,  0, 0, 0,  0,63, 0, 3)
+  rgb3Spans(5,5,0,  0, 0, 0,  0, 0,63, 6)
+  rgb3Spans(0,0,0,  0, 0, 0, 63,63,63, 9)
+  rgb3Spans(0,1,1,  0, 0, 0, 63,31,31, 12)
+  rgb3Spans(1,0,1,  0, 0, 0, 31,63,31, 15)
+  rgb3Spans(1,1,0,  0, 0, 0, 31,31,63, 18)
+  rgb3Spans(5,5,5, 16,16,16, 16,16,16, 21)
+  rgb3Spans(5,5,5, 32,32,32, 32,32,32, 24)
+  rgb3Spans(5,5,5, 48,48,48, 48,48,48, 27)
+  rgb3Spans(5,5,5, 63,63,63, 63,63,63, 30)
 end
 
 dcgrMode(0)
