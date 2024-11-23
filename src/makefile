@@ -378,10 +378,6 @@ $(LZ4): libsrc/lz4.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AMOW libsrc/lz4.pla
 	acme --setpc 4094 -o $(LZ4) libsrc/lz4.a
 
-$(LZ4CAT): samplesrc/lz4cat.pla inc/lz4.plh $(PLVM02) $(PLASM)
-	./$(PLASM) -AMOW samplesrc/lz4cat.pla
-	acme --setpc 4094 -o $(LZ4CAT) samplesrc/lz4cat.a
-
 $(RPNCALC): samplesrc/rpncalc.pla libsrc/fpu.pla inc/fpu.plh libsrc/fpstr.pla inc/fpstr.plh inc/conio.plh $(PLVM02) $(PLASM)
 	./$(PLASM) -AMOW samplesrc/rpncalc.pla
 	acme --setpc 4094 -o $(RPNCALC) samplesrc/rpncalc.a
@@ -549,6 +545,10 @@ $(DCGREASY): utilsrc/apple/dcgreasy.pla $(DCGRLIB) $(DCGRUTILS) $(PLASM)
 $(DCGRRGB): samplesrc/dcgrrgb.pla $(DCGRLIB) $(DCGRUTILS) $(PLASM)
 	./$(PLASM) -AMOW samplesrc/dcgrrgb.pla
 	acme --setpc 4094 -o $(DCGRRGB) samplesrc/dcgrrgb.a
+
+$(LZ4CAT): utilsrc/lz4cat.pla inc/lz4.plh $(PLVM02) $(PLASM)
+	./$(PLASM) -AMOW utilsrc/lz4cat.pla
+	acme --setpc 4094 -o $(LZ4CAT) utilsrc/lz4cat.a
 
 $(MON): utilsrc/apple/mon.pla $(PLASM)
 	./$(PLASM) -AMOW utilsrc/apple/mon.pla

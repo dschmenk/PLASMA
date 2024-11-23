@@ -6,15 +6,12 @@ include "inc/fileio.plh"
 
 sysflags resxtxt1|reshgr1|resxhgr1
 
-const BLU_MSK = $001F
-const GRN_MSK = $03E0
-const RED_MSK = $7C00
 const RED = 0
 const GRN = 1
 const BLU = 2
 const RGB_MAX = 63
-const ERR_MAX = 64
-const ERR_DIV = 4
+const ERR_MAX = 32
+const ERR_DIV = 2
 
 byte[] ntscChroma
 // Imperical 0-255       R    G    B
@@ -33,36 +30,15 @@ byte[]              = 32,  4, 16 // RED
 //byte[]                = 16, 16,  0 // BROWN
 //byte[]                = 32,  0, 16 // RED
 // Test             0-63 R   G   B
-//byte[]                =  0,  0, 63 // BLUE
-//byte[]                =  0, 63,  0 // GREEN
-//byte[]                = 16, 16,  0 // BROWN
-//byte[]                = 63,  0,  0 // RED
-//byte[]                = 32, 28, 63 // BLUE
-//byte[]                =  0, 56, 31 // GREEN
-//byte[]                = 31, 35,  0 // BROWN
-//byte[]                = 63,  7, 32 // RED
-//byte[]                = 32, 31, 63 // BLUE
-//byte[]                =  0, 63, 31 // GREEN
-//byte[]                = 31, 32,  0 // BROWN
-//byte[]                = 63,  0, 32 // RED
-//byte[]                = 24, 24, 40 // BLUE
-//byte[]                =  0, 40, 20 // GREEN
-//byte[]                = 16, 16, 20 // BROWN
-//byte[]                = 40,  0, 20 // RED
+//byte[]              = 12, 10, 24 // BLUE 872
+//byte[]              =  8, 26, 16 // GREEN 996
+//byte[]              = 20, 22,  8 // BROWN 872
+//byte[]              = 24,  6, 16 // RED 868
 byte[12] ntscCycle
+byte[256] gamma
 var rgbErr // Running color error array
 var arg
 
-def packrgb24(r, g, b)#1
-  return (b >> 2) | ((g & $F8) << 2) | ((r & $F8) << 7)
-end
-
-def packrgb15(r, g, b)#1
-  return (r << 10) | (g << 5) | b
-end
-def unpackrgb15(rgb)#3
-    return rgb >> 10, (rgb >> 5) & $1F, rgb $1F
-end
 def abs(n)
   return n < 0 ?? -n :: n
 end
@@ -157,6 +133,11 @@ def rgbPix(r, g, b, x, y)#0
 end
 
 def rgbInit#0
+  var i
+
+  for i = 1 to 255
+    gamma[i] = (i / 4) * (i / 4) / 63
+  next
   dcgrMode(0)
   // Init error propogation array
   rgbErr = heapalloc(561 * 3 * 2)
@@ -203,12 +184,12 @@ def rgbTest#0
   rgbExit
 end
 
-def rgbImport(filestr)#0
+def rgbImportExport(rgbfile, dhgrfile)#0
   byte refnum, r, g, b
   var i, j
   var rgbScanline, rgbptr
-    
-  refnum = fileio:open(filestr)
+
+  refnum = fileio:open(rgbfile)
   if refnum
     rgbScanline = heapalloc(560 * 3)
     if rgbScanline
@@ -217,14 +198,20 @@ def rgbImport(filestr)#0
         fileio:read(refnum, rgbScanline,  560 * 3)
         rgbptr = rgbScanline
         for i = 0 to 559
-          r = rgbptr->RED & $1F
-          g = rgbptr->GRN & $1F
-          b = rgbptr->BLU & $1F
+          r = gamma[rgbptr->RED]
+          g = gamma[rgbptr->GRN]
+          b = gamma[rgbptr->BLU]
           rgbptr = rgbptr + 3
           rgbPix(r, g, b, i, j)
         next
+        if ^$C000 == $83
+          break
+        fin
       next
       fileio:close(refnum)
+      if ^dhgrfile
+        screenWrite(dhgrfile)
+      fin
       getc
       rgbExit
     fin
@@ -235,23 +222,16 @@ end
 
 arg = argNext(argFirst)
 if ^arg
-    if ^(arg + 1) == '-'
-        if toupper(^(arg + 2)) == 'T'
-            rgbTest
-        fin
-        arg = argNext(arg)
+  if ^(arg + 1) == '-'
+    if toupper(^(arg + 2)) == 'T'
+      rgbTest
     fin
-    if ^arg
-        rgbImport(arg)
-        arg = argNext(arg)
-        if ^arg
-            if screenWrite(arg)
-              puts("Unable to write: "); puts(arg); putln
-            fin
-        fin
-        return 0
-    fin
+    arg = argNext(arg)
+  fin
+  if ^arg
+    rgbImportExport(arg, argNext(arg))
+  fin
+  return 0
 fin
 puts("Usage: DCGRRGB [-T] RGBFILE [DHGRFILE]\n")
-rgbTest
 done
