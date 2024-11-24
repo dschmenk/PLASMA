@@ -4,11 +4,6 @@ include "inc/fileio.plh"
 include "inc/lz4.plh"
 
 const ERASE_DST = 1
-struc t_header
-    word magic[2]
-    byte FLG
-    byte BD
-end
 word arg
 byte ioflags
 byte inref, outref
@@ -59,31 +54,31 @@ def lz4ReadBlock(flags)#2
 end
 def lz4ReadFrame#0
     word data, len
-    byte header[t_header], opt
+    byte header[t_lz4header], opt
 
-    fileio:read(inref, @header, t_header)
-    if header:magic[1] <> $184D or header:magic[0] <> $2204
+    fileio:read(inref, @header, t_lz4header)
+    if header:lz4magic[1] <> $184D or header:lz4magic[0] <> $2204
         puts("Not LZ4 file.\n")
         return
     fin
-    if header.FLG & $C0 <> $40
+    if header.lz4FLG & $C0 <> $40
         puts("Wrong LZ4 version.\n")
         return
     fin
-    if header.BD & $70 <> $40
+    if header.lz4BD & $70 <> $40
         puts("Not 64K block size.\n")
         return
     fin
     opt = 1
-    if header.FLG & $08 // Content Size
+    if header.lz4FLG & $08 // Content Size
         opt = opt + 8
     fin
-    if header.FLG & $01 // Dictionary ID
+    if header.lz4FLG & $01 // Dictionary ID
         opt = opt + 4
     fin
     fileio:read(inref, heapmark, opt) // Read rest of header and throw away
     repeat
-        data, len = lz4ReadBlock(header.FLG)
+        data, len = lz4ReadBlock(header.lz4FLG)
         if len
             if outref
                 fileio:write(outref, data, len)
@@ -97,7 +92,7 @@ def lz4ReadFrame#0
             heaprelease(data)
         fin
     until not data
-    if header.FLG & $04 // Content Checksun
+    if header.lz4FLG & $04 // Content Checksun
         fileio:read(inref, heapmark, 4)
     fin
 end

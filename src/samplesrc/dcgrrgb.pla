@@ -11,7 +11,7 @@ const GRN = 1
 const BLU = 2
 const RGB_MAX = 63
 const ERR_MAX = 32
-const ERR_DIV = 2
+byte errDiv = 2
 
 byte[] ntscChroma
 // Imperical 0-255       R    G    B
@@ -72,9 +72,9 @@ def rgbPix(r, g, b, x, y)#0
 
   // Error propogation
   errptr = rgbErr + x * 3 * 2
-  r = r + errptr=>[RED] / ERR_DIV
-  g = g + errptr=>[GRN] / ERR_DIV
-  b = b + errptr=>[BLU] / ERR_DIV
+  r = r + errptr=>[RED] / errDiv
+  g = g + errptr=>[GRN] / errDiv
+  b = b + errptr=>[BLU] / errDiv
   //r = min(RGB_MAX, max(-RGB_MAX, r))
   //g = min(RGB_MAX, max(-RGB_MAX, g))
   //b = min(RGB_MAX, max(-RGB_MAX, b))
@@ -135,9 +135,15 @@ end
 def rgbInit#0
   var i
 
-  for i = 1 to 255
-    gamma[i] = (i / 4) * (i / 4) / 63
-  next
+  if not gamma
+    for i = 0 to 255
+      gamma[i] = (i / 4) * (i / 4) / 63
+    next
+  else
+    for i = 0 to 255
+      gamma[i] = i / 4
+    next
+  fin
   dcgrMode(0)
   // Init error propogation array
   rgbErr = heapalloc(561 * 3 * 2)
@@ -148,6 +154,7 @@ def rgbInit#0
 end
 
 def rgbExit#0
+  heaprelease(rgbErr)
   dcgrMode(-1)
 end
 
@@ -222,16 +229,30 @@ end
 
 arg = argNext(argFirst)
 if ^arg
-  if ^(arg + 1) == '-'
-    if toupper(^(arg + 2)) == 'T'
-      rgbTest
-    fin
+  while ^(arg + 1) == '-'
+    when toupper(^(arg + 2))
+      is 'T' // Run color test
+        rgbTest
+        break
+      is 'L' // Use linear RGB transfer instead of gama
+        gamma = 1
+        break
+      is 'E' // Set error divisor
+        if ^arg > 2
+          errDiv = ^(arg + 3) - '0'
+          if ^arg > 3
+            errDiv = errDiv * 10 + ^(arg + 4) - '0'
+          fin
+        fin
+        errDiv = max(1, min(63, errDiv))
+        break
+    wend
     arg = argNext(arg)
-  fin
+  loop
   if ^arg
     rgbImportExport(arg, argNext(arg))
   fin
   return 0
 fin
-puts("Usage: DCGRRGB [-T] RGBFILE [DHGRFILE]\n")
+puts("Usage: DCGRRGB [-T] [-L] [-E##] RGBFILE [DHGRFILE]\n")
 done
