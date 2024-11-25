@@ -37,40 +37,31 @@ def lz4ReadBlock(ref, flags, dstbuf)#1
     if len <> 4 or size[0] == 0 or size[1] & $7FFF
         return 0
     fin
-    block = dstbuf
+    block = heapalloc(size[0])
     if block
         len = fileio:read(ref, block, size[0])
-        if len <> size[0]
-            return 0
+        if len == size[0]
+            if size[1] & $8000
+                //
+                // Uncompressed block
+                //
+                memcpy(dstbuf, block, len)
+            else
+                //
+                // Decompress block
+                //
+                len = lz4Unpack(block, block + size[0], dstbuf, $6000)
+            fin
+            if flags & $10 // Block Checksum
+                fileio:read(ref, @size, 4)
+            fin
         fin
-    else
-        return 0
-    fin
-    if size[1] & $8000
-        //
-        // Uncompressed block
-        //
-        //data = dstbuf
-    else
-        //
-        // Decompress block
-        //
-        len  = heapavail - 256 // Allocate almost entire heap to decompress into
-        data = heapalloc(len)
-        if data
-            len = lz4Unpack(dstbuf, dstbuf + size[0], data, data + len)
-            memcpy(dstbuf, data, len)
-        else
-            len = 0
-        fin
-    fin
-    if flags & $10 // Block Checksum
-        fileio:read(ref, @size, 4)
+        heaprelease(block)
     fin
     return len
 end
 def lz4ReadFrame(filestr)#0
-    word data, len
+    word dstbuf, len
     byte ref, header[t_lz4header], opt
 
     ref = fileio:open(filestr)
@@ -96,8 +87,10 @@ def lz4ReadFrame(filestr)#0
         opt = opt + 4
     fin
     fileio:read(ref, heapmark, opt) // Read rest of header and throw away
+    dstbuf = $2000
     repeat
-        len = lz4ReadBlock(ref, header.lz4FLG, $2000)
+        len = lz4ReadBlock(ref, header.lz4FLG, dstbuf)
+        dstbuf = dstbuf + len
     until len == 0
     //if header.lz4FLG & $04 // Content Checksun
     //    fileio:read(ref, heapmark, 4)
@@ -119,7 +112,7 @@ end
 def delay_getkey#1
     var busywait
 
-    for busywait = 0 to 10000
+    for busywait = 0 to 30000
         if ^$C000 > 127
             return ^$C010 == $83
         fin
