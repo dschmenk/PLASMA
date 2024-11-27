@@ -24,9 +24,12 @@ test: $(DCGRTEST)
 utils: $(DCGRSPRED) $(DCGREASY) $(DCGRRGB) $(DCGRSHOW)
 	-mkdir prodos/dcgr.tk/
 	-mkdir prodos/dcgr.tk/utils
+	-mkdir prodos/dcgr.tk/utils/samples
 	cp $(DCGREASY) prodos/dcgr.tk/utils
 	cp $(DCGRSPRED) prodos/dcgr.tk/utils
 	cp $(DCGRRGB) prodos/dcgr.tk/utils
+	cp $(DCGRSHOW) prodos/dcgr.tk/utils
+	cp dcgr.tk/utils/samples/* prodos/dcgr.tk/utils/samples
 
 demos: $(PENGUINS)
 	-mkdir prodos/dcgr.tk/
