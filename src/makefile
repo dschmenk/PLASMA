@@ -61,13 +61,11 @@ DHCP       = rel/DHCP\#FE1000
 HTTPD      = rel/HTTPD\#FE1000
 TFTPD      = rel/TFTPD\#FE1000
 HGRLIB     = rel/apple/HGRLIB\#FE1000
-DCGRLIB    = rel/apple/DCGRLIB\#FE1000
 GRLIB      = rel/apple/GRLIB\#FE1000
 DGRLIB     = rel/apple/DGRLIB\#FE1000
 HGRSPRITE  = rel/apple/HGRSPRITE\#FE1000
 HGRTILE    = rel/apple/HGRTILE\#FE1000
 HGRFONT    = rel/apple/HGRFONT\#FE1000
-DCGRUTILS  = rel/apple/DCGRUTILS\#FE1000
 LINES      = rel/LINES\#FE1000
 GRAFIX     = rel/apple/GRAFIX\#FE1000
 SFM        = rel/apple/SFM\#FE1000
@@ -84,11 +82,6 @@ TILETEST   = rel/apple/TILETEST\#FE1000
 HGRTEST    = rel/apple/HGRTEST\#FE1000
 GRTEST     = rel/apple/GRTEST\#FE1000
 DGRTEST    = rel/apple/DGRTEST\#FE1000
-DCGRTEST   = rel/apple/DCGRTEST\#FE1000
-DCGRSPRED  = rel/apple/DCGRSPRED\#FE1000
-DCGREASY   = rel/apple/DCGREASY\#FE1000
-DCGRRGB    = rel/apple/DCGRRGB\#FE1000
-DCGRSHOW   = rel/apple/DCGRSHOW\#FE1000
 MEMMGR     = rel/MEMMGR\#FE1000
 MEMTEST    = rel/MEMTEST\#FE1000
 FIBERTEST  = rel/FIBERTEST\#FE1000
@@ -125,7 +118,7 @@ TXTTYPE	= .TXT
 #SYSTYPE	= \#FF2000
 #TXTTYPE	= \#040000
 
-apple: $(PLVMZP_APL) $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVMJIT) $(PLVM802) $(PLVM03) $(PLVMJIT03) $(CMD) $(CMDJIT) $(JIT) $(JIT16) $(JITUNE) $(SOSCMD) $(SOSCMDJIT) $(PLASMAPLASM) $(CODEOPT) $(PLFORTH) $(HRFORTH) $(HR2FORTH) $(TX2FORTH) $(SEXPR) $(SMATH) $(DRAWL) $(ZIPCHIP) $(MATCHFILES) $(ARGS) $(MEMMGR) $(MEMTEST) $(FIBER) $(FIBERTEST) $(LONGJMP) $(ED) $(MON) $(COPY) $(DEL) $(REN) $(CAT) $(NEWDIR) $(TYPE) $(INITSLOT) $(SOS) $(ROD) $(SIEVE) $(PRIMEGAP) $(MOUSE) $(UTHERNET2) $(UTHERNET) $(ETHERIP) $(INET) $(DHCP) $(HTTPD) $(TFTPD) $(ROGUE) $(ROGUEMAP) $(ROGUECOMBAT) $(SFM) $(SFMSPRT) $(GRAFIX) $(GFXDEMO) $(LINES) $(HGRTILE) $(HGRFONT) $(HGRSPRITE) $(HGRLIB) $(TILETEST) $(HGRTEST) $(DCGRLIB) $(GRLIB) $(DGRLIB) $(DCGRUTILS) $(GRTEST) $(DGRTEST) $(HGRTEST) $(DCGRTEST) $(DCGRSPRED) $(DCGREASY) $(DCGRRGB) $(DCGRSHOW) $(FILEIO_APL) $(CONIO_APL) $(JOYBUZZ) $(PORTIO) $(SPIPORT) $(SDFAT) $(FATCAT) $(FATGET) $(FATPUT) $(FATWDSK) $(FATRDSK) $(INT32) $(INT32TEST) $(SANE) $(FPSTR) $(FPU) $(SANITY) $(LZ4) $(LZ4CAT) $(RPNCALC) $(SNDSEQ) $(PLAYSEQ) $(CONIOTEST)
+apple: $(PLVMZP_APL) $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVMJIT) $(PLVM802) $(PLVM03) $(PLVMJIT03) $(CMD) $(CMDJIT) $(JIT) $(JIT16) $(JITUNE) $(SOSCMD) $(SOSCMDJIT) $(PLASMAPLASM) $(CODEOPT) $(PLFORTH) $(HRFORTH) $(HR2FORTH) $(TX2FORTH) $(SEXPR) $(SMATH) $(DRAWL) $(ZIPCHIP) $(MATCHFILES) $(ARGS) $(MEMMGR) $(MEMTEST) $(FIBER) $(FIBERTEST) $(LONGJMP) $(ED) $(MON) $(COPY) $(DEL) $(REN) $(CAT) $(NEWDIR) $(TYPE) $(INITSLOT) $(SOS) $(ROD) $(SIEVE) $(PRIMEGAP) $(MOUSE) $(UTHERNET2) $(UTHERNET) $(ETHERIP) $(INET) $(DHCP) $(HTTPD) $(TFTPD) $(ROGUE) $(ROGUEMAP) $(ROGUECOMBAT) $(SFM) $(SFMSPRT) $(GRAFIX) $(GFXDEMO) $(LINES) $(HGRTILE) $(HGRFONT) $(HGRSPRITE) $(HGRLIB) $(TILETEST) $(HGRTEST) $(GRLIB) $(DGRLIB) $(GRTEST) $(DGRTEST) $(HGRTEST) $(FILEIO_APL) $(CONIO_APL) $(JOYBUZZ) $(PORTIO) $(SPIPORT) $(SDFAT) $(FATCAT) $(FATGET) $(FATPUT) $(FATWDSK) $(FATRDSK) $(INT32) $(INT32TEST) $(SANE) $(FPSTR) $(FPU) $(SANITY) $(LZ4) $(LZ4CAT) $(RPNCALC) $(SNDSEQ) $(PLAYSEQ) $(CONIOTEST)
 
 	-rm vmsrc/plvmzp.inc
 
@@ -487,10 +480,6 @@ $(HGRLIB): libsrc/apple/hgrlib.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AMOW libsrc/apple/hgrlib.pla
 	acme --setpc 4094 -o $(HGRLIB) libsrc/apple/hgrlib.a
 
-$(DCGRLIB): libsrc/apple/dcgrlib.pla $(PLVM02) $(PLASM)
-	./$(PLASM) -AMOW libsrc/apple/dcgrlib.pla
-	acme --setpc 4094 -o $(DCGRLIB) libsrc/apple/dcgrlib.a
-
 $(GRLIB): libsrc/apple/grlib.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AMOW libsrc/apple/grlib.pla
 	acme --setpc 4094 -o $(GRLIB) libsrc/apple/grlib.a
@@ -498,10 +487,6 @@ $(GRLIB): libsrc/apple/grlib.pla $(PLVM02) $(PLASM)
 $(DGRLIB): libsrc/apple/dgrlib.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AMOW libsrc/apple/dgrlib.pla
 	acme --setpc 4094 -o $(DGRLIB) libsrc/apple/dgrlib.a
-
-$(DCGRUTILS): libsrc/apple/dcgrutils.pla $(DCGRLIB) $(PLVM02) $(PLASM)
-	./$(PLASM) -AMOW libsrc/apple/dcgrutils.pla
-	acme --setpc 4094 -o $(DCGRUTILS) libsrc/apple/dcgrutils.a
 
 $(TILETEST): samplesrc/tiletest.pla $(PLASM)
 	./$(PLASM) -AMOW samplesrc/tiletest.pla
@@ -530,26 +515,6 @@ $(GRTEST): samplesrc/grtest.pla $(GRLIB) $(PLASM)
 $(DGRTEST): samplesrc/dgrtest.pla $(DGRLIB) $(PLASM)
 	./$(PLASM) -AMOW samplesrc/dgrtest.pla
 	acme --setpc 4094 -o $(DGRTEST) samplesrc/dgrtest.a
-
-$(DCGRTEST): samplesrc/dcgrtest.pla $(DCGRLIB) $(DCGRUTILS) $(PLASM)
-	./$(PLASM) -AMOW samplesrc/dcgrtest.pla
-	acme --setpc 4094 -o $(DCGRTEST) samplesrc/dcgrtest.a
-
-$(DCGRSPRED): utilsrc/apple/dcgrspred.pla $(DCGRLIB) $(DCGRUTILS) $(PLASM)
-	./$(PLASM) -AMOW utilsrc/apple/dcgrspred.pla
-	acme --setpc 4094 -o $(DCGRSPRED) utilsrc/apple/dcgrspred.a
-
-$(DCGREASY): utilsrc/apple/dcgreasy.pla $(DCGRLIB) $(DCGRUTILS) $(PLASM)
-	./$(PLASM) -AMOW utilsrc/apple/dcgreasy.pla
-	acme --setpc 4094 -o $(DCGREASY) utilsrc/apple/dcgreasy.a
-
-$(DCGRSHOW): utilsrc/apple/dcgrshow.pla $(DCGRLIB) $(DCGRUTILS) $(PLASM)
-	./$(PLASM) -AMOW utilsrc/apple/dcgrshow.pla
-	acme --setpc 4094 -o $(DCGRSHOW) utilsrc/apple/dcgrshow.a
-
-$(DCGRRGB): samplesrc/dcgrrgb.pla $(DCGRLIB) $(DCGRUTILS) $(PLASM)
-	./$(PLASM) -AMOW samplesrc/dcgrrgb.pla
-	acme --setpc 4094 -o $(DCGRRGB) samplesrc/dcgrrgb.a
 
 $(LZ4CAT): utilsrc/lz4cat.pla inc/lz4.plh $(PLVM02) $(PLASM)
 	./$(PLASM) -AMOW utilsrc/lz4cat.pla
