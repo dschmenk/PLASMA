@@ -202,13 +202,18 @@ byte            = 224+0, 224+1, 224+2, 224+3, 224+4, 224+5, 224+6
 byte            = 232+0, 232+1, 232+2, 232+3, 232+4, 232+5, 232+6
 byte            = 240+0, 240+1, 240+2, 240+3, 240+4, 240+5, 240+6
 byte            = 248+0, 248+1, 248+2, 248+3, 248+4, 248+5, 248+6
+//
+// Color -> DHGR pixel
+//
+byte[] dhgrPix  = 2, 4, 8, 1
+byte[] dhgrMask = 13, 12, 7, 14
 ///
 // Destination surface values
 //
 const DST_SCREEN    = 0
 const DST_MEMORY    = 1
 word surfWidth, surfWidth7, surfHeight, surfPtr, surfSpan
-byte dcgrSurface, opScr, opMem
+byte dhgrSurface, opScr, opMem
 //
 // Surface independent entrypoints
 //
@@ -233,16 +238,16 @@ end
 export asm dcgrRleMap(x, y, pixw, pixh, pixptr)#0
         JMP     $1000
 end
-export asm dcgrScrBl7(x7, y, w7, h)#0
+export asm dhgrScrBl7(x7, y, w7, h)#0
         JMP     $1000
 end
-export asm dcgrMemBl7(x7, y, w7, h, memptr, memspan)#0
+export asm dhgrMemBl7(x7, y, w7, h, memptr, memspan)#0
         JMP     $1000
 end
-export asm dcgrClearBl7(x7, y, w7, h)#0
+export asm dhgrClearBl7(x7, y, w7, h)#0
         JMP     $1000
 end
-export asm dcgrTiles(x7, y8, strptr, strlen, tileset)#0
+export asm dhgrTiles(x7, y8, strptr, strlen, tileset)#0
         JMP     $1000
 end
 //
@@ -364,11 +369,11 @@ asm _dcgrColorA
         STA     $5003       ; MEMCLRH
         RTS
 end
-//==================\\
-//                  \\
-// Pixel operations \\
-//                  \\
-//==================\\
+//===============================\\
+//                               \\
+// Double Color pixel operations \\
+//                               \\
+//===============================\\
 //
 // Screen functions
 //
@@ -1360,7 +1365,7 @@ end
 //
 // Screen -> Memory Block7 Transfer
 //
-asm dcgrScrBl7Mem(x7, y, w7, h, memptr, memspan)#0
+asm dhgrScrBl7Mem(x7, y, w7, h, memptr, memspan)#0
         TXA
         CLC
         ADC     #6
@@ -1427,7 +1432,7 @@ end
 //
 // Memory -> Screen Block7 Transfer
 //
-asm dcgrMemBl7Scr(x7, y, w7, h, memptr, memspan)#0
+asm dhgrMemBl7Scr(x7, y, w7, h, memptr, memspan)#0
         TXA
         CLC
         ADC     #6
@@ -1584,7 +1589,7 @@ end
 //
 // Memory -> Memory Block7 function
 //
-asm dcgrMemBl7Mem(x7, y, srcw7, srch, srcptr, srcspan, dstw7, dsth, dstptr)#0
+asm dhgrMemBl7Mem(x7, y, srcw7, srch, srcptr, srcspan, dstw7, dsth, dstptr)#0
         TXA
         CLC
         ADC     #9
@@ -1783,7 +1788,7 @@ end
 //
 // Clear Screen/Memory Block7
 //
-asm dcgrClearBl7Scr(x7, y, w7, h)#0
+asm dhgrClearBl7Scr(x7, y, w7, h)#0
         INX
         INX
         INX
@@ -1841,7 +1846,7 @@ asm     _dcgrClearBl7ScrC
         BNE     YFILS
 RETFILS RTS
 end
-asm dcgrClearBl7Mem(x7, y, w7, h, memptr, memspan)#0
+asm dhgrClearBl7Mem(x7, y, w7, h, memptr, memspan)#0
         TXA
         CLC
         ADC     #6
@@ -1915,7 +1920,7 @@ end
 //
 // Tile -> Screen Transfer
 //
-asm dcgrTilesScr(x7, y8, strptr, strlen, tileset)#0
+asm dhgrTilesScr(x7, y8, strptr, strlen, tileset)#0
         INX
         INX
         INX
@@ -2032,7 +2037,7 @@ end
 //
 // Wait for VLB
 //
-export asm dcgrVLB#0
+export asm dhgrVLB#0
         PHP
         SEI
         STA     $C079       ; Enable IOU access and reset VBL int on //c
@@ -2050,7 +2055,7 @@ end
 //
 // Slow implementation of Tiles -> Mem
 //
-def dcgrTileMem(tileptr, memptr, memspan)#0
+def dhgrTileMem(tileptr, memptr, memspan)#0
     byte h, v
     word rowptr
 
@@ -2078,12 +2083,12 @@ def dcgrTileMem(tileptr, memptr, memspan)#0
         tileptr = tileptr + 8
     next
 end
-def dcgrTilesMem(x7, y8, strptr, strlen, tileset, memptr, memspan)#0
+def dhgrTilesMem(x7, y8, strptr, strlen, tileset, memptr, memspan)#0
 
     if y8; memptr = memptr + y8 * 8 * memspan; fin
     memptr = memptr + x7 * 2
     while strlen
-        dcgrTileMem(tileset + ^strptr * 32, memptr, memspan)
+        dhgrTileMem(tileset + ^strptr * 32, memptr, memspan)
         strptr++
         strlen--
     loop
@@ -2091,7 +2096,7 @@ end
 //
 // Convert Block7 to Tile format
 //
-export def dcgrMemBl7Tile(x7, y, memptr, memspan, tileptr)#0
+export def dhgrMemBl7Tile(x7, y, memptr, memspan, tileptr)#0
     byte h, v
     word rowptr
 
@@ -2122,35 +2127,6 @@ export def dcgrMemBl7Tile(x7, y, memptr, memspan, tileptr)#0
     next
 end
 //
-// Read pixel and return color
-//
-export def dcgrGetPixel(x, y)#1
-    byte x7, m7, i
-    word[2] pix7
-    word amask, mmask
-
-    x7 = divmod7[x] >> 3
-    if dcgrSurface // Memory
-        dcgrMemBl7Mem(x7, y, surfWidth, surfHeight, surfPtr, surfSpan, 1, 1, @pix7)
-    else // Screen
-        dcgrScrBl7Mem(x7, y, 1, 1, @pix7, 4)
-    fin
-    m7 = divmod7[x] & $07
-    amask = auxclrmsk[m7]
-    if amask & $80; amask = (amask & $7F) << 8; fin
-    pix7[0] = amask & pix7[0]
-    mmask = memclrmsk[m7]
-    if mmask & $80; mmask = (mmask & $7F) << 8; fin
-    pix7[1] = mmask & pix7[1]
-    for i = 0 to 15
-        if pix7[0] == (auxclrsl[i] | (auxclrsh[i] << 8)) & amask
-        if pix7[1] == (memclrsl[i] | (memclrsh[i] << 8)) & mmask
-            return i // Color match
-        fin; fin
-    next
-    return 15
-end
-//
 // Hack to extend parameters for memory functions
 //
 def extPlotMem#0
@@ -2172,18 +2148,18 @@ def extRleMapMem#0
     (@dcgrRlemapMem)(surfWidth, surfHeight, surfPtr, surfSpan)#0
 end
 def extScrBl7Mem#0
-    (@dcgrScrBl7Mem)(surfPtr, surfSpan)#0
+    (@dhgrScrBl7Mem)(surfPtr, surfSpan)#0
 end
 def extMemBl7Mem#0
-    (@dcgrMemBl7Mem)(surfWidth7, surfHeight, surfPtr)#0
+    (@dhgrMemBl7Mem)(surfWidth7, surfHeight, surfPtr)#0
 end
 def extTilesMem#0
-    (@dcgrTilesMem)(surfPtr, surfSpan)#0
+    (@dhgrTilesMem)(surfPtr, surfSpan)#0
 end
 def extClearBl7Mem#0
-    (@dcgrClearBl7Mem)(surfPtr, surfSpan)#0
+    (@dhgrClearBl7Mem)(surfPtr, surfSpan)#0
 end
-def dcgrOpScr(op)#0
+def dhgrOpScr(op)#0
     byte opcode
 
     //
@@ -2225,7 +2201,7 @@ def dcgrOpScr(op)#0
 
     wend
 end
-def dcgrOpMem(op)#0
+def dhgrOpMem(op)#0
     byte opcode
 
     //
@@ -2268,67 +2244,109 @@ def dcgrOpMem(op)#0
             _jmpOpMemBl7Mem:1   = @_dcgrMemBl7MemB
     wend
 end
-export def dcgrOp(op)#0
-    if dcgrSurface // Memory
+export def dhgrOp(op)#0
+    if dhgrSurface // Memory
         if op <> opMem
             opMem = op
-            dcgrOpMem(opMem)
+            dhgrOpMem(opMem)
         fin
     else // Screen
         if op <> opScr
             opScr = op
-            dcgrOpScr(opScr)
+            dhgrOpScr(opScr)
         fin
     fin
 end
-export def dcgrSurfScr(op)#0
+export def dhgrSurfScr(op)#0
     surfWidth  = 140
     surfWidth7 = 20
     surfHeight = 192
     surfPtr    = $2000
     surfSpan   = 10
-    if dcgrSurface == DST_MEMORY
-        dcgrSurface    = DST_SCREEN
+    if dhgrSurface == DST_MEMORY
+        dhgrSurface    = DST_SCREEN
         dcgrPixel:1    = @dcgrPlotScr
         dcgrHLin:1     = @dcgrHLinScr
         dcgrVLin:1     = @dcgrVLinScr
         dcgrBitMap:1   = @dcgrBitMapScr
         dcgrPixMap:1   = @dcgrPixMapScr
         dcgrRleMap:1   = @dcgrRleMapScr
-        dcgrMemBl7:1   = @dcgrMemBl7Scr
-        dcgrClearBl7:1 = @dcgrClearBl7Scr
-        dcgrTiles:1    = @dcgrTilesScr
+        dhgrMemBl7:1   = @dhgrMemBl7Scr
+        dhgrClearBl7:1 = @dhgrClearBl7Scr
+        dhgrTiles:1    = @dhgrTilesScr
     fin
     if op <> opScr
         opScr = op
-        dcgrOpScr(opScr)
+        dhgrOpScr(opScr)
     fin
 end
-export def dcgrSurfMem(op, memh, memptr, memspan)#0
+export def dhgrSurfMem(op, memh, memptr, memspan)#0
     surfWidth7 = memspan >> 2
     surfWidth  = surfWidth7 * 7
     surfHeight = memh
     surfPtr    = memptr
     surfSpan   = memspan
-    if dcgrSurface == DST_SCREEN
-        dcgrSurface    = DST_MEMORY
+    if dhgrSurface == DST_SCREEN
+        dhgrSurface    = DST_MEMORY
         dcgrPixel:1    = @extPlotMem
         dcgrHLin:1     = @extHLinMem
         dcgrVLin:1     = @extVLinMem
         dcgrBitMap:1   = @extBitMapMem
         dcgrPixMap:1   = @extPixMapMem
         dcgrRleMap:1   = @extRleMapMem
-        dcgrScrBl7:1   = @extScrBl7Mem
-        dcgrMemBl7:1   = @extMemBl7Mem
-        dcgrClearBl7:1 = @extClearBl7Mem
-        dcgrTiles:1    = @extTilesMem
+        dhgrScrBl7:1   = @extScrBl7Mem
+        dhgrMemBl7:1   = @extMemBl7Mem
+        dhgrClearBl7:1 = @extClearBl7Mem
+        dhgrTiles:1    = @extTilesMem
     fin
     if op <> opMem
         opMem = op
-        dcgrOpMem(opMem)
+        dhgrOpMem(opMem)
     fin
 end
-export def dcgrMode(mode)#1
+//
+// Set/Unset DHGR pixels
+//
+export def dhgrSet(dhx, y)#0
+    dcgrColor(dhgrPix[dhx & $03])
+    dhgrOp(OP_OR)
+    dcgrPixel(dhx >> 2, y)
+end
+export def dhgrUnset(dhx, y)#0
+    dcgrColor(dhgrMask[dhx & $03])
+    dhgrOp(OP_AND)
+    dcgrPixel(dhx >> 2, y)
+end
+//
+// Read pixel and return color
+//
+export def dcgrGetPixel(x, y)#1
+    byte x7, m7, i
+    word[2] pix7
+    word amask, mmask
+
+    x7 = divmod7[x] >> 3
+    if dhgrSurface // Memory
+        dhgrMemBl7Mem(x7, y, surfWidth, surfHeight, surfPtr, surfSpan, 1, 1, @pix7)
+    else // Screen
+        dhgrScrBl7Mem(x7, y, 1, 1, @pix7, 4)
+    fin
+    m7 = divmod7[x] & $07
+    amask = auxclrmsk[m7]
+    if amask & $80; amask = (amask & $7F) << 8; fin
+    pix7[0] = amask & pix7[0]
+    mmask = memclrmsk[m7]
+    if mmask & $80; mmask = (mmask & $7F) << 8; fin
+    pix7[1] = mmask & pix7[1]
+    for i = 0 to 15
+        if pix7[0] == (auxclrsl[i] | (auxclrsh[i] << 8)) & amask
+        if pix7[1] == (memclrsl[i] | (memclrsh[i] << 8)) & mmask
+            return i // Color match
+        fin; fin
+    next
+    return 15
+end
+export def dhgrMode(mode)#1
     if mode >= 0
         ^page1m
         ^showfull
@@ -2338,12 +2356,12 @@ export def dcgrMode(mode)#1
         ^show80col  = 0
         ^dhresena
         ^store80ena = 0
-        dcgrOpMem(OP_SRC)
-        dcgrOpScr(OP_SRC)
-        dcgrSurface = DST_MEMORY
-        dcgrSurfScr(OP_SRC)
+        dhgrOpMem(OP_SRC)
+        dhgrOpScr(OP_SRC)
+        dhgrSurface = DST_MEMORY
+        dhgrSurfScr(OP_SRC)
         dcgrColor(0)
-        dcgrClearBl7(0, 0, 20, 192)
+        dhgrClearBl7(0, 0, 20, 192)
     else
         ^store80dis = 0
         ^dhresdis

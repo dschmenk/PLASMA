@@ -1,14 +1,18 @@
 include "inc/cmdsys.plh"
 include "inc/args.plh"
-include "inc/dcgrlib.plh"
-include "inc/dcgrutils.plh"
 include "inc/fileio.plh"
+include "dhgr.tk/inc/dhgrlib.plh"
+include "dhgr.tk/inc/dhgrutils.plh"
 
 sysflags restxt1|resxtxt1|reshgr1|resxhgr1 //  Reserve all the pages
 
+const PAUSE     = 1
+const HEIGHT_X2 = 2
+
 char[64] greasyfile = ""
-byte[20*40] frame
-byte pause = FALSE
+byte[40*96/2] frame
+byte flags
+byte frameHeight = 40
 
 var arg
 
@@ -17,14 +21,24 @@ def greasy2dcgr(pGreasy)#0
     var pPixmap
 
     pPixmap = @frame
-    for j = 0 to 39 step 2
+    for j = 0 to frameHeight-1 step 2
         for i = 0 to 39 step 2
             cl = ^(pGreasy + i)
             ch = ^(pGreasy + i + 1)
-            ^(pPixmap + i / 2)      = (cl & $0F) | (ch << 4)
-            ^(pPixmap + i / 2 + 20) = (cl >> 4)  | (ch & $F0)
+            ^(pPixmap + i / 2) = (cl & $0F) | (ch << 4)
+            if flags & HEIGHT_X2
+                ^(pPixmap + i / 2 + 20)   = (cl & $0F) | (ch << 4)
+                ^(pPixmap + i / 2 + 40) = (cl >> 4)  | (ch & $F0)
+                ^(pPixmap + i / 2 + 60) = (cl >> 4)  | (ch & $F0)
+            else
+                ^(pPixmap + i / 2 + 20) = (cl >> 4)  | (ch & $F0)
+            fin
         next
-        pPixmap = pPixmap + 40
+        if flags & HEIGHT_X2
+            pPixmap = pPixmap + 80
+        else
+            pPixmap = pPixmap + 40
+        fin
         pGreasy = pGreasy + 40
     next
 end
@@ -36,7 +50,7 @@ def greasyRead(filestr, frame)#1
     sprptr = 0
     refnum = fileio:open(filestr)
     if refnum
-        sprsize = 40 * 40  / 2
+        sprsize = 40 * frameHeight / 2
         sprptr = heapalloc(sprsize)
         if sprptr and fileio:read(refnum, @numframes,  1)
             if numframes < frame
@@ -60,22 +74,31 @@ end
 
 def importGreasy#0
     var grptr
-    byte screennum, framenum, i, j
+    byte screennum, framenum, i, j, numrows
     char[64] screenfile
 
     screennum = 1
     framenum  = 1
-    dcgrMode(0)
+    dhgrMode(DHGR_COLOR_MODE)
+    numrows = 192 / frameHeight
+    if flags & HEIGHT_X2
+        numrows = numrows / 2
+    fin
+    numrows--
     while framenum
         dcgrColor(CLR_GREY1)
-        dcgrClearBl7(0, 0, SCR_WIDTH7, SCR_HEIGHT)
-        for j = 0 to 3
+        dhgrClearBl7(0, 0, SCR_WIDTH7, SCR_HEIGHT)
+        for j = 0 to numrows
             for i = 0 to 2
                 grptr = greasyRead(@greasyfile, framenum)
                 if grptr
                     greasy2dcgr(grptr)
                     heaprelease(grptr)
-                    dcgrPixMap(i*40+20, j*40+20, 40, 40, @frame)
+                    if flags & HEIGHT_X2
+                        dcgrPixMap(i*42+8, j*(frameHeight+1)*2+2, 40, frameHeight*2, @frame)
+                    else
+                        dcgrPixMap(i*42+8, j*(frameHeight+2)+2, 40, frameHeight, @frame)
+                    fin
                     framenum++
                 else
                     framenum = 0
@@ -90,28 +113,36 @@ def importGreasy#0
         screenfile[screenfile] = '0' + screennum
         screennum++
         if screenWrite(@screenfile)
-            dcgrMode(-1)
+            dhgrMode(DHGR_TEXT_MODE)
             puts("Error writing: "); puts(@screenfile); putln
             return
         fin
-        if pause; getc; fin
+        if flags & PAUSE; getc; fin
     loop
-    dcgrMode(-1)
+    dhgrMode(DHGR_TEXT_MODE)
 end
 
 arg = argNext(argFirst)
 if ^arg
-    if ^(arg + 1) == '-'
-        if toupper(^(arg + 2)) == 'P'
-            pause = TRUE
-        fin
+    while arg and ^(arg + 1) == '-'
+        when toupper(^(arg + 2))
+            is 'P'
+                flags = flags | PAUSE
+                break
+            is '2'
+                flags = flags | HEIGHT_X2
+                break
+            is 'T'
+                frameHeight = 48
+                break
+        wend
         arg = argNext(arg)
-    fin
+    loop
     if ^arg
         strcpy(@greasyfile, arg)
         importGreasy
         return 0
     fin
 fin
-puts("Usage: DCGRGREASY [-P] FRAMEFILE\n")
+puts("Usage: DHGRGREASY [-P] [-2] [-T] FRAMEFILE\n")
 done
