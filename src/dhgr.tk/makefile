@@ -8,7 +8,7 @@ DHGRSPRED  = dhgr.tk/utils/DHGRSPRED.REL
 DHGREASY   = dhgr.tk/utils/DHGREASY.REL
 DHGRRGB    = dhgr.tk/utils/DHGRRGB.REL
 DHGRSHOW   = dhgr.tk/utils/DHGRSHOW.REL
-DLGRSHOW   = dhgr.tk/utils/DLGRSHOW.REL
+DLGRCONV   = dhgr.tk/utils/DLGRCONV.REL
 PENGUINS   = dhgr.tk/demos/penguins/PENGUINS.REL
 
 
@@ -22,7 +22,7 @@ test: $(DHGRTEST)
 	cp $(DHGRTEST) prodos/dhgr.tk/test
 	cp dhgr.tk/test/*.BIN prodos/dhgr.tk/test
 
-utils: $(DHGRSPRED) $(DHGREASY) $(DHGRRGB) $(DHGRSHOW) $(DLGRSHOW)
+utils: $(DHGRSPRED) $(DHGREASY) $(DHGRRGB) $(DHGRSHOW) $(DLGRCONV)
 	-mkdir prodos/dhgr.tk/
 	-mkdir prodos/dhgr.tk/utils
 	-mkdir prodos/dhgr.tk/utils/samples
@@ -67,9 +67,9 @@ $(DHGRSHOW): dhgr.tk/utils/dhgrshow.pla $(DHGRLIB) $(DHGRUTILS) dhgr.tk/inc/dhgr
 	./plasm -AMOW dhgr.tk/utils/dhgrshow.pla
 	acme --setpc 4094 -o $(DHGRSHOW) dhgr.tk/utils/dhgrshow.a
 
-$(DLGRSHOW): dhgr.tk/utils/dlgrshow.pla $(DHGRLIB) $(DHGRUTILS) dhgr.tk/inc/dhgrlib.plh dhgr.tk/inc/dhgrutils.plh
-	./plasm -AMOW dhgr.tk/utils/dlgrshow.pla
-	acme --setpc 4094 -o $(DLGRSHOW) dhgr.tk/utils/dlgrshow.a
+$(DLGRCONV): dhgr.tk/utils/dlgrconv.pla $(DHGRLIB) $(DHGRUTILS) dhgr.tk/inc/dhgrlib.plh dhgr.tk/inc/dhgrutils.plh
+	./plasm -AMOW dhgr.tk/utils/dlgrconv.pla
+	acme --setpc 4094 -o $(DLGRCONV) dhgr.tk/utils/dlgrconv.a
 
 $(DHGRRGB): dhgr.tk/utils/dhgrrgb.pla $(DHGRLIB) $(DHGRUTILS) dhgr.tk/inc/dhgrlib.plh dhgr.tk/inc/dhgrutils.plh
 	./plasm -AMOW dhgr.tk/utils/dhgrrgb.pla

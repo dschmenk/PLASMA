@@ -7,12 +7,13 @@ include "dhgr.tk/inc/dhgrutils.plh"
 
 sysflags restxt1|resxtxt1|reshgr1|resxhgr1 //  Reserve all the pages
 
-const FRAME_WIDTH  = 80
-const FRAME_HEIGHT = 48
-const FRAME_SIZE   = FRAME_WIDTH * FRAME_HEIGHT / 2
+const FRAME_WIDTH    = 80
+const FRAME_HEIGHT   = 48
+const FRAME_SIZE     = FRAME_WIDTH * FRAME_HEIGHT / 2
 const DLGRFRAME_SIZE = 2047
-const PAUSE     = 1
-const HEIGHT_X2 = 2
+const PAUSE          = 1
+const HEIGHT_X2      = 2
+const WRITE_DHGR     = 4
 
 var arg, srcfilelist, srcpath, srcexp, srccnt
 var entrylist, entrycnt
@@ -67,56 +68,61 @@ def dlgrRead(filestr)#1
         if frameptr and fileio:read(refnum, frameptr, DLGRFRAME_SIZE) <> DLGRFRAME_SIZE
             heaprelease(frameptr)
             frameptr = NULL
+            dhgrMode(DHGR_TEXT_MODE)
+            puts("Error reading: "); puts(filestr); putln
         fin
         fileio:close(refnum)
     fin
     return frameptr
 end
 
-def dlgrImport(filename, framenum)#0
-    var dlgrptr
-    byte screennum, i, j, numrows
+def dhgrWrite(filename)#1
     char[64] screenfile
 
-    screennum = framenum / 4
-    numrows = 192 / FRAME_HEIGHT
-    if flags & HEIGHT_X2
-        numrows = numrows / 2
+    strcpy(@screenfile, filename)
+    strcat(@screenfile, ".DHGR")
+    if screenWrite(@screenfile)
+        dhgrMode(DHGR_TEXT_MODE)
+        puts("Error writing: "); puts(@screenfile); putln
+        return FALSE
     fin
-    numrows--
-    j = framenum & ((flags & HEIGHT_X2) ?? 1 :: 3)
-    if not j
-        if framenum; getc; fin // Pause between frames
-        dcgrColor(CLR_GREY1)
-        dhgrClearBl7(0, 0, SCR_WIDTH7, SCR_HEIGHT)
-    fin
+    return TRUE
+end
+
+def dlgrConvert(filename)#1
+    var dlgrptr
+    byte i, j, numrows
+
+    dcgrColor(CLR_GREY1)
+    dhgrClearBl7(0, 0, SCR_WIDTH7, SCR_HEIGHT)
     dlgrptr = dlgrRead(filename)
     if dlgrptr
         dlgr2dcgr(dlgrptr)
         heaprelease(dlgrptr)
         if flags & HEIGHT_X2
-            dcgrPixMap(30, j*FRAME_HEIGHT*2, FRAME_WIDTH, FRAME_HEIGHT*2, @frame)
+            dcgrPixMap(30, 48, FRAME_WIDTH, FRAME_HEIGHT*2, @frame)
         else
-            dcgrPixMap(30, j*FRAME_HEIGHT, FRAME_WIDTH, FRAME_HEIGHT, @frame)
+            dcgrPixMap(30, 72, FRAME_WIDTH, FRAME_HEIGHT, @frame)
         fin
+        if flags & WRITE_DHGR
+            return dhgrWrite(filename)
+        fin
+        return TRUE
     fin
-    strcpy(@screenfile, filename)
-    strcat(@screenfile, ".SCR")
-    screenfile++
-    screenfile[screenfile] = '0' + screennum
-    screennum++
-    //if screenWrite(@screenfile)
-    //    dhgrMode(DHGR_TEXT_MODE)
-    //    puts("Error writing: "); puts(@screenfile); putln
-    //    return
-    //fin
+    return FALSE
 end
 
 arg = argNext(argFirst)
 while arg and ^(arg + 1) == '-'
     when toupper(^(arg + 2))
+        is 'P'
+            flags = flags | PAUSE
+            break
         is '2'
             flags = flags | HEIGHT_X2
+            break
+        is 'W'
+            flags = flags | WRITE_DHGR
             break
     wend
     arg = argNext(arg)
@@ -147,14 +153,13 @@ while ^arg
 loop
 if srccnt
     dhgrMode(DHGR_COLOR_MODE)
-    for entrycnt = 0 to srccnt - 1
-        dlgrImport(srcfilelist, entrycnt)
+    while srccnt and dlgrConvert(srcfilelist)
+        if flags & PAUSE; getc; fin
         srcfilelist = srcfilelist + t_fileentry
-        entrycnt++
-    next
-    getc
+        srccnt--
+    loop
     dhgrMode(DHGR_TEXT_MODE)
     return 0
 fin
-puts("Usage: DHGRGREASY [-P] [-2] [-T] FRAMEFILE\n")
+puts("Usage: DHGRGREASY [-P] [-2] [W] FRAMEFILE\n")
 done
