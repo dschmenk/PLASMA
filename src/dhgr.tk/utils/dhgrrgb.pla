@@ -24,6 +24,16 @@ byte[]              = 16, 12, 32 // BLUE
 byte[]              =  0, 28, 16 // GREEN
 byte[]              = 16, 20,  0 // BROWN
 byte[]              = 32,  4, 16 // RED
+// Calculated 0-255       R    G    B
+//byte[]              =  32,  46, 120 // BLUE
+//byte[]              =   8, 126,  32 // GREEN
+//byte[]              =  96,  82,   8 // BROWN
+//byte[]              = 120,   2,  96 // RED
+// Calculated 0-63        R   G   B
+//byte[]              =  8, 12, 30 // BLUE
+//byte[]              =  2, 32,  8 // GREEN
+//byte[]              = 24, 20,  2 // BROWN
+//byte[]              = 30,  0, 24 // RED
 // Ideal/simplified 0-63 R   G   B
 //byte[]                = 16, 16, 32 // BLUE
 //byte[]                =  0, 32, 16 // GREEN
@@ -72,12 +82,11 @@ def rgbPix(r, g, b, x, y)#0
 
   // Error propogation
   errptr = rgbErr + x * 3 * 2
-  r = r + errptr=>[RED] / errDiv
-  g = g + errptr=>[GRN] / errDiv
-  b = b + errptr=>[BLU] / errDiv
-  //r = min(RGB_MAX, max(-RGB_MAX, r))
-  //g = min(RGB_MAX, max(-RGB_MAX, g))
-  //b = min(RGB_MAX, max(-RGB_MAX, b))
+  if errDiv
+    r = r + errptr=>[RED] / errDiv
+    g = g + errptr=>[GRN] / errDiv
+    b = b + errptr=>[BLU] / errDiv
+  fin
   pr = 0
   pg = 0
   pb = 0
@@ -94,6 +103,11 @@ def rgbPix(r, g, b, x, y)#0
   nr = pr - ntscCycle[i+RED] + ntscChroma[i+RED]
   ng = pg - ntscCycle[i+GRN] + ntscChroma[i+GRN]
   nb = pb - ntscCycle[i+BLU] + ntscChroma[i+BLU]
+  if errDiv
+    nr = nr - errptr=>[3+RED] / errDiv
+    ng = ng - errptr=>[3+GRN] / errDiv
+    nb = nb - errptr=>[3+BLU] / errDiv
+  fin
   nd = dist(r, g, b, nr, ng, nb)
   // Add current 1/4 chroma color
   i  = (x & 3) * 3
@@ -120,9 +134,6 @@ def rgbPix(r, g, b, x, y)#0
     ntscCycle[i+BLU] = 0
   fin
   // Propogate error down and forward
-  //r = min(ERR_MAX, max(-ERR_MAX, r))
-  //g = min(ERR_MAX, max(-ERR_MAX, g))
-  //b = min(ERR_MAX, max(-ERR_MAX, b))
   errptr=>[RED] = r
   errptr=>[GRN] = g
   errptr=>[BLU] = b
@@ -130,6 +141,12 @@ def rgbPix(r, g, b, x, y)#0
   errptr=>[RED] = r + errptr=>[RED]
   errptr=>[GRN] = g + errptr=>[GRN]
   errptr=>[BLU] = b + errptr=>[BLU]
+  // Map dark grey to light grey
+  if (x & 3) == 3 and dcgrGetPixel(x >> 2, y) == 5
+    dhgrOp(OP_SRC)
+    dcgrColor(10)
+    dcgrPixel(x >> 2, y)
+  fin
 end
 
 def rgbInit#0
@@ -147,7 +164,7 @@ def rgbInit#0
   dhgrMode(DHGR_COLOR_MODE)
   // Init error propogation array
   rgbErr = heapalloc(561 * 3 * 2)
-  memset(rgberr, 0, 560 * 3 * 2)
+  memset(rgberr, 0, 561 * 3 * 2)
   rgberr=>[RED] = -1
   rgberr=>[GRN] = -1
   rgberr=>[BLU] = -1
@@ -244,7 +261,6 @@ if ^arg
             errDiv = errDiv * 10 + ^(arg + 4) - '0'
           fin
         fin
-        errDiv = max(1, min(63, errDiv))
         break
     wend
     arg = argNext(arg)
