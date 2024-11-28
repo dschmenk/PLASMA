@@ -1,0 +1,134 @@
+include "inc/cmdsys.plh"
+include "inc/args.plh"
+include "inc/fileio.plh"
+include "dhgr.tk/inc/dhgrlib.plh"
+include "dhgr.tk/inc/dhgrutils.plh"
+
+sysflags resxtxt1|reshgr1|resxhgr1
+
+const FRAME_WIDTH  = 40
+const FRAME_HEIGHT = 40
+const FRAME_SIZE   = FRAME_WIDTH * FRAME_HEIGHT / 2
+var arg
+byte xTV = 3
+byte yTV = 100
+
+def greasy2dcgr(pixptr, grptr)#0
+    byte i, j, cl, ch
+
+    for j = 0 to 39 step 2
+        for i = 0 to 39 step 2
+            cl = ^(grptr + i)
+            ch = ^(grptr + i + 1)
+            ^(pixptr + i / 2)      = (cl & $0F) | (ch << 4)
+            ^(pixptr + i / 2 + 20) = (cl >> 4)  | (ch & $F0)
+        next
+        pixptr = pixptr + 40
+        grptr  = grptr + 40
+    next
+end
+
+def greasyImport(filename)#2
+    var pixmapbase, pixmapptr, frameptr
+    byte refnum, numframes, i
+
+    pixmapbase = NULL
+    numframes  = 0
+    refnum = fileio:open(filename)
+    if refnum
+        fileio:read(refnum, @numframes,  1)
+        pixmapbase = heapalloc(FRAME_SIZE * numframes)
+        if pixmapbase
+            frameptr   = heapalloc(FRAME_SIZE)
+            pixmapptr  = pixmapbase
+            for i = 1 to numframes
+                fileio:read(refnum, frameptr, FRAME_SIZE)
+                greasy2dcgr(pixmapptr, frameptr)
+                pixmapptr = pixmapptr + FRAME_SIZE
+            next
+        fin
+        fileio:close(refnum)
+        heaprelease(frameptr)
+    fin
+    return pixmapbase, numframes
+end
+
+def delay_getkey#0
+    var busywait
+
+    for busywait = 0 to 3000
+        if ^$C000 > 127
+            break
+        fin
+    next
+end
+
+def dblHeight(w, h, pixptr)#0
+    byte i, span
+
+    span = (w + 1) / 2
+    h    = (h - 1) * 2
+    for i = 0 to h step 2
+        dcgrPixMap(0, i,     w, 1, pixptr)
+        dcgrPixMap(0, i + 1, w, 1, pixptr)
+        pixptr = pixptr + span
+    next
+end
+
+def frameAnimate(filename)#0
+    var frames, frameptr, framesize
+    var frame7ptr, frame7span
+    byte numframes, i
+
+    frames, numframes = greasyImport(filename)
+    if frames == NULL; return; fin
+    frame7ptr, frame7span = dhgrAllocBl7Mem(FRAME_WIDTH, FRAME_HEIGHT*2)
+    dhgrSurfMem(OP_SRC, FRAME_HEIGHT, frame7ptr, frame7span)
+    dhgrScrBl7(xTV, yTV, frame7span >> 2, FRAME_HEIGHT*2)
+    dhgrSurfScr(OP_SRC)
+    while ^$C000 < 128
+        frameptr = frames
+        for i = 1 to numframes
+            dhgrSurfMem(OP_SRC, FRAME_HEIGHT*2, frame7ptr, frame7span)
+            //dcgrPixMap(0, 0, FRAME_WIDTH, FRAME_HEIGHT, frameptr)
+            dblHeight(FRAME_WIDTH, FRAME_HEIGHT, frameptr)
+            dhgrSurfScr(OP_SRC)
+            dhgrMemBl7(xTV,yTV,frame7span>>2,FRAME_HEIGHT*2,frame7ptr,frame7span)
+            frameptr = frameptr + FRAME_SIZE
+            //delay_getkey
+        next
+    loop
+    ^$C010
+end
+
+arg = argNext(argFirst)
+if ^arg
+    while ^(arg + 1) == '-'
+        when toupper(^(arg + 2))
+            is 'X' // Set X coord
+                if ^arg > 2
+                    xTV = ^(arg + 3) - '0'
+                    if ^arg > 3
+                        xTV = xTV * 10 + ^(arg + 4) - '0'
+                    fin
+                fin
+                break
+            is 'Y' // Set Y coord
+                if ^arg > 2
+                    yTV = ^(arg + 3) - '0'
+                    if ^arg > 3
+                        yTV = yTV * 10 + ^(arg + 4) - '0'
+                    fin
+                fin
+                break
+        wend
+        arg = argNext(arg)
+    loop
+    dhgrMode(DHGR_COLOR_MODE)
+    screenRead("PENGUIN.DHGR")
+    frameAnimate(arg)
+    dhgrMode(DHGR_TEXT_MODE)
+    return 0
+fin
+puts("Usage: DCGRDEMO <GREASYFILE>\n")
+done
