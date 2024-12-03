@@ -1,0 +1,128 @@
+include "inc/cmdsys.plh"
+include "inc/lines.plh"
+include "inc/args.plh"
+include "inc/fileio.plh"
+include "dhgr.tk/inc/dhgrlib.plh"
+include "dhgr.tk/inc/dhgrutils.plh"
+
+sysflags resxtxt1|reshgr1|resxhgr1
+
+//
+// Glyph sprites
+//
+struc t_glyph
+  var  gly_left
+  var  gly_top
+  byte gly_width
+  byte gly_height
+  byte gly_adv
+  byte gly_pixmap[]
+end
+
+byte firstGlyph, numGlyphs, widthGlyph, heightGlyph, baselineGlyph
+var  fontGlyphs
+
+var arg
+var xPen = 0
+var yPen = 0
+
+def fontRead(filename)#5
+    var base, glyph, pixsize, left, top
+    byte refnum, first, num, avewidth, aveheight, i, width, height, adv
+
+    num  = 0
+    base = NULL
+    if filename and ^filename
+        refnum = fileio:open(filename)
+        if refnum
+            fileio:read(refnum, @first, 1)
+            fileio:read(refnum, @num, 1)
+            fileio:read(refnum, @avewidth, 1)
+            fileio:read(refnum, @aveheight, 1)
+            for i = 1 to num
+                fileio:read(refnum, @left,   1); left = sext(left)
+                fileio:read(refnum, @top,    1); top  = sext(top)
+                fileio:read(refnum, @width,  1)
+                fileio:read(refnum, @height, 1)
+                fileio:read(refnum, @adv,    1)
+                pixsize = (width + 1) / 2 * height
+                glyph = heapalloc(pixsize + t_glyph)
+                if glyph and fileio:read(refnum, glyph + gly_pixmap, pixsize) == pixsize
+                    glyph=>gly_left   = left
+                    glyph=>gly_top    = top
+                    glyph->gly_width  = width
+                    glyph->gly_height = height
+                    glyph->gly_adv    = adv
+                    if not base; base = glyph; fin
+                else
+                    if base; heaprelease(base); fin
+                    base = NULL
+                    num = 0
+                    break
+                fin
+            next
+            fileio:close(refnum)
+        fin
+    fin
+    return first, num, avewidth, aveheight, base
+end
+
+def fontLoad(filename)#1
+    var fontSprites, glyphs
+    byte i, width, height
+
+    firstGlyph, numGlyphs, widthGlyph, heightGlyph, glyphs = fontRead(filename)
+    if numGlyphs
+        fontGlyphs = heapalloc(numGlyphs * 2)
+        for i = 1 to numGlyphs
+            fontGlyphs=>[i-1] = glyphs
+            width  = glyphs->gly_width
+            height = glyphs->gly_height
+            glyphs = glyphs + t_glyph + (width + 1) / 2 * height
+        next
+    fin
+    return numGlyphs
+end
+
+def glyphStr(x, y, strptr)#2
+    var glyph, left, top
+    byte i, ch, width, height
+
+    dhgrOp(OP_OR)
+    for i = 1 to ^strptr
+        ch = ^(strptr + i)
+        if ch < 32 or ch > 127
+            when ch
+                is '\n'
+                    x = 0
+                    y = y + heightGlyph
+                    break
+                is '\t'
+                    x = x + (widthGlyph * 4)
+                    break
+            wend
+        elsif (ch >= firstGlyph and ch < (firstGlyph + numGlyphs))
+            glyph  = fontGlyphs=>[ch - firstGlyph]
+            left   = 0 // glyph=>gly_left
+            top    = glyph=>gly_top
+            width  = glyph->gly_width
+            height = glyph->gly_height
+            dcgrPixmap(x + left, y + top, width, height, glyph + gly_pixmap)
+            x = x + glyph->gly_adv
+        else
+            x = x + widthGlyph
+        fin
+    next
+    return x, y
+end
+
+arg = argNext(argFirst)
+dhgrMode(DHGR_COLOR_MODE)
+while arg and ^arg
+    fontLoad(arg)
+    xPen, yPen = glyphStr(xPen, yPen, "\nHello, world")
+    arg = argNext(arg)
+loop
+getc
+dhgrMode(DHGR_TEXT_MODE)
+done
