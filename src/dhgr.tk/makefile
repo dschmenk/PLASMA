@@ -4,6 +4,7 @@ AFLAGS	   = -o $@
 DHGRLIB    = dhgr.tk/libs/DHGRLIB.REL
 DHGRUTILS  = dhgr.tk/libs//DHGRUTILS.REL
 DHGRTEST   = dhgr.tk/test/DHGRTEST.REL
+FONTTEST   = dhgr.tk/test/FONTTEST.REL
 DHGRSPRED  = dhgr.tk/utils/DHGRSPRED.REL
 DHGREASY   = dhgr.tk/utils/DHGREASY.REL
 DHGRRGB    = dhgr.tk/utils/DHGRRGB.REL
@@ -17,10 +18,10 @@ libs: $(DHGRLIB) $(DHGRUTILS)
 	cp $(DHGRLIB)   prodos/sys
 	cp $(DHGRUTILS) prodos/sys
 
-test: $(DHGRTEST)
+test: $(DHGRTEST) $(FONTTEST)
 	-mkdir prodos/dhgr.tk/
 	-mkdir prodos/dhgr.tk/test
-	cp $(DHGRTEST) prodos/dhgr.tk/test
+	cp dhgr.tk/test/*.REL prodos/dhgr.tk/test
 	cp dhgr.tk/test/*.BIN prodos/dhgr.tk/test
 
 utils: $(DHGRSPRED) $(DHGREASY) $(DHGRRGB) $(DHGRSHOW) $(DLGRCONV)
@@ -61,6 +62,10 @@ $(DHGRUTILS): dhgr.tk/libs/dhgrutils.pla $(DHGRLIB) dhgr.tk/inc/dhgrlib.plh dhgr
 $(DHGRTEST): dhgr.tk/test/dhgrtest.pla $(DHGRLIB) $(DHGRUTILS) dhgr.tk/inc/dhgrlib.plh dhgr.tk/inc/dhgrutils.plh
 	./plasm -AMOW dhgr.tk/test/dhgrtest.pla
 	acme --setpc 4094 -o $(DHGRTEST) dhgr.tk/test/dhgrtest.a
+
+$(FONTTEST): dhgr.tk/test/fonttest.pla $(DHGRLIB) $(DHGRUTILS) dhgr.tk/inc/dhgrlib.plh dhgr.tk/inc/dhgrutils.plh
+	./plasm -AMOW dhgr.tk/test/fonttest.pla
+	acme --setpc 4094 -o $(FONTTEST) dhgr.tk/test/fonttest.a
 
 $(DHGRSPRED): dhgr.tk/utils/dhgrspred.pla $(DHGRLIB) $(DHGRUTILS) dhgr.tk/inc/dhgrlib.plh dhgr.tk/inc/dhgrutils.plh
 	./plasm -AMOW dhgr.tk/utils/dhgrspred.pla
