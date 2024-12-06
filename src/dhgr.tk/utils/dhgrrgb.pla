@@ -1,6 +1,7 @@
 include "inc/cmdsys.plh"
 include "inc/args.plh"
 include "inc/fileio.plh"
+include "inc/int32.plh"
 include "dhgr.tk/inc/dhgrlib.plh"
 include "dhgr.tk/inc/dhgrutils.plh"
 
@@ -9,44 +10,24 @@ sysflags resxtxt1|reshgr1|resxhgr1
 const RED = 0
 const GRN = 1
 const BLU = 2
-const RGB_MAX = 63
-const ERR_MAX = 32
-byte errDiv = 2
+const MAX_RGB = 512
+const MIN_RGB = -256
 
 byte[] ntscChroma
 // Imperical 0-255       R    G    B
-//byte[]              =  64,  51, 127 // BLUE
-//byte[]              =   0, 108,  64 // GREEN
-//byte[]              =  64,  77,   1 // BROWN
-//byte[]              = 128,  20,  64 // RED
-// Imperical 0-63        R   G   B
-byte[]              = 16, 12, 32 // BLUE
-byte[]              =  0, 28, 16 // GREEN
-byte[]              = 16, 20,  0 // BROWN
-byte[]              = 32,  4, 16 // RED
+byte[]              =  64,  51, 125 // BLUE
+byte[]              =   0, 108,  64 // GREEN
+byte[]              =  64,  77,   3 // BROWN
+byte[]              = 128,  20,  64 // RED
 //// Calculated 0-255       R    G    B
 //byte[]              =  32,  46, 120 // BLUE
 //byte[]              =   8, 126,  32 // GREEN
 //byte[]              =  96,  82,   8 // BROWN
 //byte[]              = 120,   2,  96 // RED
-// Calculated 0-63        R   G   B
-//byte[]              =  8, 12, 30 // BLUE
-//byte[]              =  2, 32,  8 // GREEN
-//byte[]              = 24, 20,  2 // BROWN
-//byte[]              = 30,  0, 24 // RED
-// Ideal/simplified 0-63 R   G   B
-//byte[]                = 16, 16, 32 // BLUE
-//byte[]                =  0, 32, 16 // GREEN
-//byte[]                = 16, 16,  0 // BROWN
-//byte[]                = 32,  0, 16 // RED
-// Test             0-63 R   G   B
-//byte[]              = 12, 10, 24 // BLUE 872
-//byte[]              =  8, 26, 16 // GREEN 996
-//byte[]              = 20, 22,  8 // BROWN 872
-//byte[]              = 24,  6, 16 // RED 868
 byte[12] ntscCycle
-byte[256] gamma
+byte[256+3] gamma
 var rgbErr // Running color error array
+byte errDiv = 2
 var arg
 
 def abs(n)
@@ -61,24 +42,48 @@ def min(a, b)
   return a < b ?? a :: b
 end
 
-def dist(x1, y1, z1, x2, y2, z2)
+def dist(x1, y1, z1, x2, y2, z2)#2
+    res[t_i32] xx, yy
+
     x2 = x2 - x1
     y2 = y2 - y1
     z2 = z2 - z1
-    return x2*x2 + y2*y2 + z2*z2
+    loadi16(x2)
+    muli16(x2)
+    store32(@xx)
+    loadi16(y2)
+    muli16(y2)
+    store32(@yy)
+    loadi16(z2)
+    muli16(z2)
+    add32(@yy)
+    add32(@xx)
+    store32(@xx)
+    return xx:[0], xx:[1]
 end
 
 def dotprod(x1, y1, z1, x2, y2, z2)
   return x1*x2 + y1*y2 + z1*z2
 end
 
+// Next error
+def nextErr(rgb, closest)
+  return (rgb - closest + 1) / 2
+end
+
+def rgbClamp(rgb)
+  //return rgb > MAX_RGB ?? MAX_RGB :: (rgb < MIN_RGB ?? MIN_RGB :: rgb)
+  return rgb
+end
+
 def rgbPix(r, g, b, x, y)#0
   var errptr
   var pr, pg, pb
   var nr, ng, nb
+  var lr, lg, lb
   var cr, cg, cb, cx
-  var pd, cd, nd
   byte i
+  res[t_i32] pd, cd, nd
 
   // Error propogation
   errptr = rgbErr + x * 3 * 2
@@ -90,57 +95,62 @@ def rgbPix(r, g, b, x, y)#0
   pr = 0
   pg = 0
   pb = 0
-  // Project RGB on previous 3/4 chroma cycle
+  // Previous 3/4 chroma cycle
   for cx = x - 1 downto x - 3
     i  = (cx & 3) * 3
     pr = pr + ntscCycle[i+RED]
     pg = pg + ntscCycle[i+GRN]
     pb = pb + ntscCycle[i+BLU]
   next
-  pd = dist(r, g, b, pr, pg, pb)
-  // Look ahead for possible better match
+  pd:[0], pd:[1] = dist(r, g, b, pr, pg, pb)
+  // Look ahead in chroma cycle for possible better match
   i  = ((x + 1) & 3) * 3
-  nr = pr - ntscCycle[i+RED] + ntscChroma[i+RED]
-  ng = pg - ntscCycle[i+GRN] + ntscChroma[i+GRN]
-  nb = pb - ntscCycle[i+BLU] + ntscChroma[i+BLU]
+  lr = pr - ntscCycle[i+RED] + ntscChroma[i+RED]
+  lg = pg - ntscCycle[i+GRN] + ntscChroma[i+GRN]
+  lb = pb - ntscCycle[i+BLU] + ntscChroma[i+BLU]
   if errDiv
-    nr = nr - (errptr=>[3+RED] + (r - nr + 1) / 2) / errDiv
-    ng = ng - (errptr=>[3+GRN] + (g - ng + 1) / 2) / errDiv
-    nb = nb - (errptr=>[3+BLU] + (b - nb + 1) / 2) / errDiv
+    nr = r + (errptr=>[3+RED] + nextErr(r, lr)) / errDiv
+    ng = g + (errptr=>[3+GRN] + nextErr(g, lg)) / errDiv
+    nb = b + (errptr=>[3+BLU] + nextErr(b, lb)) / errDiv
+  else
+    nr = r
+    ng = g
+    nb = b
   fin
-  nd = dist(r, g, b, nr, ng, nb)
-  // Add current 1/4 chroma color
+  nd:[0], nd:[1] = dist(nr, ng, nb, lr, lg, lb)
+  // Current 1/4 chroma color
   i  = (x & 3) * 3
   cr = pr + ntscChroma[i+RED]
   cg = pg + ntscChroma[i+GRN]
   cb = pb + ntscChroma[i+BLU]
-  cd = dist(r, g, b, cr, cg, cb)
-  if cd < pd and cd < nd
+  cd:[0], cd:[1] = dist(r, g, b, cr, cg, cb)
+  load32(@cd)
+  if islt32(@pd) and islt32(@nd)
     // RGB better matched with current 1/4 chroma color
-    r = (r - cr + 1) / 2
-    g = (g - cg + 1) / 2
-    b = (b - cb + 1) / 2
+    nr = nextErr(r, cr)
+    ng = nextErr(g, cg)
+    nb = nextErr(b, cb)
     ntscCycle[i+RED] = ntscChroma[i+RED]
     ntscCycle[i+GRN] = ntscChroma[i+GRN]
     ntscCycle[i+BLU] = ntscChroma[i+BLU]
     dhgrSet(x, y)
   else
     // RGB closer to black
-    r = (r - pr + 1) / 2
-    g = (g - pg + 1) / 2
-    b = (b - pb + 1) / 2
+    nr = nextErr(r, pr)
+    ng = nextErr(g, pg)
+    nb = nextErr(b, pb)
     ntscCycle[i+RED] = 0
     ntscCycle[i+GRN] = 0
     ntscCycle[i+BLU] = 0
   fin
   // Propogate error down and forward
-  errptr=>[RED] = r
-  errptr=>[GRN] = g
-  errptr=>[BLU] = b
+  errptr=>[RED] = nr
+  errptr=>[GRN] = ng
+  errptr=>[BLU] = nb
   errptr = errptr + 6
-  errptr=>[RED] = r + errptr=>[RED]
-  errptr=>[GRN] = g + errptr=>[GRN]
-  errptr=>[BLU] = b + errptr=>[BLU]
+  errptr=>[RED] = nr + errptr=>[RED]
+  errptr=>[GRN] = ng + errptr=>[GRN]
+  errptr=>[BLU] = nb + errptr=>[BLU]
   // Map dark grey to light grey
   if (x & 3) == 3 and dcgrGetPixel(x >> 2, y) == 5
     dhgrOp(OP_SRC)
@@ -154,11 +164,14 @@ def rgbInit#0
 
   if not gamma
     for i = 0 to 255
-      gamma[i] = (i / 4) * (i / 4) / 63
+      loadi16(i)
+      muli16(i)
+      divi16(255)
+      store32(@gamma + i)
     next
   else
     for i = 0 to 255
-      gamma[i] = i / 4
+      gamma[i] = i
     next
   fin
   dhgrMode(DHGR_COLOR_MODE)
@@ -254,7 +267,7 @@ if ^arg
       is 'L' // Use linear RGB transfer instead of gama
         gamma = 1
         break
-      is 'E' // Set error divisor
+      is 'E' // Set error strength
         if ^arg > 2
           errDiv = ^(arg + 3) - '0'
           if ^arg > 3

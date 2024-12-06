@@ -11,6 +11,7 @@ DHGRRGB    = dhgr.tk/utils/DHGRRGB.REL
 DHGRSHOW   = dhgr.tk/utils/DHGRSHOW.REL
 DLGRCONV   = dhgr.tk/utils/DLGRCONV.REL
 TTFCONV    = dhgr.tk/utils/ttfconv
+IIGSCONV   = dhgr.tk/utils/gsfonconv
 PENGUINS   = dhgr.tk/demos/penguins/PENGUINS.REL
 
 
@@ -38,7 +39,7 @@ demos: $(PENGUINS)
 	cp $(PENGUINS) prodos/dhgr.tk/demos/penguins/
 	cp dhgr.tk/demos/penguins/*.BIN prodos/dhgr.tk/demos/penguins/
 
-ttfconv: $(TTFCONV)
+fontconv: $(TTFCONV) $(IIGSCONV)
 
 all: libs test utils demos
 
@@ -50,6 +51,9 @@ clean:
 
 $(TTFCONV): dhgr.tk/utils/ttfconv.c
 	cc `pkg-config --cflags freetype2` dhgr.tk/utils/ttfconv.c -o dhgr.tk/utils/ttfconv -lfreetype
+
+$(IIGSCONV): dhgr.tk/utils/gsfonconv.c
+	cc dhgr.tk/utils/gsfonconv.c -o dhgr.tk/utils/gsfonconv
 
 $(DHGRLIB): dhgr.tk/libs/dhgrlib.pla dhgr.tk/inc/dhgrlib.plh
 	./plasm -AMOW dhgr.tk/libs/dhgrlib.pla

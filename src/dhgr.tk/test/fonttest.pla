@@ -24,7 +24,10 @@ var  fontGlyphs
 
 var arg
 var xPen = 0
-var yPen = 0
+var yPen = 16
+
+byte clrRot = $00,$08,$01,$09,$02,$0A,$03,$0B
+byte        = $04,$0C,$05,$0D,$06,$0E,$07,$0F
 
 def fontRead(filename)#5
     var base, glyph, pixsize, left, top
@@ -54,6 +57,12 @@ def fontRead(filename)#5
                     glyph->gly_height = height
                     glyph->gly_adv    = adv
                     if not base; base = glyph; fin
+                    //glyph = glyph + gly_pixmap
+                    //height = width * height - 1
+                    //for i = 0 to height
+                    //    width      = glyph->[i]
+                    //    glyph->[i] = clrRot[width&$0F]|(clrRot[width>>4]<<4)
+                    //next
                 else
                     if base; heaprelease(base); fin
                     base = NULL
@@ -84,11 +93,42 @@ def fontLoad(filename)#1
     return numGlyphs
 end
 
-def glyphStr(x, y, strptr)#2
+def pixGlyphStr(x, y, strptr)#2
+    var glyph, left, top, fixX
+    byte i, ch, width, height
+
+    fixX = x * 4
+    for i = 1 to ^strptr
+        ch = ^(strptr + i)
+        if ch < 32 or ch > 127
+            when ch
+                is '\n'
+                    x = 0
+                    y = y + heightGlyph
+                    break
+                is '\t'
+                    x = x + (widthGlyph * 8)
+                    break
+            wend
+        elsif (ch >= firstGlyph and ch < (firstGlyph + numGlyphs))
+            glyph  = fontGlyphs=>[ch - firstGlyph]
+            left   = glyph=>gly_left
+            top    = glyph=>gly_top
+            width  = glyph->gly_width
+            height = glyph->gly_height
+            dcgrPixmap((x + left) / 4, y + top, width, height, glyph + gly_pixmap)
+            x = x + glyph->gly_adv
+        else
+            x = x + widthGlyph
+        fin
+    next
+    return x, y
+end
+
+def bitGlyphStr(x, y, strptr)#2
     var glyph, left, top
     byte i, ch, width, height
 
-    dhgrOp(OP_OR)
     for i = 1 to ^strptr
         ch = ^(strptr + i)
         if ch < 32 or ch > 127
@@ -103,11 +143,11 @@ def glyphStr(x, y, strptr)#2
             wend
         elsif (ch >= firstGlyph and ch < (firstGlyph + numGlyphs))
             glyph  = fontGlyphs=>[ch - firstGlyph]
-            left   = 0 // glyph=>gly_left
+            left   = glyph=>gly_left
             top    = glyph=>gly_top
-            width  = glyph->gly_width
+            width  = glyph->gly_width * 4
             height = glyph->gly_height
-            dcgrPixmap(x + left, y + top, width, height, glyph + gly_pixmap)
+            dcgrBitmap(x + left, y + top, width, height, glyph + gly_pixmap)
             x = x + glyph->gly_adv
         else
             x = x + widthGlyph
@@ -118,9 +158,16 @@ end
 
 arg = argNext(argFirst)
 dhgrMode(DHGR_COLOR_MODE)
+dcgrColor(CLR_WHITE)
+dhgrClearBl7(0, 0, SCR_WIDTH7, SCR_HEIGHT)
+dcgrColor(CLR_BLACK)
+dcgrStr(0, 0, "Wide Default Font Test")
+dcgrFont(FONT_THIN)
+dcgrStr(0, 8, "Thin Default Font Test")
+dhgrOp(OP_XOR)
 while arg and ^arg
     fontLoad(arg)
-    xPen, yPen = glyphStr(xPen, yPen, "\nHello, world")
+    xPen, yPen = pixGlyphStr(xPen, yPen, "\nHello, world")
     arg = argNext(arg)
 loop
 getc

@@ -25,11 +25,11 @@ void write_glyph(FILE *fp, int left, int top, int width, int height, int advance
     unsigned char glyphdef[5], *swapbuf;
     int i;
 
-    glyphdef[0] = (left + 3) / 4;
+    glyphdef[0] = left;
     glyphdef[1] = -top;
     glyphdef[2] = (width + 3) / 4;
     glyphdef[3] = height;
-    glyphdef[4] = (advance + 3) / 4;
+    glyphdef[4] = advance;
     fwrite(&glyphdef, 1, 5, fp);
     swapbuf = malloc(pitch * height);
     for (i = 0; i < pitch * height; i++)
@@ -66,7 +66,7 @@ void write_font_file(char *filename, FT_Face face, int glyph_width, int glyph_he
                         face->glyph->bitmap_top,
                         face->glyph->bitmap.width,
                         face->glyph->bitmap.rows,
-                        face->glyph->advance.x >> 6,
+                        (face->glyph->advance.x + 0x40) >> 6,
                         face->glyph->bitmap.buffer,
                         face->glyph->bitmap.pitch);
         }
