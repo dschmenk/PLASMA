@@ -33,6 +33,7 @@ byte[12] ntscCycle
 byte[256+3] gamma
 var rgbErr // Running color error array
 byte errDiv = 3
+byte lookAhead = 2 // How many pixels to look ahead
 var arg
 
 def dist(x1, y1, z1, x2, y2, z2)#2
@@ -93,32 +94,41 @@ def rgbPix(r0, g0, b0, r1, g1, b1, r2, g2, b2, x)#1
     g0 = g0 + errptr=>[GRN] / errDiv
     b0 = b0 + errptr=>[BLU] / errDiv
   fin
-  // Look ahead in chroma cycle for possible better match for next RGB pixel
-  i  = ((x + 1) & 3) * 3
-  lr1 = pr2 + ntscChroma[i+RED]
-  lg1 = pg2 + ntscChroma[i+GRN]
-  lb1 = pb2 + ntscChroma[i+BLU]
-  if errDiv
-    r1 = r1 + (errptr=>[3+RED] + r0 - lr1) / errDiv
-    g1 = g1 + (errptr=>[3+GRN] + g0 - lg1) / errDiv
-    b1 = b1 + (errptr=>[3+BLU] + b0 - lb1) / errDiv
-  fin
-  // Look ahead in chroma cycle for possible better match for after next RGB pixel
-  i  = ((x + 2) & 3) * 3
-  lr2 = pr1 + ntscChroma[i+RED]
-  lg2 = pg1 + ntscChroma[i+GRN]
-  lb2 = pb1 + ntscChroma[i+BLU]
-  if errDiv
-    r2 = r2 + (errptr=>[3+RED] + r1 - lr2) / errDiv
-    g2 = g2 + (errptr=>[3+GRN] + g1 - lg2) / errDiv
-    b2 = b2 + (errptr=>[3+BLU] + b1 - lb2) / errDiv
-  fin
   // Calc match if current pixel is zero
   pd:[0], pd:[1] = dist(r0, g0, b0, pr3, pg3, pb3)
-  // Calc match if next pixel is one
-  d2:[0], d2:[1] = dist(r2, g2, b2, lr2, lg2, lb2)
-  // Calc match if after next pixel is one
-  d1:[0], d1:[1] = dist(r1, g1, b1, lr1, lg1, lb1)
+  if lookahead > 0 
+    // Look ahead in chroma cycle for possible better match for next RGB pixel
+    i  = ((x + 1) & 3) * 3
+    lr1 = pr2 + ntscChroma[i+RED]
+    lg1 = pg2 + ntscChroma[i+GRN]
+    lb1 = pb2 + ntscChroma[i+BLU]
+    if errDiv
+      r1 = r1 + (errptr=>[3+RED] + r0 - lr1) / errDiv
+      g1 = g1 + (errptr=>[3+GRN] + g0 - lg1) / errDiv
+      b1 = b1 + (errptr=>[3+BLU] + b0 - lb1) / errDiv
+    fin
+    // Calc match if after next pixel is one
+    d1:[0], d1:[1] = dist(r1, g1, b1, lr1, lg1, lb1)
+    if lookahead > 1
+      // Look ahead in chroma cycle for possible better match for after next RGB pixel
+      i  = ((x + 2) & 3) * 3
+      lr2 = pr1 + ntscChroma[i+RED]
+      lg2 = pg1 + ntscChroma[i+GRN]
+      lb2 = pb1 + ntscChroma[i+BLU]
+      if errDiv
+        r2 = r2 + (errptr=>[3+RED] + r1 - lr2) / errDiv
+        g2 = g2 + (errptr=>[3+GRN] + g1 - lg2) / errDiv
+        b2 = b2 + (errptr=>[3+BLU] + b1 - lb2) / errDiv
+      fin
+      // Calc match if next pixel is one
+      d2:[0], d2:[1] = dist(r2, g2, b2, lr2, lg2, lb2)
+    else
+      d2:[0], d2:[1] = pd:[0], pd:[1]
+    fin
+  else
+    d1:[0], d1:[1] = pd:[0], pd:[1]
+    d2:[0], d2:[1] = pd:[0], pd:[1]
+  fin
   // Calc match if current pixel is one
   d0:[0], d0:[1] = dist(r0, g0, b0, cr, cg, cb)
   i = (x & 3) * 3
@@ -243,6 +253,11 @@ if ^arg
     when toupper(^(arg + 2))
       is 'L' // Use linear RGB transfer instead of gama
         gamma[1] = 1
+        break
+      is 'A' // Set pixel lookahead amount
+        if ^arg > 2
+          lookahead = ^(arg + 3) - '0'
+        fin
         break
       is 'E' // Set error strength
         if ^arg > 2
