@@ -30,8 +30,9 @@ byte[]              =  16, 112,  64 // GREEN
 byte[]              =  64,  80,   0 // BROWN
 byte[]              = 112,  16,  64 // RED
 byte[12] ntscCycle
-byte[256+3] gamma
+byte[256+3] gamma // Gamma correction
 var rgbErr // Running color error array
+var rgbThreshold = 6912 // High frequency transition threshold
 byte errDiv = 3
 byte lookAhead = 2 // How many pixels to look ahead
 var arg
@@ -105,32 +106,44 @@ def rgbPix(rgbptr, errptr, cx)#1
     lr1 = pr2 + ntscChroma[i+RED]
     lg1 = pg2 + ntscChroma[i+GRN]
     lb1 = pb2 + ntscChroma[i+BLU]
-    r1 = gamma[rgbptr->[3+RED]]]
-    g1 = gamma[rgbptr->[3+GRN]]]
-    b1 = gamma[rgbptr->[3+BLU]]]
+    r1 = gamma[rgbptr->[3+RED]]
+    g1 = gamma[rgbptr->[3+GRN]]
+    b1 = gamma[rgbptr->[3+BLU]]
     if errDiv
       r1 = r1 + (errptr=>[3+RED] + r0 - lr1) / errDiv
       g1 = g1 + (errptr=>[3+GRN] + g0 - lg1) / errDiv
       b1 = b1 + (errptr=>[3+BLU] + b0 - lb1) / errDiv
     fin
-    // Calc match if after next pixel is one
-    d1:[0], d1:[1] = dist(r1, g1, b1, lr1, lg1, lb1)
+    // Check for hi frequency transition
+    dist(r0, g0, b0, r1, g1, b1)
+    if isgti16(rgbThreshold)
+      d1:[0], d1:[1] = pd:[0], pd:[1]
+    else
+      // Calc match if next pixel is one
+      d1:[0], d1:[1] = dist(r1, g1, b1, lr1, lg1, lb1)
+    fin
     if lookahead > 1
       // Look ahead in chroma cycle for possible better match for after next RGB pixel
       i  = ((cx + 2) & 3) * 3
       lr2 = pr1 + ntscChroma[i+RED]
       lg2 = pg1 + ntscChroma[i+GRN]
       lb2 = pb1 + ntscChroma[i+BLU]
-      r2 = gamma[rgbptr->[6+RED]]]
-      g2 = gamma[rgbptr->[6+GRN]]]
-      b2 = gamma[rgbptr->[6+BLU]]]
+      r2 = gamma[rgbptr->[6+RED]]
+      g2 = gamma[rgbptr->[6+GRN]]
+      b2 = gamma[rgbptr->[6+BLU]]
       if errDiv
         r2 = r2 + (errptr=>[6+RED] + r1 - lr2) / errDiv
         g2 = g2 + (errptr=>[6+GRN] + g1 - lg2) / errDiv
         b2 = b2 + (errptr=>[6+BLU] + b1 - lb2) / errDiv
       fin
-      // Calc match if next pixel is one
-      d2:[0], d2:[1] = dist(r2, g2, b2, lr2, lg2, lb2)
+      // Check for hi frequency transition
+      dist(r0, g0, b0, r2, g2, b2)
+      if isgti16(rgbThreshold)
+        d2:[0], d2:[1] = pd:[0], pd:[1]
+      else
+        // Calc match if after next pixel is one
+        d2:[0], d2:[1] = dist(r2, g2, b2, lr2, lg2, lb2)
+      fin
     else
       d2:[0], d2:[1] = pd:[0], pd:[1]
     fin
@@ -139,9 +152,10 @@ def rgbPix(rgbptr, errptr, cx)#1
     d2:[0], d2:[1] = pd:[0], pd:[1]
   fin
   // Calc match if current pixel is one
-  d0:[0], d0:[1] = dist(r0, g0, b0, cr, cg, cb)
   i = cx * 3
-  load32(@d0)
+  //d0:[0], d0:[1] = dist(r0, g0, b0, cr, cg, cb)
+  //load32(@d0)
+  dist(r0, g0, b0, cr, cg, cb)
   if islt32(@pd) and islt32(@d1) and islt32(@d2)
     // RGB better matched with current 1/4 chroma color
     er = r0 - cr
@@ -246,6 +260,20 @@ def rgbImportExport(rgbfile, dhgrfile)#0
   fin
 end
 
+def atoi(strptr)
+    var num, len
+
+    num = 0
+    len = ^strptr
+    strptr++
+    while len and ^strptr >= '0' and ^strptr <= '9'
+        num = num * 10 + ^strptr - '0'
+        strptr++
+        len--
+    loop
+    return num
+end
+
 arg = argNext(argFirst)
 if ^arg
   while ^(arg + 1) == '-'
@@ -264,6 +292,12 @@ if ^arg
           if ^arg > 3
             errDiv = errDiv * 10 + ^(arg + 4) - '0'
           fin
+        fin
+        break
+      is 'T' // Set error strength
+        if ^arg > 2
+          ^(arg + 2) = ^arg - 2
+          rgbThreshold = atoi(arg + 2)
         fin
         break
       is 'C' // Use calculated chroma values
