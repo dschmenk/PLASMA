@@ -30,12 +30,21 @@ byte[]              =  16, 112,  64 // GREEN
 byte[]              =  64,  80,   0 // BROWN
 byte[]              = 112,  16,  64 // RED
 byte[12] ntscCycle
-byte[256+3] gamma // Gamma correction
+byte[256+3] gamma = 0, 1 // Gamma correction
+var brightness
 var rgbErr // Running color error array
 var rgbThreshold = 2048 // High frequency transition threshold
 byte errDiv = 3
 byte lookAhead = 2 // How many pixels to look ahead
 var arg
+
+def min(a, b)
+  return a < b ?? a :: b
+end
+
+def max(a, b)
+  return a > b ?? a :: b
+end
 
 def dist(x1, y1, z1, x2, y2, z2)#2
   res[t_i32] xx, yy
@@ -190,18 +199,62 @@ end
 def rgbInit#0
   var i
 
-  if not gamma[1]
+  when gamma[1]
+    is 4 // (i + 1 / i^2) / 2
+      for i = 0 to 255
+        loadi16(i)
+        muli16(i)
+        addi16(127)
+        divi16(255)
+        neg32
+        addi16(255)
+        addi16(255 - i)
+        divi16(2)
+        store32(@gamma + 256)
+        gamma[255 - i] = gamma[256]
+      next
+      break
+    is 3 // 1 / i^2
+      for i = 0 to 255
+        loadi16(i)
+        muli16(i)
+        addi16(127)
+        divi16(255)
+        neg32
+        addi16(255)
+        store32(@gamma + 256)
+        gamma[255 - i] = gamma[256]
+      next
+      break
+    is 2 // i^2
+      for i = 0 to 255
+        loadi16(i)
+        muli16(i)
+        addi16(127)
+        divi16(255)
+        store32(@gamma + i)
+      next
+      break
+    is 1 // (i + i^2) / 2
+      for i = 0 to 255
+        loadi16(i)
+        muli16(i)
+        addi16(127)
+        divi16(255)
+        addi16(i)
+        divi16(2)
+        store32(@gamma + i)
+      next
+      break
+    otherwise // i
+      for i = 0 to 255
+        gamma[i] = i
+      next
+  wend
+  if brightness
     for i = 0 to 255
-      loadi16(i)
-      muli16(i)
-      addi16(127)
-      divi16(255)
-      store32(@gamma + i)
-    next
-  else
-    for i = 0 to 255
-      gamma[i] = i
-    next
+        gamma[i] = max(0, min(255, gamma[i] + brightness))
+      next
   fin
   dhgrMode(DHGR_COLOR_MODE)
   // Init error propogation array
@@ -262,25 +315,39 @@ def rgbImportExport(rgbfile, dhgrfile)#0
 end
 
 def atoi(strptr)
-    var num, len
+  var num, len, sign
 
-    num = 0
-    len = ^strptr
+  sign = 1
+  num = 0
+  len = ^strptr
+  strptr++
+  if ^strptr == '-'
+    sign = -1
     strptr++
-    while len and ^strptr >= '0' and ^strptr <= '9'
-        num = num * 10 + ^strptr - '0'
-        strptr++
-        len--
-    loop
-    return num
+    len--
+  fin
+  while len and ^strptr >= '0' and ^strptr <= '9'
+    num = num * 10 + ^strptr - '0'
+    strptr++
+    len--
+  loop
+  return num * sign
 end
 
 arg = argNext(argFirst)
 if ^arg
   while ^(arg + 1) == '-'
     when toupper(^(arg + 2))
-      is 'L' // Use linear RGB transfer instead of gama
-        gamma[1] = 1
+      is 'G' // Set gamma amount
+        if ^arg > 2
+          gamma[1] = ^(arg + 3) - '0'
+        fin
+        break
+      is 'B' // Set brightness amount
+        if ^arg > 2
+          ^(arg + 2) = ^arg - 2
+          brightness = atoi(arg + 2)
+        fin
         break
       is 'A' // Set pixel lookahead amount
         if ^arg > 2
@@ -295,7 +362,7 @@ if ^arg
           fin
         fin
         break
-      is 'T' // Set error strength
+      is 'T' // Set low-pass threshold
         if ^arg > 2
           ^(arg + 2) = ^arg - 2
           rgbThreshold = atoi(arg + 2)
@@ -319,5 +386,5 @@ if ^arg
   fin
   return 0
 fin
-puts("Usage: DHGRRGB [-T] [-L] [-E##] RGBFILE [DHGRFILE]\n")
+puts("Usage: DHGRRGB [-G#] [-B##] [-A#] [-T####] [-E##] [-C] -[I] RGBFILE [DHGRFILE]\n")
 done
