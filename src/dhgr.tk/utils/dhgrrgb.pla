@@ -14,7 +14,7 @@ const MAX_RGB = 512
 const MIN_RGB = -256
 
 byte[] ntscChroma
-// Imperical 0-255     R    G    B
+// Emperical 0-255     R    G    B
 byte[]              =  64,  51, 125 // BLUE
 byte[]              =   0, 108,  64 // GREEN
 byte[]              =  64,  77,   3 // BROWN
@@ -30,7 +30,7 @@ byte[]              =  16, 112,  64 // GREEN
 byte[]              =  64,  80,   0 // BROWN
 byte[]              = 112,  16,  64 // RED
 byte[12] ntscCycle
-byte[256+3] gamma = 0, 1 // Gamma correction
+byte[256+3] gamma = 0, 2 // Gamma correction
 var brightness
 var rgbErr // Running color error array
 var rgbThreshold = 2048 // High frequency transition threshold
@@ -99,9 +99,9 @@ def rgbPix(rgbptr, errptr, cx)#1
   cr = pr3 + ntscChroma[i+RED]
   cg = pg3 + ntscChroma[i+GRN]
   cb = pb3 + ntscChroma[i+BLU]
-  r0 = gamma[rgbptr->RED]]
-  g0 = gamma[rgbptr->GRN]]
-  b0 = gamma[rgbptr->BLU]]
+  r0 = rgbptr->RED]
+  g0 = rgbptr->GRN]
+  b0 = rgbptr->BLU]
   if errDiv
     r0 = r0 + errptr=>[RED] / errDiv
     g0 = g0 + errptr=>[GRN] / errDiv
@@ -115,15 +115,15 @@ def rgbPix(rgbptr, errptr, cx)#1
     lr1 = pr2 + ntscChroma[i+RED]
     lg1 = pg2 + ntscChroma[i+GRN]
     lb1 = pb2 + ntscChroma[i+BLU]
-    r1 = gamma[rgbptr->[3+RED]]
-    g1 = gamma[rgbptr->[3+GRN]]
-    b1 = gamma[rgbptr->[3+BLU]]
+    r1 = rgbptr->[3+RED]
+    g1 = rgbptr->[3+GRN]
+    b1 = rgbptr->[3+BLU]
     if errDiv
       r1 = r1 + (errptr=>[3+RED] + r0 - lr1) / errDiv
       g1 = g1 + (errptr=>[3+GRN] + g0 - lg1) / errDiv
       b1 = b1 + (errptr=>[3+BLU] + b0 - lb1) / errDiv
     fin
-    // Check for hi frequency transition
+    // Check for transition threshold
     dist(r0, g0, b0, r1, g1, b1)
     if isgti16(rgbThreshold)
       d1:[0], d1:[1] = pd:[0], pd:[1]
@@ -137,15 +137,15 @@ def rgbPix(rgbptr, errptr, cx)#1
         lr2 = pr1 + ntscChroma[i+RED]
         lg2 = pg1 + ntscChroma[i+GRN]
         lb2 = pb1 + ntscChroma[i+BLU]
-        r2 = gamma[rgbptr->[6+RED]]
-        g2 = gamma[rgbptr->[6+GRN]]
-        b2 = gamma[rgbptr->[6+BLU]]
+        r2 = rgbptr->[6+RED]
+        g2 = rgbptr->[6+GRN]
+        b2 = rgbptr->[6+BLU]
         if errDiv
           r2 = r2 + (errptr=>[6+RED] + r1 - lr2) / errDiv
           g2 = g2 + (errptr=>[6+GRN] + g1 - lg2) / errDiv
           b2 = b2 + (errptr=>[6+BLU] + b1 - lb2) / errDiv
         fin
-        // Check for hi frequency transition
+        // Check for transition threshold
         dist(r0, g0, b0, r2, g2, b2)
         if isgti16(rgbThreshold)
           d2:[0], d2:[1] = pd:[0], pd:[1]
@@ -200,7 +200,7 @@ def rgbInit#0
   var i
 
   when gamma[1]
-    is 4 // (i + 1 / i^2) / 2
+    is 255 // (i + 1 / i^2) / 2
       for i = 0 to 255
         loadi16(i)
         muli16(i)
@@ -214,7 +214,7 @@ def rgbInit#0
         gamma[255 - i] = gamma[256]
       next
       break
-    is 3 // 1 / i^2
+    is 254 // 1 / i^2
       for i = 0 to 255
         loadi16(i)
         muli16(i)
@@ -283,6 +283,11 @@ def rgbImportExport(rgbfile, dhgrfile)#0
       rgbInit
       for j = 0 to 191
         fileio:read(refnum, rgbScanline,  560 * 3)
+        for i = 0 to 559*3 step 3
+	  rgbScanline->[i+RED] = gamma[rgbScanline->[i+RED]]
+	  rgbScanline->[i+GRN] = gamma[rgbScanline->[i+GRN]]
+	  rgbScanline->[i+BLU] = gamma[rgbScanline->[i+BLU]]
+        next
         rgbptr = rgbScanline
         errptr = rgbErr
         for i = 0 to 559
@@ -291,11 +296,16 @@ def rgbImportExport(rgbfile, dhgrfile)#0
           fin
           rgbptr = rgbptr + 3
           errptr = errptr + 3 * 2
-         // Map dark grey to light grey
-          if (i & 3) == 3 and dcgrGetPixel(i >> 2, j) == 5
-             dhgrOp(OP_SRC)
-             dcgrColor(10)
-             dcgrPixel(i >> 2, j)
+          // Map dark grey to light grey
+          if (i & 3) == 3 
+            when dcgrGetPixel(i >> 2, j)
+              is 5 // GREY1
+                dhgrOp(OP_SRC)
+                dcgrColor(10)
+                dcgrPixel(i >> 2, j)
+              is 10 // GREY2
+                memset(@ntscCycle, $8080, 12) // Create artificial grey chroma cycle
+            wend
           fin
         next
         if ^$C000 == $83
@@ -338,9 +348,9 @@ arg = argNext(argFirst)
 if ^arg
   while ^(arg + 1) == '-'
     when toupper(^(arg + 2))
-      is 'G' // Set gamma amount
+      is 'A' // Set pixel lookahead amount
         if ^arg > 2
-          gamma[1] = ^(arg + 3) - '0'
+          lookahead = ^(arg + 3) - '0'
         fin
         break
       is 'B' // Set brightness amount
@@ -349,10 +359,19 @@ if ^arg
           brightness = atoi(arg + 2)
         fin
         break
-      is 'A' // Set pixel lookahead amount
-        if ^arg > 2
-          lookahead = ^(arg + 3) - '0'
-        fin
+      is 'C' // Set chroma values - Empirical is default
+        when toupper(^(arg + 3))
+          is 'C' // Calculated chroma cycle
+            for gamma = 0 to 11
+              ntscChroma[gamma] = ntscChroma[gamma + 12]
+           next
+            break
+          is 'I' // Idealized chroma values
+            for gamma = 0 to 11
+              ntscChroma[gamma] = ntscChroma[gamma + 24]
+            next
+            break
+        wend
         break
       is 'E' // Set error strength
         if ^arg > 2
@@ -362,21 +381,17 @@ if ^arg
           fin
         fin
         break
+      is 'G' // Set gamma amount
+        if ^arg > 2
+          ^(arg + 2) = ^arg - 2
+          gamma[1] = atoi(arg + 2)
+        fin
+        break
       is 'T' // Set low-pass threshold
         if ^arg > 2
           ^(arg + 2) = ^arg - 2
           rgbThreshold = atoi(arg + 2)
         fin
-        break
-      is 'C' // Use calculated chroma values
-        for gamma = 0 to 11
-          ntscChroma[gamma] = ntscChroma[gamma + 12]
-        next
-        break
-      is 'I' // Use idealized chroma values
-        for gamma = 0 to 11
-          ntscChroma[gamma] = ntscChroma[gamma + 24]
-        next
         break
     wend
     arg = argNext(arg)
@@ -386,5 +401,5 @@ if ^arg
   fin
   return 0
 fin
-puts("Usage: DHGRRGB [-G#] [-B##] [-A#] [-T####] [-E##] [-C] -[I] RGBFILE [DHGRFILE]\n")
+puts("Usage: DHGRRGB [-G#] [-B#] [-A#] [-T#] [-E#] [-C<C,I>] RGBFILE [DHGRFILE]\n")
 done
