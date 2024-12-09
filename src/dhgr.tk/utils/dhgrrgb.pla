@@ -12,6 +12,7 @@ const GRN = 1
 const BLU = 2
 const MAX_RGB = 512
 const MIN_RGB = -256
+const CHROMA_RESET = $1010 // Magic value for neutral chroma
 
 byte[] ntscChroma
 // Emperical 0-255     R    G    B
@@ -30,7 +31,7 @@ byte[]              =  16, 112,  64 // GREEN
 byte[]              =  64,  80,   0 // BROWN
 byte[]              = 112,  16,  64 // RED
 byte[12] ntscCycle
-byte[256+3] gamma = 0, 2 // Gamma correction
+byte[256] gamma = 0, 2 // Gamma correction
 var brightness
 var rgbErr // Running color error array
 var rgbThreshold = 2048 // High frequency transition threshold
@@ -198,6 +199,7 @@ end
 
 def rgbInit#0
   var i
+  res[t_i32] g32
 
   when gamma[1]
     is 255 // (i + 1 / i^2) / 2
@@ -210,8 +212,8 @@ def rgbInit#0
         addi16(255)
         addi16(255 - i)
         divi16(2)
-        store32(@gamma + 256)
-        gamma[255 - i] = gamma[256]
+        store32(@g32)
+        gamma[255 - i] = g32
       next
       break
     is 254 // 1 / i^2
@@ -222,8 +224,8 @@ def rgbInit#0
         divi16(255)
         neg32
         addi16(255)
-        store32(@gamma + 256)
-        gamma[255 - i] = gamma[256]
+        store32(@g32)
+        gamma[255 - i] = g32
       next
       break
     is 2 // i^2
@@ -251,6 +253,8 @@ def rgbInit#0
         gamma[i] = i
       next
   wend
+  gamma[0]   = 0
+  gamma[255] = 255
   if brightness
     for i = 0 to 255
         gamma[i] = max(0, min(255, gamma[i] + brightness))
@@ -288,7 +292,7 @@ def rgbImportExport(rgbfile, dhgrfile)#0
           rgbScanline->[i+GRN] = gamma[rgbScanline->[i+GRN]]
           rgbScanline->[i+BLU] = gamma[rgbScanline->[i+BLU]]
         next
-        memset(@ntscCycle, $0000, 12) // Reset chroma cycle
+        memset(@ntscCycle, CHROMA_RESET, 12) // Reset chroma cycle
         rgbptr = rgbScanline
         errptr = rgbErr
         for i = 0 to 559
@@ -298,17 +302,15 @@ def rgbImportExport(rgbfile, dhgrfile)#0
           rgbptr = rgbptr + 3
           errptr = errptr + 3 * 2
           // Map GREY1 -> GREY2
-          if (i & 3) == 3 and dcgrGetPixel(i >> 2, j) == 5
-            dhgrOp(OP_SRC)
-            dcgrColor(10)
-            dcgrPixel(i >> 2, j)
-            memcpy(@ntscCycle, @ntscChroma, 9)
-            ntscCycle[3+RED] = 0
-            ntscCycle[3+GRN] = 0
-            ntscCycle[3+BLU] = 0
-            ntscCycle[9+RED] = 0
-            ntscCycle[9+GRN] = 0
-            ntscCycle[9+BLU] = 0
+          if (i & 3) == 3
+            when dcgrGetPixel(i >> 2, j)
+              is 5
+                dhgrOp(OP_SRC)
+                dcgrColor(10)
+                dcgrPixel(i >> 2, j)
+              is 10
+                memset(@ntscCycle, CHROMA_RESET, 12)
+            wend
           fin
         next
         if ^$C000 == $83
