@@ -25,11 +25,16 @@ byte[]              =  32,  46, 120 // BLUE
 byte[]              =   8, 126,  32 // GREEN
 byte[]              =  96,  82,   8 // BROWN
 byte[]              = 120,   2,  96 // RED
-// Idealized 0-255     R    G    B
+// Averaged 0-255     R    G    B
 byte[]              =  64,  48, 128 // BLUE
 byte[]              =  16, 112,  64 // GREEN
 byte[]              =  64,  80,   0 // BROWN
 byte[]              = 112,  16,  64 // RED
+// Idealized 0-255     R    G    B
+byte[]              =  64,  64, 128 // BLUE
+byte[]              =   0, 128,  64 // GREEN
+byte[]              =  64,  64,   0 // BROWN
+byte[]              = 128,   0,  64 // RED
 byte[] grey2Chroma
 //                     R    G    B
 //byte[]              =   0,   0,   0 // BLUE
@@ -45,7 +50,6 @@ byte[256] gamma = 0, 2 // Gamma correction
 var brightness
 var rgbErr // Running color error array
 byte errDiv = 3
-byte clrDiv = 3
 var arg
 
 def min(a, b)
@@ -104,9 +108,9 @@ def rgbPix(rgbptr, errptr, cx)#1
   pb3 = pb2 + ntscCycle[i+BLU]
   // Previous chroma cycle
   i = cx * 3 // ((cx - 4) & 3) * 3
-  pr = (pr1 + pr2 + pr3 + ntscCycle[i+RED]) / clrDiv
-  pg = (pg1 + pg2 + pg3 + ntscCycle[i+GRN]) / clrDiv
-  pb = (pb1 + pb2 + pb3 + ntscCycle[i+BLU]) / clrDiv
+  pr = (pr1 + pr2 + pr3 + ntscCycle[i+RED] / 2) / 4
+  pg = (pg1 + pg2 + pg3 + ntscCycle[i+GRN] / 2) / 4
+  pb = (pb1 + pb2 + pb3 + ntscCycle[i+BLU] / 2) / 4
   // Current potential chroma cycle
   //i = cx * 3
   cr = pr + ntscChroma[i+RED]
@@ -222,8 +226,9 @@ def rgbInit#0
       gamma[i] = max(0, min(255, gamma[i] + brightness))
     next
   fin
+  // Make up for additional 1/4 chroma cycle
   for i = 0 to 11
-    ntscChroma[i] = (ntscChroma[i] * 8) / 7
+    ntscChroma[i] = (ntscChroma[i] * 4) / 3
   next
   dhgrMode(DHGR_COLOR_MODE)
   // Init error propogation array
@@ -328,23 +333,17 @@ if ^arg
               ntscChroma[gamma] = ntscChroma[gamma + 12]
            next
             break
-          is 'I' // Idealized chroma values
+          is 'A' // Averageded chroma values
             for gamma = 0 to 11
               ntscChroma[gamma] = ntscChroma[gamma + 24]
             next
             break
+          is 'I' // Idealized chroma values
+            for gamma = 0 to 11
+              ntscChroma[gamma] = ntscChroma[gamma + 36]
+            next
+            break
         wend
-        break
-      is 'D' // Set chroma strength
-        if ^arg > 2
-          clrDiv = ^(arg + 3) - '0'
-          if ^arg > 3
-            clrDiv = clrDiv * 10 + ^(arg + 4) - '0'
-          fin
-          if clrDiv == 0
-            clrDiv = 1
-          fin
-        fin
         break
       is 'E' // Set error strength
         if ^arg > 2
