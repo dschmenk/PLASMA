@@ -30,13 +30,22 @@ byte[]              =  64,  48, 128 // BLUE
 byte[]              =  16, 112,  64 // GREEN
 byte[]              =  64,  80,   0 // BROWN
 byte[]              = 112,  16,  64 // RED
+byte[] grey2Chroma
+//                     R    G    B
+//byte[]              =   0,   0,   0 // BLUE
+//byte[]              =   0, 108,  64 // GREEN
+//byte[]              =   0,   0,   0 // BROWN
+//byte[]              = 128,  20,  64 // RED
+byte[]              =  64,  51, 125 // BLUE
+byte[]              =   0,   0,   0 // GREEN
+byte[]              =  64,  77,   3 // BROWN
+byte[]              =   0,   0,   0 // RED
 byte[12] ntscCycle
 byte[256] gamma = 0, 2 // Gamma correction
 var brightness
 var rgbErr // Running color error array
-var rgbThreshold = 2048 // High frequency transition threshold
 byte errDiv = 3
-byte lookAhead = 2 // How many pixels to look ahead
+byte clrDiv = 3
 var arg
 
 def min(a, b)
@@ -68,119 +77,70 @@ def dist(x1, y1, z1, x2, y2, z2)#2
 end
 
 def rgbPix(rgbptr, errptr, cx)#1
-  var r0, g0, b0
-  var r1, g1, b1
-  var r2, g2, b2
+  var r, g, b
   var pr1, pg1, pb1
   var pr2, pg2, pb2
   var pr3, pg3, pb3
-  var lr0, lg0, lb0
-  var lr1, lg1, lb1
-  var lr2, lg2, lb2
-  var er, eg, eb
+  var pr, pg, pb
   var cr, cg, cb
+  var er, eg, eb
   byte i
-  res[t_i32] pd, d0, d1, d2
+  res[t_i32] pd, d0
 
-  // Previous 3/4 chroma cycle
+  // Previous 1/4 chroma cycle
   i = ((cx - 1) & 3) * 3
   pr1 = ntscCycle[i+RED]
   pg1 = ntscCycle[i+GRN]
   pb1 = ntscCycle[i+BLU]
+  // Previous 2/4 chroma cycle
   i = ((cx - 2) & 3) * 3
   pr2 = pr1 + ntscCycle[i+RED]
   pg2 = pg1 + ntscCycle[i+GRN]
   pb2 = pb1 + ntscCycle[i+BLU]
+  // Previous 3/4 chroma cycle
   i = ((cx - 3) & 3) * 3
   pr3 = pr2 + ntscCycle[i+RED]
   pg3 = pg2 + ntscCycle[i+GRN]
   pb3 = pb2 + ntscCycle[i+BLU]
-  // Current chroma cycle
-  i = cx * 3
-  cr = pr3 + ntscChroma[i+RED]
-  cg = pg3 + ntscChroma[i+GRN]
-  cb = pb3 + ntscChroma[i+BLU]
-  r0 = rgbptr->RED]
-  g0 = rgbptr->GRN]
-  b0 = rgbptr->BLU]
+  // Previous chroma cycle
+  i = cx * 3 // ((cx - 4) & 3) * 3
+  pr = (pr1 + pr2 + pr3 + ntscCycle[i+RED]) / clrDiv
+  pg = (pg1 + pg2 + pg3 + ntscCycle[i+GRN]) / clrDiv
+  pb = (pb1 + pb2 + pb3 + ntscCycle[i+BLU]) / clrDiv
+  // Current potential chroma cycle
+  //i = cx * 3
+  cr = pr + ntscChroma[i+RED]
+  cg = pg + ntscChroma[i+GRN]
+  cb = pb + ntscChroma[i+BLU]
+  r = rgbptr->[RED]
+  g = rgbptr->[GRN]
+  b = rgbptr->[BLU]
   if errDiv
-    r0 = r0 + errptr=>[RED] / errDiv
-    g0 = g0 + errptr=>[GRN] / errDiv
-    b0 = b0 + errptr=>[BLU] / errDiv
+    r = r + errptr=>[RED] / errDiv
+    g = g + errptr=>[GRN] / errDiv
+    b = b + errptr=>[BLU] / errDiv
   fin
-  // Calc match if current pixel is zero
-  pd:[0], pd:[1] = dist(r0, g0, b0, pr3, pg3, pb3)
-  if lookahead > 0
-    // Look ahead in chroma cycle for possible better match for next RGB pixel
-    i  = ((cx + 1) & 3) * 3
-    lr1 = pr2 + ntscChroma[i+RED]
-    lg1 = pg2 + ntscChroma[i+GRN]
-    lb1 = pb2 + ntscChroma[i+BLU]
-    r1 = rgbptr->[3+RED]
-    g1 = rgbptr->[3+GRN]
-    b1 = rgbptr->[3+BLU]
-    if errDiv
-      r1 = r1 + (errptr=>[3+RED] + r0 - lr1) / errDiv
-      g1 = g1 + (errptr=>[3+GRN] + g0 - lg1) / errDiv
-      b1 = b1 + (errptr=>[3+BLU] + b0 - lb1) / errDiv
-    fin
-    // Check for transition threshold
-    dist(r0, g0, b0, r1, g1, b1)
-    if isgti16(rgbThreshold)
-      d1:[0], d1:[1] = pd:[0], pd:[1]
-      d2:[0], d2:[1] = pd:[0], pd:[1]
-    else
-      // Calc match if next pixel is one
-      d1:[0], d1:[1] = dist(r1, g1, b1, lr1, lg1, lb1)
-      if lookahead > 1
-        // Look ahead in chroma cycle for possible better match for after next RGB pixel
-        i  = ((cx + 2) & 3) * 3
-        lr2 = pr1 + ntscChroma[i+RED]
-        lg2 = pg1 + ntscChroma[i+GRN]
-        lb2 = pb1 + ntscChroma[i+BLU]
-        r2 = rgbptr->[6+RED]
-        g2 = rgbptr->[6+GRN]
-        b2 = rgbptr->[6+BLU]
-        if errDiv
-          r2 = r2 + (errptr=>[6+RED] + r1 - lr2) / errDiv
-          g2 = g2 + (errptr=>[6+GRN] + g1 - lg2) / errDiv
-          b2 = b2 + (errptr=>[6+BLU] + b1 - lb2) / errDiv
-        fin
-        // Check for transition threshold
-        dist(r0, g0, b0, r2, g2, b2)
-        if isgti16(rgbThreshold)
-          d2:[0], d2:[1] = pd:[0], pd:[1]
-        else
-          // Calc match if after next pixel is one
-          d2:[0], d2:[1] = dist(r2, g2, b2, lr2, lg2, lb2)
-        fin
-      else
-        d2:[0], d2:[1] = pd:[0], pd:[1]
-      fin
-    fin
-  else
-    d1:[0], d1:[1] = pd:[0], pd:[1]
-    d2:[0], d2:[1] = pd:[0], pd:[1]
-  fin
+  // Calc match if current potential pixel is zero
+  pd:[0], pd:[1] = dist(r, g, b, pr, pg, pb)
   // Calc match if current pixel is one
-  i = cx * 3
-  //d0:[0], d0:[1] = dist(r0, g0, b0, cr, cg, cb)
+  //i = cx * 3
+  //d0:[0], d0:[1] = dist(r, g, b, cr, cg, cb)
   //load32(@d0)
-  dist(r0, g0, b0, cr, cg, cb)
-  if islt32(@pd) and islt32(@d1) and islt32(@d2)
-    // RGB better matched with current 1/4 chroma color
-    er = r0 - cr
-    eg = g0 - cg
-    eb = b0 - cb
+  dist(r, g, b, cr, cg, cb)
+  if islt32(@pd)
+    // RGB better matched with potential 1/4 chroma color
+    er = r - cr
+    eg = g - cg
+    eb = b - cb
     ntscCycle[i+RED] = ntscChroma[i+RED]
     ntscCycle[i+GRN] = ntscChroma[i+GRN]
     ntscCycle[i+BLU] = ntscChroma[i+BLU]
     i = 1
   else
-    // RGB closer to black
-    er = r0 - pr3
-    eg = g0 - pg3
-    eb = b0 - pb3
+    // RGB closer to previous 3/4 chroma color
+    er = r - pr
+    eg = g - pg
+    eb = b - pb
     ntscCycle[i+RED] = 0
     ntscCycle[i+GRN] = 0
     ntscCycle[i+BLU] = 0
@@ -234,7 +194,8 @@ def rgbInit#0
         muli16(i)
         addi16(127)
         divi16(255)
-        store32(@gamma + i)
+        store32(@g32)
+        gamma[i] = g32
       next
       break
     is 1 // (i + i^2) / 2
@@ -245,7 +206,8 @@ def rgbInit#0
         divi16(255)
         addi16(i)
         divi16(2)
-        store32(@gamma + i)
+        store32(@g32)
+        gamma[i] = g32
       next
       break
     otherwise // i
@@ -257,9 +219,12 @@ def rgbInit#0
   gamma[255] = 255
   if brightness
     for i = 0 to 255
-        gamma[i] = max(0, min(255, gamma[i] + brightness))
-      next
+      gamma[i] = max(0, min(255, gamma[i] + brightness))
+    next
   fin
+  for i = 0 to 11
+    ntscChroma[i] = (ntscChroma[i] * 8) / 7
+  next
   dhgrMode(DHGR_COLOR_MODE)
   // Init error propogation array
   rgbErr = heapalloc(563 * 3 * 2)
@@ -296,22 +261,19 @@ def rgbImportExport(rgbfile, dhgrfile)#0
         rgbptr = rgbScanline
         errptr = rgbErr
         for i = 0 to 559
+          // Calc best match
           if rgbPix(rgbptr, errptr, i & 3)
             dhgrSet(i, j)
           fin
+          // Map GREY1 -> GREY2
+          if (i & 3) == 3 and dcgrGetPixel(i >> 2, j) == 5
+            dhgrOp(OP_SRC)
+            dcgrColor(10)
+            dcgrPixel(i >> 2, j)
+            memcpy(@ntscCycle, @grey2Chroma, 12) // GREY2 chroma cycle
+          fin
           rgbptr = rgbptr + 3
           errptr = errptr + 3 * 2
-          // Map GREY1 -> GREY2
-          if (i & 3) == 3
-            when dcgrGetPixel(i >> 2, j)
-              is 5
-                dhgrOp(OP_SRC)
-                dcgrColor(10)
-                dcgrPixel(i >> 2, j)
-              is 10
-                memset(@ntscCycle, CHROMA_RESET, 12)
-            wend
-          fin
         next
         if ^$C000 == $83
           break
@@ -353,11 +315,6 @@ arg = argNext(argFirst)
 if ^arg
   while ^(arg + 1) == '-'
     when toupper(^(arg + 2))
-      is 'A' // Set pixel lookahead amount
-        if ^arg > 2
-          lookahead = ^(arg + 3) - '0'
-        fin
-        break
       is 'B' // Set brightness amount
         if ^arg > 2
           ^(arg + 2) = ^arg - 2
@@ -378,6 +335,17 @@ if ^arg
             break
         wend
         break
+      is 'D' // Set chroma strength
+        if ^arg > 2
+          clrDiv = ^(arg + 3) - '0'
+          if ^arg > 3
+            clrDiv = clrDiv * 10 + ^(arg + 4) - '0'
+          fin
+          if clrDiv == 0
+            clrDiv = 1
+          fin
+        fin
+        break
       is 'E' // Set error strength
         if ^arg > 2
           errDiv = ^(arg + 3) - '0'
@@ -390,12 +358,6 @@ if ^arg
         if ^arg > 2
           ^(arg + 2) = ^arg - 2
           gamma[1] = atoi(arg + 2)
-        fin
-        break
-      is 'T' // Set low-pass threshold
-        if ^arg > 2
-          ^(arg + 2) = ^arg - 2
-          rgbThreshold = atoi(arg + 2)
         fin
         break
     wend
