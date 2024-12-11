@@ -12,44 +12,28 @@ const GRN = 1
 const BLU = 2
 const MAX_RGB = 512
 const MIN_RGB = -256
-const CHROMA_RESET = $1010 // Magic value for neutral chroma
+const CHROMA_RESET = $4040 // Magic value for neutral chroma
 
-byte[] ntscChroma
-// Emperical 0-255     R    G    B
-byte[]              =  64,  51, 125 // BLUE
-byte[]              =   0, 108,  64 // GREEN
-byte[]              =  64,  77,   3 // BROWN
-byte[]              = 128,  20,  64 // RED
-// Calculated 0-255     R    G    B
-byte[]              =  32,  46, 120 // BLUE
-byte[]              =   8, 126,  32 // GREEN
-byte[]              =  96,  82,   8 // BROWN
-byte[]              = 120,   2,  96 // RED
-// Averaged 0-255     R    G    B
-byte[]              =  64,  48, 128 // BLUE
-byte[]              =  16, 112,  64 // GREEN
-byte[]              =  64,  80,   0 // BROWN
-byte[]              = 112,  16,  64 // RED
-// Idealized 0-255     R    G    B
-byte[]              =  64,  64, 128 // BLUE
-byte[]              =   0, 128,  64 // GREEN
-byte[]              =  64,  64,   0 // BROWN
-byte[]              = 128,   0,  64 // RED
-byte[] grey2Chroma
-//                     R    G    B
-//byte[]              =   0,   0,   0 // BLUE
-//byte[]              =   0, 108,  64 // GREEN
-//byte[]              =   0,   0,   0 // BROWN
-//byte[]              = 128,  20,  64 // RED
-byte[]              =  64,  51, 125 // BLUE
-byte[]              =   0,   0,   0 // GREEN
-byte[]              =  64,  77,   3 // BROWN
-byte[]              =   0,   0,   0 // RED
+var sin90[] // first 90 degrees of sin in fixed s.15 format
+var =     0,   571,  1143,  1714,  2285,  2855,  3425,  3993
+var =  4560,  5126,  5690,  6252,  6812,  7371,  7927,  8480
+var =  9032,  9580, 10125, 10668, 11207, 11743, 12275, 12803
+var = 13327, 13848, 14364, 14876, 15383, 15886, 16383, 16876
+var = 17364, 17846, 18323, 18794, 19260, 19720, 20173, 20621
+var = 21062, 21497, 21926, 22347, 22762, 23170, 23571, 23964
+var = 24351, 24730, 25101, 25465, 25821, 26169, 26509, 26841
+var = 27165, 27481, 27788, 28087, 28377, 28659, 28932, 29196
+var = 29451, 29697, 29935, 30163, 30381, 30591, 30791, 30982
+var = 31164, 31336, 31498, 31651, 31794, 31928, 32051, 32165
+var = 32270, 32364, 32449, 32523, 32588, 32643, 32688, 32723
+var = 32748, 32763, 32767
+byte[12] ntscChroma
 byte[12] ntscCycle
 byte[256] gamma = 0, 2 // Gamma correction
 var brightness
-var rgbErr // Running color error array
+var tint = 103
 byte errDiv = 3
+var rgbErr // Running color error array
 var arg
 
 def min(a, b)
@@ -58,6 +42,57 @@ end
 
 def max(a, b)
   return a > b ?? a :: b
+end
+
+def sin(deg)#1
+  deg = deg % 360
+  if deg <= 90
+    return sin90[deg]
+  elsif deg <= 180
+    return sin90[180 - deg]
+  elsif deg <= 270
+    return -sin90[deg - 180]
+  fin
+  return -sin90[360 - deg]
+end
+
+def cos(deg)#1
+  return sin(deg + 90)
+end
+
+def luv2rgb(l, u, v)#3 // l = fix 1.7, u, v = fix s.15; return fix 0.8 * 3
+  var r, g, b
+
+  r = l + (v >> 7)
+  g = l - u / 181 - v / 181 // l + 0.7071 * u / 128 - 0.7071 * v / 128
+  b = l + (u >> 7)
+  return r, g, b
+end
+
+def calcChroma(angle)#0
+  var r, g, b
+  byte i, j
+
+  for i = 0 to 3
+    // Calculate and NTSC RGB for this DHGR pixel
+    r, g, b = luv2rgb(256, cos(angle), sin(angle))
+    j = ((i - 1) & 3) * 3 // Match Apple II order
+    ntscChroma[j + RED] = min(255, (r + 2) >> 2)
+    ntscChroma[((i-2)&3)*3 + GRN] = min(255, (g + 2) >> 2) // ??? why ???
+    ntscChroma[j + BLU] = min(255, (b + 2) >> 2)
+    // Next NTSC chroma pixel
+    angle = angle - 90
+    if angle > 360
+      angle = angle - 360
+    elsif angle < 0
+      angle = angle + 360
+    fin
+  next
+  //for i = 0 to 3
+  //  puti(ntscChroma[i*3 + RED]); putc(',')
+  //  puti(ntscChroma[i*3 + GRN]); putc(',')
+  //  puti(ntscChroma[i*3 + BLU]); putln
+  //next
 end
 
 def dist(x1, y1, z1, x2, y2, z2)#2
@@ -226,6 +261,7 @@ def rgbInit#0
       gamma[i] = max(0, min(255, gamma[i] + brightness))
     next
   fin
+  calcChroma(tint)
   // Make up for additional 1/4 chroma cycle
   for i = 0 to 11
     ntscChroma[i] = (ntscChroma[i] * 4) / 3
@@ -270,12 +306,16 @@ def rgbImportExport(rgbfile, dhgrfile)#0
           if rgbPix(rgbptr, errptr, i & 3)
             dhgrSet(i, j)
           fin
-          // Map GREY1 -> GREY2
-          if (i & 3) == 3 and dcgrGetPixel(i >> 2, j) == 5
-            dhgrOp(OP_SRC)
-            dcgrColor(10)
-            dcgrPixel(i >> 2, j)
-            memcpy(@ntscCycle, @grey2Chroma, 12) // GREY2 chroma cycle
+          // Map GREY1 -> GREY2 and reduce grey streaks
+          if (i & 3) == 3
+            when dcgrGetPixel(i >> 2, j)
+              is 5
+                dhgrOp(OP_SRC)
+                dcgrColor(10)
+                dcgrPixel(i >> 2, j)
+              is 10
+                memset(@ntscCycle, CHROMA_RESET, 12)
+            wend
           fin
           rgbptr = rgbptr + 3
           errptr = errptr + 3 * 2
@@ -326,25 +366,6 @@ if ^arg
           brightness = atoi(arg + 2)
         fin
         break
-      is 'C' // Set chroma values - Empirical is default
-        when toupper(^(arg + 3))
-          is 'C' // Calculated chroma cycle
-            for gamma = 0 to 11
-              ntscChroma[gamma] = ntscChroma[gamma + 12]
-           next
-            break
-          is 'A' // Averageded chroma values
-            for gamma = 0 to 11
-              ntscChroma[gamma] = ntscChroma[gamma + 24]
-            next
-            break
-          is 'I' // Idealized chroma values
-            for gamma = 0 to 11
-              ntscChroma[gamma] = ntscChroma[gamma + 36]
-            next
-            break
-        wend
-        break
       is 'E' // Set error strength
         if ^arg > 2
           errDiv = ^(arg + 3) - '0'
@@ -359,6 +380,12 @@ if ^arg
           gamma[1] = atoi(arg + 2)
         fin
         break
+      is 'T' // Adjust chroma tint
+        if ^arg > 2
+          ^(arg + 2) = ^arg - 2
+          tint = tint + atoi(arg + 2)
+        fin
+        break
     wend
     arg = argNext(arg)
   loop
@@ -367,5 +394,5 @@ if ^arg
   fin
   return 0
 fin
-puts("Usage: DHGRRGB [-G#] [-B#] [-A#] [-T#] [-E#] [-C<C,I>] RGBFILE [DHGRFILE]\n")
+puts("Usage: DHGRRGB [-B#] [-E#] [-G#] [-T#] RGBFILE [DHGRFILE]\n")
 done
