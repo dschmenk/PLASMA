@@ -12,7 +12,7 @@ const GRN = 1
 const BLU = 2
 const MAX_RGB = 512
 const MIN_RGB = -256
-const CHROMA_RESET = $4040 // Magic value for neutral chroma
+const CHROMA_RESET = 64 // Magic value for neutral chroma
 
 var sin90[] // first 90 degrees of sin in fixed s.15 format
 var =     0,   571,  1143,  1714,  2285,  2855,  3425,  3993
@@ -27,11 +27,12 @@ var = 29451, 29697, 29935, 30163, 30381, 30591, 30791, 30982
 var = 31164, 31336, 31498, 31651, 31794, 31928, 32051, 32165
 var = 32270, 32364, 32449, 32523, 32588, 32643, 32688, 32723
 var = 32748, 32763, 32767
-byte[12] ntscChroma
-byte[12] ntscCycle
-byte[256] gamma = 0, 2 // Gamma correction
-var brightness
-var tint = 103
+var[12] ntscChroma
+var[12] ntscCycle
+byte[256] gamma = 0, 2, 0 // Gamma correction
+var brightness = 0
+var contrast = 0
+var tint = 0
 byte errDiv = 3
 var rgbErr // Running color error array
 var arg
@@ -45,7 +46,8 @@ def max(a, b)
 end
 
 def sin(deg)#1
-  deg = deg % 360
+  while deg > 360; deg = deg - 360; loop
+  while deg < 0; deg = deg + 360; loop
   if deg <= 90
     return sin90[deg]
   elsif deg <= 180
@@ -63,36 +65,26 @@ end
 def luv2rgb(l, u, v)#3 // l = fix 1.7, u, v = fix s.15; return fix 0.8 * 3
   var r, g, b
 
-  r = l + (v >> 7)
-  g = l - (u / 181) - (v / 181) // l - 0.7071 * u / 128 - 0.7071 * v / 128
-  b = l + (u >> 7)
+  r = max(0, l + (v >> 7))
+  g = max(0, l - u / 181 - v / 181) // l - 0.7071 * u / 128 - 0.7071 * v / 128
+  //g = max(0, l - u / 256 - v / 148) // - 60 degrees
+  b = max(0, l + (u >> 7))
   return r, g, b
 end
 
 def calcChroma(angle)#0
   var r, g, b
-  byte i, j
+  byte i
 
   for i = 0 to 3
     // Calculate and NTSC RGB for this DHGR pixel
-    r, g, b = luv2rgb(256, cos(angle), sin(angle))
-    j = ((i - 1) & 3) * 3 // Match Apple II order
-    ntscChroma[j + RED] = min(255, (r + 2) >> 2)
-    ntscChroma[j + GRN] = min(255, (g + 2) >> 2)
-    ntscChroma[j + BLU] = min(255, (b + 2) >> 2)
+    r, g, b = luv2rgb(256 - contrast, cos(angle), sin(angle))
+    ntscChroma[i*3 + RED] = (r + 2) >> 2
+    ntscChroma[i*3 + GRN] = (g + 2) >> 2
+    ntscChroma[i*3 + BLU] = (b + 2) >> 2
     // Next NTSC chroma pixel
     angle = angle - 90
-    if angle > 360
-      angle = angle - 360
-    elsif angle < 0
-      angle = angle + 360
-    fin
   next
-  //for i = 0 to 3
-  //  puti(ntscChroma[i*3 + RED]); putc(',')
-  //  puti(ntscChroma[i*3 + GRN]); putc(',')
-  //  puti(ntscChroma[i*3 + BLU]); putln
-  //next
 end
 
 def dist(x1, y1, z1, x2, y2, z2)#2
@@ -200,6 +192,18 @@ def rgbInit#0
   var i
   res[t_i32] g32
 
+  calcChroma(tint)
+  if gamma[2]
+      for i = 0 to 3
+        puti(ntscChroma[i*3 + RED]); putc(',')
+        puti(ntscChroma[i*3 + GRN]); putc(',')
+        puti(ntscChroma[i*3 + BLU]); putln
+      next
+  fin
+  // Make up for additional 1/4 chroma cycle
+  for i = 0 to 11
+    ntscChroma[i] = (ntscChroma[i] * 4) / 3
+  next
   when gamma[1]
     is 255 // (i + 1 / i^2) / 2
       for i = 0 to 255
@@ -261,11 +265,6 @@ def rgbInit#0
       gamma[i] = max(0, min(255, gamma[i] + brightness))
     next
   fin
-  calcChroma(tint)
-  // Make up for additional 1/4 chroma cycle
-  for i = 0 to 11
-    ntscChroma[i] = (ntscChroma[i] * 4) / 3
-  next
   dhgrMode(DHGR_COLOR_MODE)
   // Init error propogation array
   rgbErr = heapalloc(563 * 3 * 2)
@@ -273,10 +272,6 @@ def rgbInit#0
   rgberr=>[RED] = -1
   rgberr=>[GRN] = -1
   rgberr=>[BLU] = -1
-  //dcgrColor(CLR_WHITE)
-  //for i = 0 to 139
-  //  dcgrPixel(i, sin(i * 3) / 1024 + 96)
-  //next
 end
 
 def rgbExit#0
@@ -297,7 +292,7 @@ def rgbImportExport(rgbfile, dhgrfile)#0
       rgbInit
       for j = 0 to 191
         fileio:read(refnum, rgbScanline,  560 * 3)
-        memset(@ntscCycle, CHROMA_RESET, 12) // Reset chroma cycle
+        memset(@ntscCycle, CHROMA_RESET, 24) // Reset chroma cycle
         rgbptr = rgbScanline
         errptr = rgbErr
         for i = 0 to 559
@@ -313,7 +308,7 @@ def rgbImportExport(rgbfile, dhgrfile)#0
                 dcgrColor(10)
                 dcgrPixel(i >> 2, j)
               is 10
-                memset(@ntscCycle, CHROMA_RESET, 12)
+                memset(@ntscCycle, CHROMA_RESET, 24)
             wend
           fin
           rgbptr = rgbptr + 3
@@ -359,11 +354,20 @@ arg = argNext(argFirst)
 if ^arg
   while ^(arg + 1) == '-'
     when toupper(^(arg + 2))
-      is 'B' // Set brightness amount
+      is 'B' // Set brightness
         if ^arg > 2
           ^(arg + 2) = ^arg - 2
           brightness = atoi(arg + 2)
         fin
+        break
+      is 'C' // Adjust contrast
+        if ^arg > 2
+          ^(arg + 2) = ^arg - 2
+          contrast = atoi(arg + 2)
+        fin
+        break
+      is 'D' // Dump RGB chroma cycle
+        gamma[2] = 1
         break
       is 'E' // Set error strength
         if ^arg > 2
@@ -379,10 +383,10 @@ if ^arg
           gamma[1] = atoi(arg + 2)
         fin
         break
-      is 'T' // Adjust chroma tint
+      is 'T' // Adjust tint
         if ^arg > 2
           ^(arg + 2) = ^arg - 2
-          tint = tint + atoi(arg + 2)
+          tint = atoi(arg + 2)
         fin
         break
     wend
