@@ -274,7 +274,7 @@ int parse_constexpr(long *value, int *size)
                 if (scantoken == binary_ops_table[i])
                 {
                     matchop = 2;
-                    if (binary_ops_precedence[i] >= tos_op_prec(optos))
+                    while (binary_ops_precedence[i] >= tos_op_prec(optos))
                         if (!calc_op(pop_op()))
                             parse_error("Invalid binary operation");
                     push_op(scantoken, binary_ops_precedence[i]);
@@ -715,7 +715,7 @@ t_opseq *parse_subexpr(t_opseq *codeseq, int *stackdepth)
                 if (scantoken == binary_ops_table[i])
                 {
                     matchop = 2;
-                    if (binary_ops_precedence[i] >= tos_op_prec(optos))
+                    while (binary_ops_precedence[i] >= tos_op_prec(optos))
                     {
                         codeseq = gen_op(codeseq, pop_op());
                         if (stackdepth)
