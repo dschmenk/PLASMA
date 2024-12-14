@@ -10,9 +10,9 @@ sysflags resxtxt1|reshgr1|resxhgr1
 const RED = 0
 const GRN = 1
 const BLU = 2
-const MAX_RGB = 512
-const MIN_RGB = -256
-const CHROMA_RESET = 64 // Magic value for neutral chroma
+const RED_ANGLE   = 104
+const GREEN_ANGLE = 241
+const BLUE_ANGLE  = 347
 
 var sin90[] // first 90 degrees of sin in fixed s.15 format
 var =     0,   571,  1143,  1714,  2285,  2855,  3425,  3993
@@ -32,7 +32,7 @@ var[12] ntscCycle
 byte[256] gamma = 0, 2, 0 // Gamma correction
 var brightness = 0
 var contrast = 0
-var tint = 0
+var tint = 20
 byte errDiv = 3
 var rgbErr // Running color error array
 var arg
@@ -62,16 +62,6 @@ def cos(deg)#1
   return sin(deg + 90)
 end
 
-def luv2rgb(l, u, v)#3 // l = fix 1.7, u, v = fix s.15; return fix 0.8 * 3
-  var r, g, b
-
-  r = max(0, l + (v >> 7))
-  g = max(0, l - u / 181 - v / 181) // l - 0.7071 * u / 128 - 0.7071 * v / 128
-  //g = max(0, l - u / 256 - v / 148) // - 60 degrees
-  b = max(0, l + (u >> 7))
-  return r, g, b
-end
-
 def calcChroma(angle)#0
   var l, r, g, b
   byte i
@@ -83,10 +73,9 @@ def calcChroma(angle)#0
     //   Red maxes at 103.5 degrees
     //   Green maxes at 240.7 degrees
     //   Blue maxes at 347.1 degrees
-    r = max(0, l + (cos(angle - 104) >> 7))
-    g = max(0, l + (cos(angle - 241) >> 7))
-    b = max(0, l + (cos(angle - 347) >> 7))
-    //r, g, b = luv2rgb(256 - contrast, cos(angle), sin(angle))
+    r = max(0, l + (cos(angle - RED_ANGLE) >> 7))
+    g = max(0, l + (cos(angle - GREEN_ANGLE) >> 7))
+    b = max(0, l + (cos(angle - BLUE_ANGLE) >> 7))
     ntscChroma[i*3 + RED] = (r + 2) >> 2
     ntscChroma[i*3 + GRN] = (g + 2) >> 2
     ntscChroma[i*3 + BLU] = (b + 2) >> 2
@@ -133,14 +122,14 @@ def rgbPix(rgbptr, errptr, cx)#1
   pb1 = ntscCycle[i+BLU]
   // Previous 2/4 chroma cycle
   i = ((cx - 2) & 3) * 3
-  pr2 = pr1 + ntscCycle[i+RED]
-  pg2 = pg1 + ntscCycle[i+GRN]
-  pb2 = pb1 + ntscCycle[i+BLU]
+  pr2 = ntscCycle[i+RED] + pr1
+  pg2 = ntscCycle[i+GRN] + pg1
+  pb2 = ntscCycle[i+BLU] + pb1
   // Previous 3/4 chroma cycle
   i = ((cx - 3) & 3) * 3
-  pr3 = pr2 + ntscCycle[i+RED]
-  pg3 = pg2 + ntscCycle[i+GRN]
-  pb3 = pb2 + ntscCycle[i+BLU]
+  pr3 = ntscCycle[i+RED] + pr2
+  pg3 = ntscCycle[i+GRN] + pg2
+  pb3 = ntscCycle[i+BLU] + pb2
   // Previous chroma cycle
   i = cx * 3 // ((cx - 4) & 3) * 3
   pr = (pr1 + pr2 + pr3 + ntscCycle[i+RED] / 2) / 4
@@ -300,7 +289,7 @@ def rgbImportExport(rgbfile, dhgrfile)#0
       rgbInit
       for j = 0 to 191
         fileio:read(refnum, rgbScanline,  560 * 3)
-        memset(@ntscCycle, CHROMA_RESET, 24) // Reset chroma cycle
+        memset(@ntscCycle, 72, 24) // Reset chroma cycle
         rgbptr = rgbScanline
         errptr = rgbErr
         for i = 0 to 559
@@ -308,16 +297,16 @@ def rgbImportExport(rgbfile, dhgrfile)#0
           if rgbPix(rgbptr, errptr, i & 3)
             dhgrSet(i, j)
           fin
-          // Map GREY1 -> GREY2 and reduce grey streaks
-          if (i & 3) == 3
-            when dcgrGetPixel(i >> 2, j)
-              is 5
-                dhgrOp(OP_SRC)
-                dcgrColor(10)
-                dcgrPixel(i >> 2, j)
-              is 10
-                memset(@ntscCycle, CHROMA_RESET, 24)
-            wend
+          // Map GREY1 -> GREY2
+          if (i & 3) == 3 and dcgrGetPixel(i >> 2, j) == 5
+            dhgrOp(OP_SRC)
+            dcgrColor(10)
+            dcgrPixel(i >> 2, j)
+            memset(@ntscCycle, 0, 24)
+            memcpy(@ntscCycle +  0, @ntscChroma +  0, 6)
+            //memcpy(@ntscCycle +  6, @ntscChroma +  6, 6)
+            memcpy(@ntscCycle + 12, @ntscChroma + 12, 6)
+            //memcpy(@ntscCycle + 18, @ntscChroma + 18, 6)
           fin
           rgbptr = rgbptr + 3
           errptr = errptr + 3 * 2
@@ -394,7 +383,7 @@ if ^arg
       is 'T' // Adjust tint
         if ^arg > 2
           ^(arg + 2) = ^arg - 2
-          tint = atoi(arg + 2)
+          tint = tint + atoi(arg + 2)
         fin
         break
     wend
