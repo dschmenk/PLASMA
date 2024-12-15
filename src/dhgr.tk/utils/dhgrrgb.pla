@@ -14,7 +14,10 @@ const RED_ANGLE   = 104
 const GREEN_ANGLE = 241
 const BLUE_ANGLE  = 347
 const GREY_CHROMA = 32 * 4 / 3
-
+// Flags
+const MEM_MODE    = 1 // Render to memory surface
+const DUMP_STATE  = 2 // Dump internal state
+const RAW_INFILE  = 4 // Raw 560x192 24BPP RGB values
 var sin90[] // first 90 degrees of sin in fixed s.15 format
 var =     0,   571,  1143,  1714,  2285,  2855,  3425,  3993
 var =  4560,  5126,  5690,  6252,  6812,  7371,  7927,  8480
@@ -53,23 +56,25 @@ word = $0250,$0650,$0A50,$0E50,$1250,$1650,$1A50,$1E50
 word = $02D0,$06D0,$0AD0,$0ED0,$12D0,$16D0,$1AD0,$1ED0
 word = $0350,$0750,$0B50,$0F50,$1350,$1750,$1B50,$1F50
 word = $03D0,$07D0,$0BD0,$0FD0,$13D0,$17D0,$1BD0,$1FD0
-byte memmode = FALSE // Memory or video surface
 var surfMem, surfSpan
 var[12] ntscChroma
 var[12] ntscCycle
 byte[256] gamma = 0, 2, 0 // Gamma correction
 var brightness = 0
 var contrast = 0
-var tint = 20
+var tint = 30
 byte errDiv = 3
 var rgbErr // Running color error array
+byte flags = 0
 var arg
 
-def min(a, b)
+// Handy numeric functions
+
+def min(a, b)#1
   return a < b ?? a :: b
 end
 
-def max(a, b)
+def max(a, b)#1
   return a > b ?? a :: b
 end
 
@@ -88,6 +93,46 @@ end
 
 def cos(deg)#1
   return sin(deg + 90)
+end
+
+def dist(x1, y1, z1, x2, y2, z2)#2
+  res[t_i32] xx, yy
+
+  x2 = x2 - x1
+  y2 = y2 - y1
+  z2 = z2 - z1
+  loadi16(x2)
+  muli16(x2)
+  store32(@xx)
+  loadi16(y2)
+  muli16(y2)
+  store32(@yy)
+  loadi16(z2)
+  muli16(z2)
+  add32(@yy)
+  add32(@xx)
+  store32(@xx)
+  return xx:[0], xx:[1]
+end
+
+def atoi(strptr)#1
+  var num, len, sign
+
+  sign = 1
+  num = 0
+  len = ^strptr
+  strptr++
+  if ^strptr == '-'
+    sign = -1
+    strptr++
+    len--
+  fin
+  while len and ^strptr >= '0' and ^strptr <= '9'
+    num = num * 10 + ^strptr - '0'
+    strptr++
+    len--
+  loop
+  return num * sign
 end
 
 def calcChroma(angle)#0
@@ -110,26 +155,6 @@ def calcChroma(angle)#0
     // Next NTSC chroma pixel
     angle = angle - 90
   next
-end
-
-def dist(x1, y1, z1, x2, y2, z2)#2
-  res[t_i32] xx, yy
-
-  x2 = x2 - x1
-  y2 = y2 - y1
-  z2 = z2 - z1
-  loadi16(x2)
-  muli16(x2)
-  store32(@xx)
-  loadi16(y2)
-  muli16(y2)
-  store32(@yy)
-  loadi16(z2)
-  muli16(z2)
-  add32(@yy)
-  add32(@xx)
-  store32(@xx)
-  return xx:[0], xx:[1]
 end
 
 def rgbPix(rgbptr, errptr, cx)#1
@@ -218,7 +243,7 @@ def rgbInit#0
   res[t_i32] g32
 
   calcChroma(tint)
-  if gamma[2]
+  if flags & DUMP_STATE
       for i = 0 to 3
         puti(ntscChroma[i*3 + RED]); putc(',')
         puti(ntscChroma[i*3 + GRN]); putc(',')
@@ -290,7 +315,7 @@ def rgbInit#0
       gamma[i] = max(0, min(255, gamma[i] + brightness))
     next
   fin
-  if memmode
+  if flags & MEM_MODE
     surfMem, surfSpan = dhgrAllocBl7Mem(SCR_WIDTH, SCR_HEIGHT)
     dhgrSurfMem(OP_XOR, SCR_HEIGHT, surfMem, surfSpan)
     dhgrOp(OP_SRC) // Force op recalc
@@ -303,27 +328,79 @@ end
 
 def rgbExit#0
   heaprelease(rgbErr)
-  if not memmode
+  if not (flags & MEM_MODE)
     dhgrMode(DHGR_TEXT_MODE)
   fin
 end
 
+def pnmReadElement(refnum, bufptr)#1
+  var lenptr
+
+  lenptr = bufptr
+  repeat
+    ^lenptr = 0
+    bufptr  = lenptr + 1
+    if fileio:read(refnum, bufptr, 1) == 1 and ^bufptr == '#' // Comment
+      ^lenptr++
+      bufptr++
+      while fileio:read(refnum, bufptr, 1) == 1 and ^bufptr >= ' '
+      loop
+    else
+      repeat // Read white space seperated element
+        ^lenptr++
+        bufptr++
+      until fileio:read(refnum, bufptr, 1) <> 1 or ^bufptr <= ' '
+    fin
+  until ^lenptr and ^(lenptr + 1) <> '#' // Repeat until not comment
+  if flags & DUMP_STATE
+    puts(lenptr); putln
+  fin
+  return lenptr
+end
+
+def pnmVerifyHeader(refnum, buf)#1
+  pnmReadElement(refnum, buf)
+  if buf->0 <> 2 and buf->1 <> 'P' and buf->2 <> '6'
+    puts("Invalid PNM magic #\n")
+    return FALSE
+  fin
+  if atoi(pnmReadElement(refnum, buf)) <> 560
+    puts(buf); puts(" width not 560\n")
+    return FALSE
+  fin
+  if atoi(pnmReadElement(refnum, buf)) <> 192
+    puts(buf); puts(" height not 192\n")
+    return FALSE
+  fin
+  if atoi(pnmReadElement(refnum, buf)) <> 255
+    puts(buf); puts(" depth not 255\n")
+    return FALSE
+  fin
+  return TRUE
+end
+
 def rgbImportExport(rgbfile, dhgrfile)#0
-  byte refnum, chromabits
+  byte refnum, chromaBits
   var i, j
   var rgbScanline, rgbptr, errptr
 
-  refnum = fileio:open(rgbfile)
-  if refnum
-    rgbInit
-    rgbScanline = heapalloc(563 * 3)
-    rgbErr      = heapalloc(563 * 3 * 2)
-    if rgbErr and rgbScanline
+  rgbInit
+  rgbScanline = heapalloc(563 * 3)
+  rgbErr      = heapalloc(563 * 3 * 2)
+  if rgbErr and rgbScanline
+    refnum = fileio:open(rgbfile)
+    if refnum
+      if not (flags & RAW_INFILE)
+        if not pnmVerifyHeader(refnum, rgbErr)
+          fileio:close(refnum)
+          return
+        fin
+      fin
       // Init error propogation array
-      memset(rgberr, 0, 563 * 3 * 2)
-      rgberr=>[RED] = -1
-      rgberr=>[GRN] = -1
-      rgberr=>[BLU] = -1
+      memset(rgbErr, 0, 563 * 3 * 2)
+      rgbErr=>[RED] = -1
+      rgbErr=>[GRN] = -1
+      rgbErr=>[BLU] = -1
       memset(rgbScanline, 0, 563 * 3)
       for j = 0 to 191
         fileio:read(refnum, rgbScanline,  560 * 3)
@@ -332,34 +409,34 @@ def rgbImportExport(rgbfile, dhgrfile)#0
         errptr = rgbErr
         for i = 0 to 559
           // Calc best match
-          chromabits = chromabits >> 1
+          chromaBits = chromaBits >> 1
           if rgbPix(rgbptr, errptr, i & 3)
             dhgrSet(i, j)
-            chromabits = chromabits | $08
+            chromaBits = chromaBits | $08
           fin
           // Map GREY1 -> GREY2
           if (i & 3) == 3
-            if chromabits == $0A // Bits are in reverse order from DCGR color value
+            if chromaBits == $0A // Bits are in reverse order from DCGR color value
               dhgrOp(OP_SRC)
               dcgrColor(CLR_GREY2)
               dcgrPixel(i >> 2, j)
               memset(@ntscCycle, GREY_CHROMA, 24) // Grey chroma cycle
-            elsif chromabits == $05
+            elsif chromaBits == $05
               memset(@ntscCycle, GREY_CHROMA, 24) // Grey chroma cycle
             fin
           fin
           rgbptr = rgbptr + 3
           errptr = errptr + 3 * 2
         next
-        if memmode; putc('.'); fin
+        if flags & MEM_MODE; putc('.'); fin
         if ^$C000 == $83
           break
         fin
       next
       fileio:close(refnum)
       if ^dhgrfile
-        if memmode
-          heaprelease(rgbScanline)
+        if flags & MEM_MODE
+          heaprelease(rgbScanline) // Free up some memory
           if MACHID & $F0 <> $B0
             // Use allocated buffer on non 128K //e
             rgbScanline = heapalloc($2000)
@@ -396,32 +473,12 @@ def rgbImportExport(rgbfile, dhgrfile)#0
           screenWrite(dhgrfile)
         fin
       fin
-      if not memmode; getc; fin
+      if not (flags & MEM_MODE); getc; fin
       rgbExit
+    else
+      puts("Unable to open "); puts(rgbfile); putln
     fin
-  else
-    puts("Unable to read: "); puts(arg); putln
   fin
-end
-
-def atoi(strptr)
-  var num, len, sign
-
-  sign = 1
-  num = 0
-  len = ^strptr
-  strptr++
-  if ^strptr == '-'
-    sign = -1
-    strptr++
-    len--
-  fin
-  while len and ^strptr >= '0' and ^strptr <= '9'
-    num = num * 10 + ^strptr - '0'
-    strptr++
-    len--
-  loop
-  return num * sign
 end
 
 arg = argNext(argFirst)
@@ -440,8 +497,8 @@ if ^arg
           contrast = atoi(arg + 2)
         fin
         break
-      is 'D' // Dump RGB chroma cycle
-        gamma[2] = 1
+      is 'D' // Dump internal staet
+        flags = flags | DUMP_STATE
         break
       is 'E' // Set error strength
         if ^arg > 2
@@ -458,7 +515,10 @@ if ^arg
         fin
         break
       is 'M' // Memory mode - no video output
-        memmode = TRUE
+        flags = flags | MEM_MODE
+        break
+      is 'R' // Raw input mode - no PNM header
+        flags = flags | RAW_INFILE
         break
       is 'T' // Adjust tint
         if ^arg > 2
