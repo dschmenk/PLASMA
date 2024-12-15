@@ -622,7 +622,7 @@ asm     _dcgrBitmapScrB
 +       INC     ESTKH-1,X   ; X++
         LDY     ESTKH-1,X   ; CURRENT X COORD
         CPY     TMPH        ; AT RIGHT EDGE?
-        BCS     NXTBITS
+        BEQ     NXTBITS
         DEC     TMPL        ; BIT COUNT
         BNE     BITSCR
         BEQ     BITS8
@@ -684,10 +684,9 @@ asm     _dcgrPixmapScrC
 PIXSCRH INC     TMPL
         LDA     TMPL
         CMP     ESTKH-3,X   ; AT RIGHT EDGE?
-        BCS     ++
+        BEQ     ++
         CMP     #140        ; OFF SCREEN?
         BCS     +
-        LDY     #$00
         LDA     (SRC),Y     ; HI NIBBLE SRC PIXEL
         LSR
         LSR
@@ -710,7 +709,7 @@ asm     _dcgrPixmapScrE
         BNE     +
         INC     SRCH
 +       CMP     ESTKH-3,X   ; AT RIGHT EDGE?
-        BCC     PIXSCRL
+        BNE     PIXSCRL
 NXTPIXS DEC     ESTKL-4,X   ; HEIGHT
         BNE     YPIXS       ; NEXT ROW
 RETPIXS RTS
@@ -777,7 +776,7 @@ asm     _dcgrRlemapScrC
 RLESCRH INC     TMPL
         LDA     TMPL
         CMP     ESTKH-3,X   ; AT RIGHT EDGE?
-        BCS     NXTRLES
+        BEQ     NXTRLES
         DEC     TMPH        ; RUN LENGTH
         BEQ     RUNLENS
         CMP     #140        ; OFF SCREEN?
@@ -801,7 +800,7 @@ asm     _dcgrRlemapScrE
 +       INC     TMPL
         LDA     TMPL
         CMP     ESTKH-3,X   ; AT RIGHT EDGE?
-        BCS     NXTRLES
+        BEQ     NXTRLES
         DEC     TMPH        ; RUN LENGTH
         BNE     RLESCRL
         BEQ     RUNLENS
@@ -815,7 +814,7 @@ SKPRUNS LDY     #$00
         ADC     TMPL
         STA     TMPL
         CMP     ESTKH-3,X   ; AT RIGHT EDGE?
-        BCS     NXTRLES
+        BEQ     NXTRLES
         BCC     RUNLENS
 end
 //
@@ -1118,7 +1117,7 @@ asm     _dcgrBitmapMemA
 +       INC     ESTKH-1,X   ; X++
         LDA     ESTKH-1,X   ; CURRENT X COORD
         CMP     ESTKH-3,X   ; AT RIGHT EDGE?
-        BCS     NXTBITM
+        BEQ     NXTBITM
         DEC     ESTKH-2,X   ; BIT COUNT--
         BNE     BITMEM
         BEQ     BITM8
@@ -1198,7 +1197,7 @@ asm     _dcgrPixmapMemC
 PIXMEMH INC     TMPL
         LDA     TMPL
         CMP     ESTKH-3,X   ; AT RIGHT EDGE?
-        BCS     ++          ; NEXT ROW
+        BEQ     ++          ; NEXT ROW
         CMP     ESTKL-6,X   ; OUT OF DST BOUNDS?
         BCS     +
         LDA     (SRC),Y     ; HI NIBBLE SRC PIXEL
@@ -1224,7 +1223,7 @@ asm     _dcgrPixmapMemE
         BNE     +
         INC     SRCH
 +       CMP     ESTKH-3,X   ; AT RIGHT EDGE?
-        BCC     PIXMEML
+        BNE     PIXMEML
 NXTPIXM CLC
         LDA     ESTKL-9,X   ; SPAN
         ADC     DSTL
@@ -1276,7 +1275,7 @@ SKPRUNM LDY     #$00
         ADC     TMPL
         STA     TMPL
         CMP     ESTKH-3,X   ; AT RIGHT EDGE?
-        BCC     RUNLENM
+        BNE     RUNLENM
         ;BCS     NXTRLEM
 NXTRLEM CLC
         LDA     ESTKL-9,X   ; SPAN
@@ -1327,7 +1326,7 @@ asm     _dcgrRlemapMemC
 RLEMEMH INC     TMPL
         LDA     TMPL
         CMP     ESTKH-3,X   ; AT RIGHT EDGE?
-        BCS     NXTRLEM     ; NEXT
+        BEQ     NXTRLEM     ; NEXT
         DEC     ESTKH-4,X   ; RUN LENGTH
         BEQ     RUNLENM
         CMP     ESTKL-6,X   ; OUT OF DST BOUNDS?
@@ -1352,7 +1351,7 @@ asm     _dcgrRlemapMemE
 +       INC     TMPL
         LDA     TMPL
         CMP     ESTKH-3,X   ; AT RIGHT EDGE?
-        BCS     NXTRLEM
+        BEQ     NXTRLEM
         DEC     ESTKH-4,X   ; RUN LENGTH
         BNE     RLEMEML
         BEQ     RUNLENM
@@ -2348,6 +2347,15 @@ export def dcgrGetPixel(x, y)#1
 end
 export def dhgrMode(mode)#1
     if mode >= 0
+        //
+        // Make sure we are a 128K //e or //c
+        //
+        if MACHID & $F0 <> $B0
+            puts("\n128K required for double color graphics.\n")
+            ^$C010
+            while ^$C000 < 128; loop
+            return 0
+        fin
         ^page1m
         ^showfull
         ^showhires
@@ -2371,15 +2379,6 @@ export def dhgrMode(mode)#1
     fin
     return mode
 end
-//
-// Make sure we are a 128K //e or //c
-//
-if MACHID & $F0 <> $B0
-    puts("\n128K required for double color graphics.\n")
-    ^$C010
-    while ^$C000 < 128; loop
-    return -1
-fin
 //
 // Assembly symbol fixups
 //
