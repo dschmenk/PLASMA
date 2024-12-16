@@ -364,6 +364,34 @@ void syswrite(M6502 *mpu)
     if (len < 0) *perr = errno;
     PUSH_ESTK(len);
 }
+void sysgetmark(M6502 *mpu)
+{
+    int fd;
+    off_t pos;
+
+    PULL_ESTK(fd);
+    pos = lseek(fd, 0, SEEK_CUR);
+    if (trace) printf("FILEIO:GETMARK %d %lld\r\n", fd, pos);
+    if (pos < 0) *perr = errno;
+    PUSH_ESTK(pos & 0xFFFF);
+    PUSH_ESTK(pos >> 16);
+}
+void syssetmark(M6502 *mpu)
+{
+    int fd;
+    unsigned int posl, posh;
+    off_t pos;
+
+    PULL_ESTK(posh);
+    PULL_ESTK(posl);
+    PULL_ESTK(fd);
+    pos = posl | (posh << 16);
+    if (trace) printf("FILEIO:SETMARK %d %lld\r\n", fd, pos);
+    pos = lseek(fd, pos, SEEK_SET);
+    *perr = 0;
+    if (pos == -1) *perr = errno;
+    PUSH_ESTK(*perr);
+}
 void syscreate(M6502 *mpu)
 {
     int fd;
@@ -448,7 +476,7 @@ void export_sysio(void)
 {
     byte dci[16];
     uword defaddr;
-    uword fileio = alloc_heap(36);
+    uword fileio = alloc_heap(40);
     uword conio  = alloc_heap(26);
     //
     // CMDSYS IO functions
@@ -569,4 +597,10 @@ void export_sysio(void)
     defaddr = add_natv(sysunimpl); // writeblock
     mem_6502[fileio + 34] = (byte)defaddr;
     mem_6502[fileio + 35] = (byte)(defaddr >> 8);
+    defaddr = add_natv(sysgetmark); // getmark
+    mem_6502[fileio + 36] = (byte)defaddr;
+    mem_6502[fileio + 37] = (byte)(defaddr >> 8);
+    defaddr = add_natv(syssetmark); // setmark
+    mem_6502[fileio + 38] = (byte)defaddr;
+    mem_6502[fileio + 39] = (byte)(defaddr >> 8);
 }
