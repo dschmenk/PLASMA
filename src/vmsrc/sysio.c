@@ -389,7 +389,7 @@ void syssetmark(M6502 *mpu)
     if (trace) printf("FILEIO:SETMARK %d %lld\r\n", fd, pos);
     pos = lseek(fd, pos, SEEK_SET);
     *perr = 0;
-    if (pos == -1) *perr = errno;
+    if (pos < 0) *perr = errno;
     PUSH_ESTK(*perr);
 }
 void syscreate(M6502 *mpu)
