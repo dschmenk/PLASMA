@@ -63,6 +63,7 @@ byte[256] gamma = 0, 2, 0 // Gamma correction
 var brightness = 0
 var contrast = 0
 var tint = 22
+var[3] luma = 128, 128, 128 //0.35, 0.62, 0.18
 byte errDiv = 3
 var rgbErr // Running color error array
 byte flags = 0
@@ -136,22 +137,25 @@ def atoi(strptr)#1
 end
 
 def calcChroma(angle)#0
-  var l, r, g, b
+  var r, g, b
   byte i
 
-  l = 256 - contrast
   for i = 0 to 3
     // Calculate and NTSC RGB for this DHGR pixel
     // According to what I could find out about the NTSC color wheel:
     //   Red maxes at 103.5 degrees
     //   Green maxes at 240.7 degrees
     //   Blue maxes at 347.1 degrees
-    r = max(0, l + (cos(angle - RED_ANGLE) >> 7))
-    g = max(0, l + (cos(angle - GREEN_ANGLE) >> 7))
-    b = max(0, l + (cos(angle - BLUE_ANGLE) >> 7))
-    ntscChroma[i*3 + RED] = (r + 2) >> 2
-    ntscChroma[i*3 + GRN] = (g + 2) >> 2
-    ntscChroma[i*3 + BLU] = (b + 2) >> 2
+    //r = max(0, luma[RED] - contrast + (cos(angle - RED_ANGLE) >> 7))
+    //g = max(0, luma[GRN] - contrast + (cos(angle - GREEN_ANGLE) >> 7))
+    //b = max(0, luma[BLU] - contrast + (cos(angle - BLUE_ANGLE) >> 7))
+    r = max(0, 32767 / luma[RED] + cos(angle - RED_ANGLE)   / luma[RED]) - contrast)
+    g = max(0, 32767 / luma[GRN] + cos(angle - GREEN_ANGLE) / luma[GRN]) - contrast)
+    b = max(0, 32767 / luma[BLU] + cos(angle - BLUE_ANGLE)  / luma[BLU]) - contrast)
+    // Make chroma add up to white
+    ntscChroma[i*3 + RED] = (r + 2) / 4
+    ntscChroma[i*3 + GRN] = (g + 2) / 4
+    ntscChroma[i*3 + BLU] = (b + 2) / 4
     // Next NTSC chroma pixel
     angle = angle - 90
   next
@@ -249,6 +253,10 @@ def rgbInit#0
         puti(ntscChroma[i*3 + GRN]); putc(',')
         puti(ntscChroma[i*3 + BLU]); putln
       next
+      putln
+      puti(luma[RED]); putc(',')
+      puti(luma[GRN]); putc(',')
+      puti(luma[BLU]); putln
   fin
   // Make up for scaled chroma cycle color match
   for i = 0 to 11
@@ -513,6 +521,23 @@ if ^arg
         if ^arg > 2
           ^(arg + 2) = ^arg - 2
           gamma[1] = atoi(arg + 2)
+        fin
+        break
+      is 'L' // Adjust gamut
+        if ^arg > 3
+          when toupper(^(arg + 3))
+            is 'R'
+              ^(arg + 1) = RED
+              break
+            is 'G'
+              ^(arg + 1) = GRN
+              break
+            is 'B'
+            otherwise
+              ^(arg + 1) = BLU
+          wend
+          ^(arg + 3) = ^arg - 3
+          luma[^(arg + 1)] = luma[^(arg + 1)] + atoi(arg + 3)
         fin
         break
       is 'M' // Memory mode - no video output
