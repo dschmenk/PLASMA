@@ -24,8 +24,6 @@ sysflags resxtxt1|reshgr1|resxhgr1
 
 // NTSC_ORANGE    = 1100
 
-// NTSC_YELLOW    = 1110
-
 // NTSC_PINK      = 1101
 
 // NTSC_YELLOW    = 1110
@@ -35,12 +33,18 @@ sysflags resxtxt1|reshgr1|resxhgr1
 const RED = 0
 const GRN = 1
 const BLU = 2
-const RED_PHASE_NTSC    = 104
-const GREEN_PHASE_NTSC  = 241
-const BLUE_PHASE_NTSC   = 347
-const RED_PHASE_IDEAL   = 90
-const GREEN_PHASE_IDEAL = 270
-const BLUE_PHASE_IDEAL  = 360
+const RED_PHASE_NTSC     = 104
+const GREEN_PHASE_NTSC   = 241
+const BLUE_PHASE_NTSC    = 347
+const RED_PHASE_IDEAL    = 90
+const GREEN_PHASE_IDEAL  = 270
+const BLUE_PHASE_IDEAL   = 360
+const RED_PHASE_EQUAL    = 120
+const GREEN_PHASE_EQUAL  = 240
+const BLUE_PHASE_EQUAL   = 360
+const RED_PHASE_SIMPLE   = 90
+const GREEN_PHASE_SIMPLE = 225
+const BLUE_PHASE_SIMPLE  = 360
 const GREY_CHROMA = 32 * 4 / 3
 // Flags
 const MEM_MODE    = 1 // Render to memory surface
@@ -89,18 +93,18 @@ var surfMem, surfSpan
 var[12] ntscChroma
 var[12] ntscCycle
 var[16] pixRed, pixGrn, pixBlu
-byte[3] gamut = 128, 128, 128 // Gamut
-byte gamma = 1 // Gamma correction
 byte[256] gammaRed // RED gamma correction
 byte[256] gammaGrn // GREEN gamma correction
 byte[256] gammaBlu // BLUE gamma correction
-var[3] phase  = RED_PHASE_NTSC, GREEN_PHASE_NTSC, BLUE_PHASE_NTSC
+var[3] phase   = RED_PHASE_NTSC, GREEN_PHASE_NTSC, BLUE_PHASE_NTSC
+byte[3] gamut  = 128, 128, 128 // Gamut
+byte gamma     = 1 // Gamma correction
 var brightness = 0
 var saturation = 255 // 1.0
-var tint = 22 // 45/2 deg
-byte errDiv = 3
+var tint       = 22 // 45/2 deg
+byte errDiv    = 3
+byte flags     = 0
 var rgbErr // Running color error array
-byte flags = 0
 var arg
 
 // Handy numeric functions
@@ -161,6 +165,9 @@ def atoi(strptr)#1
     sign = -1
     strptr++
     len--
+  elsif ^strptr == '+'
+    strptr++
+    len--
   fin
   while len and ^strptr >= '0' and ^strptr <= '9'
     num = num * 10 + ^strptr - '0'
@@ -204,31 +211,6 @@ def rgbMatch(rgbptr, errptr, cx)#1
   byte i, match
   res[t_i32] pd, d0, nd, cd
 
-  // Previous 1/4 chroma cycle
-  i = ((cx - 1) & 3) * 3
-  pr1 = ntscCycle[i+RED]
-  pg1 = ntscCycle[i+GRN]
-  pb1 = ntscCycle[i+BLU]
-  // Previous 2/4 chroma cycle
-  i = ((cx - 2) & 3) * 3
-  pr2 = ntscCycle[i+RED] + pr1
-  pg2 = ntscCycle[i+GRN] + pg1
-  pb2 = ntscCycle[i+BLU] + pb1
-  // Previous 3/4 chroma cycle
-  i = ((cx - 3) & 3) * 3
-  pr3 = ntscCycle[i+RED] + pr2
-  pg3 = ntscCycle[i+GRN] + pg2
-  pb3 = ntscCycle[i+BLU] + pb2
-  // Previous chroma cycle
-  i = cx * 3 // ((cx - 4) & 3) * 3
-  pr = (pr1 + pr2 + pr3 + ntscCycle[i+RED] / 2) / 4
-  pg = (pg1 + pg2 + pg3 + ntscCycle[i+GRN] / 2) / 4
-  pb = (pb1 + pb2 + pb3 + ntscCycle[i+BLU] / 2) / 4
-  // Current potential chroma cycle
-  //i = cx * 3
-  cr = pr + ntscChroma[i+RED]
-  cg = pg + ntscChroma[i+GRN]
-  cb = pb + ntscChroma[i+BLU]
   r = gammaRed[rgbptr->[RED]]
   g = gammaGrn[rgbptr->[GRN]]
   b = gammaBlu[rgbptr->[BLU]]
@@ -238,7 +220,32 @@ def rgbMatch(rgbptr, errptr, cx)#1
     b = b + errptr=>[BLU] / errDiv
   fin
   if flags & MATCH_PIX
-    // Next full chroma cycle match
+    // Previous 1/4 chroma cycle
+    i = ((cx - 1) & 3) * 3
+    pr1 = ntscCycle[i+RED]
+    pg1 = ntscCycle[i+GRN]
+    pb1 = ntscCycle[i+BLU]
+    // Previous 2/4 chroma cycle
+    i = ((cx - 2) & 3) * 3
+    pr2 = ntscCycle[i+RED]
+    pg2 = ntscCycle[i+GRN]
+    pb2 = ntscCycle[i+BLU]
+    // Previous 3/4 chroma cycle
+    i = ((cx - 3) & 3) * 3
+    pr3 = ntscCycle[i+RED]
+    pg3 = ntscCycle[i+GRN]
+    pb3 = ntscCycle[i+BLU]
+    // Previous chroma cycle
+    i = cx * 3 // ((cx - 4) & 3) * 3
+    pr = pr1 + pr2 + pr3
+    pg = pg1 + pg2 + pg3
+    pb = pb1 + pb2 + pb3
+    // Current potential chroma cycle
+    //i = cx * 3
+    cr = pr + ntscChroma[i+RED]
+    cg = pg + ntscChroma[i+GRN]
+    cb = pb + ntscChroma[i+BLU]
+    // Match next full chroma cycle (pixel)
     cd:[0], cd:[1] = $FFFF, $7FFF
     for i = 0 to 15
       nd:[0], nd:[1] = dist(r, g, b, pixRed[i], pixGrn[i], pixBlu[i])
@@ -250,13 +257,38 @@ def rgbMatch(rgbptr, errptr, cx)#1
     match = match & (1 << cx)
     i = cx * 3
   else
-    // Next chroma subcycle match
+    // Previous 1/4 chroma cycle
+    i = ((cx - 1) & 3) * 3
+    pr1 = ntscCycle[i+RED]
+    pg1 = ntscCycle[i+GRN]
+    pb1 = ntscCycle[i+BLU]
+    // Previous 2/4 chroma cycle
+    i = ((cx - 2) & 3) * 3
+    pr2 = ntscCycle[i+RED] + pr1
+    pg2 = ntscCycle[i+GRN] + pg1
+    pb2 = ntscCycle[i+BLU] + pb1
+    // Previous 3/4 chroma cycle
+    i = ((cx - 3) & 3) * 3
+    pr3 = ntscCycle[i+RED] + pr2
+    pg3 = ntscCycle[i+GRN] + pg2
+    pb3 = ntscCycle[i+BLU] + pb2
+    // Previous chroma cycle
+    i = cx * 3 // ((cx - 4) & 3) * 3
+    pr = (pr1 + pr2 + pr3 + ntscCycle[i+RED] / 2) / 4
+    pg = (pg1 + pg2 + pg3 + ntscCycle[i+GRN] / 2) / 4
+    pb = (pb1 + pb2 + pb3 + ntscCycle[i+BLU] / 2) / 4
+    // Current potential chroma cycle
+    //i = cx * 3
+    cr = pr + ntscChroma[i+RED]
+    cg = pg + ntscChroma[i+GRN]
+    cb = pb + ntscChroma[i+BLU]
+    // Match next chroma subcycle
     pd:[0], pd:[1] = dist(r, g, b, pr, pg, pb)
     dist(r, g, b, cr, cg, cb)
     match = islt32(@pd)
   fin
   if match
-    // RGB better matched with potential 1/4 chroma color
+    // RGB better matched with next chroma color
     er = r - cr
     eg = g - cg
     eb = b - cb
@@ -265,7 +297,7 @@ def rgbMatch(rgbptr, errptr, cx)#1
     ntscCycle[i+BLU] = ntscChroma[i+BLU]
     i = 1
   else
-    // RGB closer to previous 3/4 chroma color
+    // RGB closer to previous chroma color
     er = r - pr
     eg = g - pg
     eb = b - pb
@@ -382,11 +414,8 @@ def rgbInit#0
         puti(ntscChroma[i*3 + GRN]); putc(',')
         puti(ntscChroma[i*3 + BLU]); putln
       next
+      puts("Tint = "); puti(tint); putln
   fin
-  // Make up for scaled chroma cycle color match
-  for i = 0 to 11
-    ntscChroma[i] = (ntscChroma[i] * 4) / 3
-  next
   if flags & MATCH_PIX
     // Calc pixel RGBs
     for i = 0 to 15
@@ -410,6 +439,11 @@ def rgbInit#0
         pixGrn[i] = pixGrn[i] + ntscChroma[9+GRN]
         pixBlu[i] = pixBlu[i] + ntscChroma[9+BLU]
       fin
+    next
+  else
+    // Make up for scaled chroma cycle color match
+    for i = 0 to 11
+      ntscChroma[i] = (ntscChroma[i] * 4) / 3
     next
   fin
   if flags & MEM_MODE
@@ -608,17 +642,33 @@ if ^arg
           gamma = atoi(arg + 2)
         fin
         break
-      is 'I' // Use ideal phase angles
-        phase[RED] = RED_PHASE_IDEAL
-        phase[GRN] = GREEN_PHASE_IDEAL
-        phase[BLU] = BLUE_PHASE_IDEAL
-        tint = tint - 22
-        break
       is 'M' // Memory mode - no video output
         flags = flags | MEM_MODE
         break
       is 'P' // Match next pixel
-        flags = flags | MATCH_PIX
+        when toupper(^(arg + 3))
+          is 'I' // Use ideal 4 sub-phase angles
+            phase[RED] = RED_PHASE_IDEAL
+            phase[GRN] = GREEN_PHASE_IDEAL
+            phase[BLU] = BLUE_PHASE_IDEAL
+            break
+          is 'E' // Use equal 120 deg phase angles
+            phase[RED] = RED_PHASE_EQUAL
+            phase[GRN] = GREEN_PHASE_EQUAL
+            phase[BLU] = BLUE_PHASE_EQUAL
+            break
+          is 'S' // Use simplified 90 degree and opposite phase angles
+            phase[RED] = RED_PHASE_SIMPLE
+            phase[GRN] = GREEN_PHASE_SIMPLE
+            phase[BLU] = BLUE_PHASE_SIMPLE
+            break
+          //is 'N' // Use theoretical NTSC phase angles
+          otherwise
+            phase[RED] = RED_PHASE_NTSC
+            phase[GRN] = GREEN_PHASE_NTSC
+            phase[BLU] = BLUE_PHASE_NTSC
+            break
+        wend
         break
       is 'R' // Raw input mode - no PNM header
         flags = flags | RAW_INFILE
@@ -652,6 +702,9 @@ if ^arg
           gamut[^(arg + 1)] = gamut[^(arg + 1)] - atoi(arg + 3)
         fin
         break
+      is 'W' // Match whole pixel
+        flags = flags | MATCH_PIX
+        break
       otherwise
         puts("? option:"); putc(^(arg + 2)); putln
     wend
@@ -662,5 +715,5 @@ if ^arg
   fin
   return 0
 fin
-puts("Usage: DHGRRGB [-B#] [-D] [-E#] [-G#] [-M] [-S#] [-T#] RGBFILE [DHGRFILE]\n")
+puts("Usage: DHGRRGB [-B#] [-D] [-E#] [-G#] [-M] [-P<I,E,S,N>] [-R] [-S#] [-T#] [-U<R,G,B>#] RGBFILE [DHGRFILE]\n")
 done
