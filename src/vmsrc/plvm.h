@@ -62,7 +62,7 @@ typedef uint16_t address;
  * 6502 memory map
  */
 #define MEM6502_SIZE    0x00010000
-#define ESTK_SIZE       32
+#define ESTK_SIZE       64
 #define CMDLINE_STR     0x01FF
 #define CMDLINE_BUF     0x0200
 #define SYSPATH_STR     0x0280
@@ -70,8 +70,8 @@ typedef uint16_t address;
 /*
  * Zero page VM locations matching Apple ZP
  */
-#define ESTKH           0xC0 // Hi bytes of VM stack
-#define ESTKL           0xD0 // Lo bytes of VM stack
+#define ESTKH           0xA0 // Hi bytes of VM stack
+#define ESTKL           0xC0 // Lo bytes of VM stack
 #define FP              0xE0 // Frame pointer
 #define FPL             0xE0
 #define FPH             0xE1
