@@ -145,20 +145,17 @@ def cos(deg)#1
   return sin(deg + 90)
 end
 
-def dist(x1, y1, z1, x2, y2, z2)#2
+def dist(dx, dy, dz)#2
   res[t_i32] xx, yy
 
-  x2 = x2 - x1
-  y2 = y2 - y1
-  z2 = z2 - z1
-  loadi16(x2)
-  muli16(x2)
+  loadi16(dx)
+  muli16(dx)
   store32(@xx)
-  loadi16(y2)
-  muli16(y2)
+  loadi16(dy)
+  muli16(dy)
   store32(@yy)
-  loadi16(z2)
-  muli16(z2)
+  loadi16(dz)
+  muli16(dz)
   add32(@yy)
   add32(@xx)
   store32(@xx)
@@ -257,8 +254,8 @@ def rgbMatchCycle(r, g, b, errptr, cx)#1
   cg = pg + ntscChroma[i+GRN]
   cb = pb + ntscChroma[i+BLU]
   // Match next chroma subcycle
-  pd:[0], pd:[1] = dist(r, g, b, pr, pg, pb)
-  dist(r, g, b, cr, cg, cb)
+  pd:[0], pd:[1] = dist(r - pr, g - pg, b - pb)
+  dist(r - cr, g - cg, b - cb)
   if islt32(@pd)
     // RGB better matched with next chroma color
     er = r - cr
@@ -320,7 +317,7 @@ def rgbMatchNext(r, g, b, errptr, cx)#1
   // Match next full chroma cycle (pixel)
   cd:[0], cd:[1] = $FFFF, $7FFF
   for i = 0 to 15
-    nd:[0], nd:[1] = dist(r, g, b, pixRed[i], pixGrn[i], pixBlu[i])
+    nd:[0], nd:[1] = dist(r - pixRed[i], g - pixGrn[i], b - pixBlu[i])
     if islt32(@cd)
       cd:[0], cd:[1] = nd:[0], nd:[1]
       match = i
@@ -352,6 +349,7 @@ end
 
 def rgbMatchPrev(r, g, b, errptr, cx)#1
   var cr, cg, cb
+  var er, eg, eb
   byte i,
   res[t_i32] pd
 
@@ -365,8 +363,8 @@ def rgbMatchPrev(r, g, b, errptr, cx)#1
   cg = prevGrn + ntscChroma[i+GRN]
   cb = prevBlu + ntscChroma[i+BLU]
   // Match next chroma subcycle
-  pd:[0], pd:[1] = dist(r, g, b, prevRed, prevGrn, prevBlu)
-  dist(r, g, b, cr, cg, cb)
+  pd:[0], pd:[1] = dist(r - prevRed, g - prevGrn, b - prevBlu)
+  dist(r - cr, g - cg, b - cb)
   if islt32(@pd)
     // RGB better matched with next chroma color
     prevRed = cr
@@ -376,7 +374,17 @@ def rgbMatchPrev(r, g, b, errptr, cx)#1
   else
     i = 0
   fin
-  errProp(r - prevRed, g - prevGrn, b - prevBlu, errptr)
+  // Propogate error down and forward
+  er            = r - prevRed
+  errptr=>[RED] = er
+  eg            = g - prevGrn
+  errptr=>[GRN] = eg
+  eb            = b - prevBlu
+  errptr=>[BLU] = eb
+  errptr = errptr + 6
+  errptr=>[RED] = er + errptr=>[RED]
+  errptr=>[GRN] = eg + errptr=>[GRN]
+  errptr=>[BLU] = eb + errptr=>[BLU]
   return i
 end
 
