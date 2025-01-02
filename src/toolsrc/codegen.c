@@ -1469,6 +1469,11 @@ int crunch_seq(t_opseq **seq, int pass)
                             op->code = DUP_CODE;
                             opnext->code = BINARY_CODE(ADD_TOKEN);
                         }
+                        else if (op->val == 3)
+                        {
+                            op->code = DUP_CODE;
+                            opnext->code = BINARY_CODE(INDEXW_CODE);
+                        }
                         else
                         {
                             //
