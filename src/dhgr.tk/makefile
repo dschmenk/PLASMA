@@ -31,6 +31,7 @@ utils: $(DHGRSPRED) $(DHGREASY) $(DHGRRGB) $(DHGRSHOW) $(DLGRCONV)
 	-mkdir prodos/dhgr.tk/utils/samples
 	cp dhgr.tk/utils/*.REL prodos/dhgr.tk/utils
 	cp dhgr.tk/utils/samples/* prodos/dhgr.tk/utils/samples
+	cp dhgr.tk/utils/samples/racecar.pnm prodos/dhgr.tk/utils/samples/RACECAR.PNM.BIN
 
 demos: $(PENGUINS)
 	-mkdir prodos/dhgr.tk/
