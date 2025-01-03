@@ -94,52 +94,34 @@ void sysputh(M6502 *mpu)
 }
 void syskeypressed(M6502 *mpu)
 {
-    if (!(keyqueue & 0x80))
-        keypressed(mpu);
-    PUSH_ESTK(keyqueue);
+    PUSH_ESTK(keypressed(mpu));
 }
 void sysgetc(M6502 *mpu)
 {
-    char c;
-    //
-    // Push getchar()
-    //
-    if (keyqueue & 0x80)
-    {
-        c = keyqueue & 0x7F;
-        keyqueue = 0;
-    }
-    else
-        c = keyin(mpu);
-    PUSH_ESTK(c);
+    PUSH_ESTK(keyin(mpu));
 }
 void sysgets(M6502 *mpu)
 {
     uword strptr;
     int len;
     char cext[2], instr[256];
-
+    byte cin;
+    
     //
     // Push gets(), limiting it to 128 chars
     //
     PULL_ESTK(cext[0]);
     putchar(cext[0] & 0x7F);
     len = 0;
-    if (keyqueue)
-    {
-        putchar(keyqueue & 0x7F);
-        instr[len++] = keyqueue & 0x7F;
-        keyqueue = 0;
-    }
     fflush(stdout);
     do
     {
-        switch (keyqueue = keyin(mpu))
+        switch (cin = keyin(mpu))
         {
             case 0x1B:
                 if (read(STDIN_FILENO, cext, 2) == 2)
                     if (cext[0] == '[' && cext[1] == 'D') // Left arrow
-                        keyqueue = 0x08;
+                        cin = 0x08;
                     else
                         break;
                 else
@@ -155,13 +137,12 @@ void sysgets(M6502 *mpu)
                 }
                 break;
             default:
-            if (keyqueue >= ' ')
-                putchar(instr[len++] = keyqueue);
+            if (cin >= ' ' || cin == 0x0D)
+                putchar(instr[len++] = cin);
         }
         fflush(stdout);
-    } while (keyqueue != 0x0D && len < 128);
+    } while (cin != 0x0D && len < 128);
     sysputln(mpu);
-    keyqueue = 0;
     mem_6502[CMDLINE_STR] = len;
     memcpy(mem_6502 + CMDLINE_BUF, instr, len);
     PUSH_ESTK(CMDLINE_STR);

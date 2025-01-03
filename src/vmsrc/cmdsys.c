@@ -55,14 +55,14 @@ byte keypressed(M6502 *mpu)
 {
     if (!(keyqueue & 0x80))
     {
-        read(STDIN_FILENO, &keyqueue, 1);
-        keyqueue |= 0x80;
+        if (read(STDIN_FILENO, &keyqueue, 1) > 0)
+            keyqueue |= 0x80;
     }
     return keyqueue;
 }
 byte keyin(M6502 *mpu)
 {
-    byte cin = keyqueue & 0x7F;
+    byte cin = keyqueue;
     keyqueue = 0;
     while (!cin)
     {
@@ -77,7 +77,7 @@ byte keyin(M6502 *mpu)
         else
             usleep(10000);
     }
-    return cin;
+    return cin & 0x7F;
 }
 void M6502_exec(M6502 *mpu)
 {
@@ -117,7 +117,7 @@ void setRawInput(void)
     tcgetattr(STDIN_FILENO, &termio); // save current port settings
     memcpy(&org_tio, &termio, sizeof(struct termios));
     termio.c_cflag     = /*BAUDRATE | CRTSCTS |*/ CS8 | CLOCAL | CREAD;
-    termio.c_iflag     = IGNPAR;
+    termio.c_iflag     = BRKINT | IGNPAR;
     termio.c_oflag     = 0;
     termio.c_lflag     = 0; // set input mode (non-canonical, no echo,...)
     termio.c_cc[VTIME] = 0; // inter-character timer unused
@@ -826,7 +826,7 @@ void export_cmdsys(void)
     cmdsys = alloc_heap(23);
     stodci("CMDSYS", dci); add_sym(dci, cmdsys);
     mem_6502[SYSPATH_STR] = strlen(strcat(getcwd((char *)mem_6502 + SYSPATH_BUF, 128), "/sys/"));
-    mem_6502[cmdsys + 0] = 0x11; // Version 2.11
+    mem_6502[cmdsys + 0] = 0x20; // Version 2.20
     mem_6502[cmdsys + 1] = 0x02;
     mem_6502[cmdsys + 2] = (byte)SYSPATH_STR; // syspath
     mem_6502[cmdsys + 3] = (byte)(SYSPATH_STR >> 8);
