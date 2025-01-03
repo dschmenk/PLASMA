@@ -106,7 +106,7 @@ void sysgets(M6502 *mpu)
     int len;
     char cext[2], instr[256];
     byte cin;
-    
+
     //
     // Push gets(), limiting it to 128 chars
     //
@@ -137,7 +137,8 @@ void sysgets(M6502 *mpu)
                 }
                 break;
             default:
-            if (cin >= ' ' || cin == 0x0D)
+            if (cin >= ' ')
+            //if (cin >= ' ' || cin == 0x0D)
                 putchar(instr[len++] = cin);
         }
         fflush(stdout);
