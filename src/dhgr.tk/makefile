@@ -57,41 +57,41 @@ $(IIGSCONV): dhgr.tk/utils/gsfonconv.c
 	cc dhgr.tk/utils/gsfonconv.c -o dhgr.tk/utils/gsfonconv
 
 $(DHGRLIB): dhgr.tk/libs/dhgrlib.pla dhgr.tk/inc/dhgrlib.plh
-	./plasm -AMOW dhgr.tk/libs/dhgrlib.pla
+	./xplasm -AMOW dhgr.tk/libs/dhgrlib.pla
 	acme --setpc 4094 -o $(DHGRLIB) dhgr.tk/libs/dhgrlib.a
 
 $(DHGRUTILS): dhgr.tk/libs/dhgrutils.pla $(DHGRLIB) dhgr.tk/inc/dhgrlib.plh dhgr.tk/inc/dhgrutils.plh
-	./plasm -AMOW dhgr.tk/libs/dhgrutils.pla
+	./xplasm -AMOW dhgr.tk/libs/dhgrutils.pla
 	acme --setpc 4094 -o $(DHGRUTILS) dhgr.tk/libs/dhgrutils.a
 
 $(DHGRTEST): dhgr.tk/test/dhgrtest.pla $(DHGRLIB) $(DHGRUTILS) dhgr.tk/inc/dhgrlib.plh dhgr.tk/inc/dhgrutils.plh
-	./plasm -AMOW dhgr.tk/test/dhgrtest.pla
+	./xplasm -AMOW dhgr.tk/test/dhgrtest.pla
 	acme --setpc 4094 -o $(DHGRTEST) dhgr.tk/test/dhgrtest.a
 
 $(FONTTEST): dhgr.tk/test/fonttest.pla $(DHGRLIB) $(DHGRUTILS) dhgr.tk/inc/dhgrlib.plh dhgr.tk/inc/dhgrutils.plh
-	./plasm -AMOW dhgr.tk/test/fonttest.pla
+	./xplasm -AMOW dhgr.tk/test/fonttest.pla
 	acme --setpc 4094 -o $(FONTTEST) dhgr.tk/test/fonttest.a
 
 $(DHGRSPRED): dhgr.tk/utils/dhgrspred.pla $(DHGRLIB) $(DHGRUTILS) dhgr.tk/inc/dhgrlib.plh dhgr.tk/inc/dhgrutils.plh
-	./plasm -AMOW dhgr.tk/utils/dhgrspred.pla
+	./xplasm -AMOW dhgr.tk/utils/dhgrspred.pla
 	acme --setpc 4094 -o $(DHGRSPRED) dhgr.tk/utils/dhgrspred.a
 
 $(DHGREASY): dhgr.tk/utils/dhgreasy.pla $(DHGRLIB) $(DHGRUTILS) dhgr.tk/inc/dhgrlib.plh dhgr.tk/inc/dhgrutils.plh
-	./plasm -AMOW dhgr.tk/utils/dhgreasy.pla
+	./xplasm -AMOW dhgr.tk/utils/dhgreasy.pla
 	acme --setpc 4094 -o $(DHGREASY) dhgr.tk/utils/dhgreasy.a
 
 $(DHGRSHOW): dhgr.tk/utils/dhgrshow.pla $(DHGRLIB) $(DHGRUTILS) dhgr.tk/inc/dhgrlib.plh dhgr.tk/inc/dhgrutils.plh
-	./plasm -AMOW dhgr.tk/utils/dhgrshow.pla
+	./xplasm -AMOW dhgr.tk/utils/dhgrshow.pla
 	acme --setpc 4094 -o $(DHGRSHOW) dhgr.tk/utils/dhgrshow.a
 
 $(DLGRCONV): dhgr.tk/utils/dlgrconv.pla $(DHGRLIB) $(DHGRUTILS) dhgr.tk/inc/dhgrlib.plh dhgr.tk/inc/dhgrutils.plh
-	./plasm -AMOW dhgr.tk/utils/dlgrconv.pla
+	./xplasm -AMOW dhgr.tk/utils/dlgrconv.pla
 	acme --setpc 4094 -o $(DLGRCONV) dhgr.tk/utils/dlgrconv.a
 
 $(DHGRRGB): dhgr.tk/utils/dhgrrgb.pla $(DHGRLIB) $(DHGRUTILS) dhgr.tk/inc/dhgrlib.plh dhgr.tk/inc/dhgrutils.plh
-	./plasm -AMOW dhgr.tk/utils/dhgrrgb.pla
+	./xplasm -AMOW dhgr.tk/utils/dhgrrgb.pla
 	acme --setpc 4094 -o $(DHGRRGB) dhgr.tk/utils/dhgrrgb.a
 
 $(PENGUINS): dhgr.tk/demos/penguins/penguins.pla dhgr.tk/inc/dhgrlib.plh dhgr.tk/inc/dhgrutils.plh
-	./plasm -AMOW dhgr.tk/demos/penguins/penguins.pla
+	./xplasm -AMOW dhgr.tk/demos/penguins/penguins.pla
 	acme --setpc 4094 -o $(PENGUINS) dhgr.tk/demos/penguins/penguins.a
