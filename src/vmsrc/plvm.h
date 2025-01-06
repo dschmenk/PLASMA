@@ -62,7 +62,7 @@ typedef uint16_t address;
  * 6502 memory map
  */
 #define MEM6502_SIZE    0x00010000
-#define ESTK_SIZE       64
+#define ESTK_SIZE       32
 #define CMDLINE_STR     0x01FF
 #define CMDLINE_BUF     0x0200
 #define SYSPATH_STR     0x0280

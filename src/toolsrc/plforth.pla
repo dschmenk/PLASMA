@@ -57,25 +57,6 @@ word brkentry  = 0
 word brkcfa    = 0
 byte brk       = 0
 //
-// Machine code helper routines
-//
-byte _get_estack   = $8A           // TXA
-byte               = $49, $FF      // EOR #$FF
-byte               = $38           // SEC
-byte               = $69, $20      // ADC #$20
-byte               = $C9, $21      // CMP #$21
-byte               = $90, $02      // BCC +2
-byte               = $A2, $20      // LDX #ESTKSZ/2
-byte               = $CA           // DEX
-byte               = $95           // STA
-byte _estkl        = $C0           // ESTKL,X
-byte               = $A9, $00      // LDA #$00
-byte               = $95           // STA
-byte _estkh        = $A0           // ESTKH,X
-byte               = $60           // RTS
-byte _reset_estack = $A2, $20      // LDX #ESTKSZ/2
-byte               = $60           // RTS
-//
 // FORTH dictionary layout
 //
 //  bytes   usage
@@ -126,6 +107,7 @@ predef _space_#0, _spaces_(a)#0, _see_#0, _prstack_#0, _prrstack_#0
 predef _cont_#0, _restart_#0, _bye_#0, _quit_#0
 predef _abort_(a)#0, _doabortstr_(a,b)#0, _abortstr_#0
 predef _compword_(dentry)#0, _compliteral_(a)#0, _execword_(dentry)#0, _isnum_(a,b)#2
+predef _interpret_#0
 //
 // Forth Vocabulary
 //
@@ -764,12 +746,43 @@ char d_words = "WORDS"
 byte = showcr_flag
 word = @d_pbc, 0, @_words_
 //
+// Machine code helper routines
+//
+asm _get_estackdepth#1
+        !SOURCE "vmsrc/plvmzp.inc"
+        TXA
+        EOR     #$FF
+        SEC
+        ADC     #ESTKSZ/2
+        CMP     #ESTKSZ/2+1
+        BCC     +
+        LDX     #ESTKSZ/2
++       DEX
+        STA     ESTKL,X
+        LDA     #$00
+        STA     ESTKH,X
+        RTS
+end
+asm _get_estack(index)#1
+        LDA     #ESTKSZ/2
+        CLC
+        SBC     ESTKL,X
+        TAY
+        LDA     ESTKL,Y
+        STA     ESTKL,X
+        LDA     ESTKH,Y
+        STA     ESTKH,X
+        RTS
+end
+asm _reset_estack#0
+        LDX     #ESTKSZ/2
+end
+asm _push(a)#0 // Stack hack - call as _push(a)to leave a on eval stack
+        RTS
+end
+//
 // Helper routines
 //
-predef _interpret_#0
-def push(a)#1 // Stack hack - call as (@push)(a)#0 to leave a on eval stack
-  return a
-end
 def _dictaddw_(a)#0
   *(heapalloc(2)) = a
 end
@@ -875,7 +888,7 @@ end
 // Warm start
 //
 def warmstart#0
-  (@_reset_estack)()#0
+  _reset_estack()
   brk    = 0
   brkcfa = 0
   RSP    = RSTK_SIZE
@@ -909,7 +922,6 @@ def find(matchchars, matchlen)#1
   matchchars--
   while dentry
     if ^dentry == matchlen
-
       for i = matchlen downto 1
         if ^(matchchars + i) <> ^(dentry + i)
           break
@@ -1022,7 +1034,7 @@ def _execword_(dentry)#0
   fin
   W = _cfa_(dentry)
   (*W)()#0
-  if (@_get_estack)()#1 > 32
+  if _get_estackdepth() > 32
     puts("Stack over/underflow\n")
     _quit_
   fin
@@ -1120,7 +1132,7 @@ def _interpret_#0
         if state & comp_flag
           _compliteral_(value)
         else
-          (@push)(value)#0
+          _push(value)
         fin
       else
         inchars--
@@ -1140,7 +1152,7 @@ def _swap_(a,b)#2
   return b,a
 end
 def _ifdup_(a)#1
-  if a; (@push)(a)#0; fin
+  if a; _push(a); fin
   return a
 end
 def _dup2_(a,b)#4
@@ -1312,7 +1324,7 @@ def _state_#1
   return state & comp_flag
 end
 def _dodoes_#0
-  (@push)(W + 11)#0   // Pointer to PFA storage
+  _push(W + 11)   // Pointer to PFA storage
   execwords(*(W + 2)) // Exec PFA ptr
 end
 def _itcdoes_(a)#0
@@ -1433,7 +1445,7 @@ def _semi_#0
   if ^latest
     addhash(latest) // COLON definition
   else
-    (@push)(latest)#0 // NONAME definition
+    _push(latest) // NONAME definition
   fin
   state = state & ~comp_flag
 end
@@ -1653,7 +1665,7 @@ def _tick_#0
   if state & comp_flag
     _compliteral_(dentry)
   else
-    (@push)(dentry)#0
+    _push(dentry)
   fin
 end
 def _forget_#0
@@ -1731,7 +1743,7 @@ def _blank_#0
   if state & comp_flag
     _compliteral_(32)
   else
-    (@push)(32)#0
+    _push(32)
   fin
 end
 def _char_#0
@@ -1742,7 +1754,7 @@ def _char_#0
   if state & comp_flag
     _compliteral_(^str)
   else
-    (@push)(^str)#0
+    _push(^str)
   fin
 end
 def _str_#0
@@ -1757,7 +1769,7 @@ def _str_#0
     _compword_(@d_slit)
     memcpy(heapalloc(len), str, len) // Add to dictionary
   else
-    (@push)(strbuf)#0
+    _push(strbuf)
     memcpy(strbuf, str, len) // Copy to HERE
   fin
 end
@@ -1942,13 +1954,13 @@ def _see_#0
   fin
 end
 def _prstack_#0
-  word val
-  byte depth
-
-  for depth = 1 to (@_get_estack)()#1
-    val = ^(_estkl + 32 - depth) | (^(_estkh + 32 - depth) << 8)
-    puti(val); putc(' ')
-  next
+  byte index, depth
+  depth = _get_estackdepth()
+  index = 0
+  while index < depth
+    puti(_get_estack(index)); putc(' ')
+    index++
+  loop
 end
 def _prrstack_#0
   byte depth
@@ -2126,8 +2138,6 @@ while latest
   fin
   latest = *_lfa_(latest)
 loop
-_estkl = ^(@syscall + 1) // Hack to fill in parameter stack locations
-_estkh = ^(@syscall + 3)
 fileio:iobufalloc(4) // Allocate a bunch of file buffers
 strbuf = heapalloc(256)
 inbuf  = heapalloc(SRCREFS * INBUF_SIZE)
