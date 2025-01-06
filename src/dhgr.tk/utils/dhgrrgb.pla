@@ -60,6 +60,7 @@ const RAW_INFILE  = $04 // Raw 560x192 24BPP RGB values
 const MATCH_PREV  = $00 // Match previous RGB
 const MATCH_NEXT  = $08 // Match next pixel
 const MATCH_CYCLE = $10 // Match current cycle
+const WEIGHT_DIST = $20 // Weighted distance
 var sin90[] // first 90 degrees of sin in fixed s.15 format
 var =     0,   571,  1143,  1714,  2285,  2855,  3425,  3993
 var =  4560,  5126,  5690,  6252,  6812,  7371,  7927,  8480
@@ -99,7 +100,7 @@ word = $02D0,$06D0,$0AD0,$0ED0,$12D0,$16D0,$1AD0,$1ED0
 word = $0350,$0750,$0B50,$0F50,$1350,$1750,$1B50,$1F50
 word = $03D0,$07D0,$0BD0,$0FD0,$13D0,$17D0,$1BD0,$1FD0
 var surfMem, surfSpan
-var rgbMatch
+var rgbMatch, dist
 var[12] ntscChroma
 var[12] ntscCycle
 var[16] pixRed, pixGrn, pixBlu
@@ -145,7 +146,24 @@ def cos(deg)#1
   return sin(deg + 90)
 end
 
-def dist(dr, dg, db)#2
+def ldist(dr, dg, db)#2 // Linear distance
+  res[t_i32] rr, gg
+
+  loadi16(dr)
+  muli16(dr)
+  store32(@rr)
+  loadi16(dg)
+  muli16(dg)
+  store32(@gg)
+  loadi16(db)
+  muli16(db)
+  add32(@gg)
+  add32(@rr)
+  store32(@rr)
+  return rr:[0], rr:[1]
+end
+
+def wdist(dr, dg, db)#2 // Linear distance
   res[t_i32] rr, gg
 
   loadi16(dr)
@@ -257,8 +275,8 @@ def rgbMatchCycle(r, g, b, errptr, cx)#1
   cg = pg + ntscChroma[i+GRN]
   cb = pb + ntscChroma[i+BLU]
   // Match next chroma subcycle
-  pd:[0], pd:[1] = dist(r - pr, g - pg, b - pb)
-  dist(r - cr, g - cg, b - cb)
+  pd:[0], pd:[1] = dist(r - pr, g - pg, b - pb)#2
+  dist(r - cr, g - cg, b - cb)#2
   if islt32(@pd)
     // RGB better matched with next chroma color
     er = r - cr
@@ -320,7 +338,7 @@ def rgbMatchNext(r, g, b, errptr, cx)#1
   // Match next full chroma cycle (pixel)
   cd:[0], cd:[1] = $FFFF, $7FFF
   for i = 0 to 15
-    nd:[0], nd:[1] = dist(r - pixRed[i], g - pixGrn[i], b - pixBlu[i])
+    nd:[0], nd:[1] = dist(r - pixRed[i], g - pixGrn[i], b - pixBlu[i])#2
     if islt32(@cd)
       cd:[0], cd:[1] = nd:[0], nd:[1]
       match = i
@@ -366,8 +384,8 @@ def rgbMatchPrev(r, g, b, errptr, cx)#1
   cg = prevGrn + ntscChroma[i+GRN]
   cb = prevBlu + ntscChroma[i+BLU]
   // Match next chroma subcycle
-  pd:[0], pd:[1] = dist(r - prevRed, g - prevGrn, b - prevBlu)
-  dist(r - cr, g - cg, b - cb)
+  pd:[0], pd:[1] = dist(r - prevRed, g - prevGrn, b - prevBlu)#2
+  dist(r - cr, g - cg, b - cb)#2
   if islt32(@pd)
     // RGB better matched with next chroma color
     prevRed = cr
@@ -526,6 +544,7 @@ def rgbInit#0
   else // MATCH_PREV
     rgbMatch = @rgbMatchPrev
   fin
+  dist = flags & WEIGHT_DIST ?? @wdist :: @ldist
   if flags & MEM_MODE
     surfMem, surfSpan = dhgrAllocBl7Mem(SCR_WIDTH, SCR_HEIGHT)
     dhgrSurfMem(OP_XOR, SCR_HEIGHT, surfMem, surfSpan)
@@ -801,6 +820,9 @@ if ^arg
       is 'V' // No video output, memory mode only (for portable VM)
         flags = flags | MEM_MODE
         break
+      is 'W' // Weighted distance calc
+        flags = flags | WEIGHT_DIST
+        break
       otherwise
         puts("? option:"); putc(^(arg + 2)); putln
     wend
@@ -828,5 +850,6 @@ puts("  [-T#]  = Tint: -360..360 (in degrees)\n")
 puts("  [-U<R,G,B>#]  = gammUt: Red, Grn, Blu\n")
 puts("                          -255..255\n")
 puts("  [-V]   = no Video output, mem only\n")
+puts("  [-W]   = Weighted distance\n")
 puts(" IMAGEFILE [DHGRFILE]\n")
 done
