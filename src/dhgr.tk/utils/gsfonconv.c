@@ -38,6 +38,10 @@ struct macfont {
     //uint16_t rlocTable; // lastChar - firstChar + 3 : pixel offset of glyph in bitImage
     //uint16_t owTable; lastChar - firstChar + 3 : offset/width table
 };
+struct gsfont *gsf;
+struct macfont *macf;
+int16_t *locTable;
+uint16_t *owTable;
 /*
  * Bit reversals
  */
@@ -45,6 +49,38 @@ unsigned char bitReverse[256];
 unsigned char clrSwap[256];
 unsigned char clrRot[] = {0x00,0x02,0x04,0x06,0x08,0x0A,0x0C,0x0E,
                            0x01,0x03,0x05,0x07,0x09,0x0B,0x0D,0x0F};
+void write_lyph(FILE *fp, uint8_t *glyphBits, int glyphSpan, int offset, int width, int height)
+{
+    uint32_t rowbits;
+    int byteOffset, bitShift, bitWidth,  i;
+    
+    byteOffset = offset / 8;
+    bitShift   = offset & 7;
+    bitWidth   = bitShift + width;
+    while (height--)
+    {
+        rowbits = bitReverse[glyphBits[byteOffset]];
+        if (bitWidth >= 8)
+        {
+            rowbits |= bitReverse[glyphBits[byteOffset + 1]] << 8;
+            if (bitWidth >= 16)
+            {
+                rowbits |= bitReverse[glyphBits[byteOffset + 2]] << 16;
+                if (bitWidth >= 24)
+                    rowbits |= bitReverse[glyphBits[byteOffset + 3]] << 24;
+            }
+        }
+        rowbits >>= bitShift;
+        for (i = 0; i < width; i++)
+        {
+            putchar(rowbits & 1 ? '*' : ' ');
+            rowbits >>= 1;
+        }
+        puts("");
+        glyphBits += glyphSpan;
+    }
+}
+#if 0
 void write_glyph(FILE *fp, int left, int top, int width, int height, int advance, unsigned char *buf, int pitch)
 {
     unsigned char glyphdef[5], *swapbuf;
@@ -67,11 +103,12 @@ void write_glyph(FILE *fp, int left, int top, int width, int height, int advance
     }
     free(swapbuf);
 }
-void write_font_file(char *filename, int glyph_width, int glyph_height)
+#endif
+void write_font_file(char *filename)
 {
     FILE *fp;
     unsigned char ch;
-    int c;
+    int glyph_width, glyph_height, c;
 
     if ((fp = fopen(filename, "wb")))
     {
@@ -86,7 +123,6 @@ void write_font_file(char *filename, int glyph_width, int glyph_height)
         for (c = GLYPH_FIRST; c <= GLYPH_LAST; c++)
         {
 #if 0
-            FT_Load_Char(face, c, FT_LOAD_RENDER | FT_LOAD_MONOCHROME);
             write_glyph(fp,
                         face->glyph->bitmap_left,
                         face->glyph->bitmap_top,
@@ -99,72 +135,6 @@ void write_font_file(char *filename, int glyph_width, int glyph_height)
         }
         fclose(fp);
     }
-}
-/*
- * Glyph render routines.
- */
-void bitblt(int xorg, int yorg, int width, int height, unsigned char *srcbuf, int srcpitch, unsigned char *dstbuf, int dstpitch)
-{
-    int i, j;
-
-    dstbuf = dstbuf + yorg * dstpitch;
-    width = (width + 7) / 8; // Width in bytes
-    for (j = 0; j < height; j++)
-    {
-        for (i = 0; i < width; i++)
-            dstbuf[i] = srcbuf[i];
-        srcbuf += srcpitch;
-        dstbuf += dstpitch;
-    }
-}
-void write_bitmap_file(char *filename, int glyph_width, int glyph_height)
-{
-    int bitmap_top, bitmap_rows;
-    int c, glyph_base, glyph_byte_width, glyph_pitch;
-    unsigned char *glyph_buf, *bitmap_buf;
-    FILE *fp;
-#if 0
-    glyph_base       = glyph_height * 3 / 4 ; //+ 1;
-    glyph_width      = glyph_width  * 1.25;
-    glyph_byte_width = (glyph_width + 7) / 8;
-    glyph_pitch      = GLYPH_COUNT * glyph_byte_width;
-    glyph_buf        = malloc(glyph_pitch * glyph_height);
-    memset(glyph_buf, 0, glyph_pitch * glyph_height);
-    for (c = GLYPH_FIRST; c <= GLYPH_LAST; c++)
-    {
-        FT_Load_Char(face, c, FT_LOAD_RENDER | FT_LOAD_MONOCHROME);
-        bitmap_buf  = face->glyph->bitmap.buffer,
-        bitmap_top  = glyph_base - face->glyph->bitmap_top;
-        bitmap_rows = face->glyph->bitmap.rows;
-        if (bitmap_top < 0)
-        {
-            bitmap_rows += bitmap_top;
-            bitmap_buf   = bitmap_buf - face->glyph->bitmap.pitch * bitmap_top;
-            bitmap_top   = 0;
-        }
-        if (bitmap_top < glyph_height)
-        {
-            if (bitmap_top + bitmap_rows > glyph_height)
-                bitmap_rows = glyph_height - bitmap_top;
-            bitblt(0,
-                   bitmap_top,
-                   face->glyph->bitmap.width,
-                   bitmap_rows,
-                   bitmap_buf,
-                   face->glyph->bitmap.pitch,
-                   glyph_buf + (c - GLYPH_FIRST) * glyph_byte_width,
-                   glyph_pitch);
-        }
-        else
-            printf("Glyph (%c) height: %d, top: %d, rows: %d Skipped!\n", c, glyph_height, face->glyph->bitmap_top, face->glyph->bitmap.rows);
-    }
-    if ((fp = fopen(filename, "wb")))
-    {
-        fprintf(fp, "P4\n%d\n%d\n", glyph_width * GLYPH_COUNT, glyph_height);
-        fwrite(glyph_buf, 1, glyph_pitch * glyph_height, fp);
-        fclose(fp);
-    }
-#endif
 }
 void die(char *str)
 {
@@ -208,10 +178,6 @@ void load_iigs_file(char *filename)
     char *fontdef;
     char fontname[64];
     int fontdefsize, i;
-    struct gsfont *gsf;
-    struct macfont *macf;
-    int16_t *locTable;
-    uint16_t *owTable;
 
     if ((fp = fopen(filename, "rb")))
     {
@@ -220,7 +186,7 @@ void load_iigs_file(char *filename)
         fclose(fp);
     }
     else
-        die("Unable to opern IIGS font file");
+        die("Unable to open IIGS font file");
     memcpy(&fontname, fontdef + 1, fontdef[0]);
     fontname[fontdef[0]] = '\0';
     printf("Font name: %s\n", fontname);
@@ -292,8 +258,7 @@ int main(int argc, char **argv)
      * Load IIGS font file header.
      */
     load_iigs_file(iigs_file);
-    write_bitmap_file(font_file, glyph_width, glyph_height);
-    //write_font_file(font_file, face, glyph_width, glyph_height);
+    write_font_file(font_file);
     return 0;
 }
 
