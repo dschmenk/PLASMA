@@ -68,7 +68,7 @@ void write_glyph(FILE *fp, int c)
     glyphdef[1] = -top;
     glyphdef[2] = (width + 3) / 4;
     glyphdef[3] = height;
-    glyphdef[4] = width - left;
+    glyphdef[4] = width + left;
     fwrite(&glyphdef, 1, 5, fp);
 
     pixOffset   = locTable[c];
