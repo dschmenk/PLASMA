@@ -1,13 +1,44 @@
 include "inc/cmdsys.plh"
 include "inc/fileio.plh"
 include "dhgr.tk/inc/dhgrlib.plh"
+include "dhgr.tk/inc/dhgrutils.plh"
 
 const page1m = $C054
 const page1x = $C055
 //
+// Font type bits
+//
+const FONT_MONO   = $00
+const FONT_PROP   = $80
+const FONT_BITMAP = $00
+const FONT_PIXMAP = $40
+//
+// Font header
+//
+struc t_font
+  byte[] fnt_typelen
+  char   fnt_name[16]
+  byte   fnt_first
+  byte   fnt_last
+  byte   fnt_width
+  byte   fnt_height
+  var    fnt_glyptrs[]
+end
+//
+// Variable pitch glyphs
+//
+struc t_glyph
+  var  gly_left
+  var  gly_top
+  byte gly_width
+  byte gly_height
+  byte gly_adv
+  byte gly_strike[]
+end
+//
 // Apple //e hires character font
 //
-byte fontWide[]
+byte[] Apple2Glyphs
 byte = $00,$00,$00,$00,$00,$00,$00,$00,$08,$08,$08,$08,$08,$00,$08,$00
 byte = $14,$14,$14,$00,$00,$00,$00,$00,$14,$14,$3E,$14,$3E,$14,$14,$00
 byte = $08,$3C,$0A,$1C,$28,$1E,$08,$00,$06,$26,$10,$08,$04,$32,$30,$00
@@ -56,9 +87,32 @@ byte = $00,$00,$22,$14,$08,$14,$22,$00,$00,$00,$22,$22,$22,$3C,$20,$1C
 byte = $00,$00,$3E,$10,$08,$04,$3E,$00,$38,$0C,$0C,$06,$0C,$0C,$38,$00
 byte = $08,$08,$08,$08,$08,$08,$08,$08,$0E,$18,$18,$30,$18,$18,$0E,$00
 byte = $00,$2C,$1A,$00,$00,$00,$00,$00,$00,$2A,$14,$2A,$14,$2A,$00,$00
-var fontThin  = NULL
-var fontPtr   = @fontWide
-var fontWidth = 7
+//
+// Default wide font header
+//
+export byte[] fontDefWide
+char[16] = "Default Wide"
+byte = 32, 127 // first, last
+byte = 7, 8 // width, height
+var  = @Apple2Glyphs
+//
+// Default narrow font header (unallocated)
+//
+export byte[] fontDefThin
+char[16] = "Default Thin"
+byte = 32, 127 // first, last
+byte = 4, 8 // width, height
+var  = NULL
+//
+// Current font
+//
+var fontPtr = @fontDefWide
+//
+// Function pointers
+//
+export asm dcgrStr(x, y, strptr)#2
+        JMP     $2000
+end
 //
 // Utility functions
 //
@@ -69,15 +123,101 @@ export def dhgrAllocBl7Mem(w, h)#2
     memblk = heapalloc(span * h)
     return memblk, span
 end
-export def dcgrStr(x, y, strptr)#0
-    byte i
+def bitMonoGlyphStr(x, y, strptr)#2
+    byte first, last, width, height, size, i, ch
+    var strikes
 
+    first   = fontPtr->fnt_first
+    last    = fontPtr->fnt_last
+    width   = fontPtr->fnt_width
+    height  = fontPtr->fnt_height
+    strikes = fontPtr=>fnt_glyptrs
+    size    = (width + 7) / 8 * height
     for i = 1 to ^strptr
-        dcgrBitmap(x, y, fontWidth, 8, fontPtr + (^(strptr + i) - 32) * 8)
-        x = x + fontWidth
+        ch = ^(strptr + i)
+        if ch >= first and ch <= last
+            dcgrBitmap(x, y, width, height, strikes + (^(strptr + i) - first) * size)
+            x = x + width
+        else
+            when ch
+                is '\n'
+                    x = 0
+                    y = y + fontPtr->fnt_height
+                    break
+                is '\t'
+                    x = x + (fontPtr->fnt_width * 8)
+                    break
+            wend
+        fin
     next
+    return x, y
 end
-export def dcgrBoldStr(clr, x, y, strptr)#0
+def pixPropGlyphStr(x, y, strptr)#2
+    var glyptrs, glyph, left, top
+    byte first, last, i, ch, width, height
+
+    dhgrOp(OP_XOR)
+    first   = fontPtr->fnt_first
+    last    = fontPtr->fnt_last
+    glyptrs = fontPtr + fnt_glyptrs
+    for i = 1 to ^strptr
+        ch = ^(strptr + i)
+        if ch >= first and ch <= last
+            glyph  = glyptrs=>[ch - first]
+            left   = glyph=>gly_left
+            top    = glyph=>gly_top
+            width  = glyph->gly_width
+            height = glyph->gly_height
+            dcgrPixmap((x + left) / 4, y + top, width, height, glyph + gly_strike)
+            x = x + glyph->gly_adv
+        else
+            when ch
+                is '\n'
+                    x = 0
+                    y = y + fontPtr->fnt_height
+                    break
+                is '\t'
+                    x = x + (fontPtr->fnt_width * 8)
+                    break
+            wend
+        fin
+    next
+    return x, y
+end
+
+def bitPropGlyphStr(x, y, strptr)#2
+    var glyptrs, glyph, left, top
+    byte first, last, i, ch, width, height
+
+    dhgrOp(OP_SRC)
+    first   = fontPtr->fnt_first
+    last    = fontPtr->fnt_last
+    glyptrs = fontPtr + fnt_glyptrs
+    for i = 1 to ^strptr
+        ch = ^(strptr + i)
+        if ch >= first and ch <= last
+            glyph  = glyptrs=>[ch - first]
+            left   = glyph=>gly_left
+            top    = glyph=>gly_top
+            width  = glyph->gly_width
+            height = glyph->gly_height
+            dcgrBitmap(x + left, y + top, width, height, glyph + gly_strike)
+            x = x + glyph->gly_adv
+        else
+            when ch
+                is '\n'
+                    x = 0
+                    y = y + fontPtr->fnt_height
+                    break
+                is '\t'
+                    x = x + (fontPtr->fnt_width * 4)
+                    break
+            wend
+        fin
+    next
+    return x, y
+end
+export def dcgrBoldStr(clr, x, y, strptr)#2
     byte h, v
 
     for v = y - 1 to y + 1
@@ -86,31 +226,93 @@ export def dcgrBoldStr(clr, x, y, strptr)#0
         next
     next
     dcgrColor(clr)
-    dcgrStr(x, y, strptr)
+    return dcgrStr(x, y, strptr)
 end
 export def dcgrFont(font)#0
     var  rows, pWide, pThin
     byte bits
+
     if font
-        if not fontThin
-            fontThin = heapalloc(96*8)
-            pThin = fontThin
-            pWide = @fontWide
-            for rows = 0 to 96*8
-                bits =        (^pWide                            ) & $02
-                bits = bits | (^pWide | ^pWide >> 1 | ^pWide >> 2) & $04
-                bits = bits | (                       ^pWide >> 2) & $08
-                ^pThin = bits
-                pThin++
-                pWide++
-            next
+        if font == @fontDefThin
+            if not fontDefThin:fnt_glyptrs
+                pWide = @Apple2Glyphs
+                pThin = heapalloc(96*8)
+                fontDefThin:fnt_glyptrs = pThin
+                for rows = 0 to 96*8
+                    bits =        (^pWide                            ) & $02
+                    bits = bits | (^pWide | ^pWide >> 1 | ^pWide >> 2) & $04
+                    bits = bits | (                       ^pWide >> 2) & $08
+                    ^pThin = bits
+                    pThin++
+                    pWide++
+                next
+            fin
         fin
-        fontPtr   = fontThin
-        fontWidth = 4
-    else
-        fontPtr   = @fontWide
-        fontWidth = 7
+        fontPtr = font
+        if fontPtr->fnt_typelen & FONT_PROP
+            if fontPtr->fnt_typelen & FONT_PIXMAP
+                dcgrStr:1 = @pixPropGlyphStr
+            else
+                dcgrStr:1 = @bitPropGlyphStr
+            fin
+        else // FONT_MONO
+            dcgrStr:1 = @bitMonoGlyphStr
+        fin
     fin
+end
+export def fontRead(filename)#1
+    var glyph, strksize, left, top
+    byte refnum, num, i, width, height, adv
+    byte roundup, pixbyte
+    var font_header, gly_ptr
+
+    font_header = NULL
+    if filename and ^filename
+        refnum = fileio:open(filename)
+        if refnum
+            font_header = heapalloc(t_font)
+            fileio:read(refnum, font_header, t_font)
+            num = font_header->fnt_last - font_header->fnt_first
+            if font_header->fnt_typelen & FONT_PROP
+                gly_ptr = heapalloc(num * 2) // Allocate glyph ptrs right after
+                if font_header->fnt_typelen & FONT_PIXMAP
+                    roundup = 1
+                    pixbyte = 2
+                else
+                    roundup = 7
+                    pixbyte = 8
+                fin
+                for i = 1 to num
+                    fileio:read(refnum, @left,   1); left = sext(left)
+                    fileio:read(refnum, @top,    1); top  = sext(top)
+                    fileio:read(refnum, @width,  1)
+                    fileio:read(refnum, @height, 1)
+                    fileio:read(refnum, @adv,    1)
+                    strksize = (width + roundup) / pixbyte * height
+                    if strksize
+                        *gly_ptr = heapalloc(strksize + t_glyph)
+                        glyph = *gly_ptr
+                        if glyph and fileio:read(refnum, glyph + gly_strike, strksize) == strksize
+                            glyph=>gly_left   = left
+                            glyph=>gly_top    = top
+                            glyph->gly_width  = width
+                            glyph->gly_height = height
+                            glyph->gly_adv    = adv
+                        else
+                            heaprelease(font_header)
+                            font_header = NULL
+                            break
+                        fin
+                    else
+                        *gly_ptr = NULL
+                    fin
+                    gly_ptr = gly_ptr + 2
+                next
+            fin
+            fileio:close(refnum)
+        fin
+    fin
+    return font_header
 end
 export def dcgrRect(x, y, w, h)#0
     byte x2, y2, v
@@ -249,3 +451,9 @@ export def screenWrite(filestr)#1
     fin
     return result
 end
+
+//
+// Fixups
+//
+dcgrStr:1 = @bitMonoGlyphStr
+done

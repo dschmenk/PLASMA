@@ -7,8 +7,9 @@
 #include <string.h>
 
 #include <freetype2/ft2build.h>
-#include <freetype/freetype.h>
 //#include FT_FREETYPE2_H
+#include <freetype2/freetype/freetype.h>
+
 #define FONT_WIDTH  32
 #define FONT_HEIGHT 12
 #define GLYPH_FIRST 32
@@ -42,17 +43,39 @@ void write_glyph(FILE *fp, int left, int top, int width, int height, int advance
     }
     free(swapbuf);
 }
-void write_font_file(char *filename, FT_Face face, int glyph_width, int glyph_height)
+void write_font_file(char *filename, char *fontfile, FT_Face face, int glyph_width, int glyph_height)
 {
     FILE *fp;
     unsigned char ch;
+    char *fontname, *scanname, font_header[16];
     int c;
 
     if ((fp = fopen(filename, "wb")))
     {
+        fontname = scanname = fontfile;
+        while (*scanname) // Strip leading directory names
+        {
+            if (*scanname == '/')
+                fontname = scanname + 1;
+            scanname++;
+        }
+        while (scanname > fontfile)
+        {
+            if (*scanname == '.')
+            {
+                *scanname = '\0';
+            }
+            scanname--;
+        }
+        memset(font_header, 0, 16);
+        strncpy(&font_header[1], fontname, 15);
+        ch = strlen(fontname);
+        font_header[0] = ch < 16 ? ch : 15;
+        font_header[0] |= 0x80 | 0x40; // FONT_PROP | FONT_PIXMAP
+        fwrite(font_header, 1, 16, fp);
         ch = GLYPH_FIRST;
         fwrite(&ch, 1, 1, fp);
-        ch = GLYPH_COUNT;
+        ch = GLYPH_LAST;
         fwrite(&ch, 1, 1, fp);
         ch = (glyph_width + 3) / 4;
         fwrite(&ch, 1, 1, fp);
@@ -203,7 +226,7 @@ int main(int argc, char **argv)
     //if (glyph_height < 8)  glyph_height = 8;
     FT_Set_Pixel_Sizes(face, glyph_width, glyph_height);
     //write_bitmap_file(font_file, face, glyph_width, glyph_height);
-    write_font_file(font_file, face, glyph_width, glyph_height);
+    write_font_file(font_file, ttf_file, face, glyph_width, glyph_height);
     return 0;
 }
 

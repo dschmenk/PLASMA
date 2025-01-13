@@ -57,6 +57,13 @@ void write_glyph(FILE *fp, int c)
     int pixOffset, pixWidth, byteWidth, byteOffset, bitShift, bitWidth, glyphSpan,  i;
     int left, top, width, height;
 
+    if (c < macf->firstChar || c > macf->lastChar)
+    {
+        memset(glyphdef, 0, 5);
+        fwrite(&glyphdef, 1, 5, fp);
+        return;
+    }
+    c -= macf->firstChar;
     glyphBits   = (uint8_t *)&(macf->bitImage),
     glyphSpan   = macf->rowWords * 2;
     height      = macf->rectHeight;
@@ -66,18 +73,22 @@ void write_glyph(FILE *fp, int c)
 
     glyphdef[0] = left;
     glyphdef[1] = -top;
+#if PIXFONT
     glyphdef[2] = (width + 3) / 4;
+#else
+    glyphdef[2] = width;
+#endif
     glyphdef[3] = height;
     glyphdef[4] = width + left;
     fwrite(&glyphdef, 1, 5, fp);
 
-    pixOffset   = locTable[c];
-    pixWidth    = locTable[c+1] - locTable[c];
-    byteOffset  = pixOffset / 8;
-    bitShift    = pixOffset & 7;
-    bitWidth    = bitShift + pixWidth;
-    byteWidth   = (width + 7) / 8;
-    rowbits     = 0;
+    pixOffset  = locTable[c];
+    pixWidth   = locTable[c+1] - locTable[c];
+    byteOffset = pixOffset / 8;
+    bitShift   = pixOffset & 7;
+    bitWidth   = bitShift + pixWidth;
+    byteWidth  = (width + 7) / 8;
+    rowbits    = 0;
     while (height--)
     {
         if (pixWidth > 0)
@@ -96,29 +107,66 @@ void write_glyph(FILE *fp, int c)
             rowbits >>= bitShift;
             rowbits &= 0xFFFFFFFF >> (32 - pixWidth);
         }
+#if PIXFONT
         glyphdef[0] = clrSwap[rowbits         & 0xFF];
         glyphdef[1] = clrSwap[(rowbits >> 8)  & 0xFF];
         glyphdef[2] = clrSwap[(rowbits >> 16) & 0xFF];
         glyphdef[3] = clrSwap[(rowbits >> 24) & 0xFF];
+#else
+        glyphdef[0] = rowbits;
+        glyphdef[1] = rowbits >> 8;
+        glyphdef[2] = rowbits >> 16;
+        glyphdef[3] = rowbits >> 24;
+#endif
         fwrite(&glyphdef, 1, byteWidth, fp);
         glyphBits += glyphSpan;
     }
 }
-void write_font_file(char *filename)
+void write_font_file(char *filename, char *fontfile)
 {
     FILE *fp;
     unsigned char ch;
+    char *fontname, *scanname, font_header[16];
     int glyph_width, glyph_height, c;
 
     if ((fp = fopen(filename, "wb")))
     {
+        fontname = scanname = fontfile;
+        while (*scanname) // Strip leading directory names
+        {
+            if (*scanname == '/')
+                fontname = scanname + 1;
+            scanname++;
+        }
+        while (scanname > fontfile)
+        {
+            if (*scanname == '.')
+            {
+                *scanname = '\0';
+            }
+            scanname--;
+        }
+        memset(font_header, 0, 16);
+        strncpy(&font_header[1], fontname, 15);
+        ch = strlen(fontname);
+        font_header[0] = ch < 16 ? ch : 15;
+#if PIXFONT
+        font_header[0] |= 0x80 | 0x40; // FONT_PROP | FONT_PIXMAP
+#else
+        font_header[0] |= 0x80; // FONT_PROP
+#endif
+        fwrite(font_header, 1, 16, fp);
         glyph_width  = macf->rectWidth;
         glyph_height = macf->rectHeight;
         ch = GLYPH_FIRST;
         fwrite(&ch, 1, 1, fp);
-        ch = GLYPH_COUNT;
+        ch = GLYPH_LAST;
         fwrite(&ch, 1, 1, fp);
+#if PIXFONT
         ch = (glyph_width + 3) / 4;
+#else
+        ch = glyph_width;
+#endif
         fwrite(&ch, 1, 1, fp);
         ch = glyph_height;
         fwrite(&ch, 1, 1, fp);
@@ -250,7 +298,7 @@ int main(int argc, char **argv)
      * Load IIGS font file header.
      */
     load_iigs_file(iigs_file);
-    write_font_file(font_file);
+    write_font_file(font_file, iigs_file);
     return 0;
 }
 
