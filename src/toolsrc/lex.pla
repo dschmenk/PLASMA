@@ -73,7 +73,6 @@ def scannum
     fin
     return num
 end
-
 def scan
     //
     // Skip whitespace
@@ -289,6 +288,12 @@ def scan
                     token = EOL_TKN
                 fin
                 break
+            is '\\'
+                if token <> EOF_TKN
+                    token = CNT_TKN
+                    nextln
+                fin
+                break
             otherwise
                 //
                 // Simple single character tokens
@@ -322,16 +327,31 @@ end
 // Get next line of input
 //
 def nextln
+    var inptr, inlen
+
     strconstptr = strconstbuff // Reset string constant buffer
     if ^scanptr == ';'
         scanptr++
         scan
     else
-        if token <> EOL_TKN and token <> EOF_TKN; putc(token&$7F); puts("Extraneous characters\n"); exit_err(0); fin
-        scanptr = inbuff
-        ^instr  = fileio:read(refnum, inbuff, 127)
-        if ^instr
-            ^(instr + ^instr) = NULL // NULL terminate string
+        if token <> EOL_TKN and token <> EOF_TKN and token <> CNT_TKN
+            putc(token&$7F); puts("Extraneous characters\n")
+            exit_err(0)
+        fin
+        if token == CNT_TKN
+          inptr = scanptr
+          inlen = MAX_INPUT_LEN - (inptr - inbuff)
+          if inlen <= 0
+            puts("Input "); exit_err(ERR_OVER)
+          fin
+        else
+          scanptr = inbuff
+          inptr   = inbuff
+          inlen   = MAX_INPUT_LEN
+        fin
+        inlen = fileio:read(refnum, inptr, inlen)
+        if inlen
+            ^(inptr + inlen - 1) = NULL // NULL terminate input
             lineno++
             if !(lineno & $0F); putc('.'); fin
             if scan == INCLUDE_TKN
@@ -362,8 +382,8 @@ def nextln
                 lineno    = srcline
                 return nextln
             else
-                *instr = NULL // NULL terminated 0 length string
-                token  = EOF_TKN
+                ^inbuff = NULL // NULL terminated 0 length string
+                token   = EOF_TKN
             fin
         fin
     fin

@@ -91,7 +91,6 @@ int hexdigit(char ch)
     else
         return -1;
 }
-
 t_token scan(void)
 {
     prevtoken = scantoken;
@@ -107,6 +106,11 @@ t_token scan(void)
         ;
     else if (*scanpos == '\0' || *scanpos == '\n' || *scanpos == ';')
         scantoken = EOL_TOKEN;
+    else if (*scanpos == '\\')
+    {
+        scantoken = CNT_TOKEN;
+        next_line();
+    }
     else if ((scanpos[0] >= 'a' && scanpos[0] <= 'z')
           || (scanpos[0] >= 'A' && scanpos[0] <= 'Z')
           || (scanpos[0] == '_'))
@@ -438,10 +442,11 @@ int scan_lookahead(void)
     tokenlen       = prevlen;
     return (look);
 }
-char inputline[512];
+char inputline[MAX_INPUT_LEN];
 char conststr[1024];
 int next_line(void)
 {
+    char *inptr;
     int len;
     t_token token;
     char* new_filename;
@@ -453,18 +458,36 @@ int next_line(void)
     }
     else
     {
-        if (!(scantoken == EOL_TOKEN || scantoken == EOF_TOKEN))
+        if (!(scantoken == EOL_TOKEN || scantoken == EOF_TOKEN || scantoken == CNT_TOKEN))
         {
             fprintf(stderr, "scantoken = %d (%c)\n", scantoken & 0x7F, scantoken & 0x7F);
             parse_error("Extraneous characters");
             return EOF_TOKEN;
         }
-        statement = inputline;
-        scanpos   = inputline;
+        if (scantoken == CNT_TOKEN)
+        {
+            /*
+             * Add to iput line
+             */
+            inptr = scanpos;
+            len   = MAX_INPUT_LEN - (inptr - inputline);
+            if (len <= 0)
+                parse_error("Input overflow");
+        }
+        else
+        {
+            /*
+             * Read fresh input line
+             */
+            statement = inputline;
+            scanpos   = inputline;
+            inptr     = inputline;
+            len       = MAX_INPUT_LEN;
+        }
         /*
          * Read next line from the current file, and strip newline from the end.
          */
-        if (fgets(inputline, 512, inputfile) == NULL)
+        if (fgets(inptr, len, inputfile) == NULL)
         {
             inputline[0] = 0;
             /*

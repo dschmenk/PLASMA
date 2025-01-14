@@ -12,6 +12,7 @@
 #define STREAM          (1<<8)
 #define FALSE           0
 #define TRUE            (!FALSE)
+#define MAX_INPUT_LEN   1024
 extern int outflags;
 extern FILE *inputfile, *outputfile;
 extern char *filename, modfile[17];

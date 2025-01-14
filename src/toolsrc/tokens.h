@@ -110,6 +110,7 @@
 //#define COMMENT_TOKEN       TOKEN(';')
 #define DROP_TOKEN          TOKEN(';')
 #define EOL_TOKEN           TOKEN(0)
+#define CNT_TOKEN           TOKEN('\\')
 #define INCLUDE_TOKEN       TOKEN(0x7E)
 #define EOF_TOKEN           TOKEN(0x7F)
 

@@ -10,6 +10,7 @@ const ID_TKN            = $D6 // V
 const CHR_TKN           = $C3 // C
 const INT_TKN           = $C9 // I
 const STR_TKN           = $D3 // S
+const CNT_TKN           = $DC // \
 const EOL_TKN           = $02
 const EOF_TKN           = $01
 const ERR_TKN           = $00
@@ -253,6 +254,7 @@ word codebuff, codeptr, entrypoint
 word modsysflags
 byte[16] moddep_tbl[MODDEPNUM]
 byte moddep_cnt, def_cnt = 1
+predef nextln
 predef parse_mods
 predef emit_pending_seq#0
 //
@@ -282,7 +284,7 @@ word srcline              // Saved source line number
 //
 // Scanner variables
 //
-word instr
+const MAX_INPUT_LEN   = 1024
 word inbuff
 word scanptr
 byte token             = EOL_TKN
@@ -451,9 +453,10 @@ def nametostr(namestr, len, strptr)#0
     memcpy(strptr + 1, namestr, len)
 end
 def putcurln#0
-    byte i
+    var i
+
     putln; puts(parsefile); putc('['); puti(lineno); puts("]\n")
-    puts(instr); putln
+    i = inbuff; while ^i; putc(^i); i++; loop; putln
     for i = tknptr - inbuff downto 1
         putc(' ')
     next
@@ -579,10 +582,9 @@ if srcfile and relfile
         refnum       = srcref
         parsefile    = @srcfile
         strconstbuff = heapalloc(80)
-        instr        = cmdsys:cmdline
-        inbuff       = instr + 1
+        inbuff       = heapalloc(MAX_INPUT_LEN)
         scanptr      = inbuff
-        *instr       = NULL
+        ^inbuff      = NULL
         exit         = heapalloc(t_except)
         if not except(exit)
             //
