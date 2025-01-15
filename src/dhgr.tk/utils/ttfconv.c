@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 
 #include <freetype2/ft2build.h>
 //#include FT_FREETYPE2_H
@@ -15,9 +16,13 @@
 #define GLYPH_FIRST 32
 #define GLYPH_LAST  127
 #define GLYPH_COUNT (GLYPH_LAST-GLYPH_FIRST+1)
+#define FONT_BITMAP 0
+#define FONT_PIXMAP 1
+int fontFormat = FONT_PIXMAP;
 /*
  * Bit reversals
  */
+unsigned char bitReverse[256];
 unsigned char clrSwap[256];
 unsigned char clrRot[] = {0x00,0x02,0x04,0x06,0x08,0x0A,0x0C,0x0E,
                            0x01,0x03,0x05,0x07,0x09,0x0B,0x0D,0x0F};
@@ -28,13 +33,21 @@ void write_glyph(FILE *fp, int left, int top, int width, int height, int advance
 
     glyphdef[0] = left;
     glyphdef[1] = -top;
-    glyphdef[2] = (width + 3) / 4;
+    glyphdef[2] = fontFormat == FONT_PIXMAP ? (width + 3) / 4 : width;
     glyphdef[3] = height;
     glyphdef[4] = advance;
     fwrite(&glyphdef, 1, 5, fp);
     swapbuf = malloc(pitch * height);
-    for (i = 0; i < pitch * height; i++)
-        swapbuf[i] = clrSwap[buf[i]];
+    if (fontFormat == FONT_PIXMAP)
+    {
+        for (i = 0; i < pitch * height; i++)
+            swapbuf[i] = clrSwap[buf[i]];
+    }
+    else
+    {
+        for (i = 0; i < pitch * height; i++)
+            swapbuf[i] = bitReverse[buf[i]];
+    }
     buf = swapbuf;
     while (height--)
     {
@@ -71,13 +84,13 @@ void write_font_file(char *filename, char *fontfile, FT_Face face, int glyph_wid
         strncpy(&font_header[1], fontname, 15);
         ch = strlen(fontname);
         font_header[0] = ch < 16 ? ch : 15;
-        font_header[0] |= 0x80 | 0x40; // FONT_PROP | FONT_PIXMAP
+        font_header[0] |= fontFormat == FONT_PIXMAP ? 0x80 | 0x40 : 0x80; // FONT_PROP
         fwrite(font_header, 1, 16, fp);
         ch = GLYPH_FIRST;
         fwrite(&ch, 1, 1, fp);
         ch = GLYPH_LAST;
         fwrite(&ch, 1, 1, fp);
-        ch = (glyph_width + 3) / 4;
+        ch = fontFormat == FONT_PIXMAP ? (glyph_width + 3) / 4 : glyph_width;
         fwrite(&ch, 1, 1, fp);
         ch = glyph_height;
         fwrite(&ch, 1, 1, fp);
@@ -89,7 +102,7 @@ void write_font_file(char *filename, char *fontfile, FT_Face face, int glyph_wid
                         face->glyph->bitmap_top,
                         face->glyph->bitmap.width,
                         face->glyph->bitmap.rows,
-                        (face->glyph->advance.x + 0x40) >> 6,
+                        face->glyph->advance.x >> 6,
                         face->glyph->bitmap.buffer,
                         face->glyph->bitmap.pitch);
         }
@@ -174,41 +187,59 @@ int main(int argc, char **argv)
     FT_Face face;
     unsigned char *font_buf;
     int glyph_width, glyph_height, font_pitch;
-    unsigned char bitReverse;
     int i;
 
+    glyph_width  = FONT_WIDTH;
+    glyph_height = FONT_HEIGHT;
+    ttf_file  = NULL;
     font_file = NULL;
-    if (argc > 1)
+    while (*++argv)
     {
-        ttf_file = argv[1];
-        if (argc > 2)
-            font_file = argv[2];
-        if (argc > 3)
-            glyph_width = atoi(argv[3]);
+        if (argv[0][0] == '-')
+        {
+            switch (toupper(argv[0][1]))
+            {
+                case 'B':
+                    fontFormat = FONT_BITMAP;
+                    break;
+                case 'P':
+                    fontFormat = FONT_PIXMAP;
+                    break;
+                case 'W':
+                    glyph_width = atoi(&argv[0][2]);
+                    break;
+                case 'H':
+                    glyph_height = atoi(&argv[0][2]);
+                    break;
+            }
+        }
         else
-            glyph_width = FONT_WIDTH;
-        if (argc > 4)
-            glyph_height = atoi(argv[4]);
-        else
-            glyph_height = FONT_HEIGHT;
+        {
+            if (!ttf_file)
+                ttf_file = *argv;
+            else if (!font_file)
+                font_file = *argv;
+            else
+                fprintf(stderr, "? %s\n", *argv);
+        }
     }
-    else
+    if (!ttf_file || !font_file)
         die( "Missing font file");
     /*
      * Bit/color reversal
      */
     for (i = 0; i < 256; i++)
     {
-        bitReverse = ((i & 0x01) << 7)
-                   | ((i & 0x02) << 5)
-                   | ((i & 0x04) << 3)
-                   | ((i & 0x08) << 1)
-                   | ((i & 0x10) >> 1)
-                   | ((i & 0x20) >> 3)
-                   | ((i & 0x40) >> 5)
-                   | ((i & 0x80) >> 7);
-        clrSwap[i] =  clrRot[bitReverse & 0x0F]
-                   | (clrRot[bitReverse >> 4] << 4);
+        bitReverse[i] = ((i & 0x01) << 7)
+                     | ((i & 0x02) << 5)
+                     | ((i & 0x04) << 3)
+                     | ((i & 0x08) << 1)
+                     | ((i & 0x10) >> 1)
+                     | ((i & 0x20) >> 3)
+                     | ((i & 0x40) >> 5)
+                     | ((i & 0x80) >> 7);
+        clrSwap[i] =  clrRot[bitReverse[i] & 0x0F]
+                   | (clrRot[bitReverse[i] >> 4] << 4);
     }
     /*
      * Init FreeType library.

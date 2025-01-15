@@ -12,6 +12,7 @@ DHGRSHOW   = dhgr.tk/utils/DHGRSHOW.REL
 DLGRCONV   = dhgr.tk/utils/DLGRCONV.REL
 TTFCONV    = dhgr.tk/utils/ttfconv
 IIGSCONV   = dhgr.tk/utils/gsfonconv
+DDCONV     = dhgr.tk/utils/ddfonconv
 PENGUINS   = dhgr.tk/demos/penguins/PENGUINS.REL
 
 
@@ -40,7 +41,7 @@ demos: $(PENGUINS)
 	cp $(PENGUINS) prodos/dhgr.tk/demos/penguins/
 	cp dhgr.tk/demos/penguins/*.BIN prodos/dhgr.tk/demos/penguins/
 
-fontconv: $(TTFCONV) $(IIGSCONV)
+fontconv: $(TTFCONV) $(IIGSCONV) $(DDCONV)
 
 all: libs test utils demos
 
@@ -55,6 +56,9 @@ $(TTFCONV): dhgr.tk/utils/ttfconv.c
 
 $(IIGSCONV): dhgr.tk/utils/gsfonconv.c
 	cc dhgr.tk/utils/gsfonconv.c -o dhgr.tk/utils/gsfonconv
+
+$(DDCONV): dhgr.tk/utils/ddfonconv.c
+	cc dhgr.tk/utils/ddfonconv.c -o dhgr.tk/utils/ddfonconv
 
 $(DHGRLIB): dhgr.tk/libs/dhgrlib.pla dhgr.tk/inc/dhgrlib.plh
 	./xplasm -AMOW dhgr.tk/libs/dhgrlib.pla
