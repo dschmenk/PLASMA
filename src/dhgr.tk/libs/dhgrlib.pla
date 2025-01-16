@@ -572,7 +572,21 @@ asm dcgrBitMapScr(x, y, bitw, bith, bitptr)#0
         INX
         INX
         STX     ESP
-        LDA     ESTKL-5,X   ; BITPTR
+-       LDY     ESTKH-2,X   ; MSB YCOORD
+        BPL     ++
+        LDA     ESTKL-3,X   ; WIDTH
+        LSR                 ; WIDTH/2
+        ADC     ESTKL-5,X   ; PIXPTR += SPAN
+        STA     ESTKL-5,X
+        BCC     +
+        INC     ESTKH-5,X
++       DEC     ESTKL-4,X   ; HEIGHT
+        BEQ     RETBITS
+        INC     ESTKL-2,X
+        BNE     -
+        INC     ESTKH-2,X
+        BMI     -
+++      LDA     ESTKL-5,X   ; BITPTR
         STA     SRCL
         LDA     ESTKH-5,X
         STA     SRCH
@@ -582,18 +596,7 @@ asm dcgrBitMapScr(x, y, bitw, bith, bitptr)#0
 YBITS   LDY     ESTKL-2,X   ; Y COORD
         INC     ESTKL-2,X   ; Y COORD++
         CPY     #192        ; OFF SCREEN?
-        BCC     +
-        LDA     ESTKL-3,X   ; WIDTH
-        ADC     #6          ; ROUND UP (WITH CARRY)
-        LSR
-        LSR
-        LSR
-        ADC     SRCL        ; NEXT BITMAP ROW
-        STA     SRCL
-        LDA     #$00
-        ADC     SRCH
-        STA     SRCH
-        BNE     NXTBITS     ; BRA
+        BCS     RETBITS
 end
 asm     _dcgrBitmapScrA
 +       LDA     $1000,Y     ; HGRSCANL
@@ -637,7 +640,21 @@ asm dcgrPixMapScr(x, y, pixw, pixh, pixptr)#0
         INX
         INX
         STX     ESP
-        LDA     ESTKL-5,X   ; PIXPTR
+-       LDA     ESTKH-2,X   ; MSB YCOORD
+        BPL     ++
+        LDA     ESTKL-3,X   ; WIDTH
+        LSR                 ; WIDTH/2
+        ADC     ESTKL-5,X   ; PIXPTR += SPAN
+        STA     ESTKL-5,X
+        BCC     +
+        INC     ESTKH-5,X
++       DEC     ESTKL-4,X   ; HEIGHT
+        BEQ     RETBITS
+        INC     ESTKL-2,X
+        BNE     -
+        INC     ESTKH-2,X
+        BMI     -
+++      LDA     ESTKL-5,X   ; PIXPTR
         STA     SRCL
         LDA     ESTKH-5,X
         STA     SRCH
@@ -648,15 +665,7 @@ asm dcgrPixMapScr(x, y, pixw, pixh, pixptr)#0
 YPIXS   LDY     ESTKL-2,X   ; Y COORD
         INC     ESTKL-2,X   ; Y COORD++
         CPY     #192        ; OFF SCREEN?
-        BCC     +
-        LDA     ESTKL-3,X   ; WIDTH
-        LSR
-        ADC     SRCL        ; NEXT PIXMAP ROW
-        STA     SRCL
-        LDA     #$00
-        ADC     SRCH
-        STA     SRCH
-        BNE     NXTPIXS     ; BRA
+        BCS     RETPIXS
 end
 asm     _dcgrPixmapScrA
 +       LDA     $1000,Y     ; HGRSCANL
@@ -1057,10 +1066,6 @@ asm dcgrBitMapMem(x, y, bitw, bith, bitptr, memw, memh, memptr, memspan)#0
         ADC     #9
         TAX
         STX     ESP
-        LDA     ESTKL-8,X   ; DST PTR
-        STA     DSTL
-        LDA     ESTKH-8,X
-        STA     DSTH
 -       LDY     ESTKH-2,X   ; MSB YCOORD
         BPL     ++
         LDA     ESTKL-3,X   ; WIDTH
@@ -1080,7 +1085,11 @@ asm dcgrBitMapMem(x, y, bitw, bith, bitptr, memw, memh, memptr, memspan)#0
         BNE     -
         INC     ESTKH-2,X
         BMI     -
-++      LDY     ESTKL-2,X   ; Y COORD
+++      LDA     ESTKL-8,X   ; DST PTR
+        STA     DSTL
+        LDA     ESTKH-8,X
+        STA     DSTH
+        LDY     ESTKL-2,X   ; Y COORD
         BEQ     +
         ;CLC                ; ADVANCE TO Y SCANLINE
 -       LDA     ESTKL-9,X   ; SPAN
@@ -1101,19 +1110,8 @@ asm dcgrBitMapMem(x, y, bitw, bith, bitptr, memw, memh, memptr, memspan)#0
 YBITM   LDA     ESTKL-2,X   ; Y COORD
         INC     ESTKL-2,X   ; Y COORD++
         CMP     ESTKL-7,X   ; OUT OF DST BOUNDS?
-        BCC     +
-        LDA     ESTKL-3,X   ; WIDTH
-        ADC     #6          ; ROUND UP (WITH CARRY)
-        LSR
-        LSR
-        LSR
-        ADC     SRCL        ; NEXT BITMAP ROW
-        STA     SRCL
-        LDA     #$00
-        ADC     SRCH
-        STA     SRCH
-        BNE     NXTBITM     ; BRA
-+       LDA     ESTKL-1,X   ; X COORD
+        BCS     RETBITM
+        LDA     ESTKL-1,X   ; X COORD
         STA     ESTKH-1,X   ; CURRENT X COORD
 BITM8   LDA     #8
         STA     ESTKH-2,X   ; BIT COUNT
@@ -1157,10 +1155,6 @@ asm dcgrPixMapMem(x, y, pixw, pixh, pixptr, memw, memh, memptr, memspan)#0
         ADC     #9
         TAX
         STX     ESP
-        LDA     ESTKL-8,X   ; DST PTR
-        STA     DSTL
-        LDA     ESTKH-8,X
-        STA     DSTH
 -       LDY     ESTKH-2,X   ; MSB YCOORD
         BPL     ++
         LDA     ESTKL-3,X   ; WIDTH
@@ -1175,7 +1169,11 @@ asm dcgrPixMapMem(x, y, pixw, pixh, pixptr, memw, memh, memptr, memspan)#0
         BNE     -
         INC     ESTKH-2,X
         BMI     -
-++      LDY     ESTKL-2,X   ; Y COORD
+++      LDA     ESTKL-8,X   ; DST PTR
+        STA     DSTL
+        LDA     ESTKH-8,X
+        STA     DSTH
+        LDY     ESTKL-2,X   ; Y COORD
         BEQ     +
 -       CLC                 ; ADVANCE TO Y SCANLINE
         LDA     ESTKL-9,X   ; SPAN
@@ -1197,18 +1195,10 @@ asm dcgrPixMapMem(x, y, pixw, pixh, pixptr, memw, memh, memptr, memspan)#0
 YPIXM   LDA     ESTKL-2,X   ; Y COORD
         INC     ESTKL-2,X   ; Y COORD++
         CMP     ESTKL-7,X   ; OUT OF DST BOUNDS?
-        BCC     +
-        LDA     ESTKL-3,X   ; WIDTH
-        LSR
-        ADC     SRCL        ; NEXT PIXMAP ROW
-        STA     SRCL
-        LDA     #$00
-        ADC     SRCH
-        STA     SRCH
-        BNE     NXTPIXM     ; BRA
+        BCS     RETPIXM
 end
 asm     _dcgrPixmapMemA
-+       LDA     ESTKL-1,X   ; X COORD
+        LDA     ESTKL-1,X   ; X COORD
         STA     TMPL
         LDY     #$00
 PIXMEML CMP     ESTKL-6,X   ; OUT OF DST BOUNDS?
@@ -1266,7 +1256,7 @@ NXTPIXM CLC
         STA     DSTH
         DEC     ESTKL-4,X   ; HEIGHT
         BNE     YPIXM       ; NEXT ROW
-        RTS
+RETPIXM RTS
 end
 asm dcgrRleMapMem(x, y, pixw, pixh, pixptr, memw, memh, memptr, memspan)#0
         TXA

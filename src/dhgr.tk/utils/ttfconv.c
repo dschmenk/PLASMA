@@ -11,21 +11,33 @@
 //#include FT_FREETYPE2_H
 #include <freetype2/freetype/freetype.h>
 
-#define FONT_WIDTH  32
+#define FONT_WIDTH  28
 #define FONT_HEIGHT 12
 #define GLYPH_FIRST 32
 #define GLYPH_LAST  127
 #define GLYPH_COUNT (GLYPH_LAST-GLYPH_FIRST+1)
-#define FONT_BITMAP 0
-#define FONT_PIXMAP 1
-int fontFormat = FONT_PIXMAP;
+#define FONT_AA     0x40
+int fontFormat = FONT_AA;
 /*
  * Bit reversals
  */
 unsigned char bitReverse[256];
 unsigned char clrSwap[256];
-unsigned char clrRot[] = {0x00,0x02,0x04,0x06,0x08,0x0A,0x0C,0x0E,
+/*
+ * White on Black and black is xpar
+ */
+unsigned char clrRotWonB[] = {0x05,0x02,0x04,0x06,0x08,0x0A,0x0C,0x0E,
                            0x01,0x03,0x05,0x07,0x09,0x0B,0x0D,0x0F};
+/*
+ * Black on white and white is xpar
+ */
+unsigned char clrRotBonW[] = {0x05,0x0D,0x0B,0x09,0x07,0x0A,0x03,0x01,
+                              0x0E,0x0C,0x0A,0x08,0x06,0x04,0x02,0x00};
+/*
+ * Default to black on white
+ */
+unsigned char *clrRot = clrRotBonW;
+
 void write_glyph(FILE *fp, int left, int top, int width, int height, int advance, unsigned char *buf, int pitch)
 {
     unsigned char glyphdef[5], *swapbuf;
@@ -33,12 +45,12 @@ void write_glyph(FILE *fp, int left, int top, int width, int height, int advance
 
     glyphdef[0] = left;
     glyphdef[1] = -top;
-    glyphdef[2] = fontFormat == FONT_PIXMAP ? (width + 3) / 4 : width;
+    glyphdef[2] = fontFormat == FONT_AA ? (width + 3) / 4 : width;
     glyphdef[3] = height;
     glyphdef[4] = advance;
     fwrite(&glyphdef, 1, 5, fp);
     swapbuf = malloc(pitch * height);
-    if (fontFormat == FONT_PIXMAP)
+    if (fontFormat == FONT_AA)
     {
         for (i = 0; i < pitch * height; i++)
             swapbuf[i] = clrSwap[buf[i]];
@@ -83,14 +95,13 @@ void write_font_file(char *filename, char *fontfile, FT_Face face, int glyph_wid
         memset(font_header, 0, 16);
         strncpy(&font_header[1], fontname, 15);
         ch = strlen(fontname);
-        font_header[0] = ch < 16 ? ch : 15;
-        font_header[0] |= fontFormat == FONT_PIXMAP ? 0x80 | 0x40 : 0x80; // FONT_PROP
+        font_header[0] = (ch < 16 ? ch : 15) | fontFormat | 0x80; // FONT_PROP
         fwrite(font_header, 1, 16, fp);
         ch = GLYPH_FIRST;
         fwrite(&ch, 1, 1, fp);
         ch = GLYPH_LAST;
         fwrite(&ch, 1, 1, fp);
-        ch = fontFormat == FONT_PIXMAP ? (glyph_width + 3) / 4 : glyph_width;
+        ch = fontFormat == FONT_AA ? (glyph_width + 3) / 4 : glyph_width;
         fwrite(&ch, 1, 1, fp);
         ch = glyph_height;
         fwrite(&ch, 1, 1, fp);
@@ -199,17 +210,20 @@ int main(int argc, char **argv)
         {
             switch (toupper(argv[0][1]))
             {
-                case 'B':
-                    fontFormat = FONT_BITMAP;
+                case 'A':
+                    fontFormat |= FONT_AA;
                     break;
-                case 'P':
-                    fontFormat = FONT_PIXMAP;
+                case 'B':
+                    fontFormat &= ~FONT_AA;
                     break;
                 case 'W':
                     glyph_width = atoi(&argv[0][2]);
                     break;
                 case 'H':
                     glyph_height = atoi(&argv[0][2]);
+                    break;
+                case 'I':
+                    clrRot = clrRotWonB;
                     break;
             }
         }
