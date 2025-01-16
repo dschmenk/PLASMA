@@ -6,13 +6,6 @@ include "dhgr.tk/inc/dhgrutils.plh"
 const page1m = $C054
 const page1x = $C055
 //
-// Font type bits
-//
-const FONT_MONO   = $00
-const FONT_PROP   = $80
-const FONT_BITMAP = $00
-const FONT_PIXMAP = $40
-//
 // Font header
 //
 struc t_font
@@ -123,6 +116,30 @@ export def dhgrAllocBl7Mem(w, h)#2
     memblk = heapalloc(span * h)
     return memblk, span
 end
+def bitCtrlGlyph(x, y, c)#2
+    when c
+        is '\n'
+            x = 0
+            y = y + fontPtr->fnt_height
+            break
+        is '\t'
+            x = x + (fontPtr->fnt_width * 8)
+            break
+    wend
+    return x, y
+end
+def pixCtrlGlyph(x, y, c)#2
+    when c
+        is '\n'
+            x = 0
+            y = y + fontPtr->fnt_height
+            break
+        is '\t'
+            x = x + (fontPtr->fnt_width * 4)
+            break
+    wend
+    return x, y
+end
 def bitMonoGlyphStr(x, y, strptr)#2
     byte first, last, width, height, size, i, ch
     var strikes
@@ -136,18 +153,11 @@ def bitMonoGlyphStr(x, y, strptr)#2
     for i = 1 to ^strptr
         ch = ^(strptr + i)
         if ch >= first and ch <= last
-            dcgrBitmap(x, y, width, height, strikes + (^(strptr + i) - first) * size)
+            dcgrBitmap(x, y - height, width, height, \
+                       strikes + (^(strptr + i) - first) * size)
             x = x + width
         else
-            when ch
-                is '\n'
-                    x = 0
-                    y = y + fontPtr->fnt_height
-                    break
-                is '\t'
-                    x = x + (fontPtr->fnt_width * 8)
-                    break
-            wend
+            x, y = bitCtrlGlyph(x, y, ch)
         fin
     next
     return x, y
@@ -156,10 +166,10 @@ def pixPropGlyphStr(x, y, strptr)#2
     var glyptrs, glyph
     byte first, last, i, ch
 
-    dhgrOp(OP_XOR)
     first   = fontPtr->fnt_first
     last    = fontPtr->fnt_last
     glyptrs = fontPtr + fnt_glyptrs
+    x       = x * 4
     for i = 1 to ^strptr
         ch = ^(strptr + i)
         if ch >= first and ch <= last
@@ -171,25 +181,15 @@ def pixPropGlyphStr(x, y, strptr)#2
                         glyph + gly_strike)
             x = x + glyph->gly_adv
         else
-            when ch
-                is '\n'
-                    x = 0
-                    y = y + fontPtr->fnt_height
-                    break
-                is '\t'
-                    x = x + (fontPtr->fnt_width * 8)
-                    break
-            wend
+            x, y = pixCtrlGlyph(x, y, ch)
         fin
     next
-    return x, y
+    return x / 4, y
 end
-
 def bitPropGlyphStr(x, y, strptr)#2
     var glyptrs, glyph
     byte first, last, i, ch
 
-    dhgrOp(OP_SRC)
     first   = fontPtr->fnt_first
     last    = fontPtr->fnt_last
     glyptrs = fontPtr + fnt_glyptrs
@@ -204,15 +204,7 @@ def bitPropGlyphStr(x, y, strptr)#2
                        glyph + gly_strike)
             x = x + glyph->gly_adv
         else
-            when ch
-                is '\n'
-                    x = 0
-                    y = y + fontPtr->fnt_height
-                    break
-                is '\t'
-                    x = x + (fontPtr->fnt_width * 4)
-                    break
-            wend
+            x, y = bitCtrlGlyph(x, y, ch)
         fin
     next
     return x, y
@@ -228,9 +220,10 @@ export def dcgrBoldStr(clr, x, y, strptr)#2
     dcgrColor(clr)
     return dcgrStr(x, y, strptr)
 end
-export def dcgrFont(font)#0
-    var rows, pWide, pThin
+export def dcgrFont(font)#1
+    var rows, pWide, pThin, prevFont
 
+    prevFont = fontPtr
     if font
         if font == @fontDefThin
             if not fontDefThin:fnt_glyptrs
@@ -257,6 +250,7 @@ export def dcgrFont(font)#0
             dcgrStr:1 = @bitMonoGlyphStr
         fin
     fin
+    return prevFont
 end
 export def fontRead(filename)#1
     var glyph, strksize, left, top
@@ -311,6 +305,12 @@ export def fontRead(filename)#1
         fin
     fin
     return font_header
+end
+export def fontGlyphDim#2
+    return fontPtr->fnt_width, fontPtr->fnt_height
+end
+export def fontType#1
+    return ^fontPtr & $F0
 end
 export def dcgrRect(x, y, w, h)#0
     byte x2, y2, v
