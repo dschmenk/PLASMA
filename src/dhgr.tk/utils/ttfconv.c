@@ -11,7 +11,7 @@
 //#include FT_FREETYPE2_H
 #include <freetype2/freetype/freetype.h>
 
-#define FONT_WIDTH  28
+#define FONT_WIDTH  24
 #define FONT_HEIGHT 12
 #define GLYPH_FIRST 32
 #define GLYPH_LAST  127
