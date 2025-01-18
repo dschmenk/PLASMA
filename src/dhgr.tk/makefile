@@ -21,6 +21,10 @@ PENGUINS   = dhgr.tk/demos/penguins/PENGUINS.REL
 libs: $(DHGRLIB) $(DHGRUTILS)
 	cp $(DHGRLIB)   prodos/sys
 	cp $(DHGRUTILS) prodos/sys
+	-mkdir prodos/sys/fonts
+	cp dhgr.tk/utils/fonts/APPLE2.FON.BIN prodos/sys/fonts
+	cp dhgr.tk/utils/fonts/APPLE2THIN.FON.BIN prodos/sys/fonts
+	cp dhgr.tk/utils/fonts/A2SLIM8.FON.BIN prodos/sys/fonts
 
 test: $(DHGRTEST) $(FONTTEST)
 	-mkdir prodos/dhgr.tk/
