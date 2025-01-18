@@ -48,18 +48,6 @@ export def dhgrAllocBl7Mem(w, h)#2
     memblk = heapalloc(span * h)
     return memblk, span
 end
-def ctrlGlyph(x, y, c)#2
-    when c
-        is '\n'
-            x = 0
-            y = y + fontPtr->fnt_height
-            break
-        is '\t'
-            x = x + fontPtr->fnt_width * (fontPtr & FONT_AA ?? 8 :: 4)
-            break
-    wend
-    return x, y
-end
 def bitMonoGlyphStr(x, y, strptr)#2
     byte first, last, width, height, size, i, ch
     var strikes
@@ -76,8 +64,6 @@ def bitMonoGlyphStr(x, y, strptr)#2
             dcgrBitmap(x, y - height, width, height, \
                        strikes + (^(strptr + i) - first) * size)
             x = x + width
-        else
-            x, y = ctrlGlyph(x, y, ch)
         fin
     next
     return x, y
@@ -100,8 +86,6 @@ def pixPropGlyphStr(x, y, strptr)#2
                         glyph->gly_height,        \
                         glyph + gly_strike)
             x = x + glyph->gly_adv
-        else
-            x, y = ctrlGlyph(x, y, ch)
         fin
     next
     return x / 4, y
@@ -123,18 +107,15 @@ def bitPropGlyphStr(x, y, strptr)#2
                        glyph->gly_height,   \
                        glyph + gly_strike)
             x = x + glyph->gly_adv
-        else
-            x, y = ctrlGlyph(x, y, ch)
         fin
     next
     return x, y
 end
 export def dcgrStrExtents(strptr)#2
-    var glyptrs, x, y
+    var glyptrs, xext, yext
     byte first, last, width, i, ch
 
-    x = 0
-    y = fontPtr->fnt_height
+    xext    = 0
     first   = fontPtr->fnt_first
     last    = fontPtr->fnt_last
     if fontPtr & FONT_PROP
@@ -142,26 +123,16 @@ export def dcgrStrExtents(strptr)#2
         for i = 1 to ^strptr
             ch = ^(strptr + i)
             if ch >= first and ch <= last
-                x = x + glyptrs=>[ch - first]->gly_adv
-            else
-                x, y = ctrlGlyph(x, y, ch)
+                xext = xext + glyptrs=>[ch - first]->gly_adv
             fin
         next
         if fontPtr & FONT_AA
-            x = x / 4
+            xext = xext / 4
         fin
     else
-        width = fontPtr->fnt_width
-        for i = 1 to ^strptr
-            ch = ^(strptr + i)
-            if ch >= first and ch <= last
-                x = x + width
-            else
-                x, y = ctrlGlyph(x, y, ch)
-            fin
-        next
+        xext = fontPtr->fnt_width * ^strptr
     fin
-    return x, y
+    return xext, fontPtr->fnt_height
 end
 export def dcgrBoldStr(clr, x, y, strptr)#2
     byte h, v
