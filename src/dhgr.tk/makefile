@@ -47,9 +47,18 @@ demos: $(PENGUINS)
 	cp $(PENGUINS) prodos/dhgr.tk/demos/penguins/
 	cp dhgr.tk/demos/penguins/*.BIN prodos/dhgr.tk/demos/penguins/
 
+bld: $(DHGRLIB) $(DHGRUTILS) $(DHGRTEST) $(DHGRRGB) $(DHGRSHOW)
+	-mkdir prodos/bld/dhgr.tk/
+	-mkdir prodos/bld/dhgr.tk/inc/
+	cp dhgr.tk/inc/dhgrlib.plh prodos/bld/dhgr.tk/inc/DHGRLIB.PLH.TXT
+	cp dhgr.tk/inc/dhgrutils.plh prodos/bld/dhgr.tk/inc/DHGRUTILS.PLH.TXT
+	cp dhgr.tk/test/dhgrtest.pla prodos/bld/dhgr.tk/DHGRTEST.PLA.TXT
+	cp dhgr.tk/utils/dhgrrgb.pla prodos/bld/dhgr.tk/DHGRRGB.PLA.TXT
+	cp dhgr.tk/utils/dhgrshow.pla prodos/bld/dhgr.tk/DHGRSHOW.PLA.TXT
+
 fontconv: $(TTFCONV) $(IIGSCONV) $(A2CONV) $(A2DEFAULT) $(DDCONV)
 
-all: libs test utils demos
+all: libs test utils demos bld
 
 clean:
 	-rm dhgr.tk/demos/pengiuns/*.o dhgr.tk/demos/pengiuns/*.REL dhgr.tk/demos/pengiuns/*.a
