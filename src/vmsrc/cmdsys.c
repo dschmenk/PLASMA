@@ -297,7 +297,7 @@ uword lookup_def(defxlat_t *defxtbl, uword ofst)
         defxtbl++;
     return defxtbl->defaddr;
 }
-uword add_natv( VM_Callout natvfn)
+uword add_natv(VM_Callout natvfn)
 {
     uword handle, defaddr;
     handle  = vm_addnatv(natvfn);
@@ -959,7 +959,7 @@ int main(int argc, char **argv)
         mem_6502[0x01FE]  = 0xFF; // Address of $FF (RTN) instruction
         mem_6502[0x01FD]  = 0xFE;
         mpu->registers->s = 0xFC;
-        mpu->registers->x = ESTK_SIZE;
+        mpu->registers->x = ESTK_DEPTH;
         //
         // Load module from command line - PLVM version
         //

@@ -99,7 +99,8 @@ predef _cmove_(a,b,c)#0, _move_(a,b,c)#0, _fill_(a,b,c)#0, _plasma_(a)#0
 predef _compare_(a,b,c,d)#1, _var_(a)#0, _const_(a)#0, _lit_#1, _slit_#1, _find_(a)#2
 predef _tick_#0, _forget_#0, _keypressed_#1, _key_#1, _prat_(a)#0
 predef _blank_#0, _char_#0, _str_#0, _prstr_#0, _prpstr_#0
-predef _prval_(a)#0, _prbyte_(a)#0, _prhex_(a)#0, _accept_(a,b)#1, _type_(a,b)#0
+predef _prval_(a)#0, _prbyte_(a)#0, _prhex_(a)#0, _prbin_(a)#0, _prbinw_(a)#0
+predef _accept_(a,b)#1, _type_(a,b)#0
 predef _words_#0, _tron_#0, _troff_#0, _stepon_#0, _stepoff_#0
 predef _itc_#0, _pbc_#0, _comment_#0, _src_(a)#0, _srcstr_#0, _endsrc_#0, _ifendsrc_(a)#0
 predef _brk_#0, _brkon_#0, _brkoff_#0, _word_(a)#1, _count_(a)#2
@@ -591,10 +592,18 @@ word = @d_prtos, 0, @_prhex_
 char d_prtosbyte = "C$."
 byte = 0
 word = @d_prtoshex, 0, @_prbyte_
+// PRINT TOS BINARY
+char d_prtosbinw = "%."
+byte = 0
+word = @d_prtosbyte, 0, @_prbinw_
+// PRINT TOS BINARY BYTE
+char d_prtosbin = "C%."
+byte = 0
+word = @d_prtosbinw, 0, @_prbin_
 // EMIT
 char d_emit = "EMIT"
 byte = 0
-word = @d_prtosbyte, 0, @putc
+word = @d_prtosbin, 0, @putc
 // CR
 char d_cr = "CR"
 byte = showcr_flag
@@ -952,7 +961,7 @@ def _isnum_(numchars, numlen)#2
     fin
   fin
   num = 0
-  if ^numchars == '$'
+  if ^numchars == '$' // Hexadecimal
     numchars++
     numlen--
     if numlen == 0
@@ -964,6 +973,22 @@ def _isnum_(numchars, numlen)#2
         num = num * 16 + numchar - '0'
       elsif numchar >= 'A' and numchar <= 'F'
         num = num * 16 + numchar - 'A' + 10
+      else
+        break
+      fin
+      numchars++
+      numlen--
+    loop
+  elsif ^numchars == '%' // Binary
+    numchars++
+    numlen--
+    if numlen == 0
+      return 0, 0
+    fin
+    while numlen
+      numchar = ^numchars
+      if numchar == '0' or numchar == '1'
+        num = num * 2 + numchar - '0'
       else
         break
       fin
@@ -1735,6 +1760,24 @@ def _prbyte_(a)#0
 end
 def _prhex_(a)#0
   putc('$'); puth(a); putc(' ')
+end
+def _prbin_(a)#0
+  byte i
+  putc('%')
+  for i = 0 to 7
+    putc(a & $80 ?? '1' :: '0')
+    a = a << 1
+  next
+  putc(' ')
+end
+def _prbinw_(a)#0
+  byte i
+  putc('%')
+  for i = 0 to 15
+    putc(a & $8000 ?? '1' :: '0')
+    a = a << 1
+  next
+  putc(' ')
 end
 def _prat_(a)#0
   puti(*a); putc(' ')

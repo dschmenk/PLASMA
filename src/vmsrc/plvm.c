@@ -70,9 +70,9 @@ int vm_indef(M6502 *mpu, uword address, byte data)
     uword addr;
 
     addr  = mem_6502[++mpu->registers->s + 0x0100];
-    if (!mpu->registers->s) pfail("SP underflow");
+    if (!mpu->registers->s) pfail("Call inline def: SP LSB underflow");
     addr |= mem_6502[++mpu->registers->s + 0x0100] << 8;
-    if (!mpu->registers->s) pfail("SP underflow");
+    if (!mpu->registers->s) pfail("Call inline def: SP MSB underflow");
     vm_interp(mpu, &mem_6502[addr + 1]);
     RTS;
 }
@@ -81,9 +81,9 @@ int vm_iidef(M6502 *mpu, uword address, byte data)
     uword addr;
 
     addr  = mem_6502[++mpu->registers->s + 0x0100];
-    if (!mpu->registers->s) pfail("SP underflow");
+    if (!mpu->registers->s) pfail("Call indirect def: SP LSB underflow");
     addr |= mem_6502[++mpu->registers->s + 0x0100] << 8;
-    if (!mpu->registers->s) pfail("SP underflow");
+    if (!mpu->registers->s) pfail("Call indirect def: SP MSB underflow");
     vm_interp(mpu, mem_6502 + UWORD_PTR(&mem_6502[addr + 1]));
     RTS;
 }
@@ -95,9 +95,9 @@ int vm_exdef(M6502 *mpu, uword address, byte data)
     uword addr;
 
     addr  = mem_6502[++mpu->registers->s + 0x0100];
-    if (!mpu->registers->s) pfail("SP underflow");
+    if (!mpu->registers->s) pfail("Call ext def: SP LSB underflow");
     addr |= mem_6502[++mpu->registers->s + 0x0100] << 8;
-    if (!mpu->registers->s) pfail("SP underflow");
+    if (!mpu->registers->s) pfail("Call ext def: SP MSB underflow");
     vm_interp(mpu, vm_def[UWORD_PTR(&mem_6502[addr + 1])]);
     RTS;
 }
@@ -109,9 +109,9 @@ int vm_natvdef(M6502 *mpu, uword address, byte data)
     uword addr;
 
     addr  = mem_6502[++mpu->registers->s + 0x0100];
-    if (!mpu->registers->s) pfail("SP underflow");
+    if (!mpu->registers->s) pfail("Call native def: SP LSB underflow");
     addr |= mem_6502[++mpu->registers->s + 0x0100] << 8;
-    if (!mpu->registers->s) pfail("SP underflow");
+    if (!mpu->registers->s) pfail("Call native def: SP MSB underflow");
     vm_natv[mem_6502[addr + 1]](mpu);
     RTS;
 }
@@ -145,17 +145,17 @@ OPTBL   DW CN,CN,CN,CN,CN,CN,CN,CN                                 ; 00 02 04 06
 #define internalize()                                               \
     vm_fp = UWORD_PTR(&mem_6502[FP]);                               \
     vm_pp = UWORD_PTR(&mem_6502[PP]);                               \
-    esp   = &eval_stack[ESTK_SIZE];                                 \
-    for (val = ESTK_SIZE - 1; val >= mpu->registers->x; val--)      \
+    esp   = &eval_stack[ESTK_DEPTH];                                 \
+    for (val = ESTK_DEPTH - 1; val >= mpu->registers->x; val--)      \
         PUSH(mem_6502[ESTKL + val] | (mem_6502[ESTKH + val] << 8))
 #define externalize()                                               \
     mem_6502[FPL] = (byte)vm_fp;                                    \
     mem_6502[FPH] = (byte)(vm_fp >> 8);                             \
     mem_6502[PPL] = (byte)vm_pp;                                    \
     mem_6502[PPH] = (byte)(vm_pp >> 8);                             \
-    ea = ESTK_SIZE-1;                                               \
+    ea = ESTK_DEPTH-1;                                               \
     { word *vm_sp;                                                  \
-    for (vm_sp = &eval_stack[ESTK_SIZE-1]; vm_sp >= esp; vm_sp--) { \
+    for (vm_sp = &eval_stack[ESTK_DEPTH-1]; vm_sp >= esp; vm_sp--) { \
         mem_6502[ESTKL + ea] = (byte)*vm_sp;                        \
         mem_6502[ESTKH + ea] = (byte)(*vm_sp >> 8);                 \
         ea--;                                                       \
@@ -166,20 +166,21 @@ void vm_interp(M6502 *mpu, code *vm_ip)
 {
     int val, ea, frmsz, parmcnt;
     uword vm_fp, vm_pp;
-    word eval_stack[ESTK_SIZE], *esp;
+    word eval_stack[ESTK_DEPTH], *esp;
 
     internalize();
     while (1)
     {
-        if ((esp - eval_stack) < 0 || (esp - eval_stack) > ESTK_SIZE)
+        if ((esp - eval_stack) < 0 || (esp - eval_stack) > ESTK_DEPTH)
         {
-            printf("Eval stack over/underflow! - $%04X: $%02X [%d]\r\n", (unsigned int)(vm_ip - mem_6502), (unsigned int)*vm_ip, (int)(ESTK_SIZE - (esp - eval_stack)));
-            exit(-1);
+            printf("Eval stack over/underflow! - $%04X: $%02X [%d]\r\n", (unsigned int)(vm_ip - mem_6502), (unsigned int)*vm_ip, (int)(ESTK_DEPTH - (esp - eval_stack)));
+            esp   = &eval_stack[ESTK_DEPTH];
+            //exit(-1);
         }
         if (trace)
         {
             char cmdline[16];
-            word *dsp = &eval_stack[ESTK_SIZE - 1];
+            word *dsp = &eval_stack[ESTK_DEPTH - 1];
             if (vm_ip >= mem_6502 && vm_ip < (mem_6502 + MEM6502_SIZE))
                 printf("$%04X: $%02X [ ", (unsigned int)(vm_ip - mem_6502), (unsigned int)*vm_ip);
             else

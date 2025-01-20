@@ -38,9 +38,9 @@ typedef uint16_t address;
     {                                                       \
         uword pc;                                           \
         pc  = mem_6502[++mpu->registers->s + 0x100];        \
-        if (!mpu->registers->s) pfail("SP underflow");      \
+        if (!mpu->registers->s) pfail("RTS: SP LSB underflow");      \
         pc |= mem_6502[++mpu->registers->s + 0x100]<<8;     \
-        if (!mpu->registers->s) pfail("SP underflow");      \
+        if (!mpu->registers->s) pfail("RTS: SP MSB underflow");      \
         return pc + 1;                                      \
     }
 /*
@@ -62,7 +62,7 @@ typedef uint16_t address;
  * 6502 memory map
  */
 #define MEM6502_SIZE    0x00010000
-#define ESTK_SIZE       32
+#define ESTK_DEPTH      32
 #define CMDLINE_STR     0x01FF
 #define CMDLINE_BUF     0x0200
 #define SYSPATH_STR     0x0280
