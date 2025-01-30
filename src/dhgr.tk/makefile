@@ -1,21 +1,24 @@
 .SUFFIXES	=
 AFLAGS	   = -o $@
 
-DHGRLIB    = dhgr.tk/libs/DHGRLIB.REL
-DHGRUTILS  = dhgr.tk/libs//DHGRUTILS.REL
-DHGRTEST   = dhgr.tk/test/DHGRTEST.REL
-FONTTEST   = dhgr.tk/test/FONTTEST.REL
-DHGRSPRED  = dhgr.tk/utils/DHGRSPRED.REL
-DHGREASY   = dhgr.tk/utils/DHGREASY.REL
-DHGRRGB    = dhgr.tk/utils/DHGRRGB.REL
-DHGRSHOW   = dhgr.tk/utils/DHGRSHOW.REL
-DLGRCONV   = dhgr.tk/utils/DLGRCONV.REL
-TTFCONV    = dhgr.tk/utils/ttfconv
-IIGSCONV   = dhgr.tk/utils/gsfonconv
-A2CONV     = dhgr.tk/utils/a2fonconv
-A2DEFAULT  = dhgr.tk/utils/a2fondef
-DDCONV     = dhgr.tk/utils/ddfonconv
-PENGUINS   = dhgr.tk/demos/penguins/PENGUINS.REL
+DHGRLIB       = dhgr.tk/libs/DHGRLIB.REL
+DHGRUTILS     = dhgr.tk/libs//DHGRUTILS.REL
+DHGRTEST      = dhgr.tk/test/DHGRTEST.REL
+FONTTEST      = dhgr.tk/test/FONTTEST.REL
+DHGRSPRED     = dhgr.tk/utils/DHGRSPRED.REL
+DHGREASY      = dhgr.tk/utils/DHGREASY.REL
+DHGRRGB       = dhgr.tk/utils/DHGRRGB.REL
+DHGRSHOW      = dhgr.tk/utils/DHGRSHOW.REL
+DLGRCONV      = dhgr.tk/utils/DLGRCONV.REL
+TTFCONV       = dhgr.tk/utils/ttfconv
+IIGSCONV      = dhgr.tk/utils/gsfonconv
+A2CONV        = dhgr.tk/utils/a2fonconv
+A2DEFAULT     = dhgr.tk/utils/a2fondef
+DDCONV        = dhgr.tk/utils/ddfonconv
+PENGUINS      = dhgr.tk/demos/penguins/PENGUINS.REL
+DROGUE        = dhgr.tk/drogue/DROGUE.REL
+DROGUE.MAP    = dhgr.tk/drogue/DROGUE.MAP.REL
+DROGUE.COMBAT = dhgr.tk/drogue/DROGUE.COMBAT.REL
 
 
 libs: $(DHGRLIB) $(DHGRUTILS)
@@ -46,6 +49,15 @@ demos: $(PENGUINS)
 	-mkdir prodos/dhgr.tk/demos/penguins/
 	cp $(PENGUINS) prodos/dhgr.tk/demos/penguins/
 	cp dhgr.tk/demos/penguins/*.BIN prodos/dhgr.tk/demos/penguins/
+
+drogue: $(DROGUE) $(DROGUE.MAP) $(DROGUE.COMBAT)
+	-mkdir prodos/dhgr.tk/demos
+	-mkdir prodos/dhgr.tk/demos/drogue
+	cp dhgr.tk/drogue/DROGUE.REL prodos/dhgr.tk/demos/drogue
+	cp dhgr.tk/drogue/DROGUE.MAP.REL prodos/dhgr.tk/demos/drogue/DROGUEMAP.REL
+	cp dhgr.tk/drogue/DROGUE.COMBAT.REL prodos/dhgr.tk/demos/drogue/DROGUECOMBAT.REL
+	cp samplesrc/LEVEL0#040000 prodos/dhgr.tk/demos/drogue/LEVEL0.TXT
+	cp samplesrc/LEVEL1#040000 prodos/dhgr.tk/demos/drogue/LEVEL1.TXT
 
 bld: $(DHGRLIB) $(DHGRUTILS) $(DHGRTEST) $(DHGRRGB) $(DHGRSHOW)
 	-mkdir prodos/bld/dhgr.tk/
@@ -120,3 +132,15 @@ $(DHGRRGB): dhgr.tk/utils/dhgrrgb.pla $(DHGRLIB) $(DHGRUTILS) dhgr.tk/inc/dhgrli
 $(PENGUINS): dhgr.tk/demos/penguins/penguins.pla dhgr.tk/inc/dhgrlib.plh dhgr.tk/inc/dhgrutils.plh
 	./xplasm -AMOW dhgr.tk/demos/penguins/penguins.pla
 	acme --setpc 4094 -o $(PENGUINS) dhgr.tk/demos/penguins/penguins.a
+
+$(DROGUE): dhgr.tk/drogue/drogue.pla  dhgr.tk/inc/dhgrlib.plh dhgr.tk/inc/dhgrutils.plh
+	./xplasm -AMOW dhgr.tk/drogue/drogue.pla
+	acme --setpc 4094 -o $(DROGUE) dhgr.tk/drogue/drogue.a
+
+$(DROGUE.MAP): dhgr.tk/drogue/drogue.map.pla dhgr.tk/inc/dhgrlib.plh dhgr.tk/inc/dhgrutils.plh
+	./xplasm -AMOW dhgr.tk/drogue/drogue.map.pla
+	acme --setpc 4094 -o $(DROGUE.MAP) dhgr.tk/drogue/drogue.map.a
+
+$(DROGUE.COMBAT): dhgr.tk/drogue/drogue.combat.pla dhgr.tk/inc/dhgrlib.plh dhgr.tk/inc/dhgrutils.plh
+	./xplasm -AMOW dhgr.tk/drogue/drogue.combat.pla
+	acme --setpc 4094 -o $(DROGUE.COMBAT) dhgr.tk/drogue/drogue.combat.a
