@@ -3,6 +3,7 @@ include "inc/args.plh"
 include "inc/fileio.plh"
 include "inc/matchfiles.plh"
 include "inc/lz4.plh"
+include "inc/longjmp.plh"
 include "dhgr.tk/inc/dhgrlib.plh"
 include "dhgr.tk/inc/dhgrutils.plh"
 
@@ -13,7 +14,8 @@ const page1x = $C055
 byte dolz4, quit
 var arg, srcfilelist, srcpath, srcexp, srccnt
 var entrylist, entrycnt
-
+var retval
+res[t_except] exit
 //
 // Copy string with upper case conversion
 //
@@ -28,6 +30,13 @@ def struprcpy(dst, src)#0
     ^dst = ^src
 end
 
+def fail(msg)#0
+    dhgrMode(DHGR_TEXT_MODE)
+    puts(msg)
+    putln
+    throw(@exit, -1)
+end
+
 def lz4ReadBlock(ref, flags, dstbuf)#1
     word size[2], block, data, len
 
@@ -35,26 +44,22 @@ def lz4ReadBlock(ref, flags, dstbuf)#1
     if len <> 4 or size[0] == 0 or size[1] & $7FFF
         return 0
     fin
-    block = heapalloc(size[0])
-    if block
-        len = fileio:read(ref, block, size[0])
-        if len == size[0]
-            if size[1] & $8000
-                //
-                // Uncompressed block
-                //
-                memcpy(dstbuf, block, len)
-            else
-                //
-                // Decompress block
-                //
-                len = lz4Unpack(block, block + size[0], dstbuf, $6000)
-            fin
-            if flags & $10 // Block Checksum
-                fileio:read(ref, @size, 4)
-            fin
+    if size[1] & $8000
+        //
+        // Uncompressed block, read directly into dst buffer
+        //
+        len = fileio:read(ref, dstbuf, size[0])
+    else
+        //
+        // Decompress from end of destination buffer
+        //
+        block = $6000 - size[0]
+        fileio:read(ref, block, size[0])
+        len = lz4Unpack(block, block + size[0], dstbuf, $6000)
         fin
-        heaprelease(block)
+    fin
+    if flags & $10 // Block Checksum
+        fileio:read(ref, @size, 4)
     fin
     return len
 end
@@ -66,16 +71,13 @@ def lz4ReadFrame(filestr)#0
     if not ref; return; fin
     fileio:read(ref, @header, t_lz4header)
     if header:lz4magic[1] <> $184D or header:lz4magic[0] <> $2204
-        puts("Not LZ4 file.\n")
-        return
+        fail("Not LZ4 file.\n")
     fin
     if header.lz4FLG & $C0 <> $40
-        puts("Wrong LZ4 version.\n")
-        return
+        fail("Wrong LZ4 version.\n")
     fin
     if header.lz4BD & $70 <> $40
-        puts("Not 64K block size.\n")
-        return
+        fail("Not 64K block size.\n")
     fin
     opt = 1
     if header.lz4FLG & $08 // Content Size
@@ -87,20 +89,17 @@ def lz4ReadFrame(filestr)#0
     fileio:read(ref, heapmark, opt) // Read rest of header and throw away
     dstbuf = $2000
     repeat
-        len = lz4ReadBlock(ref, header.lz4FLG, dstbuf)
-        dstbuf = dstbuf + len
+        len    = lz4ReadBlock(ref, header.lz4FLG, dstbuf)
+        dstbuf = len + dstbuf
     until len == 0
-    //if header.lz4FLG & $04 // Content Checksun
-    //    fileio:read(ref, heapmark, 4)
-    //fin
     fileio:close(ref)
 end
 
 def screenShow(filestr)#0
     if dolz4
-        ^page1x // Decompress AUX+MAIN bytes
+        ^page1x // Decompress into AUX screen bytes
         lz4ReadFrame(filestr)
-        ^page1m // Copy MAIN half to screen memory
+        ^page1m // Copy into MAIN screen bytes
         memcpy($2000, $4000, $2000)
     else
         screenRead(filestr)
@@ -156,24 +155,27 @@ while ^arg
 loop
 if srccnt
     dhgrMode(DHGR_COLOR_MODE)
-    if srccnt == 1
-        screenShow(srcfilelist)
-        getc
-    else
-        repeat
-            entrylist = srcfilelist
-            entrycnt  = srccnt
-            while entrycnt
-                screenShow(entrylist)
-                entrylist = entrylist + t_fileentry
-                entrycnt--
-                quit = delay_getkey
-                if quit; break; fin
-            loop
-        until quit
+    retval = except(@exit)
+    if retval == 0
+        if srccnt == 1
+            screenShow(srcfilelist)
+            getc
+        else
+            repeat
+                entrylist = srcfilelist
+                entrycnt  = srccnt
+                while entrycnt
+                    screenShow(entrylist)
+                    entrylist = entrylist + t_fileentry
+                    entrycnt--
+                    quit = delay_getkey
+                    if quit; break; fin
+                loop
+            until quit
+        fin
+        dhgrMode(DHGR_TEXT_MODE)
     fin
-    dhgrMode(DHGR_TEXT_MODE)
-    return 0
+    return retval
 fin
 puts("Usage: DHGRSHOW [-Z] <FILES>+\n")
 done
