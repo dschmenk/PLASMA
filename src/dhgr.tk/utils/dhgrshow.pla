@@ -37,67 +37,17 @@ def fail(msg)#0
     throw(@exit, -1)
 end
 
-def lz4ReadBlock(ref, flags, dstbuf)#1
-    word size[2], block, data, len
-
-    len = fileio:read(ref, @size, 4)
-    if len <> 4 or size[0] == 0 or size[1] & $7FFF
-        return 0
-    fin
-    if size[1] & $8000
-        //
-        // Uncompressed block, read directly into dst buffer
-        //
-        len = fileio:read(ref, dstbuf, size[0])
-    else
-        //
-        // Decompress from end of destination buffer
-        //
-        block = $6000 - size[0]
-        fileio:read(ref, block, size[0])
-        len = lz4Unpack(block, block + size[0], dstbuf, $6000)
-    fin
-    if flags & $10 // Block Checksum
-        fileio:read(ref, @size, 4)
-    fin
-    return len
-end
-def lz4ReadFrame(filestr)#0
-    word dstbuf, len
-    byte ref, header[t_lz4header], opt
-
-    ref = fileio:open(filestr)
-    if not ref; return; fin
-    fileio:read(ref, @header, t_lz4header)
-    if header:lz4magic[1] <> $184D or header:lz4magic[0] <> $2204
-        fail("Not LZ4 file.\n")
-    fin
-    if header.lz4FLG & $C0 <> $40
-        fail("Wrong LZ4 version.\n")
-    fin
-    if header.lz4BD & $70 <> $40
-        fail("Not 64K block size.\n")
-    fin
-    opt = 1
-    if header.lz4FLG & $08 // Content Size
-        opt = opt + 8
-    fin
-    if header.lz4FLG & $01 // Dictionary ID
-        opt = opt + 4
-    fin
-    fileio:read(ref, heapmark, opt) // Read rest of header and throw away
-    dstbuf = $2000
-    repeat
-        len    = lz4ReadBlock(ref, header.lz4FLG, dstbuf)
-        dstbuf = len + dstbuf
-    until len == 0
-    fileio:close(ref)
-end
-
 def screenShow(filestr)#0
     if dolz4
         ^page1x // Decompress into AUX screen bytes
-        lz4ReadFrame(filestr)
+        when lz4Read(filestr, $2000, $6000, $2000, $6000)
+            is LZ4_INVALID
+                fail("Not LZ4 file.\n")
+            is LZ4_WRONG_VERSION
+                fail("Wrong LZ4 version.\n")
+            is LZ4_NOT_64K
+                fail("Not 64K block size.\n")
+        wend
         ^page1m // Copy into MAIN screen bytes
         memcpy($2000, $4000, $2000)
     else

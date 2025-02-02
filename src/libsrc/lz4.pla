@@ -1,4 +1,6 @@
 include "inc/cmdsys.plh"
+include "inc/lz4.plh"
+include "inc/fileio.plh"
 asm incs
         !SOURCE    "vmsrc/plvmzp.inc"
 end
@@ -87,5 +89,64 @@ export def lz4Unpack(seq, seqend, buff, buffend)
         fin
     loop
     return data - buff
+end
+def lz4ReadBlock(ref, flags, dstbuf, dstend, unpackbuf, unpackend)#1
+    word size[2], block, len
+
+    len = fileio:read(ref, @size, 4)
+    if len <> 4 or size[0] == 0 or size[1] & $7FFF
+        return 0
+    fin
+    if size[1] & $8000
+        //
+        // Uncompressed block, read directly into dst buffer
+        //
+        if dstbuf + size[0] > dstend
+            size[0] = dstend - dstbuf
+        fin
+        len = fileio:read(ref, dstbuf, size[0])
+    else
+        //
+        // Decompress from end of destination buffer
+        //
+        block = unpackend - size[0]
+        fileio:read(ref, block, size[0])
+        len = lz4Unpack(block, block + size[0], dstbuf, dstend)
+    fin
+    if flags & $10 // Block Checksum
+        fileio:read(ref, @size, 4)
+    fin
+    return len
+end
+export def lz4Read(filestr, dstbuf, dstend, unpackbuf, unpackend)#1
+    word len
+    byte ref, header[t_lz4header], opt
+
+    ref = fileio:open(filestr)
+    if not ref; return LZ4_INVALID; fin
+    fileio:read(ref, @header, t_lz4header)
+    if header:lz4magic[1] <> $184D or header:lz4magic[0] <> $2204
+        return LZ4_INVALID
+    fin
+    if header.lz4FLG & $C0 <> $40
+        return LZ4_WRONG_VERSION
+    fin
+    if header.lz4BD & $70 <> $40
+        return LZ4_NOT_64K
+    fin
+    opt = 1
+    if header.lz4FLG & $08 // Content Size
+        opt = opt + 8
+    fin
+    if header.lz4FLG & $01 // Dictionary ID
+        opt = opt + 4
+    fin
+    fileio:read(ref, heapmark, opt) // Read rest of header and throw away
+    repeat
+        len    = lz4ReadBlock(ref, header.lz4FLG, dstbuf, dstend, unpackbuf, unpackend)
+        dstbuf = len + dstbuf
+    until len == 0
+    fileio:close(ref)
+    return LZ4_OK
 end
 done
