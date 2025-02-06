@@ -492,18 +492,25 @@ asm _dgrFillTile
         RTS
 end
 //
-// Wait for VLB
+// Wait for VBL
 //
-export asm dgrVLB#0
+export asm dgrVBL#0
+-       LDA     $C019
+        BPL     -
+-       LDA     $C019   ; Wait during active video
+        BMI     -
+        RTS
+end
+asm _vbl2c#0
         PHP
         SEI
         STA     $C079   ; Enable IOU access and reset VBL int on //c
         STA     $C05B   ; Enable VBL int
 -       LDA     $C019
         STA     $C079   ; Reset VBL int on //c
-        BMI     -
--       LDA     $C019
         BPL     -
+-       LDA     $C019   ; Wait during active video
+        BMI     -
         STA     $C05A   ; Disable VBL int on //c
         STA     $C078   ; Disable IOU access on //c
         PLP
@@ -573,11 +580,11 @@ export def dgrShow(page)#1
 end
 export def dgrSwap#0
     ^(showpage1 + drawpage)
-    drawpage   = drawpage ^ 1
+    drawpage = drawpage ^ 1
     drawbuff = dgrbuff[drawpage]
 end
 export def dgrDrawBuf(page)#0
-    drawpage   = page
+    drawpage = page
     drawbuff = dgrbuff[drawpage]
 end
 //
@@ -621,6 +628,13 @@ dgrBLT:1        = @drawbuff
 dgrBLT:6        = @drawbuff+1
 dgrTile:1       = @drawbuff
 dgrTile:6       = @drawbuff+1
+//
+// Check for //c specific VLB handling
+//
+if MACHID & MACHID_MODEL == MACHID_IIC
+    dgrVBL.0 = $4C     // JMP instruction
+    dgrVBL:1 = @_vbl2c //c specific VLB processing
+fin
 // Put read AUX mem routine in scary location
 memcpy($0100, @auxRead, 9)
 //

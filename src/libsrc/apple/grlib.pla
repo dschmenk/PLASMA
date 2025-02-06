@@ -407,26 +407,29 @@ asm _grFillTile
         RTS
 end
 //
-// Wait for VLB
+// Wait for VBL
 //
-export asm grVLB#0
-        LDA     $BF98
-        AND     #$C0
-        CMP     #$80
-        BNE     +
+export asm grVBL#0
+-       LDA     $C019
+        BPL     -
+-       LDA     $C019   ; Wait during active video
+        BMI     -
+        RTS
+end
+asm _vbl2c#0
         PHP
         SEI
         STA     $C079   ; Enable IOU access and reset VBL int on //c
         STA     $C05B   ; Enable VBL int
 -       LDA     $C019
         STA     $C079   ; Reset VBL int on //c
-        BMI     -
--       LDA     $C019
         BPL     -
+-       LDA     $C019   ; Wait during active video
+        BMI     -
         STA     $C05A   ; Disable VBL int on //c
         STA     $C078   ; Disable IOU access on //c
         PLP
-+       RTS
+        RTS
 end
 //
 // Clear the buffer
@@ -530,6 +533,15 @@ grBLT:1        = @drawbuff
 grBLT:6        = @drawbuff+1
 grTile:1       = @drawbuff
 grTile:6       = @drawbuff+1
+//
+// Check for machine specific VLB handling
+//
+if MACHID & MACHID_MODEL == MACHID_IIC
+    grVBL.0 = $4C     // JMP instruction
+    grVBL:1 = @_vbl2c //c specific VLB processing
+elsif MACHID & MACHID_MODEL <> MACHID_IIE
+    grVBL.0 = $60     // RTS instruction - do nothing on ][ or ][+
+fin
 //
 // Keep module in memory
 //
