@@ -53,6 +53,10 @@ const RAW_INFILE  = $04 // Raw 560x192 24BPP RGB values
 const MATCH_PREV  = $00 // Match previous RGB
 const MATCH_NEXT  = $08 // Match next pixel
 const MATCH_CYCLE = $10 // Match current cycle
+const MATCH_ONE   = 8
+const MATCH_ZERO  = 0
+byte  clrRot = $00,$02,$04,$06,$08,$0A,$0C,$0E
+byte         = $01,$03,$05,$07,$09,$0B,$0D,$0F
 var sin90[] // first 90 degrees of sin in fixed s.15 format
 var =     0,   571,  1143,  1714,  2285,  2855,  3425,  3993
 var =  4560,  5126,  5690,  6252,  6812,  7371,  7927,  8480
@@ -257,7 +261,7 @@ def rgbMatchCycle(r, g, b, errptr, cx)#1
     ntscCycle[i+RED] = ntscChroma[i+RED]
     ntscCycle[i+GRN] = ntscChroma[i+GRN]
     ntscCycle[i+BLU] = ntscChroma[i+BLU]
-    i = 1
+    i = MATCH_ONE
   else
     // RGB closer to previous chroma color
     er = r - pr
@@ -266,7 +270,7 @@ def rgbMatchCycle(r, g, b, errptr, cx)#1
     ntscCycle[i+RED] = 0
     ntscCycle[i+GRN] = 0
     ntscCycle[i+BLU] = 0
-    i = 0
+    i = MATCH_ZERO
   fin
   errProp(er, eg, eb, errptr)
   return i
@@ -325,7 +329,7 @@ def rgbMatchNext(r, g, b, errptr, cx)#1
     ntscCycle[i+RED] = ntscChroma[i+RED]
     ntscCycle[i+GRN] = ntscChroma[i+GRN]
     ntscCycle[i+BLU] = ntscChroma[i+BLU]
-    i = 1
+    i = MATCH_ONE
   else
     // RGB closer to previous chroma color
     er = r - pr
@@ -334,7 +338,7 @@ def rgbMatchNext(r, g, b, errptr, cx)#1
     ntscCycle[i+RED] = 0
     ntscCycle[i+GRN] = 0
     ntscCycle[i+BLU] = 0
-    i = 0
+    i = MATCH_ZERO
   fin
   errProp(er, eg, eb, errptr)
   return i
@@ -363,9 +367,9 @@ def rgbMatchPrev(r, g, b, errptr, cx)#1
     prevRed = cr
     prevGrn = cg
     prevBlu = cb
-    i = 1
+    i = MATCH_ONE
   else
-    i = 0
+    i = MATCH_ZERO
   fin
   // Propogate error down and forward
   er            = r - prevRed
@@ -374,10 +378,9 @@ def rgbMatchPrev(r, g, b, errptr, cx)#1
   errptr=>[GRN] = eg
   eb            = b - prevBlu
   errptr=>[BLU] = eb
-  errptr = errptr + 6
-  errptr=>[RED] = er + errptr=>[RED]
-  errptr=>[GRN] = eg + errptr=>[GRN]
-  errptr=>[BLU] = eb + errptr=>[BLU]
+  errptr=>[RED+3] = er + errptr=>[RED+3]
+  errptr=>[GRN+3] = eg + errptr=>[GRN+3]
+  errptr=>[BLU+3] = eb + errptr=>[BLU+3]
   return i
 end
 
@@ -597,7 +600,7 @@ end
 
 def rgbImportExport(rgbfile, dhgrfile)#0
   byte refnum, chromaBits
-  var i, j, r, g, b
+  var i, j, c, r, g, b
   var rgbScanline, rgbptr, errptr
 
   refnum = fileio:open(rgbfile)
@@ -621,34 +624,31 @@ def rgbImportExport(rgbfile, dhgrfile)#0
         prevRed, prevGrn, prevBLu = 96, 96, 96 // Reset prev RGB
         rgbptr = rgbScanline
         errptr = rgbErr
-        for i = 0 to 559
-          // Calc best match
-          chromaBits = chromaBits >> 1
-          r = gammaRed[rgbptr->[RED]]
-          g = gammaGrn[rgbptr->[GRN]]
-          b = gammaBlu[rgbptr->[BLU]]
-          if errDiv
-            r = r + errptr=>[RED] / errDiv
-            g = g + errptr=>[GRN] / errDiv
-            b = b + errptr=>[BLU] / errDiv
-          fin
-          if rgbMatch(r, g, b, errptr, i & 3)
-            dhgrSet(i, j)
-            chromaBits = chromaBits | $08
-          fin
-          // Map GREY1 -> GREY2
-          if (i & 3) == 3
-            if chromaBits == $0A // Bits are in reverse order from DCGR color value
-              dhgrOp(OP_SRC)
-              dcgrColor(CLR_GREY2)
-              dcgrPixel(i >> 2, j)
-              memset(@ntscCycle, GREY_CHROMA, 24) // Grey chroma cycle
-            elsif chromaBits == $05
-              memset(@ntscCycle, GREY_CHROMA, 24) // Grey chroma cycle
+        for i = 0 to 139
+          chromaBits = 0
+          for c = 0 to 3
+            // Calc best match
+            r = gammaRed[rgbptr->[RED]]
+            g = gammaGrn[rgbptr->[GRN]]
+            b = gammaBlu[rgbptr->[BLU]]
+            if errDiv
+              r = r + errptr=>[RED] / errDiv
+              g = g + errptr=>[GRN] / errDiv
+              b = b + errptr=>[BLU] / errDiv
             fin
+            chromaBits = (chromaBits >> 1) | rgbMatch(r, g, b, errptr, c)
+            rgbptr = rgbptr + 3
+            errptr = errptr + 3 * 2
+          next
+          // Map GREY1 -> GREY2
+          if chromaBits == $0A // Bits are in reverse order from DCGR color value
+            chromaBits = $05
+            memset(@ntscCycle, GREY_CHROMA, 24) // Grey chroma cycle
+          elsif chromaBits == $05
+            memset(@ntscCycle, GREY_CHROMA, 24) // Grey chroma cycle
           fin
-          rgbptr = rgbptr + 3
-          errptr = errptr + 3 * 2
+          dcgrColor(clrRot[chromaBits])
+          dcgrPixel(i, j)
         next
         if flags & MEM_MODE; putc('.'); fin
         if ^$C000 == $83
