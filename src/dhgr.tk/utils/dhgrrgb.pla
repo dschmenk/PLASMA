@@ -47,12 +47,13 @@ const GREEN_PHASE_SIMPLE = 225
 const BLUE_PHASE_SIMPLE  = 360
 const GREY_CHROMA = 32 * 4 / 3
 // Flags
-const MEM_MODE    = $01 // Render to memory surface
-const DUMP_STATE  = $02 // Dump internal state
-const RAW_INFILE  = $04 // Raw 560x192 24BPP RGB values
+const GREY_HACK   = $01 // Remap GREY1->GREY2 hack
+const MEM_MODE    = $02 // Render to memory surface
+const DUMP_STATE  = $04 // Dump internal state
+const RAW_INFILE  = $08 // Raw 560x192 24BPP RGB values
 const MATCH_PREV  = $00 // Match previous RGB
-const MATCH_NEXT  = $08 // Match next pixel
-const MATCH_CYCLE = $10 // Match current cycle
+const MATCH_NEXT  = $10 // Match next pixel
+const MATCH_CYCLE = $20 // Match current cycle
 const MATCH_ONE   = 8
 const MATCH_ZERO  = 0
 byte  clrRot = $00,$02,$04,$06,$08,$0A,$0C,$0E
@@ -111,7 +112,7 @@ var brightness = 0
 var saturation = 255 // 1.0
 var tint       = 22 // = 45/2 deg
 byte errDiv    = 4
-byte flags     = 0
+byte flags     = GREY_HACK
 var rgbErr // Running color error array
 var arg
 
@@ -640,12 +641,14 @@ def rgbImportExport(rgbfile, dhgrfile)#0
             rgbptr = rgbptr + 3
             errptr = errptr + 3 * 2
           next
-          // Map GREY1 -> GREY2
-          if chromaBits == $0A // Bits are in reverse order from DCGR color value
-            chromaBits = $05
-            memset(@ntscCycle, GREY_CHROMA, 24) // Grey chroma cycle
-          elsif chromaBits == $05
-            memset(@ntscCycle, GREY_CHROMA, 24) // Grey chroma cycle
+          if flags & GREY_HACK
+            // Map GREY1 -> GREY2
+            if chromaBits == $0A // Bits are in reverse order from DCGR color value
+              chromaBits = $05
+              memset(@ntscCycle, GREY_CHROMA, 24) // Grey chroma cycle
+            elsif chromaBits == $05
+              memset(@ntscCycle, GREY_CHROMA, 24) // Grey chroma cycle
+            fin
           fin
           dcgrColor(clrRot[chromaBits])
           dcgrPixel(i, j)
@@ -730,6 +733,9 @@ if ^arg
           ^(arg + 2) = ^arg - 2
           gamma = atoi(arg + 2)
         fin
+        break
+      is 'H' // Hack for GREY remapping
+        flags = flags & ~GREY_HACK
         break
       is 'M' // Match RGB strategy
         when toupper(^(arg + 3))
@@ -822,6 +828,7 @@ puts("  [-D]   = Dump state\n")
 puts("  [-E#]  = Error strength: 1..255\n")
 puts("                           0 = no err\n")
 puts("  [-G#]  = Gamma: 2, 1, 0, -1, -2\n")
+puts("  [-H]   = Disable GREY remap hack\n")
 puts("  [-M<N,C,P>]   = Match: Next, Current\n")
 puts("                         Previous\n")
 puts("  [-P<I,E,S,N>] = Phase: Ideal, Equal\n")
