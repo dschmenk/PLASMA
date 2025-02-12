@@ -51,9 +51,6 @@ const GREY_HACK   = $01 // Remap GREY1->GREY2 hack
 const MEM_MODE    = $02 // Render to memory surface
 const DUMP_STATE  = $04 // Dump internal state
 const RAW_INFILE  = $08 // Raw 560x192 24BPP RGB values
-const MATCH_PREV  = $00 // Match previous RGB
-const MATCH_NEXT  = $10 // Match next pixel
-const MATCH_CYCLE = $20 // Match current cycle
 const MATCH_ONE   = 8
 const MATCH_ZERO  = 0
 byte  clrRot = $00,$02,$04,$06,$08,$0A,$0C,$0E
@@ -97,16 +94,10 @@ word = $02D0,$06D0,$0AD0,$0ED0,$12D0,$16D0,$1AD0,$1ED0
 word = $0350,$0750,$0B50,$0F50,$1350,$1750,$1B50,$1F50
 word = $03D0,$07D0,$0BD0,$0FD0,$13D0,$17D0,$1BD0,$1FD0
 var surfMem, surfSpan
-var rgbMatch
 var[12] ntscChroma
-var[12] ntscCycle
-var[16] pixRed, pixGrn, pixBlu
 var prevRed, prevBlu, prevGrn
-byte[256] gammaRed // RED gamma correction
-byte[256] gammaGrn // GREEN gamma correction
-byte[256] gammaBlu // BLUE gamma correction
+byte[256] gammaRGB // RGB gamma correction
 var[3] phase   = RED_PHASE_NTSC, GREEN_PHASE_NTSC, BLUE_PHASE_NTSC
-byte[3] gamut  = 128, 128, 128 // Gamut
 byte gamma     = 1 // Gamma correction
 var brightness = 0
 var saturation = 255 // 1.0
@@ -215,140 +206,10 @@ def errProp(er, eg, eb, errptr)#0
   errptr=>[BLU] = eb + errptr=>[BLU]
 end
 
-def rgbMatchCycle(r, g, b, errptr, cx)#1
-  var pr1, pg1, pb1
-  var pr2, pg2, pb2
-  var pr3, pg3, pb3
-  var nr, ng, nb
-  var pr, pg, pb
-  var cr, cg, cb
+def rgbMatch(r, g, b, errptr, cx)#1
+  var currRed, currGrn, currBlu
   var er, eg, eb
-  byte i, match
-  res[t_i32] pd, d0, nd, cd
-
-  // Previous 1/4 chroma cycle
-  i = ((cx - 1) & 3) * 3
-  pr1 = ntscCycle[i+RED]
-  pg1 = ntscCycle[i+GRN]
-  pb1 = ntscCycle[i+BLU]
-  // Previous 2/4 chroma cycle
-  i = ((cx - 2) & 3) * 3
-  pr2 = ntscCycle[i+RED] + pr1
-  pg2 = ntscCycle[i+GRN] + pg1
-  pb2 = ntscCycle[i+BLU] + pb1
-  // Previous 3/4 chroma cycle
-  i = ((cx - 3) & 3) * 3
-  pr3 = ntscCycle[i+RED] + pr2
-  pg3 = ntscCycle[i+GRN] + pg2
-  pb3 = ntscCycle[i+BLU] + pb2
-  // Previous chroma cycle
-  i = cx * 3 // ((cx - 4) & 3) * 3
-  pr = (pr1 + pr2 + pr3 + ntscCycle[i+RED] / 2) / 4
-  pg = (pg1 + pg2 + pg3 + ntscCycle[i+GRN] / 2) / 4
-  pb = (pb1 + pb2 + pb3 + ntscCycle[i+BLU] / 2) / 4
-  // Current potential chroma cycle
-  //i = cx * 3
-  cr = pr + ntscChroma[i+RED]
-  cg = pg + ntscChroma[i+GRN]
-  cb = pb + ntscChroma[i+BLU]
-  // Match next chroma subcycle
-  pd:[0], pd:[1] = dist(r - pr, g - pg, b - pb)
-  dist(r - cr, g - cg, b - cb)
-  if islt32(@pd)
-    // RGB better matched with next chroma color
-    er = r - cr
-    eg = g - cg
-    eb = b - cb
-    ntscCycle[i+RED] = ntscChroma[i+RED]
-    ntscCycle[i+GRN] = ntscChroma[i+GRN]
-    ntscCycle[i+BLU] = ntscChroma[i+BLU]
-    i = MATCH_ONE
-  else
-    // RGB closer to previous chroma color
-    er = r - pr
-    eg = g - pg
-    eb = b - pb
-    ntscCycle[i+RED] = 0
-    ntscCycle[i+GRN] = 0
-    ntscCycle[i+BLU] = 0
-    i = MATCH_ZERO
-  fin
-  errProp(er, eg, eb, errptr)
-  return i
-end
-
-def rgbMatchNext(r, g, b, errptr, cx)#1
-  var pr1, pg1, pb1
-  var pr2, pg2, pb2
-  var pr3, pg3, pb3
-  var pr, pg, pb
-  var cr, cg, cb
-  var er, eg, eb
-  byte i, match
-  res[t_i32] nd, cd
-
-  // Previous 1/4 chroma cycle
-  i = ((cx - 1) & 3) * 3
-  pr1 = ntscCycle[i+RED]
-  pg1 = ntscCycle[i+GRN]
-  pb1 = ntscCycle[i+BLU]
-  // Previous 2/4 chroma cycle
-  i = ((cx - 2) & 3) * 3
-  pr2 = ntscCycle[i+RED]
-  pg2 = ntscCycle[i+GRN]
-  pb2 = ntscCycle[i+BLU]
-  // Previous 3/4 chroma cycle
-  i = ((cx - 3) & 3) * 3
-  pr3 = ntscCycle[i+RED]
-  pg3 = ntscCycle[i+GRN]
-  pb3 = ntscCycle[i+BLU]
-  // Previous chroma cycle
-  i = cx * 3 // ((cx - 4) & 3) * 3
-  pr = pr1 + pr2 + pr3
-  pg = pg1 + pg2 + pg3
-  pb = pb1 + pb2 + pb3
-  // Current potential chroma cycle
-  //i = cx * 3
-  cr = pr + ntscChroma[i+RED]
-  cg = pg + ntscChroma[i+GRN]
-  cb = pb + ntscChroma[i+BLU]
-  // Match next full chroma cycle (pixel)
-  cd:[0], cd:[1] = $FFFF, $7FFF
-  for i = 0 to 15
-    nd:[0], nd:[1] = dist(r - pixRed[i], g - pixGrn[i], b - pixBlu[i])
-    if islt32(@cd)
-      cd:[0], cd:[1] = nd:[0], nd:[1]
-      match = i
-    fin
-  next
-  i = cx * 3
-  if match & (1 << cx)
-    // RGB better matched with next chroma color
-    er = r - cr
-    eg = g - cg
-    eb = b - cb
-    ntscCycle[i+RED] = ntscChroma[i+RED]
-    ntscCycle[i+GRN] = ntscChroma[i+GRN]
-    ntscCycle[i+BLU] = ntscChroma[i+BLU]
-    i = MATCH_ONE
-  else
-    // RGB closer to previous chroma color
-    er = r - pr
-    eg = g - pg
-    eb = b - pb
-    ntscCycle[i+RED] = 0
-    ntscCycle[i+GRN] = 0
-    ntscCycle[i+BLU] = 0
-    i = MATCH_ZERO
-  fin
-  errProp(er, eg, eb, errptr)
-  return i
-end
-
-def rgbMatchPrev(r, g, b, errptr, cx)#1
-  var cr, cg, cb
-  var er, eg, eb
-  byte i,
+  byte pix,
   res[t_i32] pd
 
   // Previous RGB minus current chroma cycle
@@ -356,21 +217,21 @@ def rgbMatchPrev(r, g, b, errptr, cx)#1
   prevGrn = (prevGrn * 3) / 4
   prevBlu = (prevBlu * 3) / 4
   // Current potential RGB
-  i = cx * 3
-  cr = prevRed + ntscChroma[i+RED]
-  cg = prevGrn + ntscChroma[i+GRN]
-  cb = prevBlu + ntscChroma[i+BLU]
+  cx = cx * 3
+  currRed = prevRed + ntscChroma[cx+RED]
+  currGrn = prevGrn + ntscChroma[cx+GRN]
+  currBlu = prevBlu + ntscChroma[cx+BLU]
   // Match next chroma subcycle
   pd:[0], pd:[1] = dist(r - prevRed, g - prevGrn, b - prevBlu)
-  dist(r - cr, g - cg, b - cb)
+  dist(r - currRed, g - currGrn, b - currBlu)
   if islt32(@pd)
     // RGB better matched with next chroma color
-    prevRed = cr
-    prevGrn = cg
-    prevBlu = cb
-    i = MATCH_ONE
+    prevRed = currRed
+    prevGrn = currGrn
+    prevBlu = currBlu
+    pix = MATCH_ONE
   else
-    i = MATCH_ZERO
+    pix = MATCH_ZERO
   fin
   // Propogate error down and forward
   er            = r - prevRed
@@ -382,7 +243,7 @@ def rgbMatchPrev(r, g, b, errptr, cx)#1
   errptr=>[RED+3] = er + errptr=>[RED+3]
   errptr=>[GRN+3] = eg + errptr=>[GRN+3]
   errptr=>[BLU+3] = eb + errptr=>[BLU+3]
-  return i
+  return pix
 end
 
 def rgbInit#0
@@ -404,9 +265,7 @@ def rgbInit#0
         addi16(255 - i)
         divi16(2)
         store32(@g32)
-        gammaRed[255 - i] = g32
-        gammaGrn[255 - i] = g32
-        gammaBlu[255 - i] = g32
+        gammaRGB[255 - i] = g32
       next
       break
     is 254 // 1 - i^2
@@ -418,9 +277,7 @@ def rgbInit#0
         neg32
         addi16(255)
         store32(@g32)
-        gammaRed[255 - i] = g32
-        gammaGrn[255 - i] = g32
-        gammaBlu[255 - i] = g32
+        gammaRGB[255 - i] = g32
       next
       break
     is 2 // 1/(i^2)
@@ -430,9 +287,7 @@ def rgbInit#0
         addi16(127)
         divi16(255)
         store32(@g32)
-        gammaRed[i] = g32
-        gammaGrn[i] = g32
-        gammaBlu[i] = g32
+        gammaRGB[i] = g32
       next
       break
     is 1 // (i + i^2) / 2
@@ -444,38 +299,17 @@ def rgbInit#0
         addi16(i)
         divi16(2)
         store32(@g32)
-        gammaRed[i] = g32
-        gammaGrn[i] = g32
-        gammaBlu[i] = g32
+        gammaRGB[i] = g32
       next
       break
     otherwise // i
       for i = 0 to 255
-        gammaRed[i] = i
-        gammaGrn[i] = i
-        gammaBlu[i] = i
+        gammaRGB[i] = i
       next
   wend
-  if gamut[RED] <> 128
-    for i = 0 to 255
-      gammaRed[i] = max(0, min(255, (gammaRed[i] * 128) / gamut[RED]))
-    next
-  fin
-  if gamut[GRN] <> 128
-    for i = 0 to 255
-      gammaGrn[i] = max(0, min(255, (gammaGrn[i] * 128) / gamut[GRN]))
-    next
-  fin
-  if gamut[BLU] <> 128
-    for i = 0 to 255
-      gammaBlu[i] = max(0, min(255, (gammaBlu[i] * 128) / gamut[BLU]))
-    next
-  fin
   if brightness
     for i = 0 to 255
-      gammaRed[i] = max(0, min(255, gammaRed[i] + brightness))
-      gammaGrn[i] = max(0, min(255, gammaGrn[i] + brightness))
-      gammaBlu[i] = max(0, min(255, gammaBlu[i] + brightness))
+      gammaRGB[i] = max(0, min(255, gammaRGB[i] + brightness))
     next
   fin
   calcChroma(tint)
@@ -484,12 +318,6 @@ def rgbInit#0
     puts("Brightness = "); puti(brightness); putln
     puts("Tint = "); puti(tint); putln
     puts("Saturation = "); puti(saturation); putln
-    puts("Gamut = ["); puti(gamut[RED]); putc(',')
-    puti(gamut[GRN]); putc(','); puti(gamut[BLU]); puts("]\n")
-    puts("Match = ")
-    if flags & MATCH_NEXT; puts("Next\n")
-    elsif flags & MATCH_CYCLE; puts("Current\n")
-    else; puts("Prev\n"); fin
     puts("Chroma cycle RGB =\n")
     for i = 0 to 3
       putc('[')
@@ -497,42 +325,6 @@ def rgbInit#0
       puti(ntscChroma[i*3 + GRN]); putc(',')
       puti(ntscChroma[i*3 + BLU]); puts("]\n")
     next
-  fin
-  if flags & MATCH_NEXT
-    rgbMatch = @rgbMatchNext
-    // Calc pixel RGBs
-    for i = 0 to 15
-      if i & 1
-        pixRed[i] = ntscChroma[RED]
-        pixGrn[i] = ntscChroma[GRN]
-        pixBlu[i] = ntscChroma[BLU]
-      fin
-      if i & 2
-        pixRed[i] = pixRed[i] + ntscChroma[3+RED]
-        pixGrn[i] = pixGrn[i] + ntscChroma[3+GRN]
-        pixBlu[i] = pixBlu[i] + ntscChroma[3+BLU]
-      fin
-      if i & 4
-        pixRed[i] = pixRed[i] + ntscChroma[6+RED]
-        pixGrn[i] = pixGrn[i] + ntscChroma[6+GRN]
-        pixBlu[i] = pixBlu[i] + ntscChroma[6+BLU]
-      fin
-      if i & 8
-        pixRed[i] = pixRed[i] + ntscChroma[9+RED]
-        pixGrn[i] = pixGrn[i] + ntscChroma[9+GRN]
-        pixBlu[i] = pixBlu[i] + ntscChroma[9+BLU]
-      fin
-    next
-    // Adjust error scalng for this strategy
-    errDiv = errDiv * 2
-  elsif flags & MATCH_CYCLE
-    rgbMatch = @rgbMatchCycle
-     // Make up for scaled chroma cycle color match
-    for i = 0 to 11
-      ntscChroma[i] = (ntscChroma[i] * 3) / 2 // * 1.5
-    next
-  else // MATCH_PREV
-    rgbMatch = @rgbMatchPrev
   fin
   if flags & MEM_MODE
     surfMem, surfSpan = dhgrAllocBl7Mem(SCR_WIDTH, SCR_HEIGHT)
@@ -621,7 +413,6 @@ def rgbImportExport(rgbfile, dhgrfile)#0
       memset(rgbScanline, 0, 560 * 3)
       for j = 0 to 191
         fileio:read(refnum, rgbScanline,  560 * 3)
-        memset(@ntscCycle, GREY_CHROMA, 24) // Reset chroma cycle
         prevRed, prevGrn, prevBLu = 96, 96, 96 // Reset prev RGB
         rgbptr = rgbScanline
         errptr = rgbErr
@@ -629,9 +420,9 @@ def rgbImportExport(rgbfile, dhgrfile)#0
           chromaBits = 0
           for c = 0 to 3
             // Calc best match
-            r = gammaRed[rgbptr->[RED]]
-            g = gammaGrn[rgbptr->[GRN]]
-            b = gammaBlu[rgbptr->[BLU]]
+            r = gammaRGB[rgbptr->[RED]]
+            g = gammaRGB[rgbptr->[GRN]]
+            b = gammaRGB[rgbptr->[BLU]]
             if errDiv
               r = r + errptr=>[RED] / errDiv
               g = g + errptr=>[GRN] / errDiv
@@ -645,9 +436,6 @@ def rgbImportExport(rgbfile, dhgrfile)#0
             // Map GREY1 -> GREY2
             if chromaBits == $0A // Bits are in reverse order from DCGR color value
               chromaBits = $05
-              memset(@ntscCycle, GREY_CHROMA, 24) // Grey chroma cycle
-            elsif chromaBits == $05
-              memset(@ntscCycle, GREY_CHROMA, 24) // Grey chroma cycle
             fin
           fin
           dcgrColor(clrRot[chromaBits])
@@ -717,6 +505,9 @@ if ^arg
           brightness = atoi(arg + 2)
         fin
         break
+      is 'C' // Disable hack for GREY remapping
+        flags = flags & ~GREY_HACK
+        break
       is 'D' // Dump internal staet
         flags = flags | DUMP_STATE
         break
@@ -733,23 +524,6 @@ if ^arg
           ^(arg + 2) = ^arg - 2
           gamma = atoi(arg + 2)
         fin
-        break
-      is 'H' // Hack for GREY remapping
-        flags = flags & ~GREY_HACK
-        break
-      is 'M' // Match RGB strategy
-        when toupper(^(arg + 3))
-          is 'N' // Match to next pixel
-            flags = flags | MATCH_NEXT
-            tint = tint - 22
-            break
-          is 'C' // Match to current cycle
-            flags = flags | MATCH_CYCLE
-            break
-          //is 'P' // Match to previous RGB
-          otherwise
-            break
-        wend
         break
       is 'P' // RGB phase angle
         when toupper(^(arg + 3))
@@ -791,23 +565,6 @@ if ^arg
           tint = tint + atoi(arg + 2)
         fin
         break
-      is 'U' // Adjust gamut
-        if ^arg > 3
-          when toupper(^(arg + 3))
-            is 'R'
-              ^(arg + 1) = RED
-              break
-            is 'G'
-              ^(arg + 1) = GRN
-              break
-            otherwise // B
-              ^(arg + 1) = BLU
-              break
-          wend
-          ^(arg + 3) = ^arg - 3
-          gamut[^(arg + 1)] = gamut[^(arg + 1)] - atoi(arg + 3)
-        fin
-        break
       is 'V' // No video output, memory mode only (for portable VM)
         flags = flags | MEM_MODE
         break
@@ -824,20 +581,16 @@ fin
 puts("Usage:\n")
 puts(" DHGRRGB\n")
 puts("  [-B#]  = Brightness: -255..255\n")
+puts("  [-C]   = Composite output\n")
 puts("  [-D]   = Dump state\n")
 puts("  [-E#]  = Error strength: 1..255\n")
 puts("                           0 = no err\n")
 puts("  [-G#]  = Gamma: 2, 1, 0, -1, -2\n")
-puts("  [-H]   = Disable GREY remap hack\n")
-puts("  [-M<N,C,P>]   = Match: Next, Current\n")
-puts("                         Previous\n")
 puts("  [-P<I,E,S,N>] = Phase: Ideal, Equal\n")
 puts("                         Simple, NTSC\n")
 puts("  [-R]   = Raw image file, no header\n")
 puts("  [-S#]  = Saturation: -255..255\n")
 puts("  [-T#]  = Tint: -360..360 (in degrees)\n")
-puts("  [-U<R,G,B>#]  = gammUt: Red, Grn, Blu\n")
-puts("                          -255..255\n")
 puts("  [-V]   = no Video output, mem only\n")
 puts(" IMAGEFILE [DHGRFILE]\n")
 done
