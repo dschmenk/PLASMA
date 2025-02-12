@@ -1,0 +1,843 @@
+include "inc/cmdsys.plh"
+include "inc/args.plh"
+include "inc/fileio.plh"
+include "inc/int32.plh"
+include "dhgr.tk/inc/dhgrlib.plh"
+include "dhgr.tk/inc/dhgrutils.plh"
+
+sysflags resxtxt1|reshgr1|resxhgr1
+
+// Bit patterns and associated default NTSC colors
+// NTSC_BLACK     = 0000
+// NTSC_DRKBLUE   = 0001  73,  14, 116
+// NTSC_DRKGREEN  = 0010   0, 104, 100
+// NTSC_BROWN     = 0100  55, 113,  11
+// NTSC_MAGENTA   = 1000 127,  23,  27
+// NTSC_PURPLE    = 1001
+// NTSC_MEDBLUE   = 0011
+// NTSC_LTBLUE    = 1011
+// NTSC_AQUA      = 0111
+// NTSC_GREEN     = 0110
+// NTSC_ORANGE    = 1100
+// NTSC_PINK      = 1101
+// NTSC_YELLOW    = 1110
+// NTSC_WHITE     = 1111
+
+const RED = 0
+const GRN = 1
+const BLU = 2
+// According to what I could find out about the NTSC color wheel:
+//   Red maxes at 103.5 degrees
+//   Green maxes at 240.7 degrees
+//   Blue maxes at 347.1 degrees
+const RED_PHASE_NTSC     = 104
+const GREEN_PHASE_NTSC   = 241
+const BLUE_PHASE_NTSC    = 347
+// Ideal phase angles for 4 phase
+const RED_PHASE_IDEAL    = 90
+const GREEN_PHASE_IDEAL  = 270
+const BLUE_PHASE_IDEAL   = 360
+// Equal 120 deg phase angles
+const RED_PHASE_EQUAL    = 120
+const GREEN_PHASE_EQUAL  = 240
+const BLUE_PHASE_EQUAL   = 360
+// Simplified phase angles: 90 deg between R and B, 135 between RG and BG
+const RED_PHASE_SIMPLE   = 90
+const GREEN_PHASE_SIMPLE = 225
+const BLUE_PHASE_SIMPLE  = 360
+const GREY_CHROMA = 32 * 4 / 3
+// Flags
+const GREY_HACK   = $01 // Remap GREY1->GREY2 hack
+const MEM_MODE    = $02 // Render to memory surface
+const DUMP_STATE  = $04 // Dump internal state
+const RAW_INFILE  = $08 // Raw 560x192 24BPP RGB values
+const MATCH_PREV  = $00 // Match previous RGB
+const MATCH_NEXT  = $10 // Match next pixel
+const MATCH_CYCLE = $20 // Match current cycle
+const MATCH_ONE   = 8
+const MATCH_ZERO  = 0
+byte  clrRot = $00,$02,$04,$06,$08,$0A,$0C,$0E
+byte         = $01,$03,$05,$07,$09,$0B,$0D,$0F
+var sin90[] // first 90 degrees of sin in fixed s.15 format
+var =     0,   571,  1143,  1714,  2285,  2855,  3425,  3993
+var =  4560,  5126,  5690,  6252,  6812,  7371,  7927,  8480
+var =  9032,  9580, 10125, 10668, 11207, 11743, 12275, 12803
+var = 13327, 13848, 14364, 14876, 15383, 15886, 16383, 16876
+var = 17364, 17846, 18323, 18794, 19260, 19720, 20173, 20621
+var = 21062, 21497, 21926, 22347, 22762, 23170, 23571, 23964
+var = 24351, 24730, 25101, 25465, 25821, 26169, 26509, 26841
+var = 27165, 27481, 27788, 28087, 28377, 28659, 28932, 29196
+var = 29451, 29697, 29935, 30163, 30381, 30591, 30791, 30982
+var = 31164, 31336, 31498, 31651, 31794, 31928, 32051, 32165
+var = 32270, 32364, 32449, 32523, 32588, 32643, 32688, 32723
+var = 32748, 32763, 32767
+word hgrScan[] // HGR scanline order for saving memory buffer as DHGR
+word = $0000,$0400,$0800,$0C00,$1000,$1400,$1800,$1C00
+word = $0080,$0480,$0880,$0C80,$1080,$1480,$1880,$1C80
+word = $0100,$0500,$0900,$0D00,$1100,$1500,$1900,$1D00
+word = $0180,$0580,$0980,$0D80,$1180,$1580,$1980,$1D80
+word = $0200,$0600,$0A00,$0E00,$1200,$1600,$1A00,$1E00
+word = $0280,$0680,$0A80,$0E80,$1280,$1680,$1A80,$1E80
+word = $0300,$0700,$0B00,$0F00,$1300,$1700,$1B00,$1F00
+word = $0380,$0780,$0B80,$0F80,$1380,$1780,$1B80,$1F80
+word = $0028,$0428,$0828,$0C28,$1028,$1428,$1828,$1C28
+word = $00A8,$04A8,$08A8,$0CA8,$10A8,$14A8,$18A8,$1CA8
+word = $0128,$0528,$0928,$0D28,$1128,$1528,$1928,$1D28
+word = $01A8,$05A8,$09A8,$0DA8,$11A8,$15A8,$19A8,$1DA8
+word = $0228,$0628,$0A28,$0E28,$1228,$1628,$1A28,$1E28
+word = $02A8,$06A8,$0AA8,$0EA8,$12A8,$16A8,$1AA8,$1EA8
+word = $0328,$0728,$0B28,$0F28,$1328,$1728,$1B28,$1F28
+word = $03A8,$07A8,$0BA8,$0FA8,$13A8,$17A8,$1BA8,$1FA8
+word = $0050,$0450,$0850,$0C50,$1050,$1450,$1850,$1C50
+word = $00D0,$04D0,$08D0,$0CD0,$10D0,$14D0,$18D0,$1CD0
+word = $0150,$0550,$0950,$0D50,$1150,$1550,$1950,$1D50
+word = $01D0,$05D0,$09D0,$0DD0,$11D0,$15D0,$19D0,$1DD0
+word = $0250,$0650,$0A50,$0E50,$1250,$1650,$1A50,$1E50
+word = $02D0,$06D0,$0AD0,$0ED0,$12D0,$16D0,$1AD0,$1ED0
+word = $0350,$0750,$0B50,$0F50,$1350,$1750,$1B50,$1F50
+word = $03D0,$07D0,$0BD0,$0FD0,$13D0,$17D0,$1BD0,$1FD0
+var surfMem, surfSpan
+var rgbMatch
+var[12] ntscChroma
+var[12] ntscCycle
+var[16] pixRed, pixGrn, pixBlu
+var prevRed, prevBlu, prevGrn
+byte[256] gammaRed // RED gamma correction
+byte[256] gammaGrn // GREEN gamma correction
+byte[256] gammaBlu // BLUE gamma correction
+var[3] phase   = RED_PHASE_NTSC, GREEN_PHASE_NTSC, BLUE_PHASE_NTSC
+byte[3] gamut  = 128, 128, 128 // Gamut
+byte gamma     = 1 // Gamma correction
+var brightness = 0
+var saturation = 255 // 1.0
+var tint       = 22 // = 45/2 deg
+byte errDiv    = 4
+byte flags     = GREY_HACK
+var rgbErr // Running color error array
+var arg
+
+// Handy numeric functions
+
+def min(a, b)#1
+  return a < b ?? a :: b
+end
+
+def max(a, b)#1
+  return a > b ?? a :: b
+end
+
+def sin(deg)#1
+  while deg > 360; deg = deg - 360; loop
+  while deg < 0; deg = deg + 360; loop
+  if deg <= 90
+    return sin90[deg]
+  elsif deg <= 180
+    return sin90[180 - deg]
+  elsif deg <= 270
+    return -sin90[deg - 180]
+  fin
+  return -sin90[360 - deg]
+end
+
+def cos(deg)#1
+  return sin(deg + 90)
+end
+
+def dist(dr, dg, db)#2 // Linear distance
+  res[t_i32] rr, gg
+
+  loadi16(dr)
+  muli16(dr)
+  store32(@rr)
+  loadi16(dg)
+  muli16(dg)
+  store32(@gg)
+  loadi16(db)
+  muli16(db)
+  add32(@gg)
+  add32(@rr)
+  store32(@rr)
+  return rr:[0], rr:[1]
+end
+
+def atoi(strptr)#1
+  var num, len, sign
+
+  sign = 1
+  num = 0
+  len = ^strptr
+  strptr++
+  if ^strptr == '-'
+    sign = -1
+    strptr++
+    len--
+  elsif ^strptr == '+'
+    strptr++
+    len--
+  fin
+  while len and ^strptr >= '0' and ^strptr <= '9'
+    num = num * 10 + ^strptr - '0'
+    strptr++
+    len--
+  loop
+  return num * sign
+end
+
+def calcChroma(angle)#0
+  var r, g, b
+  byte i
+
+  for i = 0 to 3
+    // Calculate RGB for this DHGR pixel
+    //r = max(0, (saturation + (cos(angle - phase[RED]) >> 7)))
+    //g = max(0, (saturation + (cos(angle - phase[GRN]) >> 7)))
+    //b = max(0, (saturation + (cos(angle - phase[BLU]) >> 7)))
+    r = saturation + (cos(angle - phase[RED]) >> 7)
+    g = saturation + (cos(angle - phase[GRN]) >> 7)
+    b = saturation + (cos(angle - phase[BLU]) >> 7)
+    // Make chroma add up to white
+    ntscChroma[i*3 + RED] = (r + 2) / 4
+    ntscChroma[i*3 + GRN] = (g + 2) / 4
+    ntscChroma[i*3 + BLU] = (b + 2) / 4
+    // Next NTSC chroma pixel
+    angle = angle - 90
+  next
+end
+
+def errProp(er, eg, eb, errptr)#0
+  // Propogate error down and forward
+  errptr=>[RED] = er
+  errptr=>[GRN] = eg
+  errptr=>[BLU] = eb
+  errptr = errptr + 6
+  errptr=>[RED] = er + errptr=>[RED]
+  errptr=>[GRN] = eg + errptr=>[GRN]
+  errptr=>[BLU] = eb + errptr=>[BLU]
+end
+
+def rgbMatchCycle(r, g, b, errptr, cx)#1
+  var pr1, pg1, pb1
+  var pr2, pg2, pb2
+  var pr3, pg3, pb3
+  var nr, ng, nb
+  var pr, pg, pb
+  var cr, cg, cb
+  var er, eg, eb
+  byte i, match
+  res[t_i32] pd, d0, nd, cd
+
+  // Previous 1/4 chroma cycle
+  i = ((cx - 1) & 3) * 3
+  pr1 = ntscCycle[i+RED]
+  pg1 = ntscCycle[i+GRN]
+  pb1 = ntscCycle[i+BLU]
+  // Previous 2/4 chroma cycle
+  i = ((cx - 2) & 3) * 3
+  pr2 = ntscCycle[i+RED] + pr1
+  pg2 = ntscCycle[i+GRN] + pg1
+  pb2 = ntscCycle[i+BLU] + pb1
+  // Previous 3/4 chroma cycle
+  i = ((cx - 3) & 3) * 3
+  pr3 = ntscCycle[i+RED] + pr2
+  pg3 = ntscCycle[i+GRN] + pg2
+  pb3 = ntscCycle[i+BLU] + pb2
+  // Previous chroma cycle
+  i = cx * 3 // ((cx - 4) & 3) * 3
+  pr = (pr1 + pr2 + pr3 + ntscCycle[i+RED] / 2) / 4
+  pg = (pg1 + pg2 + pg3 + ntscCycle[i+GRN] / 2) / 4
+  pb = (pb1 + pb2 + pb3 + ntscCycle[i+BLU] / 2) / 4
+  // Current potential chroma cycle
+  //i = cx * 3
+  cr = pr + ntscChroma[i+RED]
+  cg = pg + ntscChroma[i+GRN]
+  cb = pb + ntscChroma[i+BLU]
+  // Match next chroma subcycle
+  pd:[0], pd:[1] = dist(r - pr, g - pg, b - pb)
+  dist(r - cr, g - cg, b - cb)
+  if islt32(@pd)
+    // RGB better matched with next chroma color
+    er = r - cr
+    eg = g - cg
+    eb = b - cb
+    ntscCycle[i+RED] = ntscChroma[i+RED]
+    ntscCycle[i+GRN] = ntscChroma[i+GRN]
+    ntscCycle[i+BLU] = ntscChroma[i+BLU]
+    i = MATCH_ONE
+  else
+    // RGB closer to previous chroma color
+    er = r - pr
+    eg = g - pg
+    eb = b - pb
+    ntscCycle[i+RED] = 0
+    ntscCycle[i+GRN] = 0
+    ntscCycle[i+BLU] = 0
+    i = MATCH_ZERO
+  fin
+  errProp(er, eg, eb, errptr)
+  return i
+end
+
+def rgbMatchNext(r, g, b, errptr, cx)#1
+  var pr1, pg1, pb1
+  var pr2, pg2, pb2
+  var pr3, pg3, pb3
+  var pr, pg, pb
+  var cr, cg, cb
+  var er, eg, eb
+  byte i, match
+  res[t_i32] nd, cd
+
+  // Previous 1/4 chroma cycle
+  i = ((cx - 1) & 3) * 3
+  pr1 = ntscCycle[i+RED]
+  pg1 = ntscCycle[i+GRN]
+  pb1 = ntscCycle[i+BLU]
+  // Previous 2/4 chroma cycle
+  i = ((cx - 2) & 3) * 3
+  pr2 = ntscCycle[i+RED]
+  pg2 = ntscCycle[i+GRN]
+  pb2 = ntscCycle[i+BLU]
+  // Previous 3/4 chroma cycle
+  i = ((cx - 3) & 3) * 3
+  pr3 = ntscCycle[i+RED]
+  pg3 = ntscCycle[i+GRN]
+  pb3 = ntscCycle[i+BLU]
+  // Previous chroma cycle
+  i = cx * 3 // ((cx - 4) & 3) * 3
+  pr = pr1 + pr2 + pr3
+  pg = pg1 + pg2 + pg3
+  pb = pb1 + pb2 + pb3
+  // Current potential chroma cycle
+  //i = cx * 3
+  cr = pr + ntscChroma[i+RED]
+  cg = pg + ntscChroma[i+GRN]
+  cb = pb + ntscChroma[i+BLU]
+  // Match next full chroma cycle (pixel)
+  cd:[0], cd:[1] = $FFFF, $7FFF
+  for i = 0 to 15
+    nd:[0], nd:[1] = dist(r - pixRed[i], g - pixGrn[i], b - pixBlu[i])
+    if islt32(@cd)
+      cd:[0], cd:[1] = nd:[0], nd:[1]
+      match = i
+    fin
+  next
+  i = cx * 3
+  if match & (1 << cx)
+    // RGB better matched with next chroma color
+    er = r - cr
+    eg = g - cg
+    eb = b - cb
+    ntscCycle[i+RED] = ntscChroma[i+RED]
+    ntscCycle[i+GRN] = ntscChroma[i+GRN]
+    ntscCycle[i+BLU] = ntscChroma[i+BLU]
+    i = MATCH_ONE
+  else
+    // RGB closer to previous chroma color
+    er = r - pr
+    eg = g - pg
+    eb = b - pb
+    ntscCycle[i+RED] = 0
+    ntscCycle[i+GRN] = 0
+    ntscCycle[i+BLU] = 0
+    i = MATCH_ZERO
+  fin
+  errProp(er, eg, eb, errptr)
+  return i
+end
+
+def rgbMatchPrev(r, g, b, errptr, cx)#1
+  var cr, cg, cb
+  var er, eg, eb
+  byte i,
+  res[t_i32] pd
+
+  // Previous RGB minus current chroma cycle
+  prevRed = (prevRed * 3) / 4
+  prevGrn = (prevGrn * 3) / 4
+  prevBlu = (prevBlu * 3) / 4
+  // Current potential RGB
+  i = cx * 3
+  cr = prevRed + ntscChroma[i+RED]
+  cg = prevGrn + ntscChroma[i+GRN]
+  cb = prevBlu + ntscChroma[i+BLU]
+  // Match next chroma subcycle
+  pd:[0], pd:[1] = dist(r - prevRed, g - prevGrn, b - prevBlu)
+  dist(r - cr, g - cg, b - cb)
+  if islt32(@pd)
+    // RGB better matched with next chroma color
+    prevRed = cr
+    prevGrn = cg
+    prevBlu = cb
+    i = MATCH_ONE
+  else
+    i = MATCH_ZERO
+  fin
+  // Propogate error down and forward
+  er            = r - prevRed
+  errptr=>[RED] = er
+  eg            = g - prevGrn
+  errptr=>[GRN] = eg
+  eb            = b - prevBlu
+  errptr=>[BLU] = eb
+  errptr=>[RED+3] = er + errptr=>[RED+3]
+  errptr=>[GRN+3] = eg + errptr=>[GRN+3]
+  errptr=>[BLU+3] = eb + errptr=>[BLU+3]
+  return i
+end
+
+def rgbInit#0
+  var i
+  res[t_i32] g32
+
+  if flags & DUMP_STATE
+    puts("Gamma = "); puti(sext(gamma)); putln
+  fin
+  when gamma
+    is 255 // (i + 1 / i^2) / 2
+      for i = 0 to 255
+        loadi16(i)
+        muli16(i)
+        addi16(127)
+        divi16(255)
+        neg32
+        addi16(255)
+        addi16(255 - i)
+        divi16(2)
+        store32(@g32)
+        gammaRed[255 - i] = g32
+        gammaGrn[255 - i] = g32
+        gammaBlu[255 - i] = g32
+      next
+      break
+    is 254 // 1 - i^2
+      for i = 0 to 255
+        loadi16(i)
+        muli16(i)
+        addi16(127)
+        divi16(255)
+        neg32
+        addi16(255)
+        store32(@g32)
+        gammaRed[255 - i] = g32
+        gammaGrn[255 - i] = g32
+        gammaBlu[255 - i] = g32
+      next
+      break
+    is 2 // 1/(i^2)
+      for i = 0 to 255
+        loadi16(i)
+        muli16(i)
+        addi16(127)
+        divi16(255)
+        store32(@g32)
+        gammaRed[i] = g32
+        gammaGrn[i] = g32
+        gammaBlu[i] = g32
+      next
+      break
+    is 1 // (i + i^2) / 2
+      for i = 0 to 255
+        loadi16(i)
+        muli16(i)
+        addi16(127)
+        divi16(255)
+        addi16(i)
+        divi16(2)
+        store32(@g32)
+        gammaRed[i] = g32
+        gammaGrn[i] = g32
+        gammaBlu[i] = g32
+      next
+      break
+    otherwise // i
+      for i = 0 to 255
+        gammaRed[i] = i
+        gammaGrn[i] = i
+        gammaBlu[i] = i
+      next
+  wend
+  if gamut[RED] <> 128
+    for i = 0 to 255
+      gammaRed[i] = max(0, min(255, (gammaRed[i] * 128) / gamut[RED]))
+    next
+  fin
+  if gamut[GRN] <> 128
+    for i = 0 to 255
+      gammaGrn[i] = max(0, min(255, (gammaGrn[i] * 128) / gamut[GRN]))
+    next
+  fin
+  if gamut[BLU] <> 128
+    for i = 0 to 255
+      gammaBlu[i] = max(0, min(255, (gammaBlu[i] * 128) / gamut[BLU]))
+    next
+  fin
+  if brightness
+    for i = 0 to 255
+      gammaRed[i] = max(0, min(255, gammaRed[i] + brightness))
+      gammaGrn[i] = max(0, min(255, gammaGrn[i] + brightness))
+      gammaBlu[i] = max(0, min(255, gammaBlu[i] + brightness))
+    next
+  fin
+  calcChroma(tint)
+  if flags & DUMP_STATE
+    puts("Err Div = "); puti(errDiv); putln
+    puts("Brightness = "); puti(brightness); putln
+    puts("Tint = "); puti(tint); putln
+    puts("Saturation = "); puti(saturation); putln
+    puts("Gamut = ["); puti(gamut[RED]); putc(',')
+    puti(gamut[GRN]); putc(','); puti(gamut[BLU]); puts("]\n")
+    puts("Match = ")
+    if flags & MATCH_NEXT; puts("Next\n")
+    elsif flags & MATCH_CYCLE; puts("Current\n")
+    else; puts("Prev\n"); fin
+    puts("Chroma cycle RGB =\n")
+    for i = 0 to 3
+      putc('[')
+      puti(ntscChroma[i*3 + RED]); putc(',')
+      puti(ntscChroma[i*3 + GRN]); putc(',')
+      puti(ntscChroma[i*3 + BLU]); puts("]\n")
+    next
+  fin
+  if flags & MATCH_NEXT
+    rgbMatch = @rgbMatchNext
+    // Calc pixel RGBs
+    for i = 0 to 15
+      if i & 1
+        pixRed[i] = ntscChroma[RED]
+        pixGrn[i] = ntscChroma[GRN]
+        pixBlu[i] = ntscChroma[BLU]
+      fin
+      if i & 2
+        pixRed[i] = pixRed[i] + ntscChroma[3+RED]
+        pixGrn[i] = pixGrn[i] + ntscChroma[3+GRN]
+        pixBlu[i] = pixBlu[i] + ntscChroma[3+BLU]
+      fin
+      if i & 4
+        pixRed[i] = pixRed[i] + ntscChroma[6+RED]
+        pixGrn[i] = pixGrn[i] + ntscChroma[6+GRN]
+        pixBlu[i] = pixBlu[i] + ntscChroma[6+BLU]
+      fin
+      if i & 8
+        pixRed[i] = pixRed[i] + ntscChroma[9+RED]
+        pixGrn[i] = pixGrn[i] + ntscChroma[9+GRN]
+        pixBlu[i] = pixBlu[i] + ntscChroma[9+BLU]
+      fin
+    next
+    // Adjust error scalng for this strategy
+    errDiv = errDiv * 2
+  elsif flags & MATCH_CYCLE
+    rgbMatch = @rgbMatchCycle
+     // Make up for scaled chroma cycle color match
+    for i = 0 to 11
+      ntscChroma[i] = (ntscChroma[i] * 3) / 2 // * 1.5
+    next
+  else // MATCH_PREV
+    rgbMatch = @rgbMatchPrev
+  fin
+  if flags & MEM_MODE
+    surfMem, surfSpan = dhgrAllocBl7Mem(SCR_WIDTH, SCR_HEIGHT)
+    dhgrSurfMem(OP_XOR, SCR_HEIGHT, surfMem, surfSpan)
+    dhgrOp(OP_SRC) // Force op recalc
+    dcgrColor(CLR_BLACK)
+    dhgrClearBl7(0, 0, surfSpan >> 2, SCR_HEIGHT)
+  else
+    dhgrMode(DHGR_COLOR_MODE)
+  fin
+end
+
+def rgbExit#0
+  heaprelease(rgbErr)
+  if not (flags & MEM_MODE)
+    dhgrMode(DHGR_TEXT_MODE)
+  fin
+end
+
+def pnmReadElement(refnum, bufptr)#1
+  var lenptr
+
+  lenptr = bufptr
+  repeat
+    ^lenptr = 0
+    bufptr  = lenptr + 1
+    if fileio:read(refnum, bufptr, 1) == 1 and ^bufptr == '#' // Comment
+      ^lenptr++
+      bufptr++
+      while fileio:read(refnum, bufptr, 1) == 1 and ^bufptr >= ' '
+      loop
+    else
+      repeat // Read white space seperated element
+        ^lenptr++
+        bufptr++
+      until fileio:read(refnum, bufptr, 1) <> 1 or ^bufptr <= ' ' or ^lenptr > 32
+    fin
+  until ^lenptr and ^(lenptr + 1) <> '#' // Repeat until not comment
+  if flags & DUMP_STATE; puts(lenptr); putc(' '); fin
+  return lenptr
+end
+
+def pnmVerifyHeader(refnum)#1
+  byte[128] buf
+  if flags & DUMP_STATE; puts("PNM = "); fin
+  pnmReadElement(refnum, @buf)
+  if buf[0] <> 2 and buf[1] <> 'P' and buf[2] <> '6'
+    puts("Invalid PNM magic #: "); putc(buf[1]); putc(buf[2]); putln
+    return FALSE
+  fin
+  if atoi(pnmReadElement(refnum, @buf)) <> 560
+    puts("Width not 560: "); puts(@buf); putln
+    return FALSE
+  fin
+  if atoi(pnmReadElement(refnum, @buf)) <> 192
+    puts("Height not 192: "); puts(@buf); putln
+    return FALSE
+  fin
+  if atoi(pnmReadElement(refnum, @buf)) <> 255
+    puts("Depth not 255: "); puts(@buf); putln
+    return FALSE
+  fin
+  if flags & DUMP_STATE; putln; fin
+  return TRUE
+end
+
+def rgbImportExport(rgbfile, dhgrfile)#0
+  byte refnum, chromaBits
+  var i, j, c, r, g, b
+  var rgbScanline, rgbptr, errptr
+
+  refnum = fileio:open(rgbfile)
+  if refnum
+    if not (flags & RAW_INFILE)
+      if not pnmVerifyHeader(refnum)
+        fileio:close(refnum)
+        return
+      fin
+    fin
+    rgbInit
+    rgbScanline = heapalloc(560 * 3)
+    rgbErr      = heapalloc(561 * 3 * 2)
+    if rgbErr and rgbScanline
+      // Init error propogation array
+      memset(rgbErr, 0, 560 * 3 * 2)
+      memset(rgbScanline, 0, 560 * 3)
+      for j = 0 to 191
+        fileio:read(refnum, rgbScanline,  560 * 3)
+        memset(@ntscCycle, GREY_CHROMA, 24) // Reset chroma cycle
+        prevRed, prevGrn, prevBLu = 96, 96, 96 // Reset prev RGB
+        rgbptr = rgbScanline
+        errptr = rgbErr
+        for i = 0 to 139
+          chromaBits = 0
+          for c = 0 to 3
+            // Calc best match
+            r = gammaRed[rgbptr->[RED]]
+            g = gammaGrn[rgbptr->[GRN]]
+            b = gammaBlu[rgbptr->[BLU]]
+            if errDiv
+              r = r + errptr=>[RED] / errDiv
+              g = g + errptr=>[GRN] / errDiv
+              b = b + errptr=>[BLU] / errDiv
+            fin
+            chromaBits = (chromaBits >> 1) | rgbMatch(r, g, b, errptr, c)
+            rgbptr = rgbptr + 3
+            errptr = errptr + 3 * 2
+          next
+          if flags & GREY_HACK
+            // Map GREY1 -> GREY2
+            if chromaBits == $0A // Bits are in reverse order from DCGR color value
+              chromaBits = $05
+              memset(@ntscCycle, GREY_CHROMA, 24) // Grey chroma cycle
+            elsif chromaBits == $05
+              memset(@ntscCycle, GREY_CHROMA, 24) // Grey chroma cycle
+            fin
+          fin
+          dcgrColor(clrRot[chromaBits])
+          dcgrPixel(i, j)
+        next
+        if flags & MEM_MODE; putc('.'); fin
+        if ^$C000 == $83
+          break
+        fin
+      next
+      fileio:close(refnum)
+      if ^dhgrfile
+        if flags & MEM_MODE
+          heaprelease(rgbScanline) // Free up some memory
+          if MACHID & $F0 <> $B0
+            // Use allocated buffer on non 128K //e
+            rgbScanline = heapalloc($2000)
+          else
+            // Use HGR memory (already reserved) on 128K //e
+            rgbScanline = $2000
+          fin
+          if rgbScanline
+            memset(rgbScanline, 0, $2000)
+            fileio:destroy(dhgrfile)
+            fileio:create(dhgrfile, $06, $2000)
+            refnum = fileio:open(dhgrfile)
+            if refnum
+              // Reorder scanlines into HGR format
+              rgbptr = surfMem
+              for i = 0 to SCR_HEIGHT-1
+                memcpy(rgbScanline+hgrScan[i], rgbptr, 40)
+                rgbptr = rgbptr + surfSpan
+              next
+              // Write AUX bytes
+              fileio:write(refnum, rgbScanline, $2000)
+              rgbptr = surfMem + surfSpan / 2
+              for i = 0 to SCR_HEIGHT-1
+                memcpy(rgbScanline+hgrScan[i], rgbptr, 40)
+                rgbptr = rgbptr + surfSpan
+              next
+              // Write MAIN bytes
+              fileio:write(refnum, rgbScanline, $2000)
+              fileio:close(refnum)
+            fin
+            putln
+          fin
+        else
+          screenWrite(dhgrfile)
+        fin
+      fin
+      if not (flags & MEM_MODE); getc; fin
+      rgbExit
+    fin
+  else
+    puts("Unable to open "); puts(rgbfile); putln
+  fin
+end
+
+puts("DHGR RGB converter 1.1\n")
+arg = argNext(argFirst)
+if ^arg
+  while ^(arg + 1) == '-'
+    when toupper(^(arg + 2))
+      is 'B' // Set brightness
+        if ^arg > 2
+          ^(arg + 2) = ^arg - 2
+          brightness = atoi(arg + 2)
+        fin
+        break
+      is 'C' // Disable hack for GREY remapping
+        flags = flags & ~GREY_HACK
+        break
+      is 'D' // Dump internal staet
+        flags = flags | DUMP_STATE
+        break
+      is 'E' // Set error strength
+        if ^arg > 2
+          errDiv = ^(arg + 3) - '0'
+          if ^arg > 3
+            errDiv = errDiv * 10 + ^(arg + 4) - '0'
+          fin
+        fin
+        break
+      is 'G' // Set gamma amount
+        if ^arg > 2
+          ^(arg + 2) = ^arg - 2
+          gamma = atoi(arg + 2)
+        fin
+        break
+      is 'M' // Match RGB strategy
+        when toupper(^(arg + 3))
+          is 'N' // Match to next pixel
+            flags = flags | MATCH_NEXT
+            tint = tint - 22
+            break
+          is 'C' // Match to current cycle
+            flags = flags | MATCH_CYCLE
+            break
+          //is 'P' // Match to previous RGB
+          otherwise
+            break
+        wend
+        break
+      is 'P' // RGB phase angle
+        when toupper(^(arg + 3))
+          is 'I' // Use ideal 4 sub-phase angles
+            phase[RED] = RED_PHASE_IDEAL
+            phase[GRN] = GREEN_PHASE_IDEAL
+            phase[BLU] = BLUE_PHASE_IDEAL
+            break
+          is 'E' // Use equal 120 deg phase angles
+            phase[RED] = RED_PHASE_EQUAL
+            phase[GRN] = GREEN_PHASE_EQUAL
+            phase[BLU] = BLUE_PHASE_EQUAL
+            break
+          is 'S' // Use simplified 90 degree and opposite phase angles
+            phase[RED] = RED_PHASE_SIMPLE
+            phase[GRN] = GREEN_PHASE_SIMPLE
+            phase[BLU] = BLUE_PHASE_SIMPLE
+            break
+          //is 'N' // Use theoretical NTSC phase angles
+          otherwise
+            phase[RED] = RED_PHASE_NTSC
+            phase[GRN] = GREEN_PHASE_NTSC
+            phase[BLU] = BLUE_PHASE_NTSC
+            break
+        wend
+        break
+      is 'R' // Raw input mode - no PNM header
+        flags = flags | RAW_INFILE
+        break
+      is 'S' // Adjust saturation
+        if ^arg > 2
+          ^(arg + 2) = ^arg - 2
+          saturation = saturation - atoi(arg + 2)
+        fin
+        break
+      is 'T' // Adjust tint
+        if ^arg > 2
+          ^(arg + 2) = ^arg - 2
+          tint = tint + atoi(arg + 2)
+        fin
+        break
+      is 'U' // Adjust gamut
+        if ^arg > 3
+          when toupper(^(arg + 3))
+            is 'R'
+              ^(arg + 1) = RED
+              break
+            is 'G'
+              ^(arg + 1) = GRN
+              break
+            otherwise // B
+              ^(arg + 1) = BLU
+              break
+          wend
+          ^(arg + 3) = ^arg - 3
+          gamut[^(arg + 1)] = gamut[^(arg + 1)] - atoi(arg + 3)
+        fin
+        break
+      is 'V' // No video output, memory mode only (for portable VM)
+        flags = flags | MEM_MODE
+        break
+      otherwise
+        puts("? option:"); putc(^(arg + 2)); putln
+    wend
+    arg = argNext(arg)
+  loop
+  if ^arg
+    rgbImportExport(arg, argNext(arg))
+  fin
+  return 0
+fin
+puts("Usage:\n")
+puts(" DHGRRGB\n")
+puts("  [-B#]  = Brightness: -255..255\n")
+puts("  [-C]   = Composite output\n")
+puts("  [-D]   = Dump state\n")
+puts("  [-E#]  = Error strength: 1..255\n")
+puts("                           0 = no err\n")
+puts("  [-G#]  = Gamma: 2, 1, 0, -1, -2\n")
+puts("  [-M<N,C,P>]   = Match: Next, Current\n")
+puts("                         Previous\n")
+puts("  [-P<I,E,S,N>] = Phase: Ideal, Equal\n")
+puts("                         Simple, NTSC\n")
+puts("  [-R]   = Raw image file, no header\n")
+puts("  [-S#]  = Saturation: -255..255\n")
+puts("  [-T#]  = Tint: -360..360 (in degrees)\n")
+puts("  [-U<R,G,B>#]  = gammUt: Red, Grn, Blu\n")
+puts("                          -255..255\n")
+puts("  [-V]   = no Video output, mem only\n")
+puts(" IMAGEFILE [DHGRFILE]\n")
+done
