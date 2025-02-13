@@ -22,51 +22,51 @@ res[t_except] exit
 // Copy string with upper case conversion
 //
 def struprcpy(dst, src)#0
-    byte i
+  byte i
 
-    if ^src
-        for i = 1 to ^src
-            dst->[i] = toupper(src->[i])
-        next
-    fin
-    ^dst = ^src
+  if ^src
+    for i = 1 to ^src
+      dst->[i] = toupper(src->[i])
+    next
+  fin
+  ^dst = ^src
 end
 
 def fail(msg)#0
-    dhgrMode(DHGR_TEXT_MODE)
-    puts(msg)
-    putln
-    throw(@exit, -1)
+  dhgrMode(DHGR_TEXT_MODE)
+  puts(msg)
+  putln
+  throw(@exit, -1)
 end
 
 def screenShow(filestr)#0
-    if dolz4
-        ^page1x // Decompress into AUX screen bytes
-        when lz4Read(filestr, $2000, $6000, $2000, $6000)
-            is LZ4_INVALID
-                fail("Not LZ4 file.\n")
-            is LZ4_WRONG_VERSION
-                fail("Wrong LZ4 version.\n")
-            is LZ4_NOT_64K
-                fail("Not 64K block size.\n")
-        wend
-        ^page1m // Copy into MAIN screen bytes
-        memcpy($2000, $4000, $2000)
-    else
-        screenRead(filestr)
-    fin
+  if dolz4
+    ^page1x // Decompress into AUX screen bytes
+    when lz4Read(filestr, $2000, $6000, $2000, $6000)
+      is LZ4_INVALID
+        fail("Not LZ4 file.\n")
+      is LZ4_WRONG_VERSION
+        fail("Wrong LZ4 version.\n")
+      is LZ4_NOT_64K
+        fail("Not 64K block size.\n")
+    wend
+    ^page1m // Copy into MAIN screen bytes
+    memcpy($2000, $4000, $2000)
+  else
+    screenRead(filestr)
+  fin
 end
 
 def delay_getkey#1
-    var busywait, wastetime
+  var busywait, wastetime
 
-    for busywait = 0 to 60*pause
-        waitVBL
-        if ^$C000 > 127
-            return (^$C010 & $7F) == $03
-        fin
-    next
-    return FALSE
+  for busywait = 0 to 60*pause
+    waitVBL
+    if ^$C000 > 127
+      return (^$C010 & $7F) == $03
+    fin
+  next
+  return FALSE
 end
 
 def atoi(strptr)#1
@@ -94,69 +94,69 @@ end
 
 arg = argNext(argFirst)
 while ^arg and ^(arg + 1) == '-'
-    //
-    // Process flags
-    //
-    when toupper(^(arg + 2))
-        is 'Z' // decompress screens
-            dolz4 = TRUE
-            break
-        is 'P' // pause between screens
-            if ^arg > 2
-                ^(arg + 2) = ^arg - 2
-                pause = atoi(arg + 2)
-            fin
-            break
-    wend
-    arg = argNext(arg)
+  //
+  // Process flags
+  //
+  when toupper(^(arg + 2))
+    is 'Z' // decompress screens
+      dolz4 = TRUE
+      break
+    is 'P' // pause between screens
+      if ^arg > 2
+        ^(arg + 2) = ^arg - 2
+        pause = atoi(arg + 2)
+      fin
+      break
+  wend
+  arg = argNext(arg)
 loop
 while ^arg
-    //
-    // Add to source list
-    //
-    srcpath, srcexp     = splitPathFile(arg)
-    entrylist, entrycnt = matchList(srcpath, srcexp)
-    if not entrylist
-        puts(arg); puts(" ???\n")
-    else
-        if not srcfilelist
-            srcfilelist = entrylist
-        fin
-        srccnt = srccnt + entrycnt
-        while entrycnt
-            //
-            // Prepend path to filename
-            //
-            strcpy(entrylist, strcat(strcpy(heapmark, srcpath), entrylist))
-            entrylist = entrylist + t_fileentry
-            entrycnt--
-        loop
+  //
+  // Add to source list
+  //
+  srcpath, srcexp   = splitPathFile(arg)
+  entrylist, entrycnt = matchList(srcpath, srcexp)
+  if not entrylist
+    puts(arg); puts(" ???\n")
+  else
+    if not srcfilelist
+      srcfilelist = entrylist
     fin
-    arg = argNext(arg)
+    srccnt = srccnt + entrycnt
+    while entrycnt
+      //
+      // Prepend path to filename
+      //
+      strcpy(entrylist, strcat(strcpy(heapmark, srcpath), entrylist))
+      entrylist = entrylist + t_fileentry
+      entrycnt--
+    loop
+  fin
+  arg = argNext(arg)
 loop
 if srccnt
-    dhgrMode(DHGR_COLOR_MODE)
-    retval = except(@exit)
-    if retval == 0
-        if srccnt == 1
-            screenShow(srcfilelist)
-            getc
-        else
-            repeat
-                entrylist = srcfilelist
-                entrycnt  = srccnt
-                while entrycnt
-                    screenShow(entrylist)
-                    entrylist = entrylist + t_fileentry
-                    entrycnt--
-                    quit = delay_getkey
-                    if quit; break; fin
-                loop
-            until quit
-        fin
-        dhgrMode(DHGR_TEXT_MODE)
+  dhgrMode(DHGR_COLOR_MODE)
+  retval = except(@exit)
+  if retval == 0
+    if srccnt == 1
+      screenShow(srcfilelist)
+      getc
+    else
+      repeat
+        entrylist = srcfilelist
+        entrycnt  = srccnt
+        while entrycnt
+          screenShow(entrylist)
+          entrylist = entrylist + t_fileentry
+          entrycnt--
+          quit = delay_getkey
+          if quit; break; fin
+        loop
+      until quit
     fin
-    return retval
+    dhgrMode(DHGR_TEXT_MODE)
+  fin
+  return retval
 fin
 puts("Usage: DHGRSHOW [-Z] <FILES>+\n")
 done
