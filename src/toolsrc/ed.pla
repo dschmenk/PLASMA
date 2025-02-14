@@ -219,26 +219,24 @@ def sizemask(size)
     return 0
 end
 def strpoolalloc(size)
-    byte szmask
-    word mapmask, addr, i
+    byte szmask, poolmap, ofst
+    word mapmask, i
 
     szmask = sizemask(size)
     for i = strplmapsize - 1 downto 0
-        if ^(strpoolmap + i) <> $FF
+        poolmap = ^(strpoolmap + i)
+        if  poolmap <> $FF
             mapmask = szmask
-            repeat
-                if ^(strpoolmap + i) & mapmask
+            ofst    = 0
+            repeat // Look for memory hole to fit
+                if poolmap & mapmask // Nope, shift over
                     mapmask = mapmask << 1
-                else
-                    ^(strpoolmap + i) = ^(strpoolmap + i) | mapmask
-                    addr = (i << 7) + strpool
-                    while !(mapmask & 1)
-                        addr = addr + 16
-                        mapmask = mapmask >> 1
-                    loop
-                    return addr
+                    ofst++
+                else // Yep, take it
+                    ^(strpoolmap + i) = poolmap | mapmask
+                    return (ofst << 4) + (i << 7) + strpool
                 fin
-            until mapmask & $100
+            until mapmask & $100 // No fit
         fin
     next
     bell()
@@ -273,13 +271,22 @@ def strstripcpy(dststr, srcstr)#0
     striptail(dststr, keyspace)
 end
 def delstr(strptr)#0
-    byte mask, ofst
+    word ofst, mask
 
-    if strptr and strptr <> @nullstr
+    if strptr <> @nullstr
         mask = sizemask(^strptr + 1)
+        //if (strptr - strpool) & $0F
+        //  puts("Misaligned pointer in delstr!"); bell(); getc
+        //fin
         ofst = (strptr - strpool) >> 4
         mask = mask << (ofst & $07)
+        //if mask & $FF00
+        //  puts("Invalid mask shift in delstr!"); bell(); getc
+        //fin
         ofst = ofst >> 3
+        //if (^(strpoolmap + ofst) & mask) <> mask
+        //  puts("Inconsistent mask in delstr!"); bell(); getc
+        //fin
         ^(strpoolmap + ofst) = ^(strpoolmap + ofst) & ~mask
     fin
 end
@@ -296,7 +303,7 @@ def newstr(strptr)
     fin
     newptr = strpoolalloc(strlen + 1)
     if newptr
-        memcpy(newptr, strptr, strlen + 1)
+        memcpy(newptr + 1, strptr + 1, strlen)
         ^newptr = strlen
         return newptr
     fin
@@ -981,10 +988,10 @@ def keyin3
             is $80 | '3'
                 key = keyctrlz; break // Pg Dn
             is $80 | '5'
+                key = keyctrlb; break // Selection start/end
+            is $80 | '0'
                 key = keyctrld; break // Del
             is $80 | '.'
-                key = keyctrlc; break // Copy
-            is $80 | '0'
                 key = keyctrlv; break // Paste
             is $80 | '-'
                 key = keyctrlx; break // Cut
@@ -1011,7 +1018,7 @@ def keyin2e
         key = ^keyboard
     until key >= 128
     ^keystrobe
-    if ^pushbttn2 & 128 // Closed Apple pressed
+    if ^pushbttn2 & 128 // Closed Apple (option) pressed
         when key
             is keyarrowleft
                 key = keyctrla; break
@@ -1026,7 +1033,7 @@ def keyin2e
             is keytab
                 key = keydetab; break
             //
-            // Map OA+keypad
+            // Map option+keypad on Platinum //e
             //
             is $80 | '4'
                 key = keyarrowleft; break
@@ -1045,13 +1052,21 @@ def keyin2e
             is $80 | '3'
                 key = keyctrlz; break // Pg Dn
             is $80 | '5'
+                key = keyctrlb; break // Selection start/end
+            is $80 | '0'
                 key = keyctrld; break // Del
             is $80 | '.'
-                key = keyctrlc; break // Copy
-            is $80 | '0'
                 key = keyctrlv; break // Paste
             is $80 | '-'
                 key = keyctrlx; break // Cut
+            is $80 | '+'
+                key = keyctrlc; break // Copy
+            is $80 | '*'
+                key = keyctrlo; break // Open line
+            is $80 | '/'
+                key = keyctrlt; break // Join lines
+            is $80 | '='
+                key = keyctrly; break // Insert/Overwrite
         wend
     fin
     return key
@@ -1158,13 +1173,15 @@ end
 def freesel#0
     word i
 
-    for i = 0 to numcliplines - 1
-        if cliplinbuf=>[i] <> @nullstr
-            delstr(cliplinbuf=>[i])
-            cliplinbuf=>[i] = @nullstr
-        fin
-    next
-    numcliplines = 0
+    if numcliplines
+        for i = 0 to numcliplines - 1
+            if cliplinbuf=>[i] <> @nullstr
+                delstr(cliplinbuf=>[i])
+                cliplinbuf=>[i] = @nullstr
+            fin
+        next
+        numcliplines = 0
+    fin
 end
 def selrange#2
     word first, last
@@ -1191,11 +1208,15 @@ def copysel#0
 
     freesel
     firstsel, lastsel = selrange
-    for numcliplines = 0 to lastsel - firstsel
-        cliplinbuf=>[numcliplines] = newstr(txtlinbuf=>[firstsel + numcliplines])
-    next
-    flags = flags & ~selection
-    drawgutter(scrntop, scrnleft)
+    if lastsel - firstsel < MAXCLIPLINES
+        for numcliplines = 0 to lastsel - firstsel
+            cliplinbuf=>[numcliplines] = newstr(txtlinbuf=>[firstsel + numcliplines])
+        next
+        flags = flags & ~selection
+        drawgutter(scrntop, scrnleft)
+    else
+        bell
+    fin
 end
 def cutsel#0
     word firstsel, lastsel
@@ -1206,7 +1227,9 @@ def cutsel#0
         for numcliplines = 0 to lastsel - firstsel
             cliplinbuf=>[numcliplines] = txtlinbuf=>[firstsel + numcliplines]
         next
-        memcpy(@txtlinbuf=>[firstsel], @txtlinbuf=>[lastsel + 1], (numlines - lastsel + 1) * 2)
+        memcpy(@txtlinbuf=>[firstsel], \
+               @txtlinbuf=>[lastsel + 1], \
+               (numlines - lastsel + 1) * 2)
         numlines = numlines - numcliplines
         for lastsel = numlines to numlines + numcliplines
             txtlinbuf=>[lastsel] = @nullstr
@@ -1230,7 +1253,9 @@ def pastesel#0
     word p
 
     if numcliplines and numcliplines + numlines < MAXLINES
-        memcpy(@txtlinbuf=>[cursrow + numcliplines], @txtlinbuf=>[cursrow], (numlines - cursrow) * 2)
+        memcpy(@txtlinbuf=>[cursrow + numcliplines], \
+               @txtlinbuf=>[cursrow], \
+               (numlines - cursrow) * 2)
         for p = 0 to numcliplines - 1
             txtlinbuf=>[cursrow + p] = newstr(cliplinbuf=>[p])
         next
@@ -1661,8 +1686,9 @@ def chkchng
     return TRUE
 end
 def cmdmode#0
-    byte slot
+    byte slot, b
     word cmdptr, line
+    var i, freepool
 
     clrscrn
     puts("PLASMA Editor, Version 2.20\n")
@@ -1751,6 +1777,23 @@ def cmdmode#0
                     inittxtbuf
                     strstripcpy(@filename, "UNTITLED")
                 fin
+                break
+            is 'D' // Dump stats
+                freepool = 0
+                for i = strplmapsize - 1 downto 0
+                    slot = ^(strpoolmap + i)
+                    if slot <> $FF
+                        for b = 0 to 7
+                            if not ((1 << b) & slot)
+                                freepool++
+                            fin
+                        next
+                    fin
+                next
+                puts("Pool size: "); puti(strplmapsize*128); putln
+                puts("Pool free: "); puti(freepool*16); putln
+                puts("Num lines: "); puti(numlines); putln
+                puts("Clip lines: "); puti(numcliplines); putln
                 break
             otherwise
                 bell
