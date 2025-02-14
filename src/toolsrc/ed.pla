@@ -7,7 +7,7 @@
 include "inc/cmdsys.plh"
 include "inc/args.plh"
 include "inc/fileio.plh"
-//sysflags nojitc // Keep JITC from compiling and pausing while editing
+sysflags nojitc // Keep JITC from compiling and pausing while editing
 //
 // Hardware constants
 //
@@ -218,7 +218,15 @@ asm sizemask(size)#1
         LDA     #$00
         STA     ESTKH,X
         RTS
---      INX
+--      DEY                     ; THIS IS NEXT MAP BYTE FROM BELOW
+        CPY     #$FF
+        BNE     +
+        DEC     DSTH
+        DEC     ESTKH+1,X
+        LDA     ESTKH+1,X
+        CMP     #$FF
+        BNE     +
+        INX
         INX
         INX
 ++      LDA     #$00
@@ -226,7 +234,7 @@ asm sizemask(size)#1
         STA     ESTKH,X
         RTS
 end
-asm poolmap(strbase, mapbase, idx, mask)#1
+asm poolalloc(poolbase, mapbase, idx, mask)#1
         LDA     ESTKL+2,X       ; MAPBASEL
         STA     DSTL
         LDA     ESTKH+2,X       ; MAPBASEH
@@ -234,22 +242,24 @@ asm poolmap(strbase, mapbase, idx, mask)#1
         ADC     ESTKH+1,X       ; IDXH
         STA     DSTH
         LDY     ESTKL+1,X       ; IDXL
-        LDA     (DST),Y
++       LDA     (DST),Y
         CMP     #$FF
-        BEQ     --
+        BEQ     --              ; MAP BYTE FULL, TRY NEXT
         LDA     #$00
-        STA     ESTKL+2,X       ; OFST
--       LDA     ESTKL,X
-        AND     (DST),Y
+        STA     TMP             ; OFST
+        LDA     ESTKL,X
+        STA     ESTKH,X
+-       AND     (DST),Y
         BEQ     ++
-        INC     ESTKL+2,X       ; OFST++
-        ASL     ESTKL,X         ; MASK <<= 1
-        BCS     --              ; NO FIT, EXIT
+        INC     TMP             ; OFST++
+        ASL     ESTKH,X         ; MASK <<= 1
+        BCS     --              ; NO FIT, TRY NEXT MAP BYTE
+        LDA     ESTKH,X
         BCC     -
-++      LDA     ESTKL,X         ; UPDATE MASK
+++      LDA     ESTKH,X         ; UPDATE MAPMASK
         ORA     (DST),Y
         STA     (DST),Y
-        LDA     ESTKL+2,X       ; OFST
+        LDA     TMP             ; OFST
         ASL
         ASL
         ASL
@@ -303,12 +313,12 @@ def strpoolalloc(size)
     byte szmask
     word straddr, i
 
-    szmask = sizemask(size)
-    for i = strplmapsize - 1 downto 0
-        straddr = poolmap(strpool, strpoolmap, i, szmask)
-        if straddr
-            return straddr
-        fin
+    straddr = poolalloc(strpool, strpoolmap, strplmapsize - 1, sizemask(size))
+    if straddr
+        return straddr
+    fin
+    //szmask = sizemask(size)
+    //for i = strplmapsize - 1 downto 0
         //if  ^(strpoolmap + i) <> $FF
         //    mapmask = szmask
         //    ofst    = 0
@@ -322,7 +332,7 @@ def strpoolalloc(size)
         //        fin
         //    until mapmask & $100 // No fit
         //fin
-    next
+    //next
     puts(@nomem)
     return 0
 end
