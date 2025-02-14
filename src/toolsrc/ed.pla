@@ -7,7 +7,7 @@
 include "inc/cmdsys.plh"
 include "inc/args.plh"
 include "inc/fileio.plh"
-sysflags nojitc // Keep JITC from compiling and pausing while editing
+//sysflags nojitc // Keep JITC from compiling and pausing while editing
 //
 // Hardware constants
 //
@@ -87,6 +87,7 @@ word              = $0450,$04D0,$0550,$05D0,$0650,$06D0,$0750,$07D0
 byte nullstr       = ""
 byte[80] findstr   = ""
 byte[64] filename  = "UNTITLED"
+char nomem         = "Out of memory!\n"
 byte exit          = FALSE
 byte flags         = 0
 byte flash         = 0
@@ -198,49 +199,131 @@ CPUPLP  LDA     (SRC),Y
         BNE     CPUPLP
 +++     RTS
 end
+asm sizemask(size)#1
+        LDA     ESTKL,X
+        CMP     #81
+        BCS     ++
+        ADC     #$0F
+        LSR
+        LSR
+        LSR
+        LSR
+        TAY
+        LDA     #$FF
+-       ASL
+        DEY
+        BNE     -
+        EOR     #$FF
+        STA     ESTKL,X
+        LDA     #$00
+        STA     ESTKH,X
+        RTS
+--      INX
+        INX
+        INX
+++      LDA     #$00
+        STA     ESTKL,X
+        STA     ESTKH,X
+        RTS
+end
+asm poolmap(strbase, mapbase, idx, mask)#1
+        LDA     ESTKL+2,X       ; MAPBASEL
+        STA     DSTL
+        LDA     ESTKH+2,X       ; MAPBASEH
+        CLC
+        ADC     ESTKH+1,X       ; IDXH
+        STA     DSTH
+        LDY     ESTKL+1,X       ; IDXL
+        LDA     (DST),Y
+        CMP     #$FF
+        BEQ     --
+        LDA     #$00
+        STA     ESTKL+2,X       ; OFST
+-       LDA     ESTKL,X
+        AND     (DST),Y
+        BEQ     ++
+        INC     ESTKL+2,X       ; OFST++
+        ASL     ESTKL,X         ; MASK <<= 1
+        BCS     --              ; NO FIT, EXIT
+        BCC     -
+++      LDA     ESTKL,X         ; UPDATE MASK
+        ORA     (DST),Y
+        STA     (DST),Y
+        LDA     ESTKL+2,X       ; OFST
+        ASL
+        ASL
+        ASL
+        ASL
+        ;CLC
+        ADC     ESTKL+3,X       ; + OFST << 4
+        STA     ESTKL+3,X
+        BCC     +
+        INC     ESTKH+3,X
++       ASL     ESTKH+2,X
+        TYA
+        ROR
+        TAY
+        LDA     #$00
+        ROR
+        ;CLC
+        ADC     ESTKL+3,X       ; + IDX << 7
+        STA     ESTKL+3,X
+        TYA
+        ADC     ESTKH+3,X
+        STA     ESTKH+3,X
+        INX
+        INX
+        INX
+        RTS
+end
 def bell#0
     putc($07)
 end
 //
 // Memory management routines
 //
-def sizemask(size)
-    if size <= 16
-        return $01
-    elsif size <= 32
-        return $03
-    elsif size <= 48
-        return $07
-    elsif size <= 64
-        return $0F
-    elsif size <= 80
-        return $1F
-    fin
-    return 0
-end
+//def sizemask(size)
+//    if size <= 80
+//        return sizetomask[(size - 1) >> 4]
+//    fin
+//    if size <= 16
+//        return $01
+//    elsif size <= 32
+//        return $03
+//    elsif size <= 48
+//        return $07
+//    elsif size <= 64
+//        return $0F
+//    elsif size <= 80
+//        return $1F
+//    fin
+//    return 0
+//end
 def strpoolalloc(size)
-    byte szmask, poolmap, ofst
-    word mapmask, i
+    byte szmask
+    word straddr, i
 
     szmask = sizemask(size)
     for i = strplmapsize - 1 downto 0
-        poolmap = ^(strpoolmap + i)
-        if  poolmap <> $FF
-            mapmask = szmask
-            ofst    = 0
-            repeat // Look for memory hole to fit
-                if poolmap & mapmask // Nope, shift over
-                    mapmask = mapmask << 1
-                    ofst++
-                else // Yep, take it
-                    ^(strpoolmap + i) = poolmap | mapmask
-                    return (ofst << 4) + (i << 7) + strpool
-                fin
-            until mapmask & $100 // No fit
+        straddr = poolmap(strpool, strpoolmap, i, szmask)
+        if straddr
+            return straddr
         fin
+        //if  ^(strpoolmap + i) <> $FF
+        //    mapmask = szmask
+        //    ofst    = 0
+        //    repeat // Look for memory hole to fit
+        //        if ^(strpoolmap + i) & mapmask // Nope, shift over
+        //            mapmask = mapmask << 1
+        //            ofst++
+        //        else // Yep, take it
+        //            ^(strpoolmap + i) = ^(strpoolmap + i) | mapmask
+        //            return (ofst << 4) + (i << 7) + strpool
+        //        fin
+        //    until mapmask & $100 // No fit
+        //fin
     next
-    bell()
-    puts("OUT OF MEMORY!")
+    puts(@nomem)
     return 0
 end
 def striplead(strptr, chr)#0
@@ -256,11 +339,11 @@ def striplead(strptr, chr)#0
         memcpy(strptr + 1, strptr + striplen, ^strptr)
     fin
 end
-def striptail(strptr, chr)#0
+def striptail(strptr)#0
     byte strlen
 
     for strlen = ^strptr downto 1
-        if ^(strptr + strlen) <> $8D and ^(strptr + strlen) <> chr
+        if ^(strptr + strlen) > keyspace
             break
         fin
     next
@@ -268,25 +351,15 @@ def striptail(strptr, chr)#0
 end
 def strstripcpy(dststr, srcstr)#0
     memcpy(dststr, srcstr, ^srcstr + 1)
-    striptail(dststr, keyspace)
+    striptail(dststr)
 end
 def delstr(strptr)#0
     word ofst, mask
 
     if strptr <> @nullstr
-        mask = sizemask(^strptr + 1)
-        //if (strptr - strpool) & $0F
-        //  puts("Misaligned pointer in delstr!"); bell(); getc
-        //fin
         ofst = (strptr - strpool) >> 4
-        mask = mask << (ofst & $07)
-        //if mask & $FF00
-        //  puts("Invalid mask shift in delstr!"); bell(); getc
-        //fin
+        mask = sizemask(^strptr + 1) << (ofst & $07)
         ofst = ofst >> 3
-        //if (^(strpoolmap + ofst) & mask) <> mask
-        //  puts("Inconsistent mask in delstr!"); bell(); getc
-        //fin
         ^(strpoolmap + ofst) = ^(strpoolmap + ofst) & ~mask
     fin
 end
@@ -294,10 +367,11 @@ def newstr(strptr)
     byte strlen
     word newptr
 
-    strlen = ^strptr
-    while ^(strptr + strlen) == keyenter or ^(strptr + strlen) == keyspace
-        strlen--
-    loop
+    for strlen = ^strptr downto 1
+        if ^(strptr + strlen) > keyspace
+            break
+        fin
+    next
     if strlen == 0
         return @nullstr
     fin
@@ -305,9 +379,10 @@ def newstr(strptr)
     if newptr
         memcpy(newptr + 1, strptr + 1, strlen)
         ^newptr = strlen
-        return newptr
+    else
+        newptr = @nullstr
     fin
-    return @nullstr
+    return newptr
 end
 def inittxtbuf#0
     word i
