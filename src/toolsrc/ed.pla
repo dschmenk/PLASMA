@@ -17,7 +17,6 @@ const pushbttn2     = $C062
 const pushbttn3     = $C063
 const keyboard      = $C000
 const keystrobe     = $C010
-const inputln       = $01FF
 //
 // ASCII key values
 //
@@ -61,8 +60,6 @@ const MAXLINES      = 999
 const MAXLINESSIZE  = MAXLINES+24
 const MAXCLIPLINES  = 256
 const MAXLNLEN      = 79
-const MAXSTRPLSIZE  = $8000
-//const STRPLMAPSIZE  = 224 // $E0 = 28K is memory@16 bytes per bit map, 128 bytes per 8 bit map, 1K bytes per 8 byte map
 const pgjmp         = 16
 const changed       = 1
 const insmode       = 2
@@ -87,15 +84,14 @@ word              = $0450,$04D0,$0550,$05D0,$0650,$06D0,$0750,$07D0
 byte nullstr       = ""
 byte[80] findstr   = ""
 byte[64] filename  = "UNTITLED"
-char nomem         = "Out of memory!\n"
 byte exit          = FALSE
 byte flags         = 0
 byte flash         = 0
 word numlines      = 0
 word numcliplines  = 0
 word arg
-word strplsize     = MAXSTRPLSIZE
-word strpool, strplmapsize, txtlinbuf, cliplinbuf, strpoolmap
+word strpool, strplmapsize, strpoolmap
+word txtlinbuf, cliplinbuf
 word cursx, cursy, scrnleft, curscol
 byte underchr, curschr
 word keyin, cursrow, selrow, scrntop, cursptr
@@ -199,6 +195,23 @@ CPUPLP  LDA     (SRC),Y
         BNE     CPUPLP
 +++     RTS
 end
+//def sizemask(size)
+//    if size <= 80
+//        return sizetomask[(size - 1) >> 4]
+//    fin
+//    if size <= 16
+//        return $01
+//    elsif size <= 32
+//        return $03
+//    elsif size <= 48
+//        return $07
+//    elsif size <= 64
+//        return $0F
+//    elsif size <= 80
+//        return $1F
+//    fin
+//    return 0
+//end
 asm sizemask(size)#1
         LDA     ESTKL,X
         CMP     #81
@@ -234,6 +247,25 @@ asm sizemask(size)#1
         STA     ESTKH,X
         RTS
 end
+//def strpoolalloc(size)
+//    szmask = sizemask(size)
+//    for i = strplmapsize - 1 downto 0
+//        if  ^(strpoolmap + i) <> $FF
+//            mapmask = szmask
+//            ofst    = 0
+//            repeat // Look for memory hole to fit
+//                if ^(strpoolmap + i) & mapmask // Nope, shift over
+//                    mapmask = mapmask << 1
+//                    ofst++
+//                else // Yep, take it
+//                    ^(strpoolmap + i) = ^(strpoolmap + i) | mapmask
+//                    return (ofst << 4) + (i << 7) + strpool
+//                fin
+//            until mapmask & $100 // No fit
+//        fin
+//    next
+//    return 0
+//end
 asm poolalloc(poolbase, mapbase, idx, mask)#1
         LDA     ESTKL+2,X       ; MAPBASEL
         STA     DSTL
@@ -269,8 +301,8 @@ asm poolalloc(poolbase, mapbase, idx, mask)#1
         STA     ESTKL+3,X
         BCC     +
         INC     ESTKH+3,X
-+       ASL     ESTKH+2,X
-        TYA
++       TYA
+        LSR     ESTKH+1,X
         ROR
         TAY
         LDA     #$00
@@ -292,50 +324,6 @@ end
 //
 // Memory management routines
 //
-//def sizemask(size)
-//    if size <= 80
-//        return sizetomask[(size - 1) >> 4]
-//    fin
-//    if size <= 16
-//        return $01
-//    elsif size <= 32
-//        return $03
-//    elsif size <= 48
-//        return $07
-//    elsif size <= 64
-//        return $0F
-//    elsif size <= 80
-//        return $1F
-//    fin
-//    return 0
-//end
-def strpoolalloc(size)
-    byte szmask
-    word straddr, i
-
-    straddr = poolalloc(strpool, strpoolmap, strplmapsize - 1, sizemask(size))
-    if straddr
-        return straddr
-    fin
-    //szmask = sizemask(size)
-    //for i = strplmapsize - 1 downto 0
-        //if  ^(strpoolmap + i) <> $FF
-        //    mapmask = szmask
-        //    ofst    = 0
-        //    repeat // Look for memory hole to fit
-        //        if ^(strpoolmap + i) & mapmask // Nope, shift over
-        //            mapmask = mapmask << 1
-        //            ofst++
-        //        else // Yep, take it
-        //            ^(strpoolmap + i) = ^(strpoolmap + i) | mapmask
-        //            return (ofst << 4) + (i << 7) + strpool
-        //        fin
-        //    until mapmask & $100 // No fit
-        //fin
-    //next
-    puts(@nomem)
-    return 0
-end
 def striplead(strptr, chr)#0
     byte striplen
 
@@ -349,11 +337,11 @@ def striplead(strptr, chr)#0
         memcpy(strptr + 1, strptr + striplen, ^strptr)
     fin
 end
-def striptail(strptr)#0
+def striptail(strptr, chr)#0
     byte strlen
 
     for strlen = ^strptr downto 1
-        if ^(strptr + strlen) > ' '
+        if ^(strptr + strlen) <> $8D and ^(strptr + strlen) <> chr
             break
         fin
     next
@@ -361,7 +349,7 @@ def striptail(strptr)#0
 end
 def strstripcpy(dststr, srcstr)#0
     memcpy(dststr, srcstr, ^srcstr + 1)
-    striptail(dststr)
+    striptail(dststr, keyspace)
 end
 def delstr(strptr)#0
     word ofst, mask
@@ -385,11 +373,15 @@ def newstr(strptr)
     if strlen == 0
         return @nullstr
     fin
-    newptr = strpoolalloc(strlen + 1)
+    newptr = poolalloc(strpool,          \
+                       strpoolmap,       \
+                       strplmapsize - 1, \
+                       sizemask(strlen + 1))
     if newptr
         memcpy(newptr + 1, strptr + 1, strlen)
         ^newptr = strlen
     else
+        puts("Out of memory!\n")
         newptr = @nullstr
     fin
     return newptr
@@ -398,13 +390,11 @@ def inittxtbuf#0
     word i
 
     if not strpool
-        txtlinbuf  = heapalloc(MAXLINESSIZE*2)
-        cliplinbuf = heapalloc(MAXCLIPLINES*2)
-        strplsize    = heapavail - 1024
-        strplmapsize = strplsize / 128
-        strplsize    = strplmapsize * 128
+        txtlinbuf    = heapalloc(MAXLINESSIZE*2)
+        cliplinbuf   = heapalloc(MAXCLIPLINES*2)
+        strplmapsize = (heapavail - 1024) / 128
         strpoolmap   = heapalloc(strplmapsize)
-        strpool      = heapalloc(strplsize)
+        strpool      = heapalloc(strplmapsize * 128)
         memset(txtlinbuf,  @nullstr, MAXLINESSIZE*2)
         memset(cliplinbuf, @nullstr, MAXCLIPLINES*2)
         memset(strpoolmap, 0, strplmapsize)
