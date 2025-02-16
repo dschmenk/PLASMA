@@ -7,7 +7,8 @@
 include "inc/cmdsys.plh"
 include "inc/args.plh"
 include "inc/fileio.plh"
-sysflags nojitc // Keep JITC from compiling and pausing while editing
+include "inc/conio.plh"
+sysflags restxt1|resxtxt1|nojitc // Keep JITC from compiling and pausing while editing
 //
 // Hardware constants
 //
@@ -73,11 +74,8 @@ const shiftlock     = 128
 //
 const scrnheight  = 24
 const scrnbottom  = 23
-word scrnwidth    = 36
-word scrnright    = 35
-word txtscrn      = $0400,$0480,$0500,$0580,$0600,$0680,$0700,$0780
-word              = $0428,$04A8,$0528,$05A8,$0628,$06A8,$0728,$07A8
-word              = $0450,$04D0,$0550,$05D0,$0650,$06D0,$0750,$07D0
+word scrnwidth    = 76
+word scrnright    = 75
 //
 // Editor variables
 //
@@ -86,7 +84,7 @@ byte[80] findstr   = ""
 byte[64] filename  = "UNTITLED"
 byte exit          = FALSE
 byte flags         = 0
-byte flash         = 0
+byte flashcurs     = 0
 word numlines      = 0
 word numcliplines  = 0
 word arg
@@ -97,6 +95,11 @@ byte underchr, curschr
 word keyin, cursrow, selrow, scrntop, cursptr
 byte a3echo         = $80
 byte a3noecho       = $00
+//
+// String of 80 spaces
+//
+byte[80] spaces = \
+"                                                                                 "
 //
 // Predeclared functions
 //
@@ -554,17 +557,13 @@ end
 // Screen routines
 //
 def clrscrn#0
-    if MACHID == $F2 // Apple 3
-        putc(28)
-    else
-        call($FC58, 0, 0, 0, 0)
-    fin
+    conio:home()
 end
 def drawrow(row, ofst, strptr)#0
     byte numchars
-    word scrnptr
+    char scrnstr[81]
 
-    scrnptr = txtscrn[row] + (flags & gutter)
+    //scrnptr = txtscrn[row] + (flags & gutter)
     if ofst >= ^strptr
         numchars = 0
     else
@@ -573,34 +572,39 @@ def drawrow(row, ofst, strptr)#0
     if numchars >= scrnwidth
         numchars = scrnwidth
     else
-        memset(scrnptr + numchars, $A0A0, scrnwidth - numchars)
+        //conio:gotoxy((flags & gutter) + numchars, row)
+        //spaces = scrnwidth - numchars
+        //puts(@spaces)
+        memset(@scrnstr + numchars + 1, $2020, scrnwidth - numchars)
     fin
-    memcpy(scrnptr, strptr + ofst + 1, numchars)
+    memcpy(@scrnstr + 1, strptr + ofst + 1, numchars)
+    scrnstr = scrnwidth
+    conio:gotoxy((flags & gutter) + 1, row)
+    puts(@scrnstr)
 end
 def drawgutter(scrnrow, ofst)#0
     byte row, hilite, ofstch, huns, tens, ones
-    word scrnptr
-
+    char gutterchars[5]
     //
     // Draw line numbers and gutter hilites
     //
-    ofstch = ofst ?? '<' :: ' '
+    gutterchars[0] = 4
+    gutterchars[4] = ofst ?? '<' :: ' '
     huns, tens = divmod(scrnrow + 1, 100)
     tens, ones = divmod(tens, 10)
     for row = 0 to 23
-        scrnptr = txtscrn[row]
         if scrnrow < numlines
             if flags & selection and (scrnrow >= selrow and scrnrow <= cursrow) or (scrnrow >= cursrow and scrnrow <= selrow)
-                hilite = $00
+                conio:texttype(NORMAL) // hilite = $00
             elsif scrnrow == cursrow
-                hilite = $00
+                conio:texttype(NORMAL) // hilite = $00
             else
-                hilite = $80
+                conio:texttype(INVERSE) // hilite = $80
             fin
             if huns
-                ^scrnptr     = hilite + '0' + huns
-                ^(scrnptr+1) = hilite + '0' + tens
-                ^(scrnptr+2) = hilite + '0' + ones
+                gutterchars[1] = '0' + huns
+                gutterchars[2] = '0' + tens
+                gutterchars[3] = '0' + ones
                 ones++
                 if ones > 9
                     ones = 0
@@ -611,9 +615,9 @@ def drawgutter(scrnrow, ofst)#0
                     fin
                 fin
             elsif tens
-                ^scrnptr     = hilite + ' '
-                ^(scrnptr+1) = hilite + '0' + tens
-                ^(scrnptr+2) = hilite + '0' + ones
+                gutterchars[1] = ' '
+                gutterchars[2] = '0' + tens
+                gutterchars[3] = '0' + ones
                 ones++
                 if ones > 9
                     ones = 0
@@ -624,27 +628,27 @@ def drawgutter(scrnrow, ofst)#0
                     fin
                 fin
             elsif ones
-                ^scrnptr     = hilite + ' '
-                ^(scrnptr+1) = hilite + ' '
-                ^(scrnptr+2) = hilite + '0' + ones
+                gutterchars[1] = ' '
+                gutterchars[2] = ' '
+                gutterchars[3] = '0' + ones
                 ones++
                 if ones > 9
                     ones = 0
                     tens = 1
                 fin
             fin
-            ^(scrnptr+3) = ofstch
-        else
-            *scrnptr     = $A0A0
-            *(scrnptr+2) = $A0A0
         fin
+        conio:gotoxy(1, row)
+        puts(@gutterchars)
         scrnrow++
     next
+    conio:texttype(NORMAL)
 end
 def drawscrn(toprow, ofst)#0
     byte row, numchars, lofst
     word strptr, scrnptr
 
+    conio:viewport(0, 0, 80, 25) // Keep bottom of screen scrolling up
     lofst = flags & gutter
     if lofst
         drawgutter(toprow, ofst)
@@ -652,35 +656,10 @@ def drawscrn(toprow, ofst)#0
     //
     // Draw text
     //
-    if ofst
-        for row = 0 to 23
-            strptr   = txtlinbuf=>[toprow + row]
-            scrnptr  = txtscrn[row] + lofst
-            if ofst >= ^strptr
-                numchars = 0
-            else
-                numchars = ^strptr - ofst
-            fin
-            if numchars >= scrnwidth
-                numchars = scrnwidth
-            else
-                memset(scrnptr + numchars, $A0A0, scrnwidth - numchars)
-            fin
-            memcpy(scrnptr, strptr + ofst + 1, numchars)
-        next
-    else
-        for row = 0 to 23
-            strptr   = txtlinbuf=>[toprow + row]
-            scrnptr  = txtscrn[row] + lofst
-            numchars = ^strptr
-            if numchars >= scrnwidth
-                numchars = scrnwidth
-            else
-                memset(scrnptr + numchars, $A0A0, scrnwidth - numchars)
-            fin
-            memcpy(scrnptr, strptr + 1, numchars)
-        next
-    fin
+    for row = 0 to 23
+        drawrow(row, ofst, txtlinbuf=>[toprow + row])
+    next
+    conio:viewport(0, 0, 80, 24)
 end
 def cursoff#0
     word scrnptr
@@ -688,9 +667,9 @@ def cursoff#0
     if flags & showcurs
         ^cursptr     = underchr
         if flags & gutter
-            scrnptr      = txtscrn[cursy]
-            *scrnptr     = *scrnptr     | $8080
-            ^(scrnptr+2) = ^(scrnptr+2) | $80
+            //scrnptr      = txtscrn[cursy]
+            //*scrnptr     = *scrnptr     | $8080
+            //^(scrnptr+2) = ^(scrnptr+2) | $80
         fin
         flags = flags & ~showcurs
 
@@ -703,24 +682,24 @@ def curson#0
     if !(flags & showcurs)
         lofst = flags & gutter
         if lofst
-            scrnptr = txtscrn[cursy]
-            *scrnptr     = *scrnptr     & $7F7F
-            ^(scrnptr+2) = ^(scrnptr+2) & $7F
+            //scrnptr = txtscrn[cursy]
+            //*scrnptr     = *scrnptr     & $7F7F
+            //^(scrnptr+2) = ^(scrnptr+2) & $7F
         fin
-        cursptr  = txtscrn[cursy] + lofst + cursx
-        underchr = ^cursptr
-        ^cursptr = curschr
+        //cursptr  = txtscrn[cursy] + lofst + cursx
+        //underchr = ^cursptr
+        //^cursptr = curschr
         flags = flags | showcurs
     fin
 end
-def cursflash#0
+def cursflashcurs#0
     if flags & showcurs
-        if flash == 0
+        if flashcurs == 0
             ^cursptr = curschr
-        elsif flash == 128
+        elsif flashcurs == 128
             ^cursptr = underchr
         fin
-        flash++
+        flashcurs++
     fin
 end
 def redraw#0
@@ -1019,7 +998,7 @@ def keyin3
     byte key
 
     repeat
-        cursflash
+        cursflashcurs
     until cons_keyavail
     key = cons_keyread
     if key & $80 // Open Apple modifier
@@ -1072,16 +1051,16 @@ end
 def keyin2e
     byte key, vbl
 
-    vbl  = ^$C019
+    vbl = ^$C019
     repeat
         if flags & showcurs
-            if flash == 0
+            if flashcurs == 0
                 ^cursptr = curschr
-            elsif flash == 128
+            elsif flashcurs == 128
                 ^cursptr = underchr
             fin
             if vbl ^ ^$C019
-                flash = flash + 8
+                flashcurs = flashcurs + 8
                 vbl = ^$C019
                 ^$C079 = 0 // Clear VBL int on //c
             fin
@@ -1144,7 +1123,6 @@ def keyin2e
 end
 def keyin2c
     byte key
-
     ^$C079 = 0 // IOU enable and clear VBL int on //c
     ^$C05B = 0 // Enable VBL Ints on //c
     key = keyin2e
@@ -1156,7 +1134,7 @@ def keyin2
     byte key
 
     repeat
-        cursflash
+        cursflashcurs
         key = ^keyboard
         if key == keyctrll
             ^keystrobe
@@ -1882,6 +1860,7 @@ end
 //
 // Init editor
 //
+conio:textmode(80)
 setkeyin
 if not (MACHID & $80) // ][ or ][+
     flags = uppercase | shiftlock
@@ -1906,4 +1885,5 @@ flags    = flags | insmode | gutter
 drawscrn(scrntop, scrnleft)
 curson
 editmode
+conio:textmode(40)
 done
