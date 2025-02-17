@@ -59,7 +59,7 @@ const keydelete     = $FF
 const MAXLINES      = 999
 const MAXLINESSIZE  = MAXLINES+24
 const MAXCLIPLINES  = 256
-const MAXLNLEN      = 79
+const MAXLNLEN      = 127
 const pgjmp         = 16
 const changed       = 1
 const insmode       = 2
@@ -214,7 +214,7 @@ end
 //end
 asm sizemask(size)#1
         LDA     ESTKL,X
-        CMP     #81
+        CMP     #129        ; 81
         BCS     ++
         ADC     #$0F
         LSR
@@ -1418,25 +1418,29 @@ def openline(row)
     return FALSE
 end
 def joinline#0
-    byte joinstr[MAXLNLEN+1], joinlen, stripjoin[MAXLNLEN+1]
+    word  joinlen, joinstr, stripjoin
 
     if cursrow < numlines - 1
-        strstripcpy(@joinstr, txtlinbuf=>[cursrow])
-        memcpy(@stripjoin, txtlinbuf=>[cursrow + 1], ^(txtlinbuf=>[cursrow + 1]) + 1)
-        striplead(@stripjoin, keyspace);
-        joinlen = joinstr + stripjoin
+        joinstr   = heapalloc(MAXLNLEN+1)
+        stripjoin = heapalloc(MAXLNLEN+1)
+        strstripcpy(joinstr, txtlinbuf=>[cursrow])
+        memcpy(stripjoin, txtlinbuf=>[cursrow + 1], ^(txtlinbuf=>[cursrow + 1]) + 1)
+        striplead(stripjoin, keyspace);
+        joinlen = ^joinstr + ^stripjoin
         if joinlen <= MAXLNLEN
-            curshpos(joinstr)
-            memcpy(@joinstr + joinstr + 1, @stripjoin + 1, stripjoin)
-            joinstr = joinlen
+            curshpos(^joinstr)
+            memcpy(joinstr + ^joinstr + 1, stripjoin + 1, ^stripjoin)
+            ^joinstr = joinlen
             delstr(txtlinbuf=>[cursrow])
-            txtlinbuf=>[cursrow] = newstr(@joinstr)
+            txtlinbuf=>[cursrow] = newstr(joinstr)
             delstr(txtlinbuf=>[cursrow + 1])
             numlines--
             memcpy(@txtlinbuf=>[cursrow + 1], @txtlinbuf=>[cursrow + 2], (numlines - cursrow) * 2)
             flags = flags | changed
+            heaprelease(joinstr)
             return
         fin
+        heaprelease(joinstr)
     fin
     bell
 end
