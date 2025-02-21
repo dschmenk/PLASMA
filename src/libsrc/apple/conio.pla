@@ -15,6 +15,8 @@ const a2rndh   = $4F
 //
 // Apple II hardware constants.
 //
+const CSW          = $0036
+const KSW          = $0038
 const speaker      = $C030
 const showgraphics = $C050
 const showtext     = $C051
@@ -26,6 +28,9 @@ const showlores    = $C056
 const showhires    = $C057
 const keyboard     = $C000
 const keystrobe    = $C010
+const pushbttn1    = $C061
+const pushbttn2    = $C062
+const pushbttn3    = $C063
 const hgr1         = $2000
 const hgr2         = $4000
 const page1        = 0
@@ -69,15 +74,17 @@ word txt2scrn[]     = $0800,$0880,$0900,$0980,$0A00,$0A80,$0B00,$0B80
 word                = $0828,$08A8,$0928,$09A8,$0A28,$0AA8,$0B28,$0BA8
 word                = $0850,$08D0,$0950,$09D0,$0A50,$0AD0,$0B50,$0BD0
 //
-// Text screen parameters.
+// Current text mode
 //
-//byte textcols = 40
-//byte curshpos = 0
-//byte cursvpos = 0
+byte textcols = 40
 //
-// Apple2 disable 80 column string
+// Apple 2 disable 80 column string
 //
 char disable80[] = 5, 21, 13, '1', 26, 13
+//
+// Apple 2 KSW snd CSW values
+//
+word kswsave, cswsave
 //
 // Apple 3 console codes.
 //
@@ -85,6 +92,8 @@ byte textbwmode[]   = 2, 16, 0
 byte textclrmode[]  = 2, 16, 1
 byte grcharset[]    = 1, 0, $7F, $7F, $7F, $7F, $00, $00, $00, $00
 byte a3keyqueue     = 0
+byte a3echo         = $80
+byte a3noecho       = $00
 //
 // Random number for Apple 1 and III.
 //
@@ -211,16 +220,122 @@ end
 def a2keypressed
     return ^keyboard >= 128 ?? ^keyboard :: 0
 end
-def a2home
-    //curshpos = 0
-    //cursvpos = 0
+def a2getchar
+    return (pushbttn2 & 128) | key
+end
+def a2getchare
+    return (pushbttn2 & 128) | key
+end
+def a2getkey
+    return (pushbttn2 & 128) | key
+end
+def a2getkeye
+    return (pushbttn2 & 128) | key
+end
+def keyin2e
+    byte key, vbl
+
+    vbl = ^$C019
+    repeat
+        if flags & showcurs
+            if flashcurs == 0
+                ^cursptr = curschr
+            elsif flashcurs == 128
+                ^cursptr = underchr
+            fin
+            if vbl ^ ^$C019
+                flashcurs = flashcurs + 8
+                vbl = ^$C019
+                ^$C079 = 0 // Clear VBL int on //c
+            fin
+        fin
+        key = ^keyboard
+    until key >= 128
+    ^keystrobe
+    return key
+end
+def keyin2c
+    byte key
+    ^$C079 = 0 // IOU enable and clear VBL int on //c
+    ^$C05B = 0 // Enable VBL Ints on //c
+    key = keyin2e
+    ^$C05A = 0 // Disable VBL Ints on //c
+    ^$C078 = 0 // IOU disable on //c
+    return key
+end
+def keyin2
+    byte key
+
+    repeat
+        cursflashcurs
+        key = ^keyboard
+        if key == keyctrll
+            ^keystrobe
+            flags = flags ^ shiftlock
+            key   = 0
+        fin
+    until key >= 128
+    ^keystrobe
+    when key
+        is keyctrln
+            key = $DB // '['
+            break
+        is $9E // SHIFT+CTRL+N
+            key = $FE // '~'
+            break
+        is keyctrlp
+            key = $DC // '\'
+            break
+        is $80 // SHIFT+CTRL+P -> CTRL+@
+            key = $FC // '|'
+            break
+        is keyctrlg
+            key = $DF // '_'
+            break
+        is keyarrowleft
+            if ^pushbttn3 < 128
+                key = keydelete
+            fin
+            break
+        is keyarrowright
+            if ^pushbttn3 < 128
+                key = keytab
+            fin
+            break
+        otherwise
+            if key >= $C0 and flags < shiftlock
+                if ^pushbttn3 < 128
+                    when key
+                        is $C0
+                            key = $D0 // P
+                            break
+                        is $DD
+                            key = $CD // M
+                            break
+                        is $DE
+                            key = $CE // N
+                    wend
+                else
+                   key = key | $E0
+                fin
+            fin
+    wend
+    return key
+end
+def a2home40
     return call($FC58, 0, 0, 0, 0) // home()
 end
+def a2home80
+    putc(12) // Form Feed
+    return 0
+end
 def a2gotoxy(x, y)
-    //curshpos = x
-    //cursvpos = y
     ^$24 = x + ^$20
     return call($FB5B, y + ^$22, 0, 0, 0)
+end
+def a2gotoxy80(x, y)
+    putc($1E); putc(x + ' '); putc(y + ' ')
+    return 0
 end
 def a2viewport(left, top, width, height)
     if !width or !height
@@ -239,16 +354,43 @@ def a2texttype(type)
     ^$32 = type
     return 0
 end
+def a2texttype80(type)
+    putc(type == NORMAL ?? $0E :: $0F)
+    return 0
+end
+def a2texttype80v(type)
+    return 0
+end
 def a2textmode(columns)
     call($FB39, 0, 0, 0, 0) // textmode()
-    if columns > 40
+    if columns > 40 and MACHID & MACHID_80COL
+        cswsave = *CSW
+        kswsave = *KSW
         call($C300, 0, 0, 0,  0)
+        conio:home       = @a2home80
+        conio:gotoxy     = @a2gotoxy80
+        conio:texttype   = @a2texttype80
+        textcols         = 80
     else
-        puts(@disable80)
+        if textcols == 80
+            if MACHID & $C0 == MACHID_IIE
+                puts($15)
+            else
+                ^$C059
+                *CSW = cswsave
+                *KSW = kswsave
+            fin
+        fin
+        conio:home       = @a2home
+        conio:gotoxy     = @a2gotoxy
+        conio:texttype   = @a2texttype
+        textcols         = 40
+        a2home
     fin
-    return a2home
+    return textcols
 end
 def a2grmode(mix)
+    a2textmode(40)
     call($FB2F, 0, 0, 0, 0) // initmode()
     call($FB40, 0, 0, 0, 0) // grmode()
     if !mix
@@ -292,6 +434,29 @@ def dev_status(devnum, code, list)
     params:3 = list
     return syscall($82, @params)
 end
+def cons_keyavail
+    byte params[5]
+    byte count
+
+    params.0 = 3
+    params.1 = cmdsys.devcons
+    params.2 = 5
+    params:3 = @count
+    return syscall($82, @params) ?? 0 :: count
+end
+def cons_keyread
+    byte params[8]
+    byte key
+
+    params.0 = 4
+    params.1 = cmdsys.refcons
+    params:2 = @key
+    params:4 = 1
+    params:6 = 0
+    syscall($CA, @params)
+    return params:6 ?? key :: 0
+end
+
 def a3keypressed
     byte count
 
@@ -311,18 +476,24 @@ def a3getkey
     a3keyqueue = 0
     return keycode
 end
+def keyin3
+    repeat
+        cursflashcurs
+    until cons_keyavail
+    return cons_keyread
+end
 def a3echo(state)
     return dev_control(cmdsys.devcons, 11, @state)
 end
+    if MACHID == $F2 // Apple 3
+        dev_control(cmdsys.devcons, 11, @a3noecho)
+    fin
+
 def a3home
-    //curshpos = 0
-    //cursvpos = 0
     putc(28)
     return 0
 end
 def a3gotoxy(x, y)
-    //curshpos = x
-    //cursvpos = y
     putc(24)
     putc(x)
     putc(25)
@@ -426,6 +597,9 @@ when MACHID & MACHID_MODEL
         conio:rnd        = @a13rnd
         break
     otherwise // MACHID_II        puts("Found MACHID_MODEL = $"); putb(MACHID & MACHID_MODEL); putln
+        if not (MACHID & $80) // ][ or ][+
+            flags = uppercase
+        fin
 wend
 //
 // Keep module in memory

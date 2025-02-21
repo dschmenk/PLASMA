@@ -9,51 +9,7 @@ include "inc/args.plh"
 include "inc/fileio.plh"
 include "inc/conio.plh"
 sysflags restxt1|resxtxt1|nojitc // Keep JITC from compiling and pausing while editing
-//
-// Hardware constants
-//
-const csw           = $0036
-const pushbttn1     = $C061
-const pushbttn2     = $C062
-const pushbttn3     = $C063
-const keyboard      = $C000
-const keystrobe     = $C010
-//
-// ASCII key values
-//
-const keyenter      = $8D
-const keyspace      = $A0
-const keyarrowup    = $8B
-const keyarrowdown  = $8A
-const keyarrowleft  = $88
-const keyarrowright = $95
-const keyescape     = $9B
-const keyctrla      = $81
-const keyctrlb      = $82
-const keyctrlc      = $83
-const keyctrld      = $84
-const keyctrle      = $85
-const keyctrlf      = $86
-const keyctrlg      = $87
-const keyctrli      = $89
-const keyctrlk      = $8B
-const keyctrll      = $8C
-const keyctrln      = $8E
-const keyctrlo      = $8F
-const keyctrlp      = $90
-const keyctrlq      = $91
-const keyctrlr      = $92
-const keyctrls      = $93
-const keyctrlt      = $94
-const keyctrlu      = $95
-const keyctrlv      = $96
-const keyctrlw      = $97
-const keyctrlx      = $98
-const keyctrly      = $99
-const keyctrlz      = $9A
-const keytab        = keyctrli
-const keydetab      = $9D
-const keydelete     = $FF
+const CSW          = $0036
 //
 // Data and text buffer constants
 //
@@ -92,9 +48,7 @@ word strpool, strplmapsize, strpoolmap
 word txtlinbuf, cliplinbuf
 word cursx, cursy, scrnleft, curscol
 byte underchr, curschr
-word keyin, cursrow, selrow, scrntop, cursptr
-byte a3echo         = $80
-byte a3noecho       = $00
+word cursrow, selrow, scrntop, cursptr
 //
 // String of 80 spaces
 //
@@ -423,8 +377,8 @@ end
 //
 def caseconv(chr)
     if flags & uppercase
-        if chr & $E0 == $E0
-            chr = chr - $E0
+        if chr & $60 == $60
+            chr = chr - $60
         fin
     fin
     return chr
@@ -435,8 +389,8 @@ def strupper(strptr)#0
     if ^strptr
         for i = ^strptr downto 1
             chr = (strptr).[i]
-            if chr & $E0 == $E0
-                (strptr).[i] = chr - $E0
+            if chr & $60 == $60
+                (strptr).[i] = chr - $60
             fin
         next
     fin
@@ -447,8 +401,8 @@ def strlower(strptr)#0
     if ^strptr
         for i = ^strptr downto 1
             chr = (strptr).[i]
-            if chr & $E0 == $00
-                (strptr).[i] = chr + $E0
+            if chr & $60 == $00
+                (strptr).[i] = chr + $60
             fin
         next
     fin
@@ -563,7 +517,6 @@ def drawrow(row, ofst, strptr)#0
     byte numchars
     char scrnstr[81]
 
-    //scrnptr = txtscrn[row] + (flags & gutter)
     if ofst >= ^strptr
         numchars = 0
     else
@@ -648,7 +601,7 @@ def drawscrn(toprow, ofst)#0
     byte row, numchars, lofst
     word strptr, scrnptr
 
-    conio:viewport(0, 0, 80, 25) // Keep bottom of screen scrolling up
+    conio:viewport(0, 0, scrnwidth + 4, 25) // Keep bottom of screen scrolling up
     lofst = flags & gutter
     if lofst
         drawgutter(toprow, ofst)
@@ -659,7 +612,7 @@ def drawscrn(toprow, ofst)#0
     for row = 0 to 23
         drawrow(row, ofst, txtlinbuf=>[toprow + row])
     next
-    conio:viewport(0, 0, 80, 24)
+    conio:viewport(0, 0, scrnwidth + 4, 24)
 end
 def cursoff#0
     word scrnptr
@@ -859,7 +812,6 @@ def pgleft#0
     fin
     cursoff
     if curshpos(i)
-    //if curshpos(curscol - 8)
         drawscrn(scrntop, scrnleft)
     else
         if flags & selection
@@ -900,7 +852,6 @@ def pgright#0
     fin
     cursoff
     if curshpos(i)
-    //if curshpos(curscol + 8)
         drawscrn(scrntop, scrnleft)
     else
         if flags & selection
@@ -962,113 +913,11 @@ end
 //
 // Keyboard routines
 //
-def dev_control(devnum, code, list)#1
-    byte params[5]
-
-    params.0 = 3
-    params.1 = devnum
-    params.2 = code
-    params:3 = list
-    perr     = syscall($83, @params)
-    return perr
-end
-def cons_keyavail
-    byte params[5]
-    byte count
-
-    params.0 = 3
-    params.1 = cmdsys.devcons
-    params.2 = 5
-    params:3 = @count
-    return syscall($82, @params) ?? 0 :: count
-end
-def cons_keyread
-    byte params[8]
+def keyin
     byte key
 
-    params.0 = 4
-    params.1 = cmdsys.refcons
-    params:2 = @key
-    params:4 = 1
-    params:6 = 0
-    syscall($CA, @params)
-    return params:6 ?? key :: 0
-end
-def keyin3
-    byte key
-
-    repeat
-        cursflashcurs
-    until cons_keyavail
-    key = cons_keyread
-    if key & $80 // Open Apple modifier
-        when key
-            is keyarrowleft
-                key = keyctrla; break
-            is keyarrowright
-                key = keyctrls; break
-            is keyarrowup
-                key = keyctrlw; break
-            is keyarrowdown
-                key = keyctrlz; break
-            is keyenter
-                key = keyctrlf; break
-             is keytab
-                key = keydetab; break
-           is $80 | '\\'
-                key = keydelete; break // Delete
-            //
-            // Map OA+keypad
-            //
-            is $80 | '4'
-                key = keyarrowleft; break
-            is $80 | '6'
-                key = keyarrowright; break
-            is $80 | '8'
-                key = keyarrowup; break
-            is $80 | '2'
-                key = keyarrowdown; break
-            is $80 | '7'
-                key = keyctrlq; break // Top
-            is $80 | '1'
-                key = keyctrle; break // Bottom
-            is $80 | '9'
-                key = keyctrlw; break // Pg Up
-            is $80 | '3'
-                key = keyctrlz; break // Pg Dn
-            is $80 | '5'
-                key = keyctrlb; break // Selection start/end
-            is $80 | '0'
-                key = keyctrld; break // Del
-            is $80 | '.'
-                key = keyctrlv; break // Paste
-            is $80 | '-'
-                key = keyctrlx; break // Cut
-        wend
-    fin
-    return key | $80
-end
-def keyin2e
-    byte key, vbl
-
-    vbl = ^$C019
-    repeat
-        if flags & showcurs
-            if flashcurs == 0
-                ^cursptr = curschr
-            elsif flashcurs == 128
-                ^cursptr = underchr
-            fin
-            if vbl ^ ^$C019
-                flashcurs = flashcurs + 8
-                vbl = ^$C019
-                ^$C079 = 0 // Clear VBL int on //c
-            fin
-        fin
-        key = ^keyboard
-    until key >= 128
-    ^keystrobe
-    if ^pushbttn2 & 128 // Closed Apple (option) pressed
+    key = conio:getkey()
+    if key & keyoptmod // Closed-Apple/Option pressed
         when key
             is keyarrowleft
                 key = keyctrla; break
@@ -1082,6 +931,8 @@ def keyin2e
                 key = keyctrlf; break
             is keytab
                 key = keydetab; break
+           is $80 | '\\'
+                key = keydelete; break // Delete
             //
             // Map option+keypad on Platinum //e
             //
@@ -1119,90 +970,7 @@ def keyin2e
                 key = keyctrly; break // Insert/Overwrite
         wend
     fin
-    return key
-end
-def keyin2c
-    byte key
-    ^$C079 = 0 // IOU enable and clear VBL int on //c
-    ^$C05B = 0 // Enable VBL Ints on //c
-    key = keyin2e
-    ^$C05A = 0 // Disable VBL Ints on //c
-    ^$C078 = 0 // IOU disable on //c
-    return key
-end
-def keyin2
-    byte key
-
-    repeat
-        cursflashcurs
-        key = ^keyboard
-        if key == keyctrll
-            ^keystrobe
-            flags = flags ^ shiftlock
-            key   = 0
-        fin
-    until key >= 128
-    ^keystrobe
-    when key
-        is keyctrln
-            key = $DB // '['
-            break
-        is $9E // SHIFT+CTRL+N
-            key = $FE // '~'
-            break
-        is keyctrlp
-            key = $DC // '\'
-            break
-        is $80 // SHIFT+CTRL+P -> CTRL+@
-            key = $FC // '|'
-            break
-        is keyctrlg
-            key = $DF // '_'
-            break
-        is keyarrowleft
-            if ^pushbttn3 < 128
-                key = keydelete
-            fin
-            break
-        is keyarrowright
-            if ^pushbttn3 < 128
-                key = keytab
-            fin
-            break
-        otherwise
-            if key >= $C0 and flags < shiftlock
-                if ^pushbttn3 < 128
-                    when key
-                        is $C0
-                            key = $D0 // P
-                            break
-                        is $DD
-                            key = $CD // M
-                            break
-                        is $DE
-                            key = $CE // N
-                    wend
-                else
-                   key = key | $E0
-                fin
-            fin
-    wend
-    return key
-end
-def setkeyin#0
-    when MACHID & MACHID_MODEL
-        is MACHID_IIE
-            keyin = @keyin2e
-            break
-        is MACHID_IIC
-            keyin = @keyin2c
-            break
-        is MACHID_III
-            keyin = @keyin3
-            break
-        otherwise // ][ or ][+
-            keyin = @keyin2
-    wend
+    return key & $7F
 end
 //
 // Printer routines
@@ -1212,13 +980,13 @@ def printtxt(slot)#0
     word i, scrncsw
 
     scrncsw = *csw
-    *csw  = $C000 | (slot << 8)
+    *CSW  = $C000 | (slot << 8)
     for i = 0 to numlines - 1
         lncpy(@txtbuf, txtlinbuf=>[i])
         puts(@txtbuf)
         putln
     next
-    *csw = scrncsw
+    *CSW = scrncsw
 end
 def freesel#0
     word i
@@ -1536,7 +1304,7 @@ def editline(key)
                     localchange = TRUE
                     break
             wend
-            key = keyin()
+            key = keyin
         until not editkey(key)
         if localchange
             flags = flags | changed
@@ -1549,11 +1317,9 @@ def editline(key)
     return key
 end
 def editmode#0
-    if MACHID == $F2 // Apple 3
-        dev_control(cmdsys.devcons, 11, @a3noecho)
-    fin
+    conio:echo(FALSE)
     repeat
-        when editline(keyin())
+        when editline(keyin)
             is keyarrowup
                 cursup; break
             is keyarrowdown
@@ -1645,15 +1411,11 @@ def editmode#0
                 curschr = flags & insmode ?? '+' :: ' '
                 break
             is keyescape
-                if MACHID == $F2 // Apple 3
-                    dev_control(cmdsys.devcons, 11, @a3echo)
-                fin
+                conio:echo(TRUE)
                 cursoff
                 cmdmode
                 if not exit
-                    if MACHID == $F2 // Apple 3
-                        dev_control(cmdsys.devcons, 11, @a3noecho)
-                    fin
+                    conio:echo(FALSE)
                     redraw
                 fin
         wend
@@ -1731,7 +1493,7 @@ end
 def chkchng
     if flags & changed
         puts("LOSE CHANGES TO FILE (Y/N)?")
-        if toupper(keyin()) == 'N'
+        if toupper(keyin) == 'N'
             putln
             return FALSE
         fin
@@ -1864,10 +1626,9 @@ end
 //
 // Init editor
 //
-conio:textmode(80)
-setkeyin
-if not (MACHID & $80) // ][ or ][+
-    flags = uppercase | shiftlock
+if conio:textmode(80) <> 80
+    scrnwidth = 36
+    scrnright = 35
 fin
 inittxtbuf
 arg = argNext(argFirst)
