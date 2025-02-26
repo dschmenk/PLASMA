@@ -514,50 +514,43 @@ def clrscrn#0
     conio:home()
 end
 def drawrow(row, ofst, strptr)#0
-    byte numchars
-    char scrnstr[81]
+    byte numchars, left
 
     if ofst >= ^strptr
         numchars = 0
     else
         numchars = ^strptr - ofst
     fin
+    left = (flags & gutter) + 1
     if numchars >= scrnwidth
-        numchars = scrnwidth
+        conio:putchars(left, row, scrnwidth, strptr + ofst + 1)
     else
-        //conio:gotoxy((flags & gutter) + numchars, row)
-        //spaces = scrnwidth - numchars
-        //puts(@spaces)
-        memset(@scrnstr + numchars + 1, $2020, scrnwidth - numchars)
+        conio:putchars(left, row, numchars, strptr + ofst + 1)
+        conio:putchars(left + numchars, row, scrnwidth - numchars, ' ')
     fin
-    memcpy(@scrnstr + 1, strptr + ofst + 1, numchars)
-    scrnstr = scrnwidth
-    conio:gotoxy((flags & gutter) + 1, row)
-    puts(@scrnstr)
 end
 def drawgutter(scrnrow, ofst)#0
     byte row, hilite, ofstch, huns, tens, ones
-    char gutterchars[5]
+    char gutterchars[4]
     //
     // Draw line numbers and gutter hilites
     //
-    gutterchars[0] = 4
-    gutterchars[4] = ofst ?? '<' :: ' '
+    gutterchars[3] = ofst ?? '<' :: ' '
     huns, tens = divmod(scrnrow + 1, 100)
     tens, ones = divmod(tens, 10)
     for row = 0 to 23
         if scrnrow < numlines
             if flags & selection and (scrnrow >= selrow and scrnrow <= cursrow) or (scrnrow >= cursrow and scrnrow <= selrow)
-                conio:texttype(NORMAL) // hilite = $00
+                hilite = $00
             elsif scrnrow == cursrow
-                conio:texttype(NORMAL) // hilite = $00
+                hilite = $00
             else
-                conio:texttype(INVERSE) // hilite = $80
+                hilite = $80
             fin
             if huns
-                gutterchars[1] = '0' + huns
-                gutterchars[2] = '0' + tens
-                gutterchars[3] = '0' + ones
+                gutterchars[0] = '0' + huns
+                gutterchars[1] = '0' + tens
+                gutterchars[2] = '0' + ones
                 ones++
                 if ones > 9
                     ones = 0
@@ -568,9 +561,9 @@ def drawgutter(scrnrow, ofst)#0
                     fin
                 fin
             elsif tens
-                gutterchars[1] = ' '
-                gutterchars[2] = '0' + tens
-                gutterchars[3] = '0' + ones
+                gutterchars[0] = ' '
+                gutterchars[1] = '0' + tens
+                gutterchars[2] = '0' + ones
                 ones++
                 if ones > 9
                     ones = 0
@@ -581,9 +574,9 @@ def drawgutter(scrnrow, ofst)#0
                     fin
                 fin
             elsif ones
+                gutterchars[0] = ' '
                 gutterchars[1] = ' '
-                gutterchars[2] = ' '
-                gutterchars[3] = '0' + ones
+                gutterchars[2] = '0' + ones
                 ones++
                 if ones > 9
                     ones = 0
@@ -591,11 +584,10 @@ def drawgutter(scrnrow, ofst)#0
                 fin
             fin
         fin
-        conio:gotoxy(1, row)
-        puts(@gutterchars)
+        conio:putchars(0, row, 4, @gutterchars)
         scrnrow++
     next
-    conio:texttype(NORMAL)
+    //conio:textctrl(ctrltxt, NORMAL)
 end
 def drawscrn(toprow, ofst)#0
     byte row, numchars, lofst
@@ -625,7 +617,6 @@ def cursoff#0
             //^(scrnptr+2) = ^(scrnptr+2) | $80
         fin
         flags = flags & ~showcurs
-
     fin
 end
 def curson#0
@@ -643,16 +634,6 @@ def curson#0
         //underchr = ^cursptr
         //^cursptr = curschr
         flags = flags | showcurs
-    fin
-end
-def cursflashcurs#0
-    if flags & showcurs
-        if flashcurs == 0
-            ^cursptr = curschr
-        elsif flashcurs == 128
-            ^cursptr = underchr
-        fin
-        flashcurs++
     fin
 end
 def redraw#0
@@ -1317,7 +1298,7 @@ def editline(key)
     return key
 end
 def editmode#0
-    conio:echo(FALSE)
+    conio:textctrl(ctrlecho, OFF)
     repeat
         when editline(keyin)
             is keyarrowup
@@ -1411,11 +1392,11 @@ def editmode#0
                 curschr = flags & insmode ?? '+' :: ' '
                 break
             is keyescape
-                conio:echo(TRUE)
+                conio:textctrl(ctrlecho, ON)
                 cursoff
                 cmdmode
                 if not exit
-                    conio:echo(FALSE)
+                    conio:textctrl(ctrlecho, OFF)
                     redraw
                 fin
         wend
