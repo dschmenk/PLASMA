@@ -43,13 +43,57 @@ asm _vblnop#1
 end
 asm _vblend#1
 end
+export asm statusVBL#1
+!SOURCE    "vmsrc/plvmzp.inc"
+        PHP             ; //c version first because its largest
+        SEI
+        STA     $C07F   ; Enable IOU access and reset VBL int on //c
+        LDA     $C041   ; Save VBL int state MSB = BVL int enebaled
+        STA     $C05B   ; Enable VBL int
+        LDY     #$00
+        BIT     $C019
+        BPL     +       ; Check for VBL
+        DEY
+        STA     $C070   ; Reset VBL int on //c
++       ASL
+        BCS     +
+        STA     $C05A   ; Disable VBL int on //c
++       STA     $C07E   ; Disable IOU access on //c
+        PLP
+        TYA
+        DEX
+        STA     ESTKL,X
+        STA     ESTKH,X
+        RTS
+end
+asm _stat2e#1
+        LDA     #$00   ; //e version
+        BIT     $C019   ; Check for VBL
+        BPL     +
+        LDA     #$FF
++       DEX
+        STA     ESTKL,X
+        STA     ESTKH,X
+        RTS
+end
+asm _statnop#1
+        LDA     #$00    ; NOP version
+        DEX             ; return FALSE
+        STA     ESTKL,X
+        STA     ESTKH,X
+        RTS
+end
+asm _statend#1
+end
 //
 // Check for machine specific VLB handling
 //
 if MACHID & MACHID_MODEL == MACHID_IIE
     memcpy(@waitVBL, @_vbl2e, @_vblnop-@_vbl2e)
+    memcpy(@statusVBL, @_stat2e, @_statnop-@_stat2e)
 elsif MACHID & MACHID_MODEL <> MACHID_IIC
     memcpy(@waitVBL, @_vblnop, @_vblend-@_vblnop)
+    memcpy(@statusVBL, @_statnop, @_statend-@_statnop)
 fin
 //
 // Keep module in memory

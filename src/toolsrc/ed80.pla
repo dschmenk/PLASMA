@@ -8,6 +8,7 @@ include "inc/cmdsys.plh"
 include "inc/args.plh"
 include "inc/fileio.plh"
 include "inc/conio.plh"
+include "inc/vblank.plh"
 sysflags restxt1|resxtxt1|nojitc // Keep JITC from compiling and pausing while editing
 const CSW          = $0036
 //
@@ -20,11 +21,9 @@ const MAXLNLEN      = 127
 const pgjmp         = 16
 const changed       = 1
 const insmode       = 2
-const gutter        = 4
-const uppercase     = 8
-const selection     = 16
-const showcurs      = 32
-const shiftlock     = 128
+const gutter        = 4     // This has to be 4 to match on-screen width
+const selection     = 8
+const exit          = 16
 //
 // Text screen row address array
 //
@@ -39,15 +38,14 @@ word viewtop
 byte nullstr       = ""
 byte[80] findstr   = ""
 byte[64] filename  = "UNTITLED"
-byte exit          = FALSE
 byte flags         = 0
-byte flashcurs     = 0
 word numlines      = 0
 word numcliplines  = 0
 word arg
 word strpool, strplmapsize, strpoolmap
 word txtlinbuf, cliplinbuf
 word cursx, cursy, cursrow, curscol, selrow
+word cursflash = 300 // default cursor flash delay
 //
 // Predeclared functions
 //
@@ -562,18 +560,20 @@ def drawscrn#0
     drawrows(0, scrnheight - 1)
 end
 def curshpos(hpos)#1
-    byte needredraw
+    byte needredraw, scrnleft, scrnright
 
     needredraw = TRUE
     if hpos < 0; hpos = 0; fin
     if hpos > MAXLNLEN; hpos = MAXLNLEN; fin
+    scrnleft  = flags & gutter
+    scrnright = scrnleft + viewwidth
     curscol = hpos
     cursx   = curscol - viewleft + (flags & gutter)
-    if cursx > viewwidth
-        cursx    = viewwidth
+    if cursx > scrnright
+        cursx    = scrnright
         viewleft = curscol - viewwidth
-    elsif cursx < flags & gutter
-        cursx    = flags & gutter
+    elsif cursx < scrnleft
+        cursx    = scrnleft
         viewleft = curscol
     else
         needredraw = FALSE
@@ -1073,15 +1073,16 @@ end
 def waitkey#0
     word delay
 
-    for delay = 0 to  300
-        if conio:keypressed(); return; fin
-    next
+    delay = cursflash
+    while not conio:keypressed() and delay
+        delay--
+    loop
 end
 def keyin
     byte key, underchr, curschr
 
     underchr = curscol >= ^(txtlinbuf=>[cursrow]) ?? ' ' :: txtlinbuf=>[cursrow]->[curscol + 1]
-    curschr  = flags & insmode ?? '+' :: ' '
+    curschr  = flags & insmode ?? '+' :: '_'
     repeat
         conio:gotoxy(cursx, cursy)
         conio:textctrl(ctrlattr, INVERSE)
@@ -1322,13 +1323,13 @@ def editmode#0
                 conio:textctrl(ctrlecho, ON)
                 conio:textctrl(ctrlcursor, ON)
                 cmdmode
-                if not exit
+                if not (flags & exit)
                     conio:textctrl(ctrlecho, OFF)
                     conio:textctrl(ctrlcursor, OFF)
                     drawscrn
                 fin
         wend
-    until exit
+    until flags & exit
 end
 //
 // Command mode
@@ -1417,7 +1418,7 @@ def cmdmode#0
 
     conio:clear(cls)
     puts("PLASMA Editor, Version 2.20\n")
-    while not exit
+    while not (flags & exit)
         puts(@filename)
         cmdptr = gets($BA)
         when toupper(parsecmd(cmdptr))
@@ -1435,11 +1436,7 @@ def cmdmode#0
                             viewwidth = scrnwidth - (flags & gutter) - 1
                             break
                         is 'C' // Lower case chip (Apple ][/][+ only)
-                            if flags & uppercase
-                                //txtlower Add textctrl to force lower case output
-                            else
-                                //txtupper Add textctrl to force upper case output
-                            fin
+                            conio:textctrl(ctrlcase, 0)
                             break
                     wend
                 fin
@@ -1486,8 +1483,8 @@ def cmdmode#0
                 printtxt(slot)
                 break
             is 'Q' // Quit
-                exit = chkchng
-                if not exit
+                flags = flags | (chkchng ?? exit :: 0)
+                if not (flags & exit)
                     return
                 fin
                 break
@@ -1545,6 +1542,15 @@ if ^arg
         cursrow = strtonum(arg)
     fin
 fin
+while statusVBL and cursflash
+    cursflash--
+loop
+cursflash = 0
+while not statusVBL
+    cursflash++
+loop
+if cursflash == 0; cursflash = 30; fin
+cursflash = cursflash * 20 // Make it flash a little slower 
 flags     = flags | insmode | gutter
 scrnwidth = conio:textmode(scrnwidth)
 inittxtbuf

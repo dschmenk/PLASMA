@@ -231,6 +231,68 @@ EXA2PC  INX
         BIT     LCRDEN+LCBNK2
         RTS
 end
+asm a2putuprchars(cnt, chrs)
+TXTATTR =       $32
+        LDA     ESTKL+1,X       ; CNT
+        BEQ     EXA2PC
+        BIT     ROMEN
+        LDA     ESTKH,X
+        BEQ     ++
+        STA     SRCH            ; SRC = CHRPTR
+        LDA     ESTKL,X
+        STA     SRCL
+        LDY     #$00
+-       STY     ESTKH+1,X
+        TYA
+        CMP     ESTKL+1,X
+        BEQ     EXA2UPC
+        LDA     TXTATTR
+        PHA
+        LDA     (SRC),Y
+        ORA     #$80
+        CMP     #'a'+$80
+        BCC     +
+        CMP     #'z'+$81
+        BCS     +
+        SBC     #$1F
+        PHA
+        LDA     #$3F            ; OUTPUT LC AS INV
+        STA     TXTATTR
+        PLA
++       JSR     COUT
+        PLA
+        STA     TXTATTR
+        LDY     ESTKH+1,X
+        INY
+        BNE     -
+++      LDA     TXTATTR
+        PHA
+        LDA     ESTKL,X         ; CHR
+        ORA     #$80
+        CMP     #'a'+$80
+        BCC     +
+        CMP     #'z'+$81
+        BCS     +
+        SBC     #$1F
+        PHA
+        LDA     #$3F
+        STA     TXTATTR
+        PLA
++
+-       PHA
+        JSR     COUT
+        PLA
+        DEC     ESTKL+1,X
+        BNE     -
+        PLA
+        STA     TXTATTR
+EXA2UPC INX
+        LDA     #$00
+        STA     ESTKL,X
+        STA     ESTKH,X
+        BIT     LCRDEN+LCBNK2
+        RTS
+end
 asm vidcpy(dstrow, srcrow)#0
 WNDLFT  =       $20
 WNDWID  =       $21
@@ -558,6 +620,15 @@ def a2ctrl(code, param)#1
             fin
             handled = TRUE
             break
+        is ctrlcase
+            if not (flags & txt80)
+                flags = flags ^ uppercase
+                if flags & uppercase
+                    conio:putchars = flags & uppercase ?? @a2putuprchars :: @a2putchars
+                fin
+            fin
+            handled = TRUE
+            break
     wend
     return handled
 end
@@ -649,6 +720,7 @@ def a2textmode(columns)
             conio:clear      = @a2clear80v
             conio:gotoxy     = @a2gotoxy80v
             conio:textctrl   = @a2ctrl80v
+            conio:putchars   = @a2putchars
         fin
         flags            = flags | txt80
     else
@@ -660,6 +732,9 @@ def a2textmode(columns)
                 *CSW = cswsave
                 *KSW = kswsave
                 a2viewport(0, 0, 40, 24)
+                if flags & uppercase
+                    conio:putchars = @a2putuprchars
+                fin
             fin
         fin
         conio:clear      = @a2clear
@@ -894,7 +969,8 @@ when MACHID & MACHID_MODEL
         conio:getkey     = @a2cgetkey
         break
     is MACHID_II
-        //flags            = flags | uppercase
+        flags            = flags | uppercase
+        conio:putchars   = @a2putuprchars
         break
     is MACHID_I
         conio:keypressed = @a1keypressed
