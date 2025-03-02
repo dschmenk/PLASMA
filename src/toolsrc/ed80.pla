@@ -28,10 +28,11 @@ const shiftlock     = 128
 //
 // Text screen row address array
 //
-const scrnheight  = 24
-const scrnbottom  = 23
-word scrnwidth    = 76
-word scrnright    = 75
+word scrnheight     = 24
+byte scrnwidth      = 80
+byte viewwidth
+byte viewleft
+word viewtop
 //
 // Editor variables
 //
@@ -46,14 +47,7 @@ word numcliplines  = 0
 word arg
 word strpool, strplmapsize, strpoolmap
 word txtlinbuf, cliplinbuf
-word cursx, cursy, scrnleft, curscol
-byte underchr, curschr
-word cursrow, selrow, scrntop, cursptr
-//
-// String of 80 spaces
-//
-byte[80] spaces = \
-"                                                                                 "
+word cursx, cursy, cursrow, curscol, selrow
 //
 // Predeclared functions
 //
@@ -65,57 +59,6 @@ predef cmdmode#0
 //
 asm equates
     !SOURCE "vmsrc/plvmzp.inc"
-end
-asm sethibit(strptr)#0
-        LDA     ESTKL,X
-        STA     SRCL
-        LDA     ESTKH,X
-        STA     SRCH
-        INX
-        LDY     #$00
-        LDA     (SRC),Y
-        BEQ     +
-        TAY
-STHILP  LDA     (SRC),Y
-        ORA     #$80
-        STA     (SRC),Y
-        DEY
-        BNE     STHILP
-+       RTS
-end
-asm lncpy(dststr, srcstr)#0
-        LDA     ESTKL,X
-        STA     SRCL
-        LDA     ESTKH,X
-        STA     SRCH
-        INX
-        LDA     ESTKL,X
-        STA     DSTL
-        LDA     ESTKH,X
-        STA     DSTH
-        INX
-        LDY     #$00
-        LDA     (SRC),Y
-        CMP     #80
-        BCC     +
-        LDA     #79
-        CLC
-+       ADC     #$01    ; APPEND CR TO END OF STRING
-        STA     (DST),Y
-        TAY
-        LDA     #$0D
-        STA     (DST),Y
-        DEY
-        BEQ     ++
-CPLNLP  LDA     (SRC),Y
-        CMP     #$20
-        BCS     +
-        ADC     #$60
-+       AND     #$7F
-        STA     (DST),Y
-        DEY
-        BNE     CPLNLP
-++      RTS
 end
 asm lnupcpy(dststr, srcstr)#0
         LDA     ESTKL,X
@@ -294,19 +237,16 @@ def striplead(strptr, chr)#0
         memcpy(strptr + 1, strptr + striplen, ^strptr)
     fin
 end
-def striptail(strptr, chr)#0
+def strstripcpy(dststr, srcstr)#0
     byte strlen
 
-    for strlen = ^strptr downto 1
-        if ^(strptr + strlen) <> $8D and ^(strptr + strlen) <> chr
+    memcpy(dststr, srcstr, ^srcstr + 1)
+    for strlen = ^dststr downto 1
+        if ^(dststr + strlen) > keyspace
             break
         fin
     next
-    ^strptr = strlen
-end
-def strstripcpy(dststr, srcstr)#0
-    memcpy(dststr, srcstr, ^srcstr + 1)
-    striptail(dststr, keyspace)
+    ^dststr = strlen
 end
 def delstr(strptr)#0
     word ofst, mask
@@ -366,62 +306,54 @@ def inittxtbuf#0
     numlines   = 1
     cursrow    = 0
     curscol    = 0
-    cursx      = 0
+    cursx      = flags & gutter
     cursy      = 0
-    scrnleft   = 0
-    scrntop    = 0
+    viewleft   = 0
+    viewtop    = 0
+    viewwidth  = scrnwidth - (flags & gutter) - 1
     flags      = flags & ~selection
 end
 //
-// Case conversion/printing routines
+// String routines
 //
-def caseconv(chr)
-    if flags & uppercase
-        if chr & $60 == $60
-            chr = chr - $60
+def fillnum(huns, tens, ones, chrptr)#3
+    if huns
+        chrptr->[0] = '0' + huns
+        chrptr->[1] = '0' + tens
+        chrptr->[2] = '0' + ones
+        ones++
+        if ones > 9
+            ones = 0
+            tens++
+            if tens > 9
+                tens = 0
+                huns++
+            fin
+        fin
+    elsif tens
+        chrptr->[0] = ' '
+        chrptr->[1] = '0' + tens
+        chrptr->[2] = '0' + ones
+        ones++
+        if ones > 9
+            ones = 0
+            tens++
+            if tens > 9
+                tens = 0
+                huns = 1
+            fin
+        fin
+    elsif ones
+        chrptr->[0] = ' '
+        chrptr->[1] = ' '
+        chrptr->[2] = '0' + ones
+        ones++
+        if ones > 9
+            ones = 0
+            tens = 1
         fin
     fin
-    return chr
-end
-def strupper(strptr)#0
-    byte i, chr
-
-    if ^strptr
-        for i = ^strptr downto 1
-            chr = (strptr).[i]
-            if chr & $60 == $60
-                (strptr).[i] = chr - $60
-            fin
-        next
-    fin
-end
-def strlower(strptr)#0
-    byte i, chr
-
-    if ^strptr
-        for i = ^strptr downto 1
-            chr = (strptr).[i]
-            if chr & $60 == $00
-                (strptr).[i] = chr + $60
-            fin
-        next
-    fin
-end
-def txtupper#0
-    word i, strptr
-
-    flags = flags | uppercase
-    for i = numlines - 1 downto 0
-        strupper(txtlinbuf=>[i])
-    next
-end
-def txtlower#0
-    word i, strptr
-
-    flags = flags & ~uppercase
-    for i = numlines - 1 downto 0
-        strlower(txtlinbuf=>[i])
-    next
+    return huns, tens, ones
 end
 def strtonum(strptr)
     word num, i
@@ -454,8 +386,6 @@ def readtxt(filename, startline)#0
         repeat
             txtbuf = fileio:read(refnum, @txtbuf + 1, MAXLNLEN)
             if txtbuf
-                sethibit(@txtbuf)
-                if flags & uppercase; strupper(@txtbuf); fin
                 txtlinbuf=>[numlines] = newstr(@txtbuf)
                 numlines++
             fin
@@ -474,7 +404,7 @@ def readtxt(filename, startline)#0
 end
 def writetxt(filename)#0
     word i
-    byte refnum, txtbuf[MAXLNLEN+2]
+    byte refnum, txtbuf[MAXLNLEN+2], txtlen
 
     //
     // Remove blank lines at end of text.
@@ -494,8 +424,11 @@ def writetxt(filename)#0
     // Write all the text lines to the file.
     //
     for i = 0 to numlines - 1
-        lncpy(@txtbuf, txtlinbuf=>[i])
-        if fileio:write(refnum, @txtbuf + 1, txtbuf) <> txtbuf
+        txtlen = ^(txtlinbuf=>[i])
+        memcpy(@txtbuf, txtlinbuf=>[i] + 1, txtlen)
+        txtbuf[txtlen] = keyenter
+        txtlen++
+        if fileio:write(refnum, @txtbuf, txtlen) <> txtlen
             puts("\nError $"); puth(perr); puts(" writing: "); puts(filename); putln
             fileio:close(refnum)
             return
@@ -510,136 +443,123 @@ end
 //
 // Screen routines
 //
-def clrscrn#0
-    conio:home()
-end
-def drawrow(row, ofst, strptr)#0
-    byte numchars, left
+def drawstr(row, strptr)#0
+    byte numchars
 
-    if ofst >= ^strptr
-        numchars = 0
+    conio:gotoxy(flags & gutter, row)
+    numchars = viewleft >= ^strptr ?? 0 :: ^strptr - viewleft
+    if numchars >= viewwidth
+        conio:putchars(viewwidth, strptr + viewleft + 1)
     else
-        numchars = ^strptr - ofst
-    fin
-    left = (flags & gutter) + 1
-    if numchars >= scrnwidth
-        conio:putchars(left, row, scrnwidth, strptr + ofst + 1)
-    else
-        conio:putchars(left, row, numchars, strptr + ofst + 1)
-        conio:putchars(left + numchars, row, scrnwidth - numchars, ' ')
+        conio:putchars(numchars, strptr + viewleft + 1)
+        conio:clear(cleol)
     fin
 end
-def drawgutter(scrnrow, ofst)#0
-    byte row, hilite, ofstch, huns, tens, ones
+def drawgutterrow(row)#0
+    byte hilite, huns, tens, ones
+    word scrnrow
     char gutterchars[4]
+
     //
     // Draw line numbers and gutter hilites
     //
-    gutterchars[3] = ofst ?? '<' :: ' '
-    huns, tens = divmod(scrnrow + 1, 100)
-    tens, ones = divmod(tens, 10)
-    for row = 0 to 23
+    if flags & gutter
+        gutterchars[3] = viewleft ?? '<' :: ' '
+        scrnrow    = row + viewtop
+        huns, tens = divmod(scrnrow + 1, 100)
+        tens, ones = divmod(tens, 10)
         if scrnrow < numlines
-            if flags & selection and (scrnrow >= selrow and scrnrow <= cursrow) or (scrnrow >= cursrow and scrnrow <= selrow)
-                hilite = $00
+            if flags & selection
+                if (scrnrow >= selrow and scrnrow <= cursrow) or (scrnrow >= cursrow and scrnrow <= selrow)
+                    gutterchars[3] = '+'
+                    conio:textctrl(ctrlattr, INVERSE)
+                fin
             elsif scrnrow == cursrow
-                hilite = $00
+                conio:textctrl(ctrlattr, INVERSE)
+            fin
+            huns, tens, ones = fillnum(huns, tens, ones, @gutterchars)
+            conio:gotoxy(0, row)
+            conio:putchars(4, @gutterchars)
+            conio:textctrl(ctrlattr, NORMAL)
+        fin
+    fin
+end
+def drawgutter#0
+    byte row, hilite, huns, tens, ones
+    word scrnrow
+    char gutterchars[4]
+
+    //
+    // Draw line numbers and gutter hilites
+    //
+    if flags & gutter
+        gutterchars[3] = viewleft ?? '<' :: ' '
+        huns, tens = divmod(viewtop + 1, 100)
+        tens, ones = divmod(tens, 10)
+        for row = 0 to scrnheight-1
+            scrnrow = row + viewtop
+            if scrnrow < numlines
+                if flags & selection
+                    if (scrnrow >= selrow and scrnrow <= cursrow) or (scrnrow >= cursrow and scrnrow <= selrow)
+                        gutterchars[3] = '+'
+                        conio:textctrl(ctrlattr, INVERSE)
+                    else
+                        gutterchars[3] = viewleft ?? '<' :: ' '
+                    fin
+                elsif scrnrow == cursrow
+                    conio:textctrl(ctrlattr, INVERSE)
+                fin
+                huns, tens, ones = fillnum(huns, tens, ones, @gutterchars)
+                conio:gotoxy(0, row)
+                conio:putchars(4, @gutterchars)
+                conio:textctrl(ctrlattr, NORMAL)
+            fin
+        next
+    fin
+end
+def drawrows(toprow, bottomrow)#0
+    byte row, hilite, huns, tens, ones, numchars
+    word scrnrow, strptr
+    char gutterchars[4]
+
+    //
+    // Draw gutter and text
+    //
+    gutterchars[3] = viewleft ?? '<' :: ' '
+    huns, tens = divmod(viewtop + toprow + 1, 100)
+    tens, ones = divmod(tens, 10)
+    for row = toprow to bottomrow
+        scrnrow = row + viewtop
+        if scrnrow < numlines
+            conio:gotoxy(0, row)
+            if flags & gutter
+                if flags & selection
+                    if (scrnrow >= selrow and scrnrow <= cursrow) or (scrnrow >= cursrow and scrnrow <= selrow)
+                        gutterchars[3] = '+'
+                        conio:textctrl(ctrlattr, INVERSE)
+                    else
+                        gutterchars[3] = viewleft ?? '<' :: ' '
+                    fin
+                elsif scrnrow == cursrow
+                    conio:textctrl(ctrlattr, INVERSE)
+                fin
+                huns, tens, ones = fillnum(huns, tens, ones, @gutterchars)
+                conio:putchars(4, @gutterchars)
+                conio:textctrl(ctrlattr, NORMAL)
+            fin
+            strptr = txtlinbuf=>[scrnrow]
+            numchars = viewleft >= ^strptr ?? 0 :: ^strptr - viewleft
+            if numchars >= viewwidth
+                conio:putchars(viewwidth, strptr + viewleft + 1)
             else
-                hilite = $80
-            fin
-            if huns
-                gutterchars[0] = '0' + huns
-                gutterchars[1] = '0' + tens
-                gutterchars[2] = '0' + ones
-                ones++
-                if ones > 9
-                    ones = 0
-                    tens++
-                    if tens > 9
-                        tens = 0
-                        huns++
-                    fin
-                fin
-            elsif tens
-                gutterchars[0] = ' '
-                gutterchars[1] = '0' + tens
-                gutterchars[2] = '0' + ones
-                ones++
-                if ones > 9
-                    ones = 0
-                    tens++
-                    if tens > 9
-                        tens = 0
-                        huns = 1
-                    fin
-                fin
-            elsif ones
-                gutterchars[0] = ' '
-                gutterchars[1] = ' '
-                gutterchars[2] = '0' + ones
-                ones++
-                if ones > 9
-                    ones = 0
-                    tens = 1
-                fin
+                conio:putchars(numchars, strptr + viewleft + 1)
+                conio:clear(cleol)
             fin
         fin
-        conio:putchars(0, row, 4, @gutterchars)
-        scrnrow++
     next
-    //conio:textctrl(ctrltxt, NORMAL)
 end
-def drawscrn(toprow, ofst)#0
-    byte row, numchars, lofst
-    word strptr, scrnptr
-
-    conio:viewport(0, 0, scrnwidth + 4, 25) // Keep bottom of screen scrolling up
-    lofst = flags & gutter
-    if lofst
-        drawgutter(toprow, ofst)
-    fin
-    //
-    // Draw text
-    //
-    for row = 0 to 23
-        drawrow(row, ofst, txtlinbuf=>[toprow + row])
-    next
-    conio:viewport(0, 0, scrnwidth + 4, 24)
-end
-def cursoff#0
-    word scrnptr
-
-    if flags & showcurs
-        ^cursptr     = underchr
-        if flags & gutter
-            //scrnptr      = txtscrn[cursy]
-            //*scrnptr     = *scrnptr     | $8080
-            //^(scrnptr+2) = ^(scrnptr+2) | $80
-        fin
-        flags = flags & ~showcurs
-    fin
-end
-def curson#0
-    byte lofst
-    word scrnptr
-
-    if !(flags & showcurs)
-        lofst = flags & gutter
-        if lofst
-            //scrnptr = txtscrn[cursy]
-            //*scrnptr     = *scrnptr     & $7F7F
-            //^(scrnptr+2) = ^(scrnptr+2) & $7F
-        fin
-        //cursptr  = txtscrn[cursy] + lofst + cursx
-        //underchr = ^cursptr
-        //^cursptr = curschr
-        flags = flags | showcurs
-    fin
-end
-def redraw#0
-    cursoff
-    drawscrn(scrntop, scrnleft)
-    curson
+def drawscrn#0
+    drawrows(0, scrnheight - 1)
 end
 def curshpos(hpos)#1
     byte needredraw
@@ -648,13 +568,13 @@ def curshpos(hpos)#1
     if hpos < 0; hpos = 0; fin
     if hpos > MAXLNLEN; hpos = MAXLNLEN; fin
     curscol = hpos
-    cursx   = curscol - scrnleft
-    if cursx > scrnright
-        cursx      = scrnright
-        scrnleft   = curscol - scrnright
-    elsif cursx < 0
-        cursx      = 0
-        scrnleft   = curscol
+    cursx   = curscol - viewleft + (flags & gutter)
+    if cursx > viewwidth
+        cursx    = viewwidth
+        viewleft = curscol - viewwidth
+    elsif cursx < flags & gutter
+        cursx    = flags & gutter
+        viewleft = curscol
     else
         needredraw = FALSE
     fin
@@ -667,111 +587,121 @@ def cursvpos(vpos)#1
     if vpos < 0; vpos = 0; fin
     if vpos > numlines - 1; vpos = numlines - 1; fin
     cursrow = vpos
-    cursy   = cursrow - scrntop
-    if cursy > scrnbottom
-        cursy = scrnbottom
-        scrntop = cursrow - scrnbottom
+    cursy   = cursrow - viewtop
+    if cursy > scrnheight - 1
+        cursy   = scrnheight - 1
+        viewtop = cursrow - (scrnheight - 1)
     elsif cursy < 0
-        cursy    = 0
-        scrntop  = cursrow
+        cursy   = 0
+        viewtop = cursrow
     else
         needredraw = FALSE
     fin
     return needredraw
 end
 def curshome#0
-    cursoff
     cursrow  = 0
     curscol  = 0
-    cursx    = 0
+    cursx    = flags & gutter
     cursy    = 0
-    scrnleft = 0
-    scrntop  = 0
-    drawscrn(scrntop, scrnleft)
-    curson
+    viewleft = 0
+    viewtop  = 0
+    drawscrn
 end
 def cursend#0
-    cursoff
     if numlines > 23
         cursrow  = numlines - 1
         cursy    = 23
-        scrntop  = cursrow - 23
+        viewtop  = cursrow - 23
     else
         cursrow  = numlines - 1
         cursy    = numlines - 1
-        scrntop  = 0
+        viewtop  = 0
     fin
     curscol  = 0
-    cursx    = 0
-    scrnleft = 0
-    drawscrn(scrntop, scrnleft)
-    curson
+    cursx    = flags & gutter
+    viewleft = 0
+    drawscrn
 end
 def cursup#0
     if cursrow > 0
-        cursoff
         cursrow--
+        drawgutterrow(cursy)
         if cursy > 0
             cursy--
-            if flags & selection
-                drawgutter(scrntop, scrnleft)
-            fin
+            drawgutterrow(cursy)
         else
-            scrntop = cursrow
-            drawscrn(scrntop, scrnleft)
+            viewtop = cursrow
+            if conio:textctrl(ctrlscroll, DOWN)
+                drawrows(0, 0)
+            else
+                drawscrn
+            fin
         fin
-        curson
     fin
 end
 def pgup#0
-    cursoff
+    word scroll
+
+    scroll = viewtop
     if cursvpos(cursrow - pgjmp)
-        drawscrn(scrntop, scrnleft)
-    else
-        if flags & selection
-            drawgutter(scrntop, scrnleft)
+        scroll = viewtop - scroll
+        if scroll
+            if conio:textctrl(ctrlscroll, scroll)
+                drawrows(0, -scroll - 1)
+                drawgutter
+            else
+                drawscrn
+            fin
         fin
+    else
+        drawgutter
     fin
-    curson
 end
 def cursdown#0
     if cursrow < numlines - 1
-        cursoff
         cursrow++
-        if cursy < 23
+        drawgutterrow(cursy)
+        if cursy < scrnheight - 1
             cursy++
-            if flags & selection
-                drawgutter(scrntop, scrnleft)
-            fin
+            drawgutterrow(cursy)
         else
-            scrntop = cursrow - 23
-            drawscrn(scrntop, scrnleft)
+            viewtop = cursrow - (scrnheight - 1)
+            if conio:textctrl(ctrlscroll, UP)
+                drawrows(scrnheight - 1, scrnheight - 1)
+            else
+                drawscrn
+            fin
         fin
-        curson
     fin
 end
 def pgdown#0
-    cursoff
+    word scroll
+
+    scroll = viewtop
     if cursvpos(cursrow + pgjmp)
-        drawscrn(scrntop, scrnleft)
-    else
-        if flags & selection
-            drawgutter(scrntop, scrnleft)
+        scroll = viewtop - scroll
+        if scroll
+            if conio:textctrl(ctrlscroll, scroll)
+                drawrows(scrnheight - scroll, scrnheight - 1)
+                drawgutter
+            else
+                drawscrn
+            fin
         fin
+    else
+        drawgutter
     fin
-    curson
 end
 def cursleft#0
     if curscol > 0
-        cursoff
         curscol--
-        if cursx > 0
+        if cursx > flags & gutter
             cursx--
         else
-            scrnleft = curscol
-            drawscrn(scrntop, scrnleft)
+            viewleft = curscol
+            drawscrn
         fin
-        curson
     fin
 end
 def pgleft#0
@@ -791,27 +721,21 @@ def pgleft#0
             i = 0
         fin
     fin
-    cursoff
     if curshpos(i)
-        drawscrn(scrntop, scrnleft)
+        drawscrn
     else
-        if flags & selection
-            drawgutter(scrntop, scrnleft)
-        fin
+        drawgutter
     fin
-    curson
 end
 def cursright#0
     if curscol < MAXLNLEN
-        cursoff
         curscol++
-        if cursx < scrnright
+        if cursx < scrnwidth - 1
             cursx++
         else
-            scrnleft = curscol - scrnright
-            drawscrn(scrntop, scrnleft)
+            viewleft = curscol - scrnwidth - 1
+            drawscrn
         fin
-        curson
     fin
 end
 def pgright#0
@@ -831,15 +755,11 @@ def pgright#0
             i = ^strptr
         fin
     fin
-    cursoff
     if curshpos(i)
-        drawscrn(scrntop, scrnleft)
+        drawscrn
     else
-        if flags & selection
-            drawgutter(scrntop, scrnleft)
-        fin
+        drawgutter
     fin
-    curson
 end
 //
 // Find string in text
@@ -892,79 +812,15 @@ def findtxt#0
     bell
 end
 //
-// Keyboard routines
-//
-def keyin
-    byte key
-
-    key = conio:getkey()
-    if key & keyoptmod // Closed-Apple/Option pressed
-        when key
-            is keyarrowleft
-                key = keyctrla; break
-            is keyarrowright
-                key = keyctrls; break
-            is keyarrowup
-                key = keyctrlw; break
-            is keyarrowdown
-                key = keyctrlz; break
-            is keyenter
-                key = keyctrlf; break
-            is keytab
-                key = keydetab; break
-           is $80 | '\\'
-                key = keydelete; break // Delete
-            //
-            // Map option+keypad on Platinum //e
-            //
-            is $80 | '4'
-                key = keyarrowleft; break
-            is $80 | '6'
-                key = keyarrowright; break
-            is $80 | '8'
-                key = keyarrowup; break
-            is $80 | '2'
-                key = keyarrowdown; break
-            is $80 | '7'
-                key = keyctrlq; break // Top
-            is $80 | '1'
-                key = keyctrle; break // Bottom
-            is $80 | '9'
-                key = keyctrlw; break // Pg Up
-            is $80 | '3'
-                key = keyctrlz; break // Pg Dn
-            is $80 | '5'
-                key = keyctrlb; break // Selection start/end
-            is $80 | '0'
-                key = keyctrld; break // Del
-            is $80 | '.'
-                key = keyctrlv; break // Paste
-            is $80 | '-'
-                key = keyctrlx; break // Cut
-            is $80 | '+'
-                key = keyctrlc; break // Copy
-            is $80 | '*'
-                key = keyctrlo; break // Open line
-            is $80 | '/'
-                key = keyctrlt; break // Join lines
-            is $80 | '='
-                key = keyctrly; break // Insert/Overwrite
-        wend
-    fin
-    return key & $7F
-end
-//
 // Printer routines
 //
 def printtxt(slot)#0
-    byte txtbuf[MAXLNLEN+1]
     word i, scrncsw
 
     scrncsw = *csw
     *CSW  = $C000 | (slot << 8)
     for i = 0 to numlines - 1
-        lncpy(@txtbuf, txtlinbuf=>[i])
-        puts(@txtbuf)
+        puts(txtlinbuf=>[i])
         putln
     next
     *CSW = scrncsw
@@ -1000,7 +856,7 @@ end
 def beginsel#0
     flags  = flags ^ selection
     selrow = cursrow
-    drawgutter(scrntop, scrnleft)
+    drawgutter
 end
 def copysel#0
     word firstsel, lastsel
@@ -1012,7 +868,7 @@ def copysel#0
             cliplinbuf=>[numcliplines] = newstr(txtlinbuf=>[firstsel + numcliplines])
         next
         flags = flags & ~selection
-        drawgutter(scrntop, scrnleft)
+        drawgutter
     else
         bell
     fin
@@ -1037,13 +893,13 @@ def cutsel#0
         if cursrow >= numlines
             cursrow = numlines - 1
         fin
-        if cursrow < scrntop
-            scrntop = cursrow
+        if cursrow < viewtop
+            viewtop = cursrow
         fin
-        cursy = cursrow - scrntop
+        cursy = cursrow - viewtop
         flags = flags | changed
         flags = flags & ~selection
-        redraw
+        drawscrn
     else
         bell
     fin
@@ -1060,7 +916,7 @@ def pastesel#0
         next
         numlines = numlines + numcliplines
         flags = flags | changed
-        redraw
+        drawscrn
     else
         bell
     fin
@@ -1095,7 +951,7 @@ def indentsel#0
             flags = flags | changed
         fin
     next
-    redraw
+    drawscrn
 end
 def undentsel#0
     byte undentstr[MAXLNLEN+1], l
@@ -1121,7 +977,7 @@ def undentsel#0
             fin
         fin
     next
-    redraw
+    drawscrn
 end
 def autoindent(strptr)#0
     byte i
@@ -1211,8 +1067,91 @@ def splitline#0
         fin
     fin
 end
+//
+// Keyboard routines
+//
+def waitkey#0
+    word delay
+
+    for delay = 0 to  300
+        if conio:keypressed(); return; fin
+    next
+end
+def keyin
+    byte key, underchr, curschr
+
+    underchr = curscol >= ^(txtlinbuf=>[cursrow]) ?? ' ' :: txtlinbuf=>[cursrow]->[curscol + 1]
+    curschr  = flags & insmode ?? '+' :: ' '
+    repeat
+        conio:gotoxy(cursx, cursy)
+        conio:textctrl(ctrlattr, INVERSE)
+        conio:putchars(1, curschr)
+        waitkey
+        conio:gotoxy(cursx, cursy)
+        conio:textctrl(ctrlattr, NORMAL)
+        conio:putchars(1, underchr)
+        waitkey
+    until conio:keypressed()
+    key = conio:getkey()
+    if key & keyoptmod // Closed-Apple/Option pressed
+        when key & ~keyoptmod
+            is keyarrowleft
+                key = keyctrla; break
+            is keyarrowright
+                key = keyctrls; break
+            is keyarrowup
+                key = keyctrlw; break
+            is keyarrowdown
+                key = keyctrlz; break
+            is keyenter
+                key = keyctrlf; break
+            is keytab
+                key = keydetab; break
+           is $80 | '\\'
+                key = keydelete; break // Delete
+            //
+            // Map option+keypad on Platinum //e
+            //
+            is $80 | '4'
+                key = keyarrowleft; break
+            is $80 | '6'
+                key = keyarrowright; break
+            is $80 | '8'
+                key = keyarrowup; break
+            is $80 | '2'
+                key = keyarrowdown; break
+            is $80 | '7'
+                key = keyctrlq; break // Top
+            is $80 | '1'
+                key = keyctrle; break // Bottom
+            is $80 | '9'
+                key = keyctrlw; break // Pg Up
+            is $80 | '3'
+                key = keyctrlz; break // Pg Dn
+            is $80 | '5'
+                key = keyctrlb; break // Selection start/end
+            is $80 | '0'
+                key = keyctrld; break // Del
+            is $80 | '.'
+                key = keyctrlv; break // Paste
+            is $80 | '-'
+                key = keyctrlx; break // Cut
+            is $80 | '+'
+                key = keyctrlc; break // Copy
+            is $80 | '*'
+                key = keyctrlo; break // Open line
+            is $80 | '/'
+                key = keyctrlt; break // Join lines
+            is $80 | '='
+                key = keyctrly; break // Insert/Overwrite
+            otherwise
+                key = key & ~keyoptmod
+        wend
+    fin
+    return key
+end
 def editkey(key)
-    if key >= keyspace or key == keydelete or key == keyctrld or key == keyctrlr
+    if key >= keyspace or key == keyctrld or key == keyctrlr
         return TRUE
     fin
     return FALSE
@@ -1225,7 +1164,7 @@ def editline(key)
         undopos  = curscol
         undoline = txtlinbuf=>[cursrow]
         editlen = MAXLNLEN
-        memset(@editchars, $A0A0, MAXLNLEN)
+        memset(@editchars, keyspace | (keyspace << 8), MAXLNLEN)
         memcpy(@editchars, undoline + 1, ^undoline)
         txtlinbuf=>[cursrow] = @editstr
         localchange = FALSE
@@ -1234,34 +1173,28 @@ def editline(key)
                 is keyctrld
                     memcpy(@editchars[curscol], @editchars[curscol + 1], MAXLNLEN - 1 - curscol)
                     editchars[MAXLNLEN - 1] = keyspace
-                    cursoff
-                    drawrow(cursy, scrnleft, @editstr)
-                    curson
+                    drawstr(cursy, @editstr)
                     localchange = TRUE
                     break
                 is keyctrlr
                     memset(@editchars, $A0A0, MAXLNLEN)
                     memcpy(@editchars, undoline + 1, ^undoline)
-                    cursoff
                     if curshpos(undopos)
-                        drawscrn(scrntop, scrnleft)
+                        drawscrn
                     else
-                        drawrow(cursy, scrnleft, @editstr)
+                        drawstr(cursy, @editstr)
                     fin
-                    curson
                     localchange = FALSE
                     break
                 is keydelete
                     if curscol > 0
                         memcpy(@editchars[curscol - 1], @editchars[curscol], MAXLNLEN - curscol)
                         editchars[MAXLNLEN - 1] = keyspace
-                        cursoff
                         if curshpos(curscol - 1)
-                            drawscrn(scrntop, scrnleft)
+                            drawscrn
                         else
-                            drawrow(cursy, scrnleft, @editstr)
+                            drawstr(cursy, @editstr)
                         fin
-                        curson
                         localchange = TRUE
                     fin
                     break
@@ -1274,14 +1207,12 @@ def editline(key)
                             break
                         fin
                     fin
-                    editchars[curscol] = caseconv(key)
-                    cursoff
+                    editchars[curscol] = key
                     if curshpos(curscol + 1)
-                        drawscrn(scrntop, scrnleft)
+                        drawscrn
                     else
-                        drawrow(cursy, scrnleft, @editstr)
+                        drawstr(cursy, @editstr)
                     fin
-                    curson
                     localchange = TRUE
                     break
             wend
@@ -1299,6 +1230,7 @@ def editline(key)
 end
 def editmode#0
     conio:textctrl(ctrlecho, OFF)
+    conio:textctrl(ctrlcursor, OFF)
     repeat
         when editline(keyin)
             is keyarrowup
@@ -1335,7 +1267,7 @@ def editmode#0
                         numlines++
                         cursdown
                         flags = flags | changed
-                        drawgutter(scrntop, scrnleft)
+                        drawgutter
                     else
                         bell
                     fin
@@ -1349,7 +1281,7 @@ def editmode#0
                 else
                     curshpos(0)
                 fin
-                redraw
+                drawscrn
                 break
             is keyenter
                 if flags & insmode
@@ -1359,45 +1291,41 @@ def editmode#0
                 fin
                 autoindent(txtlinbuf=>[cursrow])
                 cursvpos(cursrow + 1)
-                redraw
+                drawscrn
                 break
             is keyctrlt
                 joinline
-                redraw
+                drawscrn
                 break
             is keytab
                 if flags & insmode
                     indentsel
-                    cursoff
                     if not ^(txtlinbuf=>[cursrow])
                         curshpos((curscol + 2) & $FE)
                     else
                         autoindent(txtlinbuf=>[cursrow])
                     fin
-                    curson
                     break
                 fin
            is keydetab
                 undentsel
-                cursoff
                 if not ^(txtlinbuf=>[cursrow])
                     curshpos((curscol - 2) & $FFFE)
                 else
                     autoindent(txtlinbuf=>[cursrow])
                 fin
-                curson
                 break
             is keyctrly
                 flags   = flags ^ insmode
-                curschr = flags & insmode ?? '+' :: ' '
                 break
             is keyescape
                 conio:textctrl(ctrlecho, ON)
-                cursoff
+                conio:textctrl(ctrlcursor, ON)
                 cmdmode
                 if not exit
                     conio:textctrl(ctrlecho, OFF)
-                    redraw
+                    conio:textctrl(ctrlcursor, OFF)
+                    drawscrn
                 fin
         wend
     until exit
@@ -1474,7 +1402,7 @@ end
 def chkchng
     if flags & changed
         puts("LOSE CHANGES TO FILE (Y/N)?")
-        if toupper(keyin) == 'N'
+        if toupper(getc) == 'N'
             putln
             return FALSE
         fin
@@ -1487,7 +1415,7 @@ def cmdmode#0
     word cmdptr, line
     var i, freepool
 
-    clrscrn
+    conio:clear(cls)
     puts("PLASMA Editor, Version 2.20\n")
     while not exit
         puts(@filename)
@@ -1504,19 +1432,13 @@ def cmdmode#0
                     when toupper(^(cmdptr + 1))
                         is 'G' // Gutter view
                             flags = flags ^ gutter
-                            if flags & gutter
-                                scrnwidth    = 36
-                                scrnright    = 35
-                            else
-                                scrnwidth    = 40
-                                scrnright    = 39
-                            fin
+                            viewwidth = scrnwidth - (flags & gutter) - 1
                             break
                         is 'C' // Lower case chip (Apple ][/][+ only)
                             if flags & uppercase
-                                txtlower
+                                //txtlower Add textctrl to force lower case output
                             else
-                                txtupper
+                                //txtupper Add textctrl to force upper case output
                             fin
                             break
                     wend
@@ -1607,29 +1529,32 @@ end
 //
 // Init editor
 //
-if conio:textmode(80) <> 80
-    scrnwidth = 36
-    scrnright = 35
-fin
-inittxtbuf
 arg = argNext(argFirst)
 if ^arg
+    while ^(arg+1) == '-'
+        when ^(arg+2)
+            is '4' // Force 40 columns
+                scrnwidth = 40
+                break
+        wend
+        arg = argNext(arg)
+    loop
     strcpy(@filename, arg)
-    puts(@filename)
-    readtxt(@filename, 0)
     arg = argNext(arg)
     if ^arg
         cursrow = strtonum(arg)
-        if cursrow
-            curshpos(0)
-            cursvpos(cursrow - 1)
-        fin
     fin
 fin
-curschr  = '+'
-flags    = flags | insmode | gutter
-drawscrn(scrntop, scrnleft)
-curson
+flags     = flags | insmode | gutter
+scrnwidth = conio:textmode(scrnwidth)
+inittxtbuf
+puts(@filename)
+readtxt(@filename, 0)
+if cursrow
+    curshpos(0)
+    cursvpos(cursrow - 1)
+fin
+drawscrn
 editmode
 conio:textmode(40)
 done

@@ -269,11 +269,11 @@ test:	samplesrc/test.pla samplesrc/testlib.pla $(PLVM) $(PLASM)
 	acme --setpc 4094 -o $(TESTLIB) samplesrc/testlib.a
 	./$(PLVM) test
 
-$(ED): toolsrc/ed.pla $(PLVM02) $(PLASM) toolsrc/ed.pla
+$(ED): toolsrc/ed.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AMOW toolsrc/ed.pla
 	acme --setpc 4094 -o $(ED) toolsrc/ed.a
 
-$(ED80): toolsrc/ed.pla $(PLVM02) $(PLASM) toolsrc/ed80.pla
+$(ED80): toolsrc/ed80.pla inc/conio.plh libsrc/apple/conio.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AMOW toolsrc/ed80.pla
 	acme --setpc 4094 -o $(ED80) toolsrc/ed80.a
 

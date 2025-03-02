@@ -15,29 +15,36 @@ const a2rndh   = $4F
 //
 // Apple II hardware constants.
 //
-const CURSH        = $0024
-const CURSV        = $0025
-const CSW          = $0036
-const KSW          = $0038
+const WNDLEFT      = $20
+const WNDWIDTH     = $21
+const WNDTOP       = $22
+const WNDBOTTOM    = $23
+const CURSH        = $24
+const CURSV        = $25
+const TBASE        = $28
+const CSW          = $36
+const KSW          = $38
 const CURSH80      = $057B
-const speaker      = $C030
+const store80dis   = $C000
+const store80ena   = $C001
 const showgraphics = $C050
 const showtext     = $C051
 const showfull     = $C052
 const showmix      = $C053
 const showpage1    = $C054
 const showpage2    = $C055
+const page1m       = $C054
+const page1x       = $C055
 const showlores    = $C056
 const showhires    = $C057
+const IOUdis       = $C07E
+const IOUena       = $C07F
 const keyboard     = $C000
 const keystrobe    = $C010
 const pushbttn1    = $C061
 const pushbttn2    = $C062
 const pushbttn3    = $C063
-const hgr1         = $2000
-const hgr2         = $4000
-const page1        = 0
-const page2        = 1
+const speaker      = $C030
 //
 // Apple III hardware constants.
 //
@@ -45,8 +52,8 @@ const ENV_REG      = $FFDF
 //
 // Predefined functions.
 //
-predef a2keypressed,a2getkey,a2putchars(x,y,cnt,chrs), a2ctrl(code,param)
-predef a2home,a2gotoxy(x,y),a2viewport(left, top, width, height)
+predef a2keypressed,a2getkey,a2putchars(cnt,chrs), a2ctrl(code,param)
+predef a2clear(clr),a2gotoxy(x,y),a2viewport(left, top, width, height)
 predef a2textmode(cols),a2grmode(mix),a2grcolor(color),a2grplot(x,y)
 predef a2tone(duration, delay),a2rnd
 //
@@ -59,7 +66,7 @@ word conio[]
 word = @a2keypressed
 word = @a2getkey
 word = @a2putchars
-word = @a2home
+word = @a2clear
 word = @a2gotoxy
 word = @a2viewport
 word = @a2ctrl
@@ -172,21 +179,123 @@ asm a2grplot(x, y)
     INX
     RTS
 end
+//def a2putchars(cnt, chrs)
+//    byte c
 //
-// COUT(CHAR) output character unmodified
-//
-asm cout(c)#0
+//    if cnt
+//        if chrs & $FF00
+//            for c = 0 to cnt-1; putc(^(chrs + c)); next
+//        else
+//            for c = 0 to cnt-1; putc(chrs); next
+//        fin
+//    fin
+//    return ^CURSH
+//end
+asm a2putchars(cnt, chrs)
 LCRDEN  =       $C080
 LCWTEN  =       $C081
 ROMEN   =       $C082
 LCRWEN  =       $C083
 LCBNK2  =       $00
 LCBNK1  =       $08
-        LDA     ESTKL,X
-        INX
+COUT    =       $FDED
+        LDA     ESTKL+1,X       ; CNT
+        BEQ     EXA2PC
         BIT     ROMEN
-        JSR     $FDED
+        LDA     ESTKH,X
+        BEQ     ++
+        STA     SRCH            ; SRC = CHRPTR
+        LDA     ESTKL,X
+        STA     SRCL
+        LDY     #$00
+-       STY     ESTKH+1,X
+        TYA
+        CMP     ESTKL+1,X
+        BEQ     EXA2PC
+        LDA     (SRC),Y
+        ORA     #$80
+        JSR     COUT
+        LDY     ESTKH+1,X
+        INY
+        BNE     -
+++
+-       LDA     ESTKL,X         ; CHR
+        ORA     #$80
+        JSR     COUT
+        DEC     ESTKL+1,X
+        BNE     -
+EXA2PC  INX
+        LDA     #$00
+        STA     ESTKL,X
+        STA     ESTKH,X
         BIT     LCRDEN+LCBNK2
+        RTS
+end
+asm vidcpy(dstrow, srcrow)#0
+WNDLFT  =       $20
+WNDWID  =       $21
+        LDA     WNDLFT
+        CLC
+        ADC     ESTKL+1,X
+        STA     DSTL
+        LDA     #$00
+        ADC     ESTKH+1,X
+        STA     DSTH
+        LDA     WNDLFT
+        CLC
+        ADC     ESTKL,X
+        STA     SRCL
+        LDA     #$00
+        ADC     ESTKH,X
+        STA     SRCH
+        LDY     WNDWID
+        DEY
+-       LDA     (SRC),Y
+        STA     (DST),Y
+        DEY
+        BPL     -
+        INX
+        INX
+        RTS
+end
+asm vidxcpy(dstrow, srcrow)#0
+PAGE1M  =       $C054
+PAGE1X =        $C055
+        LDA     WNDLFT
+        LSR
+        ADC     ESTKL+1,X
+        STA     DSTL
+        LDA     #$00
+        ADC     ESTKH+1,X
+        STA     DSTH
+        LDA     WNDLFT
+        LSR
+        ADC     ESTKL,X
+        STA     SRCL
+        LDA     #$00
+        ADC     ESTKH,X
+        STA     SRCH
+        LDA     WNDWID
+        LSR
+        ADC     #$00
+        PHA
+        TAY
+        DEY
+        STA     PAGE1X
+-       LDA     (SRC),Y
+        STA     (DST),Y
+        DEY
+        BPL     -
+        PLA
+        TAY
+        DEY
+        STA     PAGE1M
+-       LDA     (SRC),Y
+        STA     (DST),Y
+        DEY
+        BPL     -
+        INX
+        INX
         RTS
 end
 //
@@ -201,7 +310,7 @@ def a1getkey
     loop
     return getc()
 end
-def a1putchars(x, y, cnt, chrs)
+def a1putchars(cnt, chrs)
     byte c
 
     if chrs < 256
@@ -213,13 +322,20 @@ def a1putchars(x, y, cnt, chrs)
             putc(chrs->[c])
         next
     fin
-    return x + cnt
+    return cnt
 end
-def a1home
+def a1clear(clr)
     byte l
-    for l = 0 to 23
-        putln
-    next
+    when clr
+        is cleol
+            break
+        is cleos
+        is cls
+            for l = 0 to 23
+                putln
+            next
+            break
+    wend
     return 0
 end
 def a1gotoxy(x, y)
@@ -236,10 +352,10 @@ def a1viewport(left, top, width, height)
     return 0
 end
 def a1ctrl(code, param)#1
-    return 0
+    return FALSE
 end
 def a1textmode(columns)
-    return 0
+    return 40
 end
 def a1grmode(mix)
     return 0 // not supported
@@ -259,65 +375,10 @@ end
 def a2keypressed
     return ^keyboard >= 128 ?? ^keyboard :: 0
 end
-def a2egetkey
-    byte key, vbl, flashcurs, curschr, underchr
-    word cursptr
-
-    flashcurs = 0
-    cursptr = ^CURSH + txt1scrn[^CURSV]
-    underchr = ^cursptr
-    curschr = '+'
-    vbl = ^$C019
-    repeat
-        if flags & showcurs
-            if flashcurs == 0
-                ^cursptr = curschr
-            elsif flashcurs == 128
-                ^cursptr = underchr
-            fin
-            if vbl ^ ^$C019
-                flashcurs = flashcurs + 8
-                vbl = ^$C019
-                ^$C079 = 0 // Clear VBL int on //c
-            fin
-        fin
-        key = ^keyboard
-    until key >= 128
-    ^keystrobe
-    return (pushbttn2 & $80) | (key & $7F)
-end
-def a2cgetkey
-    byte key
-
-    ^$C079 = 0 // IOU enable and clear VBL int on //c
-    ^$C05B = 0 // Enable VBL Ints on //c
-    key = a2egetkey
-    ^$C05A = 0 // Disable VBL Ints on //c
-    ^$C078 = 0 // IOU disable on //c
-    return key
-end
-def cursflashcurs#0
-    byte key, flashcurs, curschr, underchr
-    word cursptr
-
-    flashcurs = 0
-    cursptr = ^CURSH + txt1scrn[^CURSV]
-    underchr = ^cursptr
-    curschr = '+'
-    if flags & showcurs
-        if flashcurs == 0
-            ^cursptr = curschr
-        elsif flashcurs == 128
-            ^cursptr = underchr
-        fin
-        flashcurs++
-    fin
-end
 def a2getkey
     byte key
 
     repeat
-        cursflashcurs
         key = ^keyboard
         if key == $80 | keyctrll
             ^keystrobe
@@ -372,42 +433,78 @@ def a2getkey
     wend
     return (pushbttn2 & $80) | (key & $7F)
 end
-def a2putchars(x, y, cnt, chrs)
-    byte c
+def a2egetkey
+    byte key
 
-    conio:gotoxy(x, y)    
-    if chrs & $FF00
-        for c = 0 to cnt-1
-            putc(chrs->[c])
-        next
-    else
-        for c = 1 to cnt
-            putc(chrs)
-        next
-    fin
-    return x + cnt
+    repeat
+        key = ^keyboard
+    until key >= 128
+    ^keystrobe
+    return (^pushbttn2 & $80) | (key & $7F)
 end
-def a2home
-    return call($FC58, 0, 0, 0, 0) // home()
+def a2cgetkey
+    byte key
+
+    ^$C079 = 0 // IOU enable and clear VBL int on //c
+    ^$C05B = 0 // Enable VBL Ints on //c
+    key = a2egetkey
+    ^$C05A = 0 // Disable VBL Ints on //c
+    ^$C078 = 0 // IOU disable on //c
+    return key
 end
-def a2home80e
-    cout(12) // Form Feed
+def a2clear(clr)
+    when clr
+        is cleol // clear EOL
+            call($FC9C, 0, 0, 0, 0) // CLEOL
+            break
+        is cls // home
+            call($FC58, 0, 0, 0, 0) // HOME
+            break
+        is cleos // clear OES
+            call($FC42, 0, 0, 0, 0) // CLREOP
+            break
+    wend
     return 0
 end
-def a2home80v
-    cout(12) // Form Feed
+def a2clear80e(clr)
+    when clr
+        is cleol // clear EOL
+            putc(29) // GS
+            break
+        is cls // home
+            putc(12) // FF
+            break
+        is cleos // clear OES
+            putc(11) // VT
+            break
+    wend
+    return 0
+    putc(12) // Form Feed
+    return 0
+end
+def a2clear80v(clr)
+    when clr
+        is cleol // clear EOL
+            break
+        is cls
+            putc(12) // FF
+            break
+        is cleos // clear OES
+            putc(11) // VT
+            break
+    wend
     return 0
 end
 def a2gotoxy(x, y)
-    ^CURSH = x + ^$20
-    return call($FB5B, y + ^$22, 0, 0, 0)
+    ^CURSH = x
+    return call($FB5B, y + ^WNDTOP, 0, 0, 0) // TABV
 end
 def a2gotoxy80e(x, y)
-    ^CURSH80 = x + ^$20
-    return call($FB5B, y + ^$22, 0, 0, 0)
+    ^CURSH80 = x
+    return call($FB5B, y + ^WNDTOP, 0, 0, 0) // TABV
 end
 def a2gotoxy80v(x, y)
-    putc($1E); putc(x + ' '); putc(y + ' ')
+    putc(30); putc(x + ' '); putc(y + ' ')
     return 0
 end
 def a2viewport(left, top, width, height)
@@ -417,16 +514,21 @@ def a2viewport(left, top, width, height)
         width  = 40
         height = 24
     fin
-    ^$20 = left
-    ^$21 = width
-    ^$22 = top
-    ^$23 = height + top
-    return a2gotoxy(0, 0)
+    ^WNDLEFT   = left
+    ^WNDWIDTH  = width
+    ^WNDTOP    = top
+    ^WNDBOTTOM = height + top - 1
+    return conio:gotoxy(0, 0)
 end
 def a2ctrl(code, param)#1
+    word handled
+    byte row
+
+    handled = FALSE
     when code
-        is ctrltxt
+        is ctrlattr
             ^$32 = param
+            handled = TRUE
              break
         is ctrlecho
             if param
@@ -434,19 +536,104 @@ def a2ctrl(code, param)#1
             else
                 flags = flags & ~echo
             fin
+            handled = TRUE
             break
-        is ctrlcurs
+        is ctrlcursor
             if param
                 flags = flags | showcurs
             else
                 flags = flags & ~showcurs
             fin
+            handled = TRUE
             break
-        is ctrlsetcurs
-            curschar = param ?? param :: ' '
+        is ctrlscroll
+            if param > 0
+                for row = ^WNDTOP to ^WNDBOTTOM - param - 1
+                    vidcpy(txt1scrn[row], txt1scrn[row + param])
+                next
+            elsif param < 0
+                for row = ^WNDBOTTOM downto ^WNDTOP - param
+                    vidcpy(txt1scrn[row], txt1scrn[row + param])
+                next
+            fin
+            handled = TRUE
             break
     wend
-    return 0
+    return handled
+end
+def a2ctrl80e(code, param)#1
+    word handled
+    byte row
+
+    handled = FALSE
+    when code
+        is ctrlattr
+            ^$32 = param
+            handled = TRUE
+             break
+        is ctrlecho
+            if param
+                flags = flags | echo
+            else
+                flags = flags & ~echo
+            fin
+            handled = TRUE
+            break
+        is ctrlcursor
+            if param
+                flags = flags | showcurs
+            else
+                flags = flags & ~showcurs
+            fin
+            handled = TRUE
+            break
+        is ctrlscroll
+            ^IOUdis     = 0
+            ^store80ena = 0
+            if param > 0
+                for row = ^WNDTOP to ^WNDBOTTOM - param - 1
+                    vidxcpy(txt1scrn[row], txt1scrn[row + param])
+                next
+            elsif param < 0
+                for row = ^WNDBOTTOM downto ^WNDTOP - param
+                    vidxcpy(txt1scrn[row], txt1scrn[row + param])
+                next
+            fin
+            ^store80dis = 0
+            ^IOUena     = 0
+            handled = TRUE
+            break
+    wend
+    return handled
+end
+def a2ctrl80v(code, param)#1
+    word handled
+    byte row
+
+    handled = FALSE
+    when code
+        is ctrlattr
+            break
+        is ctrlecho
+            if param
+                flags = flags | echo
+            else
+                flags = flags & ~echo
+            fin
+            handled = TRUE
+            break
+        is ctrlcursor
+            if param
+                flags = flags | showcurs
+            else
+                flags = flags & ~showcurs
+            fin
+            handled = TRUE
+            break
+        is ctrlscroll
+            break
+    wend
+    return handled
 end
 def a2textmode(columns)
     call($FB39, 0, 0, 0, 0) // textmode()
@@ -455,27 +642,31 @@ def a2textmode(columns)
         kswsave = *KSW
         call($C300, 0, 0, 0,  0)
         if MACHID & $C0 == MACHID_IIE
-            conio:home       = @a2home80e
+            conio:clear      = @a2clear80e
             conio:gotoxy     = @a2gotoxy80e
+            conio:textctrl   = @a2ctrl80e
         else
-            conio:home       = @a2home80v
+            conio:clear      = @a2clear80v
             conio:gotoxy     = @a2gotoxy80v
+            conio:textctrl   = @a2ctrl80v
         fin
         flags            = flags | txt80
     else
         if flags & txt80
             if MACHID & $C0 == MACHID_IIE
                 puts(@disable80)
-            else
-                ^$C059
+            else // Videx disable
+                ^$C058
                 *CSW = cswsave
                 *KSW = kswsave
+                a2viewport(0, 0, 40, 24)
             fin
         fin
-        conio:home       = @a2home
+        conio:clear      = @a2clear
         conio:gotoxy     = @a2gotoxy
+        conio:textctrl   = @a2ctrl
         flags            = flags & ~txt80
-        a2home
+        a2clear(cls)
     fin
     return flags & txt80 ?? 80 :: 40
 end
@@ -486,7 +677,7 @@ def a2grmode(mix)
     if !mix
         ^showfull
     fin
-    a2home
+    a2clear(cls)
     return a2grscrn(@txt1scrn) // point to lo-res screen
 end
 def a2tone(duration, delay)
@@ -565,19 +756,9 @@ def a3getkey
     a3keyqueue = 0
     return keycode
 end
-def keyin3
-    repeat
-        cursflashcurs
-    until cons_keyavail
-    return cons_keyread
-end
-def a3putchars(x, y, cnt, chrs)
+def a3putchars(cnt, chrs)
     byte c
 
-    putc(24)
-    putc(x)
-    putc(25)
-    putc(y)
     if chrs < 256
         for c = 1 to cnt
             putc(chrs)
@@ -587,10 +768,19 @@ def a3putchars(x, y, cnt, chrs)
             putc(chrs->[c])
         next
     fin
-    return x + cnt
+    return cnt
 end
-def a3home
-    putc(28)
+def a3clear(clr)
+    when clr
+        is cleol // clear EOL
+            break
+        is cls
+            putc(28) // FF
+            break
+        is cleos // clear OES
+            putc(11) // VT
+            break
+    wend
     return 0
 end
 def a3gotoxy(x, y)
@@ -622,19 +812,20 @@ def a3viewport(left, top, width, height)
     return a3gotoxy(0, 0)
 end
 def a3ctrl(code, param)#1
+    word handled
+
+    handled = FALSE
     when code
-        is ctrltxt
+        is ctrlattr
             break
         is ctrlecho
             dev_control(cmdsys.devcons, 11, param ?? @a3echoflag :: @a3noechoflag)
+            handled = TRUE
             break
-        is ctrlcurs
-            break
-        is ctrlsetcurs
-            curschar = param ?? param :: ' '
+        is ctrlcursor
             break
     wend
-    return 0
+    return handled
 end
 def a3textmode(columns)
     puts(@textbwmode)
@@ -687,7 +878,7 @@ when MACHID & MACHID_MODEL
         conio:keypressed = @a3keypressed
         conio:getkey     = @a3getkey
         conio:putchars   = @a3putchars
-        conio:home       = @a3home
+        conio:clear      = @a3clear
         conio:gotoxy     = @a3gotoxy
         conio:viewport   = @a3viewport
         conio:textctrl   = @a3ctrl
@@ -709,7 +900,7 @@ when MACHID & MACHID_MODEL
         conio:keypressed = @a1keypressed
         conio:getkey     = @a1getkey
         conio:putchars   = @a1putchars
-        conio:home       = @a1home
+        conio:clear      = @a1clear
         conio:gotoxy     = @a1gotoxy
         conio:viewport   = @a1viewport
         conio:textctrl   = @a1ctrl
