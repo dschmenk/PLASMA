@@ -454,7 +454,7 @@ def drawstr(row, strptr)#0
     fin
 end
 def drawgutterrow(row)#0
-    byte hilite, huns, tens, ones
+    byte huns, tens, ones
     word scrnrow
     char gutterchars[4]
 
@@ -462,7 +462,6 @@ def drawgutterrow(row)#0
     // Draw line numbers and gutter hilites
     //
     if flags & gutter
-        gutterchars[3] = viewleft ?? '<' :: ' '
         scrnrow    = row + viewtop
         huns, tens = divmod(scrnrow + 1, 100)
         tens, ones = divmod(tens, 10)
@@ -477,13 +476,15 @@ def drawgutterrow(row)#0
             fin
             huns, tens, ones = fillnum(huns, tens, ones, @gutterchars)
             conio:gotoxy(0, row)
-            conio:putchars(4, @gutterchars)
+            conio:putchars(3, @gutterchars)
+            conio:textctrl(ctrlattr, INVERSE)
+            putc(viewleft ?? '<' :: ' ')
             conio:textctrl(ctrlattr, NORMAL)
         fin
     fin
 end
 def drawgutter#0
-    byte row, hilite, huns, tens, ones
+    byte row, seperator, huns, tens, ones
     word scrnrow
     char gutterchars[4]
 
@@ -491,7 +492,7 @@ def drawgutter#0
     // Draw line numbers and gutter hilites
     //
     if flags & gutter
-        gutterchars[3] = viewleft ?? '<' :: ' '
+        seperator = viewleft ?? '<' :: ' '
         huns, tens = divmod(viewtop + 1, 100)
         tens, ones = divmod(tens, 10)
         for row = 0 to scrnheight-1
@@ -509,21 +510,23 @@ def drawgutter#0
                 fin
                 huns, tens, ones = fillnum(huns, tens, ones, @gutterchars)
                 conio:gotoxy(0, row)
-                conio:putchars(4, @gutterchars)
+                conio:putchars(3, @gutterchars)
+                conio:textctrl(ctrlattr, INVERSE)
+                putc(seperator)
                 conio:textctrl(ctrlattr, NORMAL)
             fin
         next
     fin
 end
 def drawrows(toprow, bottomrow)#0
-    byte row, hilite, huns, tens, ones, numchars
+    byte row, seperator, huns, tens, ones, numchars
     word scrnrow, strptr
     char gutterchars[4]
 
     //
     // Draw gutter and text
     //
-    gutterchars[3] = viewleft ?? '<' :: ' '
+    seperator = viewleft ?? '<' :: ' '
     huns, tens = divmod(viewtop + toprow + 1, 100)
     tens, ones = divmod(tens, 10)
     for row = toprow to bottomrow
@@ -542,7 +545,9 @@ def drawrows(toprow, bottomrow)#0
                     conio:textctrl(ctrlattr, INVERSE)
                 fin
                 huns, tens, ones = fillnum(huns, tens, ones, @gutterchars)
-                conio:putchars(4, @gutterchars)
+                conio:putchars(3, @gutterchars)
+                conio:textctrl(ctrlattr, INVERSE)
+                putc(seperator)
                 conio:textctrl(ctrlattr, NORMAL)
             fin
             strptr = txtlinbuf=>[scrnrow]
@@ -566,9 +571,9 @@ def curshpos(hpos)#1
     if hpos < 0; hpos = 0; fin
     if hpos > MAXLNLEN; hpos = MAXLNLEN; fin
     scrnleft  = flags & gutter
-    scrnright = scrnleft + viewwidth
-    curscol = hpos
-    cursx   = curscol - viewleft + (flags & gutter)
+    scrnright = scrnwidth - 2
+    curscol   = hpos
+    cursx     = curscol - viewleft + scrnleft
     if cursx > scrnright
         cursx    = scrnright
         viewleft = curscol - viewwidth
@@ -694,15 +699,7 @@ def pgdown#0
     fin
 end
 def cursleft#0
-    if curscol > 0
-        curscol--
-        if cursx > flags & gutter
-            cursx--
-        else
-            viewleft = curscol
-            drawscrn
-        fin
-    fin
+    if curshpos(curscol - 1); drawscrn; fin
 end
 def pgleft#0
     word i, strptr
@@ -728,15 +725,7 @@ def pgleft#0
     fin
 end
 def cursright#0
-    if curscol < MAXLNLEN
-        curscol++
-        if cursx < scrnwidth - 1
-            cursx++
-        else
-            viewleft = curscol - scrnwidth - 1
-            drawscrn
-        fin
-    fin
+    if curshpos(curscol + 1); drawscrn; fin
 end
 def pgright#0
     word i, strptr
@@ -1087,10 +1076,11 @@ def keyin
         conio:gotoxy(cursx, cursy)
         conio:textctrl(ctrlattr, INVERSE)
         conio:putchars(1, curschr)
-        waitkey
         conio:gotoxy(cursx, cursy)
+        waitkey
         conio:textctrl(ctrlattr, NORMAL)
         conio:putchars(1, underchr)
+        conio:gotoxy(cursx, cursy)
         waitkey
     until conio:keypressed()
     key = conio:getkey()
@@ -1542,14 +1532,13 @@ if ^arg
         cursrow = strtonum(arg)
     fin
 fin
-while statusVBL and cursflash
-    cursflash--
+while statusVBL
 loop
 cursflash = 0
-while not statusVBL
+while not statusVBL and cursflash < 10000
     cursflash++
 loop
-if cursflash == 0; cursflash = 30; fin
+if cursflash == 10000 and not statusVBL; cursflash = 30; fin // Check if no VBL implemented
 cursflash = cursflash * 20 // Make it flash a little slower 
 flags     = flags | insmode | gutter
 scrnwidth = conio:textmode(scrnwidth)
@@ -1562,5 +1551,5 @@ if cursrow
 fin
 drawscrn
 editmode
-conio:textmode(40)
+conio:textmode(0) // Set default mode
 done

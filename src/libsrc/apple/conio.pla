@@ -52,7 +52,7 @@ const ENV_REG      = $FFDF
 //
 // Predefined functions.
 //
-predef a2keypressed,a2getkey,a2putchars(cnt,chrs), a2ctrl(code,param)
+predef a2keypressed,a2getkey,a2putuprchars(cnt,chrs), a2ctrl(code,param)
 predef a2clear(clr),a2gotoxy(x,y),a2viewport(left, top, width, height)
 predef a2textmode(cols),a2grmode(mix),a2grcolor(color),a2grplot(x,y)
 predef a2tone(duration, delay),a2rnd
@@ -65,7 +65,7 @@ word conio[]
 //
 word = @a2keypressed
 word = @a2getkey
-word = @a2putchars
+word = @a2putuprchars
 word = @a2clear
 word = @a2gotoxy
 word = @a2viewport
@@ -179,6 +179,22 @@ asm a2grplot(x, y)
     INX
     RTS
 end
+asm cout(chr)#0
+LCRDEN  =       $C080
+LCWTEN  =       $C081
+ROMEN   =       $C082
+LCRWEN  =       $C083
+LCBNK2  =       $00
+LCBNK1  =       $08
+COUT    =       $FDED
+        LDA     ESTKL,X
+        ORA     #$80
+        BIT     ROMEN
+        JSR     COUT
+        BIT     LCRDEN+LCBNK2
+        INX
+        RTS
+end
 //def a2putchars(cnt, chrs)
 //    byte c
 //
@@ -192,13 +208,6 @@ end
 //    return ^CURSH
 //end
 asm a2putchars(cnt, chrs)
-LCRDEN  =       $C080
-LCWTEN  =       $C081
-ROMEN   =       $C082
-LCRWEN  =       $C083
-LCBNK2  =       $00
-LCBNK1  =       $08
-COUT    =       $FDED
         LDA     ESTKL+1,X       ; CNT
         BEQ     EXA2PC
         BIT     ROMEN
@@ -250,9 +259,9 @@ TXTATTR =       $32
         PHA
         LDA     (SRC),Y
         ORA     #$80
-        CMP     #'a'+$80
+        CMP     #'a'+128
         BCC     +
-        CMP     #'z'+$81
+        CMP     #'z'+129
         BCS     +
         SBC     #$1F
         PHA
@@ -269,9 +278,9 @@ TXTATTR =       $32
         PHA
         LDA     ESTKL,X         ; CHR
         ORA     #$80
-        CMP     #'a'+$80
+        CMP     #'a'+128
         BCC     +
-        CMP     #'z'+$81
+        CMP     #'z'+129
         BCS     +
         SBC     #$1F
         PHA
@@ -476,7 +485,7 @@ def a2getkey
             fin
             break
         otherwise
-            if key >= $C0 and flags < shiftlock
+            if key >= $C0 and flags & shiftlock
                 if ^pushbttn3 < 128
                     when key
                         is $C0
@@ -531,28 +540,27 @@ end
 def a2clear80e(clr)
     when clr
         is cleol // clear EOL
-            putc(29) // GS
+            cout(29) // GS
             break
         is cls // home
-            putc(12) // FF
+            cout(12) // FF
             break
         is cleos // clear OES
-            putc(11) // VT
+            cout(11) // VT
             break
     wend
-    return 0
-    putc(12) // Form Feed
     return 0
 end
 def a2clear80v(clr)
     when clr
         is cleol // clear EOL
+            cout(29) // CLEOL
             break
         is cls
-            putc(12) // FF
+            cout(12) // FF
             break
         is cleos // clear OES
-            putc(11) // VT
+            cout(11) // VT
             break
     wend
     return 0
@@ -566,7 +574,7 @@ def a2gotoxy80e(x, y)
     return call($FB5B, y + ^WNDTOP, 0, 0, 0) // TABV
 end
 def a2gotoxy80v(x, y)
-    putc(30); putc(x + ' '); putc(y + ' ')
+    cout(30); cout(x + ' '); cout(y + ' ')
     return 0
 end
 def a2viewport(left, top, width, height)
@@ -622,10 +630,8 @@ def a2ctrl(code, param)#1
             break
         is ctrlcase
             if not (flags & txt80)
-                flags = flags ^ uppercase
-                if flags & uppercase
-                    conio:putchars = flags & uppercase ?? @a2putuprchars :: @a2putchars
-                fin
+                flags          = flags ^ uppercase
+                conio:putchars = flags & uppercase ?? @a2putuprchars :: @a2putchars
             fin
             handled = TRUE
             break
@@ -702,12 +708,19 @@ def a2ctrl80v(code, param)#1
             handled = TRUE
             break
         is ctrlscroll
+            if param == UP
+                cout(30); cout(' '); cout(23 + ' '); cout(10)
+                handled = TRUE
+            fin
             break
     wend
     return handled
 end
 def a2textmode(columns)
     call($FB39, 0, 0, 0, 0) // textmode()
+    if columns == 0
+        columns = cmdsys:_sysflags_ & vid80col ?? 80 :: 40
+    fin
     if columns > 40 and MACHID & MACHID_80COL
         cswsave = *CSW
         kswsave = *KSW
@@ -716,19 +729,20 @@ def a2textmode(columns)
             conio:clear      = @a2clear80e
             conio:gotoxy     = @a2gotoxy80e
             conio:textctrl   = @a2ctrl80e
-        else
+        else // MACHID_II
+            ^$C059 // 80 column output softswitch
             conio:clear      = @a2clear80v
             conio:gotoxy     = @a2gotoxy80v
             conio:textctrl   = @a2ctrl80v
             conio:putchars   = @a2putchars
         fin
-        flags            = flags | txt80
+        flags = flags | txt80
     else
         if flags & txt80
             if MACHID & $C0 == MACHID_IIE
-                puts(@disable80)
+                cout(@disable80)
             else // Videx disable
-                ^$C058
+                ^$C058 // 80 column output softswitch
                 *CSW = cswsave
                 *KSW = kswsave
                 a2viewport(0, 0, 40, 24)
@@ -962,14 +976,17 @@ when MACHID & MACHID_MODEL
         conio:tone       = @a3tone
         conio:rnd        = @a13rnd
         break
-    is MACHID_IIE
-        conio:getkey     = @a2egetkey
-        break
     is MACHID_IIC
         conio:getkey     = @a2cgetkey
+        conio:putchars   = @a2putchars
         break
+    is MACHID_IIE
+        conio:getkey     = @a2egetkey
+        conio:putchars   = @a2putchars
+        break
+    is MACHID_IIPLUS
     is MACHID_II
-        flags            = flags | uppercase
+        flags            = flags | uppercase | shiftlock
         conio:putchars   = @a2putuprchars
         break
     is MACHID_I
@@ -986,6 +1003,7 @@ when MACHID & MACHID_MODEL
         conio:rnd        = @a13rnd
         break
 wend
+if cmdsys:_sysflags_ & vid80col; conio:textmode(80); fin
 //
 // Keep module in memory
 //
