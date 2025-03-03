@@ -92,12 +92,8 @@ const showcurs  = $01
 const shiftlock = $02
 const echo      = $04
 const txt80     = $08
-const uppercase = $80
+const uppercase = $10
 byte flags
-//
-// Apple 2 disable 80 column string
-//
-char disable80[] = 5, 13, 26, '1', 13, 21
 //
 // Apple 2 KSW snd CSW values
 //
@@ -109,9 +105,6 @@ byte textbwmode[]   = 2, 16, 0
 byte textclrmode[]  = 2, 16, 1
 byte grcharset[]    = 1, 0, $7F, $7F, $7F, $7F, $00, $00, $00, $00
 byte a3keyqueue     = 0
-byte a3echoflag     = $80
-byte a3noechoflag   = $00
-byte curschar       = ' '
 //
 // Random number for Apple 1 and III.
 //
@@ -717,9 +710,8 @@ def a2ctrl80v(code, param)#1
     return handled
 end
 def a2textmode(columns)
-    call($FB39, 0, 0, 0, 0) // textmode()
     if columns == 0
-        columns = cmdsys:_sysflags_ & vid80col ?? 80 :: 40
+        columns = (cmdsys:_sysflags_ & vid80col) ?? 80 :: 40
     fin
     if columns > 40 and MACHID & MACHID_80COL
         cswsave = *CSW
@@ -740,7 +732,7 @@ def a2textmode(columns)
     else
         if flags & txt80
             if MACHID & $C0 == MACHID_IIE
-                cout(@disable80)
+                cout(21)
             else // Videx disable
                 ^$C058 // 80 column output softswitch
                 *CSW = cswsave
@@ -755,6 +747,7 @@ def a2textmode(columns)
         conio:gotoxy     = @a2gotoxy
         conio:textctrl   = @a2ctrl
         flags            = flags & ~txt80
+        call($FB39, 0, 0, 0, 0) // textmode()
         a2clear(cls)
     fin
     return flags & txt80 ?? 80 :: 40
@@ -803,28 +796,6 @@ def dev_status(devnum, code, list)
     params.2 = code
     params:3 = list
     return syscall($82, @params)
-end
-def cons_keyavail
-    byte params[5]
-    byte count
-
-    params.0 = 3
-    params.1 = cmdsys.devcons
-    params.2 = 5
-    params:3 = @count
-    return syscall($82, @params) ?? 0 :: count
-end
-def cons_keyread
-    byte params[8]
-    byte key
-
-    params.0 = 4
-    params.1 = cmdsys.refcons
-    params:2 = @key
-    params:4 = 1
-    params:6 = 0
-    syscall($CA, @params)
-    return params:6 ?? key :: 0
 end
 def a3keypressed
     byte count
@@ -908,7 +879,8 @@ def a3ctrl(code, param)#1
         is ctrlattr
             break
         is ctrlecho
-            dev_control(cmdsys.devcons, 11, param ?? @a3echoflag :: @a3noechoflag)
+            param = param & $80
+            dev_control(cmdsys.devcons, 11, @param)
             handled = TRUE
             break
         is ctrlcursor

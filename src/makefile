@@ -15,7 +15,6 @@ CMDJIT     = rel/apple/CMD.128\#061000
 PLVMZP_C64 = vmsrc/c64/plvmzp.inc
 PLVMC64    = rel/c64/PLASMA
 ED         = rel/ED\#FE1000
-ED80       = rel/ED80\#FE1000
 ZIPCHIP    = rel/apple/ZIPCHIP\#FE1000
 JIT        = rel/apple/JIT\#FE1000
 JIT16      = rel/apple/JIT16\#FE1000
@@ -120,7 +119,7 @@ TXTTYPE	= .TXT
 #SYSTYPE	= \#FF2000
 #TXTTYPE	= \#040000
 
-apple: $(PLVMZP_APL) $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVMJIT) $(PLVM802) $(PLVM03) $(PLVMJIT03) $(CMD) $(CMDJIT) $(JIT) $(JIT16) $(JITUNE) $(SOSCMD) $(SOSCMDJIT) $(PLASMAPLASM) $(CODEOPT) $(PLFORTH) $(HRFORTH) $(HR2FORTH) $(TX2FORTH) $(SEXPR) $(SMATH) $(DRAWL) $(ZIPCHIP) $(MATCHFILES) $(ARGS) $(MEMMGR) $(MEMTEST) $(FIBER) $(FIBERTEST) $(LONGJMP) $(ED) $(ED80) $(MON) $(COPY) $(DEL) $(REN) $(CAT) $(NEWDIR) $(TYPE) $(INITSLOT) $(SOS) $(ROD) $(SIEVE) $(PRIMEGAP) $(MOUSE) $(UTHERNET2) $(UTHERNET) $(ETHERIP) $(INET) $(DHCP) $(HTTPD) $(TFTPD) $(ROGUE) $(ROGUEMAP) $(ROGUECOMBAT) $(SFM) $(SFMSPRT) $(GRAFIX) $(GFXDEMO) $(LINES) $(HGRTILE) $(HGRFONT) $(HGRSPRITE) $(HGRLIB) $(TILETEST) $(HGRTEST) $(GRLIB) $(DGRLIB) $(VBLANK) $(GRTEST) $(DGRTEST) $(HGRTEST) $(FILEIO_APL) $(CONIO_APL) $(JOYBUZZ) $(PORTIO) $(SPIPORT) $(SDFAT) $(FATCAT) $(FATGET) $(FATPUT) $(FATWDSK) $(FATRDSK) $(INT32) $(INT32TEST) $(SANE) $(FPSTR) $(FPU) $(SANITY) $(LZ4) $(LZ4CAT) $(RPNCALC) $(SNDSEQ) $(PLAYSEQ) $(CONIOTEST)
+apple: $(PLVMZP_APL) $(PLASM) $(PLVM) $(PLVM01) $(PLVM02) $(PLVMJIT) $(PLVM802) $(PLVM03) $(PLVMJIT03) $(CMD) $(CMDJIT) $(JIT) $(JIT16) $(JITUNE) $(SOSCMD) $(SOSCMDJIT) $(PLASMAPLASM) $(CODEOPT) $(PLFORTH) $(HRFORTH) $(HR2FORTH) $(TX2FORTH) $(SEXPR) $(SMATH) $(DRAWL) $(ZIPCHIP) $(MATCHFILES) $(ARGS) $(MEMMGR) $(MEMTEST) $(FIBER) $(FIBERTEST) $(LONGJMP) $(ED) $(MON) $(COPY) $(DEL) $(REN) $(CAT) $(NEWDIR) $(TYPE) $(INITSLOT) $(SOS) $(ROD) $(SIEVE) $(PRIMEGAP) $(MOUSE) $(UTHERNET2) $(UTHERNET) $(ETHERIP) $(INET) $(DHCP) $(HTTPD) $(TFTPD) $(ROGUE) $(ROGUEMAP) $(ROGUECOMBAT) $(SFM) $(SFMSPRT) $(GRAFIX) $(GFXDEMO) $(LINES) $(HGRTILE) $(HGRFONT) $(HGRSPRITE) $(HGRLIB) $(TILETEST) $(HGRTEST) $(GRLIB) $(DGRLIB) $(VBLANK) $(GRTEST) $(DGRTEST) $(HGRTEST) $(FILEIO_APL) $(CONIO_APL) $(JOYBUZZ) $(PORTIO) $(SPIPORT) $(SDFAT) $(FATCAT) $(FATGET) $(FATPUT) $(FATWDSK) $(FATRDSK) $(INT32) $(INT32TEST) $(SANE) $(FPSTR) $(FPU) $(SANITY) $(LZ4) $(LZ4CAT) $(RPNCALC) $(SNDSEQ) $(PLAYSEQ) $(CONIOTEST)
 
 	-rm vmsrc/plvmzp.inc
 
@@ -269,13 +268,9 @@ test:	samplesrc/test.pla samplesrc/testlib.pla $(PLVM) $(PLASM)
 	acme --setpc 4094 -o $(TESTLIB) samplesrc/testlib.a
 	./$(PLVM) test
 
-$(ED): toolsrc/ed.pla $(PLVM02) $(PLASM)
+$(ED): toolsrc/ed.pla inc/conio.plh libsrc/apple/conio.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AMOW toolsrc/ed.pla
 	acme --setpc 4094 -o $(ED) toolsrc/ed.a
-
-$(ED80): toolsrc/ed80.pla inc/conio.plh libsrc/apple/conio.pla $(PLVM02) $(PLASM)
-	./$(PLASM) -AMOW toolsrc/ed80.pla
-	acme --setpc 4094 -o $(ED80) toolsrc/ed80.a
 
 $(MATCHFILES): libsrc/apple/matchfiles.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AMOW libsrc/apple/matchfiles.pla
