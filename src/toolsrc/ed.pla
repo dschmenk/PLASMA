@@ -454,9 +454,9 @@ def drawstr(row, strptr)#0
     fin
 end
 def drawgutterrow(row)#0
-    byte huns, tens, ones
+    byte seperator, huns, tens, ones
     word scrnrow
-    char gutterchars[4]
+    char gutterchars[3]
 
     //
     // Draw line numbers and gutter hilites
@@ -466,19 +466,21 @@ def drawgutterrow(row)#0
         huns, tens = divmod(scrnrow + 1, 100)
         tens, ones = divmod(tens, 10)
         if scrnrow < numlines
+            seperator = viewleft ?? '<' :: ' '
             if flags & selection
                 if (scrnrow >= selrow and scrnrow <= cursrow) or (scrnrow >= cursrow and scrnrow <= selrow)
-                    gutterchars[3] = '+'
+                    seperator = '['
                     conio:textctrl(ctrlattr, INVERSE)
                 fin
-            elsif scrnrow == cursrow
+            fin
+            if scrnrow == cursrow
                 conio:textctrl(ctrlattr, INVERSE)
             fin
             huns, tens, ones = fillnum(huns, tens, ones, @gutterchars)
             conio:gotoxy(0, row)
             conio:putchars(3, @gutterchars)
             conio:textctrl(ctrlattr, INVERSE)
-            putc(viewleft ?? '<' :: ' ')
+            putc(seperator)
             conio:textctrl(ctrlattr, NORMAL)
         fin
     fin
@@ -486,7 +488,7 @@ end
 def drawgutter#0
     byte row, seperator, huns, tens, ones
     word scrnrow
-    char gutterchars[4]
+    char gutterchars[3]
 
     //
     // Draw line numbers and gutter hilites
@@ -498,14 +500,14 @@ def drawgutter#0
         for row = 0 to scrnheight-1
             scrnrow = row + viewtop
             if scrnrow < numlines
+                seperator = viewleft ?? '<' :: ' '
                 if flags & selection
                     if (scrnrow >= selrow and scrnrow <= cursrow) or (scrnrow >= cursrow and scrnrow <= selrow)
-                        gutterchars[3] = '+'
+                        seperator = '['
                         conio:textctrl(ctrlattr, INVERSE)
-                    else
-                        gutterchars[3] = viewleft ?? '<' :: ' '
                     fin
-                elsif scrnrow == cursrow
+                fin
+                if scrnrow == cursrow
                     conio:textctrl(ctrlattr, INVERSE)
                 fin
                 huns, tens, ones = fillnum(huns, tens, ones, @gutterchars)
@@ -521,12 +523,11 @@ end
 def drawrows(toprow, bottomrow)#0
     byte row, seperator, huns, tens, ones, numchars
     word scrnrow, strptr
-    char gutterchars[4]
+    char gutterchars[3]
 
     //
     // Draw gutter and text
     //
-    seperator = viewleft ?? '<' :: ' '
     huns, tens = divmod(viewtop + toprow + 1, 100)
     tens, ones = divmod(tens, 10)
     for row = toprow to bottomrow
@@ -534,14 +535,14 @@ def drawrows(toprow, bottomrow)#0
         if scrnrow < numlines
             conio:gotoxy(0, row)
             if flags & gutter
+                seperator = viewleft ?? '<' :: ' '
                 if flags & selection
                     if (scrnrow >= selrow and scrnrow <= cursrow) or (scrnrow >= cursrow and scrnrow <= selrow)
-                        gutterchars[3] = '+'
+                        seperator = '['
                         conio:textctrl(ctrlattr, INVERSE)
-                    else
-                        gutterchars[3] = viewleft ?? '<' :: ' '
                     fin
-                elsif scrnrow == cursrow
+                fin
+                if scrnrow == cursrow
                     conio:textctrl(ctrlattr, INVERSE)
                 fin
                 huns, tens, ones = fillnum(huns, tens, ones, @gutterchars)
@@ -1284,7 +1285,7 @@ def editmode#0
                 cursvpos(cursrow + 1)
                 drawscrn
                 break
-            is keyctrlt
+            is keyctrly
                 joinline
                 drawscrn
                 break
@@ -1306,17 +1307,15 @@ def editmode#0
                     autoindent(txtlinbuf=>[cursrow])
                 fin
                 break
-            is keyctrly
-                flags   = flags ^ insmode
+            is keyctrlt
+                flags = flags ^ insmode
                 break
             is keyescape
-                conio:textctrl(ctrlecho, ON)
-                conio:textctrl(ctrlcursor, ON)
                 cmdmode
                 if not (flags & exit)
+                    conio:clear(cls)
                     conio:textctrl(ctrlecho, OFF)
                     conio:textctrl(ctrlcursor, OFF)
-                    conio:clear(cls)
                     drawscrn
                 fin
         wend
@@ -1408,6 +1407,8 @@ def cmdmode#0
     var i, freepool
 
     conio:clear(cls)
+    conio:textctrl(ctrlecho, ON)
+    conio:textctrl(ctrlcursor, ON)
     puts("PLASMA Editor, Version 2.20\n")
     while not (flags & exit)
         puts(@filename)
@@ -1533,8 +1534,9 @@ if ^arg
         cursrow = strtonum(arg)
     fin
 fin
-cursflash = waitVBL
-if cursflash == 0; cursflash = 300; fin
+if waitVBL
+    cursflash = waitVBL
+fin
 flags     = flags | insmode | gutter
 scrnwidth = conio:textmode(scrnwidth)
 inittxtbuf

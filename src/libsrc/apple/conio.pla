@@ -506,16 +506,6 @@ def a2egetkey
     ^keystrobe
     return (^pushbttn2 & $80) | (key & $7F)
 end
-def a2cgetkey
-    byte key
-
-    ^$C079 = 0 // IOU enable and clear VBL int on //c
-    ^$C05B = 0 // Enable VBL Ints on //c
-    key = a2egetkey
-    ^$C05A = 0 // Disable VBL Ints on //c
-    ^$C078 = 0 // IOU disable on //c
-    return key
-end
 def a2clear(clr)
     when clr
         is cleol // clear EOL
@@ -530,26 +520,12 @@ def a2clear(clr)
     wend
     return 0
 end
-def a2clear80e(clr)
+def a2clear80(clr)
     when clr
         is cleol // clear EOL
             cout(29) // GS
             break
         is cls // home
-            cout(12) // FF
-            break
-        is cleos // clear OES
-            cout(11) // VT
-            break
-    wend
-    return 0
-end
-def a2clear80v(clr)
-    when clr
-        is cleol // clear EOL
-            cout(29) // CLEOL
-            break
-        is cls
             cout(12) // FF
             break
         is cleos // clear OES
@@ -693,11 +669,23 @@ def a2ctrl80v(code, param)#1
             handled = TRUE
             break
         is ctrlcursor
-            if param
-                flags = flags | showcurs
-            else
-                flags = flags & ~showcurs
-            fin
+            when param
+                is OFF
+                    flags = flags & ~showcurs
+                    ^$C0B0 = $0A
+                    ^$C0B1 = $0F
+                    //break
+                is INVERSE
+                    flags = flags | showcurs
+                    ^$C0B0 = $0A
+                    ^$C0B1 = $00
+                    break
+                otherwise
+                    flags = flags | showcurs
+                    ^$C0B0 = $0A
+                    ^$C0B1 = $C0
+                    break
+            wend
             handled = TRUE
             break
         is ctrlscroll
@@ -719,15 +707,15 @@ def a2textmode(columns)
             kswsave = *KSW
             call($C300, 0, 0, 0,  0)
             if MACHID & $C0 == MACHID_IIE
-                conio:clear      = @a2clear80e
-                conio:gotoxy     = @a2gotoxy80e
-                conio:textctrl   = @a2ctrl80e
+                conio:clear    = @a2clear80
+                conio:gotoxy   = @a2gotoxy80e
+                conio:textctrl = @a2ctrl80e
             else // MACHID_II
                 ^$C059 // 80 column output softswitch
-                conio:clear      = @a2clear80v
-                conio:gotoxy     = @a2gotoxy80v
-                conio:textctrl   = @a2ctrl80v
-                conio:putchars   = @a2putchars
+                conio:clear    = @a2clear80
+                conio:gotoxy   = @a2gotoxy80v
+                conio:textctrl = @a2ctrl80v
+                conio:putchars = @a2putchars
             fin
             flags = flags | txt80
         fin
@@ -736,19 +724,20 @@ def a2textmode(columns)
             if MACHID & $C0 == MACHID_IIE
                 cout(21)
             else // Videx disable
-                ^$C058 // 40 column output softswitch
+                cout(26); cout('1')
                 *CSW = cswsave
                 *KSW = kswsave
-                a2viewport(0, 0, 40, 24)
+                ^$C058 // 40 column output softswitch
+                //a2viewport(0, 0, 40, 24)
                 if flags & uppercase
                     conio:putchars = @a2putuprchars
                 fin
             fin
         fin
-        conio:clear      = @a2clear
-        conio:gotoxy     = @a2gotoxy
-        conio:textctrl   = @a2ctrl
-        flags            = flags & ~txt80
+        flags          = flags & ~txt80
+        conio:clear    = @a2clear
+        conio:gotoxy   = @a2gotoxy
+        conio:textctrl = @a2ctrl
         call($FB39, 0, 0, 0, 0) // textmode()
         a2clear(cls)
     fin
@@ -951,9 +940,6 @@ when MACHID & MACHID_MODEL
         conio:rnd        = @a13rnd
         break
     is MACHID_IIC
-        conio:getkey     = @a2cgetkey
-        conio:putchars   = @a2putchars
-        break
     is MACHID_IIE
         conio:getkey     = @a2egetkey
         conio:putchars   = @a2putchars
