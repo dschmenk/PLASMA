@@ -92,7 +92,7 @@ const showcurs  = $01
 const shiftlock = $02
 const echo      = $04
 const uppercase = $08
-const txt80e    = $10 // //e & //c 80 column
+const txt80e    = $10 // IIe & //c 80 column
 const txt80v    = $20 // VIDEX 80 column card
 const txt80a    = $40 // ALS SmartTerm 80 column card
 const txt80     = txt80e | txt80v | txt80a
@@ -241,10 +241,12 @@ end
 asm a2putuprchars(cnt, chrs)
 TXTATTR =       $32
         LDA     ESTKH+1,X       ; CNTH
-        BEQ     EXA2PC          ; > 255
+        BNE     EXA2UPC         ; > 255
         LDA     ESTKL+1,X       ; CNTL
-        BEQ     EXA2PC          ; == 0
+        BEQ     EXA2UPC         ; == 0
         BIT     ROMEN
+        LDA     TXTATTR
+        STA     TMPL
         LDA     ESTKH,X
         BEQ     ++
         STA     SRCH            ; SRC = CHRPTR
@@ -255,8 +257,6 @@ TXTATTR =       $32
         TYA
         CMP     ESTKL+1,X
         BEQ     EXA2UPC
-        LDA     TXTATTR
-        PHA
         LDA     (SRC),Y
         ORA     #$80
         CMP     #'a'+128
@@ -269,14 +269,12 @@ TXTATTR =       $32
         STA     TXTATTR
         PLA
 +       JSR     COUT
-        PLA
+        LDA     TMPL
         STA     TXTATTR
         LDY     ESTKH+1,X
         INY
         BNE     -
-++      LDA     TXTATTR
-        PHA
-        LDA     ESTKL,X         ; CHR
+++      LDA     ESTKL,X         ; CHR
         ORA     #$80
         CMP     #'a'+128
         BCC     +
@@ -293,7 +291,7 @@ TXTATTR =       $32
         PLA
         DEC     ESTKL+1,X
         BNE     -
-        PLA
+        LDA     TMPL
         STA     TXTATTR
 EXA2UPC INX
         BIT     LCRDEN+LCBNK2
@@ -717,7 +715,7 @@ def a2textmode(columns)
     if columns == 0
         columns = (cmdsys:_sysflags_ & vid80col) ?? 80 :: 40
     fin
-    if columns > 40 and MACHID & MACHID_80COL
+    if columns >= 80 and MACHID & MACHID_80COL
         if not (flags & txt80)
             cswsave = *CSW
             kswsave = *KSW
@@ -750,29 +748,28 @@ def a2textmode(columns)
                 fin
             fin
         fin
-        conio:clear(cls)
     else
-        if flags & txt80e // IIe disable
-            cout(21)
-        elsif flags & txt80v // Videx disable
-            cout(26); cout('1')
-            ^$C058
-        elsif flags & txt80a // ALS SmartTerm disable
-            cout(20); cout('A'); cout('1')
+        if flags & txt80
+            if flags & txt80e // IIe disable
+                cout(21)
+            elsif flags & txt80v // Videx disable
+                cout(26); cout('1')
+                ^$C058
+            elsif flags & txt80a // ALS SmartTerm disable
+                cout(20); cout('A'); cout('1')
+            fin
+            *CSW  = cswsave
+            *KSW  = kswsave
+            flags = flags & ~txt80
         fin
-        *CSW = cswsave
-        *KSW = kswsave
-        if flags & uppercase
-            conio:putchars = @a2putuprchars
-        fin
-        flags          = flags & ~txt80
-        columns        = 40
+        call($FB39, 0, 0, 0, 0) // textmode()
+        conio:putchars = flags & uppercase ?? @a2putuprchars :: @a2putchars
         conio:clear    = @a2clear
         conio:gotoxy   = @a2gotoxy
         conio:textctrl = @a2ctrl
-        call($FB39, 0, 0, 0, 0) // textmode()
-        a2clear(cls)
+        columns        = 40
     fin
+    conio:clear(cls)
     return columns
 end
 def a2grmode(mix)
