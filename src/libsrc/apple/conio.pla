@@ -91,8 +91,11 @@ word                = $0850,$08D0,$0950,$09D0,$0A50,$0AD0,$0B50,$0BD0
 const showcurs  = $01
 const shiftlock = $02
 const echo      = $04
-const txt80     = $08
-const uppercase = $10
+const uppercase = $08
+const txt80e    = $10 // //e & //c 80 column
+const txt80v    = $20 // VIDEX 80 column card
+const txt80a    = $40 // ALS SmartTerm 80 column card
+const txt80     = txt80e | txt80v | txt80a
 byte flags
 //
 // Apple 2 KSW snd CSW values
@@ -670,16 +673,34 @@ def a2ctrl80v(code, param)#1
         is ctrlcursor
             when param
                 is OFF
-                    ^$C0B0 = $0A
-                    ^$C0B1 = $20
+                    if flags & txt80v
+                        ^$C0B0 = $0A
+                        ^$C0B1 = $20
+                    elsif flags & txt80a
+                        cout(20) // Ctrl-T
+                        cout('C')
+                        cout('7')
+                    fin
                     break
                 is INVERSE
-                    ^$C0B0 = $0A
-                    ^$C0B1 = $00
+                    if flags & txt80v
+                        ^$C0B0 = $0A
+                        ^$C0B1 = $00
+                    elsif flags & txt80a
+                        cout(20) // Ctrl-T
+                        cout('C')
+                        cout('3')
+                    fin
                     break
                 otherwise
-                    ^$C0B0 = $0A
-                    ^$C0B1 = $C0
+                    if flags & txt80v
+                        ^$C0B0 = $0A
+                        ^$C0B1 = $C0
+                    elsif flags & txt80a
+                        cout(20) // Ctrl-T
+                        cout('C')
+                        cout('3')
+                    fin
             wend
             handled = TRUE
             break
@@ -700,42 +721,52 @@ def a2textmode(columns)
         if not (flags & txt80)
             cswsave = *CSW
             kswsave = *KSW
-            call($C300, 0, 0, 0, 0)
+            *CSW    = $C300
+            cout(' ') // 80 column card enable
             if MACHID & $C0 == MACHID_IIE
                 conio:clear    = @a2clear80
                 conio:gotoxy   = @a2gotoxy80e
                 conio:textctrl = @a2ctrl80e
                 columns = 80
+                flags = flags | txt80e
             else // MACHID_II
-                ^$C059 // 80 column output softswitch
                 conio:clear    = @a2clear80
                 conio:gotoxy   = @a2gotoxy80v
                 conio:textctrl = @a2ctrl80v
                 conio:putchars = @a2putchars
-                if columns > 80 and columns <= 88// Check for UltraTerm modes
-                    cout(22); cout(columns - 80 + '0')
-                    ^WNDBOTTOM = UltraTermHeight[columns - 81]
-                else
-                    cout(22); cout('1') // Ensure 80x24
+                if ^$C304 == $1E // Try and identify different cards
+                    flags = flags | txt80a // ALS SmartTerm (hopefully)
                     columns = 80
+                    puts("ALS SmartTerm"); getc
+                else
+                    flags = flags | txt80v // Treat anything else as VIDEX
+                    ^$C059
+                    if columns > 80 and columns <= 88 \
+                      and ^$C304 == $39 // Check for UltraTerm modes
+                        cout(22); cout(columns - 80 + '0')
+                        ^WNDBOTTOM = UltraTermHeight[columns - 81]
+                    else
+                        cout(22); cout('1') // Ensure 80x24
+                        columns = 80
+                    fin
+                    puts("VIDEX"); getc
                 fin
             fin
-            flags = flags | txt80
         fin
+        conio:clear(cls)
     else
-        if flags & txt80
-            if MACHID & $C0 == MACHID_IIE
-                cout(21)
-            else // Videx disable
-                cout(26); cout('1')
-                *CSW = cswsave
-                *KSW = kswsave
-                ^$C058 // 40 column output softswitch
-                //a2viewport(0, 0, 40, 24)
-                if flags & uppercase
-                    conio:putchars = @a2putuprchars
-                fin
-            fin
+        if flags & txt80e // IIe disable
+            cout(21)
+        elsif flags & txt80v // Videx disable
+            cout(26); cout('1')
+            ^$C058
+        elsif flags & txt80a // ALS SmartTerm disable
+            cout(1); cout('A'); cout('1')
+        fin
+        *CSW = cswsave
+        *KSW = kswsave
+        if flags & uppercase
+            conio:putchars = @a2putuprchars
         fin
         flags          = flags & ~txt80
         columns        = 40
