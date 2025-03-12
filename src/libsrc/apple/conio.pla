@@ -816,32 +816,45 @@ end
 //
 // Apple III routines.
 //
-def dev_control(devnum, code, list)
+def cons_control(code, list)
     byte params[5]
 
     params.0 = 3
-    params.1 = devnum
+    params.1 = cmdsys.devcons
     params.2 = code
     params:3 = list
     return syscall($83, @params)
 end
-def dev_status(devnum, code, list)
+def cons_keyavail
     byte params[5]
+    byte count
 
     params.0 = 3
-    params.1 = devnum
-    params.2 = code
-    params:3 = list
-    return syscall($82, @params)
+    params.1 = cmdsys.devcons
+    params.2 = 5
+    params:3 = @count
+    return syscall($82, @params) ?? 0 :: count
+end
+def cons_keyread
+    byte params[8]
+    byte key
+
+    params.0 = 4
+    params.1 = cmdsys.refcons
+    params:2 = @key
+    params:4 = 1
+    params:6 = 0
+    syscall($CA, @params)
+    return params:6 ?? key :: 0
 end
 def a3keypressed
     byte count
 
-    dev_status(cmdsys.devcons, 5, @count)
+    count = cons_keyavail
     if count
-        a3keyqueue = getc
+        a3keyqueue = cons_keyread
     fin
-    return a3keyqueue ?? a3keyqueue | $80 :: 0
+    return a3keyqueue
 end
 def a3getkey
     byte keycode
@@ -936,7 +949,7 @@ def a3ctrl(code, param)#1
             break
         is ctrlecho
             param = param ?? $80 :: 0
-            dev_control(cmdsys.devcons, 11, @param)
+            cons_control(11, @param)
             handled = TRUE
             break
         is ctrlcursor
@@ -983,7 +996,7 @@ def a3grmode(mix)
         mix = 23
     fin
     a3putchar(16); putc(1) // TEXT 40 COLOR MODE
-    dev_control(cmdsys.devcons, 17, @grcharset)
+    cons_control(17, @grcharset)
     a3viewport(0, 20, 40, 4)
     a3putchar(28)
     for i = 0 to mix
