@@ -3,6 +3,7 @@ WELCOME TO THE PLASMA EDITOR!
 
 FIRST THINGS FIRST:
 TO NAVIGATE, USE THE ARROW KEYS.
+
 ON THE APPLE ][:
 
     CTRL-K = UP
@@ -24,18 +25,13 @@ EXIT BY ENTERING 'Q' AND 'RETURN'.
 YOU CAN ALSO RETURN TO THE EDITOR BY
 JUST PRESSING 'RETURN'.
 
--------
+-------------------------------------------------------------------------
 
-THE PLASMA EDITOR IS A SIMPLE TEXT
-EDITOR FOR ENTERING AND MANIPULATING
-TEXT AND SOURCE CODE FILES. THE
-EDITOR ONLY SUPPORTS 40 COLUMN TEXT
-ALTHOUGH LINES CAN BE UP TO 79
-CHARACTERS LONG. THE SCREEN WILL
-SCROLL HORIZONTALLY AS THE CURSOR
-MOVES. THERE IS ABOUT 16K TO 30K
-OF MEMORY FOR THE TEXT BUFFER,
-DEPENDING ON YOUR CONFIGURATION.
+THE PLASMA EDITOR IS A SIMPLE TEXT EDITOR FOR ENTERING AND MANIPULATING
+TEXT AND SOURCE CODE FILES. THE EDITOR SUPPORTS FROM 40 TO 128 COLUMN MODE
+WITH LINES THAT CAN BE UP TO 127 CHARACTERS LONG. THE SCREEN WILL SCROLL
+HORIZONTALLY AS THE CURSOR MOVES, IF NEDED. THERE IS ABOUT 16K TO 30K OF
+MEMORY FOR THE TEXT BUFFER, DEPENDING ON YOUR CONFIGURATION.
 
 IT HAS TWO MODES, COMMAND AND EDIT.
 
@@ -80,24 +76,19 @@ EDIT COMMANDS:
     CTRL-L       = SHIFT LOCK
     SHIFT-LEFT ARROW = DELETE (SHIFT-MOD)
 
-  WITH THE SHIFT-KEY MOD ON AN
-  APPLE ][, UPPER AND LOWER CASE
-  ENTRY WORKS AS EXPECTED.
+  WITH THE SHIFT-KEY MOD ON AN APPLE ][, UPPER AND LOWER CASE ENTRY WORKS
+  AS EXPECTED.
 
     ESC T C      = FORCE LOWER-CASE CHARS
 
-  If you have a lower-case character
-  generator installed, you can force
-  lower-case display.  Otherwise,
-  upper case will be displayed normally
-  but lower-case will be displayed in
-  inverse.  This is the default.
+  If you have a lower-case character generator installed, you can force
+  lower-case display.  Otherwise, upper case will be displayed normally
+  but lower-case will be displayed in inverse.  This is the default.
 
   Apple //e AND //c FEATURES:
   ---------------------------
 
-  The 'SOLID-APPLE' key will modify
-  these keys:
+  The 'SOLID-APPLE' key will modify these keys:
 
     SA-RETURN      = OPEN FOLLOWING LINE
     SA-LEFT ARROW  = JUMP LEFT
@@ -109,8 +100,7 @@ EDIT COMMANDS:
   Apple /// FEATURES:
   -------------------
 
-  The 'OPEN-APPLE' key will modify
-  these keys:
+  The 'OPEN-APPLE' key will modify these keys:
 
     OA-\           = DELETE CHAR LEFT
     OA-RETURN      = OPEN FOLLOWING LINE
@@ -123,9 +113,8 @@ EDIT COMMANDS:
   Apple //e Platinum AND /// FEATURES:
   ------------------------------------
 
-  On the keypad, 'OPTION' on //e Plat
-  or 'OPEN-APPLE' on the /// allows
-  the keys for navigation and misc:
+  On the keypad, 'OPTION' on //e Platinum or 'OPEN-APPLE' on the ///
+  allows the keys for navigation and misc operations:
 
     OA-4           = MOVE CHAR LEFT
     OA-6           = MOVE CHAR RIGHT

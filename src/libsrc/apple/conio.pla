@@ -107,10 +107,8 @@ byte[] UltraTermHeight = 24, 24,  24, 24, 32, 48,  24,  32
 //
 // Apple 3 console codes.
 //
-byte textbwmode[]   = 2, 16, 0
-byte textclrmode[]  = 2, 16, 1
-byte grcharset[]    = 1, 0, $7F, $7F, $7F, $7F, $00, $00, $00, $00
-byte a3keyqueue     = 0
+byte grcharset[] = 1, 0, $7F, $7F, $7F, $7F, $00, $00, $00, $00
+byte a3keyqueue  = 0
 //
 // Random number for Apple 1 and III.
 //
@@ -178,7 +176,7 @@ asm a2grplot(x, y)
     INX
     RTS
 end
-asm cout(chr)#0
+asm a2cout(chr)#0
 LCRDEN  =       $C080
 LCWTEN  =       $C081
 ROMEN   =       $C082
@@ -364,6 +362,25 @@ PAGE1X =        $C055
         INX
         RTS
 end
+asm vid3cpy(dstrow, srcrow)#0
+        LDA     ESTKL+1,X
+        STA     DSTL
+        LDA     ESTKH+1,X
+        STA     DSTH
+        LDA     ESTKL,X
+        STA     SRCL
+        LDA     ESTKH,X
+        STA     SRCH
+        LDY     #40
+        DEY
+-       LDA     (SRC),Y
+        STA     (DST),Y
+        DEY
+        BPL     -
+        INX
+        INX
+        RTS
+end
 //
 // Apple 1 routines.
 //
@@ -525,13 +542,13 @@ end
 def a2clear80(clr)
     when clr
         is cleol // clear EOL
-            cout(29) // GS
+            a2cout(29) // GS
             break
         is cls // home
-            cout(12) // FF
+            a2cout(12) // FF
             break
         is cleos // clear OES
-            cout(11) // VT
+            a2cout(11) // VT
             break
     wend
     return 0
@@ -545,7 +562,7 @@ def a2gotoxy80e(x, y)
     return call($FB5B, y + ^WNDTOP, 0, 0, 0) // TABV
 end
 def a2gotoxy80v(x, y)
-    cout(30); cout(x + ' '); cout(y + ' ')
+    a2cout(30); a2cout(x + ' '); a2cout(y + ' ')
     return 0
 end
 def a2viewport(left, top, width, height)
@@ -675,9 +692,9 @@ def a2ctrl80v(code, param)#1
                         ^$C0B0 = $0A
                         ^$C0B1 = $20
                     elsif flags & txt80a
-                        cout(20) // Ctrl-T
-                        cout('C')
-                        cout('7')
+                        a2cout(20) // Ctrl-T
+                        a2cout('C')
+                        a2cout('7')
                     fin
                     break
                 is INVERSE
@@ -685,9 +702,9 @@ def a2ctrl80v(code, param)#1
                         ^$C0B0 = $0A
                         ^$C0B1 = $00
                     elsif flags & txt80a
-                        cout(20) // Ctrl-T
-                        cout('C')
-                        cout('3')
+                        a2cout(20) // Ctrl-T
+                        a2cout('C')
+                        a2cout('3')
                     fin
                     break
                 otherwise
@@ -695,16 +712,16 @@ def a2ctrl80v(code, param)#1
                         ^$C0B0 = $0A
                         ^$C0B1 = $C0
                     elsif flags & txt80a
-                        cout(20) // Ctrl-T
-                        cout('C')
-                        cout('3')
+                        a2cout(20) // Ctrl-T
+                        a2cout('C')
+                        a2cout('3')
                     fin
             wend
             handled = TRUE
             break
         is ctrlscroll
             if param == UP
-                cout(30); cout(' '); cout(^WNDBOTTOM + ' ' - 1); cout(10)
+                a2cout(30); a2cout(' '); a2cout(^WNDBOTTOM + ' ' - 1); a2cout(10)
                 handled = TRUE
             fin
             break
@@ -739,10 +756,10 @@ def a2textmode(columns)
                     ^$C059
                     if columns > 80 and columns <= 88 \
                       and ^$C304 == $39 // Check for UltraTerm modes
-                        cout(22); cout(columns - 80 + '0')
+                        a2cout(22); a2cout(columns - 80 + '0')
                         ^WNDBOTTOM = UltraTermHeight[columns - 81]
                     else
-                        cout(22); cout('1') // Ensure 80x24
+                        a2cout(22); a2cout('1') // Ensure 80x24
                         columns = 80
                     fin
                 fin
@@ -751,12 +768,12 @@ def a2textmode(columns)
     else
         if flags & txt80
             if flags & txt80e // IIe disable
-                cout(21)
+                a2cout(21)
             elsif flags & txt80v // Videx disable
-                cout(26); cout('1')
+                a2cout(26); a2cout('1')
                 ^$C058
             elsif flags & txt80a // ALS SmartTerm disable
-                cout(20); cout('A'); cout('1')
+                a2cout(20); a2cout('A'); a2cout('1')
             fin
             *CSW  = cswsave
             *KSW  = kswsave
@@ -836,25 +853,55 @@ def a3getkey
     a3keyqueue = 0
     return keycode
 end
+def a3putchar(chr)#0
+    byte params[6]
+
+    params.0 = 3
+    params.1 = cmdsys.refcons
+    params:2 = @chr
+    params:4 = 1
+    syscall($CB, @params)
+end
 def a3putchars(cnt, chrs)
+    byte params[6]
     byte c
 
-    if chrs < 256
-        for c = 1 to cnt
-            putc(chrs)
-        next
+    params.0 = 3
+    params.1 = cmdsys.refcons
+    if chrs & $FF00
+        params:2 = chrs
+        params:4 = cnt
+        syscall($CB, @params)
     else
-        for c = 0 to cnt-1
-            putc(chrs->[c])
+        params:2 = @chrs
+        params:4 = 1
+        for c = 1 to cnt
+            syscall($CB, @params)
         next
     fin
     return cnt
 end
+def a3clear(clr)
+    when clr
+        is cleol // clear EOL
+            a3putchar(31) // GS
+            break
+        is cls // home
+            a3putchar(28) // FF
+            break
+        is cleos // clear OES
+            a3putchar(29) // VT
+            break
+    wend
+    return 0
+end
 def a3gotoxy(x, y)
-    putc(24)
-    putc(x)
-    putc(25)
-    putc(y)
+    char chrs[3]
+
+    chrs[0] = 26
+    chrs[1] = x
+    chrs[2] = y
+    a3putchars(3, @chrs)
     return 0
 end
 def a3viewport(left, top, width, height)
@@ -867,43 +914,66 @@ def a3viewport(left, top, width, height)
         width  = 40//textcols
         height = 24
     fin
-    putc(1) // Reset viewport
-    putc(26)
-    putc(left)
-    putc(top)
-    putc(2)
-    putc(26)
-    putc(left + width  - 1)
-    putc(top  + height - 1)
-    putc(3)
+    a3putchar(1) // Reset viewport
+    a3putchar(26)
+    a3putchar(left)
+    a3putchar(top)
+    a3putchar(2)
+    a3putchar(26)
+    a3putchar(left + width  - 1)
+    a3putchar(top  + height - 1)
+    a3putchar(3)
     return a3gotoxy(0, 0)
 end
 def a3ctrl(code, param)#1
     word handled
+    byte row
 
     handled = FALSE
     when code
         is ctrlattr
+            a3putchar(param == INVERSE ?? 18 :: 17)
             break
         is ctrlecho
-            param = param & $80
+            param = param ?? $80 :: 0
             dev_control(cmdsys.devcons, 11, @param)
             handled = TRUE
             break
         is ctrlcursor
+            a3putchar(param == OFF ?? 6 :: 5)
+            handled = TRUE
+            break
+        is ctrlscroll
+            if param > 0
+                for row = 0 to 23 - param
+                    vid3cpy(txt1scrn[row], txt1scrn[row + param])
+                    vid3cpy(txt2scrn[row], txt2scrn[row + param])
+                next
+            elsif param < 0
+                for row = 23 downto -param
+                    vid3cpy(txt1scrn[row], txt1scrn[row + param])
+                    vid3cpy(txt2scrn[row], txt2scrn[row + param])
+                next
+            fin
+            handled = TRUE
             break
     wend
     return handled
 end
 def a3textmode(columns)
-    puts(@textbwmode)
-    if columns > 40
-        a3viewport(0, 0, 80, 24)
+    a3putchar(16)
+    if columns >= 80
+        a3putchar(2)
+        columns = 80
     else
-        a3viewport(0, 0, 40, 24)
+        a3putchar(0)
+        columns = 40
     fin
-    putc(28)
-    return 0
+    a3putchar(1) // Reset viewport
+    a3putchar(28) // CLS
+    a3ctrl(ctrlecho, ON)
+    a3ctrl(ctrlcursor, OFF)
+    return columns
 end
 def a3grmode(mix)
     byte i
@@ -912,10 +982,10 @@ def a3grmode(mix)
     else
         mix = 23
     fin
-    puts(@textclrmode)
+    a3putchar(16); putc(1) // TEXT 40 COLOR MODE
     dev_control(cmdsys.devcons, 17, @grcharset)
     a3viewport(0, 20, 40, 4)
-    putc(28)
+    a3putchar(28)
     for i = 0 to mix
         memset(txt1scrn[i], $0000, 40) // text  screen
         memset(txt2scrn[i], $0000, 40) // color screen
@@ -946,7 +1016,7 @@ when MACHID & MACHID_MODEL
         conio:keypressed = @a3keypressed
         conio:getkey     = @a3getkey
         conio:putchars   = @a3putchars
-        conio:clear      = @a2clear80
+        conio:clear      = @a3clear
         conio:gotoxy     = @a3gotoxy
         conio:viewport   = @a3viewport
         conio:textctrl   = @a3ctrl
