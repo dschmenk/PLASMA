@@ -126,11 +126,135 @@ var   sweep_stack[SWEEPSTACK_MAX] // In-flight expressions
 const GC_TRIGGER = 200
 byte gc_pull     = 0
 
-def mark_list(list)#0
-  while list
-    list->type = list->type | MARK_BIT
-    list = list=>link
-  loop
+//def hashstr(str)#1
+//  return (^str ^ ((^(str+1) << 1) ^ ^(str + ^str/2) << 2)) & HASH_MASK
+//end
+asm hashstr(str)#1
+        !SOURCE "vmsrc/plvmzp.inc"
+        LDA     ESTKL,X
+        STA     SRCL
+        LDA     ESTKH,X
+        STA     SRCH
+        LDY     #$00
+        LDA     (SRC),Y
+        STA     ESTKL,X
+        STY     ESTKH,X
+        LSR
+        TAY
+        INY
+        LDA     (SRC), Y
+        ASL
+        ASL
+        EOR     ESTKL,X
+        STA     ESTKL,X
+        LDY     #$01
+        LDA     (SRC),Y
+        ASL
+        EOR     ESTKL,X
+        AND     #63           ; HASH_MASK
+        STA     ESTKL,X
+        RTS
+end
+
+//def mark_list(list)#0
+//  while list
+//    list->type = list->type | MARK_BIT
+//    list = list=>link
+//  loop
+//end
+asm mark_list(list)#0
+        LDA     ESTKL,X
+        STA     SRCL
+        LDA     ESTKH,X
+        STA     SRCH
+        BEQ     +             ; CHECK FOR NULL (MSB, ANYWAY)
+-       LDY     #$02
+        LDA     (SRC),Y
+        ORA     #$80          ; MARK_BIT
+        STA     (SRC),Y
+        DEY
+        LDA     (SRC),Y
+        BEQ     +
+        PHA
+        DEY
+        LDA     (SRC),Y
+        STA     SRCL
+        PLA
+        STA     SRCH
+        BNE     -
++       INX
+        RTS
+end
+
+//def match_sym(symstr, sym_list)
+//  var symptr
+//  byte len, typelen, i
+//
+//  len     = ^symstr
+//  typelen = SYM_TYPE | len
+//  len--; symstr++
+//  symptr = sym_list
+//  while symptr
+//    if symptr->type == typelen
+//      for i = 0 to len
+//        if symptr->name[i] <> symstr->[i]; break; fin
+//      next
+//      if i > len
+//        return symptr
+//      fin
+//    fin
+//    symptr = symptr=>link
+//  loop
+//  return NULL
+//end
+asm match_sym(symstr, sym_list)
+        INX
+        LDA     ESTKL-1,X     ; sym_list
+        STA     SRCL
+        LDA     ESTKH-1,X
+        STA     SRCH
+        BEQ     MSYMRET       ; NULL
+        LDA     ESTKL,X       ; symstr
+        SEC
+        SBC     #10
+        STA     DSTL
+        LDA     ESTKH,X
+        SBC     #0
+        STA     DSTH
+        LDY     #10
+        LDA     (DST),Y
+        ORA     #$20          ; SYM_TYPE
+        STA     TMPL          ; len
+        AND     #$0F
+        CLC
+        ADC     #10
+        STA     TMPH
+--      LDA     TMPL
+        LDY     #$02
+        CMP     (SRC),Y
+        BNE     +             ; NO MATCH, NEXT
+        LDY     TMPH
+-       LDA     (SRC),Y
+        CMP     (DST),Y
+        BNE     +             ; NO MATCH, NEXT
+        DEY
+        CPY     #10
+        BNE     -
+MSYMRET LDA     SRCL          ; RETURN MATCH
+        STA     ESTKL,X
+        LDA     SRCH
+        STA     ESTKH,X
+        RTS
++       LDY     #$01          ; NEXT
+        LDA     (SRC),Y
+        PHA
+        DEY
+        LDA     (SRC),Y
+        STA     SRCL
+        PLA
+        STA     SRCH
+        BNE     --
+        BEQ     MSYMRET
 end
 
 def mark_elems#0
@@ -407,32 +531,10 @@ export def new_string(strptr)#1
   return stringptr
 end
 
-def match_sym(symstr, sym_list)
-  var symptr
-  byte len, typelen, i
-
-  len     = ^symstr
-  typelen = SYM_TYPE | len
-  len--; symstr++
-  symptr = sym_list
-  while symptr
-    if symptr->type == typelen
-      for i = 0 to len
-        if symptr->name[i] <> symstr->[i]; break; fin
-      next
-      if i > len
-        return symptr
-      fin
-    fin
-    symptr = symptr=>link
-  loop
-  return NULL
-end
-
 export def new_sym(symstr)#1
   var symptr, index
 
-  index  = (^symstr ^ ^(symstr + 1 + ^symstr/2) << 2) & HASH_MASK
+  index  = hashstr(symstr) // (^symstr ^ ^(symstr + 1 + ^symstr/2) << 2) & HASH_MASK
   symptr = match_sym(symstr, hashtbl[index])
   if symptr; return symptr; fin // Return already existing symbol
   gc_pull++
