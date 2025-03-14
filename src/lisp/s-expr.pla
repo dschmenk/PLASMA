@@ -123,8 +123,8 @@ const SWEEPSTACK_MAX  = 16
 byte  sweep_stack_top = 0
 var   sweep_stack[SWEEPSTACK_MAX] // In-flight expressions
 
-const GC_TRIGGER = 200
-byte gc_pull     = 0
+const GC_SHIFT_AVAIL = 6
+word gc_trigger, gc_pull // GC tigger points
 
 //def hashstr(str)#1
 //  return (^str ^ ((^(str+1) << 1) ^ ^(str + ^str/2) << 2)) & HASH_MASK
@@ -367,6 +367,7 @@ export def gc#0
   sweep_used
   collect_unused
   gc_pull = 0
+  gc_trigger = (heapavail >> GC_SHIFT_AVAIL) + 1
 end
 
 //
@@ -1044,7 +1045,7 @@ export def eval_expr(expr)#1
   if expr
     if expr->type <> CONS_TYPE; return eval_atom(expr); fin
     if hook_eval; expr = hook_eval(expr); fin
-    if gc_pull > GC_TRIGGER; gc; fin
+    if gc_pull > gc_trigger; gc; fin
     alist_enter = assoc_list
     curl        = NULL // Current lambda
     while expr
@@ -1836,5 +1837,11 @@ new_sym("CHARS")=>natv    = @natv_chars
 new_sym("ASCII")=>natv    = @natv_ascii
 //new_sym("SYMS")=>natv     = @natv_syms
 tempstr = heapalloc(256)
+
+//
+// Set GC trigger to ~8% of available memory
+//
+
+gc_trigger = heapavail >> GC_SHIFT_AVAIL
 return modkeep | modinitkeep
 done
