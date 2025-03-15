@@ -16,6 +16,7 @@ A2CONV        = dhgr.tk/utils/a2fonconv
 A2DEFAULT     = dhgr.tk/utils/a2fondef
 DDCONV        = dhgr.tk/utils/ddfonconv
 PENGUINS      = dhgr.tk/demos/penguins/PENGUINS.REL
+DARTHGR       = dhgr.tk/demos/darthgr/DARTHGR.REL
 DROGUE        = dhgr.tk/drogue/DROGUE.REL
 DROGUE.MAP    = dhgr.tk/drogue/DROGUE.MAP.REL
 DROGUE.COMBAT = dhgr.tk/drogue/DROGUE.COMBAT.REL
@@ -42,12 +43,15 @@ utils: $(DHGRSPRED) $(DHGREASY) $(DHGRRGB) $(DHGRSHOW) $(DLGRCONV)
 	cp dhgr.tk/utils/*.REL prodos/dhgr.tk/utils
 	cp dhgr.tk/utils/samples/* prodos/dhgr.tk/utils/samples
 
-demos: $(PENGUINS)
+demos: $(PENGUINS) $(DARTHGR)
 	-mkdir prodos/dhgr.tk/
 	-mkdir prodos/dhgr.tk/demos/
 	-mkdir prodos/dhgr.tk/demos/penguins/
+	-mkdir prodos/dhgr.tk/demos/darthgr/
 	cp $(PENGUINS) prodos/dhgr.tk/demos/penguins/
 	cp dhgr.tk/demos/penguins/*.BIN prodos/dhgr.tk/demos/penguins/
+	cp $(DARTHGR) prodos/dhgr.tk/demos/darthgr/
+	cp dhgr.tk/demos/darthgr/*.BIN prodos/dhgr.tk/demos/darthgr/
 
 drogue: $(DROGUE) $(DROGUE.MAP) $(DROGUE.COMBAT)
 	-mkdir prodos/dhgr.tk/demos
@@ -64,6 +68,8 @@ bld: $(DHGRLIB) $(DHGRUTILS) $(DHGRTEST) $(DHGRRGB) $(DHGRSHOW)
 	cp dhgr.tk/inc/dhgrlib.plh prodos/bld/dhgr.tk/inc/DHGRLIB.PLH.TXT
 	cp dhgr.tk/inc/dhgrutils.plh prodos/bld/dhgr.tk/inc/DHGRUTILS.PLH.TXT
 	cp dhgr.tk/test/dhgrtest.pla prodos/bld/dhgr.tk/DHGRTEST.PLA.TXT
+	cp dhgr.tk/test/fonttest.pla prodos/bld/dhgr.tk/FONTTEST.PLA.TXT
+	cp dhgr.tk/demos/darthgr/darthgr.pla prodos/bld/dhgr.tk/DARTHGR.PLA.TXT
 	cp dhgr.tk/utils/dhgrrgb.pla prodos/bld/dhgr.tk/DHGRRGB.PLA.TXT
 	cp dhgr.tk/utils/dhgrshow.pla prodos/bld/dhgr.tk/DHGRSHOW.PLA.TXT
 
@@ -73,6 +79,7 @@ all: libs test utils demos bld
 
 clean:
 	-rm dhgr.tk/demos/pengiuns/*.o dhgr.tk/demos/pengiuns/*.REL dhgr.tk/demos/pengiuns/*.a
+	-rm dhgr.tk/demos/darthgr/*.o dhgr.tk/demos/darthgr/*.REL dhgr.tk/demos/darthgr/*.a
 	-rm dhgr.tk/test/*.o dhgr.tk/test/*.REL dhgr.tk/test/*.a
 	-rm dhgr.tk/utils/*.o dhgr.tk/utils/*.REL dhgr.tk/utils/*.a
 
@@ -131,6 +138,10 @@ $(DHGRRGB): dhgr.tk/utils/dhgrrgb.pla $(DHGRLIB) $(DHGRUTILS) dhgr.tk/inc/dhgrli
 $(PENGUINS): dhgr.tk/demos/penguins/penguins.pla dhgr.tk/inc/dhgrlib.plh dhgr.tk/inc/dhgrutils.plh
 	./xplasm -AMOW dhgr.tk/demos/penguins/penguins.pla
 	acme --setpc 4094 -o $(PENGUINS) dhgr.tk/demos/penguins/penguins.a
+
+$(DARTHGR): dhgr.tk/demos/darthgr/darthgr.pla dhgr.tk/inc/dhgrlib.plh dhgr.tk/inc/dhgrutils.plh
+	./xplasm -AMOW dhgr.tk/demos/darthgr/darthgr.pla
+	acme --setpc 4094 -o $(DARTHGR) dhgr.tk/demos/darthgr/darthgr.a
 
 $(DROGUE): dhgr.tk/drogue/drogue.pla  dhgr.tk/inc/dhgrlib.plh dhgr.tk/inc/dhgrutils.plh
 	./xplasm -AMOW dhgr.tk/drogue/drogue.pla
