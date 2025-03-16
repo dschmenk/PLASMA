@@ -1,5 +1,3 @@
-#!/usr/bin/python
-
 import sys
 #from mido import MidiFile
 import mido
@@ -15,14 +13,15 @@ if len(sys.argv) == 1:
 while optarg < (len(sys.argv) - 1):
     if sys.argv[optarg] == '-t': # Override tempo percentage
         timescale = float(sys.argv[optarg + 1]) * 16.0
-        optarg += 2
-    if sys.argv[optarg] == '-p': # Add extra percussion channel
+        optarg += 1 #2
+    elif sys.argv[optarg] == '-p': # Add extra percussion channel
         extperchan = int(sys.argv[optarg + 1])
         channels.append(extperchan)
-        optarg += 2
-    if sys.argv[optarg][0] == '+': # Enable channel
+        optarg += 1 #2
+    elif sys.argv[optarg][0] == '+': # Enable channel
         channels.append(int(sys.argv[optarg][1]))
-        optarg += 1
+        #optarg += 1
+    optarg += 1
 mid = mido.MidiFile(sys.argv[optarg])
 timeshift = timescale
 #totaltime = 0.0
