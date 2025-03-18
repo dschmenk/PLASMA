@@ -10,6 +10,7 @@ DHGREASY      = dhgr.tk/utils/DHGREASY.REL
 DHGRRGB       = dhgr.tk/utils/DHGRRGB.REL
 DHGRSHOW      = dhgr.tk/utils/DHGRSHOW.REL
 DLGRCONV      = dhgr.tk/utils/DLGRCONV.REL
+DHGRRGB_C     = dhgr.tk/utils/dhgrrgb
 TTFCONV       = dhgr.tk/utils/ttfconv
 IIGSCONV      = dhgr.tk/utils/gsfonconv
 A2CONV        = dhgr.tk/utils/a2fonconv
@@ -36,7 +37,7 @@ test: $(DHGRTEST) $(FONTTEST)
 	cp dhgr.tk/test/*.REL prodos/dhgr.tk/test
 	cp dhgr.tk/test/*.BIN prodos/dhgr.tk/test
 
-utils: $(DHGRSPRED) $(DHGREASY) $(DHGRRGB) $(DHGRSHOW) $(DLGRCONV)
+utils: $(DHGRSPRED) $(DHGREASY) $(DHGRRGB) $(DHGRRGB_C) $(DHGRSHOW) $(DLGRCONV)
 	-mkdir prodos/dhgr.tk/
 	-mkdir prodos/dhgr.tk/utils
 	-mkdir prodos/dhgr.tk/utils/samples
@@ -134,6 +135,9 @@ $(DLGRCONV): dhgr.tk/utils/dlgrconv.pla $(DHGRLIB) $(DHGRUTILS) dhgr.tk/inc/dhgr
 $(DHGRRGB): dhgr.tk/utils/dhgrrgb.pla $(DHGRLIB) $(DHGRUTILS) dhgr.tk/inc/dhgrlib.plh dhgr.tk/inc/dhgrutils.plh
 	./xplasm -AMOW dhgr.tk/utils/dhgrrgb.pla
 	acme --setpc 4094 -o $(DHGRRGB) dhgr.tk/utils/dhgrrgb.a
+
+$(DHGRRGB_C): dhgr.tk/utils/dhgrrgb.c
+	cc dhgr.tk/utils/dhgrrgb.c -o dhgr.tk/utils/dhgrrgb
 
 $(PENGUINS): dhgr.tk/demos/penguins/penguins.pla dhgr.tk/inc/dhgrlib.plh dhgr.tk/inc/dhgrutils.plh
 	./xplasm -AMOW dhgr.tk/demos/penguins/penguins.pla
