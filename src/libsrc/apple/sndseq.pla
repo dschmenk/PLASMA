@@ -366,6 +366,8 @@ asm a2keypressed
         DEY
 +       STY     ESTKL,X
         STY     ESTKH,X
+end
+asm nopBackground#0
         RTS
 end
 def a3keypressed
@@ -833,14 +835,34 @@ export def musicGetKey(yield, backgroundProc)#1
     char key
 
     key = 0
-    repeat
-        musicSequence(yield, backgroundProc)#0 // Call background proc every half second
-        if keypressed()
-            key       = getc
-            seqRepeat = FALSE
-        fin
-    until not seqRepeat
+    if backgroundProc == NULL; backgroundProc = @nopBackground; fin
+    if seqTrack
+        repeat
+            musicSequence(yield, backgroundProc)#0 // Call background proc every half second
+            if keypressed()
+                key       = getc
+                seqRepeat = FALSE
+            fin
+        until not seqRepeat
+    fin
     return key
+end
+//
+// Read sequence onto heap
+//
+export def musicRead(filename)#1
+    byte ref
+    word seq, len
+
+    seq = NULL
+    ref = fileio:open(filename)
+    if ref
+        seq = heapalloc(heapavail - 256)
+        len = fileio:read(ref, seq, heapmark - seq)
+        fileio:close(ref)
+        heaprelease(seq + len)
+    fin
+    return seq
 end
 
 when MACHID & MACHID_MODEL
