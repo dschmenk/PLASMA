@@ -28,10 +28,16 @@
 #define GREEN_PHASE_SIMPLE 225
 #define BLUE_PHASE_SIMPLE  360
 /* Flags */
+#define GREY_HACK          1 /* Remap GREY1 to GREY2 */
 #define DUMP_STATE         2 /* Dump internal state */
+char flags = GREY_HACK;
 /* Handy macros */
+#ifndef min
 #define min(a,b)           ((a)<(b)?(a):(b))
+#endif
+#ifndef max
 #define max(a,b)           ((a)>(b)?(a):(b))
+#endif
 #define RED                0
 #define GRN                1
 #define BLU                2
@@ -78,16 +84,24 @@ int scanOffset[] = {0x0000,0x0400,0x0800,0x0C00,0x1000,0x1400,0x1800,0x1C00,
                     0x02D0,0x06D0,0x0AD0,0x0ED0,0x12D0,0x16D0,0x1AD0,0x1ED0,
                     0x0350,0x0750,0x0B50,0x0F50,0x1350,0x1750,0x1B50,0x1F50,
                     0x03D0,0x07D0,0x0BD0,0x0FD0,0x13D0,0x17D0,0x1BD0,0x1FD0};
-char flags     = 0;
 
 void dhgrSet(int x, int y)
 {
-    int pixbit, pixofst;
+  int pixbit, pixofst;
 
-    pixbit  = 1 << (x % 7);
-    pixofst = x / 7;
-    pixofst = (DHGR_SIZE/2) * (pixofst & 1) + (pixofst >> 1);
-    dhgrScreen[scanOffset[y] + pixofst] |= pixbit;
+  pixbit  = 1 << (x % 7);
+  pixofst = x / 7;
+  pixofst = (DHGR_SIZE/2) * (pixofst & 1) + (pixofst >> 1);
+  dhgrScreen[scanOffset[y] + pixofst] |= pixbit;
+}
+void dhgrPlot(int x, int y, int clr)
+{
+  int bit;
+  for (bit = 0; bit < 4; bit++)
+  {
+    if ((1 << bit) & clr)
+      dhgrSet(x + bit, y);
+  }
 }
 long int dist(int dr, int dg, int db)
 {
@@ -234,7 +248,6 @@ int rgbInit(void)
       printf("    [%3d, %3d %3d]\n", ntscChroma[i][RED],
                                      ntscChroma[i][GRN],
                                      ntscChroma[i][BLU]);
-    getchar();
   }
   return TRUE;
 }
@@ -289,7 +302,7 @@ int rgbImportExport(char *pnmfile, char *dhgrfile)
   FILE *fp;
   unsigned char *scanptr;
   unsigned char chromaBits, *rgbptr;
-  int scan, pix, r, g, b, *errptr;
+  int scan, pix, chroma, r, g, b, *errptr;
 
   if (flags & DUMP_STATE)
     printf("PNM file = %s\n", pnmfile);
@@ -313,16 +326,22 @@ int rgbImportExport(char *pnmfile, char *dhgrfile)
         /* Reset pointers */
         rgbptr  = rgbScanline;
         errptr  = rgbErr;
-        for (pix = 0; pix < X_RES; pix++)
+        for (pix = 0; pix < X_RES; pix += 4)
         {
+          chromaBits = 0;
+          for (chroma = 0; chroma < 4; chroma++)
+          {
             /* Calc best match */
             r = gammaRed[rgbptr[RED]];
             g = gammaGrn[rgbptr[GRN]];
             b = gammaBlu[rgbptr[BLU]];
-            if (rgbMatchChroma(r, g, b, errptr, pix & 3))
-                dhgrSet(pix, scan);
+            chromaBits |= rgbMatchChroma(r, g, b, errptr, chroma) << chroma;
             rgbptr = rgbptr + 3;
             errptr = errptr + 3;
+          }
+          if (chromaBits == 0x0A && flags & GREY_HACK)
+            chromaBits = 0x05;
+          dhgrPlot(pix, scan, chromaBits);
         }
       }
     }
@@ -350,8 +369,10 @@ int main(int argc, char **argv)
       case 'B': /* Set brightness */
         brightness = atoi(*argv + 2);
         break;
+      case 'C': /* No grey remapping*/
+        flags &= ~GREY_HACK;
       case 'D': /* Dump internal state */
-        flags = flags | DUMP_STATE;
+        flags |= DUMP_STATE;
         break;
       case 'E': /* Set error strength */
         errDiv = atoi(*argv + 2);
@@ -386,10 +407,10 @@ int main(int argc, char **argv)
         }
         break;
       case 'S': /* Adjust saturation */
-        saturation = saturation - atoi(*argv + 2);
+        saturation -= atoi(*argv + 2);
         break;
       case 'T': /* Adjust tint */
-        tint = tint + atoi(*argv + 2);
+        tint += atoi(*argv + 2);
         break;
       default:
         printf("? option: %c\n", (*argv)[1]);
@@ -400,6 +421,7 @@ int main(int argc, char **argv)
   puts("Usage:");
   puts(" dhgrrgb");
   puts("  [-b#]  = Brightness: -255..255");
+  puts("  [-c]   = Composite output (no grey remapping)");
   puts("  [-d]   = Dump state");
   puts("  [-e#]  = Error strength: 1..255");
   puts("                           0 = no err");
