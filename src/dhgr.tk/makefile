@@ -137,7 +137,7 @@ $(DHGRRGB): dhgr.tk/utils/dhgrrgb.pla $(DHGRLIB) $(DHGRUTILS) dhgr.tk/inc/dhgrli
 	acme --setpc 4094 -o $(DHGRRGB) dhgr.tk/utils/dhgrrgb.a
 
 $(DHGRRGB_C): dhgr.tk/utils/dhgrrgb.c
-	cc dhgr.tk/utils/dhgrrgb.c -o dhgr.tk/utils/dhgrrgb
+	cc dhgr.tk/utils/dhgrrgb.c -o dhgr.tk/utils/dhgrrgb -lm
 
 $(PENGUINS): dhgr.tk/demos/penguins/penguins.pla dhgr.tk/inc/dhgrlib.plh dhgr.tk/inc/dhgrutils.plh
 	./xplasm -AMOW dhgr.tk/demos/penguins/penguins.pla
