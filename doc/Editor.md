@@ -124,11 +124,15 @@ EDIT COMMANDS:
     OA-3           = JUMP DOWN
     OA-7           = JUMP BEGIN
     OA-1           = JUMP END
-    OA-5           = DELETE CHAR
+    OA-5           = SELECT/DESELECT
     OA--           = CUT SELECTION INTO CLIPBOARD
-    OA-0           = PASTE CLIPBOARD
+    OA-+           = COPY SELECTION INTO CLIPBOARD
+    OA-0           = DELETE CHARACTER
+    OA-/           = INSERT/OVERWRITE
+    OA-*           = OPEN FOLLOWING LINE
     OA-ENTER       = OPEN FOLLOWING LINE
-    OA-.           = COPY SELECTION INTO CLIPBOARD
+    OA-.           = PASTE CLIPBOARD
+    OA-=           = NUMLOCK (NUMBER KEYS ACT LIKE OA/OPTION PRESSED)
 
 COMMAND MODE:
 
