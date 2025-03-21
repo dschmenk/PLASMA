@@ -149,7 +149,8 @@ COMMAND MODE:
     N            = CLEAR TEXT IN MEMORY
     T G          = TOGGLE GUTTER VIEW
     T C          = TOGGLE LOWER-CASE SUPPORT (APPLE ][)
-    G <LINE>     = GO TO LINE #
     F [STRING]   = FIND STRING
     E            = EDIT MODE
     'RETURN'     = EDIT MODE
+    1..999       = GO TO LINE #
+    
