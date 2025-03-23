@@ -1,0 +1,455 @@
+include "inc/cmdsys.plh"
+include "inc/lines.plh"
+include "inc/vblank.plh"
+include "dhgr.tk/inc/dhgrlib.plh"
+include "dhgr.tk/inc/dhgrutils.plh"
+
+sysflags resxtxt1|reshgr1|resxhgr1
+//
+// ViewScreen coordinates
+//
+const VIEW_LEFT7   = 3
+const VIEW_RIGHT7  = 17
+const VIEW_WIDTH7  = VIEW_RIGHT7 - VIEW_LEFT7
+const VIEW_LEFT    = VIEW_LEFT7  * 7 // 21
+const VIEW_RIGHT   = VIEW_RIGHT7 * 7 // 119
+const VIEW_WIDTH   = VIEW_RIGHT  - VIEW_LEFT
+const VIEW_TOP     = 24
+const VIEW_BOTTOM  = 124
+const VIEW_HEIGHT  = VIEW_BOTTOM - VIEW_TOP
+const VIEW_ORGX    = (VIEW_LEFT+VIEW_RIGHT)/2
+const VIEW_ORGY    = (VIEW_TOP+VIEW_BOTTOM)/2
+//
+// Dither matrices
+//
+const DITHER0   = $00
+const DITHER25  = $04
+const DITHER50  = $06
+const DITHER75  = $07
+const DITHER100 = $0F
+byte[] dither   = DITHER0, DITHER25, DITHER50, DITHER75, DITHER100
+var sin90[] // first 90 degrees of sin in fixed s.15 format
+var =     0,   571,  1143,  1714,  2285,  2855,  3425,  3993
+var =  4560,  5126,  5690,  6252,  6812,  7371,  7927,  8480
+var =  9032,  9580, 10125, 10668, 11207, 11743, 12275, 12803
+var = 13327, 13848, 14364, 14876, 15383, 15886, 16383, 16876
+var = 17364, 17846, 18323, 18794, 19260, 19720, 20173, 20621
+var = 21062, 21497, 21926, 22347, 22762, 23170, 23571, 23964
+var = 24351, 24730, 25101, 25465, 25821, 26169, 26509, 26841
+var = 27165, 27481, 27788, 28087, 28377, 28659, 28932, 29196
+var = 29451, 29697, 29935, 30163, 30381, 30591, 30791, 30982
+var = 31164, 31336, 31498, 31651, 31794, 31928, 32051, 32165
+var = 32270, 32364, 32449, 32523, 32588, 32643, 32688, 32723
+var = 32748, 32763, 32767
+//
+// Pattern fill
+//
+const PAT_WIDTH  = SCR_WIDTH
+const PAT_HEIGHT = 2
+word pattern
+//
+// Edge arrays
+//
+word leftedge, rightedge
+//
+// Top and bottom extents
+//
+byte topedge,  bottomedge
+//
+// Random seed
+//
+var rndseed = $A965
+
+def random#1
+  rndseed = (rndseed >> 3) ^ (rndseed << 13) + $4321
+  return rndseed
+end
+//
+// Create pattern pixmap for filling
+//
+def setpattern(clr1, clr2, dither)#0
+  word patfill, clr
+
+  if not pattern
+    pattern = heapalloc(SCR_WIDTH * PAT_HEIGHT)
+  fin
+  //
+  // Even scanlines
+  //
+  clr = dither & 1 ?? clr2 :: clr1
+  patfill = clr | (clr << 8)
+  clr = dither & 2 ?? clr2 :: clr1
+  patfill = patfill | (clr << 4) | (clr << 12)
+  memset(pattern, patfill, SCR_WIDTH/2)
+  patfill = (patfill << 4) | clr // Rotate pattern for odd pixel
+  memset(pattern + SCR_WIDTH, patfill, SCR_WIDTH/2)
+  //
+  // Odd scanlines
+  //
+  clr = dither & 4 ?? clr2 :: clr1
+  patfill = clr | (clr << 8)
+  clr = dither & 8 ?? clr2 :: clr1
+  patfill = patfill | (clr << 4) | (clr << 12)
+  memset(pattern + SCR_WIDTH/2, patfill, SCR_WIDTH/2)
+  patfill = (patfill << 4) | clr  // Rotate pattern for odd pixel
+  memset(pattern + SCR_WIDTH + SCR_WIDTH/2, patfill, SCR_WIDTH/2)
+end
+//
+// Sin and Cos
+//
+def sin(deg)#1
+  while deg > 360; deg = deg - 360; loop
+  while deg < 0; deg = deg + 360; loop
+  if deg <= 90
+    return sin90[deg]
+  elsif deg <= 180
+    return sin90[180 - deg]
+  elsif deg <= 270
+    return -sin90[deg - 180]
+  fin
+  return -sin90[360 - deg]
+end
+def cos(deg)#1
+  return sin(deg + 90)
+end
+//
+// Ellipse
+//
+def solidellip(xorg, yorg, width, height)#0
+  var x, y, angle
+
+  for angle = 0 to 90 step 90 / height
+    x = ((cos(angle) >> 8) * width) >> 8
+    y = ((sin(angle) >> 8) * height) >> 8
+    dcgrHLin(xorg - x, xorg + x, yorg + y)
+    dcgrHLin(xorg - x, xorg + x, yorg - y)
+  next
+end
+
+def patternellip(xorg, yorg, width, height)#0
+  var x, y, angle, left, len, scan
+
+  for angle = 0 to 90 step 90 / height
+    x = ((cos(angle) >> 8) * width) >> 8
+    y = ((sin(angle) >> 8) * height) >> 8
+    left = xorg - x
+    len  = x * 2
+    if len == 0; len = 1; fin
+    scan = yorg + y
+    dcgrPixMap(left, scan, len, 1, \
+               pattern + (left & 1 ?? SCR_WIDTH     :: 0) \
+                       + (scan & 1 ?? (SCR_WIDTH/2) :: 0))
+    scan = yorg - y
+    dcgrPixMap(left, scan, len, 1, \
+               pattern + (left & 1 ?? SCR_WIDTH     :: 0) \
+                       + (scan & 1 ?? (SCR_WIDTH/2) :: 0))
+  next
+end
+
+def patternrect(left, top, right, bottom)#0
+  word patscan
+  byte width, y
+
+  width = right - left + 1
+  patscan = pattern + (left & 1 ?? SCR_WIDTH :: 0)
+  for y = top to bottom
+    dcgrPixMap(left, y, width, 1, patscan + (y & 1 ?? (SCR_WIDTH/2) :: 0))
+  next
+end
+
+def solidrect(left, top, right, bottom)#0
+  byte l7, r7, x
+
+  l7 = (left | 7) / 7
+  r7 = right / 7
+  if l7 < r7
+    dhgrClearBl7(l7, top, r7 - l7, bottom - top + 1)
+  fin
+  l7 = l7 * 7
+  if l7 > left
+    for x = l7-1 downto left
+      dcgrVLin(top, bottom, x)
+    next
+  fin
+  r7 = r7 * 7
+  if r7 < right
+    for x = r7 to right
+      dcgrVLin(top, bottom, x)
+    next
+  fin
+end
+
+def setedge(x, y)#0
+  if y < topedge;    topedge    = y; fin
+  if y > bottomedge; bottomedge = y; fin
+  if x < leftedge->[y];  leftedge->[y]  = x; fin
+  if x > rightedge->[y]; rightedge->[y] = x; fin
+end
+def startpoly#0
+  setlineplot(@setedge)
+  leftedge  = heapalloc(SCR_HEIGHT)
+  rightedge = heapalloc(SCR_HEIGHT)
+  memset(leftedge,  $FFFF, SCR_HEIGHT)
+  memset(rightedge, $0000, SCR_HEIGHT)
+  topedge    = $FF
+  bottomedge = $00
+end
+def patternpoly#0
+  var width
+  byte y, left
+
+  if topedge > SCR_HEIGHT-1; return; fin
+  for y = topedge to bottomedge
+    left  = leftedge->[y]
+    width = rightedge->[y] - left + 1
+    if width > 0
+      dcgrPixMap(left, y, width, 1, \
+                pattern + (left & 1 ?? SCR_WIDTH     :: 0) \
+                        + (y    & 1 ?? (SCR_WIDTH/2) :: 0))
+    fin
+  next
+  heaprelease(leftedge)
+end
+def solidpoly#0
+  byte y, left, right
+
+  if topedge > SCR_HEIGHT-1; return; fin
+  for y = topedge to bottomedge
+    left  = leftedge->[y]
+    right = rightedge->[y]
+    if right >= left
+      dcgrHLin(left, right, y)
+    fin
+  next
+  heaprelease(leftedge)
+end
+
+def setedgeleft(x, y)#0
+  leftedge->[y] = x
+end
+
+def setedgeright(x, y)#0
+  rightedge->[y] = x
+end
+
+def patterntrapz(xtopl, xtopr, top, xbottoml, xbottomr, bottom)#0
+  byte y, left
+
+  leftedge  = heapalloc(SCR_HEIGHT)
+  rightedge = heapalloc(SCR_HEIGHT)
+  setlineplot(@setedgeleft)
+  line(xtopl, top, xbottoml, bottom)
+  setlineplot(@setedgeright)
+  line(xtopr, top, xbottomr, bottom)
+  for y = top to bottom
+    left = leftedge->[y]
+    dcgrPixMap(left, y, rightedge->[y] - left + 1, 1, \
+               pattern + (left & 1 ?? SCR_WIDTH     :: 0) \
+                       + (y    & 1 ?? (SCR_WIDTH/2) :: 0))
+  next
+  heaprelease(leftedge)
+end
+
+def solidtrapz(xtopl, xtopr, top, xbottoml, xbottomr, bottom)#0
+  byte y
+
+  leftedge  = heapalloc(SCR_HEIGHT)
+  rightedge = heapalloc(SCR_HEIGHT)
+  setlineplot(@setedgeleft)
+  line(xtopl, top, xbottoml, bottom)
+  setlineplot(@setedgeright)
+  line(xtopr, top, xbottomr, bottom)
+  for y = top to bottom
+    dcgrHLin(leftedge->[y], rightedge->[y], y)
+  next
+  heaprelease(leftedge)
+end
+
+def frame(left, top, right, bottom, thickness)#0
+  while thickness
+    thickness--
+    dcgrHLin(left + thickness, right  - thickness, top    + thickness)
+    dcgrHLin(left + thickness, right  - thickness, bottom - thickness)
+    dcgrVLin(top  + thickness, bottom - thickness, left   + thickness)
+    dcgrVLin(top  + thickness, bottom - thickness, right  - thickness)
+  loop
+end
+//
+// Draw components
+//
+def drawSurround#0
+  //
+  // Viewscreen surround
+  //
+  dcgrColor(CLR_GREY)
+  dhgrClearBl7(0,           0,           SCR_WIDTH7, VIEW_TOP)
+  dhgrClearBl7(0,           VIEW_BOTTOM, SCR_WIDTH7, VIEW_TOP)
+  dhgrClearBl7(0,           VIEW_TOP,    VIEW_LEFT7, VIEW_HEIGHT)
+  dhgrClearBl7(VIEW_RIGHT7, VIEW_TOP,    VIEW_LEFT7, VIEW_HEIGHT)
+  setpattern(CLR_BLACK, CLR_GREY, DITHER50)
+  patternrect(0, VIEW_BOTTOM+VIEW_TOP, SCR_WIDTH-1, SCR_HEIGHT-1)
+  //
+  // Above viewscreen ceiling
+  //
+  setpattern(CLR_BLACK, CLR_GREY, DITHER50)
+  patterntrapz(0, SCR_WIDTH-1, 0, VIEW_LEFT-3, VIEW_RIGHT+3-1, VIEW_TOP-6)
+  //
+  // Below viewscreen bump-out
+  //
+  setpattern(CLR_GREY, CLR_WHITE, DITHER50)
+  patterntrapz(VIEW_LEFT-3, VIEW_RIGHT+3-1, VIEW_BOTTOM+5,\
+                        0,    SCR_WIDTH-1, VIEW_BOTTOM+VIEW_TOP-1)
+  //
+  // Viewscreen frame
+  //
+  dcgrColor(CLR_DRKBLUE)
+  frame(VIEW_LEFT-3, VIEW_TOP-3, VIEW_RIGHT+3-1, VIEW_BOTTOM+3-1, 3)
+  dcgrColor(CLR_MEDBLUE)
+  frame(VIEW_LEFT-2, VIEW_TOP-2, VIEW_RIGHT+2-1, VIEW_BOTTOM+2-1, 1)
+end
+def drawRails#0
+  dcgrColor(CLR_ORANGE)
+  dhgrClearBl7(0,     132, 40/7, 1)
+  dhgrClearBl7(107/7, 132, 40/7, 1)
+  dcgrColor(CLR_MAGENTA)
+  dhgrClearBl7(0,     133, 40/7, 7)
+  dhgrClearBl7(107/7, 133, 40/7, 7)
+  dcgrColor(CLR_BLACK)
+  solidrect( 20, 140,  24, 191)
+  solidrect(115, 140, 119, 191)
+end
+def drawAlerts#0
+  dcgrColor(CLR_ORANGE)
+  frame( 1*7-2, 40-2,  2*7+2-1, 80+2-1, 2)
+  frame(18*7-2, 40-2, 19*7+2-1, 80+2-1, 2)
+  dcgrColor(CLR_BLACK)
+  dhgrClearBl7( 1, 40, 1, 40)
+  dhgrClearBl7(18, 40, 1, 40)
+end
+def drawConsoles#0
+  dcgrColor(CLR_BLACK)
+  startpoly
+  line(70-30,          160, 70-30, SCR_HEIGHT-1)
+  line(70-40, SCR_HEIGHT-1, 70-30, SCR_HEIGHT-1)
+  line(70-40, SCR_HEIGHT-1, 70-30,          160)
+  solidpoly
+  startpoly
+  line(70+30-1,          160, 70+30-1, SCR_HEIGHT-1)
+  line(70+40-1, SCR_HEIGHT-1, 70+30-1, SCR_HEIGHT-1)
+  line(70+40-1, SCR_HEIGHT-1, 70+30-1,          160)
+  solidpoly
+  setpattern(CLR_BLACK, CLR_BROWN, DITHER50)
+  patterntrapz(0, 70-30, 160, \
+              0, 70-40, SCR_HEIGHT-1)
+  patterntrapz(70+30-1, SCR_WIDTH-1, 160, \
+              70+40-1, SCR_WIDTH-1, SCR_HEIGHT-1)
+  dcgrColor(CLR_BLACK)
+  solidtrapz(0, 70-40, 170, \
+             0, 70-51, SCR_HEIGHT-1)
+  solidtrapz(70+40-1, SCR_WIDTH-1, 170, \
+             70+51-1, SCR_WIDTH-1, SCR_HEIGHT-1)
+end
+def drawNavigation#0
+  dcgrColor(CLR_WHITE)
+  solidtrapz(70-20, 70+20-1, 150, 70-30, 70+30-1, SCR_HEIGHT-1)
+  setpattern(CLR_GREY, CLR_BROWN, DITHER50)
+  patternellip(70, 170, 40, 35)
+end
+//
+// Animate useless screen lights
+//
+def keypressed#1
+  return ^$C000 & $80
+end
+def idleviewplot(x)#0
+  dcgrPixel((x&63)+70-32, VIEW_BOTTOM+3)
+  dcgrPixel((x&63)+70-32, VIEW_BOTTOM+4)
+end
+def newstar#3
+  return 15 - (random & 30), 15 - (random & 30), random & 15
+end
+def idle#0
+  byte xpos, star, nstars
+  var starx, stary, starincx, starincy, starclr
+  var x, y, incx, incy
+
+  waitVBL; nstars = waitVBL / 60
+  starx    = heapalloc(nstars*2)
+  stary    = heapalloc(nstars*2)
+  starincx = heapalloc(nstars*2)
+  starincy = heapalloc(nstars*2)
+  starclr  = heapalloc(nstars)
+  nstars--
+  for star = 0 to nstars
+    repeat
+      incx, incy, starclr->[star] = newstar
+    until incx <> 0 and incy <> 0
+    if starclr->[star] == 0; starclr->[star] = 15; fin
+    starx=>[star]    = incx * (VIEW_WIDTH-1)/2
+    stary=>[star]    = incy * (VIEW_HEIGHT-1)/2
+    starincx=>[star] = incx
+    starincy=>[star] = incy
+  next
+  xpos = 8
+  star = 0
+  while not keypressed
+    dcgrColor(CLR_WHITE)
+    idleviewplot(xpos)
+    dcgrColor(CLR_YELLOW)
+    idleviewplot(xpos-2)
+    dcgrColor(CLR_ORANGE)
+    idleviewplot(xpos-4)
+    dcgrColor(CLR_GREY)
+    idleviewplot(xpos-6)
+    xpos = xpos + 2
+    for star = 0 to nstars
+      x = starx=>[star]
+      y = stary=>[star]
+      incx = x + starincx=>[star]
+      incy = y + starincy=>[star]
+      if  incx > (VIEW_WIDTH-1)*8  or incx < -VIEW_WIDTH*8 \
+       or incy > (VIEW_HEIGHT-1)*8 or incy < -VIEW_HEIGHT*8
+        repeat
+          incx, incy, starclr->[star] = newstar
+        until incx <> 0 and incy <> 0
+        if starclr->[star] == 0; starclr->[star] = 15; fin
+        starx=>[star]    = incx << 5
+        stary=>[star]    = incy << 5
+        starincx=>[star] = incx
+        starincy=>[star] = incy
+      else
+        starx=>[star]    = incx
+        stary=>[star]    = incy
+        incx = starincx=>[star]
+        incy = starincy=>[star]
+        starincx=>[star] = incx + ((incx > 0 ?? incx + 7 :: incx - 7) >> 3)
+        starincy=>[star] = incy + ((incy > 0 ?? incy + 7 :: incy - 7) >> 3)
+      fin
+      dcgrColor(CLR_BLACK)
+      dcgrPixel((x >> 4) + VIEW_ORGX, (y >> 4) + VIEW_ORGY)
+      dcgrColor(starclr->[star])
+      dcgrPixel((starx=>[star] >> 4) + VIEW_ORGX, (stary=>[star] >> 4) + VIEW_ORGY)
+    next
+  loop
+end
+//
+// Initialize
+//
+dhgrMode(DHGR_COLOR_MODE)
+//
+// Draw bridge
+//
+drawSurround
+drawRails
+drawAlerts
+drawConsoles
+drawNavigation
+//
+// Animate lights waiting for keypress
+//
+idle; getc
+//
+// All done
+//
+dhgrMode(DHGR_TEXT_MODE)
+done
