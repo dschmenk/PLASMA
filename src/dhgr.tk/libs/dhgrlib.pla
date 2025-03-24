@@ -423,8 +423,7 @@ asm     _dcgrPlotScrD
         AND     $4000,X     ; AUXCLRMSK
         EOR     (DST),Y
         STA     (DST),Y
-        BNE     ++
-        BEQ     ++
+        BCC     ++          ; CARRY WILL BE CLEAR FROM ABOVE
 +       INY
 end
 asm     _dcgrPlotScrE
@@ -484,8 +483,7 @@ asm     _dcgrOpPlotScrD
         AND     $5000       ; AUXCLRL
         EOR     (DST),Y
         STA     (DST),Y
-        BNE     ++
-        BEQ     ++
+        BCC     ++          ; CARRY WILL BE CLEAR FROM ABOVE
 +       INY
 end
 asm     _dcgrOpPlotScrE
@@ -889,8 +887,7 @@ asm     _dcgrPlotMemD
         AND     $4000,X     ; AUXCLRMSK
         EOR     (DST),Y
         STA     (DST),Y
-        BNE     ++
-        BEQ     ++
+        BCC     ++          ; CARRY WILL BE CLEAR FROM ABOVE
 +       INY
 end
 asm     _dcgrPlotMemE
@@ -901,7 +898,7 @@ asm     _dcgrPlotMemE
         STA     (DST),Y
         DEY
 ++      TYA
-        CLC
+        ;CLC
         ADC     TMPH        ; ADVANCE TO MEM HALF OF SCANLINE
         TAY                 ; SPAN / 2
 end
@@ -1497,120 +1494,107 @@ asm     _clipYMemBl7Scr
         LSR     ESTKL-6,X
         ASL     ESTKL-1,X   ; X7 COORD * 2
         ASL     ESTKL-3,X   ; WIDTH7 * 2
-        LDA     SRCL
-        BNE     +
-        DEC     SRCH
-+       DEC     SRCL
+        DEC     ESTKL-3,X   ; WIDTH7 * 2 - 1
 end
 asm     _jmpOpMemBl7Scr
         JMP     $A000
+YM7S    INC     ESTKL-2,X   ; Y COORD++
 end
 asm     _dcgrMemBl7ScrA
-YM7S    LDY     ESTKL-2,X   ; Y COORD
-        INC     ESTKL-2,X   ; Y COORD++
+        LDY     ESTKL-2,X   ; Y COORD
         LDA     ESTKL-1,X   ; X7 COORD
-        ;CLC
 end
 asm     _dcgrMemBl7ScrB
         ADC     $1000,Y     ; HGRSCANL
-        STA     DSTL
-        LDA     #$00
-        ADC     $2000,Y     ; HGRSCANH
+        STA     DSTL        ; THIS WON'T CARRY OUT
+        LDA     $2000,Y     ; HGRSCANH
         STA     DSTH
-        LDA     DSTL
-        BNE     +
-        DEC     DSTH
-+       DEC     DSTL
         STA     $C055       ; PAGE1X
-        LDY     ESTKL-3,X   ; WIDTH7*2
+        LDY     ESTKL-3,X   ; WIDTH7*2-1
 -       LDA     (SRC),Y
         STA     (DST),Y
         DEY
         LDA     (SRC),Y
         STA     (DST),Y
         DEY
-        BNE     -
+        BPL     -
         ;CLC
         LDA     ESTKL-6,X   ; HALF SPAN
         ADC     SRCL
         STA     SRCL
-        ;LDA     ESTKH-6,X
-        TYA     ;LDA #$00
-        ADC     SRCH
-        STA     SRCH
-        STA     $C054       ; PAGE1M
-        LDY     ESTKL-3,X   ; WIDTH7*2
+        BCS     YM7SIH
+--      STA     $C054       ; PAGE1M
+        LDY     ESTKL-3,X   ; WIDTH7*2-1
 -       LDA     (SRC),Y
         STA     (DST),Y
         DEY
         LDA     (SRC),Y
         STA     (DST),Y
         DEY
-        BNE     -
-        ;CLC
-        LDA     ESTKL-6,X   ; HALF SPAN
-        ADC     SRCL
-        STA     SRCL
-        ;LDA     ESTKH-6,X
-        TYA     ;LDA #$00
-        ADC     SRCH
-        STA     SRCH
+        BPL     -
         DEC     ESTKL-4,X   ; HEIGHT
-        BNE     YM7S
+        BEQ     RETM7S
+        ;CLC
+        LDA     ESTKL-6,X   ; HALF SPAN
+        ADC     SRCL
+        STA     SRCL
+        BCC     YM7S
+        INC     SRCH
+        CLC
+        BCC     YM7S
+YM7SIH  INC     SRCH
+        CLC
+        BCC     --
 RETM7S  RTS
+
+YOM7S   INC     ESTKL-2,X   ; Y COORD++
 end
 asm     _dcgrOpMemBl7ScrA
-YOM7S   LDY     ESTKL-2,X   ; Y COORD
-        INC     ESTKL-2,X   ; Y COORD++
+        LDY     ESTKL-2,X   ; Y COORD
         LDA     ESTKL-1,X   ; X7 COORD
         ;CLC
 end
 asm     _dcgrOpMemBl7ScrB
         ADC     $1000,Y     ; HGRSCANL
-        STA     DSTL
-        LDA     #$00
-        ADC     $2000,Y     ; HGRSCANH
+        STA     DSTL        ; THIS WON'T CARRY OUT
+        LDA     $2000,Y     ; HGRSCANH
         STA     DSTH
-        LDA     DSTL
-        BNE     +
-        DEC     DSTH
-+       DEC     DSTL
         STA     $C055       ; PAGE1X
-        LDY     ESTKL-3,X   ; WIDTH7*2
+        LDY     ESTKL-3,X   ; WIDTH7*2-1
 -       LDA     (SRC),Y
 end
 asm     _dcgrOpMemBl7ScrC
         EOR     (DST),Y
         STA     (DST),Y
         DEY
-        BNE     -
+        BPL     -
         ;CLC
         LDA     ESTKL-6,X   ; HALF SPAN
         ADC     SRCL
         STA     SRCL
-        ;LDA     ESTKH-6,X
-        TYA     ;LDA #$00
-        ADC     SRCH
-        STA     SRCH
-        STA     $C054       ; PAGE1M
-        LDY     ESTKL-3,X   ; WIDTH7*2
+        BCS     YOM7SIH
+--      STA     $C054       ; PAGE1M
+        LDY     ESTKL-3,X   ; WIDTH7*2-1
 -       LDA     (SRC),Y
 end
 asm     _dcgrOpMemBl7ScrD
         EOR     (DST),Y
         STA     (DST),Y
         DEY
-        BNE     -
+        BPL     -
+        DEC     ESTKL-4,X   ; HEIGHT
+        BEQ     RETOM7S
         ;CLC
         LDA     ESTKL-6,X   ; HALF SPAN
         ADC     SRCL
         STA     SRCL
-        ;LDA     ESTKH-6,X
-        TYA     ;LDA #$00
-        ADC     SRCH
-        STA     SRCH
-        DEC     ESTKL-4,X   ; HEIGHT
-        BNE     YOM7S
+        BCC     YOM7S
+        INC     SRCH
+        CLC
+        BCC     YOM7S
+YOM7SIH INC     SRCH
+        CLC
+        BCC     --
 RETOM7S RTS
 end
 //
@@ -1711,19 +1695,17 @@ YM7M    LDY     ESTKL-3,X   ; SRC WIDTH7*2
         ;CLC
         ADC     SRCL
         STA     SRCL
-        ;LDA     ESTKH-6,X
-        TYA     ;LDA #$00
-        ADC     SRCH
-        STA     SRCH
-        LDA     ESTKH-10,X  ; ESTKL-10,X HALF DST SPAN
+        BCC     +
+        INC     SRCH
+        CLC
++       LDA     ESTKH-10,X  ; ESTKL-10,X HALF DST SPAN
         ;CLC
         ADC     DSTL
         STA     DSTL
-        ;LDA     ESTKH-10,X
-        TYA     ;LDA #$00
-        ADC     DSTH
-        STA     DSTH
-        LDY     ESTKL-3,X   ; SRC WIDTH7*2
+        BCC     +
+        INC     DSTH
+        CLC
++       LDY     ESTKL-3,X   ; SRC WIDTH7*2
 -       LDA     (SRC),Y
         STA     (DST),Y
         DEY
@@ -1735,19 +1717,17 @@ YM7M    LDY     ESTKL-3,X   ; SRC WIDTH7*2
         ;CLC
         ADC     SRCL
         STA     SRCL
-        ;LDA     ESTKH-6,X
-        TYA     ;LDA #$00
-        ADC     SRCH
-        STA     SRCH
-        LDA     ESTKH-10,X  ; ESTKL-10,X HALF DST SPAN
+        BCC     +
+        INC     SRCH
+        CLC
++       LDA     ESTKH-10,X  ; ESTKL-10,X HALF DST SPAN
         ;CLC
         ADC     DSTL
         STA     DSTL
-        ;LDA     ESTKH-10,X
-        TYA     ;LDA #$00
-        ADC     DSTH
-        STA     DSTH
-        DEC     ESTKL-4,X   ; SRC HEIGHT
+        BCC     +
+        INC     DSTH
+        CLC
++       DEC     ESTKL-4,X   ; SRC HEIGHT
         BNE     YM7M
 RETM7M  RTS
 end
@@ -1768,19 +1748,17 @@ asm     _dcgrOpMemBl7MemC
         ;CLC
         ADC     SRCL
         STA     SRCL
-        ;LDA     ESTKH-6,X
-        TYA     ;LDA #$00
-        ADC     SRCH
-        STA     SRCH
-        LDA     ESTKH-10,X  ; ESTKL-10,X HALF DST SPAN
+        BCC     +
+        INC     SRCH
+        CLC
++       LDA     ESTKH-10,X  ; ESTKL-10,X HALF DST SPAN
         ;CLC
         ADC     DSTL
         STA     DSTL
-        ;LDA     ESTKH-10,X
-        TYA     ;LDA #$00
-        ADC     DSTH
-        STA     DSTH
-        LDY     ESTKL-3,X   ; SRC WIDTH7*2
+        BCC     +
+        INC     DSTH
+        CLC
++       LDY     ESTKL-3,X   ; SRC WIDTH7*2
 -       LDA     (SRC),Y
 end
 asm     _dcgrOpMemBl7MemD
@@ -1796,19 +1774,17 @@ asm     _dcgrOpMemBl7MemD
         ;CLC
         ADC     SRCL
         STA     SRCL
-        ;LDA     ESTKH-6,X
-        TYA     ;LDA #$00
-        ADC     SRCH
-        STA     SRCH
-        LDA     ESTKH-10,X  ; ESTKL-10,X HALF DST SPAN
+        BCC     +
+        INC     SRCH
+        CLC
++       LDA     ESTKH-10,X  ; ESTKL-10,X HALF DST SPAN
         ;CLC
         ADC     DSTL
         STA     DSTL
-        ;LDA     ESTKH-10,X
-        TYA     ;LDA #$00
-        ADC     DSTH
-        STA     DSTH
-        DEC     ESTKL-4,X   ; SRC HEIGHT
+        BCC     +
+        INC     DSTH
+        CLC
++       DEC     ESTKL-4,X   ; SRC HEIGHT
         BNE     YOM7M
         RTS
 end
@@ -1831,6 +1807,7 @@ asm     _clipYClearBl7Scr
         JSR     $E000       ; CLIPY
         BCS     RETFILS     ; CLIPPED AWAY
         ASL     ESTKL-3,X   ; WIDTH7 * 2
+        DEC     ESTKL-3,X   ; WIDTH7 * 2 - 1
         ASL     ESTKL-1,X   ; X7 COORD * 2
 YFILS   LDY     ESTKL-2,X   ; Y COORD
         INC     ESTKL-2,X   ; Y COORD++
@@ -1843,12 +1820,8 @@ asm     _dcgrClearBl7ScrA
         LDA     #$00
         ADC     $2000,Y     ; HGRSCANH
         STA     DSTH
-        LDA     DSTL
-        BNE     +
-        DEC     DSTH
-+       DEC     DSTL
         STA     $C055       ; PAGE1X
-        LDY     ESTKL-3,X   ; WIDTH7
+        LDY     ESTKL-3,X   ; WIDTH7*2-1
 end
 asm     _dcgrClearBl7ScrB
 -       LDA     $3002       ; AUXCLRH
@@ -1857,9 +1830,9 @@ asm     _dcgrClearBl7ScrB
         LDA     $3000       ; AUXCLRL
         STA     (DST),Y
         DEY
-        BNE     -
+        BPL     -
         STA     $C054       ; PAGE1M
-        LDY     ESTKL-3,X   ; WIDTH7
+        LDY     ESTKL-3,X   ; WIDTH7*2-1
 end
 asm     _dcgrClearBl7ScrC
 -       LDA     $3003       ; MEMCLRH
@@ -1868,7 +1841,7 @@ asm     _dcgrClearBl7ScrC
         LDA     $3001       ; MEMCLRL
         STA     (DST),Y
         DEY
-        BNE     -
+        BPL     -
         DEC     ESTKL-4,X   ; HEIGHT
         BNE     YFILS
 RETFILS RTS
@@ -1911,22 +1884,20 @@ asm dhgrClearBl7Mem(x7, y, w7, h, memptr, memspan)#0
         LDA     #$00        ; PLA
         ADC     DSTH
         STA     SRCH
-        BNE     +           ; BRA
+        BNE     ++          ; BRA
 YFILM   LDA     ESTKL-6,X   ; HALF SPAN
         ADC     DSTL
         STA     DSTL
-        ;LDA     ESTKH-6,X
-        TYA     ;LDA #$00
-        ADC     DSTH
-        STA     DSTH
-        LDA     ESTKL-6,X   ; SPAN
+        BCC     +
+        INC     DSTH
+        CLC
++       LDA     ESTKL-6,X   ; SPAN
         ADC     SRCL
         STA     SRCL
-        ;LDA     ESTKH-6,X
-        TYA     ;LDA #$00
-        ADC     SRCH
-        STA     SRCH
-+       LDY     ESTKL-3,X   ; WIDTH7
+        BCC     ++
+        INC     SRCH
+        CLC
+++      LDY     ESTKL-3,X   ; WIDTH7
 end
 asm     _dcgrClearBl7MemB
 -       LDA     $3002       ; AUXCLRH
@@ -2499,9 +2470,9 @@ _dcgrScrBl7MemA:8    = @hgrscanh
 _clipXMemBl7Src:1    = @_clipX
 _clipYMemBl7Scr:1    = @_clipY
 _dcgrMemBl7ScrB:1    = @hgrscanl
-_dcgrMemBl7ScrB:8    = @hgrscanh
+_dcgrMemBl7ScrB:6    = @hgrscanh
 _dcgrOpMemBl7ScrB:1  = @hgrscanl
-_dcgrOpMemBl7ScrB:8  = @hgrscanh
+_dcgrOpMemBl7ScrB:6  = @hgrscanh
 //
 // Memory <-> Memory Block Transfer fixups
 //

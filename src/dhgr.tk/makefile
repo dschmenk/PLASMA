@@ -56,6 +56,7 @@ demos: $(PENGUINS) $(DARTHGR) $(STARTREK)
 	cp $(DARTHGR) prodos/dhgr.tk/demos/darthgr/
 	cp dhgr.tk/demos/darthgr/*.BIN prodos/dhgr.tk/demos/darthgr/
 	cp $(STARTREK) prodos/dhgr.tk/demos/startrek/
+	cp dhgr.tk/demos/startrek/*.BIN prodos/dhgr.tk/demos/startrek/
 
 drogue: $(DROGUE) $(DROGUE.MAP) $(DROGUE.COMBAT)
 	-mkdir prodos/dhgr.tk/demos

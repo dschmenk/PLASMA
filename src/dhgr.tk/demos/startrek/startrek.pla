@@ -15,10 +15,33 @@ const VIEW_LEFT    = VIEW_LEFT7  * 7 // 21
 const VIEW_RIGHT   = VIEW_RIGHT7 * 7 // 119
 const VIEW_WIDTH   = VIEW_RIGHT  - VIEW_LEFT
 const VIEW_TOP     = 24
-const VIEW_BOTTOM  = 124
+const VIEW_BOTTOM  = 122
 const VIEW_HEIGHT  = VIEW_BOTTOM - VIEW_TOP
 const VIEW_ORGX    = (VIEW_LEFT+VIEW_RIGHT)/2
 const VIEW_ORGY    = (VIEW_TOP+VIEW_BOTTOM)/2
+//
+// Enterprise sprites
+//
+struc t_sprite
+  var spr_xorg
+  var spr_yorg
+  var spr_width
+  var spr_height
+  var spr_pixmap
+  var spr_bl7
+end
+res[t_sprite * 8] ncc1701
+char[12] sprFile = "ENT.UP.SPR"
+char[12]         = "ENT.UR.SPR"
+char[12]         = "ENT.RT.SPR"
+char[12]         = "ENT.DR.SPR"
+char[12]         = "ENT.DN.SPR"
+char[12]         = "ENT.DL.SPR"
+char[12]         = "ENT.LT.SPR"
+char[12]         = "ENT.UL.SPR"
+const ENT_W7 = 5
+const ENT_H  = 43
+const ENT_SZ = ENT_W7*4*ENT_H
 //
 // Dither matrices
 //
@@ -48,13 +71,12 @@ const PAT_WIDTH  = SCR_WIDTH
 const PAT_HEIGHT = 2
 word pattern
 //
-// Edge arrays
+// Polygon variables
 //
-word leftedge, rightedge
-//
-// Top and bottom extents
-//
-byte topedge,  bottomedge
+word leftedge, rightedge  // Edge arrays
+byte polytop,  polybottom // Poly top and bottom extents
+byte startvx, startvy     // Starting poly vertex
+byte polyvx, polyvy       // Current poly vertex
 //
 // Random seed
 //
@@ -67,7 +89,7 @@ end
 //
 // Create pattern pixmap for filling
 //
-def setpattern(clr1, clr2, dither)#0
+def setPattern(clr1, clr2, dither)#0
   word patfill, clr
 
   if not pattern
@@ -112,41 +134,8 @@ end
 def cos(deg)#1
   return sin(deg + 90)
 end
-//
-// Ellipse
-//
-def solidellip(xorg, yorg, width, height)#0
-  var x, y, angle
 
-  for angle = 0 to 90 step 90 / height
-    x = ((cos(angle) >> 8) * width) >> 8
-    y = ((sin(angle) >> 8) * height) >> 8
-    dcgrHLin(xorg - x, xorg + x, yorg + y)
-    dcgrHLin(xorg - x, xorg + x, yorg - y)
-  next
-end
-
-def patternellip(xorg, yorg, width, height)#0
-  var x, y, angle, left, len, scan
-
-  for angle = 0 to 90 step 90 / height
-    x = ((cos(angle) >> 8) * width) >> 8
-    y = ((sin(angle) >> 8) * height) >> 8
-    left = xorg - x
-    len  = x * 2
-    if len == 0; len = 1; fin
-    scan = yorg + y
-    dcgrPixMap(left, scan, len, 1, \
-               pattern + (left & 1 ?? SCR_WIDTH     :: 0) \
-                       + (scan & 1 ?? (SCR_WIDTH/2) :: 0))
-    scan = yorg - y
-    dcgrPixMap(left, scan, len, 1, \
-               pattern + (left & 1 ?? SCR_WIDTH     :: 0) \
-                       + (scan & 1 ?? (SCR_WIDTH/2) :: 0))
-  next
-end
-
-def patternrect(left, top, right, bottom)#0
+def patrnRect(left, top, right, bottom)#0
   word patscan
   byte width, y
 
@@ -156,8 +145,7 @@ def patternrect(left, top, right, bottom)#0
     dcgrPixMap(left, y, width, 1, patscan + (y & 1 ?? (SCR_WIDTH/2) :: 0))
   next
 end
-
-def solidrect(left, top, right, bottom)#0
+def solidRect(left, top, right, bottom)#0
   byte l7, r7, x
 
   l7 = (left | 7) / 7
@@ -178,28 +166,42 @@ def solidrect(left, top, right, bottom)#0
     next
   fin
 end
-
-def setedge(x, y)#0
-  if y < topedge;    topedge    = y; fin
-  if y > bottomedge; bottomedge = y; fin
+//
+// Convex polygon
+//
+def setEdge(x, y)#0
   if x < leftedge->[y];  leftedge->[y]  = x; fin
   if x > rightedge->[y]; rightedge->[y] = x; fin
 end
-def startpoly#0
-  setlineplot(@setedge)
+def startPoly(x, y)#0
+  setlineplot(@setEdge)
   leftedge  = heapalloc(SCR_HEIGHT)
   rightedge = heapalloc(SCR_HEIGHT)
   memset(leftedge,  $FFFF, SCR_HEIGHT)
   memset(rightedge, $0000, SCR_HEIGHT)
-  topedge    = $FF
-  bottomedge = $00
+  polytop    = y
+  polybottom = y
+  startvx    = x
+  startvy    = y
+  polyvx     = x
+  polyvy     = y
 end
-def patternpoly#0
+def addVertex(x, y)#0
+  if y < polytop;    polytop    = y; fin
+  if y > polybottom; polybottom = y; fin
+  line(polyvx, polyvy, x, y)
+  polyvx     = x
+  polyvy     = y
+end
+def patrnPoly(x, y)#0
   var width
-  byte y, left
+  byte left
 
-  if topedge > SCR_HEIGHT-1; return; fin
-  for y = topedge to bottomedge
+  if y < polytop;    polytop    = y; fin
+  if y > polybottom; polybottom = y; fin
+  line(polyvx, polyvy, x, y)
+  line(x, y, startvx, startvy)
+  for y = polytop to polybottom
     left  = leftedge->[y]
     width = rightedge->[y] - left + 1
     if width > 0
@@ -210,11 +212,14 @@ def patternpoly#0
   next
   heaprelease(leftedge)
 end
-def solidpoly#0
-  byte y, left, right
+def solidPoly(x, y)#0
+  byte left, right
 
-  if topedge > SCR_HEIGHT-1; return; fin
-  for y = topedge to bottomedge
+  if y < polytop;    polytop    = y; fin
+  if y > polybottom; polybottom = y; fin
+  line(polyvx, polyvy, x, y)
+  line(x, y, startvx, startvy)
+  for y = polytop to polybottom
     left  = leftedge->[y]
     right = rightedge->[y]
     if right >= left
@@ -223,46 +228,37 @@ def solidpoly#0
   next
   heaprelease(leftedge)
 end
+//
+// Ellipse
+//
+def solidEllip(xorg, yorg, width, height)#0
+  var x, y, angle
 
-def setedgeleft(x, y)#0
-  leftedge->[y] = x
+  for angle = 0 to 90 step 90 / height
+    x = ((cos(angle) >> 8) * width) >> 8
+    y = ((sin(angle) >> 8) * height) >> 8
+    dcgrHLin(xorg - x, xorg + x, yorg + y)
+    dcgrHLin(xorg - x, xorg + x, yorg - y)
+  next
 end
+def patrnEllip(xorg, yorg, width, height)#0
+  var x, y, angle, left, len, scan
 
-def setedgeright(x, y)#0
-  rightedge->[y] = x
-end
-
-def patterntrapz(xtopl, xtopr, top, xbottoml, xbottomr, bottom)#0
-  byte y, left
-
-  leftedge  = heapalloc(SCR_HEIGHT)
-  rightedge = heapalloc(SCR_HEIGHT)
-  setlineplot(@setedgeleft)
-  line(xtopl, top, xbottoml, bottom)
-  setlineplot(@setedgeright)
-  line(xtopr, top, xbottomr, bottom)
-  for y = top to bottom
-    left = leftedge->[y]
-    dcgrPixMap(left, y, rightedge->[y] - left + 1, 1, \
+  for angle = 0 to 90 step 90 / height
+    x = ((cos(angle) >> 8) * width) >> 8
+    y = ((sin(angle) >> 8) * height) >> 8
+    left = xorg - x
+    len  = x * 2
+    if len == 0; len = 1; fin
+    scan = yorg + y
+    dcgrPixMap(left, scan, len, 1, \
                pattern + (left & 1 ?? SCR_WIDTH     :: 0) \
-                       + (y    & 1 ?? (SCR_WIDTH/2) :: 0))
+                       + (scan & 1 ?? (SCR_WIDTH/2) :: 0))
+    scan = yorg - y
+    dcgrPixMap(left, scan, len, 1, \
+               pattern + (left & 1 ?? SCR_WIDTH     :: 0) \
+                       + (scan & 1 ?? (SCR_WIDTH/2) :: 0))
   next
-  heaprelease(leftedge)
-end
-
-def solidtrapz(xtopl, xtopr, top, xbottoml, xbottomr, bottom)#0
-  byte y
-
-  leftedge  = heapalloc(SCR_HEIGHT)
-  rightedge = heapalloc(SCR_HEIGHT)
-  setlineplot(@setedgeleft)
-  line(xtopl, top, xbottoml, bottom)
-  setlineplot(@setedgeright)
-  line(xtopr, top, xbottomr, bottom)
-  for y = top to bottom
-    dcgrHLin(leftedge->[y], rightedge->[y], y)
-  next
-  heaprelease(leftedge)
 end
 
 def frame(left, top, right, bottom, thickness)#0
@@ -286,19 +282,24 @@ def drawSurround#0
   dhgrClearBl7(0,           VIEW_BOTTOM, SCR_WIDTH7, VIEW_TOP)
   dhgrClearBl7(0,           VIEW_TOP,    VIEW_LEFT7, VIEW_HEIGHT)
   dhgrClearBl7(VIEW_RIGHT7, VIEW_TOP,    VIEW_LEFT7, VIEW_HEIGHT)
-  setpattern(CLR_BLACK, CLR_GREY, DITHER50)
-  patternrect(0, VIEW_BOTTOM+VIEW_TOP, SCR_WIDTH-1, SCR_HEIGHT-1)
+  setPattern(CLR_BLACK, CLR_GREY, DITHER50)
+  patrnRect(0, VIEW_BOTTOM+VIEW_TOP, SCR_WIDTH-1, SCR_HEIGHT-1)
   //
   // Above viewscreen ceiling
   //
-  setpattern(CLR_BLACK, CLR_GREY, DITHER50)
-  patterntrapz(0, SCR_WIDTH-1, 0, VIEW_LEFT-3, VIEW_RIGHT+3-1, VIEW_TOP-6)
+  setPattern(CLR_BLACK, CLR_GREY, DITHER50)
+  startPoly(0, 0)
+  addVertex(SCR_WIDTH-1, 0)
+  addVertex(VIEW_RIGHT+3-1, VIEW_TOP-6)
+  patrnPoly(VIEW_LEFT-3, VIEW_TOP-6)
   //
   // Below viewscreen bump-out
   //
-  setpattern(CLR_GREY, CLR_WHITE, DITHER50)
-  patterntrapz(VIEW_LEFT-3, VIEW_RIGHT+3-1, VIEW_BOTTOM+5,\
-                        0,    SCR_WIDTH-1, VIEW_BOTTOM+VIEW_TOP-1)
+  setPattern(CLR_GREY, CLR_WHITE, DITHER50)
+  startPoly(VIEW_LEFT-3,    VIEW_BOTTOM+5)
+  addVertex(VIEW_RIGHT+3-1, VIEW_BOTTOM+5)
+  addVertex(SCR_WIDTH-1,    VIEW_BOTTOM+VIEW_TOP-1)
+  patrnPoly(0,              VIEW_BOTTOM+VIEW_TOP-1)
   //
   // Viewscreen frame
   //
@@ -315,8 +316,8 @@ def drawRails#0
   dhgrClearBl7(0,     133, 40/7, 7)
   dhgrClearBl7(107/7, 133, 40/7, 7)
   dcgrColor(CLR_BLACK)
-  solidrect( 20, 140,  24, 191)
-  solidrect(115, 140, 119, 191)
+  solidRect( 20, 140,  24, 191)
+  solidRect(115, 140, 119, 191)
 end
 def drawAlerts#0
   dcgrColor(CLR_ORANGE)
@@ -327,53 +328,86 @@ def drawAlerts#0
   dhgrClearBl7(18, 40, 1, 40)
 end
 def drawConsoles#0
+  dcgrColor(CLR_MAGENTA)
+  startPoly(70-30,          160)
+  addVertex(70-30, SCR_HEIGHT-1)
+  solidPoly(70-40, SCR_HEIGHT-1)
+  startPoly(70+30-1,          160)
+  addVertex(70+30-1, SCR_HEIGHT-1)
+  solidPoly(70+40-1, SCR_HEIGHT-1)
+  setPattern(CLR_BLACK, CLR_BROWN, DITHER50)
+  startPoly(0,              160)
+  addVertex(70-30,          160)
+  addVertex(70-40, SCR_HEIGHT-1)
+  patrnPoly(0,     SCR_HEIGHT-1)
+  startPoly(70+30-1,              160)
+  addVertex(SCR_WIDTH-1,          160)
+  addVertex(SCR_WIDTH-1, SCR_HEIGHT-1)
+  patrnPoly(70+40-1,     SCR_HEIGHT-1)
   dcgrColor(CLR_BLACK)
-  startpoly
-  line(70-30,          160, 70-30, SCR_HEIGHT-1)
-  line(70-40, SCR_HEIGHT-1, 70-30, SCR_HEIGHT-1)
-  line(70-40, SCR_HEIGHT-1, 70-30,          160)
-  solidpoly
-  startpoly
-  line(70+30-1,          160, 70+30-1, SCR_HEIGHT-1)
-  line(70+40-1, SCR_HEIGHT-1, 70+30-1, SCR_HEIGHT-1)
-  line(70+40-1, SCR_HEIGHT-1, 70+30-1,          160)
-  solidpoly
-  setpattern(CLR_BLACK, CLR_BROWN, DITHER50)
-  patterntrapz(0, 70-30, 160, \
-              0, 70-40, SCR_HEIGHT-1)
-  patterntrapz(70+30-1, SCR_WIDTH-1, 160, \
-              70+40-1, SCR_WIDTH-1, SCR_HEIGHT-1)
-  dcgrColor(CLR_BLACK)
-  solidtrapz(0, 70-40, 170, \
-             0, 70-51, SCR_HEIGHT-1)
-  solidtrapz(70+40-1, SCR_WIDTH-1, 170, \
-             70+51-1, SCR_WIDTH-1, SCR_HEIGHT-1)
+  startPoly(0,     170)
+  addVertex(70-40, 170)
+  addVertex(70-51, SCR_HEIGHT-1)
+  solidPoly(0,     SCR_HEIGHT-1)
+  startPoly(70+40-1,              170)
+  addVertex(SCR_WIDTH-1,          170)
+  addVertex(SCR_WIDTH-1, SCR_HEIGHT-1)
+  solidPoly(70+51-1,     SCR_HEIGHT-1)
 end
 def drawNavigation#0
   dcgrColor(CLR_WHITE)
-  solidtrapz(70-20, 70+20-1, 150, 70-30, 70+30-1, SCR_HEIGHT-1)
-  setpattern(CLR_GREY, CLR_BROWN, DITHER50)
-  patternellip(70, 170, 40, 35)
+  startPoly(70-20,           150)
+  addVertex(70+20-1,         150)
+  addVertex(70+30-1, SCR_HEIGHT-1)
+  solidPoly(70-30,   SCR_HEIGHT-1)
+  setPattern(CLR_GREY, CLR_BROWN, DITHER50)
+  patrnEllip(70, 170, 40, 35)
 end
 //
-// Animate useless screen lights
+// Read Enterprise sprites
+//
+def readEnterprise#0
+  var xorg, yorg, width, height, pixptr, t_ptr, f_ptr
+  byte i
+
+  t_ptr = @ncc1701
+  f_ptr = @sprFile
+  for i = 0 to 7
+    xorg, yorg, width, height, pixptr = spriteRead(f_ptr)
+    t_ptr=>spr_xorg   = xorg
+    t_ptr=>spr_yorg   = yorg
+    t_ptr=>spr_width  = width
+    t_ptr=>spr_height = height
+    t_ptr=>spr_pixmap = pixptr
+    t_ptr=>spr_bl7  = heapalloc(ENT_SZ)
+    dhgrSurfMem(OP_SRC, ENT_H, t_ptr=>spr_bl7, ENT_W7*4)
+    dcgrColor(CLR_BLACK)
+    dhgrClearBl7(0, 0, ENT_W7, ENT_H)
+    dcgrPixmap(ENT_W7*7/2 - xorg,ENT_H/2 - yorg, width, height, pixptr)
+    t_ptr = t_ptr + t_sprite
+    f_ptr = f_ptr + 12
+  next
+end
+//
+// Animate stuff
 //
 def keypressed#1
   return ^$C000 & $80
 end
-def idleviewplot(x)#0
-  dcgrPixel((x&63)+70-32, VIEW_BOTTOM+3)
-  dcgrPixel((x&63)+70-32, VIEW_BOTTOM+4)
+def idleViewPlot(x)#0
+  x = (x&63)+70-32
+  dcgrHLin(x - 1, x + 1, VIEW_BOTTOM+3)
+  dcgrHlin(x - 1, x + 1, VIEW_BOTTOM+4)
 end
-def newstar#3
+def newStar#3
   return 15 - (random & 30), 15 - (random & 30), random & 15
 end
-def idle#0
+def idleStars#0
   byte xpos, star, nstars
   var starx, stary, starincx, starincy, starclr
   var x, y, incx, incy
 
-  waitVBL; nstars = waitVBL / 60
+  waitVBL; nstars = waitVBL / 50
   starx    = heapalloc(nstars*2)
   stary    = heapalloc(nstars*2)
   starincx = heapalloc(nstars*2)
@@ -394,14 +428,14 @@ def idle#0
   star = 0
   while not keypressed
     dcgrColor(CLR_WHITE)
-    idleviewplot(xpos)
+    idleViewPlot(xpos)
     dcgrColor(CLR_YELLOW)
-    idleviewplot(xpos-2)
+    idleViewPlot(xpos-4)
     dcgrColor(CLR_ORANGE)
-    idleviewplot(xpos-4)
+    idleViewPlot(xpos-8)
     dcgrColor(CLR_GREY)
-    idleviewplot(xpos-6)
-    xpos = xpos + 2
+    idleViewPlot(xpos-12)
+    xpos = xpos + 4
     for star = 0 to nstars
       x = starx=>[star]
       y = stary=>[star]
@@ -410,7 +444,7 @@ def idle#0
       if  incx > (VIEW_WIDTH-1)*8  or incx < -VIEW_WIDTH*8 \
        or incy > (VIEW_HEIGHT-1)*8 or incy < -VIEW_HEIGHT*8
         repeat
-          incx, incy, starclr->[star] = newstar
+          incx, incy, starclr->[star] = newStar
         until incx <> 0 and incy <> 0
         if starclr->[star] == 0; starclr->[star] = 15; fin
         starx=>[star]    = incx << 5
@@ -431,7 +465,69 @@ def idle#0
       dcgrPixel((starx=>[star] >> 4) + VIEW_ORGX, (stary=>[star] >> 4) + VIEW_ORGY)
     next
   loop
+  getc
+  heaprelease(starx)
 end
+def idleSpin#0
+  var viewbuf, viewspan
+  var i, k, oi, oj
+  byte xpos
+
+  //
+  // Use back buffer
+  //
+  viewbuf, viewspan = dhgrAllocBl7Mem(VIEW_WIDTH, VIEW_HEIGHT)
+  i    = @ncc1701
+  k    = 0
+  xpos = 0
+  while not keypressed
+    //
+    // Rotate Enterprise
+    //
+    dhgrSurfMem(OP_SRC, VIEW_HEIGHT, viewbuf, viewspan)
+    dcgrColor(CLR_BLACK)
+    dhgrClearBl7(0, 0, VIEW_WIDTH7, VIEW_HEIGHT)
+    dcgrColor(CLR_GREEN)
+    for oi = (xpos/4)&31 to VIEW_WIDTH-1 step 32
+      dcgrVLin(0, VIEW_HEIGHT-1, oi)
+    next
+    for oi = (xpos/4)&63 to VIEW_HEIGHT-1 step 64
+      dcgrHLin(0, VIEW_WIDTH-1, oi)
+    next
+    dhgrOp(OP_OR)
+    dhgrMemBl7((VIEW_WIDTH7 - ENT_W7 + 1)/2, (VIEW_HEIGHT-ENT_H + 1)/2, \
+               ENT_W7, ENT_H, \
+               i=>spr_bl7, ENT_W7*4)
+    dhgrSurfScr(OP_SRC)
+    waitVBL
+    dhgrMemBl7(VIEW_LEFT7, VIEW_TOP, \
+               VIEW_WIDTH7, VIEW_HEIGHT, \
+               viewbuf, viewspan)
+    i = i + t_sprite
+    k++
+    if k > 7
+      k = 0
+      i = @ncc1701
+    fin
+    //
+    // Animate useless view screen lights
+    //
+    dcgrColor(CLR_WHITE)
+    idleViewPlot(xpos)
+    dcgrColor(CLR_YELLOW)
+    idleViewPlot(xpos-4)
+    dcgrColor(CLR_ORANGE)
+    idleViewPlot(xpos-8)
+    dcgrColor(CLR_GREY)
+    idleViewPlot(xpos-12)
+    xpos = xpos + 4
+  loop
+  getc
+end
+//
+// Read sprites
+//
+readEnterprise
 //
 // Initialize
 //
@@ -445,9 +541,10 @@ drawAlerts
 drawConsoles
 drawNavigation
 //
-// Animate lights waiting for keypress
+// Animate stars waiting for keypress
 //
-idle; getc
+idleStars
+idleSpin
 //
 // All done
 //
