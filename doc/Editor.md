@@ -110,11 +110,12 @@ EDIT COMMANDS:
     OA-DOWN ARROW  = JUMP DOWN
     OA-TAB         = DETAB
 
-  Apple //e Platinum AND /// FEATURES:
-  ------------------------------------
+  Apple //e Platinum IIGS & /// FEATURES:
+  ---------------------------------------
 
-  On the keypad, 'OPTION' on //e Platinum or 'OPEN-APPLE' on the ///
-  allows the keys for navigation and misc operations:
+  On the keypad, 'OPTION' on //e Platinum & IIGS
+  or 'OPEN-APPLE' on the /// allows the keys for
+  navigation and misc operations:
 
     OA-4           = MOVE CHAR LEFT
     OA-6           = MOVE CHAR RIGHT
@@ -129,8 +130,8 @@ EDIT COMMANDS:
     OA-+           = COPY SELECTION INTO CLIPBOARD
     OA-0           = DELETE CHARACTER
     OA-/           = INSERT/OVERWRITE
-    OA-*           = OPEN FOLLOWING LINE
-    OA-ENTER       = OPEN FOLLOWING LINE
+    OA-*           = OPEN CURRENT LINE
+    OA-ENTER       = OPEN NEXT LINE
     OA-.           = PASTE CLIPBOARD
     OA-=           = NUMLOCK (NUMBER KEYS ACT LIKE OA/OPTION PRESSED)
 
