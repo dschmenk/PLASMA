@@ -78,6 +78,7 @@ bld: $(DHGRLIB) $(DHGRUTILS) $(DHGRTEST) $(DHGRRGB) $(DHGRSHOW) $(STARTREK)
 	cp dhgr.tk/test/fonttest.pla prodos/bld/dhgr.tk/FONTTEST.PLA.TXT
 	cp dhgr.tk/demos/darthgr/darthgr.pla prodos/bld/dhgr.tk/DARTHGR.PLA.TXT
 	cp dhgr.tk/demos/startrek/startrek.pla prodos/bld/dhgr.tk/STARTREK.PLA.TXT
+	cp dhgr.tk/demos/startrek/fillshape.pla prodos/bld/dhgr.tk/FILLSHAPE.PLA.TXT
 	cp dhgr.tk/utils/dhgrrgb.pla prodos/bld/dhgr.tk/DHGRRGB.PLA.TXT
 	cp dhgr.tk/utils/dhgrshow.pla prodos/bld/dhgr.tk/DHGRSHOW.PLA.TXT
 
