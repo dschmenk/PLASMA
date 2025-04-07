@@ -1,0 +1,217 @@
+include "inc/cmdsys.plh"
+include "inc/lines.plh"
+include "inc/vblank.plh"
+include "dhgr.tk/inc/dhgrlib.plh"
+include "dhgr.tk/inc/dhgrutils.plh"
+//
+// Pattern fill
+//
+const PAT_WIDTH  = SCR_WIDTH
+const PAT_HEIGHT = 2
+word pattern
+//
+// Polygon variables
+//
+word leftedge, rightedge  // Edge arrays
+byte polytop,  polybottom // Poly top and bottom extents
+byte startvx, startvy     // Starting poly vertex
+byte polyvx, polyvy       // Current poly vertex
+byte sin90[] // first 90 degrees of sin in fixed s.15 format
+byte =     0>>7,   571>>7,  1143>>7,  1714>>7,  2285>>7,  2855>>7,  3425>>7,  3993>>7
+byte =  4560>>7,  5126>>7,  5690>>7,  6252>>7,  6812>>7,  7371>>7,  7927>>7,  8480>>7
+byte =  9032>>7,  9580>>7, 10125>>7, 10668>>7, 11207>>7, 11743>>7, 12275>>7, 12803>>7
+byte = 13327>>7, 13848>>7, 14364>>7, 14876>>7, 15383>>7, 15886>>7, 16383>>7, 16876>>7
+byte = 17364>>7, 17846>>7, 18323>>7, 18794>>7, 19260>>7, 19720>>7, 20173>>7, 20621>>7
+byte = 21062>>7, 21497>>7, 21926>>7, 22347>>7, 22762>>7, 23170>>7, 23571>>7, 23964>>7
+byte = 24351>>7, 24730>>7, 25101>>7, 25465>>7, 25821>>7, 26169>>7, 26509>>7, 26841>>7
+byte = 27165>>7, 27481>>7, 27788>>7, 28087>>7, 28377>>7, 28659>>7, 28932>>7, 29196>>7
+byte = 29451>>7, 29697>>7, 29935>>7, 30163>>7, 30381>>7, 30591>>7, 30791>>7, 30982>>7
+byte = 31164>>7, 31336>>7, 31498>>7, 31651>>7, 31794>>7, 31928>>7, 32051>>7, 32165>>7
+byte = 32270>>7, 32364>>7, 32449>>7, 32523>>7, 32588>>7, 32643>>7, 32688>>7, 32723>>7
+byte = 32748>>7, 32763>>7, 32767>>7
+//
+// Sin and Cos
+//
+def sinext(deg)#1
+  return (sin90[deg] << 7) | (sin90[deg] >> 1)
+end
+def sin(deg)#1
+  while deg > 360; deg = deg - 360; loop
+  while deg < 0; deg = deg + 360; loop
+  if deg <= 90
+    return sinext(deg)
+  elsif deg <= 180
+    return sinext(180 - deg)
+  elsif deg <= 270
+    return -sinext(deg - 180)
+  fin
+  return -sinext(360 - deg)
+end
+def cos(deg)#1
+  return sin(deg + 90)
+end
+//
+// Create pattern pixmap for filling
+//
+export def setPattern(clr1, clr2, dither)#0
+  word patfill, clr
+
+  if not pattern
+    pattern = heapalloc(SCR_WIDTH * PAT_HEIGHT)
+  fin
+  //
+  // Even scanlines
+  //
+  clr = dither & 1 ?? clr2 :: clr1
+  patfill = clr | (clr << 8)
+  clr = dither & 2 ?? clr2 :: clr1
+  patfill = patfill | (clr << 4) | (clr << 12)
+  memset(pattern, patfill, SCR_WIDTH/2)
+  patfill = (patfill << 4) | clr // Rotate pattern for odd pixel
+  memset(pattern + SCR_WIDTH, patfill, SCR_WIDTH/2)
+  //
+  // Odd scanlines
+  //
+  clr = dither & 4 ?? clr2 :: clr1
+  patfill = clr | (clr << 8)
+  clr = dither & 8 ?? clr2 :: clr1
+  patfill = patfill | (clr << 4) | (clr << 12)
+  memset(pattern + SCR_WIDTH/2, patfill, SCR_WIDTH/2)
+  patfill = (patfill << 4) | clr  // Rotate pattern for odd pixel
+  memset(pattern + SCR_WIDTH + SCR_WIDTH/2, patfill, SCR_WIDTH/2)
+end
+export def patrnRect(left, top, right, bottom)#0
+  word patscan
+  byte width, y
+
+  width = right - left + 1
+  patscan = pattern + (left & 1 ?? SCR_WIDTH :: 0)
+  for y = top to bottom
+    dcgrPixMap(left, y, width, 1, patscan + (y & 1 ?? (SCR_WIDTH/2) :: 0))
+  next
+end
+export def solidRect(left, top, right, bottom)#0
+  byte l7, r7, x
+
+  l7 = (left | 7) / 7
+  r7 = right / 7
+  if l7 < r7
+    dhgrClearBl7(l7, top, r7 - l7, bottom - top + 1)
+  fin
+  l7 = l7 * 7
+  if l7 > left
+    for x = l7-1 downto left
+      dcgrVLin(top, bottom, x)
+    next
+  fin
+  r7 = r7 * 7
+  if r7 < right
+    for x = r7 to right
+      dcgrVLin(top, bottom, x)
+    next
+  fin
+end
+//
+// Convex polygon
+//
+def setEdge(x, y)#0
+  if x < leftedge->[y];  leftedge->[y]  = x; fin
+  if x > rightedge->[y]; rightedge->[y] = x; fin
+end
+export def startPoly(x, y)#0
+  setlineplot(@setEdge)
+  leftedge  = heapalloc(SCR_HEIGHT)
+  rightedge = heapalloc(SCR_HEIGHT)
+  memset(leftedge,  $FFFF, SCR_HEIGHT)
+  memset(rightedge, $0000, SCR_HEIGHT)
+  polytop    = y
+  polybottom = y
+  startvx    = x
+  startvy    = y
+  polyvx     = x
+  polyvy     = y
+end
+export def addVertex(x, y)#0
+  if y < polytop;    polytop    = y; fin
+  if y > polybottom; polybottom = y; fin
+  line(polyvx, polyvy, x, y)
+  polyvx     = x
+  polyvy     = y
+end
+export def patrnPoly(x, y)#0
+  var width
+  byte left
+
+  if y < polytop;    polytop    = y; fin
+  if y > polybottom; polybottom = y; fin
+  line(polyvx, polyvy, x, y)
+  line(x, y, startvx, startvy)
+  for y = polytop to polybottom
+    left  = leftedge->[y]
+    width = rightedge->[y] - left + 1
+    if width > 0
+      dcgrPixMap(left, y, width, 1, \
+                pattern + (left & 1 ?? SCR_WIDTH     :: 0) \
+                        + (y    & 1 ?? (SCR_WIDTH/2) :: 0))
+    fin
+  next
+  heaprelease(leftedge)
+end
+export def solidPoly(x, y)#0
+  byte left, right
+
+  if y < polytop;    polytop    = y; fin
+  if y > polybottom; polybottom = y; fin
+  line(polyvx, polyvy, x, y)
+  line(x, y, startvx, startvy)
+  for y = polytop to polybottom
+    left  = leftedge->[y]
+    right = rightedge->[y]
+    if right >= left
+      dcgrHLin(left, right, y)
+    fin
+  next
+  heaprelease(leftedge)
+end
+//
+// Ellipse
+//
+export def solidEllip(xorg, yorg, width, height)#0
+  var x, y, angle
+
+  for angle = 0 to 90 step 90 / height
+    x = ((cos(angle) >> 8) * width) >> 8
+    y = ((sin(angle) >> 8) * height) >> 8
+    dcgrHLin(xorg - x, xorg + x, yorg + y)
+    dcgrHLin(xorg - x, xorg + x, yorg - y)
+  next
+end
+export def patrnEllip(xorg, yorg, width, height)#0
+  var x, y, angle, left, len, scan
+
+  for angle = 0 to 90 step 90 / height
+    x = ((cos(angle) >> 8) * width) >> 8
+    y = ((sin(angle) >> 8) * height) >> 8
+    left = xorg - x
+    len  = x * 2
+    if len == 0; len = 1; fin
+    scan = yorg + y
+    dcgrPixMap(left, scan, len, 1, \
+               pattern + (left & 1 ?? SCR_WIDTH     :: 0) \
+                       + (scan & 1 ?? (SCR_WIDTH/2) :: 0))
+    scan = yorg - y
+    dcgrPixMap(left, scan, len, 1, \
+               pattern + (left & 1 ?? SCR_WIDTH     :: 0) \
+                       + (scan & 1 ?? (SCR_WIDTH/2) :: 0))
+  next
+end
+export def frame(left, top, right, bottom, thickness)#0
+  while thickness
+    thickness--
+    dcgrHLin(left + thickness, right  - thickness, top    + thickness)
+    dcgrHLin(left + thickness, right  - thickness, bottom - thickness)
+    dcgrVLin(top  + thickness, bottom - thickness, left   + thickness)
+    dcgrVLin(top  + thickness, bottom - thickness, right  - thickness)
+  loop
+end
+

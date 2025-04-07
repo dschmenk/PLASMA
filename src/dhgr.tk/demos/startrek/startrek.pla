@@ -1,8 +1,28 @@
 include "inc/cmdsys.plh"
-include "inc/lines.plh"
+//include "inc/lines.plh"
 include "inc/vblank.plh"
 include "dhgr.tk/inc/dhgrlib.plh"
 include "dhgr.tk/inc/dhgrutils.plh"
+import fillshape
+  //
+  // Dither matrices
+  //
+  const DITHER0   = $00
+  const DITHER25  = $04
+  const DITHER50  = $06
+  const DITHER75  = $07
+  const DITHER100 = $0F
+  predef setPattern(clr1, clr2, dither)#0
+  predef patrnRect(left, top, right, bottom)#0
+  predef solidRect(left, top, right, bottom)#0
+  predef startPoly(x, y)#0
+  predef addVertex(x, y)#0
+  predef patrnPoly(x, y)#0
+  predef solidPoly(x, y)#0
+  predef solidEllip(xorg, yorg, width, height)#0
+  predef patrnEllip(xorg, yorg, width, height)#0
+  predef frame(left, top, right, bottom, thickness)#0
+end
 
 sysflags resxtxt1|reshgr1|resxhgr1
 //
@@ -43,232 +63,12 @@ const ENT_W7 = 5
 const ENT_H  = 43
 const ENT_SZ = ENT_W7*4*ENT_H
 //
-// Dither matrices
-//
-const DITHER0   = $00
-const DITHER25  = $04
-const DITHER50  = $06
-const DITHER75  = $07
-const DITHER100 = $0F
-byte[] dither   = DITHER0, DITHER25, DITHER50, DITHER75, DITHER100
-var sin90[] // first 90 degrees of sin in fixed s.15 format
-var =     0,   571,  1143,  1714,  2285,  2855,  3425,  3993
-var =  4560,  5126,  5690,  6252,  6812,  7371,  7927,  8480
-var =  9032,  9580, 10125, 10668, 11207, 11743, 12275, 12803
-var = 13327, 13848, 14364, 14876, 15383, 15886, 16383, 16876
-var = 17364, 17846, 18323, 18794, 19260, 19720, 20173, 20621
-var = 21062, 21497, 21926, 22347, 22762, 23170, 23571, 23964
-var = 24351, 24730, 25101, 25465, 25821, 26169, 26509, 26841
-var = 27165, 27481, 27788, 28087, 28377, 28659, 28932, 29196
-var = 29451, 29697, 29935, 30163, 30381, 30591, 30791, 30982
-var = 31164, 31336, 31498, 31651, 31794, 31928, 32051, 32165
-var = 32270, 32364, 32449, 32523, 32588, 32643, 32688, 32723
-var = 32748, 32763, 32767
-//
-// Pattern fill
-//
-const PAT_WIDTH  = SCR_WIDTH
-const PAT_HEIGHT = 2
-word pattern
-//
-// Polygon variables
-//
-word leftedge, rightedge  // Edge arrays
-byte polytop,  polybottom // Poly top and bottom extents
-byte startvx, startvy     // Starting poly vertex
-byte polyvx, polyvy       // Current poly vertex
-//
 // Random seed
 //
-var rndseed = $A965
-
+var rndseed = $A64D
 def random#1
-  rndseed = (rndseed >> 3) ^ (rndseed << 13) + $4321
+  rndseed = (rndseed << 8) ^ ((rndseed & $7FFF) >> 7) + $62B3
   return rndseed
-end
-//
-// Create pattern pixmap for filling
-//
-def setPattern(clr1, clr2, dither)#0
-  word patfill, clr
-
-  if not pattern
-    pattern = heapalloc(SCR_WIDTH * PAT_HEIGHT)
-  fin
-  //
-  // Even scanlines
-  //
-  clr = dither & 1 ?? clr2 :: clr1
-  patfill = clr | (clr << 8)
-  clr = dither & 2 ?? clr2 :: clr1
-  patfill = patfill | (clr << 4) | (clr << 12)
-  memset(pattern, patfill, SCR_WIDTH/2)
-  patfill = (patfill << 4) | clr // Rotate pattern for odd pixel
-  memset(pattern + SCR_WIDTH, patfill, SCR_WIDTH/2)
-  //
-  // Odd scanlines
-  //
-  clr = dither & 4 ?? clr2 :: clr1
-  patfill = clr | (clr << 8)
-  clr = dither & 8 ?? clr2 :: clr1
-  patfill = patfill | (clr << 4) | (clr << 12)
-  memset(pattern + SCR_WIDTH/2, patfill, SCR_WIDTH/2)
-  patfill = (patfill << 4) | clr  // Rotate pattern for odd pixel
-  memset(pattern + SCR_WIDTH + SCR_WIDTH/2, patfill, SCR_WIDTH/2)
-end
-//
-// Sin and Cos
-//
-def sin(deg)#1
-  while deg > 360; deg = deg - 360; loop
-  while deg < 0; deg = deg + 360; loop
-  if deg <= 90
-    return sin90[deg]
-  elsif deg <= 180
-    return sin90[180 - deg]
-  elsif deg <= 270
-    return -sin90[deg - 180]
-  fin
-  return -sin90[360 - deg]
-end
-def cos(deg)#1
-  return sin(deg + 90)
-end
-
-def patrnRect(left, top, right, bottom)#0
-  word patscan
-  byte width, y
-
-  width = right - left + 1
-  patscan = pattern + (left & 1 ?? SCR_WIDTH :: 0)
-  for y = top to bottom
-    dcgrPixMap(left, y, width, 1, patscan + (y & 1 ?? (SCR_WIDTH/2) :: 0))
-  next
-end
-def solidRect(left, top, right, bottom)#0
-  byte l7, r7, x
-
-  l7 = (left | 7) / 7
-  r7 = right / 7
-  if l7 < r7
-    dhgrClearBl7(l7, top, r7 - l7, bottom - top + 1)
-  fin
-  l7 = l7 * 7
-  if l7 > left
-    for x = l7-1 downto left
-      dcgrVLin(top, bottom, x)
-    next
-  fin
-  r7 = r7 * 7
-  if r7 < right
-    for x = r7 to right
-      dcgrVLin(top, bottom, x)
-    next
-  fin
-end
-//
-// Convex polygon
-//
-def setEdge(x, y)#0
-  if x < leftedge->[y];  leftedge->[y]  = x; fin
-  if x > rightedge->[y]; rightedge->[y] = x; fin
-end
-def startPoly(x, y)#0
-  setlineplot(@setEdge)
-  leftedge  = heapalloc(SCR_HEIGHT)
-  rightedge = heapalloc(SCR_HEIGHT)
-  memset(leftedge,  $FFFF, SCR_HEIGHT)
-  memset(rightedge, $0000, SCR_HEIGHT)
-  polytop    = y
-  polybottom = y
-  startvx    = x
-  startvy    = y
-  polyvx     = x
-  polyvy     = y
-end
-def addVertex(x, y)#0
-  if y < polytop;    polytop    = y; fin
-  if y > polybottom; polybottom = y; fin
-  line(polyvx, polyvy, x, y)
-  polyvx     = x
-  polyvy     = y
-end
-def patrnPoly(x, y)#0
-  var width
-  byte left
-
-  if y < polytop;    polytop    = y; fin
-  if y > polybottom; polybottom = y; fin
-  line(polyvx, polyvy, x, y)
-  line(x, y, startvx, startvy)
-  for y = polytop to polybottom
-    left  = leftedge->[y]
-    width = rightedge->[y] - left + 1
-    if width > 0
-      dcgrPixMap(left, y, width, 1, \
-                pattern + (left & 1 ?? SCR_WIDTH     :: 0) \
-                        + (y    & 1 ?? (SCR_WIDTH/2) :: 0))
-    fin
-  next
-  heaprelease(leftedge)
-end
-def solidPoly(x, y)#0
-  byte left, right
-
-  if y < polytop;    polytop    = y; fin
-  if y > polybottom; polybottom = y; fin
-  line(polyvx, polyvy, x, y)
-  line(x, y, startvx, startvy)
-  for y = polytop to polybottom
-    left  = leftedge->[y]
-    right = rightedge->[y]
-    if right >= left
-      dcgrHLin(left, right, y)
-    fin
-  next
-  heaprelease(leftedge)
-end
-//
-// Ellipse
-//
-def solidEllip(xorg, yorg, width, height)#0
-  var x, y, angle
-
-  for angle = 0 to 90 step 90 / height
-    x = ((cos(angle) >> 8) * width) >> 8
-    y = ((sin(angle) >> 8) * height) >> 8
-    dcgrHLin(xorg - x, xorg + x, yorg + y)
-    dcgrHLin(xorg - x, xorg + x, yorg - y)
-  next
-end
-def patrnEllip(xorg, yorg, width, height)#0
-  var x, y, angle, left, len, scan
-
-  for angle = 0 to 90 step 90 / height
-    x = ((cos(angle) >> 8) * width) >> 8
-    y = ((sin(angle) >> 8) * height) >> 8
-    left = xorg - x
-    len  = x * 2
-    if len == 0; len = 1; fin
-    scan = yorg + y
-    dcgrPixMap(left, scan, len, 1, \
-               pattern + (left & 1 ?? SCR_WIDTH     :: 0) \
-                       + (scan & 1 ?? (SCR_WIDTH/2) :: 0))
-    scan = yorg - y
-    dcgrPixMap(left, scan, len, 1, \
-               pattern + (left & 1 ?? SCR_WIDTH     :: 0) \
-                       + (scan & 1 ?? (SCR_WIDTH/2) :: 0))
-  next
-end
-
-def frame(left, top, right, bottom, thickness)#0
-  while thickness
-    thickness--
-    dcgrHLin(left + thickness, right  - thickness, top    + thickness)
-    dcgrHLin(left + thickness, right  - thickness, bottom - thickness)
-    dcgrVLin(top  + thickness, bottom - thickness, left   + thickness)
-    dcgrVLin(top  + thickness, bottom - thickness, right  - thickness)
-  loop
 end
 //
 // Draw components
@@ -499,7 +299,7 @@ def idleSpin#0
                ENT_W7, ENT_H, \
                i=>spr_bl7, ENT_W7*4)
     dhgrSurfScr(OP_SRC)
-    waitVBL
+    //waitVBL
     dhgrMemBl7(VIEW_LEFT7, VIEW_TOP, \
                VIEW_WIDTH7, VIEW_HEIGHT, \
                viewbuf, viewspan)
@@ -522,6 +322,7 @@ def idleSpin#0
     idleViewPlot(xpos-12)
     xpos = xpos + 4
   loop
+  heaprelease(viewbuf)
   getc
 end
 //

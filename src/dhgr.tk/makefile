@@ -19,6 +19,7 @@ DDCONV        = dhgr.tk/utils/ddfonconv
 PENGUINS      = dhgr.tk/demos/penguins/PENGUINS.REL
 DARTHGR       = dhgr.tk/demos/darthgr/DARTHGR.REL
 STARTREK      = dhgr.tk/demos/startrek/STARTREK.REL
+FILLSHAPE     = dhgr.tk/demos/startrek/FILLSHAPE.REL
 DROGUE        = dhgr.tk/drogue/DROGUE.REL
 DROGUE.MAP    = dhgr.tk/drogue/DROGUE.MAP.REL
 DROGUE.COMBAT = dhgr.tk/drogue/DROGUE.COMBAT.REL
@@ -45,7 +46,7 @@ utils: $(DHGRSPRED) $(DHGREASY) $(DHGRRGB) $(DHGRRGB_C) $(DHGRSHOW) $(DLGRCONV)
 	cp dhgr.tk/utils/*.REL prodos/dhgr.tk/utils
 	cp dhgr.tk/utils/samples/* prodos/dhgr.tk/utils/samples
 
-demos: $(PENGUINS) $(DARTHGR) $(STARTREK)
+demos: $(PENGUINS) $(DARTHGR) $(STARTREK) $(FILLSHAPE)
 	-mkdir prodos/dhgr.tk/
 	-mkdir prodos/dhgr.tk/demos/
 	-mkdir prodos/dhgr.tk/demos/penguins/
@@ -56,6 +57,7 @@ demos: $(PENGUINS) $(DARTHGR) $(STARTREK)
 	cp $(DARTHGR) prodos/dhgr.tk/demos/darthgr/
 	cp dhgr.tk/demos/darthgr/*.BIN prodos/dhgr.tk/demos/darthgr/
 	cp $(STARTREK) prodos/dhgr.tk/demos/startrek/
+	cp $(FILLSHAPE) prodos/dhgr.tk/demos/startrek/
 	cp dhgr.tk/demos/startrek/*.BIN prodos/dhgr.tk/demos/startrek/
 
 drogue: $(DROGUE) $(DROGUE.MAP) $(DROGUE.COMBAT)
@@ -156,6 +158,10 @@ $(DARTHGR): dhgr.tk/demos/darthgr/darthgr.pla dhgr.tk/inc/dhgrlib.plh dhgr.tk/in
 $(STARTREK): dhgr.tk/demos/startrek/startrek.pla dhgr.tk/inc/dhgrlib.plh dhgr.tk/inc/dhgrutils.plh
 	./xplasm -AMOW dhgr.tk/demos/startrek/startrek.pla
 	acme --setpc 4094 -o $(STARTREK) dhgr.tk/demos/startrek/startrek.a
+
+$(FILLSHAPE): dhgr.tk/demos/startrek/fillshape.pla dhgr.tk/inc/dhgrlib.plh dhgr.tk/inc/dhgrutils.plh
+	./xplasm -AMOW dhgr.tk/demos/startrek/fillshape.pla
+	acme --setpc 4094 -o $(FILLSHAPE) dhgr.tk/demos/startrek/fillshape.a
 
 $(DROGUE): dhgr.tk/drogue/drogue.pla  dhgr.tk/inc/dhgrlib.plh dhgr.tk/inc/dhgrutils.plh
 	./xplasm -AMOW dhgr.tk/drogue/drogue.pla
