@@ -96,6 +96,8 @@ While running code, `<CTRL-C>` will break out and return to the interpreter.
 
 Numbers entered with a preceeding `$` will be interpreted as hex values
 
+Numbers entered with a preceeding `%` will be interpreted as binary values
+
 ### Words for displaying hex numbers
 
 `$.`: Display TOS word in hex with leading `$`
@@ -153,4 +155,4 @@ There are a few useful scripts located in the `scripts` directory. By far the mo
 
 Here is a (worse than usual) video running through some examples. This was a preliminary release so the final is a bit different: https://youtu.be/picPyXAk77I?si=Td2En5Z3oxVTzh0z
 
-A pre-configured ProDOS floppy image able to run  and a few utilities is available here: https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLFORTH.PO
+A pre-configured ProDOS floppy image able to run  and a few utilities is available here: https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLFORTH.po
