@@ -34,6 +34,8 @@ The combination of all these enhancements make PLEIADES an efficient environment
 
 - [140K Single Disk Bootable FORTH](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLFORTH.po)
 - [140K Single Disk Bootable LISP](https://github.com/dschmenk/PLASMA/blob/master/images/apple/DRAWL.po)
+- [140K ASM Toolkit](https://github.com/dschmenk/PLASMA/blob/master/images/apple/ASM-TK.po)
+- [140K DHGR Toolkit](https://github.com/dschmenk/PLASMA/blob/master/images/apple/DHGR-TK.po)
 - [1/6 - 140K PLEIADES Install Boot](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLEIADES-2.20-INST.po)
 - [2/6 - 140K PLEIADES System](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLEIADES-2.20-SYS.po)
 - [3/6 - 140K PLEIADES Networking](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLEIADES-2.20-INET.po)
