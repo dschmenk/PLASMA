@@ -21,7 +21,7 @@ PLEIADES incorporates many feature improvements and bug fixes from the previous 
 The combination of all these enhancements make PLEIADES an efficient environment for programming and interacting with a 6502 computer. 
 
 ## Documents:
-- [PLASMA Language and Compiler]((https://github.com/dschmenk/PLASMA/blob/master/doc/PLASMA.md))
+- [PLASMA Language and Compiler](https://github.com/dschmenk/PLASMA/blob/master/doc/PLASMA.md))
 - [PLASMA Libraries](https://github.com/dschmenk/PLASMA/wiki)
 - [PLFORTH - FORTH for PLEIADES](https://github.com/dschmenk/PLASMA/blob/master/doc/PLFORTH.md)
 - [DRAWL - LISP 1.5 for PLEIADES](https://github.com/dschmenk/PLASMA/blob/master/doc/DRAWL.md)
