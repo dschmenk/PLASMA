@@ -1,6 +1,6 @@
 # The PLASMA Environment has been christened: PLEIADES
 
-**PL**asma **E**nhanced **I**nter**A**ctive **D**evelopment **E**nvironment**S**
+## (**PL**asma **E**nhanced **I**nter**A**ctive **D**evelopment **E**nvironment**S**)
 
 ![Pleiades](https://upload.wikimedia.org/wikipedia/commons/thumb/4/4e/Pleiades_large.jpg/1024px-Pleiades_large.jpg)
 image credit: NASA, ESA, AURA/Caltech, Palomar Observator
