@@ -74,6 +74,12 @@ const ERR_BAD_INDEX    = -13
 const ERR_BAD_GO       = -14
 
 //
+// Temp string size
+//
+
+const TMPSTR_SIZE      = 128
+
+//
 // Variables
 //
 
@@ -106,7 +112,6 @@ word hashtbl[HASH_SIZE]
 var sym_nil, sym_true, sym_quote, sym_lambda, sym_funarg, sym_set
 var sym_macro, sym_cond, sym_if, sym_label, sym_for
 var prog, prog_expr, prog_return // Current PROG expressions
-var tempstr
 
 predef print_expr(expr)#0
 predef eval_expr(expr)#1
@@ -1220,14 +1225,15 @@ end
 
 def natv_number(symptr, expr)
   var num
+  char tempstr[TMPSTR_SIZE]
 
   expr = eval_expr(expr=>car)
   if not expr; return NULL; fin
   when expr->type & TYPE_MASK
     is STRING_TYPE // Convert string to number
-      memcpy(tempstr, expr + stringstr, expr->stringstr + 1)
-      ^(tempstr + ^tempstr + 1) = 0
-      drop, expr = parse_num(tempstr + 1)
+      memcpy(@tempstr, expr + stringstr, expr->stringstr + 1)
+      tempstr[tempstr[0] + 1] = 0
+      drop, expr = parse_num(@tempstr + 1)
       break
     is SYM_TYPE
     is ARRAY_TYPE
@@ -1491,35 +1497,37 @@ end
 //
 
 def natv_string(symptr, expr)
+  char tempstr[TMPSTR_SIZE]
+
   expr = eval_expr(expr=>car)
   if not expr; return NULL; fin
-  ^tempstr = 0
+  tempstr[0] = 0
   when expr->type & TYPE_MASK
     is NUM_TYPE
       when expr->type
         is NUM_INT
-          i32tos(expr + intval, tempstr)
+          i32tos(expr + intval, @tempstr)
           break
         is NUM_FLOAT
-          ext2str(expr + floatval, tempstr, fmt_fpint, fmt_fpfrac, fmt_fp)
-          if ^(tempstr + 1) == ' ' // Remove leading space
-            memcpy (tempstr + 1, tempstr + 2, ^tempstr)
-            ^tempstr--
+          ext2str(expr + floatval, @tempstr, fmt_fpint, fmt_fpfrac, fmt_fp)
+          if tempstr[1] == ' ' // Remove leading space
+            memcpy (@tempstr + 1, @tempstr + 2, tempstr[0])
+            tempstr[0]--
           fin
           break
       wend
       break
     is SYM_TYPE
-      ^tempstr = expr->type & SYM_LEN
-      memcpy(tempstr + 1, expr + name, ^tempstr)
+      tempstr[0] = expr->type & SYM_LEN
+      memcpy(@tempstr + 1, expr + name, tempstr[0])
       break;
     is ARRAY_TYPE
-      ^tempstr = 2
-      ^(tempstr + 1) = '['
-      ^(tempstr + 2) = ']'
+      tempstr[0] = 2
+      tempstr[1] = '['
+      tempstr[2] = ']'
       break;
   wend
-  return new_string(tempstr)
+  return new_string(@tempstr)
 end
 
 def natv_stringp(symptr, expr)
@@ -1529,6 +1537,7 @@ end
 def natv_subs(symptr, expr)
   var stringptr
   byte ofst, len
+  char tempstr[TMPSTR_SIZE]
 
   stringptr = eval_expr(expr=>car)
   if stringptr->type <> STRING_TYPE
@@ -1553,27 +1562,28 @@ def natv_subs(symptr, expr)
   if ofst + len > stringptr->stringstr
     len = stringptr->stringstr - ofst
   fin
-  memcpy(tempstr + 1, stringptr + stringstr + ofst + 1, len)
-  ^tempstr = len
-  return new_string(tempstr)
+  memcpy(@tempstr + 1, stringptr + stringstr + ofst + 1, len)
+  tempstr[0] = len
+  return new_string(@tempstr)
 end
 
 def natv_cats(symptr, expr)
   var len, stringptr
+  char tempstr[TMPSTR_SIZE]
 
   len = 0
   while expr
     stringptr = eval_expr(expr=>car)
     if stringptr->type == STRING_TYPE
-      if len + stringptr->stringstr < 255
-        memcpy(tempstr + len + 1, stringptr + stringstr + 1, stringptr->stringstr)
+      if len + stringptr->stringstr < TMPSTR_SIZE
+        memcpy(@tempstr + len + 1, stringptr + stringstr + 1, stringptr->stringstr)
         len = len + stringptr->stringstr
       fin
     fin
     expr = expr=>cdr
   loop
-  ^tempstr = len
-  return new_string(tempstr)
+  tempstr[0] = len
+  return new_string(@tempstr)
 end
 
 def natv_lens(symptr, expr)
@@ -1586,16 +1596,18 @@ def natv_lens(symptr, expr)
 end
 
 def natv_chars(symptr, expr)
-  ^tempstr = 0
+  char tempstr[TMPSTR_SIZE]
+
+  tempstr[0] = 0
   while expr
     symptr = eval_expr(expr=>car)
     if symptr->type == NUM_INT
-      ^tempstr++
-      ^(tempstr + ^tempstr) = symptr=>intval[0]
+      tempstr[0]++
+      tempstr[tempstr[0]] = symptr=>intval[0]
     fin
     expr = expr=>cdr
   loop
-  return new_string(tempstr)
+  return new_string(@tempstr)
 end
 
 def natv_ascii(symptr, expr)
@@ -1836,6 +1848,5 @@ new_sym("LENS")=>natv     = @natv_lens
 new_sym("CHARS")=>natv    = @natv_chars
 new_sym("ASCII")=>natv    = @natv_ascii
 //new_sym("SYMS")=>natv     = @natv_syms
-tempstr = heapalloc(256)
 return modkeep | modinitkeep
 done
