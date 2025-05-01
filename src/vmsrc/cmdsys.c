@@ -823,7 +823,7 @@ void export_cmdsys(void)
     byte dci[16];
     uword defaddr;
     uword machid = alloc_heap(1);
-    cmdsys = alloc_heap(23);
+    cmdsys = alloc_heap(25);
     stodci("CMDSYS", dci); add_sym(dci, cmdsys);
     mem_6502[SYSPATH_STR] = strlen(strcat(getcwd((char *)mem_6502 + SYSPATH_BUF, 128), "/sys/"));
     mem_6502[cmdsys + 0] = 0x20; // Version 2.20
@@ -843,6 +843,8 @@ void export_cmdsys(void)
     defaddr = add_natv(syslookuptbl); // syslookuptbl
     mem_6502[cmdsys + 21] = (byte)defaddr;
     mem_6502[cmdsys + 22] = (byte)(defaddr >> 8);
+    mem_6502[cmdsys + 23] = 0x00;
+    mem_6502[cmdsys + 24] = 0x08; // vi80col
     export_natv("CALL",  syscall6502);
     export_natv("TOUPPER",  systoupper);
     export_natv("STRCPY",  sysstrcpy);
