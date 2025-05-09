@@ -1,36 +1,36 @@
-new
+NEW
 
-rem Rod's Colors
+REM ROD'S COLORS
 
-10  goto 300
+10  GOTO 300
 
-100 for w = 3 to 50
-110   for i = 1 to 19
-120     for j = 0 to 19
-130       k  = i + j
-140       mi = 40 - i
-150       mk = 40 - k
-160       color = (j * 3) / (i + 3) + i * w / 12
-170       plot i,  k 
-180       plot k,  i 
-190       plot mi, mk 
-200       plot mk, mi 
-210       plot k,  mi 
-220       plot mi, k 
-230       plot i,  mk 
-240       plot mk, i 
-250       if peek(-16384) > 127 then poke -16368, 0 : return
-260     next
-270   next
-280 next
-290 goto 100
+100 FOR W = 3 TO 50
+110   FOR I = 1 TO 19
+120     FOR J = 0 TO 19
+130       K  = I + J
+140       MI = 40 - I
+150       MK = 40 - K
+160       COLOR = (J * 3) / (I + 3) + I * W / 12
+170       PLOT I,  K 
+180       PLOT K,  I 
+190       PLOT MI, MK 
+200       PLOT MK, MI 
+210       PLOT K,  MI 
+220       PLOT MI, K 
+230       PLOT I,  MK 
+240       PLOT MK, I 
+250       IF PEEK(-16384) > 127 THEN POKE -16368, 0 : RETURN
+260     NEXT
+270   NEXT
+280 NEXT
+290 GOTO 100
 
-300 gr : home
-310 htab 11 : vtab 22
-320 print "Press any key to exit."
-330 gosub 100
-340 text : home
-350 print "That's all, folks!"
-360 end
+300 GR : HOME
+310 HTAB 11 : VTAB 22
+320 PRINT "PRESS ANY KEY TO EXIT."
+330 GOSUB 100
+340 TEXT : HOME
+350 PRINT "THAT'S ALL FOLKS!"
+360 END
 
-run
+RUN
