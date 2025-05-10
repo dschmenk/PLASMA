@@ -1,4 +1,4 @@
-# The PLASMA Environment has been christened: PLEIADES
+# The PLASMA Environment has evolved: PLEIADES
 
 ## (**PL**asma **E**nhanced **I**nter**A**ctive **D**evelopment **E**nvironment**S**)
 
