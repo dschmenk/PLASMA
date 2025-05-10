@@ -28,6 +28,7 @@ The combination of all these enhancements make PLEIADES an efficient environment
 - [PLEIADES Text Editor](https://github.com/dschmenk/PLASMA/blob/master/doc/Editor.md)
 
 ## YouTube Video Series
+- [Welcome to PLEIADES](https://youtu.be/nrCwYxA_N_E)
 - [Modern Retrogramming with PLASMA](https://www.youtube.com/playlist?list=PLlPKgUMQbJ79VJvZRfv1CJQf4SP2Gw3yU)
 
 ## Disk Images:
