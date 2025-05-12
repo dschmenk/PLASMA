@@ -5,7 +5,7 @@
 ![Pleiades](https://upload.wikimedia.org/wikipedia/commons/thumb/4/4e/Pleiades_large.jpg/1024px-Pleiades_large.jpg)
 image credit: NASA, ESA, AURA/Caltech, Palomar Observator
 
-PLASMA has grown from a language compiler to a full featured interactive environment for developing and running applications. With the addition of FORTH and LISP to the PLASMA ecosystem as well as support for assembly programming with EDASM and even a bugfix so AppleSoft can run from the PLASM command line, a new designation for the expanded functionality seems in order.
+PLASMA has grown from a language compiler to a full featured interactive environment for developing and running applications. With the addition of FORTH and LISP to the PLASMA ecosystem as well as support for assembly programming with EDASM and even a bugfix so AppleSoft can run from the PLEIADES command line, a new designation for the expanded functionality seems in order.
 PLEIADES incorporates many feature improvements and bug fixes from the previous PLASMA 2.11 release. Here a some of the biggest updates:
 
 1. Increase evaluation stack size to 32 entries for more complex algorithms
