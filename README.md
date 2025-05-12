@@ -22,7 +22,7 @@ The combination of all these enhancements make PLEIADES an efficient environment
 
 ## Documents:
 - [PLASMA Language and Compiler](https://github.com/dschmenk/PLASMA/blob/master/doc/PLASMA.md)
-- [PLASMA Libraries](https://github.com/dschmenk/PLASMA/wiki)
+- [PLASMA Command Line, Implementation Details and Libraries](https://github.com/dschmenk/PLASMA/wiki)
 - [PLFORTH - FORTH for PLEIADES](https://github.com/dschmenk/PLASMA/blob/master/doc/PLFORTH.md)
 - [DRAWL - LISP 1.5 for PLEIADES](https://github.com/dschmenk/PLASMA/blob/master/doc/DRAWL.md)
 - [PLEIADES Text Editor](https://github.com/dschmenk/PLASMA/blob/master/doc/Editor.md)
