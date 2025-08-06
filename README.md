@@ -30,6 +30,7 @@ The combination of all these enhancements make PLEIADES an efficient environment
 ## YouTube Video Series
 - [Welcome to PLEIADES](https://youtu.be/nrCwYxA_N_E)
 - [Modern Retrogramming with PLASMA](https://www.youtube.com/playlist?list=PLlPKgUMQbJ79VJvZRfv1CJQf4SP2Gw3yU)
+- [KansasFest 2025 - DHGR image conversion in PLASMA](https://youtu.be/b7r-92k7kBk?si=AC9KjqlNCk6c1PgF)
 
 ## Disk Images:
 
