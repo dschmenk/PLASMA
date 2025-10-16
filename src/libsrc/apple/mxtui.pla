@@ -1,0 +1,187 @@
+include "inc/cmdsys.plh"
+include "inc/conio.plh"
+include "inc/mouse.plh"
+
+const TOPLEVEL = $01
+const DROPDOWN = $00
+const ACTIVE   = $02
+const INACTIVE = $00
+
+const txtMask = $32
+const txtMain = $C054
+const txtAux  = $C055
+word txtRow = $400, $480, $500, $580, $600, $680, $700, $780
+word        = $428, $4A8, $528, $5A8, $628, $6A8, $728, $7A8
+word        = $450, $4D0, $550, $5D0, $650, $6D0, $750, $7D0
+
+const cursorMouse = $42
+byte xMouse, yMouse, bttnMouse, underMouse
+
+def mxtPeekTxt(x, y)
+  ^(txtAux - (x & 1))
+  return ^(txtRow[y] + (x >> 1))
+end
+
+def mxtPokeTxt(x, y, c)
+  ^(txtAux - (x & 1))
+  ^(txtRow[y] + (x >> 1)) = c
+end
+
+def mxtHideMouse#0
+   mxtPokeTxt(xMouse, yMouse, underMouse)
+  ^txtMain
+end
+
+def mxtShowMouse#0
+  underMouse = mxtPeekTxt(xMouse, yMouse)
+  mxtPokeTxt(xMouse, yMouse, cursorMouse)
+  ^txtMain
+end
+
+def mxtInit#0
+  byte i
+
+  conio:textmode(80)
+  conio:gotoxy(0, 0)
+  ^txtMask = INVERSE
+  conio:putchars(80, ' ')
+  conio:textctrl(ctrlattr, NORMAL)
+  ^txtAux
+  for i = 1 to 23
+    memset(txtRow[i], $5656, 40)
+  next
+  ^txtMain
+  for i = 1 to 23
+    memset(txtRow[i], $5757, 40)
+  next
+end
+
+def mxtTitle(x1, x2, y, title, flags)#0
+  conio:gotoxy(x1, y)
+  if title
+    if x2 < 0; x2 = x1 - x2; fin // Negative x2 == width
+    if flags & TOPLEVEL
+      ^txtMask = INVERSE
+      if flags & ACTIVE
+        conio:putchars(x2 - x1 - 1, ' ')
+      else
+        putc(' ')
+        putc(27) // Turn MouseText on
+        conio:putchars(x2 - x1 - 3, '\\')
+        putc(24) // Turn MouseText off
+        putc(' ')
+      ^txtMask = NORMAL
+      fin
+      conio:gotoxy((x1 + x2 - ^title) / 2, y)
+    fin
+    puts(title)
+    ^txtMask = NORMAL
+  else
+    conio:putchars(x2 - x1 - 1, '_')
+  fin
+end
+
+def mxtFrame(x1, y1, x2, y2, title, flags)#0
+  byte w
+
+  if x2 < 0; x2 = x1 - x2; fin // Negative x2 == width
+  if y2 < 0; y2 = y1 - y2; fin // Negative y2 == height
+  w = x2 - x1 - 2
+  mxtTitle(x1, x2, y1, title, flags)
+  putc(27) // Turn MouseText on
+  for y1 = y1 + 1 to y2 - 1
+    conio:gotoxy(x1, y1)
+    ^txtMask = INVERSE
+    putc('_')
+    ^txtMask = NORMAL
+    conio:putchars(w, ' ')
+    ^txtMask = INVERSE
+    putc('_')
+    ^txtMask = NORMAL
+    putc(' ')
+  next
+  conio:gotoxy(x1, y2)
+  ^txtMask = INVERSE
+  putc('T')
+  ^txtMask = NORMAL
+  conio:putchars(w, '_')
+  ^txtMask = INVERSE
+  putc('_')
+  ^txtMask = NORMAL
+  putc(' ')
+  conio:gotoxy(x1 + 1, y2 + 1) // Drop shadow
+  ^txtMask = NORMAL
+  conio:putchars(x2 - x1, ' ')
+  putc(24) // Turn MouseText off
+end
+
+def mxtRect(x1, y1, x2, y2)
+  byte w
+  if x2 < 0; x2 = x1 - x2; fin // Negative x2 == width
+  if y2 < 0; y2 = y1 - y2; fin // Negative y2 == height
+  w = x2 - x1 - 2
+  conio:gotoxy(x1, y1)
+  putc(27) // Turn MouseText on
+  putc(' ')
+  conio:putchars(w, '_')
+  for y1 = y1 + 1 to y2 - 1
+    conio:gotoxy(x1, y1)
+    ^txtMask = INVERSE
+    putc('Z')
+    ^txtMask = NORMAL
+    conio:putchars(w, ' ')
+    ^txtMask = INVERSE
+    putc('_')
+  next
+  conio:gotoxy(x1, y2)
+  ^txtMask = NORMAL
+  putc(' ')
+  ^txtMask = INVERSE
+  conio:putchars(w, 'L')
+  ^txtMask = NORMAL
+  putc(' ')
+  putc(24) // Turn MouseText off
+end
+
+mxtInit
+mxtFrame(1, 0, -10, -9, "File", DROPDOWN)
+putc(27)
+conio:gotoxy(2, 1); puts("New")
+^txtMask = INVERSE
+conio:gotoxy(2, 2); conio:putchars(7, 'S')
+^txtMask = NORMAL
+conio:gotoxy(2, 3); puts("Load")
+^txtMask = INVERSE
+conio:gotoxy(2, 4); conio:putchars(7, 'S')
+^txtMask = NORMAL
+conio:gotoxy(2, 5); puts("Save")
+conio:gotoxy(2, 6); puts("Save...")
+^txtMask = INVERSE
+conio:gotoxy(2, 7); conio:putchars(7, 'S')
+^txtMask = NORMAL
+conio:gotoxy(2, 8); puts("Exit")
+mxtFrame(55, 6, -20, -10, "GoodBye", TOPLEVEL | INACTIVE)
+mxtFrame(15, 6, -20, -10, "Hello", TOPLEVEL | ACTIVE)
+mxtRect(17, 10, -6, -2)
+conio:gotoxy(18, 11); puts("Okay")
+mxtRect(23, 10, -8, -2)
+conio:gotoxy(24, 11); puts("Cancel")
+^txtMain
+mouse:clampMouse(0, 79, 0, 23)
+mouse:setMouse(MOVE_INT_ENABLE|BUTTON_INT_ENABLE|MOUSE_ENABLE)
+xMouse     = 0
+yMouse     = 0
+bttnMouse  = 0
+mxtShowMouse
+while !(conio:keypressed() or (bttnMouse & BUTTON_DOWN))
+  if mouse:chkMouse()
+    mxtHideMouse
+    xMouse, yMouse, bttnMouse = mouse:readMouse()#3
+    mxtShowMouse
+  fin
+loop
+if conio:keypressed(); getc; fin
+mouse:detachMouse()
+conio:gotoxy(0, 23)
+conio:clear(cleol)
+done
