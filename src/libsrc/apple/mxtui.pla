@@ -3,9 +3,12 @@ include "inc/conio.plh"
 include "inc/mouse.plh"
 
 const TOPLEVEL = $01
-const DROPDOWN = $00
-const ACTIVE   = $02
+const DROPDOWN = $02
+const ACTIVE   = $04
 const INACTIVE = $00
+const CLOSEBOX = $08
+const VSCROLL  = $10
+const HSCROLL  = $20
 
 const txtMask = $32
 const txtMain = $C054
@@ -16,6 +19,12 @@ word        = $450, $4D0, $550, $5D0, $650, $6D0, $750, $7D0
 
 const cursorMouse = $42
 byte xMouse, yMouse, bttnMouse, underMouse
+
+char fileItem = "File"
+char editItem = "Edit"
+char viewItem = "View"
+char helpItem = "Help"
+word defItems = @fileItem, @editItem, @viewItem, @helpItem, NULL
 
 def mxtPeekTxt(x, y)
   ^(txtAux - (x & 1))
@@ -42,90 +51,23 @@ def mxtInit#0
   byte i
 
   conio:textmode(80)
-  conio:gotoxy(0, 0)
-  ^txtMask = INVERSE
-  conio:putchars(80, ' ')
-  conio:textctrl(ctrlattr, NORMAL)
   ^txtAux
-  for i = 1 to 23
+  for i = 0 to 23
     memset(txtRow[i], $5656, 40)
   next
   ^txtMain
-  for i = 1 to 23
+  for i = 0 to 23
     memset(txtRow[i], $5757, 40)
   next
 end
 
-def mxtTitle(x1, x2, y, title, flags)#0
-  conio:gotoxy(x1, y)
-  if title
-    if x2 < 0; x2 = x1 - x2; fin // Negative x2 == width
-    if flags & TOPLEVEL
-      ^txtMask = INVERSE
-      if flags & ACTIVE
-        conio:putchars(x2 - x1 - 1, ' ')
-      else
-        putc(' ')
-        putc(27) // Turn MouseText on
-        conio:putchars(x2 - x1 - 3, '\\')
-        putc(24) // Turn MouseText off
-        putc(' ')
-      ^txtMask = NORMAL
-      fin
-      conio:gotoxy((x1 + x2 - ^title) / 2, y)
-    fin
-    puts(title)
-    ^txtMask = NORMAL
-  else
-    conio:putchars(x2 - x1 - 1, '_')
-  fin
-end
-
-def mxtFrame(x1, y1, x2, y2, title, flags)#0
-  byte w
-
-  if x2 < 0; x2 = x1 - x2; fin // Negative x2 == width
-  if y2 < 0; y2 = y1 - y2; fin // Negative y2 == height
-  w = x2 - x1 - 2
-  mxtTitle(x1, x2, y1, title, flags)
+def mxtRect(x, y, w, h)#0
+  w  = w - 2
+  conio:gotoxy(x + 1, y)
   putc(27) // Turn MouseText on
-  for y1 = y1 + 1 to y2 - 1
-    conio:gotoxy(x1, y1)
-    ^txtMask = INVERSE
-    putc('_')
-    ^txtMask = NORMAL
-    conio:putchars(w, ' ')
-    ^txtMask = INVERSE
-    putc('_')
-    ^txtMask = NORMAL
-    putc(' ')
-  next
-  conio:gotoxy(x1, y2)
-  ^txtMask = INVERSE
-  putc('T')
-  ^txtMask = NORMAL
   conio:putchars(w, '_')
-  ^txtMask = INVERSE
-  putc('_')
-  ^txtMask = NORMAL
-  putc(' ')
-  conio:gotoxy(x1 + 1, y2 + 1) // Drop shadow
-  ^txtMask = NORMAL
-  conio:putchars(x2 - x1, ' ')
-  putc(24) // Turn MouseText off
-end
-
-def mxtRect(x1, y1, x2, y2)
-  byte w
-  if x2 < 0; x2 = x1 - x2; fin // Negative x2 == width
-  if y2 < 0; y2 = y1 - y2; fin // Negative y2 == height
-  w = x2 - x1 - 2
-  conio:gotoxy(x1, y1)
-  putc(27) // Turn MouseText on
-  putc(' ')
-  conio:putchars(w, '_')
-  for y1 = y1 + 1 to y2 - 1
-    conio:gotoxy(x1, y1)
+  for y = y + 1 to y + h - 2
+    conio:gotoxy(x, y)
     ^txtMask = INVERSE
     putc('Z')
     ^txtMask = NORMAL
@@ -133,24 +75,134 @@ def mxtRect(x1, y1, x2, y2)
     ^txtMask = INVERSE
     putc('_')
   next
-  conio:gotoxy(x1, y2)
-  ^txtMask = NORMAL
-  putc(' ')
-  ^txtMask = INVERSE
+  conio:gotoxy(x + 1, y)
   conio:putchars(w, 'L')
   ^txtMask = NORMAL
-  putc(' ')
+  putc(24) // Turn MouseText off
+end
+
+def mxtButton(x, y, label)#0
+mxtRect(x - 1, y - 1, ^label+ 2, 3)
+conio:gotoxy(x, y); puts(label)
+end
+
+def mxtPanel(x, y, w, h, title, flags)#0
+  byte x2, y2
+
+  mxtRect(x, y, w, h)
+  ^txtMask = INVERSE
+  conio:gotoxy(x + 1, y); puts(title)
+  putc(27) // Turn MouseText on
+  if flags & VSCROLL
+    x2 = x + w - 2
+    ^txtMask = NORMAL
+    conio:gotoxy(x2 + 1, y); putc('_')
+    ^txtMask = INVERSE
+    conio:gotoxy(x2, y + 1);  puts("ZR")
+    for y2 = y + 2 to y + h - 3
+      conio:gotoxy(x2, y2); puts("ZZ")
+    next
+    conio:gotoxy(x2, y2); puts("ZQ")
+    conio:gotoxy(x2 + 1, y2 + 1); putc('L')
+  fin
+  if flags & HSCROLL
+    conio:gotoxy(x, y + h - 1)
+    puts("ZO"); conio:putchars(w - 4, '\\'); putc('P')
+    if flags & VSCROLL; putc(255); fin
+  fin
+  ^txtMask = NORMAL
+  putc(24) // Turn MouseText off
+end
+
+def mxtMenu(items)#0
+ conio:gotoxy(0, 0)
+  ^txtMask = INVERSE
+  while *items
+    putc(' ')
+    puts(*items)
+    putc(' ')
+    items = items + 2
+  loop
+  conio:clear(cleol)
+  ^txtMask = NORMAL
+end
+
+def mxtTitle(x, y, w, title, flags)#0
+  byte w
+
+  conio:gotoxy(x, y)
+  if title
+    if flags & TOPLEVEL
+      ^txtMask = INVERSE
+      if flags & ACTIVE
+        putc(' ')
+        if flags & CLOSEBOX
+          putc(27) // Turn MouseText on
+          putc('^')
+          putc(24) // Turn MouseText off
+        else
+          putc(' ')
+        fin
+        conio:putchars(w - 2, ' ')
+      else
+        putc(' ')
+        putc(27) // Turn MouseText on
+        putc(flags & CLOSEBOX ?? '^' :: ' ')
+        conio:putchars(w - 3, '\\')
+        putc(24) // Turn MouseText off
+        putc(' ')
+        ^txtMask = NORMAL
+      fin
+      conio:gotoxy(x + (w - ^title) / 2, y)
+    elsif flags & DROPDOWN
+      conio:gotoxy(x, y)
+    else
+      conio:putchars(w, '_')
+      conio:gotoxy(x, y)
+      ^txtMask = INVERSE
+    fin
+    puts(title)
+    ^txtMask = NORMAL
+  else
+    conio:putchars(w, '_')
+  fin
+end
+
+def mxtFrame(x, y, w, h, title, flags)#0
+  mxtTitle(x, y, w - 1, title, flags)
+  w = w - 2
+  putc(27) // Turn MouseText on
+  ^txtMask = INVERSE
+  for y = y + 1 to y + h - 1
+    conio:gotoxy(x, y)
+    putc('_')
+    ^txtMask = NORMAL
+    conio:putchars(w, ' ')
+    ^txtMask = INVERSE
+    putc('_')
+  next
+  conio:gotoxy(x, y)
+  ^txtMask = INVERSE
+  putc('T')
+  ^txtMask = NORMAL
+  conio:putchars(w, '_')
+  ^txtMask = INVERSE
+  putc('_')
+  ^txtMask = NORMAL
+  conio:gotoxy(x + 1, y + 1) // Drop shadow
+  conio:putchars(w + 1, ' ')
   putc(24) // Turn MouseText off
 end
 
 mxtInit
-mxtFrame(1, 0, -10, -9, "File", DROPDOWN)
-putc(27)
+mxtMenu(@defItems)
+mxtFrame(1, 0, 10, 9, "File", DROPDOWN)
+putc(27) // Turn MouseText on
 conio:gotoxy(2, 1); puts("New")
 ^txtMask = INVERSE
 conio:gotoxy(2, 2); conio:putchars(7, 'S')
 ^txtMask = NORMAL
-conio:gotoxy(2, 3); puts("Load")
+conio:gotoxy(2, 3); puts("Load...")
 ^txtMask = INVERSE
 conio:gotoxy(2, 4); conio:putchars(7, 'S')
 ^txtMask = NORMAL
@@ -160,12 +212,14 @@ conio:gotoxy(2, 6); puts("Save...")
 conio:gotoxy(2, 7); conio:putchars(7, 'S')
 ^txtMask = NORMAL
 conio:gotoxy(2, 8); puts("Exit")
-mxtFrame(55, 6, -20, -10, "GoodBye", TOPLEVEL | INACTIVE)
-mxtFrame(15, 6, -20, -10, "Hello", TOPLEVEL | ACTIVE)
-mxtRect(17, 10, -6, -2)
-conio:gotoxy(18, 11); puts("Okay")
-mxtRect(23, 10, -8, -2)
-conio:gotoxy(24, 11); puts("Cancel")
+putc(24) // Turn MouseText off
+
+mxtFrame(15, 6, 20, 10, "Hello", TOPLEVEL | ACTIVE | CLOSEBOX)
+mxtPanel(16, 8, 17, 5, "Info", VSCROLL)
+mxtButton(18, 14, "Okay")
+mxtButton(25, 14, "Cancel")
+mxtFrame(55, 6, 20, 10, "GoodBye", TOPLEVEL | INACTIVE | CLOSEBOX)
+mxtPanel(56, 8, 17, 8, "Help", HSCROLL | VSCROLL)
 ^txtMain
 mouse:clampMouse(0, 79, 0, 23)
 mouse:setMouse(MOVE_INT_ENABLE|BUTTON_INT_ENABLE|MOUSE_ENABLE)
