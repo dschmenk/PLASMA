@@ -66,14 +66,14 @@ predef musicPlay(track, rept)#0
 predef musicStop#0
 predef spkrSequence(yield, func)#0
 predef a2spkrTone(pitch, duration)#0
-predef a2spkrPWM(sample, speed, len)#0
+predef a2spkrPCM(samples, pagecnt)#0
 predef a2keypressed
 //
 // Static sequencer values
 //
 export word musicSequence = @spkrSequence
-export word spkrTone      = @a2spkrTone
-export word spkrPWM       = @a2spkrPWM
+export word tonePlay      = @a2spkrTone
+export word pcmPlay       = @a2spkrPCM
 word        keypressed    = @a2keypressed
 
 word instr[] // Overlay with other variables
@@ -315,42 +315,45 @@ TONEXIT PLP
         INX
         RTS
 end
-asm a2spkrPWM(sample, speed, len)#0
-        STX     ESP
-        LDY     ESTKH,X
+asm a2spkrPCM(samples, pagecnt)#0
+PWM_DIV =       3
+PWM_DLY =       $100/PWM_DIV
         LDA     ESTKL,X
-        BEQ     +
-        INY
-+       STY     DSTH
-        STA     DSTL
-        LDA     ESTKL+2,X
+        STA     TMP
+        LDA     ESTKL+1,X
         STA     SRCL
-        LDA     ESTKH+2,X
+        LDA     ESTKH+1,X
         STA     SRCH
-        LDY     ESTKL+1,X
-        INY
-        STY     TMPL
-        LDY     #$00
         PHP
         SEI
--       LDA     (SRC),Y
-        SEC
---      LDX     TMPL
----     DEX
-        BNE     ---
-        SBC     #$01
-        BCS     --
-        BIT     $C030
-        INY
-        BNE     +
+        LDY     #$00
+PWM_OUT LDA     (SRC),Y     ; 5
+        STA     $C030       ; 4
+        LSR                 ; 2
+        LSR                 ; 2
+        LSR                 ; 2
+        ;LSR                 ; 2
+                            ; 17
+end
+asm pwm_on
+        STA     ON_BR+1     ; 4
+ON_BR   BNE     OFF_BR      ; 3
+        !FILL   31, $EA     ; 15 * 2 NOPs
+        EOR     #$1F        ; 2
+        STA     $C030       ; 4
+                            ; 43
+end
+asm pwm_off
+        STA     OFF_BR+1    ; 4
+OFF_BR  BNE     ON_BR       ; 3
+        !FILL   31, $EA     ; 15 * 2 NOPs
+        INY                 ; 2
+        BNE     PWM_OUT     ; 3
+                            ; 12
         INC     SRCH
-+       DEC     DSTL
-        BNE     -
-        DEC     DSTH
-        BNE     -
-        PLP
-        LDX     ESP
-        INX
+        DEC     TMP
+        BNE     PWM_OUT
+PCMEX   PLP
         INX
         INX
         RTS
@@ -389,12 +392,12 @@ def a3spkrTone(pitch, duration)#0
     a2spkrTone(pitch, duration)
     ^ENV_REG = env
 end
-def a3spkrPWM(sample, speed, len)#0
+def a3spkrPCM(samples, pagecnt)#0
     byte env
 
     env = ^ENV_REG
     ^ENV_REG = env | $C0
-    a2spkrPWM(sample, speed, len)
+    a2spkrPCM(samples, pagecnt)
     ^ENV_REG = env
 end
 //
@@ -736,7 +739,7 @@ def spkrSequence(yield, func)#0
                 // Percussion event
                 //
                 if seqEvent->perchanvol
-                    //spkrPWM($D000, 0, 64) // Play some random sample as percussion
+                    //pcmPlay($D000, 0, 64) // Play some random sample as percussion
                 else
                     if seqRepeat
                         musicPlay(seqTrack, TRUE)
@@ -755,7 +758,7 @@ def spkrSequence(yield, func)#0
         if numNotes > 1
             for i = 0 to MAX_SPKR_NOTES-1
                 if notes1[i]
-                    spkrTone(periods1[i], arpeggioDuration[numNotes])#0
+                    tonePlay(periods1[i], arpeggioDuration[numNotes])#0
                 fin
             next
             seqTime++
@@ -769,7 +772,7 @@ def spkrSequence(yield, func)#0
             next
             duration = eventTime - seqTime
             seqTime  = duration + seqTime
-            spkrTone(period, DUR16TH * duration)#0
+            tonePlay(period, DUR16TH * duration)#0
         fin
         if yieldTime <= seqTime; func()#0; yieldTime = seqTime + yield; fin
     until keypressed()
@@ -788,7 +791,7 @@ def noSequence(yield, func)#0
     repeat
         seqTime++
         if seqTime < 0; seqTime = 1; fin // Capture wrap-around
-        spkrTone(0, DUR16TH) // Waste 16th of a second playing silence
+        tonePlay(0, DUR16TH) // Waste 16th of a second playing silence
         if keypressed(); return; fin
         if yield == seqTime; func()#0; seqTime = 0; fin
     until FALSE
@@ -868,8 +871,8 @@ end
 
 when MACHID & MACHID_MODEL
     is MACHID_III
-        spkrTone   = @a3spkrTone
-        spkrPWM    = @a3spkrPWM
+        tonePlay   = @a3spkrTone
+        pcmPlay    = @a3spkrPCM
         keypressed = @a3keypressed
         break
     is MACHID_I
@@ -896,6 +899,11 @@ if mbSlot < 0
         spkrOctave0[instr] = mbOctave0[instr]/NOTEDIV
     next
 fin
+//
+// Fixups
+//
+pwm_on:1  = @pwm_on+4
+pwm_off:1 = @pwm_off+4
 //
 // Keep module in memory
 //
