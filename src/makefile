@@ -48,7 +48,7 @@ FPSTR      = rel/FPSTR\#FE1000
 FPU        = rel/FPU\#FE1000
 SNDSEQ     = rel/apple/SNDSEQ\#FE1000
 PLAYSEQ    = rel/apple/PLAYSEQ\#FE1000
-PLAYWAV    = rel/apple/PLAYWAV\#FE1000
+PLAYPCM    = rel/apple/PLAYPCM\#FE1000
 SANITY     = rel/SANITY\#FE1000
 RPNCALC    = rel/RPNCALC\#FE1000
 LZ4        = rel/LZ4\#FE1000
@@ -129,7 +129,7 @@ $(HTTPD) $(TFTPD) $(ROGUE) $(ROGUEMAP) $(ROGUECOMBAT) $(SFM) $(SFMSPRT) $(GRAFIX
 $(HGRTILE) $(HGRFONT) $(HGRSPRITE) $(HGRLIB) $(TILETEST) $(HGRTEST) $(GRLIB) $(DGRLIB) $(VBLANK) \
 $(GRTEST) $(DGRTEST) $(HGRTEST) $(FILEIO_APL) $(CONIO_APL) $(JOYBUZZ) $(PORTIO) $(SPIPORT) \
 $(SDFAT) $(FATCAT) $(FATGET) $(FATPUT) $(FATWDSK) $(FATRDSK) $(INT32) $(INT32TEST) $(SANE) $(FPSTR) $(FPU) $(SANITY) \
-$(LZ4) $(LZ4CAT) $(RPNCALC) $(SNDSEQ) $(PLAYSEQ) $(PLAYWAV) $(CONIOTEST)
+$(LZ4) $(LZ4CAT) $(RPNCALC) $(SNDSEQ) $(PLAYSEQ) $(PLAYPCM) $(CONIOTEST)
 
 	-rm vmsrc/plvmzp.inc
 
@@ -443,9 +443,9 @@ $(PLAYSEQ): samplesrc/playseq.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AMOW samplesrc/playseq.pla
 	acme --setpc 4094 -o $(PLAYSEQ) samplesrc/playseq.a
 
-$(PLAYWAV): samplesrc/playwav.pla $(PLVM02) $(PLASM)
-	./$(PLASM) -AMOW samplesrc/playwav.pla
-	acme --setpc 4094 -o $(PLAYWAV) samplesrc/playwav.a
+$(PLAYPCM): samplesrc/playpcm.pla $(PLVM02) $(PLASM)
+	./$(PLASM) -AMOW samplesrc/playpcm.pla
+	acme --setpc 4094 -o $(PLAYPCM) samplesrc/playpcm.a
 
 $(GRAFIX): libsrc/apple/grafix.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AMOW libsrc/apple/grafix.pla

@@ -27,6 +27,15 @@ byte = $09, $0A, $0C, $0D, $0F, $10, $12, $13, $15, $17, $19, $1B, $1D, $1F, $21
 byte = $25, $27, $2A, $2C, $2E, $31, $33, $36, $38, $3B, $3E, $40, $43, $46, $49, $4C
 byte = $4F, $51, $54, $57, $5A, $5D, $60, $63, $67, $6A, $6D, $70, $73, $76, $79, $7C
 
+def wavtopcm4(samples, rep, len)#0
+    var i
+
+    rep = (rep - 1) << 4
+    for i = 0 to len-1
+        samples->[i] = rep | (samples->[i] >> 4)
+    next
+end
+
 arg = argNext(argFirst)
 if ^arg
     ref = fileio:open(arg)
@@ -35,23 +44,32 @@ if ^arg
         len = fileio:read(ref, pcm, heapavail)
         fileio:close(ref)
         heapalloc(len)
-        pcm = pcm + 44
-        len = len - 44
+        if pcm[0] == 'R' and pcm[1] == 'I' and pcm[2] == 'F'
+            pcm = pcm + 44
+            len = len - 44
+            wavtopcm4(pcm, 1, len)
+        fin
         pcmPlay(pcm, len / 256)#0
     fin
 else
-    while ^$C000 < 128
-        pcmPlay(@sinewave, 1)#0
+    wavtopcm4(@sinewave, 16, 256)
+    memcpy(heapmark, @sinewave, 256)
+    memcpy(heapmark + 256, @sinewave, 256)
+    memcpy(heapmark + 512, @sinewave, 256)
+    memcpy(heapmark + 768, @sinewave, 256)
+    memcpy(heapmark + 1024, heapmark, 1024)
+     while ^$C000 < 128
+        pcmPlay(heapmark, 8)#0
     loop
     getc
-    memset(@sinewave, $10F0, 256)
+    memset(heapmark, $FFF0, 1024)
     while ^$C000 < 128
-        pcmPlay(@sinewave, 1)#0
+        pcmPlay(heapmark, 4)#0
     loop
     getc
-    memset(@sinewave, $8080, 256)
+    memset(heapmark, $F8F8, 1024)
     while ^$C000 < 128
-        pcmPlay(@sinewave, 1)#0
+        pcmPlay(heapmark, 4)#0
     loop
     getc
 fin

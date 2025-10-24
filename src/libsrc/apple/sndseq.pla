@@ -315,45 +315,47 @@ TONEXIT PLP
         INX
         RTS
 end
-asm a2spkrPCM(samples, pagecnt)#0
-PWM_DIV =       3
-PWM_DLY =       $100/PWM_DIV
+asm a2spkrPCM(rlepcm, pgcnt)#0
         LDA     ESTKL,X
         STA     TMP
         LDA     ESTKL+1,X
         STA     SRCL
         LDA     ESTKH+1,X
         STA     SRCH
+        STX     ESP
         PHP
         SEI
         LDY     #$00
 PWM_OUT LDA     (SRC),Y     ; 5
-        STA     $C030       ; 4
         LSR                 ; 2
         LSR                 ; 2
         LSR                 ; 2
-        ;LSR                 ; 2
-                            ; 17
+        LSR                 ; 2
+        TAX                 ; 2
+PWM_REP BIT     $C030       ; 4
+        LDA     (SRC),Y     ; 5
+        AND     #$0F        ; 2
 end
 asm pwm_on
         STA     ON_BR+1     ; 4
 ON_BR   BNE     OFF_BR      ; 3
-        !FILL   31, $EA     ; 15 * 2 NOPs
-        EOR     #$1F        ; 2
-        STA     $C030       ; 4
-                            ; 43
+        !FILL   15, $EA     ; 15 * 2 NOPs
+        BIT     $C030       ; 4
+        EOR     #$0F        ; 2
 end
 asm pwm_off
         STA     OFF_BR+1    ; 4
 OFF_BR  BNE     ON_BR       ; 3
-        !FILL   31, $EA     ; 15 * 2 NOPs
+        !FILL   15, $EA     ; 15 * 2 NOPs
+        DEX                 ; 2
+        BPL     PWM_REP     ; 3
         INY                 ; 2
         BNE     PWM_OUT     ; 3
-                            ; 12
         INC     SRCH
         DEC     TMP
         BNE     PWM_OUT
 PCMEX   PLP
+        LDX     ESP
         INX
         INX
         RTS
