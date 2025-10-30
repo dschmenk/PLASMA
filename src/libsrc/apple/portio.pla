@@ -10,27 +10,114 @@ const ANN3   = $C05E
 const OFF    = 0
 const ON     = 1
 const STROBE = $C040
-const FLAG0  = $C060
-const FLAG1  = $C061
-const FLAG2  = $C062
-const FLAG3  = $C063
+const FLAG0  = $C061
+const FLAG1  = $C062
+const FLAG2  = $C063
+const FLAG3  = $C060
 const PREAD  = $FB1E
 const WAIT   = $FCA8
+asm asmdefs
+        !SOURCE    "vmsrc/plvmzp.inc"
+ANN0    =       $C058
+ANN1    =       $C05A
+ANN2    =       $C05C
+ANN3    =       $C05E
+STROBE  =       $C040
+FLAG0   =       $C061
+FLAG1   =       $C062
+FLAG2   =       $C063
+FLAG3   =       $C060
+end
 
-export def digitalRead(pin)
-  return FLAG0[pin&3] > 127
+//export def digitalRead(pin)#1
+//  return FLAG3[(pin+1)&3] > 127
+export asm digitalRead(pin)#1
+        LDA     ESTKL,X
+        CLC
+        ADC     #$01
+        AND     #$03
+        TAY
+        LDA     FLAG3,Y
+        BPL     +
+        LDY     #$FF
+        STY     ESTKL,X
+        STY     ESTKH,X
+        RTS
++       LDY     #$00
+        STY     ESTKL,X
+        STY     ESTKH,X
+        RTS
+
 end
-export def portRead
-  return (^FLAG0>>7)&1|(^FLAG1>>6)&2|(^FLAG2>>5)&4|(^FLAG3>>4)&8
+
+//export def portRead
+//  return (^FLAG0>>7)&1|(^FLAG1>>6)&2|(^FLAG2>>5)&4|(^FLAG3>>4)&8
+export asm portRead#1
+        INX
+        LDA     #$00
+        STA     ESTKH,X
+        BIT     FLAG0
+        BPL     +
+        ORA     #$01
++       BIT     FLAG1
+        BPL     +
+        ORA     #$02
++       BIT     FLAG2
+        BPL     +
+        ORA     #$04
++       BIT     FLAG3
+        BPL     +
+        ORA     #$08
++       STA     ESTKL,Y
+        RTS
 end
-export def digitalWrite(pin, val)#0
-  ANN0[((pin&3)<<1)+(val&1)]
+//export def digitalWrite(pin, val)#0
+//  ANN0[((pin&3)<<1)+(val&1)]
+export asm digitalWrite(pin, val)#0
+        LSR     ESTKL,X
+        LDA     ESTKL+1,X
+        AND     #$03
+        ROL
+        TAY
+        LDA     ANN0,Y
+        INX
+        INX
+        RTS
 end
-export def portWrite(val)#0
-  ANN0[val&1]
-  ANN1[(val>>1)&1]
-  ANN2[(val>>2)&1]
-  ANN3[(val>>3)&1]
+//export def portWrite(val)#0
+//  ANN0[val&1]
+//  ANN1[(val>>1)&1]
+//  ANN2[(val>>2)&1]
+//  ANN3[(val>>3)&1]
+export asm portWrite(val)#0
+        LDY     #$00
+        LSR     ESTKL,X
+        BCC     +
+        INY
++       LDA     ANN0,Y
+        LDY     #$00
+        LSR     ESTKL,X
+        BCC     +
+        INY
++       LDA     ANN1,Y
+        LDY     #$00
+        LSR     ESTKL,X
+        BCC     +
+        INY
++       LDA     ANN2,Y
+        LDY     #$00
+        LSR     ESTKL,X
+        BCC     +
+        INY
++       LDA     ANN3,Y
+        INX
+        RTS
+end
+//export def strobe#0
+//  ^STROBE
+export asm strobe#0
+        LDA     STROBE
+        RTS
 end
 export def analogRead(pin)
   return call(PREAD,0,pin&3,0,0).2
