@@ -106,7 +106,7 @@ Binary numbers can be entered when preceded by `%`
 
 ## Debugging vs Performance
 
-PLFORTH defaults to compiling using ITC (Indirect Threaded Code). This supports a list of inspection and debugging features while developing programs and scripts. However, the compiler can easily switch to PBC (PLASMA Byte Code) to greatly improve performance, but most of the debugging tools are lost. ITC compiled words and PBC compiled words can be intermingled and call each other seemlessly. PLASMA Byte Code is a direct match to many low-level FORTH constructs.
+PLFORTH defaults to compiling using PLASMA byte code (PBC) to greatly improve performance, but most of the debugging tools are lost. However, the compiler can easily switch to ITC (Indirect Threaded Code). ITC can be set as the initial mode by passing a `-D` flag on the command line. This supports a list of inspection and debugging features while developing programs and scripts. ITC compiled words and PBC compiled words can be intermingled and call each other seemlessly. PLASMA Byte Code is a direct match to many low-level FORTH constructs.
 
 ## Graphics
 Due to the way the Apple II implements Hi-Res, Lo-Res and Double Lo-Res graphics, a stub loader is required to reserve the pages used.
