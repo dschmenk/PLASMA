@@ -135,7 +135,7 @@ There are a few useful scripts located in the `scripts` directory. By far the mo
 
 ## Command line options
 
-`-F`: Fast flag (like `PCB` as first command)
+`-D`: Debug flag (like `ITC` as first command)
 
 `-T`: Trace flag (like `TRON` as first command)
 
