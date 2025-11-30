@@ -69,6 +69,7 @@ HGRSPRITE  = rel/apple/HGRSPRITE\#FE1000
 HGRTILE    = rel/apple/HGRTILE\#FE1000
 HGRFONT    = rel/apple/HGRFONT\#FE1000
 LINES      = rel/LINES\#FE1000
+SINCOS     = rel/SINCOS\#FE1000
 GRAFIX     = rel/apple/GRAFIX\#FE1000
 SFM        = rel/apple/SFM\#FE1000
 SFMSPRT    = rel/apple/SFMSPRT\#FE1000
@@ -125,7 +126,7 @@ $(CMD) $(CMDJIT) $(JIT) $(JIT16) $(JITUNE) $(SOSCMD) $(SOSCMDJIT) $(PLASMAPLASM)
 $(HRFORTH) $(HR2FORTH) $(TX2FORTH) $(SEXPR) $(SMATH) $(DRAWL) $(ZIPCHIP) $(MATCHFILES) $(ARGS) $(MEMMGR) \
 $(MEMTEST) $(FIBER) $(FIBERTEST) $(LONGJMP) $(ED) $(MON) $(COPY) $(DEL) $(REN) $(CAT) $(NEWDIR) $(TYPE) \
 $(INITSLOT) $(SOS) $(ROD) $(SIEVE) $(PRIMEGAP) $(MOUSE) $(UTHERNET2) $(UTHERNET) $(ETHERIP) $(INET) $(DHCP) \
-$(HTTPD) $(TFTPD) $(ROGUE) $(ROGUEMAP) $(ROGUECOMBAT) $(SFM) $(SFMSPRT) $(GRAFIX) $(GFXDEMO) $(LINES) \
+$(HTTPD) $(TFTPD) $(ROGUE) $(ROGUEMAP) $(ROGUECOMBAT) $(SFM) $(SFMSPRT) $(GRAFIX) $(GFXDEMO) $(LINES) $(SINCOS) \
 $(HGRTILE) $(HGRFONT) $(HGRSPRITE) $(HGRLIB) $(TILETEST) $(HGRTEST) $(GRLIB) $(DGRLIB) $(VBLANK) \
 $(GRTEST) $(DGRTEST) $(HGRTEST) $(FILEIO_APL) $(CONIO_APL) $(JOYBUZZ) $(PORTIO) $(SPIPORT) \
 $(SDFAT) $(FATCAT) $(FATGET) $(FATPUT) $(FATWDSK) $(FATRDSK) $(INT32) $(INT32TEST) $(SANE) $(FPSTR) $(FPU) $(SANITY) \
@@ -305,6 +306,10 @@ $(FIBER): libsrc/fiber.pla $(PLVM02) $(PLASM)
 $(LINES): libsrc/lines.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AMOW libsrc/lines.pla
 	acme --setpc 4094 -o $(LINES) libsrc/lines.a
+
+$(SINCOS): libsrc/sincos.pla $(PLVM02) $(PLASM)
+	./$(PLASM) -AMOW libsrc/sincos.pla
+	acme --setpc 4094 -o $(SINCOS) libsrc/sincos.a
 
 $(FIBERTEST): samplesrc/fibertest.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AMOW samplesrc/fibertest.pla
