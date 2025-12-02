@@ -8,24 +8,18 @@ LCBNK1  =       $08
 JITCOMP =       $03E2
 JITCODE =       $03E4
 !SOURCE "vmsrc/plvmzp.inc"
-        JMP     CMDMOVE
-_CMDBEGIN   =   *
-!PSEUDOPC   $1000 {
-!SOURCE "vmsrc/apple/cmdjit.a"
-_CMDEND     =   *
-}
 ;*
 ;* MOVE CMD DOWN TO $1000-$2000
 ;*
-CMDMOVE LDA     #<_CMDBEGIN
+        LDA     #<_CMDBEGIN
         STA     SRCL
         LDA     #>_CMDBEGIN
         STA     SRCH
         LDY     #$00
         STY     DSTL
-        LDX     #$10
+        LDX     #$0C
         STX     DSTH
-        INX
+        LDX     #$11
 -       LDA     (SRC),Y
         STA     (DST),Y
         INY
@@ -38,16 +32,22 @@ CMDMOVE LDA     #<_CMDBEGIN
 ; INIT VM ENVIRONMENT STACK POINTERS
 ;
         STY     $01FF
-        STY     PPL
-        STY     IFPL        ; INIT FRAME POINTER = $AF00 (4K FOR JIT CODE)
-        STY     JITCODE
+        STY     JITCODE     ; INIT JIT CODE TO $AF00
         STY     JITCOMP
         STY     JITCOMP+1
         LDA     #$AF
+        STA     JITCODE+1
+        STY     PPL
+        STY     IFPL        ; INIT FRAME POINTER = $A800 (4K FOR JIT CODE 768 BYTES SYM)
+        LDA     #$A8        ; FRAME POINTER BELOW JIT CODE AND SYM TABLE
         STA     PPH
         STA     IFPH
-        STA     JITCODE+1
         LDX     #$FE        ; INIT STACK POINTER (YES, $FE. SEE GETS)
         TXS
         LDX     #ESTKSZ/2   ; INIT EVAL STACK INDEX
-        JMP     $1000
+        JMP     $0C00
+_CMDBEGIN   =   *
+!PSEUDOPC   $0C00 {
+!SOURCE "vmsrc/apple/cmdjit.a"
+_CMDEND     =   *
+}

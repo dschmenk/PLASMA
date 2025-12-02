@@ -7,7 +7,7 @@ LCBNK2  =       $00
 LCBNK1  =       $08
     !SOURCE "vmsrc/plvmzp.inc"
 ;*
-;* MOVE CMD DOWN TO $1000-$2000
+;* MOVE CMD DOWN TO $0C00-$2000
 ;*
         LDA     #<_CMDBEGIN
         STA     SRCL
@@ -15,8 +15,9 @@ LCBNK1  =       $08
         STA     SRCH
         LDY     #$00
         STY     DSTL
-        LDX     #$10
+        LDX     #$0C
         STX     DSTH
+        LDX     #$10
 -       LDA     (SRC),Y
         STA     (DST),Y
         INY
@@ -30,14 +31,14 @@ LCBNK1  =       $08
 ;
         STY     $01FF
         STY     IFPL        ; INIT FRAME POINTER = $BF00
-        LDA     #$BF
+        LDA     #$B8
         STA     IFPH
         LDX     #$FE        ; INIT STACK POINTER (YES, $FE. SEE GETS)
         TXS
         LDX     #ESTKSZ/2   ; INIT EVAL STACK INDEX
-        JMP     $1000
+        JMP     $0C00
 _CMDBEGIN = *
-        !PSEUDOPC   $1000 {
+        !PSEUDOPC   $0C00 {
         !SOURCE "vmsrc/apple/cmd.a"
 _CMDEND =   *
 }

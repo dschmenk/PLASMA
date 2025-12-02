@@ -13,24 +13,23 @@ byte pen
 var clipLeft, clipRight, clipTop, clipBottom
 
 def clipCode(x, y)#1
-    byte code
+    byte xcode, ycode
 
-    code = 0
     if x < clipLeft
-        code = CLIP_LEFT
+        xcode = CLIP_LEFT
     elsif x > clipRight
-        code = CLIP_RIGHT
+        xcode = CLIP_RIGHT
+    else
+        xcode = 0
     fin
     if y < clipTop
-        code = code | CLIP_TOP
+        ycode = CLIP_TOP
     elsif y > clipBottom
-        code = code | CLIP_BOTTOM
+        ycode = CLIP_BOTTOM
+    else
+        ycode = 0
     fin
-    return code
-end
-
-def abs(val)#1
-    return val < 0 ?? -val :: val
+    return xcode | ycode
 end
 
 def lerp(a1, b1, a2, b2, n)#1
@@ -45,7 +44,7 @@ def lerp(a1, b1, a2, b2, n)#1
     return i32[0] + b1
 end
 
-def clipLine(x1, y1, x2, y2)#0
+export def clipLine(x1, y1, x2, y2)#0
     byte outcode1, outcode2
 
     outcode1 = clipCode(x1, y1)
@@ -80,36 +79,32 @@ def clipLine(x1, y1, x2, y2)#0
             x2 = lerp(y1, x1, y2, x2, clipBottom)
             y2 = clipBottom
         fin
-        outcode1 = clipCode(x1, y1)
-        outcode2 = clipCode(x2, y2)
-        if outcode1 & outcode2; return; fin // Clipped away
+        if clipCode(x1, y1) | clipCode(x2, y2); return; fin // Clipped away
     fin
     linespans(x1, y1, x2, y2)
 end
 
 export def clipRect(left, top, right, bottom)#0
-    clipLeft = left
-    clipTop  = top
-    clipLeft = left
+    clipLeft   = left
+    clipTop    = top
+    clipRight  = right
     clipBottom = bottom
 end
 
+export def fillRect(left, top, right, bottom)#0
+    var y
+
+    for y = top to bottom
+        clipLine(left, y, right, y)
+    next
+end
+
 export def initTurtle(width, height)#0
-    cliprect(0, 0, width - 1, height - 1)
+    clipRect(0, 0, width - 1, height - 1)
     turtleX      = width / 2
     turtleY      = height / 2
     turtleAngle  = 0
     pen          = 1
-end
-
-export def turnLeft(angle)#0
-    turtleAngle = turtleAngle - angle
-    while turtleAngle < 0; turtleAngle = turtleAngle + 360; loop
-end
-
-export def turnRight(angle)#0
-    turtleAngle = turtleAngle + angle
-    while turtleAngle >= 360; turtleAngle = turtleAngle - 360; loop
 end
 
 export def turnTo(angle)#0
@@ -118,16 +113,12 @@ export def turnTo(angle)#0
     while turtleAngle < 0; turtleAngle = turtleAngle + 360; loop
 end
 
-export def moveForward(dist)#0
-    var x, y
+export def turnLeft(angle)#0
+    turnTo(turtleAngle - angle)
+end
 
-    x = turtleX + mulcos(dist, turtleAngle)
-    y = turtleY + mulsin(dist, turtleAngle)
-    if pen
-        clipLine(turtleX, turtleY, x, y)
-    fin
-    turtleX = x
-    turtleY = y
+export def turnRight(angle)#0
+    turnTo(turtleAngle + angle)
 end
 
 export def moveTo(x, y)#0
@@ -136,6 +127,14 @@ export def moveTo(x, y)#0
     fin
     turtleX = x
     turtleY = y
+end
+
+export def moveForward(dist)#0
+    moveTo(turtleX + mulcos(dist, turtleAngle), turtleY + mulsin(dist, turtleAngle))
+end
+
+export def moveBackward(dist)#0
+    moveTo(turtleX - mulcos(dist, turtleAngle), turtleY - mulsin(dist, turtleAngle))
 end
 
 export def penUp#0
