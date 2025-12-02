@@ -9,7 +9,7 @@ JITCOMP =       $03E2
 JITCODE =       $03E4
 !SOURCE "vmsrc/plvmzp.inc"
 ;*
-;* MOVE CMD DOWN TO $1000-$2000
+;* MOVE CMD DOWN TO $0C00-$1C00
 ;*
         LDA     #<_CMDBEGIN
         STA     SRCL
@@ -26,7 +26,7 @@ JITCODE =       $03E4
         BNE     -
         INC     SRCH
         INC     DSTH
-        DEX                 ; STOP WHEN DST=$2000 REACHED
+        DEX                 ; STOP WHEN DST=$1C00 REACHED
         BNE     -
 ;
 ; INIT VM ENVIRONMENT STACK POINTERS
