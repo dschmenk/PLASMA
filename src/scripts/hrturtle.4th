@@ -21,7 +21,7 @@ SRC" TURTLE.4TH"
 
 : SPIN
     361 0 DO
-        50 SQUARE
+        100 SQUARE
         I TURNTO
     10 +LOOP
 ;
