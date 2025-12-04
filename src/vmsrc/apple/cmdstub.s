@@ -6,17 +6,23 @@ LCRWEN  =       $C083
 LCBNK2  =       $00
 LCBNK1  =       $08
     !SOURCE "vmsrc/plvmzp.inc"
+        JMP     CMDMOVE
+_CMDBEGIN   =   *
+!PSEUDOPC   $0C00 {
+!SOURCE "vmsrc/apple/cmd.a"
+_CMDEND     =   *
+}
 ;*
-;* MOVE CMD DOWN TO $0C00-$2000
+;* MOVE CMD DOWN TO $0C00-$1C00
 ;*
-        LDA     #<_CMDBEGIN
+CMDMOVE LDA     #<_CMDBEGIN
         STA     SRCL
         LDA     #>_CMDBEGIN
         STA     SRCH
         LDY     #$00
         STY     DSTL
-        LDX     #$0C
-        STX     DSTH
+        LDA     #$0C
+        STA     DSTH
         LDX     #$10
 -       LDA     (SRC),Y
         STA     (DST),Y
@@ -25,20 +31,15 @@ LCBNK1  =       $08
         INC     SRCH
         INC     DSTH
         DEX                 ; STOP WHEN DST=$2000 REACHED
-        BNE     -
+        BPL     -
 ;
 ; INIT VM ENVIRONMENT STACK POINTERS
 ;
         STY     $01FF
         STY     IFPL        ; INIT FRAME POINTER = $BF00
-        LDA     #$B8
+        LDA     #$BF
         STA     IFPH
         LDX     #$FE        ; INIT STACK POINTER (YES, $FE. SEE GETS)
         TXS
         LDX     #ESTKSZ/2   ; INIT EVAL STACK INDEX
         JMP     $0C00
-_CMDBEGIN = *
-        !PSEUDOPC   $0C00 {
-        !SOURCE "vmsrc/apple/cmd.a"
-_CMDEND =   *
-}
