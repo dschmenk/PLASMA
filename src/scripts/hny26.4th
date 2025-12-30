@@ -48,10 +48,10 @@ SRC" TURTLE.4TH"
   PENDOWN
   0 DO
     PENUP
-    I 5 / MOVE
+    I 2 / MOVE
     PENDOWN
     0 MOVE
-    36 TURN
+    108 TURN
   LOOP
 ;
 
