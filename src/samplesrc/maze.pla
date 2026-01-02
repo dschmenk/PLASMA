@@ -1,0 +1,394 @@
+include "inc/cmdsys.plh"
+include "inc/conio.plh"
+include "inc/args.plh"
+include "inc/hgrlib.plh"
+include "inc/hgrtile.plh"
+sysflags reshgr1 // Reserve HGR page 1
+
+const rndnum        = $4E // ZP location of RND
+const WALL_NONE     = 0
+const WALL_TOP      = 1
+const WALL_LEFT     = 2
+const DIR_UP        = 1
+const DIR_LEFT      = 2
+const DIR_DOWN      = 4
+const DIR_RIGHT     = 8
+const CELL_TRACED   = 16
+const CELL_SOLVED   = 32
+const MAZE_WIDTH    = 39
+const MAZE_HEIGHT   = 23
+const PLAYER        = 4*8
+const CRUMB         = 5*8
+
+byte mazeTileSet = $00, $00, $00, $00, $00, $00, $00, $00 // No walls
+byte             = $7F, $00, $00, $00, $00, $00, $00, $00 // Top wall
+byte             = $03, $03, $03, $03, $03, $03, $03, $03 // Left wall
+byte             = $7F, $03, $03, $03, $03, $03, $03, $03 // Top & Left walls
+byte             = $00, $00, $10, $54, $54, $54, $10, $00 // Player
+byte             = $00, $00, $00, $00, $08, $00, $00, $00 // Bread crumb
+
+word maze[] = $0400,$0480,$0500,$0580,$0600,$0680,$0700,$0780
+word        = $0428,$04A8,$0528,$05A8,$0628,$06A8,$0728,$07A8
+word        = $0450,$04D0,$0550,$05D0,$0650,$06D0,$0750,$07D0
+
+word arg, seed, moveCnt
+byte entry, exit, solved
+
+def cellSetFlags(x, y, flags)#0
+    maze.[y, x] = maze.[y, x] | flags
+end
+
+def cellClearFlags(x, y, flags)#0
+    maze.[y, x] = maze.[y, x] & ~flags
+end
+
+def branchUp(x, y)
+    byte flags
+
+    if y > 0
+        flags = maze.[y - 1, x]
+        if (flags & CELL_SOLVED) or !(flags & CELL_TRACED)
+            cellClearFlags(x, y, WALL_TOP)
+            tileDraw(x, y, @mazeTileSet + 8 * (maze.[y, x] & 3))
+            return TRUE
+        fin
+    fin
+    return FALSE
+end
+
+def branchLeft(x, y)
+    byte flags
+    
+    if x > 0
+        flags = maze.[y, x - 1]
+        if (flags & CELL_SOLVED) or !(flags & CELL_TRACED)
+            cellClearFlags(x, y, WALL_LEFT)
+            tileDraw(x, y, @mazeTileSet + 8 * (maze.[y, x] & 3))
+            return TRUE
+        fin
+    fin
+    return FALSE
+end
+
+def branchDown(x, y)
+    byte flags
+    
+    if y < MAZE_HEIGHT-1
+        flags = maze.[y + 1, x]
+        if (flags & CELL_SOLVED) or !(flags & CELL_TRACED)
+            cellClearFlags(x, y + 1, WALL_TOP)
+            tileDraw(x, y + 1, @mazeTileSet + 8 * (maze.[y + 1, x] & 3))
+            return TRUE
+        fin
+    fin
+    return FALSE
+end
+
+def branchRight(x, y)
+    byte flags
+    
+    if x < MAZE_WIDTH-1
+        flags = maze.[y, x + 1]
+        if (flags & CELL_SOLVED) or !(flags & CELL_TRACED)
+            cellClearFlags(x + 1, y, WALL_LEFT)
+            tileDraw(x + 1, y, @mazeTileSet + 8 * (maze.[y, x + 1] & 3))
+            return TRUE
+        fin
+    fin
+    return FALSE
+end
+
+def branchNew(x, y)
+    byte flags, dir, cnt
+
+    cnt = 0
+    dir = 1 << (conio:rnd() & 3)
+    repeat
+        when dir
+            is DIR_DOWN
+                if y < MAZE_HEIGHT-1
+                    flags = maze.[y + 1, x]
+                    if (flags & CELL_SOLVED) or !(flags & CELL_TRACED)
+                        return DIR_DOWN
+                    fin
+                fin
+                cnt++
+                //break
+            is DIR_RIGHT
+                if x < MAZE_WIDTH-1
+                    flags = maze.[y, x + 1]
+                    if (flags & CELL_SOLVED) or !(flags & CELL_TRACED)
+                        return DIR_RIGHT
+                    fin
+                fin
+                cnt++
+                //break
+            is DIR_UP
+                if y > 0
+                    flags = maze.[y - 1, x]
+                    if (flags & CELL_SOLVED) or !(flags & CELL_TRACED)
+                        return DIR_UP
+                    fin
+                fin
+                cnt++
+                //break
+            is DIR_LEFT
+                if x > 0
+                    flags = maze.[y, x - 1]
+                    if (flags & CELL_SOLVED) or !(flags & CELL_TRACED)
+                        return DIR_LEFT
+                    fin
+                fin
+                cnt++
+                //break
+        wend
+    until cnt > 3
+    return 0
+end
+
+def cellSolve(x, y)#0
+    byte flags, moveDir, searchCnt
+    word traceStart, traceEnd, traceBack
+
+    traceStart = heapmark
+    searchCnt  = 0
+    while !(maze.[y, x] & CELL_SOLVED)
+        if searchCnt == 0
+            cellSetFlags(x, y, CELL_TRACED)
+            traceEnd  = heapalloc(2)
+            *traceEnd = x | (y << 8)
+            moveDir   = 1 << (conio:rnd() & 3)
+        fin
+        //
+        // Look for a possible direction to move
+        //
+        when moveDir
+            is DIR_UP
+                if branchUp(x, y)
+                    searchCnt = 0
+                    y--
+                else
+                    searchCnt++
+                    moveDir = DIR_RIGHT
+                fin
+                break
+            is DIR_LEFT
+                if branchLeft(x, y)
+                    searchCnt = 0
+                    x--
+                else
+                    searchCnt++
+                    moveDir = DIR_DOWN
+                fin
+                break
+            is DIR_DOWN
+                if branchDown(x, y)
+                    searchCnt = 0
+                    y++
+                else
+                    searchCnt++
+                    moveDir = DIR_LEFT
+                fin
+                break
+            is DIR_RIGHT
+                if branchRight(x, y)
+                    searchCnt = 0
+                    x++
+                else
+                    searchCnt++
+                    moveDir = DIR_UP
+                fin
+                break
+            otherwise
+                //
+                // Shouldn't happen
+                //
+                heaprelease(traceStart)
+                return
+        wend
+        if searchCnt > 3
+            //
+            // Dead end - back up and try new branch
+            //
+            moveDir   = 0
+            traceBack = traceEnd + 2
+            repeat
+                traceBack = traceBack - 2
+                x = traceBack->0
+                y = traceBack->1
+                moveDir = branchNew(x, y)
+            until moveDir or traceBack == traceStart
+            if not moveDir
+                //
+                // Shouldn't happen
+                //
+                heaprelease(traceStart)
+                return
+            fin
+        fin
+    loop
+    //
+    // Mark all traced cells as solved
+    //
+    traceBack = traceEnd + 2
+    repeat
+        traceBack = traceBack - 2
+        cellSetFlags(traceBack->0, traceBack->1, CELL_SOLVED)
+    until traceBack == traceStart
+    heaprelease(traceStart)
+end
+
+def mazeGen#0
+    byte x, y
+
+    //cellSetFlags(MAZE_WIDTH-1, exit, CELL_SOLVED)
+    //cellSolve(0, entry)
+    cellSetFlags(0, entry, CELL_SOLVED)
+    cellSolve(MAZE_WIDTH-1, exit)
+    //for x = 0 to MAZE_WIDTH-1
+    for x = MAZE_WIDTH-1 downto 0
+        for y = 0 to MAZE_HEIGHT-1
+            if !(maze.[y, x] & CELL_SOLVED)
+                cellSolve(x, y)
+            fin
+        next
+    next
+    //
+    // Clear all flags used to generate
+    //
+    for x = 0 to MAZE_WIDTH-1
+        for y = 0 to MAZE_HEIGHT-1
+            cellClearFlags(x, y, CELL_SOLVED | CELL_TRACED)
+        next
+    next
+end
+
+def mazeInit#0
+    byte y
+
+    for y = 0 to MAZE_HEIGHT-1
+        memset(maze[y], $0303, MAZE_WIDTH)
+        maze.[y, MAZE_WIDTH] = WALL_LEFT
+    next
+    memset(maze[MAZE_HEIGHT], $0101, MAZE_WIDTH)
+    maze.[MAZE_HEIGHT, MAZE_WIDTH] = 0
+    entry = conio:rnd() % MAZE_HEIGHT
+    exit  = conio:rnd() % MAZE_HEIGHT
+    maze.[entry, 0]             = WALL_TOP
+    maze.[exit, MAZE_WIDTH]     = WALL_TOP
+    if exit < MAZE_HEIGHT
+        maze.[exit + 1, MAZE_WIDTH] = WALL_TOP|WALL_LEFT
+    else
+        maze.[exit + 1, MAZE_WIDTH] = WALL_TOP
+    fin
+end
+
+def moveUp(x, y)
+    return !(maze.[y, x] & WALL_TOP)
+end
+
+def moveLeft(x, y)
+    return !(maze.[y, x] & WALL_LEFT)
+end
+
+def moveDown(x, y)
+    return !(maze.[y + 1, x] & WALL_TOP)
+end
+
+def moveRight(x, y)
+    return !(maze.[y, x + 1] & WALL_LEFT)
+end
+
+def mazePlay
+    byte x, y, quit, pulse
+
+    x    = 0
+    y    = entry
+    while TRUE
+        tileXorDraw(x, y, @mazeTileSet + PLAYER)
+        while !conio:keypressed(); loop
+        tileXorDraw(x, y, @mazeTileSet + PLAYER)
+        when toupper(conio:getkey() & $7F)
+            is 'I'
+                if !(maze.[y, x] & WALL_TOP) 
+                    tileOrDraw(x, y, @mazeTileSet + CRUMB)
+                    y--
+                    moveCnt++
+                fin
+                break
+            is 'M'
+                if !(maze.[y + 1, x] & WALL_TOP)
+                    tileOrDraw(x, y, @mazeTileSet + CRUMB)
+                    y++
+                    moveCnt++
+                fin
+                break
+            is 'J'
+                if !(maze.[y, x] & WALL_LEFT)
+                    tileOrDraw(x, y, @mazeTileSet + CRUMB)
+                    x--
+                    moveCnt++
+                fin
+                break
+            is 'K'
+                if !(maze.[y, x + 1] & WALL_LEFT)
+                    tileOrDraw(x, y, @mazeTileSet + CRUMB)
+                    x++
+                    moveCnt++
+                    if x == MAZE_WIDTH; return TRUE; fin // Solved!
+                fin
+                break
+            is 'Q'
+                return FALSE
+        wend
+    loop
+end
+
+def atoi(strptr)#1
+  var num, len, sign
+
+  sign = 1
+  num = 0
+  len = ^strptr
+  strptr++
+  if ^strptr == '-'
+    sign = -1
+    strptr++
+    len--
+  elsif ^strptr == '+'
+    strptr++
+    len--
+  fin
+  while len and ^strptr >= '0' and ^strptr <= '9'
+    num = num * 10 + ^strptr - '0'
+    strptr++
+    len--
+  loop
+  return num * sign
+end
+
+arg = argNext(argFirst)
+if ^arg
+    *rndnum = atoi(arg)
+else
+    puts("Press a key to generate the maze...")
+    while not conio:keypressed()
+        conio:rnd()
+    loop
+    getc
+fin
+seed = *rndnum
+hgrMode(hgrPage1)
+tileDrawBuf(hgrPage1)
+mazeInit
+tileFromText(0, @mazeTileSet)
+mazeGen
+solved = mazePlay
+hgrMode(hgrOff)
+if solved
+    puts("Solved!\n")
+fin
+puts("Seed  = "); puti(seed); putln
+puts("Moves = "); puti(moveCnt); putln
+done
+
