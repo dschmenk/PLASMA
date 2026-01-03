@@ -1,6 +1,7 @@
 include "inc/cmdsys.plh"
 include "inc/conio.plh"
 include "inc/args.plh"
+include "inc/int32.plh"
 include "inc/hgrlib.plh"
 include "inc/hgrtile.plh"
 sysflags reshgr1 // Reserve HGR page 1
@@ -33,6 +34,7 @@ word        = $0450,$04D0,$0550,$05D0,$0650,$06D0,$0750,$07D0
 
 word arg, seed, moveCnt
 byte entry, exit, solved
+res[4] tics
 
 def cellSetFlags(x, y, flags)#0
     maze.[y, x] = maze.[y, x] | flags
@@ -112,7 +114,7 @@ def branchNew(x, y)
                         return DIR_UP
                     fin
                 fin
-                dir = DIR_RIGHT
+                dir = DIR_DOWN
                 cnt++
                 break
             is DIR_LEFT
@@ -122,7 +124,7 @@ def branchNew(x, y)
                         return DIR_LEFT
                     fin
                 fin
-                dir = DIR_DOWN
+                dir = DIR_RIGHT
                 cnt++
                 break
             is DIR_DOWN
@@ -152,9 +154,10 @@ end
 
 def cellSolve(x, y)#0
     byte flags, moveDir, searchCnt
-    word traceStart, traceEnd, traceBack
+    word traceStart, traceEnd, traceLast, traceBack
 
     traceStart = heapmark
+    traceLast  = traceStart
     searchCnt  = 0
     while !(maze.[y, x] & CELL_SOLVED)
         if searchCnt == 0
@@ -173,7 +176,7 @@ def cellSolve(x, y)#0
                     y--
                 else
                     searchCnt++
-                    moveDir = DIR_RIGHT
+                    moveDir = DIR_DOWN
                 fin
                 break
             is DIR_LEFT
@@ -182,7 +185,7 @@ def cellSolve(x, y)#0
                     x--
                 else
                     searchCnt++
-                    moveDir = DIR_DOWN
+                    moveDir = DIR_RIGHT
                 fin
                 break
             is DIR_DOWN
@@ -212,14 +215,14 @@ def cellSolve(x, y)#0
         wend
         if searchCnt > 3
             //
-            // Dead end - back up and try new branch
+            // Dead end - restart and try new branch
             //
             moveDir   = 0
-            traceBack = traceEnd + 2
+            traceBack = traceLast
             repeat
-                traceBack = traceBack - 2
                 x = traceBack->0
                 y = traceBack->1
+                traceBack = traceBack + 2
                 moveDir = branchNew(x, y)
             until moveDir or traceBack == traceStart
             if not moveDir
@@ -229,6 +232,7 @@ def cellSolve(x, y)#0
                 heaprelease(traceStart)
                 return
             fin
+            traceLast = traceBack
         fin
     loop
     //
@@ -245,12 +249,9 @@ end
 def mazeGen#0
     byte x, y
 
-    //cellSetFlags(MAZE_WIDTH-1, exit, CELL_SOLVED)
-    //cellSolve(0, entry)
-    cellSetFlags(0, entry, CELL_SOLVED)
-    cellSolve(MAZE_WIDTH-1, exit)
-    //for x = 0 to MAZE_WIDTH-1
-    for x = MAZE_WIDTH-1 downto 0
+    cellSetFlags(MAZE_WIDTH-1, exit, CELL_SOLVED)
+    cellSolve(0, entry)
+    for x = 0 to MAZE_WIDTH-1
         for y = 0 to MAZE_HEIGHT-1
             if !(maze.[y, x] & CELL_SOLVED)
                 cellSolve(x, y)
@@ -293,8 +294,12 @@ def mazePlay
     cellSetFlags(0, entry, WALL_LEFT) // Block off entry
     x    = 0
     y    = entry
+    zero32
     while TRUE
         tileXorDraw(x, y, @mazeTileSet + PLAYER)
+        while not conio:keypressed()
+            addi16(1)
+        loop
         key = toupper(conio:getkey() & $7F)
         tileXorDraw(x, y, @mazeTileSet + PLAYER)
         when key
@@ -369,6 +374,7 @@ else
     getc
 fin
 repeat
+    moveCnt = 0
     seed = *rndnum
     conio:textmode(40)
     hgrMode(hgrPage1)
@@ -377,12 +383,16 @@ repeat
     tileFromText(0, @mazeTileSet)
     mazeGen
     solved = mazePlay
+    store32(@tics)
     hgrMode(hgrOff)
     if solved
         puts("Solved!\n")
     fin
-    puts("Seed  = "); puti(seed); putln
-    puts("Moves = "); puti(moveCnt); putln
+    puts("Seed    = "); puti(seed); putln
+    puts("Moves   = "); puti(moveCnt); putln
+    puts("Tics    = "); puti32(@tics); putln
+    load32(@tics); divi16(1104); store32(@tics)
+    puts("Seconds = "); puti32(@tics); putln
     puts("Play again? (Y/N):"))
 until toupper(conio:getkey()) == 'N'
 conio:textmode(0)
