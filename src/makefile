@@ -86,6 +86,7 @@ TILETEST   = rel/apple/TILETEST\#FE1000
 HGRTEST    = rel/apple/HGRTEST\#FE1000
 GRTEST     = rel/apple/GRTEST\#FE1000
 DGRTEST    = rel/apple/DGRTEST\#FE1000
+MAZE       = rel/apple/MAZE\#FE1000
 MEMMGR     = rel/MEMMGR\#FE1000
 MEMTEST    = rel/MEMTEST\#FE1000
 FIBERTEST  = rel/FIBERTEST\#FE1000
@@ -129,7 +130,7 @@ $(MEMTEST) $(FIBER) $(FIBERTEST) $(LONGJMP) $(ED) $(MON) $(COPY) $(DEL) $(REN) $
 $(INITSLOT) $(SOS) $(ROD) $(SIEVE) $(PRIMEGAP) $(MOUSE) $(UTHERNET2) $(UTHERNET) $(ETHERIP) $(INET) $(DHCP) \
 $(HTTPD) $(TFTPD) $(ROGUE) $(ROGUEMAP) $(ROGUECOMBAT) $(SFM) $(SFMSPRT) $(GRAFIX) $(GFXDEMO) $(LINES) $(TURTLE) \
 $(SINCOS) $(HGRTILE) $(HGRFONT) $(HGRSPRITE) $(HGRLIB) $(TILETEST) $(HGRTEST) $(GRLIB) $(DGRLIB) $(VBLANK) \
-$(GRTEST) $(DGRTEST) $(HGRTEST) $(FILEIO_APL) $(CONIO_APL) $(JOYBUZZ) $(PORTIO) $(SPIPORT) \
+$(GRTEST) $(DGRTEST) $(MAZE) $(FILEIO_APL) $(CONIO_APL) $(JOYBUZZ) $(PORTIO) $(SPIPORT) \
 $(SDFAT) $(FATCAT) $(FATGET) $(FATPUT) $(FATWDSK) $(FATRDSK) $(INT32) $(INT32TEST) $(SANE) $(FPSTR) $(FPU) $(SANITY) \
 $(LZ4) $(LZ4CAT) $(RPNCALC) $(SNDSEQ) $(PLAYSEQ) $(PLAYPCM) $(CONIOTEST)
 
@@ -532,6 +533,10 @@ $(HGRFONT): libsrc/apple/hgrfont.pla $(PLVM02) $(PLASM)
 $(HGRSPRITE): libsrc/apple/hgrsprite.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AMOW libsrc/apple/hgrsprite.pla
 	acme --setpc 4094 -o $(HGRSPRITE) libsrc/apple/hgrsprite.a
+
+$(MAZE): samplesrc/maze.pla $(HGRLIB) $(HGRTILE) $(PLASM)
+	./$(PLASM) -AMOW samplesrc/maze.pla
+	acme --setpc 4094 -o $(MAZE) samplesrc/maze.a
 
 $(HGRTEST): samplesrc/hgrtest.pla $(HGRLIB) $(PLASM)
 	./$(PLASM) -AMOW samplesrc/hgrtest.pla

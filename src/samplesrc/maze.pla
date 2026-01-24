@@ -16,17 +16,25 @@ const DIR_DOWN      = 4
 const DIR_RIGHT     = 8
 const CELL_TRACED   = 16
 const CELL_SOLVED   = 32
+const CELL_VISITED  = 4
+const SEEN_TOP      = 8
+const SEEN_LEFT     = 16
+const CELL_SEEN     = 32
 const MAZE_WIDTH    = 39
 const MAZE_HEIGHT   = 23
-const PLAYER        = 4*8
-const CRUMB         = 5*8
+const PLAYER        = 8*8
+//const CRUMB         = 5*8
 
 byte mazeTileSet = $00, $00, $00, $00, $00, $00, $00, $00 // No walls
 byte             = $7F, $00, $00, $00, $00, $00, $00, $00 // Top wall
 byte             = $03, $03, $03, $03, $03, $03, $03, $03 // Left wall
 byte             = $7F, $03, $03, $03, $03, $03, $03, $03 // Top & Left walls
+byte             = $00, $00, $00, $00, $08, $00, $00, $00 // No walls + crumb
+byte             = $7F, $00, $00, $00, $08, $00, $00, $00 // Top wall + crumb
+byte             = $03, $03, $03, $03, $0B, $03, $03, $03 // Left wall + crumb
+byte             = $7F, $03, $03, $03, $0B, $03, $03, $03 // Top & Left walls + crumb
 byte             = $00, $00, $10, $54, $54, $54, $10, $00 // Player
-byte             = $00, $00, $00, $00, $08, $00, $00, $00 // Bread crumb
+//byte             = $00, $00, $00, $00, $08, $00, $00, $00 // Bread crumb
 
 word maze[] = $0400,$0480,$0500,$0580,$0600,$0680,$0700,$0780
 word        = $0428,$04A8,$0528,$05A8,$0628,$06A8,$0728,$07A8
@@ -34,6 +42,7 @@ word        = $0450,$04D0,$0550,$05D0,$0650,$06D0,$0750,$07D0
 
 word arg, seed, moveCnt
 byte entry, exit, solved
+byte viewFlag = TRUE
 res[4] tics
 
 def cellSetFlags(x, y, flags)#0
@@ -246,6 +255,64 @@ def cellSolve(x, y)#0
     heaprelease(traceStart)
 end
 
+def cellVis(x, y, dir)#0
+    if not (maze.[y, x] & CELL_SEEN)
+        if (dir & DIR_RIGHT) and (maze.[y, x] & WALL_LEFT)
+            cellSetFlags(x, y, SEEN_LEFT)
+            tileDraw(x, y, @mazeTileSet + 8 * ((maze.[y, x] & (maze.[y, x] >> 3)) & 7))
+            return
+        fin
+        if (dir & DIR_DOWN) and (maze.[y, x] & WALL_TOP)
+            cellSetFlags(x, y, SEEN_TOP)
+            tileDraw(x, y, @mazeTileSet + 8 * ((maze.[y, x] & (maze.[y, x] >> 3)) & 7))
+            return
+        fin
+        cellSetFlags(x, y, CELL_SEEN | SEEN_TOP | SEEN_LEFT)
+        tileDraw(x, y, @mazeTileSet + 8 * (maze.[y, x] & 7))
+        if maze.[y, x + 1] & WALL_LEFT
+            if not (maze.[y, x + 1] & CELL_SEEN)
+                cellSetFlags(x + 1, y, SEEN_LEFT)
+                tileDraw(x + 1, y, @mazeTileSet + 8 * ((maze.[y, x + 1] & (maze.[y, x + 1] >> 3)) & 7))
+            fin
+        fin
+        if maze.[y + 1, x] & WALL_TOP
+            if not (maze.[y + 1, x] & CELL_SEEN)
+                cellSetFlags(x, y + 1, SEEN_TOP)
+                tileDraw(x, y + 1, @mazeTileSet + 8 * ((maze.[y + 1, x] & (maze.[y + 1, x] >> 3)) & 7))
+            fin
+        fin
+    fin
+end
+
+def cellView(x, y)#0
+    byte vis
+
+    cellSetFlags(x, y, CELL_SEEN | SEEN_TOP | SEEN_LEFT | CELL_VISITED)
+    tileDraw(x, y, @mazeTileSet + 8 * (maze.[y, x] & 7))
+    if viewFlag
+        vis = x
+        while not (maze.[y, vis] & WALL_LEFT)
+            vis--
+            cellVis(vis, y, DIR_LEFT)
+        loop
+        vis = y
+        while not (maze.[vis, x] & WALL_TOP)
+            vis--
+            cellVis(x, vis, DIR_UP)
+        loop
+        vis = x
+        repeat
+            vis++
+            cellVis(vis, y, DIR_RIGHT)
+        until (vis >= MAZE_WIDTH) or (maze.[y, vis] & WALL_LEFT)
+        vis = y
+        repeat
+            vis++
+            cellVis(x, vis, DIR_DOWN)
+        until maze.[vis, x] & WALL_TOP
+    fin
+end
+
 def mazeGen#0
     byte x, y
 
@@ -291,42 +358,43 @@ end
 def mazePlay
     byte x, y, quit, key
 
+    if viewFlag
+        hgrColor(0)
+        hgrRect(0, 0, 279, 191)
+    fin
     cellSetFlags(0, entry, WALL_LEFT) // Block off entry
     x    = 0
     y    = entry
     zero32
     while TRUE
-        tileXorDraw(x, y, @mazeTileSet + PLAYER)
+        cellView(x, y)
+        tileOrDraw(x, y, @mazeTileSet + PLAYER)
         while not conio:keypressed()
             addi16(1)
         loop
+        tileDraw(x, y, @mazeTileSet + 8 * (maze.[y, x] & 7))
         key = toupper(conio:getkey() & $7F)
-        tileXorDraw(x, y, @mazeTileSet + PLAYER)
         when key
             is 'I'
                 if !(maze.[y, x] & WALL_TOP) 
-                    tileOrDraw(x, y, @mazeTileSet + CRUMB)
                     y--
                     moveCnt++
                 fin
                 break
             is 'M'
                 if !(maze.[y + 1, x] & WALL_TOP)
-                    tileOrDraw(x, y, @mazeTileSet + CRUMB)
                     y++
                     moveCnt++
                 fin
                 break
             is 'J'
                 if !(maze.[y, x] & WALL_LEFT)
-                    tileOrDraw(x, y, @mazeTileSet + CRUMB)
                     x--
                     moveCnt++
                 fin
                 break
             is 'K'
                 if !(maze.[y, x + 1] & WALL_LEFT)
-                    tileOrDraw(x, y, @mazeTileSet + CRUMB)
                     x++
                     moveCnt++
                     if x == MAZE_WIDTH; return TRUE; fin // Solved!
@@ -336,6 +404,7 @@ def mazePlay
                 return FALSE
         wend
     loop
+    return TRUE
 end
 
 def atoi(strptr)#1
@@ -362,6 +431,10 @@ def atoi(strptr)#1
 end
 
 arg = argNext(argFirst)
+if ^arg and ^(arg + 1) == 'V'
+    viewFlag = FALSE
+    arg = argNext(arg)
+fin
 if ^arg
     *rndnum = atoi(arg)
 else
@@ -378,6 +451,7 @@ repeat
     seed = *rndnum
     conio:textmode(40)
     hgrMode(hgrPage1)
+    hgrDrawBuf(hgrPage1)
     tileDrawBuf(hgrPage1)
     mazeInit
     tileFromText(0, @mazeTileSet)
@@ -393,8 +467,11 @@ repeat
     puts("Timer = "); puti32(@tics)
     load32(@tics); divi16(1085); store32(@tics)
     puts(" ("); puti32(@tics); puts(" secs)\n")
+    for moveCnt = 0 to 1000
+        if conio:keypressed(); getc; fin
+    next
     puts("Play again? (Y/N):")
-until toupper(conio:getkey()) == 'N'
+until toupper(conio:getkey()) <> 'Y'
 conio:textmode(0)
 done
 
