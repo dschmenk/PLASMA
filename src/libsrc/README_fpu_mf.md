@@ -152,5 +152,5 @@ This library follows the same license as the PLASMA project.
 ## See Also
 
 - [PLASMA Documentation](../../doc/)
-- [MegaFlash Project](https://github.com/yourusername/MegaFlash)
+- [MegaFlash Project](https://github.com/ThomasFok/MegaFlash)
 - [SANE Numerics](https://en.wikipedia.org/wiki/Standard_Apple_Numerics_Environment)

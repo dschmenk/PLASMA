@@ -159,6 +159,6 @@ This code follows the PLASMA project's existing license.
 ## Questions?
 
 For questions about:
-- **MegaFlash hardware**: See [MegaFlash repository](https://github.com/yourusername/MegaFlash)
+- **MegaFlash hardware**: See [MegaFlash repository](https://github.com/ThomasFok/MegaFlash)
 - **PLASMA integration**: Open an issue in this repository
 - **Usage examples**: See `fptest_mf.pla` test program
