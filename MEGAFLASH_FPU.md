@@ -152,7 +152,7 @@ This code follows the PLASMA project's existing license.
 
 ## Credits
 
-- MegaFlash hardware/firmware: Tomas Fok
+- MegaFlash hardware/firmware: Thomas Fok
 - PLASMA language: David Schmenk
 - MegaFlash FPU integration: Brendan Robert
 
