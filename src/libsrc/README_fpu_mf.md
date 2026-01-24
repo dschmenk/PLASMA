@@ -10,9 +10,9 @@
 - **API Compatible**: Maintains complete API compatibility with `fpu.pla`
 - **Automatic Fallback**: Detects MegaFlash presence and falls back to SANE if not available
 - **Format Conversion**: Automatically converts between SANE Extended (80-bit) and MBF (40-bit) formats
-- **Hardware-Accelerated Operations**:
+- **Hardware-Accelerated Operations** (28 functions total):
   - **Direct FPU**: mul, div, sqrt, sin, cos, tan, atan, ln, exp
-  - **Via Identities**: neg, abs, log2, pow2, asin, acos, sinh, cosh, tanh, sec, csc, cot
+  - **Via Identities**: neg, abs, log2, log21, ln1, pow2, pow21, powE1, powE21, powXInt, powXY, asin, acos, sinh, cosh, tanh, sec, csc, cot
 
 ## Usage
 
@@ -97,7 +97,14 @@ The library uses the following MegaFlash registers (Slot 4):
 - `neg` - Negate (x * -1)
 - `abs` - Absolute value
 - `log2X` - Log base 2 (ln(x) / ln(2))
+- `log21X` - Log base 2 of 1+x (ln(1+x) / ln(2))
+- `ln1X` - Natural log of 1+x (ln(1 + x))
 - `pow2X` - 2^x (e^(x*ln(2)))
+- `pow21X` - 2^x - 1 (e^(x*ln(2)) - 1)
+- `powE1X` - e^x - 1 (exp(x) - 1)
+- `powE21X` - e^(2x) - 1 (exp(2x) - 1)
+- `powXInt` - x^n for integer n (e^(n*ln(x)))
+- `powXY` - x^y general power (e^(y*ln(x)))
 - `asin` - Arcsine (atan(x/sqrt(1-x²)))
 - `acos` - Arccosine (π/2 - asin(x))
 - `sinh` - Hyperbolic sine ((e^x - e^-x)/2)
@@ -117,8 +124,6 @@ The library uses the following MegaFlash registers (Slot 4):
 - `round` - Round
 - `logb` - Log base
 - `scalb` - Scale
-- `ln1X`, `pow21X`, `powE1X`, `powE21X` - Special log/exp variants
-- `powXInt`, `powXY` - General exponentiation
 - `compXY`, `annuityXY` - Financial functions
 - `randNum` - Random number generation
 
