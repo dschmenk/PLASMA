@@ -1,0 +1,1020 @@
+//
+// MegaFlash Hardware-Accelerated FPU Library
+// Drop-in replacement for fpu.pla using MegaFlash hardware acceleration
+//
+// This library maintains API compatibility with the standard SANE-based
+// fpu.pla library, allowing users to switch between implementations
+// by simply changing the import statement.
+//
+include "inc/cmdsys.plh"
+include "inc/sane.plh"
+include "inc/fpstr.plh"
+include "inc/megaflash.plh"
+
+//
+// External interface to FPU library (same as fpu.pla)
+//
+predef reset, getEnv, setEnv(env), testExcept(except), setExcept(except), enterProc(pEnv), exitProc(env)
+predef constPi, constE
+predef pushInt(pInt), pushSgl(pSgl), pushDbl(pDbl), pushExt(pExt), pushStr(pStr)
+predef pullInt(pInt), pullSgl(pSgl), pullDbl(pDbl), pullExt(pExt), pullStr(pStr,intdigits,fracdigits,format)
+predef loadInt(pInt,reg), loadSgl(pSgl,reg), loadDbl(pDbl,reg), loadExt(pExt,reg), loadStr(pStr,reg)
+predef storInt(pInt,reg), storSgl(pSgl,reg), storDbl(pDbl,reg), storExt(pExt,reg), storStr(pStr,intdigits,fracdigits,format,reg)
+predef shiftUp, shiftDown, rotateUp, rotateDown, dup, swap, clear
+predef add, sub, mul, div, rem
+predef neg, abs, type, cmp, logb, scalb(scale), trunc, round, sqrt, squared
+predef cos, sin, tan, atan
+predef log2X, log21X, lnX, ln1X, pow2X, pow21X, powEX, powE1X, powE21X, powXInt(powInt), powXY
+predef compXY, annuityXY, randNum(pSeed)
+
+//
+// Export table (same structure as fpu.pla)
+//
+word fpu = @reset
+word = @setEnv, @getEnv, @testExcept, @setExcept, @enterProc, @exitProc
+word = @constPi, @constE
+word = @pushInt, @pushSgl, @pushDbl, @pushExt, @pushStr
+word = @pullInt, @pullSgl, @pullDbl, @pullExt, @pullStr
+word = @loadInt, @loadSgl, @loadDbl, @loadExt, @loadStr
+word = @storInt, @storSgl, @storDbl, @storExt, @storStr
+word = @shiftUp, @shiftDown, @rotateUp, @rotateDown, @dup, @swap, @clear
+word = @add, @sub, @mul, @div, @rem
+word = @neg, @abs, @type, @cmp
+word = @logb, @scalb, @trunc, @round, @sqrt, @squared
+word = @cos, @sin, @tan, @atan
+word = @log2X, @log21X, @lnX, @ln1X, @pow2X, @pow21X, @powEX, @powE1X, @powE21X, @powXInt, @powXY
+word = @compXY, @annuityXY, @randNum
+
+//
+// Useful constants (same as fpu.pla)
+//
+byte ext_pi[t_extended] = $35,$C2,$68,$21,$A2,$DA,$0F,$C9,$00,$40
+byte ext_e[t_extended]  = $9B,$4A,$BB,$A2,$5B,$54,$F8,$AD,$00,$40
+
+//
+// FP Stack (4 extended precision registers)
+//
+byte stack[t_extended*4]
+word stackRegs[4]
+
+//
+// MegaFlash hardware state
+//
+byte mfAvailable = FALSE
+byte[MBF_TOTAL] mbfBuffer  // Buffer for MBF format conversions
+
+//
+// Import SANE library for fallback and format conversions
+//
+import sane
+word saneInit = 0
+
+//==============================================================================
+// MEGAFLASH HARDWARE INTERFACE
+//==============================================================================
+
+//
+// Detect MegaFlash hardware presence
+//
+def detectMegaFlash
+    byte id1, id2
+
+    // Read ID register twice and XOR - should give $FF if MegaFlash present
+    id1 = ^MF_IDREG
+    id2 = ^MF_IDREG
+
+    if (id1 ^ id2) == $FF
+        return TRUE
+    fin
+    return FALSE
+end
+
+//
+// Wait for MegaFlash operation to complete
+//
+asm waitMegaFlash
+    LDA     MF_STATUSREG
+:   BIT     MF_STATUSREG
+    BMI     :-
+    RTS
+end
+
+//
+// Execute MegaFlash FPU command
+// Input: A = command code
+// Output: A = error code (0 = success)
+//
+asm execMegaFlash(cmd)#1
+    LDX     ESP
+    LDA     ESTKL,X             // Get command code
+
+    // Reset buffer pointers
+    STZ     MF_CMDREG
+
+    // Send command
+    STA     MF_CMDREG
+
+    // Wait for completion
+:   BIT     MF_STATUSREG
+    BMI     :-
+
+    // Get error code
+    LDA     MF_PARAMREG
+    STA     ESTKL,X
+    LDA     #0
+    STA     ESTKH,X
+    RTS
+end
+
+//==============================================================================
+// MBF <-> SANE EXTENDED FORMAT CONVERSION
+//==============================================================================
+
+//
+// Convert SANE Extended (80-bit) to MBF (40-bit)
+// Input: pExt = pointer to 80-bit extended
+//        pMBF = pointer to 6-byte MBF output
+// Output: 0 on success, error code on failure
+//
+// SANE Extended format:
+//   Byte 0-1: Sign (bit 15) + Exponent (bits 14-0, bias 16383)
+//   Byte 2-9: 64-bit mantissa (bit 63 is explicit integer bit)
+//
+// MBF format:
+//   Byte 0: Exponent (bias 128, 0 = zero)
+//   Byte 1: Sign (bit 7) + Mantissa MSB (bits 6-0, no explicit integer bit)
+//   Byte 2-5: Mantissa continuation
+//   (Optional byte 6: Extension for extra precision)
+//
+def extendedToMBF(pExt, pMBF)
+    word expWord, i
+    byte signByte, expByte
+
+    // Get exponent word (bytes 0-1 of extended, big-endian)
+    expWord = (pExt->0) << 8
+    expWord = expWord | (pExt=>1)
+
+    // Extract sign bit
+    if expWord & $8000
+        signByte = $80
+    else
+        signByte = 0
+    fin
+
+    // Extract exponent (15 bits)
+    expWord = expWord & $7FFF
+
+    // Check for zero
+    if expWord == 0
+        // Zero value
+        pMBF->0 = 0
+        pMBF->1 = 0
+        pMBF->2 = 0
+        pMBF->3 = 0
+        pMBF->4 = 0
+        pMBF->5 = 0
+        return 0
+    fin
+
+    // Convert exponent from SANE bias (16383) to MBF bias (128)
+    // MBF exponent = SANE exponent - 16383 + 128 = SANE exp - 16255
+    expWord = expWord - 16255
+
+    // Check for overflow/underflow
+    if expWord < 1
+        // Underflow - return zero
+        pMBF->0 = 0
+        pMBF->1 = 0
+        pMBF->2 = 0
+        pMBF->3 = 0
+        pMBF->4 = 0
+        pMBF->5 = 0
+        return 0
+    fin
+    if expWord > 255
+        // Overflow
+        return MF_ERR_OVERFLOW
+    fin
+
+    expByte = expWord
+
+    // Store exponent
+    pMBF->0 = expByte
+
+    // Convert mantissa
+    // SANE mantissa is in bytes 2-9, with bit 63 being the explicit integer bit
+    // MBF mantissa needs bit 7 of byte 1 set (implicit integer bit), then 31 more bits
+    //
+    // SANE byte 2: bit 7 is integer bit (should be 1 for normalized)
+    // MBF byte 1: bit 7 is sign, bits 6-0 are mantissa MSB (no explicit integer bit)
+
+    pMBF->1 = signByte | ((pExt=>2) & $7F)  // Skip the explicit integer bit
+    pMBF->2 = pExt=>3
+    pMBF->3 = pExt=>4
+    pMBF->4 = pExt=>5
+    pMBF->5 = pExt=>6  // Extension byte for rounding
+
+    return 0
+end
+
+//
+// Convert MBF (40-bit) to SANE Extended (80-bit)
+// Input: pMBF = pointer to 6-byte MBF input
+//        pExt = pointer to 10-byte extended output
+// Output: 0 on success
+//
+def MBFToExtended(pMBF, pExt)
+    word expWord
+    byte expByte, signByte, i
+
+    // Get MBF exponent
+    expByte = pMBF->0
+
+    // Check for zero
+    if expByte == 0
+        // Zero value - clear all bytes
+        for i = 0 to 9
+            pExt->i = 0
+        next
+        return 0
+    fin
+
+    // Convert exponent from MBF bias (128) to SANE bias (16383)
+    // SANE exponent = MBF exponent + 16255
+    expWord = expByte
+    expWord = expWord + 16255
+
+    // Extract sign from MBF byte 1
+    signByte = pMBF->1
+    if signByte & $80
+        expWord = expWord | $8000  // Set sign bit
+    fin
+
+    // Store exponent (bytes 0-1, big-endian)
+    pExt->0 = expWord >> 8
+    pExt->1 = expWord
+
+    // Convert mantissa
+    // Set explicit integer bit (bit 63 = 1 for normalized numbers)
+    pExt->2 = (signByte & $7F) | $80  // Add back the explicit integer bit
+    pExt->3 = pMBF->2
+    pExt->4 = pMBF->3
+    pExt->5 = pMBF->4
+    pExt->6 = pMBF->5
+
+    // Clear remaining mantissa bytes
+    pExt->7 = 0
+    pExt->8 = 0
+    pExt->9 = 0
+
+    return 0
+end
+
+//
+// Send FAC and ARG to MegaFlash parameter buffer
+// Input: pFAC, pARG = pointers to 6-byte MBF values
+//        facExt = FAC extension byte
+//
+asm sendFACARG(pFAC, pARG, facExt)#0
+    LDX     ESP
+
+    // Get pointers
+    LDA     ESTKL+2,X       // pFAC low
+    STA     $06
+    LDA     ESTKH+2,X       // pFAC high
+    STA     $07
+
+    LDA     ESTKL+1,X       // pARG low
+    STA     $08
+    LDA     ESTKH+1,X       // pARG high
+    STA     $09
+
+    LDA     ESTKL,X         // facExt
+    STA     $0A
+
+    INX
+    INX
+    INX
+    STX     ESP
+
+    // Reset buffer pointer
+    STZ     MF_CMDREG
+
+    // Send FAC and ARG (interleaved: FAC[i], ARG[i])
+    LDY     #5
+:   LDA     ($06),Y         // FAC[i]
+    STA     MF_PARAMREG
+    LDA     ($08),Y         // ARG[i]
+    STA     MF_PARAMREG
+    DEY
+    BPL     :-
+
+    // Send FAC extension
+    LDA     $0A
+    STA     MF_PARAMREG
+
+    RTS
+end
+
+//
+// Receive result from MegaFlash parameter buffer
+// Input: pResult = pointer to 6-byte MBF output
+// Output: extension byte in A
+//
+asm receiveFAC(pResult)#1
+    LDX     ESP
+
+    // Get pointer
+    LDA     ESTKL,X
+    STA     $06
+    LDA     ESTKH,X
+    STA     $07
+
+    // Read 6 bytes of FAC
+    LDY     #5
+:   LDA     MF_PARAMREG
+    STA     ($06),Y
+    DEY
+    BPL     :-
+
+    // Read extension byte
+    LDA     MF_PARAMREG
+    STA     ESTKL,X
+    LDA     #0
+    STA     ESTKH,X
+
+    RTS
+end
+
+//==============================================================================
+// SANE FALLBACK FUNCTIONS
+//==============================================================================
+
+//
+// Initialize SANE library for fallback operations
+//
+def initSANE
+    if saneInit
+        return 0
+    fin
+
+    // Load SANE library using standard fpu.pla approach
+    // This loads FP6502.CODE and ELEMS.CODE from disk
+
+    // For now, we'll use a simplified approach and import sane directly
+    // In a full implementation, we'd want to conditionally load SANE
+    // only if MegaFlash is not available
+
+    saneInit = TRUE
+    return 0
+end
+
+//==============================================================================
+// STACK MANIPULATION ROUTINES (same as fpu.pla)
+//==============================================================================
+
+def rotateUp
+    stackRegs[0], stackRegs[1], stackRegs[2], stackRegs[3] = stackRegs[3], stackRegs[0], stackRegs[1], stackRegs[2]
+    return 0
+end
+
+def rotateDown
+    stackRegs[0], stackRegs[1], stackRegs[2], stackRegs[3] = stackRegs[1], stackRegs[2], stackRegs[3], stackRegs[0]
+    return 0
+end
+
+def shiftUp
+    stackRegs[0], stackRegs[1], stackRegs[2], stackRegs[3] = stackRegs[3], stackRegs[0], stackRegs[1], stackRegs[2]
+    memcpy(stackRegs[0], stackRegs[1], t_extended)
+    return 0
+end
+
+def shiftDown // drop
+    stackRegs[0], stackRegs[1], stackRegs[2], stackRegs[3] = stackRegs[1], stackRegs[2], stackRegs[3], stackRegs[0]
+    memcpy(stackRegs[3], stackRegs[2], t_extended)
+    return 0
+end
+
+def _drop(passthru) // Internal version with passthru
+    stackRegs[0], stackRegs[1], stackRegs[2], stackRegs[3] = stackRegs[1], stackRegs[2], stackRegs[3], stackRegs[0]
+    memcpy(stackRegs[3], stackRegs[2], t_extended)
+    return passthru
+end
+
+def swap
+    stackRegs[0], stackRegs[1] = stackRegs[1], stackRegs[0]
+    return 0
+end
+
+def _swap(passthru) // Internal version with passthru
+    stackRegs[0], stackRegs[1] = stackRegs[1], stackRegs[0]
+    return passthru
+end
+
+def dup
+    stackRegs[0], stackRegs[1], stackRegs[2], stackRegs[3] = stackRegs[3], stackRegs[0], stackRegs[1], stackRegs[2]
+    memcpy(stackRegs[0], stackRegs[1], t_extended)
+    return 0
+end
+
+def clear
+    word zero
+    zero = 0
+
+    if mfAvailable
+        // Use MegaFlash to create zero
+        // For now, just set exponent to 0
+        stackRegs[0]->0 = 0
+        stackRegs[0]->1 = 0
+        return 0
+    else
+        // Use SANE
+        if saneInit
+            sane:saveZP()
+            return sane:restoreZP(sane:op2FP(FFINT|FOZ2X, stackRegs[0], @zero))
+        fin
+    fin
+    return 0
+end
+
+//==============================================================================
+// STACK ACCESS ROUTINES
+//==============================================================================
+
+def pushInt(pInt)
+    stackRegs[0], stackRegs[1], stackRegs[2], stackRegs[3] = stackRegs[3], stackRegs[0], stackRegs[1], stackRegs[2]
+
+    // Use SANE for integer conversion
+    if !saneInit; initSANE; fin
+    sane:saveZP()
+    return sane:restoreZP(sane:op2FP(FFINT|FOZ2X, stackRegs[0], pInt))
+end
+
+def pullInt(pInt)
+    if !saneInit; initSANE; fin
+    sane:saveZP()
+    return _drop(sane:restoreZP(sane:op2FP(FFINT|FOX2Z, pInt, stackRegs[0])))
+end
+
+def loadInt(pInt, reg)
+    if !saneInit; initSANE; fin
+    sane:saveZP()
+    return sane:restoreZP(sane:op2FP(FFINT|FOZ2X, stackRegs[reg & $03], pInt))
+end
+
+def storInt(pInt, reg)
+    if !saneInit; initSANE; fin
+    sane:saveZP()
+    return sane:restoreZP(sane:op2FP(FFINT|FOX2Z, pInt, stackRegs[reg & $03]))
+end
+
+def pushSgl(pSgl)
+    stackRegs[0], stackRegs[1], stackRegs[2], stackRegs[3] = stackRegs[3], stackRegs[0], stackRegs[1], stackRegs[2]
+    if !saneInit; initSANE; fin
+    sane:saveZP()
+    return sane:restoreZP(sane:op2FP(FFSGL|FOZ2X, stackRegs[0], pSgl))
+end
+
+def pullSgl(pSgl)
+    if !saneInit; initSANE; fin
+    sane:saveZP()
+    return _drop(sane:restoreZP(sane:op2FP(FFSGL|FOX2Z, pSgl, stackRegs[0])))
+end
+
+def loadSgl(pSgl, reg)
+    if !saneInit; initSANE; fin
+    sane:saveZP()
+    return sane:restoreZP(sane:op2FP(FFSGL|FOZ2X, stackRegs[reg & $03], pSgl))
+end
+
+def storSgl(pSgl, reg)
+    if !saneInit; initSANE; fin
+    sane:saveZP()
+    return sane:restoreZP(sane:op2FP(FFSGL|FOX2Z, pSgl, stackRegs[reg & $03]))
+end
+
+def pushDbl(pDbl)
+    stackRegs[0], stackRegs[1], stackRegs[2], stackRegs[3] = stackRegs[3], stackRegs[0], stackRegs[1], stackRegs[2]
+    if !saneInit; initSANE; fin
+    sane:saveZP()
+    return sane:restoreZP(sane:op2FP(FFDBL|FOZ2X, stackRegs[0], pDbl))
+end
+
+def pullDbl(pDbl)
+    if !saneInit; initSANE; fin
+    sane:saveZP()
+    return _drop(sane:restoreZP(sane:op2FP(FFDBL|FOX2Z, pDbl, stackRegs[0])))
+end
+
+def loadDbl(pDbl, reg)
+    if !saneInit; initSANE; fin
+    sane:saveZP()
+    return sane:restoreZP(sane:op2FP(FFDBL|FOZ2X, stackRegs[reg & $03], pDbl))
+end
+
+def storDbl(pDbl, reg)
+    if !saneInit; initSANE; fin
+    sane:saveZP()
+    return sane:restoreZP(sane:op2FP(FFDBL|FOX2Z, pDbl, stackRegs[reg & $03]))
+end
+
+def pushExt(pExt)
+    stackRegs[0], stackRegs[1], stackRegs[2], stackRegs[3] = stackRegs[3], stackRegs[0], stackRegs[1], stackRegs[2]
+    memcpy(stackRegs[0], pExt, t_extended)
+    return 0
+end
+
+def pullExt(pExt)
+    memcpy(pExt, stackRegs[0], t_extended)
+    return _drop(0)
+end
+
+def loadExt(pExt, reg)
+    memcpy(stackRegs[reg & $03], pExt, t_extended)
+    return 0
+end
+
+def storExt(pExt, reg)
+    memcpy(pExt, stackRegs[reg & $03], t_extended)
+    return 0
+end
+
+def pushStr(pStr)
+    stackRegs[0], stackRegs[1], stackRegs[2], stackRegs[3] = stackRegs[3], stackRegs[0], stackRegs[1], stackRegs[2]
+    return str2ext(pStr, stackRegs[0])
+end
+
+def pullStr(pStr, intdigits, fracdigits, format)
+    return _drop(ext2str(stackRegs[0], pStr, intdigits, fracdigits, format))
+end
+
+def loadStr(pStr, reg)
+    return str2ext(pStr, stackRegs[reg])
+end
+
+def storStr(pStr, intdigits, fracdigits, format, reg)
+    return ext2str(stackRegs[reg], pStr, intdigits, fracdigits, format)
+end
+
+//==============================================================================
+// BASIC MATH OPERATIONS (MegaFlash accelerated)
+//==============================================================================
+
+//
+// Helper function to execute binary operation on MegaFlash
+// Input: cmd = MegaFlash command code
+// Returns: error code (0 = success)
+//
+def execBinaryOp(cmd)
+    byte err
+    byte[MBF_SIZE] mbfFAC, mbfARG, mbfResult
+
+    if !mfAvailable
+        // Fallback to SANE
+        return -1  // Signal to use SANE
+    fin
+
+    // Convert stack registers to MBF
+    err = extendedToMBF(stackRegs[0], @mbfFAC)
+    if err; return err; fin
+
+    err = extendedToMBF(stackRegs[1], @mbfARG)
+    if err; return err; fin
+
+    // Send to MegaFlash
+    sendFACARG(@mbfFAC, @mbfARG, 0)
+
+    // Execute command
+    err = execMegaFlash(cmd)
+    if err; return err; fin
+
+    // Get result
+    receiveFAC(@mbfResult)
+
+    // Convert back to extended and store in stack[1]
+    err = MBFToExtended(@mbfResult, stackRegs[1])
+
+    return err
+end
+
+//
+// Helper function to execute unary operation on MegaFlash
+//
+def execUnaryOp(cmd)
+    byte err
+    byte[MBF_SIZE] mbfFAC, mbfARG, mbfResult
+
+    if !mfAvailable
+        return -1  // Signal to use SANE
+    fin
+
+    // Convert stack register to MBF
+    err = extendedToMBF(stackRegs[0], @mbfFAC)
+    if err; return err; fin
+
+    // Set ARG to zero (not used for unary ops)
+    mbfARG.0 = 0
+    mbfARG.1 = 0
+    mbfARG.2 = 0
+    mbfARG.3 = 0
+    mbfARG.4 = 0
+    mbfARG.5 = 0
+
+    // Send to MegaFlash
+    sendFACARG(@mbfFAC, @mbfARG, 0)
+
+    // Execute command
+    err = execMegaFlash(cmd)
+    if err; return err; fin
+
+    // Get result
+    receiveFAC(@mbfResult)
+
+    // Convert back to extended
+    err = MBFToExtended(@mbfResult, stackRegs[0])
+
+    return err
+end
+
+def add
+    word err
+
+    err = execBinaryOp(MF_CMD_FADD)
+    if err < 0
+        // Use SANE fallback
+        if !saneInit; initSANE; fin
+        sane:saveZP()
+        return _drop(sane:restoreZP(sane:op2FP(FFEXT|FOADD, stackRegs[1], stackRegs[0])))
+    fin
+
+    return _drop(err)
+end
+
+def sub
+    // MegaFlash doesn't have FSUB - use SANE fallback
+    // (Could also implement as negate + add, but SANE is more reliable)
+    if !saneInit; initSANE; fin
+    sane:saveZP()
+    return _drop(sane:restoreZP(sane:op2FP(FFEXT|FOSUB, stackRegs[1], stackRegs[0])))
+end
+
+def mul
+    word err
+
+    err = execBinaryOp(MF_CMD_FMUL)
+    if err < 0
+        if !saneInit; initSANE; fin
+        sane:saveZP()
+        return _drop(sane:restoreZP(sane:op2FP(FFEXT|FOMUL, stackRegs[1], stackRegs[0])))
+    fin
+
+    return _drop(err)
+end
+
+def div
+    word err
+
+    err = execBinaryOp(MF_CMD_FDIV)
+    if err < 0
+        if !saneInit; initSANE; fin
+        sane:saveZP()
+        return _drop(sane:restoreZP(sane:op2FP(FFEXT|FODIV, stackRegs[1], stackRegs[0])))
+    fin
+
+    return _drop(err)
+end
+
+def rem
+    // MegaFlash doesn't support REM - use SANE
+    if !saneInit; initSANE; fin
+    sane:saveZP()
+    return _drop(sane:restoreZP(sane:op2FP(FFEXT|FOREM, stackRegs[1], stackRegs[0])))
+end
+
+def neg
+    // MegaFlash doesn't have NEG - use SANE or flip sign manually
+    if !saneInit; initSANE; fin
+    sane:saveZP()
+    return sane:restoreZP(sane:op1FP(FFEXT|FONEG, stackRegs[0]))
+end
+
+def abs
+    // MegaFlash doesn't have ABS - use SANE
+    if !saneInit; initSANE; fin
+    sane:saveZP()
+    return sane:restoreZP(sane:op1FP(FFEXT|FOABS, stackRegs[0]))
+end
+
+def type
+    // Type classification - use SANE
+    if !saneInit; initSANE; fin
+    sane:saveZP()
+    return sane:restoreZP(sane:op1FP(FFEXT|FOCLASS, stackRegs[0]))
+end
+
+def cmp
+    // Comparison - use SANE
+    if !saneInit; initSANE; fin
+    sane:saveZP()
+    return sane:restoreZP(sane:op2FP(FFEXT|FOCMP, stackRegs[1], stackRegs[0]))
+end
+
+def trunc
+    // Truncate - use SANE
+    if !saneInit; initSANE; fin
+    sane:saveZP()
+    return sane:restoreZP(sane:op1FP(FFEXT|FOTTI, stackRegs[0]))
+end
+
+def round
+    // Round - use SANE
+    if !saneInit; initSANE; fin
+    sane:saveZP()
+    return sane:restoreZP(sane:op1FP(FFEXT|FORTI, stackRegs[0]))
+end
+
+def sqrt
+    word err
+
+    err = execUnaryOp(MF_CMD_FSQR)
+    if err < 0
+        if !saneInit; initSANE; fin
+        sane:saveZP()
+        return sane:restoreZP(sane:op1FP(FFEXT|FOSQRT, stackRegs[0]))
+    fin
+
+    return err
+end
+
+def squared
+    word err
+
+    // Square by multiplying by itself
+    memcpy(stackRegs[1], stackRegs[0], t_extended)
+    err = execBinaryOp(MF_CMD_FMUL)
+    if err < 0
+        if !saneInit; initSANE; fin
+        sane:saveZP()
+        return sane:restoreZP(sane:op2FP(FFEXT|FOMUL, stackRegs[0], stackRegs[0]))
+    fin
+
+    return err
+end
+
+def logb
+    // Log base - use SANE
+    if !saneInit; initSANE; fin
+    sane:saveZP()
+    return sane:restoreZP(sane:op1FP(FFEXT|FOLOGB, stackRegs[0]))
+end
+
+def scalb(scale)
+    // Scale - use SANE
+    if !saneInit; initSANE; fin
+    sane:saveZP()
+    return sane:restoreZP(sane:op2FP(FFEXT|FOSCALB, stackRegs[0], scale))
+end
+
+//==============================================================================
+// TRANSCENDENTAL FUNCTIONS (MegaFlash accelerated)
+//==============================================================================
+
+def cos
+    word err
+
+    err = execUnaryOp(MF_CMD_FCOS)
+    if err < 0
+        // Use SANE ELEMS
+        if !saneInit; initSANE; fin
+        sane:saveZP()
+        return sane:restoreZP(sane:op1ELEM(FFEXT|FOCOSX, stackRegs[0]))
+    fin
+
+    return err
+end
+
+def sin
+    word err
+
+    err = execUnaryOp(MF_CMD_FSIN)
+    if err < 0
+        if !saneInit; initSANE; fin
+        sane:saveZP()
+        return sane:restoreZP(sane:op1ELEM(FFEXT|FOSINX, stackRegs[0]))
+    fin
+
+    return err
+end
+
+def tan
+    word err
+
+    err = execUnaryOp(MF_CMD_FTAN)
+    if err < 0
+        if !saneInit; initSANE; fin
+        sane:saveZP()
+        return sane:restoreZP(sane:op1ELEM(FFEXT|FOTANX, stackRegs[0]))
+    fin
+
+    return err
+end
+
+def atan
+    word err
+
+    err = execUnaryOp(MF_CMD_FATN)
+    if err < 0
+        if !saneInit; initSANE; fin
+        sane:saveZP()
+        return sane:restoreZP(sane:op1ELEM(FFEXT|FOATANX, stackRegs[0]))
+    fin
+
+    return err
+end
+
+def log2X
+    // Use SANE ELEMS
+    if !saneInit; initSANE; fin
+    sane:saveZP()
+    return sane:restoreZP(sane:op1ELEM(FFEXT|FOLOG2X, stackRegs[0]))
+end
+
+def log21X
+    if !saneInit; initSANE; fin
+    sane:saveZP()
+    return sane:restoreZP(sane:op1ELEM(FFEXT|FOLOG21X, stackRegs[0]))
+end
+
+def lnX
+    word err
+
+    err = execUnaryOp(MF_CMD_FLOG)
+    if err < 0
+        if !saneInit; initSANE; fin
+        sane:saveZP()
+        return sane:restoreZP(sane:op1ELEM(FFEXT|FOLNX, stackRegs[0]))
+    fin
+
+    return err
+end
+
+def ln1X
+    if !saneInit; initSANE; fin
+    sane:saveZP()
+    return sane:restoreZP(sane:op1ELEM(FFEXT|FOLN1X, stackRegs[0]))
+end
+
+def pow2X
+    if !saneInit; initSANE; fin
+    sane:saveZP()
+    return sane:restoreZP(sane:op1ELEM(FFEXT|FOEXP2X, stackRegs[0]))
+end
+
+def pow21X
+    if !saneInit; initSANE; fin
+    sane:saveZP()
+    return sane:restoreZP(sane:op1ELEM(FFEXT|FOEXP21X, stackRegs[0]))
+end
+
+def powEX
+    word err
+
+    err = execUnaryOp(MF_CMD_FEXP)
+    if err < 0
+        if !saneInit; initSANE; fin
+        sane:saveZP()
+        return sane:restoreZP(sane:op1ELEM(FFEXT|FOEXPX, stackRegs[0]))
+    fin
+
+    return err
+end
+
+def powE1X
+    if !saneInit; initSANE; fin
+    sane:saveZP()
+    return sane:restoreZP(sane:op1ELEM(FFEXT|FOEXP1X, stackRegs[0]))
+end
+
+def powE21X
+    if !saneInit; initSANE; fin
+    sane:saveZP()
+    return sane:restoreZP(sane:op1ELEM(FFEXT|FOEXP21X, stackRegs[0]))
+end
+
+def powXInt(powInt)
+    if !saneInit; initSANE; fin
+    sane:saveZP()
+    return sane:restoreZP(sane:op2ELEM(FFEXT|FOXPWRI, stackRegs[0], powInt))
+end
+
+def powXY
+    if !saneInit; initSANE; fin
+    sane:saveZP()
+    return sane:restoreZP(_drop(_swap(sane:op2ELEM(FFEXT|FOXPWRY, stackRegs[0], stackRegs[1]))))
+end
+
+def compXY
+    if !saneInit; initSANE; fin
+    sane:saveZP()
+    return sane:restoreZP(_drop(_swap(sane:op2ELEM(FFEXT|FOCOMPND, stackRegs[0], stackRegs[1]))))
+end
+
+def annuityXY
+    if !saneInit; initSANE; fin
+    sane:saveZP()
+    return sane:restoreZP(_drop(_swap(sane:op2ELEM(FFEXT|FOANNUIT, stackRegs[0], stackRegs[1]))))
+end
+
+def randNum(pSeed)
+    if !saneInit; initSANE; fin
+    sane:saveZP()
+    return sane:restoreZP(sane:op1ELEM(FFEXT|FORANDX, pSeed))
+end
+
+//==============================================================================
+// ENVIRONMENT AND CONSTANTS
+//==============================================================================
+
+def setEnv(env)
+    if !saneInit; initSANE; fin
+    sane:saveZP()
+    return sane:restoreZP(sane:op1FP(FOSETENV, env))
+end
+
+def getEnv
+    if !saneInit; initSANE; fin
+    sane:saveZP()
+    return sane:restoreZP(sane:op0FP(FOGETENV))
+end
+
+def testExcept(except)
+    if !saneInit; initSANE; fin
+    sane:saveZP()
+    return sane:restoreZP(sane:op1FP(FOTESTXCP, except))
+end
+
+def setExcept(except)
+    if !saneInit; initSANE; fin
+    sane:saveZP()
+    return sane:restoreZP(sane:op1FP(FOSETXCP, except))
+end
+
+def enterProc(pEnv)
+    if !saneInit; initSANE; fin
+    sane:saveZP()
+    return sane:restoreZP(sane:op1FP(FOPROCENTRY, pEnv))
+end
+
+def exitProc(env)
+    if !saneInit; initSANE; fin
+    sane:saveZP()
+    return sane:restoreZP(sane:op1FP(FOPROCEXIT, env))
+end
+
+def constPi
+    return pushExt(@ext_pi)
+end
+
+def constE
+    return pushExt(@ext_e)
+end
+
+//==============================================================================
+// INITIALIZATION
+//==============================================================================
+
+def reset
+    byte i
+    word zero
+
+    zero = 0
+
+    // Detect MegaFlash hardware
+    mfAvailable = detectMegaFlash
+
+    if mfAvailable
+        puts("MegaFlash FPU detected - hardware acceleration enabled\n")
+    else
+        puts("MegaFlash FPU not found - using SANE software floating point\n")
+        // Initialize SANE for fallback
+        initSANE
+    fin
+
+    // Initialize stack registers
+    for i = 0 to 3
+        stackRegs[i] = @stack[i * t_extended]
+    next
+
+    // Clear all stack registers
+    for i = 0 to 3
+        loadInt(@zero, i)
+    next
+
+    return 0
+end
+
+//
+// Keep module in memory
+//
+return modkeep
+done
