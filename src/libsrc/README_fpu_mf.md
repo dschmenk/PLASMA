@@ -10,16 +10,9 @@
 - **API Compatible**: Maintains complete API compatibility with `fpu.pla`
 - **Automatic Fallback**: Detects MegaFlash presence and falls back to SANE if not available
 - **Format Conversion**: Automatically converts between SANE Extended (80-bit) and MBF (40-bit) formats
-- **Accelerated Operations**:
-  - Multiplication (`mul`)
-  - Division (`div`)
-  - Sine (`sin`)
-  - Cosine (`cos`)
-  - Tangent (`tan`)
-  - Arctangent (`atan`)
-  - Natural logarithm (`lnX`)
-  - Exponential (`powEX`)
-  - Square root (`sqrt`)
+- **Hardware-Accelerated Operations**:
+  - **Direct FPU**: mul, div, sqrt, sin, cos, tan, atan, ln, exp
+  - **Via Identities**: neg, abs, log2, pow2, asin, acos, sinh, cosh, tanh, sec, csc, cot
 
 ## Usage
 
@@ -89,7 +82,7 @@ The library uses the following MegaFlash registers (Slot 4):
 
 ## Supported Operations
 
-### Hardware Accelerated (MegaFlash)
+### Hardware Accelerated - Direct (MegaFlash FPU)
 - `mul` - Multiply
 - `div` - Divide
 - `sqrt` - Square root
@@ -98,21 +91,36 @@ The library uses the following MegaFlash registers (Slot 4):
 - `tan` - Tangent
 - `atan` - Arctangent
 - `lnX` - Natural logarithm
-- `powEX` - e^x
+- `powEX` - e^x (exponential)
+
+### Hardware Accelerated - Via Identities (MegaFlash + math)
+- `neg` - Negate (x * -1)
+- `abs` - Absolute value
+- `log2X` - Log base 2 (ln(x) / ln(2))
+- `pow2X` - 2^x (e^(x*ln(2)))
+- `asin` - Arcsine (atan(x/sqrt(1-x²)))
+- `acos` - Arccosine (π/2 - asin(x))
+- `sinh` - Hyperbolic sine ((e^x - e^-x)/2)
+- `cosh` - Hyperbolic cosine ((e^x + e^-x)/2)
+- `tanh` - Hyperbolic tangent (sinh/cosh)
+- `sec` - Secant (1/cos)
+- `csc` - Cosecant (1/sin)
+- `cot` - Cotangent (1/tan)
 
 ### Software Fallback (SANE)
-- `add` - Addition
-- `sub` - Subtraction
+- `add` - Addition (conversion overhead makes hardware slower)
+- `sub` - Subtraction (same reason)
 - `rem` - Remainder
-- `neg` - Negate
-- `abs` - Absolute value
 - `type` - Type classification
 - `cmp` - Compare
 - `trunc` - Truncate
 - `round` - Round
 - `logb` - Log base
 - `scalb` - Scale
-- All other ELEMS functions
+- `ln1X`, `pow21X`, `powE1X`, `powE21X` - Special log/exp variants
+- `powXInt`, `powXY` - General exponentiation
+- `compXY`, `annuityXY` - Financial functions
+- `randNum` - Random number generation
 
 ## Building
 
