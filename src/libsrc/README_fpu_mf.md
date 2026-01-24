@@ -145,9 +145,9 @@ This library follows the same license as the PLASMA project.
 
 ## Credits
 
-- MegaFlash hardware and firmware by [your name]
+- MegaFlash hardware and firmware by Tomas Fok
 - PLASMA language by David Schmenk
-- Integration by [contributors]
+- MegaFlash FPU integration by Brendan Robert
 
 ## See Also
 
