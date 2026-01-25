@@ -1,0 +1,2815 @@
+; ACME COMPATIBLE OUTPUT
+	!WORD	_SEGEND-_SEGBEGIN	; LENGTH OF HEADER + CODE/DATA + BYTECODE SEGMENT
+_SEGBEGIN 
+	!WORD	$6502			; MAGIC #
+	!WORD	_SYSFLAGS			; SYSTEM FLAGS
+	!WORD	_SUBSEG			; BYTECODE SUB-SEGMENT
+	!WORD	_DEFCNT			; BYTECODE DEF COUNT
+	!WORD	_INIT			; MODULE INITIALIZATION ROUTINE
+; utilsrc/tftpd.pla: 0001: //
+; utilsrc/tftpd.pla: 0002: // TFTP Daemon
+; utilsrc/tftpd.pla: 0003: //
+; utilsrc/tftpd.pla: 0004: include "inc/cmdsys.plh"
+; inc/cmdsys.plh: 0001: import cmdsys
+	; DCI STRING: CMDSYS
+	!BYTE	$C3,$CD,$C4,$D3,$D9,$53
+					; CMDSYS -> X000
+; inc/cmdsys.plh: 0002:     //
+; inc/cmdsys.plh: 0003:     // Useful values for everyone
+; inc/cmdsys.plh: 0004:     //
+; inc/cmdsys.plh: 0005:     const _SYSVER_ = $0220 // Version built against
+					; _SYSVER_ = 544
+; inc/cmdsys.plh: 0006:     const FALSE    = 0
+					; FALSE = 0
+; inc/cmdsys.plh: 0007:     const TRUE     = not FALSE
+					; TRUE = -1
+; inc/cmdsys.plh: 0008:     const NULL     = 0
+					; NULL = 0
+; inc/cmdsys.plh: 0009:     //
+; inc/cmdsys.plh: 0010:     // Machine ID values
+; inc/cmdsys.plh: 0011:     //
+; inc/cmdsys.plh: 0012:     const MACHID_CLOCK = $01
+					; MACHID_CLOCK = 1
+; inc/cmdsys.plh: 0013:     const MACHID_80COL = $02
+					; MACHID_80COL = 2
+; inc/cmdsys.plh: 0014:     const MACHID_MEM   = $30
+					; MACHID_MEM = 48
+; inc/cmdsys.plh: 0015:     const MACHID_64K   = $20
+					; MACHID_64K = 32
+; inc/cmdsys.plh: 0016:     const MACHID_128K  = $30
+					; MACHID_128K = 48
+; inc/cmdsys.plh: 0017:     const MACHID_MODEL = $C8
+					; MACHID_MODEL = 200
+; inc/cmdsys.plh: 0018:     const MACHID_II    = $00
+					; MACHID_II = 0
+; inc/cmdsys.plh: 0019:     const MACHID_IIPLUS= $40
+					; MACHID_IIPLUS = 64
+; inc/cmdsys.plh: 0020:     const MACHID_IIE   = $80
+					; MACHID_IIE = 128
+; inc/cmdsys.plh: 0021:     const MACHID_III   = $C0
+					; MACHID_III = 192
+; inc/cmdsys.plh: 0022:     const MACHID_IIC   = $88
+					; MACHID_IIC = 136
+; inc/cmdsys.plh: 0023:     const MACHID_I     = $08
+					; MACHID_I = 8
+; inc/cmdsys.plh: 0024:     byte MACHID
+					; MACHID -> X001
+; inc/cmdsys.plh: 0025:     //
+; inc/cmdsys.plh: 0026:     // System flags: memory allocator screen holes.
+; inc/cmdsys.plh: 0027:     //
+; inc/cmdsys.plh: 0028:     const restxt1     = $0001
+					; restxt1 = 1
+; inc/cmdsys.plh: 0029:     const restxt2     = $0002
+					; restxt2 = 2
+; inc/cmdsys.plh: 0030:     const resxtxt1    = $0004
+					; resxtxt1 = 4
+; inc/cmdsys.plh: 0031:     const resxtxt2    = $0008
+					; resxtxt2 = 8
+; inc/cmdsys.plh: 0032:     const reshgr1     = $0010
+					; reshgr1 = 16
+; inc/cmdsys.plh: 0033:     const reshgr2     = $0020
+					; reshgr2 = 32
+; inc/cmdsys.plh: 0034:     const resxhgr1    = $0040
+					; resxhgr1 = 64
+; inc/cmdsys.plh: 0035:     const resxhgr2    = $0080
+					; resxhgr2 = 128
+; inc/cmdsys.plh: 0036:     const nojitc      = $0100
+					; nojitc = 256
+; inc/cmdsys.plh: 0037:     const vid80col    = $0800
+					; vid80col = 2048
+; inc/cmdsys.plh: 0038:     //
+; inc/cmdsys.plh: 0039:     // Module don't free memory
+; inc/cmdsys.plh: 0040:     //
+; inc/cmdsys.plh: 0041:     const modflagkeep = $1000
+					; modflagkeep = 4096
+; inc/cmdsys.plh: 0042:     const modkeep     = $2000
+					; modkeep = 8192
+; inc/cmdsys.plh: 0043:     const modinitkeep = $4000
+					; modinitkeep = 16384
+; inc/cmdsys.plh: 0044:     //
+; inc/cmdsys.plh: 0045:     // CMD exported interface table
+; inc/cmdsys.plh: 0046:     //
+; inc/cmdsys.plh: 0047:     struc t_cmdsys
+; inc/cmdsys.plh: 0048:         word sysver
+					; sysver = 0
+; inc/cmdsys.plh: 0049:         word syspath
+					; syspath = 2
+; inc/cmdsys.plh: 0050:         word cmdline
+					; cmdline = 4
+; inc/cmdsys.plh: 0051:         word modexec
+					; modexec = 6
+; inc/cmdsys.plh: 0052:         word sysopen
+					; sysopen = 8
+; inc/cmdsys.plh: 0053:         word sysclose
+					; sysclose = 10
+; inc/cmdsys.plh: 0054:         word sysread
+					; sysread = 12
+; inc/cmdsys.plh: 0055:         word syswrite
+					; syswrite = 14
+; inc/cmdsys.plh: 0056:         byte syserr
+					; syserr = 16
+; inc/cmdsys.plh: 0057:         byte jitcount
+					; jitcount = 17
+; inc/cmdsys.plh: 0058:         byte jitsize
+					; jitsize = 18
+; inc/cmdsys.plh: 0059:         word sysexec[] // Apple II specific
+					; sysexec = 19
+; inc/cmdsys.plh: 0060:         byte refcons   // Apple /// specific
+					; refcons = 19
+; inc/cmdsys.plh: 0061:         byte devcons   // Apple /// specific
+					; devcons = 20
+; inc/cmdsys.plh: 0062:         word lookupsym
+					; lookupsym = 21
+; inc/cmdsys.plh: 0063:         word _sysflags_ // Actual system flags (read only, don't write)
+					; _sysflags_ = 23
+; inc/cmdsys.plh: 0064:     end
+					; t_cmdsys = 25
+; inc/cmdsys.plh: 0065:     //
+; inc/cmdsys.plh: 0066:     // CMD exported functions
+; inc/cmdsys.plh: 0067:     //
+; inc/cmdsys.plh: 0068:     predef putc(c)#0, putln()#0, puts(s)#0, puti(i)#0, getc()#1, gets(p)#1, putb(b)#0, puth(h)#0
+					; PUTC -> X002
+					; PUTLN -> X003
+					; PUTS -> X004
+					; PUTI -> X005
+					; GETC -> X006
+					; GETS -> X007
+					; PUTB -> X008
+					; PUTH -> X009
+; inc/cmdsys.plh: 0069:     predef call(addr,areg,xreg,yreg,status)#1, syscall(cmd,params)#1
+					; CALL -> X010
+					; SYSCALL -> X011
+; inc/cmdsys.plh: 0070:     predef heapmark()#1, heapallocalign(size, pow2, freeaddr)#1
+					; HEAPMARK -> X012
+					; HEAPALLOCALIGN -> X013
+; inc/cmdsys.plh: 0071:     predef heapalloc(size)#1, heaprelease(newheap)#1, heapavail()#1
+					; HEAPALLOC -> X014
+					; HEAPRELEASE -> X015
+					; HEAPAVAIL -> X016
+; inc/cmdsys.plh: 0072:     predef memset(addr,value,size)#0, memcpy(dst,src,size)#0, strcpy(dst,src)#1, strcat(dst,src)#1
+					; MEMSET -> X017
+					; MEMCPY -> X018
+					; STRCPY -> X019
+					; STRCAT -> X020
+; inc/cmdsys.plh: 0073:     predef toupper(c)#1, sext(a)#1, divmod(a,b)#2, isugt(a,b)#1, isuge(a,b)#1, isult(a,b)#1, isule(a,b)#1
+					; TOUPPER -> X021
+					; SEXT -> X022
+					; DIVMOD -> X023
+					; ISUGT -> X024
+					; ISUGE -> X025
+					; ISULT -> X026
+					; ISULE -> X027
+; inc/cmdsys.plh: 0074: end
+; utilsrc/tftpd.pla: 0004: 
+; utilsrc/tftpd.pla: 0005: include "inc/inet.plh"
+; inc/inet.plh: 0001: //
+; inc/inet.plh: 0002: // iNet API
+; inc/inet.plh: 0003: //
+; inc/inet.plh: 0004: import iNet
+	; DCI STRING: INET
+	!BYTE	$C9,$CE,$C5,$54
+					; INET -> X028
+; inc/inet.plh: 0005: struc t_inet
+; inc/inet.plh: 0006:     word initIP
+					; initIP = 0
+; inc/inet.plh: 0007:     word serviceIP
+					; serviceIP = 2
+; inc/inet.plh: 0008:     word openUDP
+					; openUDP = 4
+; inc/inet.plh: 0009:     word sendUDP
+					; sendUDP = 6
+; inc/inet.plh: 0010:     word closeUDP
+					; closeUDP = 8
+; inc/inet.plh: 0011:     word listenTCP
+					; listenTCP = 10
+; inc/inet.plh: 0012:     word connectTCP
+					; connectTCP = 12
+; inc/inet.plh: 0013:     word sendTCP
+					; sendTCP = 14
+; inc/inet.plh: 0014:     word closeTCP
+					; closeTCP = 16
+; inc/inet.plh: 0015:     word setInterfaceIP
+					; setInterfaceIP = 18
+; inc/inet.plh: 0016:     word getInterfaceHA
+					; getInterfaceHA = 20
+; inc/inet.plh: 0017:     word setDNS
+					; setDNS = 22
+; inc/inet.plh: 0018:     word resolveIP
+					; resolveIP = 24
+; inc/inet.plh: 0019:     word setCallback
+					; setCallback = 26
+; inc/inet.plh: 0020:     word setParam
+					; setParam = 28
+; inc/inet.plh: 0021: end
+					; t_inet = 30
+; inc/inet.plh: 0022: end
+; utilsrc/tftpd.pla: 0005: 
+; utilsrc/tftpd.pla: 0006: include "inc/fileio.plh"
+; inc/fileio.plh: 0001: import fileio
+	; DCI STRING: FILEIO
+	!BYTE	$C6,$C9,$CC,$C5,$C9,$4F
+					; FILEIO -> X029
+; inc/fileio.plh: 0002:     //
+; inc/fileio.plh: 0003:     // Useful ProDOS values
+; inc/fileio.plh: 0004:     //
+; inc/fileio.plh: 0005:     // MACHID is defined in cmdsys.plh
+; inc/fileio.plh: 0006:     // Which slot has a ROM
+; inc/fileio.plh: 0007:     const SLTBYT = $BF99
+					; SLTBYT = 49049
+; inc/fileio.plh: 0008:     // Prefix active
+; inc/fileio.plh: 0009:     const PFIXPTR = $BF9A
+					; PFIXPTR = 49050
+; inc/fileio.plh: 0010:     // Memory alocate bitmap
+; inc/fileio.plh: 0011:     const MEMTABL = $BF58
+					; MEMTABL = 48984
+; inc/fileio.plh: 0012:     //
+; inc/fileio.plh: 0013:     // SOS/ProDOS error codes
+; inc/fileio.plh: 0014:     //
+; inc/fileio.plh: 0015:     const FILE_ERR_OK            = $00
+					; FILE_ERR_OK = 0
+; inc/fileio.plh: 0016:     const FILE_ERR_BAD_CALL_NUM  = $01
+					; FILE_ERR_BAD_CALL_NUM = 1
+; inc/fileio.plh: 0017:     const FILE_ERR_BAD_PARAM_CNT = $04
+					; FILE_ERR_BAD_PARAM_CNT = 4
+; inc/fileio.plh: 0018:     const FILE_ERR_INT_TBL_FULL  = $25
+					; FILE_ERR_INT_TBL_FULL = 37
+; inc/fileio.plh: 0019:     const FILE_ERR_IO            = $27
+					; FILE_ERR_IO = 39
+; inc/fileio.plh: 0020:     //
+; inc/fileio.plh: 0021:     // File entry struc
+; inc/fileio.plh: 0022:     //
+; inc/fileio.plh: 0023:     struc t_fileentry
+; inc/fileio.plh: 0024:         byte store_namelen
+					; store_namelen = 0
+; inc/fileio.plh: 0025:         byte entry_name[15]
+					; entry_name = 1
+; inc/fileio.plh: 0026:         byte entry_type
+					; entry_type = 16
+; inc/fileio.plh: 0027:         word entry_keyptr
+					; entry_keyptr = 17
+; inc/fileio.plh: 0028:         word entry_blocks
+					; entry_blocks = 19
+; inc/fileio.plh: 0029:         word entry_EOFL
+					; entry_EOFL = 21
+; inc/fileio.plh: 0030:         byte entry_EOFH
+					; entry_EOFH = 23
+; inc/fileio.plh: 0031:         word entry_create[2]
+					; entry_create = 24
+; inc/fileio.plh: 0032:         byte entry_version
+					; entry_version = 28
+; inc/fileio.plh: 0033:         byte entry_minver
+					; entry_minver = 29
+; inc/fileio.plh: 0034:         byte entry_access
+					; entry_access = 30
+; inc/fileio.plh: 0035:         word entry_aux
+					; entry_aux = 31
+; inc/fileio.plh: 0036:         word entry_mod[2]
+					; entry_mod = 33
+; inc/fileio.plh: 0037:         word entry_headptr
+					; entry_headptr = 37
+; inc/fileio.plh: 0038:     end
+					; t_fileentry = 39
+; inc/fileio.plh: 0039:     //
+; inc/fileio.plh: 0040:     // File info struc
+; inc/fileio.plh: 0041:     //
+; inc/fileio.plh: 0042:     struc t_fileinfo
+; inc/fileio.plh: 0043:         byte file_access
+					; file_access = 0
+; inc/fileio.plh: 0044:         byte file_type
+					; file_type = 1
+; inc/fileio.plh: 0045:         word aux_type
+					; aux_type = 2
+; inc/fileio.plh: 0046:         byte storage_type
+					; storage_type = 4
+; inc/fileio.plh: 0047:         word blocks_used
+					; blocks_used = 5
+; inc/fileio.plh: 0048:         word mod_date
+					; mod_date = 7
+; inc/fileio.plh: 0049:         word mod_time
+					; mod_time = 9
+; inc/fileio.plh: 0050:         word create_date
+					; create_date = 11
+; inc/fileio.plh: 0051:         word create_time
+					; create_time = 13
+; inc/fileio.plh: 0052:     end
+					; t_fileinfo = 15
+; inc/fileio.plh: 0053:     //
+; inc/fileio.plh: 0054:     // File functions
+; inc/fileio.plh: 0055:     //
+; inc/fileio.plh: 0056:     struc t_fileio
+; inc/fileio.plh: 0057:         word getpfx
+					; getpfx = 0
+; inc/fileio.plh: 0058:         word setpfx
+					; setpfx = 2
+; inc/fileio.plh: 0059:         word getfileinfo
+					; getfileinfo = 4
+; inc/fileio.plh: 0060:         word setfileinfo
+					; setfileinfo = 6
+; inc/fileio.plh: 0061:         word geteof
+					; geteof = 8
+; inc/fileio.plh: 0062:         word seteof
+					; seteof = 10
+; inc/fileio.plh: 0063:         word iobufalloc
+					; iobufalloc = 12
+; inc/fileio.plh: 0064:         word open
+					; open = 14
+; inc/fileio.plh: 0065:         word close
+					; close = 16
+; inc/fileio.plh: 0066:         word read
+					; read = 18
+; inc/fileio.plh: 0067:         word write
+					; write = 20
+; inc/fileio.plh: 0068:         word create
+					; create = 22
+; inc/fileio.plh: 0069:         word destroy
+					; destroy = 24
+; inc/fileio.plh: 0070:         word rename
+					; rename = 26
+; inc/fileio.plh: 0071:         word newline
+					; newline = 28
+; inc/fileio.plh: 0072:         word online
+					; online = 30
+; inc/fileio.plh: 0073:         word readblock
+					; readblock = 32
+; inc/fileio.plh: 0074:         word writeblock
+					; writeblock = 34
+; inc/fileio.plh: 0075:         word getmark
+					; getmark = 36
+; inc/fileio.plh: 0076:         word setmark
+					; setmark = 38
+; inc/fileio.plh: 0077:     end
+					; t_fileio = 40
+; inc/fileio.plh: 0078:     //
+; inc/fileio.plh: 0079:     // Globally accessible error code
+; inc/fileio.plh: 0080:     //
+; inc/fileio.plh: 0081:     byte perr
+					; PERR -> X030
+; inc/fileio.plh: 0082: end
+; utilsrc/tftpd.pla: 0006: 
+; utilsrc/tftpd.pla: 0007: include "inc/conio.plh"
+; inc/conio.plh: 0001: import conio
+	; DCI STRING: CONIO
+	!BYTE	$C3,$CF,$CE,$C9,$4F
+					; CONIO -> X031
+; inc/conio.plh: 0002:     //
+; inc/conio.plh: 0003:     // ASCII key values
+; inc/conio.plh: 0004:     //
+; inc/conio.plh: 0005:     const keyarrowdown  = $0A
+					; keyarrowdown = 10
+; inc/conio.plh: 0006:     const keyarrowup    = $0B
+					; keyarrowup = 11
+; inc/conio.plh: 0007:     const keyarrowleft  = $08
+					; keyarrowleft = 8
+; inc/conio.plh: 0008:     const keyarrowright = $15
+					; keyarrowright = 21
+; inc/conio.plh: 0009:     const keyenter      = $0D
+					; keyenter = 13
+; inc/conio.plh: 0010:     const keyescape     = $1B
+					; keyescape = 27
+; inc/conio.plh: 0011:     const keyctrla      = $01
+					; keyctrla = 1
+; inc/conio.plh: 0012:     const keyctrlb      = $02
+					; keyctrlb = 2
+; inc/conio.plh: 0013:     const keyctrlc      = $03
+					; keyctrlc = 3
+; inc/conio.plh: 0014:     const keyctrld      = $04
+					; keyctrld = 4
+; inc/conio.plh: 0015:     const keyctrle      = $05
+					; keyctrle = 5
+; inc/conio.plh: 0016:     const keyctrlf      = $06
+					; keyctrlf = 6
+; inc/conio.plh: 0017:     const keyctrlg      = $07
+					; keyctrlg = 7
+; inc/conio.plh: 0018:     const keyctrli      = $09
+					; keyctrli = 9
+; inc/conio.plh: 0019:     const keyctrlk      = $0B
+					; keyctrlk = 11
+; inc/conio.plh: 0020:     const keyctrll      = $0C
+					; keyctrll = 12
+; inc/conio.plh: 0021:     const keyctrln      = $0E
+					; keyctrln = 14
+; inc/conio.plh: 0022:     const keyctrlo      = $0F
+					; keyctrlo = 15
+; inc/conio.plh: 0023:     const keyctrlp      = $10
+					; keyctrlp = 16
+; inc/conio.plh: 0024:     const keyctrlq      = $11
+					; keyctrlq = 17
+; inc/conio.plh: 0025:     const keyctrlr      = $12
+					; keyctrlr = 18
+; inc/conio.plh: 0026:     const keyctrls      = $13
+					; keyctrls = 19
+; inc/conio.plh: 0027:     const keyctrlt      = $14
+					; keyctrlt = 20
+; inc/conio.plh: 0028:     const keyctrlu      = $15
+					; keyctrlu = 21
+; inc/conio.plh: 0029:     const keyctrlv      = $16
+					; keyctrlv = 22
+; inc/conio.plh: 0030:     const keyctrlw      = $17
+					; keyctrlw = 23
+; inc/conio.plh: 0031:     const keyctrlx      = $18
+					; keyctrlx = 24
+; inc/conio.plh: 0032:     const keyctrly      = $19
+					; keyctrly = 25
+; inc/conio.plh: 0033:     const keyctrlz      = $1A
+					; keyctrlz = 26
+; inc/conio.plh: 0034:     const keytab        = keyctrli
+					; keytab = 9
+; inc/conio.plh: 0035:     const keydetab      = $1D
+					; keydetab = 29
+; inc/conio.plh: 0036:     const keyspace      = $20
+					; keyspace = 32
+; inc/conio.plh: 0037:     const keydelete     = $7F
+					; keydelete = 127
+; inc/conio.plh: 0038:     //
+; inc/conio.plh: 0039:     // Option/Solid-Apple key modifier
+; inc/conio.plh: 0040:     //
+; inc/conio.plh: 0041:     const keyoptmod     = $80
+					; keyoptmod = 128
+; inc/conio.plh: 0042:     //
+; inc/conio.plh: 0043:     // Clear optioms
+; inc/conio.plh: 0044:     //
+; inc/conio.plh: 0045:     const cleol         = 1
+					; cleol = 1
+; inc/conio.plh: 0046:     const cleos         = 2
+					; cleos = 2
+; inc/conio.plh: 0047:     const cls           = 3
+					; cls = 3
+; inc/conio.plh: 0048:     //
+; inc/conio.plh: 0049:     // Control Codes
+; inc/conio.plh: 0050:     //
+; inc/conio.plh: 0051:     const ctrlattr      = 1
+					; ctrlattr = 1
+; inc/conio.plh: 0052:     const ctrlecho      = 2
+					; ctrlecho = 2
+; inc/conio.plh: 0053:     const ctrlcursor    = 3
+					; ctrlcursor = 3
+; inc/conio.plh: 0054:     const ctrlcase      = 4
+					; ctrlcase = 4
+; inc/conio.plh: 0055:     const ctrlscroll    = 5
+					; ctrlscroll = 5
+; inc/conio.plh: 0056:     //
+; inc/conio.plh: 0057:     // Control parameters
+; inc/conio.plh: 0058:     //
+; inc/conio.plh: 0059:     const OFF           = 0
+					; OFF = 0
+; inc/conio.plh: 0060:     const ON            = 1
+					; ON = 1
+; inc/conio.plh: 0061:     const NORMAL        = $FF
+					; NORMAL = 255
+; inc/conio.plh: 0062:     const INVERSE       = $3F
+					; INVERSE = 63
+; inc/conio.plh: 0063:     const FLASH         = $7F
+					; FLASH = 127
+; inc/conio.plh: 0064:     const UP            = 1
+					; UP = 1
+; inc/conio.plh: 0065:     const DOWN          = -1
+					; DOWN = -1
+; inc/conio.plh: 0066:     //
+; inc/conio.plh: 0067:     // Additional modes available on VIDEX UltraTerm
+; inc/conio.plh: 0068:     //
+; inc/conio.plh: 0069:     const UTmode80x24   = 1
+					; UTmode80x24 = 1
+; inc/conio.plh: 0070:     const UTmode96x24   = 2
+					; UTmode96x24 = 2
+; inc/conio.plh: 0071:     const UTmode160x24  = 3
+					; UTmode160x24 = 3
+; inc/conio.plh: 0072:     const UTmode80x24I  = 4
+					; UTmode80x24I = 4
+; inc/conio.plh: 0073:     const UTmode80x32I  = 5
+					; UTmode80x32I = 5
+; inc/conio.plh: 0074:     const UTmode80x48I  = 6
+					; UTmode80x48I = 6
+; inc/conio.plh: 0075:     const UTmode132x24I = 7
+					; UTmode132x24I = 7
+; inc/conio.plh: 0076:     const UTmode128x32I = 8
+					; UTmode128x32I = 8
+; inc/conio.plh: 0077:     //
+; inc/conio.plh: 0078:     // API
+; inc/conio.plh: 0079:     //
+; inc/conio.plh: 0080:     struc t_conio
+; inc/conio.plh: 0081:         word keypressed
+					; keypressed = 0
+; inc/conio.plh: 0082:         word getkey
+					; getkey = 2
+; inc/conio.plh: 0083:         word putchars
+					; putchars = 4
+; inc/conio.plh: 0084:         word clear
+					; clear = 6
+; inc/conio.plh: 0085:         word gotoxy
+					; gotoxy = 8
+; inc/conio.plh: 0086:         word viewport
+					; viewport = 10
+; inc/conio.plh: 0087:         word textctrl
+					; textctrl = 12
+; inc/conio.plh: 0088:         word textmode
+					; textmode = 14
+; inc/conio.plh: 0089:         word grmode
+					; grmode = 16
+; inc/conio.plh: 0090:         word grcolor
+					; grcolor = 18
+; inc/conio.plh: 0091:         word grplot
+					; grplot = 20
+; inc/conio.plh: 0092:         word tone
+					; tone = 22
+; inc/conio.plh: 0093:         word rnd
+					; rnd = 24
+; inc/conio.plh: 0094:     end
+					; t_conio = 26
+; inc/conio.plh: 0095: end
+; utilsrc/tftpd.pla: 0007: 
+; utilsrc/tftpd.pla: 0008: sysflags nojitc // Keep JITC from compiling and pausing while transferring
+	!BYTE	$00			; END OF MODULE DEPENDENCIES
+_SYSFLAGS	=	$0100		; SYSTEM FLAGS
+; utilsrc/tftpd.pla: 0009: //
+; utilsrc/tftpd.pla: 0010: // TFTP values
+; utilsrc/tftpd.pla: 0011: //
+; utilsrc/tftpd.pla: 0012: const TFTP_PORT = 69
+					; TFTP_PORT = 69
+; utilsrc/tftpd.pla: 0013: const TID_INC   = $0010
+					; TID_INC = 16
+; utilsrc/tftpd.pla: 0014: const RRQ       = $0100
+					; RRQ = 256
+; utilsrc/tftpd.pla: 0015: const WRQ       = $0200
+					; WRQ = 512
+; utilsrc/tftpd.pla: 0016: const DATAPKT   = $0300
+					; DATAPKT = 768
+; utilsrc/tftpd.pla: 0017: const ACKPKT    = $0400
+					; ACKPKT = 1024
+; utilsrc/tftpd.pla: 0018: const ERRPKT    = $0500
+					; ERRPKT = 1280
+; utilsrc/tftpd.pla: 0019: struc t_errPkt
+; utilsrc/tftpd.pla: 0020:     word errOp
+					; errOp = 0
+; utilsrc/tftpd.pla: 0021:     word errCode
+					; errCode = 2
+; utilsrc/tftpd.pla: 0022:     byte errStr[]
+					; errStr = 4
+; utilsrc/tftpd.pla: 0023:     byte errStrNull
+					; errStrNull = 4
+; utilsrc/tftpd.pla: 0024: end
+					; t_errPkt = 5
+; utilsrc/tftpd.pla: 0025: struc t_ackPkt
+; utilsrc/tftpd.pla: 0026:     word ackOp
+					; ackOp = 0
+; utilsrc/tftpd.pla: 0027:     word ackBlock
+					; ackBlock = 2
+; utilsrc/tftpd.pla: 0028: end
+					; t_ackPkt = 4
+; utilsrc/tftpd.pla: 0029: struc t_datPkt
+; utilsrc/tftpd.pla: 0030:     word datOp
+					; datOp = 0
+; utilsrc/tftpd.pla: 0031:     word datBlock
+					; datBlock = 2
+; utilsrc/tftpd.pla: 0032:     byte datBytes[]
+					; datBytes = 4
+; utilsrc/tftpd.pla: 0033: end
+					; t_datPkt = 4
+; utilsrc/tftpd.pla: 0034: res[t_errPkt] tftpError = $00, $05, $00, $00, $00
+_D032 					; tftpError = $00, $05, $00, $00, $00
+	!BYTE	$00
+	!BYTE	$05
+	!BYTE	$00
+	!BYTE	$00
+	!BYTE	$00
+; utilsrc/tftpd.pla: 0035: res[t_ackPkt] tftpAck   = $00, $04, $00, $00
+_D033 					; tftpAck   = $00, $04, $00, $00
+	!BYTE	$00
+	!BYTE	$04
+	!BYTE	$00
+	!BYTE	$00
+; utilsrc/tftpd.pla: 0036: //
+; utilsrc/tftpd.pla: 0037: // Current file operations
+; utilsrc/tftpd.pla: 0038: //
+; utilsrc/tftpd.pla: 0039: byte ref, type, , netscii, filename[256]
+_D034 	!FILL	1			; ref, type, , netscii, filename[256]
+_D035 	!FILL	1			; type, , netscii, filename[256]
+	!FILL	$01
+_D036 	!FILL	1			; netscii, filename[256]
+_D037 	!FILL	256			; filename[256]
+; utilsrc/tftpd.pla: 0040: word aux, block
+_D038 	!FILL	2			; aux, block
+_D039 	!FILL	2			; block
+; utilsrc/tftpd.pla: 0041: word buff, TID = $1001
+_D040 	!FILL	2			; buff, TID = $1001
+_D041 					; TID = $1001
+	!WORD	$1001
+; utilsrc/tftpd.pla: 0042: word portTFTP, portTID
+_D042 	!FILL	2			; portTFTP, portTID
+_D043 	!FILL	2			; portTID
+; utilsrc/tftpd.pla: 0043: //
+; utilsrc/tftpd.pla: 0044: // Swap bytes in word
+; utilsrc/tftpd.pla: 0045: //
+; utilsrc/tftpd.pla: 0046: asm swab(val)
+_A000 					; swab()
+; utilsrc/tftpd.pla: 0047:         !SOURCE "vmsrc/plvmzp.inc"
+        !SOURCE "vmsrc/plvmzp.inc"
+; utilsrc/tftpd.pla: 0048:         LDA     ESTKL,X
+        LDA     ESTKL,X
+; utilsrc/tftpd.pla: 0049:         LDY     ESTKH,X
+        LDY     ESTKH,X
+; utilsrc/tftpd.pla: 0050:         STA     ESTKH,X
+        STA     ESTKH,X
+; utilsrc/tftpd.pla: 0051:         STY     ESTKL,X
+        STY     ESTKL,X
+; utilsrc/tftpd.pla: 0052:         RTS
+        RTS
+; utilsrc/tftpd.pla: 0053: end
+; utilsrc/tftpd.pla: 0054: //
+; utilsrc/tftpd.pla: 0055: // Translate 'in' value to 'out' value
+; utilsrc/tftpd.pla: 0056: //
+; utilsrc/tftpd.pla: 0057: asm xlat(in, out, buf, len)#0
+_A001 					; xlat()
+; utilsrc/tftpd.pla: 0058:         INX
+        INX
+; utilsrc/tftpd.pla: 0059:         INX
+        INX
+; utilsrc/tftpd.pla: 0060:         INX
+        INX
+; utilsrc/tftpd.pla: 0061:         INX
+        INX
+; utilsrc/tftpd.pla: 0062:         LDA     ESTKL-4,X
+        LDA     ESTKL-4,X
+; utilsrc/tftpd.pla: 0063:         ORA     ESTKH-4,X
+        ORA     ESTKH-4,X
+; utilsrc/tftpd.pla: 0064:         BEQ     XLATEX
+        BEQ     XLATEX
+; utilsrc/tftpd.pla: 0065:         LDA     ESTKL-3,X
+        LDA     ESTKL-3,X
+; utilsrc/tftpd.pla: 0066:         STA     SRCL
+        STA     SRCL
+; utilsrc/tftpd.pla: 0067:         LDA     ESTKH-3,X
+        LDA     ESTKH-3,X
+; utilsrc/tftpd.pla: 0068:         STA     SRCH
+        STA     SRCH
+; utilsrc/tftpd.pla: 0069:         LDA     ESTKL-1,X
+        LDA     ESTKL-1,X
+; utilsrc/tftpd.pla: 0070:         LDY     ESTKL-4,X
+        LDY     ESTKL-4,X
+; utilsrc/tftpd.pla: 0071:         BEQ     XLATLP
+        BEQ     XLATLP
+; utilsrc/tftpd.pla: 0072:         INC     ESTKH-4,X
+        INC     ESTKH-4,X
+; utilsrc/tftpd.pla: 0073:         LDY     #$00
+        LDY     #$00
+; utilsrc/tftpd.pla: 0074: XLATLP  CMP     (SRC),Y
+XLATLP  CMP     (SRC),Y
+; utilsrc/tftpd.pla: 0075:         BNE     +
+        BNE     +
+; utilsrc/tftpd.pla: 0076:         LDA     ESTKL-2,X
+        LDA     ESTKL-2,X
+; utilsrc/tftpd.pla: 0077:         STA     (SRC),Y
+        STA     (SRC),Y
+; utilsrc/tftpd.pla: 0078:         LDA     ESTKL-1,X
+        LDA     ESTKL-1,X
+; utilsrc/tftpd.pla: 0079: +       INY
++       INY
+; utilsrc/tftpd.pla: 0080:         BNE     +
+        BNE     +
+; utilsrc/tftpd.pla: 0081:         INC     DSTH
+        INC     DSTH
+; utilsrc/tftpd.pla: 0082:         INC     SRCH
+        INC     SRCH
+; utilsrc/tftpd.pla: 0083: +       DEC     ESTKL-4,X
++       DEC     ESTKL-4,X
+; utilsrc/tftpd.pla: 0084:         BNE     XLATLP
+        BNE     XLATLP
+; utilsrc/tftpd.pla: 0085:         DEC     ESTKH-4,X
+        DEC     ESTKH-4,X
+; utilsrc/tftpd.pla: 0086:         BNE     XLATLP
+        BNE     XLATLP
+; utilsrc/tftpd.pla: 0087: XLATEX  RTS
+XLATEX  RTS
+; utilsrc/tftpd.pla: 0088: end
+; utilsrc/tftpd.pla: 0089: //
+; utilsrc/tftpd.pla: 0090: // Convert byte to two hex chars
+; utilsrc/tftpd.pla: 0091: //
+; utilsrc/tftpd.pla: 0092: def btoh(cptr, b)#0
+_SUBSEG 				; BYTECODE STARTS
+					; cptr -> [0]
+					; b -> [2]
+_C000 					; btoh()
+; utilsrc/tftpd.pla: 0093:     byte h
+					; h -> [4]
+; utilsrc/tftpd.pla: 0094: 
+; utilsrc/tftpd.pla: 0095:     h = ((b >> 4) & $0F) + '0'
+	!BYTE	$58,$05,$02		; ENTER	5,2
+; utilsrc/tftpd.pla: 0096:     if h > '9'
+; utilsrc/tftpd.pla: 0097:         h = h + 7
+; utilsrc/tftpd.pla: 0098:     fin
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$08			; CN	4
+	!BYTE	$9C			; SHR
+	!BYTE	$3C,$0F			; ANDI	15
+	!BYTE	$38,$30			; ADDI	48
+	!BYTE	$6C,$04			; DLB	[4]
+	!BYTE	$2A,$39			; CB	57
+	!BYTE	$44			; ISGT
+	!BYTE	$4C			; BRFLS	_B001
+	!WORD	_B001-*
+	!BYTE	$64,$04			; LLB	[4]
+	!BYTE	$38,$07			; ADDI	7
+	!BYTE	$74,$04			; SLB	[4]
+_B001 
+_B002 
+; utilsrc/tftpd.pla: 0099:     ^cptr = h
+; utilsrc/tftpd.pla: 0100:     cptr++
+	!BYTE	$64,$04			; LLB	[4]
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$70			; SB
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$8C			; INCR
+; utilsrc/tftpd.pla: 0101:     h = (b & $0F) + '0'
+; utilsrc/tftpd.pla: 0102:     if h > '9'
+; utilsrc/tftpd.pla: 0103:         h = h + 7
+; utilsrc/tftpd.pla: 0104:     fin
+	!BYTE	$76,$00			; SLW	[0]
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$3C,$0F			; ANDI	15
+	!BYTE	$38,$30			; ADDI	48
+	!BYTE	$6C,$04			; DLB	[4]
+	!BYTE	$2A,$39			; CB	57
+	!BYTE	$44			; ISGT
+	!BYTE	$4C			; BRFLS	_B003
+	!WORD	_B003-*
+	!BYTE	$64,$04			; LLB	[4]
+	!BYTE	$38,$07			; ADDI	7
+	!BYTE	$74,$04			; SLB	[4]
+_B003 
+_B004 
+; utilsrc/tftpd.pla: 0105:     ^cptr = h
+; utilsrc/tftpd.pla: 0106: end
+	!BYTE	$64,$04			; LLB	[4]
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$70			; SB
+	!BYTE	$5A,$05			; LEAVE	5
+; utilsrc/tftpd.pla: 0107: 
+; utilsrc/tftpd.pla: 0108: def hexByte(hexChars)
+					; hexChars -> [0]
+_C001 					; hexByte()
+; utilsrc/tftpd.pla: 0109:     byte lo, hi
+					; lo -> [2]
+					; hi -> [3]
+; utilsrc/tftpd.pla: 0110: 
+; utilsrc/tftpd.pla: 0111:     lo = toupper(^(hexChars + 1)) - '0'
+	!BYTE	$58,$04,$01		; ENTER	4,1
+; utilsrc/tftpd.pla: 0112:     if lo > 9
+; utilsrc/tftpd.pla: 0113:         lo = lo - 7
+; utilsrc/tftpd.pla: 0114:     fin
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$8C			; INCR
+	!BYTE	$60			; LB
+	!BYTE	$54			; CALL	_X021
+_F000 	!WORD	0		
+	!BYTE	$3A,$30			; SUBI	48
+	!BYTE	$6C,$02			; DLB	[2]
+	!BYTE	$12			; CN	9
+	!BYTE	$44			; ISGT
+	!BYTE	$4C			; BRFLS	_B005
+	!WORD	_B005-*
+	!BYTE	$64,$02			; LLB	[2]
+	!BYTE	$3A,$07			; SUBI	7
+	!BYTE	$74,$02			; SLB	[2]
+_B005 
+_B006 
+; utilsrc/tftpd.pla: 0115:     hi = toupper(^hexChars) - '0'
+; utilsrc/tftpd.pla: 0116:     if hi > 9
+; utilsrc/tftpd.pla: 0117:         hi = hi - 7
+; utilsrc/tftpd.pla: 0118:     fin
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$60			; LB
+	!BYTE	$54			; CALL	_X021
+_F001 	!WORD	0		
+	!BYTE	$3A,$30			; SUBI	48
+	!BYTE	$6C,$03			; DLB	[3]
+	!BYTE	$12			; CN	9
+	!BYTE	$44			; ISGT
+	!BYTE	$4C			; BRFLS	_B007
+	!WORD	_B007-*
+	!BYTE	$64,$03			; LLB	[3]
+	!BYTE	$3A,$07			; SUBI	7
+	!BYTE	$74,$03			; SLB	[3]
+_B007 
+_B008 
+; utilsrc/tftpd.pla: 0119:     return (hi << 4) | lo
+	!BYTE	$64,$03			; LLB	[3]
+	!BYTE	$08			; CN	4
+	!BYTE	$9A			; SHL
+	!BYTE	$64,$02			; LLB	[2]
+	!BYTE	$96			; OR 
+	!BYTE	$5A,$04			; LEAVE	4
+; utilsrc/tftpd.pla: 0120: end
+; utilsrc/tftpd.pla: 0121: def hexWord(hexChars)
+					; hexChars -> [0]
+_C002 					; hexWord()
+; utilsrc/tftpd.pla: 0122:     return (hexByte(hexChars) << 8) | hexByte(hexChars + 2)
+	!BYTE	$58,$02,$01		; ENTER	2,1
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$54			; CALL	_C001
+_F002 	!WORD	_C001		
+	!BYTE	$10			; CN	8
+	!BYTE	$9A			; SHL
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$38,$02			; ADDI	2
+	!BYTE	$54			; CALL	_C001
+_F003 	!WORD	_C001		
+	!BYTE	$96			; OR 
+	!BYTE	$5A,$02			; LEAVE	2
+; utilsrc/tftpd.pla: 0123: end
+; utilsrc/tftpd.pla: 0124: def mkProName(netName, proName)#3
+					; netName -> [0]
+					; proName -> [2]
+_C003 					; mkProName()
+; utilsrc/tftpd.pla: 0125:     byte n, l, ascii, proType
+					; n -> [4]
+					; l -> [5]
+					; ascii -> [6]
+					; proType -> [7]
+; utilsrc/tftpd.pla: 0126:     word proAux
+					; proAux -> [8]
+; utilsrc/tftpd.pla: 0127: 
+; utilsrc/tftpd.pla: 0128:     proType = $02   // default to BIN
+	!BYTE	$58,$0A,$02		; ENTER	10,2
+; utilsrc/tftpd.pla: 0129:     proAux  = $0000 // default to 0
+; utilsrc/tftpd.pla: 0130:     //
+; utilsrc/tftpd.pla: 0131:     // Check for CiderPress style extension
+; utilsrc/tftpd.pla: 0132:     //
+; utilsrc/tftpd.pla: 0133:     for l = 0 to 255
+	!BYTE	$04			; CN	2
+	!BYTE	$74,$07			; SLB	[7]
+	!BYTE	$00			; CN	0
+	!BYTE	$76,$08			; SLW	[8]
+	!BYTE	$2A,$FF			; CB	255
+	!BYTE	$00			; CN	0
+_B010 
+	!BYTE	$6C,$05			; DLB	[5]
+; utilsrc/tftpd.pla: 0134:         if netName->[l] == 0; break; fin
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$B0,$05			; ADDLB	[5]
+	!BYTE	$60			; LB
+	!BYTE	$4E			; BRTRU	_B012
+	!WORD	_B012-*
+	!BYTE	$50			; BRNCH	_B009
+	!WORD	_B009-*
+_B012 
+_B013 
+; utilsrc/tftpd.pla: 0135:     next
+_B011 
+	!BYTE	$A4			; INCBRLE	_B010
+	!WORD	_B010-*
+_B009 
+	!BYTE	$74,$05			; SLB	[5]
+	!BYTE	$30			; DROP 
+; utilsrc/tftpd.pla: 0136:     ascii = toupper(netName->[l + 1]) == 'N' // Netscii mode
+; utilsrc/tftpd.pla: 0137:     if l > 7 and ^(netName + l - 7) == '#'
+; utilsrc/tftpd.pla: 0138:         proType = hexByte(netName + l - 6)
+; utilsrc/tftpd.pla: 0139:         proAux  = hexWord(netName + l - 4)
+; utilsrc/tftpd.pla: 0140:         l = l - 7
+; utilsrc/tftpd.pla: 0141:     fin
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$64,$05			; LLB	[5]
+	!BYTE	$8C			; INCR
+	!BYTE	$82			; ADD 
+	!BYTE	$60			; LB
+	!BYTE	$54			; CALL	_X021
+_F004 	!WORD	0		
+	!BYTE	$2A,$4E			; CB	78
+	!BYTE	$40			; ISEQ
+	!BYTE	$74,$06			; SLB	[6]
+	!BYTE	$64,$05			; LLB	[5]
+	!BYTE	$0E			; CN	7
+	!BYTE	$44			; ISGT
+	!BYTE	$AC			; BRAND	_B014
+	!WORD	_B014-*
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$B0,$05			; ADDLB	[5]
+	!BYTE	$3A,$07			; SUBI	7
+	!BYTE	$60			; LB
+	!BYTE	$2A,$23			; CB	35
+	!BYTE	$40			; ISEQ
+_B014 
+	!BYTE	$4C			; BRFLS	_B015
+	!WORD	_B015-*
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$B0,$05			; ADDLB	[5]
+	!BYTE	$3A,$06			; SUBI	6
+	!BYTE	$54			; CALL	_C001
+_F005 	!WORD	_C001		
+	!BYTE	$74,$07			; SLB	[7]
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$B0,$05			; ADDLB	[5]
+	!BYTE	$3A,$04			; SUBI	4
+	!BYTE	$54			; CALL	_C002
+_F006 	!WORD	_C002		
+	!BYTE	$76,$08			; SLW	[8]
+	!BYTE	$64,$05			; LLB	[5]
+	!BYTE	$3A,$07			; SUBI	7
+	!BYTE	$74,$05			; SLB	[5]
+_B015 
+_B016 
+; utilsrc/tftpd.pla: 0142:     memcpy(proName + 1, netName, l)
+; utilsrc/tftpd.pla: 0143:     ^proName = l
+; utilsrc/tftpd.pla: 0144:     return ascii, proType, proAux
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$64,$05			; LLB	[5]
+	!BYTE	$54			; CALL	_X018
+_F007 	!WORD	0		
+	!BYTE	$64,$05			; LLB	[5]
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$64,$06			; LLB	[6]
+	!BYTE	$64,$07			; LLB	[7]
+	!BYTE	$66,$08			; LLW	[8]
+	!BYTE	$5A,$0A			; LEAVE	10
+; utilsrc/tftpd.pla: 0145: end
+; utilsrc/tftpd.pla: 0146: def mkNetName(proName, netName)
+					; proName -> [0]
+					; netName -> [2]
+_C004 					; mkNetName()
+; utilsrc/tftpd.pla: 0147:     word l, n
+					; l -> [4]
+					; n -> [6]
+; utilsrc/tftpd.pla: 0148:     byte fileinfo[t_fileinfo]
+					; fileinfo -> [8]
+; utilsrc/tftpd.pla: 0149: 
+; utilsrc/tftpd.pla: 0150:     if !fileio:getfileinfo(proName, @fileinfo)
+	!BYTE	$58,$17,$02		; ENTER	23,2
+; utilsrc/tftpd.pla: 0151:         //
+; utilsrc/tftpd.pla: 0152:         // Scan backward looking for dir seperator
+; utilsrc/tftpd.pla: 0153:         //
+; utilsrc/tftpd.pla: 0154:         l = ^proName
+; utilsrc/tftpd.pla: 0155:         for n = l downto 1
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$28,$08			; LLA	[8]
+	!BYTE	$6A			; LAW	_X029+4
+_F008 	!WORD	0+4		
+	!BYTE	$56			; ICAL
+	!BYTE	$4E			; BRTRU	_B017
+	!WORD	_B017-*
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$60			; LB
+	!BYTE	$76,$04			; SLW	[4]
+	!BYTE	$02			; CN	1
+	!BYTE	$66,$04			; LLW	[4]
+	!BYTE	$A2			; BRLT	_B019
+	!WORD	_B019-*
+_B020 
+	!BYTE	$6E,$06			; DLW	[6]
+; utilsrc/tftpd.pla: 0156:             if ^(proName + n) == '/'
+; utilsrc/tftpd.pla: 0157:                 break
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$B2,$06			; ADDLW	[6]
+	!BYTE	$60			; LB
+	!BYTE	$2A,$2F			; CB	47
+	!BYTE	$24			; BRNE	_B022
+	!WORD	_B022-*
+	!BYTE	$50			; BRNCH	_B019
+	!WORD	_B019-*
+; utilsrc/tftpd.pla: 0158:             fin
+_B022 
+_B023 
+; utilsrc/tftpd.pla: 0159:         next
+_B021 
+	!BYTE	$A8			; DECBRGE	_B020
+	!WORD	_B020-*
+_B019 
+	!BYTE	$76,$06			; SLW	[6]
+	!BYTE	$30			; DROP 
+; utilsrc/tftpd.pla: 0160:         memcpy(netName + 1, proName + 1 + n, l - n)
+; utilsrc/tftpd.pla: 0161:         ^netName = l - n + 7
+; utilsrc/tftpd.pla: 0162:         //
+; utilsrc/tftpd.pla: 0163:         // Build CiderPress style extension
+; utilsrc/tftpd.pla: 0164:         //
+; utilsrc/tftpd.pla: 0165:         n = netName + ^netName - 6
+; utilsrc/tftpd.pla: 0166:         ^n = '#'
+; utilsrc/tftpd.pla: 0167:         btoh(n + 1, fileinfo.file_type)
+; utilsrc/tftpd.pla: 0168:         btoh(n + 3, fileinfo.aux_type.1)
+; utilsrc/tftpd.pla: 0169:         btoh(n + 5, fileinfo.aux_type)
+; utilsrc/tftpd.pla: 0170:     else
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$8C			; INCR
+	!BYTE	$B2,$06			; ADDLW	[6]
+	!BYTE	$66,$04			; LLW	[4]
+	!BYTE	$66,$06			; LLW	[6]
+	!BYTE	$84			; SUB 
+	!BYTE	$54			; CALL	_X018
+_F009 	!WORD	0		
+	!BYTE	$66,$04			; LLW	[4]
+	!BYTE	$66,$06			; LLW	[6]
+	!BYTE	$84			; SUB 
+	!BYTE	$38,$07			; ADDI	7
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$70			; SB
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$34			; DUP
+	!BYTE	$60			; LB
+	!BYTE	$82			; ADD 
+	!BYTE	$3A,$06			; SUBI	6
+	!BYTE	$76,$06			; SLW	[6]
+	!BYTE	$2A,$23			; CB	35
+	!BYTE	$66,$06			; LLW	[6]
+	!BYTE	$70			; SB
+	!BYTE	$66,$06			; LLW	[6]
+	!BYTE	$8C			; INCR
+	!BYTE	$64,$09			; LLB	[9]
+	!BYTE	$54			; CALL	_C000
+_F010 	!WORD	_C000		
+	!BYTE	$66,$06			; LLW	[6]
+	!BYTE	$38,$03			; ADDI	3
+	!BYTE	$28,$0A			; LLA	[10]
+	!BYTE	$8C			; INCR
+	!BYTE	$60			; LB
+	!BYTE	$54			; CALL	_C000
+_F011 	!WORD	_C000		
+	!BYTE	$66,$06			; LLW	[6]
+	!BYTE	$38,$05			; ADDI	5
+	!BYTE	$64,$0A			; LLB	[10]
+	!BYTE	$54			; CALL	_C000
+_F012 	!WORD	_C000		
+	!BYTE	$50			; BRNCH	_B018
+	!WORD	_B018-*
+_B017 
+; utilsrc/tftpd.pla: 0171:         //
+; utilsrc/tftpd.pla: 0172:         // Error getting info on file
+; utilsrc/tftpd.pla: 0173:         //
+; utilsrc/tftpd.pla: 0174:         puts("Error reading "); puts(proName); putln
+	!BYTE	$2E			; CS
+	!BYTE	$0E
+	!BYTE	$45,$72,$72,$6F,$72,$20,$72,$65
+	!BYTE	$61,$64,$69,$6E,$67,$20
+	!BYTE	$54			; CALL	_X004
+_F013 	!WORD	0		
+; utilsrc/tftpd.pla: 0175:         return -1
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$54			; CALL	_X004
+_F014 	!WORD	0		
+	!BYTE	$54			; CALL	_X003
+_F015 	!WORD	0		
+	!BYTE	$20			; MINUS ONE
+	!BYTE	$5A,$17			; LEAVE	23
+; utilsrc/tftpd.pla: 0176:     fin
+_B018 
+; utilsrc/tftpd.pla: 0177:     return 0
+	!BYTE	$00			; CN	0
+	!BYTE	$5A,$17			; LEAVE	23
+; utilsrc/tftpd.pla: 0178: end
+; utilsrc/tftpd.pla: 0179: 
+; utilsrc/tftpd.pla: 0180: def readUDP(ipsrc, portsrc, data, len, param)
+					; ipsrc -> [0]
+					; portsrc -> [2]
+					; data -> [4]
+					; len -> [6]
+					; param -> [8]
+_C005 					; readUDP()
+; utilsrc/tftpd.pla: 0181:     word err
+					; err -> [10]
+; utilsrc/tftpd.pla: 0182: 
+; utilsrc/tftpd.pla: 0183:     err = 0
+	!BYTE	$58,$0C,$05		; ENTER	12,5
+; utilsrc/tftpd.pla: 0184:     when *data
+	!BYTE	$00			; CN	0
+	!BYTE	$76,$0A			; SLW	[10]
+	!BYTE	$66,$04			; LLW	[4]
+	!BYTE	$62			; LW
+	!BYTE	$52			; SEL
+	!WORD	_B025-*
+; utilsrc/tftpd.pla: 0185:         is $0500 // Error
+_B026 
+; utilsrc/tftpd.pla: 0186:             err = *data
+; utilsrc/tftpd.pla: 0187:         is $0400 // Ack
+	!BYTE	$66,$04			; LLW	[4]
+	!BYTE	$62			; LW
+	!BYTE	$76,$0A			; SLW	[10]
+_B027 
+; utilsrc/tftpd.pla: 0188:             if swab(data=>ackBlock) <> block
+; utilsrc/tftpd.pla: 0189:                 puts("RRQ: Out-of-sequence block\n")
+	!BYTE	$66,$04			; LLW	[4]
+	!BYTE	$38,$02			; ADDI	2
+	!BYTE	$62			; LW
+	!BYTE	$54			; CALL	_A000
+_F016 	!WORD	_A000		
+	!BYTE	$6A			; LAW	_D039+0
+_F017 	!WORD	_D039+0		
+	!BYTE	$22			; BREQ	_B028
+	!WORD	_B028-*
+	!BYTE	$2E			; CS
+	!BYTE	$1B
+	!BYTE	$52,$52,$51,$3A,$20,$4F,$75,$74
+	!BYTE	$2D,$6F,$66,$2D,$73,$65,$71,$75
+	!BYTE	$65,$6E,$63,$65,$20,$62,$6C,$6F
+	!BYTE	$63,$6B,$0D
+	!BYTE	$54			; CALL	_X004
+_F018 	!WORD	0		
+; utilsrc/tftpd.pla: 0190:                 err = $0800 // Out-of-sequence block
+; utilsrc/tftpd.pla: 0191:                 break
+	!BYTE	$2C,$00,$08		; CW	2048
+	!BYTE	$76,$0A			; SLW	[10]
+	!BYTE	$50			; BRNCH	_B024
+	!WORD	_B024-*
+; utilsrc/tftpd.pla: 0192:             fin
+_B028 
+_B029 
+; utilsrc/tftpd.pla: 0193:             if param == 512 // Size of initial read
+; utilsrc/tftpd.pla: 0194:                 param = fileio:read(ref, buff+datBytes, 512)
+; utilsrc/tftpd.pla: 0195:                 if type == $04 // TXT type
+; utilsrc/tftpd.pla: 0196:                     xlat($0D, $0A, buff+datBytes, param)
+; utilsrc/tftpd.pla: 0197:                 fin
+	!BYTE	$66,$08			; LLW	[8]
+	!BYTE	$2C,$00,$02		; CW	512
+	!BYTE	$24			; BRNE	_B030
+	!WORD	_B030-*
+	!BYTE	$68			; LAB	_D034+0
+_F019 	!WORD	_D034+0		
+	!BYTE	$6A			; LAW	_D040+0
+_F020 	!WORD	_D040+0		
+	!BYTE	$38,$04			; ADDI	4
+	!BYTE	$2C,$00,$02		; CW	512
+	!BYTE	$6A			; LAW	_X029+18
+_F021 	!WORD	0+18		
+	!BYTE	$56			; ICAL
+	!BYTE	$76,$08			; SLW	[8]
+	!BYTE	$68			; LAB	_D035+0
+_F022 	!WORD	_D035+0		
+	!BYTE	$08			; CN	4
+	!BYTE	$24			; BRNE	_B032
+	!WORD	_B032-*
+	!BYTE	$1A			; CN	13
+	!BYTE	$14			; CN	10
+	!BYTE	$6A			; LAW	_D040+0
+_F023 	!WORD	_D040+0		
+	!BYTE	$38,$04			; ADDI	4
+	!BYTE	$66,$08			; LLW	[8]
+	!BYTE	$54			; CALL	_A001
+_F024 	!WORD	_A001		
+_B032 
+_B033 
+; utilsrc/tftpd.pla: 0198:                 block++
+	!BYTE	$6A			; LAW	_D039+0
+_F025 	!WORD	_D039+0		
+	!BYTE	$8C			; INCR
+; utilsrc/tftpd.pla: 0199:                 buff=>datBlock = swab(block)
+; utilsrc/tftpd.pla: 0200:                 iNet:sendUDP(portTID, ipsrc, portsrc, buff, t_datPkt + param)
+; utilsrc/tftpd.pla: 0201:             fin
+	!BYTE	$7E			; DAW	_D039+0
+_F026 	!WORD	_D039+0		
+	!BYTE	$54			; CALL	_A000
+_F027 	!WORD	_A000		
+	!BYTE	$6A			; LAW	_D040+0
+_F028 	!WORD	_D040+0		
+	!BYTE	$38,$02			; ADDI	2
+	!BYTE	$72			; SW
+	!BYTE	$6A			; LAW	_D043+0
+_F029 	!WORD	_D043+0		
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$6A			; LAW	_D040+0
+_F030 	!WORD	_D040+0		
+	!BYTE	$08			; CN	4
+	!BYTE	$B2,$08			; ADDLW	[8]
+	!BYTE	$6A			; LAW	_X028+6
+_F031 	!WORD	0+6		
+	!BYTE	$56			; ICAL
+	!BYTE	$30			; DROP 
+_B030 
+_B031 
+; utilsrc/tftpd.pla: 0202:             if err
+; utilsrc/tftpd.pla: 0203:                 tftpError:errCode = err
+; utilsrc/tftpd.pla: 0204:                 iNet:sendUDP(portTID, ipsrc, portsrc, @tftpError, t_errPkt)
+; utilsrc/tftpd.pla: 0205:             fin
+	!BYTE	$66,$0A			; LLW	[10]
+	!BYTE	$4C			; BRFLS	_B034
+	!WORD	_B034-*
+	!BYTE	$66,$0A			; LLW	[10]
+	!BYTE	$7A			; SAW	_D032+2
+_F032 	!WORD	_D032+2		
+	!BYTE	$6A			; LAW	_D043+0
+_F033 	!WORD	_D043+0		
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$26			; LA	_D032+0
+_F034 	!WORD	_D032+0		
+	!BYTE	$0A			; CN	5
+	!BYTE	$6A			; LAW	_X028+6
+_F035 	!WORD	0+6		
+	!BYTE	$56			; ICAL
+	!BYTE	$30			; DROP 
+_B034 
+_B035 
+; utilsrc/tftpd.pla: 0206:             if param < 512 or err
+; utilsrc/tftpd.pla: 0207:                 //
+; utilsrc/tftpd.pla: 0208:                 // All done
+; utilsrc/tftpd.pla: 0209:                 //
+; utilsrc/tftpd.pla: 0210:                 iNet:closeUDP(portTID)
+; utilsrc/tftpd.pla: 0211:                 fileio:close(ref)
+; utilsrc/tftpd.pla: 0212:                 ref = 0
+; utilsrc/tftpd.pla: 0213:             fin
+	!BYTE	$66,$08			; LLW	[8]
+	!BYTE	$2C,$00,$02		; CW	512
+	!BYTE	$46			; ISLT
+	!BYTE	$AE			; BROR	_B036
+	!WORD	_B036-*
+	!BYTE	$66,$0A			; LLW	[10]
+_B036 
+	!BYTE	$4C			; BRFLS	_B037
+	!WORD	_B037-*
+	!BYTE	$6A			; LAW	_D043+0
+_F036 	!WORD	_D043+0		
+	!BYTE	$6A			; LAW	_X028+8
+_F037 	!WORD	0+8		
+	!BYTE	$56			; ICAL
+	!BYTE	$30			; DROP 
+	!BYTE	$68			; LAB	_D034+0
+_F038 	!WORD	_D034+0		
+	!BYTE	$6A			; LAW	_X029+16
+_F039 	!WORD	0+16		
+	!BYTE	$56			; ICAL
+	!BYTE	$30			; DROP 
+	!BYTE	$00			; CN	0
+	!BYTE	$78			; SAB	_D034+0
+_F040 	!WORD	_D034+0		
+_B037 
+_B038 
+; utilsrc/tftpd.pla: 0214:             break
+	!BYTE	$50			; BRNCH	_B024
+	!WORD	_B024-*
+; utilsrc/tftpd.pla: 0215:         otherwise
+_B025 
+	!BYTE	$02			; CASEBLOCK
+	!WORD	$0400
+	!WORD	_B027-*
+	!WORD	$0500
+	!WORD	_B026-*
+; utilsrc/tftpd.pla: 0216:             puts("TFTP: RRQ Unexpected packet opcode: $"); puth(*data); putln
+	!BYTE	$2E			; CS
+	!BYTE	$25
+	!BYTE	$54,$46,$54,$50,$3A,$20,$52,$52
+	!BYTE	$51,$20,$55,$6E,$65,$78,$70,$65
+	!BYTE	$63,$74,$65,$64,$20,$70,$61,$63
+	!BYTE	$6B,$65,$74,$20,$6F,$70,$63,$6F
+	!BYTE	$64,$65,$3A,$20,$24
+	!BYTE	$54			; CALL	_X004
+_F041 	!WORD	0		
+; utilsrc/tftpd.pla: 0217:     wend
+	!BYTE	$66,$04			; LLW	[4]
+	!BYTE	$62			; LW
+	!BYTE	$54			; CALL	_X009
+_F042 	!WORD	0		
+	!BYTE	$54			; CALL	_X003
+_F043 	!WORD	0		
+_B024 
+; utilsrc/tftpd.pla: 0218:     return 0
+	!BYTE	$00			; CN	0
+	!BYTE	$5A,$0C			; LEAVE	12
+; utilsrc/tftpd.pla: 0219: end
+; utilsrc/tftpd.pla: 0220: def writeUDP(ipsrc, portsrc, data, len, param)
+					; ipsrc -> [0]
+					; portsrc -> [2]
+					; data -> [4]
+					; len -> [6]
+					; param -> [8]
+_C006 					; writeUDP()
+; utilsrc/tftpd.pla: 0221:     word err
+					; err -> [10]
+; utilsrc/tftpd.pla: 0222: 
+; utilsrc/tftpd.pla: 0223:     err = 0
+	!BYTE	$58,$0C,$05		; ENTER	12,5
+; utilsrc/tftpd.pla: 0224:     when *data
+	!BYTE	$00			; CN	0
+	!BYTE	$76,$0A			; SLW	[10]
+	!BYTE	$66,$04			; LLW	[4]
+	!BYTE	$62			; LW
+	!BYTE	$52			; SEL
+	!WORD	_B040-*
+; utilsrc/tftpd.pla: 0225:         is $0300 // Data packet
+_B041 
+; utilsrc/tftpd.pla: 0226:             if swab(data=>datBlock) <> block
+; utilsrc/tftpd.pla: 0227:                 puts("WRQ: Out-of-sequence block\n")
+	!BYTE	$66,$04			; LLW	[4]
+	!BYTE	$38,$02			; ADDI	2
+	!BYTE	$62			; LW
+	!BYTE	$54			; CALL	_A000
+_F044 	!WORD	_A000		
+	!BYTE	$6A			; LAW	_D039+0
+_F045 	!WORD	_D039+0		
+	!BYTE	$22			; BREQ	_B042
+	!WORD	_B042-*
+	!BYTE	$2E			; CS
+	!BYTE	$1B
+	!BYTE	$57,$52,$51,$3A,$20,$4F,$75,$74
+	!BYTE	$2D,$6F,$66,$2D,$73,$65,$71,$75
+	!BYTE	$65,$6E,$63,$65,$20,$62,$6C,$6F
+	!BYTE	$63,$6B,$0D
+	!BYTE	$54			; CALL	_X004
+_F046 	!WORD	0		
+; utilsrc/tftpd.pla: 0228:                 err = $0800 // Out-of-sequence block
+; utilsrc/tftpd.pla: 0229:                 break
+	!BYTE	$2C,$00,$08		; CW	2048
+	!BYTE	$76,$0A			; SLW	[10]
+	!BYTE	$50			; BRNCH	_B039
+	!WORD	_B039-*
+; utilsrc/tftpd.pla: 0230:             fin
+_B042 
+_B043 
+; utilsrc/tftpd.pla: 0231:             len = len - t_datPkt
+; utilsrc/tftpd.pla: 0232:             if type == $04 // TXT type
+; utilsrc/tftpd.pla: 0233:                 xlat($0A, $0D, data+datBytes, len)
+; utilsrc/tftpd.pla: 0234:             fin
+	!BYTE	$66,$06			; LLW	[6]
+	!BYTE	$3A,$04			; SUBI	4
+	!BYTE	$76,$06			; SLW	[6]
+	!BYTE	$68			; LAB	_D035+0
+_F047 	!WORD	_D035+0		
+	!BYTE	$08			; CN	4
+	!BYTE	$24			; BRNE	_B044
+	!WORD	_B044-*
+	!BYTE	$14			; CN	10
+	!BYTE	$1A			; CN	13
+	!BYTE	$66,$04			; LLW	[4]
+	!BYTE	$38,$04			; ADDI	4
+	!BYTE	$66,$06			; LLW	[6]
+	!BYTE	$54			; CALL	_A001
+_F048 	!WORD	_A001		
+_B044 
+_B045 
+; utilsrc/tftpd.pla: 0235:             if fileio:write(ref, data+datBytes, len) <> len
+; utilsrc/tftpd.pla: 0236:                 puts("WRQ: File write error\n")
+	!BYTE	$68			; LAB	_D034+0
+_F049 	!WORD	_D034+0		
+	!BYTE	$66,$04			; LLW	[4]
+	!BYTE	$38,$04			; ADDI	4
+	!BYTE	$66,$06			; LLW	[6]
+	!BYTE	$6A			; LAW	_X029+20
+_F050 	!WORD	0+20		
+	!BYTE	$56			; ICAL
+	!BYTE	$66,$06			; LLW	[6]
+	!BYTE	$22			; BREQ	_B046
+	!WORD	_B046-*
+	!BYTE	$2E			; CS
+	!BYTE	$16
+	!BYTE	$57,$52,$51,$3A,$20,$46,$69,$6C
+	!BYTE	$65,$20,$77,$72,$69,$74,$65,$20
+	!BYTE	$65,$72,$72,$6F,$72,$0D
+	!BYTE	$54			; CALL	_X004
+_F051 	!WORD	0		
+; utilsrc/tftpd.pla: 0237:                 tftpError:errCode = $0300 // Disk full error
+; utilsrc/tftpd.pla: 0238:                 break
+	!BYTE	$2C,$00,$03		; CW	768
+	!BYTE	$7A			; SAW	_D032+2
+_F052 	!WORD	_D032+2		
+	!BYTE	$50			; BRNCH	_B039
+	!WORD	_B039-*
+; utilsrc/tftpd.pla: 0239:             fin
+_B046 
+_B047 
+; utilsrc/tftpd.pla: 0240:             if not err
+; utilsrc/tftpd.pla: 0241:                 tftpAck:ackBlock = swab(block)
+; utilsrc/tftpd.pla: 0242:                 block++
+	!BYTE	$66,$0A			; LLW	[10]
+	!BYTE	$4E			; BRTRU	_B048
+	!WORD	_B048-*
+	!BYTE	$6A			; LAW	_D039+0
+_F053 	!WORD	_D039+0		
+	!BYTE	$54			; CALL	_A000
+_F054 	!WORD	_A000		
+	!BYTE	$7A			; SAW	_D033+2
+_F055 	!WORD	_D033+2		
+	!BYTE	$6A			; LAW	_D039+0
+_F056 	!WORD	_D039+0		
+	!BYTE	$8C			; INCR
+; utilsrc/tftpd.pla: 0243:                 iNet:sendUDP(portTID, ipsrc, portsrc, @tftpAck, t_ackPkt)
+; utilsrc/tftpd.pla: 0244:             else
+	!BYTE	$7A			; SAW	_D039+0
+_F057 	!WORD	_D039+0		
+	!BYTE	$6A			; LAW	_D043+0
+_F058 	!WORD	_D043+0		
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$26			; LA	_D033+0
+_F059 	!WORD	_D033+0		
+	!BYTE	$08			; CN	4
+	!BYTE	$6A			; LAW	_X028+6
+_F060 	!WORD	0+6		
+	!BYTE	$56			; ICAL
+	!BYTE	$30			; DROP 
+	!BYTE	$50			; BRNCH	_B049
+	!WORD	_B049-*
+_B048 
+; utilsrc/tftpd.pla: 0245:                 tftpError:errCode = err
+; utilsrc/tftpd.pla: 0246:                 iNet:sendUDP(portTID, ipsrc, portsrc, @tftpError, t_errPkt)
+; utilsrc/tftpd.pla: 0247:             fin
+	!BYTE	$66,$0A			; LLW	[10]
+	!BYTE	$7A			; SAW	_D032+2
+_F061 	!WORD	_D032+2		
+	!BYTE	$6A			; LAW	_D043+0
+_F062 	!WORD	_D043+0		
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$26			; LA	_D032+0
+_F063 	!WORD	_D032+0		
+	!BYTE	$0A			; CN	5
+	!BYTE	$6A			; LAW	_X028+6
+_F064 	!WORD	0+6		
+	!BYTE	$56			; ICAL
+	!BYTE	$30			; DROP 
+_B049 
+; utilsrc/tftpd.pla: 0248:             if len < 512 or err
+; utilsrc/tftpd.pla: 0249:                 //
+; utilsrc/tftpd.pla: 0250:                 // All done
+; utilsrc/tftpd.pla: 0251:                 //
+; utilsrc/tftpd.pla: 0252:                 iNet:closeUDP(portTID)
+; utilsrc/tftpd.pla: 0253:                 fileio:close(ref)
+; utilsrc/tftpd.pla: 0254:                 ref = 0
+; utilsrc/tftpd.pla: 0255:             fin
+	!BYTE	$66,$06			; LLW	[6]
+	!BYTE	$2C,$00,$02		; CW	512
+	!BYTE	$46			; ISLT
+	!BYTE	$AE			; BROR	_B050
+	!WORD	_B050-*
+	!BYTE	$66,$0A			; LLW	[10]
+_B050 
+	!BYTE	$4C			; BRFLS	_B051
+	!WORD	_B051-*
+	!BYTE	$6A			; LAW	_D043+0
+_F065 	!WORD	_D043+0		
+	!BYTE	$6A			; LAW	_X028+8
+_F066 	!WORD	0+8		
+	!BYTE	$56			; ICAL
+	!BYTE	$30			; DROP 
+	!BYTE	$68			; LAB	_D034+0
+_F067 	!WORD	_D034+0		
+	!BYTE	$6A			; LAW	_X029+16
+_F068 	!WORD	0+16		
+	!BYTE	$56			; ICAL
+	!BYTE	$30			; DROP 
+	!BYTE	$00			; CN	0
+	!BYTE	$78			; SAB	_D034+0
+_F069 	!WORD	_D034+0		
+_B051 
+_B052 
+; utilsrc/tftpd.pla: 0256:             break
+	!BYTE	$50			; BRNCH	_B039
+	!WORD	_B039-*
+; utilsrc/tftpd.pla: 0257:         otherwise
+_B040 
+	!BYTE	$01			; CASEBLOCK
+	!WORD	$0300
+	!WORD	_B041-*
+; utilsrc/tftpd.pla: 0258:             puts("WRQ: Unexpected packet opcode: $"); puth(*data); putln
+	!BYTE	$2E			; CS
+	!BYTE	$20
+	!BYTE	$57,$52,$51,$3A,$20,$55,$6E,$65
+	!BYTE	$78,$70,$65,$63,$74,$65,$64,$20
+	!BYTE	$70,$61,$63,$6B,$65,$74,$20,$6F
+	!BYTE	$70,$63,$6F,$64,$65,$3A,$20,$24
+	!BYTE	$54			; CALL	_X004
+_F070 	!WORD	0		
+; utilsrc/tftpd.pla: 0259:     wend
+	!BYTE	$66,$04			; LLW	[4]
+	!BYTE	$62			; LW
+	!BYTE	$54			; CALL	_X009
+_F071 	!WORD	0		
+	!BYTE	$54			; CALL	_X003
+_F072 	!WORD	0		
+_B039 
+; utilsrc/tftpd.pla: 0260:     return 0
+	!BYTE	$00			; CN	0
+	!BYTE	$5A,$0C			; LEAVE	12
+; utilsrc/tftpd.pla: 0261: end
+; utilsrc/tftpd.pla: 0262: def servUDP(ipsrc, portsrc, data, len, param)
+					; ipsrc -> [0]
+					; portsrc -> [2]
+					; data -> [4]
+					; len -> [6]
+					; param -> [8]
+_C007 					; servUDP()
+; utilsrc/tftpd.pla: 0263:     byte info[24]
+					; info -> [10]
+; utilsrc/tftpd.pla: 0264:     byte l, prefix[48]
+					; l -> [34]
+					; prefix -> [35]
+; utilsrc/tftpd.pla: 0265: 
+; utilsrc/tftpd.pla: 0266:     when *data
+	!BYTE	$58,$53,$05		; ENTER	83,5
+	!BYTE	$66,$04			; LLW	[4]
+	!BYTE	$62			; LW
+	!BYTE	$52			; SEL
+	!WORD	_B054-*
+; utilsrc/tftpd.pla: 0267:         is RRQ // Read request
+_B055 
+; utilsrc/tftpd.pla: 0268:             //
+; utilsrc/tftpd.pla: 0269:             // Initiate file read
+; utilsrc/tftpd.pla: 0270:             //
+; utilsrc/tftpd.pla: 0271:             if ref
+; utilsrc/tftpd.pla: 0272:                 //
+; utilsrc/tftpd.pla: 0273:                 // File already open and active
+; utilsrc/tftpd.pla: 0274:                 //
+; utilsrc/tftpd.pla: 0275:                 tftpError:errCode = $0300 // Allocation exceeded
+; utilsrc/tftpd.pla: 0276:                 iNet:sendUDP(portTFTP, ipsrc, portsrc, @tftpError, t_errPkt)
+; utilsrc/tftpd.pla: 0277:                 return 0
+	!BYTE	$68			; LAB	_D034+0
+_F073 	!WORD	_D034+0		
+	!BYTE	$4C			; BRFLS	_B056
+	!WORD	_B056-*
+	!BYTE	$2C,$00,$03		; CW	768
+	!BYTE	$7A			; SAW	_D032+2
+_F074 	!WORD	_D032+2		
+	!BYTE	$6A			; LAW	_D042+0
+_F075 	!WORD	_D042+0		
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$26			; LA	_D032+0
+_F076 	!WORD	_D032+0		
+	!BYTE	$0A			; CN	5
+	!BYTE	$6A			; LAW	_X028+6
+_F077 	!WORD	0+6		
+	!BYTE	$56			; ICAL
+	!BYTE	$30			; DROP 
+	!BYTE	$00			; CN	0
+	!BYTE	$5A,$53			; LEAVE	83
+; utilsrc/tftpd.pla: 0278:             fin
+_B056 
+_B057 
+; utilsrc/tftpd.pla: 0279:             //
+; utilsrc/tftpd.pla: 0280:             // Extract filename
+; utilsrc/tftpd.pla: 0281:             //
+; utilsrc/tftpd.pla: 0282:             netscii, type, aux = mkProName(data + 2, @filename)
+; utilsrc/tftpd.pla: 0283:             ref = fileio:open(@filename)
+; utilsrc/tftpd.pla: 0284:             if not ref
+; utilsrc/tftpd.pla: 0285:                 puts("Error opening file: "); puts(@filename)
+	!BYTE	$66,$04			; LLW	[4]
+	!BYTE	$38,$02			; ADDI	2
+	!BYTE	$26			; LA	_D037+0
+_F078 	!WORD	_D037+0		
+	!BYTE	$54			; CALL	_C003
+_F079 	!WORD	_C003		
+	!BYTE	$7A			; SAW	_D038+0
+_F080 	!WORD	_D038+0		
+	!BYTE	$78			; SAB	_D035+0
+_F081 	!WORD	_D035+0		
+	!BYTE	$78			; SAB	_D036+0
+_F082 	!WORD	_D036+0		
+	!BYTE	$26			; LA	_D037+0
+_F083 	!WORD	_D037+0		
+	!BYTE	$6A			; LAW	_X029+14
+_F084 	!WORD	0+14		
+	!BYTE	$56			; ICAL
+	!BYTE	$7C			; DAB	_D034+0
+_F085 	!WORD	_D034+0		
+	!BYTE	$4E			; BRTRU	_B058
+	!WORD	_B058-*
+	!BYTE	$2E			; CS
+	!BYTE	$14
+	!BYTE	$45,$72,$72,$6F,$72,$20,$6F,$70
+	!BYTE	$65,$6E,$69,$6E,$67,$20,$66,$69
+	!BYTE	$6C,$65,$3A,$20
+	!BYTE	$54			; CALL	_X004
+_F086 	!WORD	0		
+; utilsrc/tftpd.pla: 0286:                 puts(", Error: "); putb(perr); putln
+	!BYTE	$26			; LA	_D037+0
+_F087 	!WORD	_D037+0		
+	!BYTE	$54			; CALL	_X004
+_F088 	!WORD	0		
+	!BYTE	$2E			; CS
+	!BYTE	$09
+	!BYTE	$2C,$20,$45,$72,$72,$6F,$72,$3A
+	!BYTE	$20
+	!BYTE	$54			; CALL	_X004
+_F089 	!WORD	0		
+; utilsrc/tftpd.pla: 0287:                 tftpError:errCode = $0100 // File not found
+; utilsrc/tftpd.pla: 0288:                 iNet:sendUDP(portTFTP, ipsrc, portsrc, @tftpError, t_errPkt)
+; utilsrc/tftpd.pla: 0289:                 return 0
+	!BYTE	$68			; LAB	_X030+0
+_F090 	!WORD	0+0		
+	!BYTE	$54			; CALL	_X008
+_F091 	!WORD	0		
+	!BYTE	$54			; CALL	_X003
+_F092 	!WORD	0		
+	!BYTE	$2C,$00,$01		; CW	256
+	!BYTE	$7A			; SAW	_D032+2
+_F093 	!WORD	_D032+2		
+	!BYTE	$6A			; LAW	_D042+0
+_F094 	!WORD	_D042+0		
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$26			; LA	_D032+0
+_F095 	!WORD	_D032+0		
+	!BYTE	$0A			; CN	5
+	!BYTE	$6A			; LAW	_X028+6
+_F096 	!WORD	0+6		
+	!BYTE	$56			; ICAL
+	!BYTE	$30			; DROP 
+	!BYTE	$00			; CN	0
+	!BYTE	$5A,$53			; LEAVE	83
+; utilsrc/tftpd.pla: 0290:             fin
+_B058 
+_B059 
+; utilsrc/tftpd.pla: 0291:             info.0 = $0A
+; utilsrc/tftpd.pla: 0292:             info:1 = @filename
+; utilsrc/tftpd.pla: 0293:             syscall($C4, @info)
+; utilsrc/tftpd.pla: 0294:             type = info.4
+; utilsrc/tftpd.pla: 0295:             puts("Reading file: "); puts(@filename); putln
+	!BYTE	$14			; CN	10
+	!BYTE	$74,$0A			; SLB	[10]
+	!BYTE	$26			; LA	_D037+0
+_F097 	!WORD	_D037+0		
+	!BYTE	$76,$0B			; SLW	[11]
+	!BYTE	$2A,$C4			; CB	196
+	!BYTE	$28,$0A			; LLA	[10]
+	!BYTE	$54			; CALL	_X011
+_F098 	!WORD	0		
+	!BYTE	$30			; DROP 
+	!BYTE	$64,$0E			; LLB	[14]
+	!BYTE	$78			; SAB	_D035+0
+_F099 	!WORD	_D035+0		
+	!BYTE	$2E			; CS
+	!BYTE	$0E
+	!BYTE	$52,$65,$61,$64,$69,$6E,$67,$20
+	!BYTE	$66,$69,$6C,$65,$3A,$20
+	!BYTE	$54			; CALL	_X004
+_F100 	!WORD	0		
+; utilsrc/tftpd.pla: 0296:             TID              = (TID + TID_INC) | $1000
+; utilsrc/tftpd.pla: 0297:             block            = 1
+; utilsrc/tftpd.pla: 0298:             buff=>datBlock   = swab(block)
+; utilsrc/tftpd.pla: 0299:             len = fileio:read(ref, buff+datBytes, 512)
+; utilsrc/tftpd.pla: 0300:             if type == $04 // TXT type
+; utilsrc/tftpd.pla: 0301:                 xlat($0D, $0A, buff+datBytes, 512)
+; utilsrc/tftpd.pla: 0302:             fin
+	!BYTE	$26			; LA	_D037+0
+_F101 	!WORD	_D037+0		
+	!BYTE	$54			; CALL	_X004
+_F102 	!WORD	0		
+	!BYTE	$54			; CALL	_X003
+_F103 	!WORD	0		
+	!BYTE	$6A			; LAW	_D041+0
+_F104 	!WORD	_D041+0		
+	!BYTE	$38,$10			; ADDI	16
+	!BYTE	$2C,$00,$10		; CW	4096
+	!BYTE	$96			; OR 
+	!BYTE	$7A			; SAW	_D041+0
+_F105 	!WORD	_D041+0		
+	!BYTE	$02			; CN	1
+	!BYTE	$7E			; DAW	_D039+0
+_F106 	!WORD	_D039+0		
+	!BYTE	$54			; CALL	_A000
+_F107 	!WORD	_A000		
+	!BYTE	$6A			; LAW	_D040+0
+_F108 	!WORD	_D040+0		
+	!BYTE	$38,$02			; ADDI	2
+	!BYTE	$72			; SW
+	!BYTE	$68			; LAB	_D034+0
+_F109 	!WORD	_D034+0		
+	!BYTE	$6A			; LAW	_D040+0
+_F110 	!WORD	_D040+0		
+	!BYTE	$38,$04			; ADDI	4
+	!BYTE	$2C,$00,$02		; CW	512
+	!BYTE	$6A			; LAW	_X029+18
+_F111 	!WORD	0+18		
+	!BYTE	$56			; ICAL
+	!BYTE	$76,$06			; SLW	[6]
+	!BYTE	$68			; LAB	_D035+0
+_F112 	!WORD	_D035+0		
+	!BYTE	$08			; CN	4
+	!BYTE	$24			; BRNE	_B060
+	!WORD	_B060-*
+	!BYTE	$1A			; CN	13
+	!BYTE	$14			; CN	10
+	!BYTE	$6A			; LAW	_D040+0
+_F113 	!WORD	_D040+0		
+	!BYTE	$38,$04			; ADDI	4
+	!BYTE	$2C,$00,$02		; CW	512
+	!BYTE	$54			; CALL	_A001
+_F114 	!WORD	_A001		
+_B060 
+_B061 
+; utilsrc/tftpd.pla: 0303:             portTID = iNet:openUDP(TID, @readUDP, len)
+; utilsrc/tftpd.pla: 0304:             iNet:sendUDP(portTID, ipsrc, portsrc, buff, t_datPkt + len)
+; utilsrc/tftpd.pla: 0305:             break
+	!BYTE	$6A			; LAW	_D041+0
+_F115 	!WORD	_D041+0		
+	!BYTE	$26			; LA	_C005+0
+_F116 	!WORD	_C005+0		
+	!BYTE	$66,$06			; LLW	[6]
+	!BYTE	$6A			; LAW	_X028+4
+_F117 	!WORD	0+4		
+	!BYTE	$56			; ICAL
+	!BYTE	$7E			; DAW	_D043+0
+_F118 	!WORD	_D043+0		
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$6A			; LAW	_D040+0
+_F119 	!WORD	_D040+0		
+	!BYTE	$08			; CN	4
+	!BYTE	$B2,$06			; ADDLW	[6]
+	!BYTE	$6A			; LAW	_X028+6
+_F120 	!WORD	0+6		
+	!BYTE	$56			; ICAL
+	!BYTE	$30			; DROP 
+	!BYTE	$50			; BRNCH	_B053
+	!WORD	_B053-*
+; utilsrc/tftpd.pla: 0306:         is WRQ // Write request
+_B062 
+; utilsrc/tftpd.pla: 0307:             //
+; utilsrc/tftpd.pla: 0308:             // Initiate file write
+; utilsrc/tftpd.pla: 0309:             //
+; utilsrc/tftpd.pla: 0310:             if ref
+; utilsrc/tftpd.pla: 0311:                 //
+; utilsrc/tftpd.pla: 0312:                 // File already open and active
+; utilsrc/tftpd.pla: 0313:                 //
+; utilsrc/tftpd.pla: 0314:                 tftpError:errCode = $0300 // Allocation exceeded
+; utilsrc/tftpd.pla: 0315:                 iNet:sendUDP(portTFTP, ipsrc, portsrc, @tftpError, t_errPkt)
+; utilsrc/tftpd.pla: 0316:                 return 0
+	!BYTE	$68			; LAB	_D034+0
+_F121 	!WORD	_D034+0		
+	!BYTE	$4C			; BRFLS	_B063
+	!WORD	_B063-*
+	!BYTE	$2C,$00,$03		; CW	768
+	!BYTE	$7A			; SAW	_D032+2
+_F122 	!WORD	_D032+2		
+	!BYTE	$6A			; LAW	_D042+0
+_F123 	!WORD	_D042+0		
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$26			; LA	_D032+0
+_F124 	!WORD	_D032+0		
+	!BYTE	$0A			; CN	5
+	!BYTE	$6A			; LAW	_X028+6
+_F125 	!WORD	0+6		
+	!BYTE	$56			; ICAL
+	!BYTE	$30			; DROP 
+	!BYTE	$00			; CN	0
+	!BYTE	$5A,$53			; LEAVE	83
+; utilsrc/tftpd.pla: 0317:             fin
+_B063 
+_B064 
+; utilsrc/tftpd.pla: 0318:             //
+; utilsrc/tftpd.pla: 0319:             // Extract filename
+; utilsrc/tftpd.pla: 0320:             //
+; utilsrc/tftpd.pla: 0321:             netscii, type, aux = mkProName(data + 2, @filename)
+; utilsrc/tftpd.pla: 0322:             //
+; utilsrc/tftpd.pla: 0323:             // Scan filename prefix and create
+; utilsrc/tftpd.pla: 0324:             //
+; utilsrc/tftpd.pla: 0325:             prefix[1] = filename[1]
+; utilsrc/tftpd.pla: 0326:             for l = 2 to filename[0]
+	!BYTE	$66,$04			; LLW	[4]
+	!BYTE	$38,$02			; ADDI	2
+	!BYTE	$26			; LA	_D037+0
+_F126 	!WORD	_D037+0		
+	!BYTE	$54			; CALL	_C003
+_F127 	!WORD	_C003		
+	!BYTE	$7A			; SAW	_D038+0
+_F128 	!WORD	_D038+0		
+	!BYTE	$78			; SAB	_D035+0
+_F129 	!WORD	_D035+0		
+	!BYTE	$78			; SAB	_D036+0
+_F130 	!WORD	_D036+0		
+	!BYTE	$68			; LAB	_D037+1
+_F131 	!WORD	_D037+1		
+	!BYTE	$74,$24			; SLB	[36]
+	!BYTE	$68			; LAB	_D037+0
+_F132 	!WORD	_D037+0		
+	!BYTE	$04			; CN	2
+	!BYTE	$A0			; BRGT	_B065
+	!WORD	_B065-*
+_B066 
+	!BYTE	$6C,$22			; DLB	[34]
+; utilsrc/tftpd.pla: 0327: 		if filename[l] == '/'
+; utilsrc/tftpd.pla: 0328: 		    prefix[0] = l-1
+; utilsrc/tftpd.pla: 0329: 		    fileio:create(@prefix, $0F, $0000)
+; utilsrc/tftpd.pla: 0330: 		fin
+	!BYTE	$26			; LA	_D037+0
+_F133 	!WORD	_D037+0		
+	!BYTE	$B0,$22			; ADDLB	[34]
+	!BYTE	$60			; LB
+	!BYTE	$2A,$2F			; CB	47
+	!BYTE	$24			; BRNE	_B068
+	!WORD	_B068-*
+	!BYTE	$64,$22			; LLB	[34]
+	!BYTE	$8E			; DECR
+	!BYTE	$74,$23			; SLB	[35]
+	!BYTE	$28,$23			; LLA	[35]
+	!BYTE	$1E			; CN	15
+	!BYTE	$00			; CN	0
+	!BYTE	$6A			; LAW	_X029+22
+_F134 	!WORD	0+22		
+	!BYTE	$56			; ICAL
+	!BYTE	$30			; DROP 
+_B068 
+_B069 
+; utilsrc/tftpd.pla: 0331: 		prefix[l] = filename[l]
+; utilsrc/tftpd.pla: 0332:             next
+	!BYTE	$26			; LA	_D037+0
+_F135 	!WORD	_D037+0		
+	!BYTE	$B0,$22			; ADDLB	[34]
+	!BYTE	$60			; LB
+	!BYTE	$28,$23			; LLA	[35]
+	!BYTE	$B0,$22			; ADDLB	[34]
+	!BYTE	$70			; SB
+_B067 
+	!BYTE	$A4			; INCBRLE	_B066
+	!WORD	_B066-*
+_B065 
+	!BYTE	$74,$22			; SLB	[34]
+	!BYTE	$30			; DROP 
+; utilsrc/tftpd.pla: 0333:             fileio:destroy(@filename)
+; utilsrc/tftpd.pla: 0334:             if fileio:create(@filename, type, aux)
+; utilsrc/tftpd.pla: 0335:                 puts("Create file error: "); putb(perr); putln
+	!BYTE	$26			; LA	_D037+0
+_F136 	!WORD	_D037+0		
+	!BYTE	$6A			; LAW	_X029+24
+_F137 	!WORD	0+24		
+	!BYTE	$56			; ICAL
+	!BYTE	$30			; DROP 
+	!BYTE	$26			; LA	_D037+0
+_F138 	!WORD	_D037+0		
+	!BYTE	$68			; LAB	_D035+0
+_F139 	!WORD	_D035+0		
+	!BYTE	$6A			; LAW	_D038+0
+_F140 	!WORD	_D038+0		
+	!BYTE	$6A			; LAW	_X029+22
+_F141 	!WORD	0+22		
+	!BYTE	$56			; ICAL
+	!BYTE	$4C			; BRFLS	_B070
+	!WORD	_B070-*
+	!BYTE	$2E			; CS
+	!BYTE	$13
+	!BYTE	$43,$72,$65,$61,$74,$65,$20,$66
+	!BYTE	$69,$6C,$65,$20,$65,$72,$72,$6F
+	!BYTE	$72,$3A,$20
+	!BYTE	$54			; CALL	_X004
+_F142 	!WORD	0		
+; utilsrc/tftpd.pla: 0336:             fin
+	!BYTE	$68			; LAB	_X030+0
+_F143 	!WORD	0+0		
+	!BYTE	$54			; CALL	_X008
+_F144 	!WORD	0		
+	!BYTE	$54			; CALL	_X003
+_F145 	!WORD	0		
+_B070 
+_B071 
+; utilsrc/tftpd.pla: 0337:             ref = fileio:open(@filename)
+; utilsrc/tftpd.pla: 0338:             if not ref
+; utilsrc/tftpd.pla: 0339:                 puts("Error opening file: "); puts(@filename)
+	!BYTE	$26			; LA	_D037+0
+_F146 	!WORD	_D037+0		
+	!BYTE	$6A			; LAW	_X029+14
+_F147 	!WORD	0+14		
+	!BYTE	$56			; ICAL
+	!BYTE	$7C			; DAB	_D034+0
+_F148 	!WORD	_D034+0		
+	!BYTE	$4E			; BRTRU	_B072
+	!WORD	_B072-*
+	!BYTE	$2E			; CS
+	!BYTE	$14
+	!BYTE	$45,$72,$72,$6F,$72,$20,$6F,$70
+	!BYTE	$65,$6E,$69,$6E,$67,$20,$66,$69
+	!BYTE	$6C,$65,$3A,$20
+	!BYTE	$54			; CALL	_X004
+_F149 	!WORD	0		
+; utilsrc/tftpd.pla: 0340:                 puts(", Error: "); putb(perr); putln
+	!BYTE	$26			; LA	_D037+0
+_F150 	!WORD	_D037+0		
+	!BYTE	$54			; CALL	_X004
+_F151 	!WORD	0		
+	!BYTE	$2E			; CS
+	!BYTE	$09
+	!BYTE	$2C,$20,$45,$72,$72,$6F,$72,$3A
+	!BYTE	$20
+	!BYTE	$54			; CALL	_X004
+_F152 	!WORD	0		
+; utilsrc/tftpd.pla: 0341:                 tftpError:errCode = $0200 // Access violation
+; utilsrc/tftpd.pla: 0342:                 iNet:sendUDP(portTFTP, ipsrc, portsrc, @tftpError, t_errPkt)
+; utilsrc/tftpd.pla: 0343:                 return 0
+	!BYTE	$68			; LAB	_X030+0
+_F153 	!WORD	0+0		
+	!BYTE	$54			; CALL	_X008
+_F154 	!WORD	0		
+	!BYTE	$54			; CALL	_X003
+_F155 	!WORD	0		
+	!BYTE	$2C,$00,$02		; CW	512
+	!BYTE	$7A			; SAW	_D032+2
+_F156 	!WORD	_D032+2		
+	!BYTE	$6A			; LAW	_D042+0
+_F157 	!WORD	_D042+0		
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$26			; LA	_D032+0
+_F158 	!WORD	_D032+0		
+	!BYTE	$0A			; CN	5
+	!BYTE	$6A			; LAW	_X028+6
+_F159 	!WORD	0+6		
+	!BYTE	$56			; ICAL
+	!BYTE	$30			; DROP 
+	!BYTE	$00			; CN	0
+	!BYTE	$5A,$53			; LEAVE	83
+; utilsrc/tftpd.pla: 0344:             fin
+_B072 
+_B073 
+; utilsrc/tftpd.pla: 0345:             puts("Writing file: "); puts(@filename); putln
+	!BYTE	$2E			; CS
+	!BYTE	$0E
+	!BYTE	$57,$72,$69,$74,$69,$6E,$67,$20
+	!BYTE	$66,$69,$6C,$65,$3A,$20
+	!BYTE	$54			; CALL	_X004
+_F160 	!WORD	0		
+; utilsrc/tftpd.pla: 0346:             TID              = (TID + TID_INC) | $1000
+; utilsrc/tftpd.pla: 0347:             block            = 1
+; utilsrc/tftpd.pla: 0348:             tftpAck:ackBlock = 0
+; utilsrc/tftpd.pla: 0349:             portTID = iNet:openUDP(TID, @writeUDP, 0)
+; utilsrc/tftpd.pla: 0350:             iNet:sendUDP(portTID, ipsrc, portsrc, @tftpAck, t_ackPkt)
+; utilsrc/tftpd.pla: 0351:             break
+	!BYTE	$26			; LA	_D037+0
+_F161 	!WORD	_D037+0		
+	!BYTE	$54			; CALL	_X004
+_F162 	!WORD	0		
+	!BYTE	$54			; CALL	_X003
+_F163 	!WORD	0		
+	!BYTE	$6A			; LAW	_D041+0
+_F164 	!WORD	_D041+0		
+	!BYTE	$38,$10			; ADDI	16
+	!BYTE	$2C,$00,$10		; CW	4096
+	!BYTE	$96			; OR 
+	!BYTE	$7A			; SAW	_D041+0
+_F165 	!WORD	_D041+0		
+	!BYTE	$02			; CN	1
+	!BYTE	$7A			; SAW	_D039+0
+_F166 	!WORD	_D039+0		
+	!BYTE	$00			; CN	0
+	!BYTE	$7A			; SAW	_D033+2
+_F167 	!WORD	_D033+2		
+	!BYTE	$6A			; LAW	_D041+0
+_F168 	!WORD	_D041+0		
+	!BYTE	$26			; LA	_C006+0
+_F169 	!WORD	_C006+0		
+	!BYTE	$00			; CN	0
+	!BYTE	$6A			; LAW	_X028+4
+_F170 	!WORD	0+4		
+	!BYTE	$56			; ICAL
+	!BYTE	$7E			; DAW	_D043+0
+_F171 	!WORD	_D043+0		
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$26			; LA	_D033+0
+_F172 	!WORD	_D033+0		
+	!BYTE	$08			; CN	4
+	!BYTE	$6A			; LAW	_X028+6
+_F173 	!WORD	0+6		
+	!BYTE	$56			; ICAL
+	!BYTE	$30			; DROP 
+	!BYTE	$50			; BRNCH	_B053
+	!WORD	_B053-*
+; utilsrc/tftpd.pla: 0352:         otherwise
+_B054 
+	!BYTE	$02			; CASEBLOCK
+	!WORD	$0100
+	!WORD	_B055-*
+	!WORD	$0200
+	!WORD	_B062-*
+; utilsrc/tftpd.pla: 0353:             puts("TFTP: Server Unexpected packet opcode: $"); puth(*data); putln
+	!BYTE	$2E			; CS
+	!BYTE	$28
+	!BYTE	$54,$46,$54,$50,$3A,$20,$53,$65
+	!BYTE	$72,$76,$65,$72,$20,$55,$6E,$65
+	!BYTE	$78,$70,$65,$63,$74,$65,$64,$20
+	!BYTE	$70,$61,$63,$6B,$65,$74,$20,$6F
+	!BYTE	$70,$63,$6F,$64,$65,$3A,$20,$24
+	!BYTE	$54			; CALL	_X004
+_F174 	!WORD	0		
+; utilsrc/tftpd.pla: 0354:     wend
+	!BYTE	$66,$04			; LLW	[4]
+	!BYTE	$62			; LW
+	!BYTE	$54			; CALL	_X009
+_F175 	!WORD	0		
+	!BYTE	$54			; CALL	_X003
+_F176 	!WORD	0		
+_B053 
+; utilsrc/tftpd.pla: 0355:     return 0
+	!BYTE	$00			; CN	0
+	!BYTE	$5A,$53			; LEAVE	83
+; utilsrc/tftpd.pla: 0356: end
+; utilsrc/tftpd.pla: 0357: 
+; utilsrc/tftpd.pla: 0358: def volumes#0
+_C008 					; volumes()
+; utilsrc/tftpd.pla: 0359:     word strbuf
+					; strbuf -> [0]
+; utilsrc/tftpd.pla: 0360:     byte i
+					; i -> [2]
+; utilsrc/tftpd.pla: 0361: 
+; utilsrc/tftpd.pla: 0362:     strbuf   = heapmark()
+	!BYTE	$58,$03,$00		; ENTER	3,0
+; utilsrc/tftpd.pla: 0363:     fileio:online(0, strbuf)
+; utilsrc/tftpd.pla: 0364:     for i = 0 to 15
+	!BYTE	$54			; CALL	_X012
+_F177 	!WORD	0		
+	!BYTE	$76,$00			; SLW	[0]
+	!BYTE	$00			; CN	0
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$6A			; LAW	_X029+30
+_F178 	!WORD	0+30		
+	!BYTE	$56			; ICAL
+	!BYTE	$30			; DROP 
+	!BYTE	$1E			; CN	15
+	!BYTE	$00			; CN	0
+_B075 
+	!BYTE	$6C,$02			; DLB	[2]
+; utilsrc/tftpd.pla: 0365:         ^strbuf = ^strbuf & $0F
+; utilsrc/tftpd.pla: 0366:         if ^strbuf
+; utilsrc/tftpd.pla: 0367:             putc('/'); puts(strbuf); putln()
+; utilsrc/tftpd.pla: 0368:         fin
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$60			; LB
+	!BYTE	$3C,$0F			; ANDI	15
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$70			; SB
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$60			; LB
+	!BYTE	$4C			; BRFLS	_B077
+	!WORD	_B077-*
+	!BYTE	$2A,$2F			; CB	47
+	!BYTE	$54			; CALL	_X002
+_F179 	!WORD	0		
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$54			; CALL	_X004
+_F180 	!WORD	0		
+	!BYTE	$54			; CALL	_X003
+_F181 	!WORD	0		
+_B077 
+_B078 
+; utilsrc/tftpd.pla: 0369:         strbuf = strbuf + 16
+; utilsrc/tftpd.pla: 0370:     next
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$38,$10			; ADDI	16
+	!BYTE	$76,$00			; SLW	[0]
+_B076 
+	!BYTE	$A4			; INCBRLE	_B075
+	!WORD	_B075-*
+_B074 
+	!BYTE	$74,$02			; SLB	[2]
+	!BYTE	$30			; DROP 
+; utilsrc/tftpd.pla: 0371: end
+	!BYTE	$5A,$03			; LEAVE	3
+; utilsrc/tftpd.pla: 0372: 
+; utilsrc/tftpd.pla: 0373: puts("TFTP Server, Version 2.1\n")
+_INIT 
+	!BYTE	$2E			; CS
+	!BYTE	$19
+	!BYTE	$54,$46,$54,$50,$20,$53,$65,$72
+	!BYTE	$76,$65,$72,$2C,$20,$56,$65,$72
+	!BYTE	$73,$69,$6F,$6E,$20,$32,$2E,$31
+	!BYTE	$0D
+	!BYTE	$54			; CALL	_X004
+_F182 	!WORD	0		
+; utilsrc/tftpd.pla: 0374: if !iNet:initIP()
+; utilsrc/tftpd.pla: 0375:     return -1
+	!BYTE	$6A			; LAW	_X028+0
+_F183 	!WORD	0+0		
+	!BYTE	$56			; ICAL
+	!BYTE	$4E			; BRTRU	_B079
+	!WORD	_B079-*
+	!BYTE	$20			; MINUS ONE
+	!BYTE	$5C			; RET
+; utilsrc/tftpd.pla: 0376: fin
+_B079 
+_B080 
+; utilsrc/tftpd.pla: 0377: puts("Online volumes:\n"); volumes()
+	!BYTE	$2E			; CS
+	!BYTE	$10
+	!BYTE	$4F,$6E,$6C,$69,$6E,$65,$20,$76
+	!BYTE	$6F,$6C,$75,$6D,$65,$73,$3A,$0D
+	!BYTE	$54			; CALL	_X004
+_F184 	!WORD	0		
+; utilsrc/tftpd.pla: 0378: portTFTP = iNet:openUDP(TFTP_PORT, @servUDP, 0)
+; utilsrc/tftpd.pla: 0379: //
+; utilsrc/tftpd.pla: 0380: // Alloc aligned file/io buffers
+; utilsrc/tftpd.pla: 0381: //
+; utilsrc/tftpd.pla: 0382: buff = heapalloc(t_datPkt + 512)
+; utilsrc/tftpd.pla: 0383: buff=>datOp = $0300 // Data op
+; utilsrc/tftpd.pla: 0384: //
+; utilsrc/tftpd.pla: 0385: // Service IP
+; utilsrc/tftpd.pla: 0386: //
+; utilsrc/tftpd.pla: 0387: repeat
+	!BYTE	$54			; CALL	_C008
+_F185 	!WORD	_C008		
+	!BYTE	$2A,$45			; CB	69
+	!BYTE	$26			; LA	_C007+0
+_F186 	!WORD	_C007+0		
+	!BYTE	$00			; CN	0
+	!BYTE	$6A			; LAW	_X028+4
+_F187 	!WORD	0+4		
+	!BYTE	$56			; ICAL
+	!BYTE	$7A			; SAW	_D042+0
+_F188 	!WORD	_D042+0		
+	!BYTE	$2C,$04,$02		; CW	516
+	!BYTE	$54			; CALL	_X014
+_F189 	!WORD	0		
+	!BYTE	$7A			; SAW	_D040+0
+_F190 	!WORD	_D040+0		
+	!BYTE	$2C,$00,$03		; CW	768
+	!BYTE	$6A			; LAW	_D040+0
+_F191 	!WORD	_D040+0		
+	!BYTE	$72			; SW
+_B082 
+; utilsrc/tftpd.pla: 0388:     iNet:serviceIP()
+; utilsrc/tftpd.pla: 0389: until conio:keypressed()
+	!BYTE	$6A			; LAW	_X028+2
+_F192 	!WORD	0+2		
+	!BYTE	$56			; ICAL
+	!BYTE	$30			; DROP 
+_B083 
+	!BYTE	$6A			; LAW	_X031+0
+_F193 	!WORD	0+0		
+	!BYTE	$56			; ICAL
+	!BYTE	$4C			; BRFLS	_B082
+	!WORD	_B082-*
+_B081 
+; utilsrc/tftpd.pla: 0390: getc // eat keypress
+; utilsrc/tftpd.pla: 0391: done
+	!BYTE	$54			; CALL	_X006
+_F194 	!WORD	0		
+	!BYTE	$30			; DROP 
+	!BYTE	$00			; CN	0
+	!BYTE	$5C			; RET
+_DEFCNT	=	10
+_SEGEND 
+;
+; RE-LOCATEABLE DICTIONARY
+;
+	!BYTE	$02			; CODE TABLE FIXUP
+	!WORD	_C000		
+	!BYTE	$00
+	!BYTE	$02			; CODE TABLE FIXUP
+	!WORD	_C001		
+	!BYTE	$00
+	!BYTE	$02			; CODE TABLE FIXUP
+	!WORD	_C002		
+	!BYTE	$00
+	!BYTE	$02			; CODE TABLE FIXUP
+	!WORD	_C003		
+	!BYTE	$00
+	!BYTE	$02			; CODE TABLE FIXUP
+	!WORD	_C004		
+	!BYTE	$00
+	!BYTE	$02			; CODE TABLE FIXUP
+	!WORD	_C005		
+	!BYTE	$00
+	!BYTE	$02			; CODE TABLE FIXUP
+	!WORD	_C006		
+	!BYTE	$00
+	!BYTE	$02			; CODE TABLE FIXUP
+	!WORD	_C007		
+	!BYTE	$00
+	!BYTE	$02			; CODE TABLE FIXUP
+	!WORD	_C008		
+	!BYTE	$00
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F000-_SEGBEGIN		
+	!BYTE	21			; ESD INDEX
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F001-_SEGBEGIN		
+	!BYTE	21			; ESD INDEX
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F002-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F003-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F004-_SEGBEGIN		
+	!BYTE	21			; ESD INDEX
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F005-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F006-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F007-_SEGBEGIN		
+	!BYTE	18			; ESD INDEX
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F008-_SEGBEGIN		
+	!BYTE	29			; ESD INDEX
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F009-_SEGBEGIN		
+	!BYTE	18			; ESD INDEX
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F010-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F011-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F012-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F013-_SEGBEGIN		
+	!BYTE	4			; ESD INDEX
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F014-_SEGBEGIN		
+	!BYTE	4			; ESD INDEX
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F015-_SEGBEGIN		
+	!BYTE	3			; ESD INDEX
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F016-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F017-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F018-_SEGBEGIN		
+	!BYTE	4			; ESD INDEX
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F019-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F020-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F021-_SEGBEGIN		
+	!BYTE	29			; ESD INDEX
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F022-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F023-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F024-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F025-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F026-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F027-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F028-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F029-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F030-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F031-_SEGBEGIN		
+	!BYTE	28			; ESD INDEX
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F032-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F033-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F034-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F035-_SEGBEGIN		
+	!BYTE	28			; ESD INDEX
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F036-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F037-_SEGBEGIN		
+	!BYTE	28			; ESD INDEX
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F038-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F039-_SEGBEGIN		
+	!BYTE	29			; ESD INDEX
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F040-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F041-_SEGBEGIN		
+	!BYTE	4			; ESD INDEX
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F042-_SEGBEGIN		
+	!BYTE	9			; ESD INDEX
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F043-_SEGBEGIN		
+	!BYTE	3			; ESD INDEX
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F044-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F045-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F046-_SEGBEGIN		
+	!BYTE	4			; ESD INDEX
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F047-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F048-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F049-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F050-_SEGBEGIN		
+	!BYTE	29			; ESD INDEX
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F051-_SEGBEGIN		
+	!BYTE	4			; ESD INDEX
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F052-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F053-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F054-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F055-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F056-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F057-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F058-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F059-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F060-_SEGBEGIN		
+	!BYTE	28			; ESD INDEX
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F061-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F062-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F063-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F064-_SEGBEGIN		
+	!BYTE	28			; ESD INDEX
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F065-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F066-_SEGBEGIN		
+	!BYTE	28			; ESD INDEX
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F067-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F068-_SEGBEGIN		
+	!BYTE	29			; ESD INDEX
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F069-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F070-_SEGBEGIN		
+	!BYTE	4			; ESD INDEX
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F071-_SEGBEGIN		
+	!BYTE	9			; ESD INDEX
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F072-_SEGBEGIN		
+	!BYTE	3			; ESD INDEX
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F073-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F074-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F075-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F076-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F077-_SEGBEGIN		
+	!BYTE	28			; ESD INDEX
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F078-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F079-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F080-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F081-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F082-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F083-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F084-_SEGBEGIN		
+	!BYTE	29			; ESD INDEX
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F085-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F086-_SEGBEGIN		
+	!BYTE	4			; ESD INDEX
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F087-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F088-_SEGBEGIN		
+	!BYTE	4			; ESD INDEX
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F089-_SEGBEGIN		
+	!BYTE	4			; ESD INDEX
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F090-_SEGBEGIN		
+	!BYTE	30			; ESD INDEX
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F091-_SEGBEGIN		
+	!BYTE	8			; ESD INDEX
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F092-_SEGBEGIN		
+	!BYTE	3			; ESD INDEX
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F093-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F094-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F095-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F096-_SEGBEGIN		
+	!BYTE	28			; ESD INDEX
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F097-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F098-_SEGBEGIN		
+	!BYTE	11			; ESD INDEX
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F099-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F100-_SEGBEGIN		
+	!BYTE	4			; ESD INDEX
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F101-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F102-_SEGBEGIN		
+	!BYTE	4			; ESD INDEX
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F103-_SEGBEGIN		
+	!BYTE	3			; ESD INDEX
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F104-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F105-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F106-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F107-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F108-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F109-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F110-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F111-_SEGBEGIN		
+	!BYTE	29			; ESD INDEX
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F112-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F113-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F114-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F115-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F116-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F117-_SEGBEGIN		
+	!BYTE	28			; ESD INDEX
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F118-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F119-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F120-_SEGBEGIN		
+	!BYTE	28			; ESD INDEX
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F121-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F122-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F123-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F124-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F125-_SEGBEGIN		
+	!BYTE	28			; ESD INDEX
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F126-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F127-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F128-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F129-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F130-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F131-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F132-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F133-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F134-_SEGBEGIN		
+	!BYTE	29			; ESD INDEX
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F135-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F136-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F137-_SEGBEGIN		
+	!BYTE	29			; ESD INDEX
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F138-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F139-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F140-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F141-_SEGBEGIN		
+	!BYTE	29			; ESD INDEX
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F142-_SEGBEGIN		
+	!BYTE	4			; ESD INDEX
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F143-_SEGBEGIN		
+	!BYTE	30			; ESD INDEX
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F144-_SEGBEGIN		
+	!BYTE	8			; ESD INDEX
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F145-_SEGBEGIN		
+	!BYTE	3			; ESD INDEX
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F146-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F147-_SEGBEGIN		
+	!BYTE	29			; ESD INDEX
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F148-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F149-_SEGBEGIN		
+	!BYTE	4			; ESD INDEX
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F150-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F151-_SEGBEGIN		
+	!BYTE	4			; ESD INDEX
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F152-_SEGBEGIN		
+	!BYTE	4			; ESD INDEX
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F153-_SEGBEGIN		
+	!BYTE	30			; ESD INDEX
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F154-_SEGBEGIN		
+	!BYTE	8			; ESD INDEX
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F155-_SEGBEGIN		
+	!BYTE	3			; ESD INDEX
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F156-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F157-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F158-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F159-_SEGBEGIN		
+	!BYTE	28			; ESD INDEX
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F160-_SEGBEGIN		
+	!BYTE	4			; ESD INDEX
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F161-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F162-_SEGBEGIN		
+	!BYTE	4			; ESD INDEX
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F163-_SEGBEGIN		
+	!BYTE	3			; ESD INDEX
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F164-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F165-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F166-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F167-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F168-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F169-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F170-_SEGBEGIN		
+	!BYTE	28			; ESD INDEX
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F171-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F172-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F173-_SEGBEGIN		
+	!BYTE	28			; ESD INDEX
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F174-_SEGBEGIN		
+	!BYTE	4			; ESD INDEX
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F175-_SEGBEGIN		
+	!BYTE	9			; ESD INDEX
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F176-_SEGBEGIN		
+	!BYTE	3			; ESD INDEX
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F177-_SEGBEGIN		
+	!BYTE	12			; ESD INDEX
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F178-_SEGBEGIN		
+	!BYTE	29			; ESD INDEX
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F179-_SEGBEGIN		
+	!BYTE	2			; ESD INDEX
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F180-_SEGBEGIN		
+	!BYTE	4			; ESD INDEX
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F181-_SEGBEGIN		
+	!BYTE	3			; ESD INDEX
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F182-_SEGBEGIN		
+	!BYTE	4			; ESD INDEX
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F183-_SEGBEGIN		
+	!BYTE	28			; ESD INDEX
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F184-_SEGBEGIN		
+	!BYTE	4			; ESD INDEX
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F185-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F186-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F187-_SEGBEGIN		
+	!BYTE	28			; ESD INDEX
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F188-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F189-_SEGBEGIN		
+	!BYTE	14			; ESD INDEX
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F190-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$81			; INTERNAL FIXUP
+	!WORD	_F191-_SEGBEGIN		
+	!BYTE	$00
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F192-_SEGBEGIN		
+	!BYTE	28			; ESD INDEX
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F193-_SEGBEGIN		
+	!BYTE	31			; ESD INDEX
+	!BYTE	$91			; EXTERNAL FIXUP
+	!WORD	_F194-_SEGBEGIN		
+	!BYTE	6			; ESD INDEX
+	!BYTE	$00			; END OF RLD
+;
+; EXTERNAL/ENTRY SYMBOL DICTIONARY
+;
+	; DCI STRING: PUTC
+	!BYTE	$D0,$D5,$D4,$43
+	!BYTE	$10			; EXTERNAL SYMBOL FLAG
+	!WORD	2			; ESD INDEX
+	; DCI STRING: PUTLN
+	!BYTE	$D0,$D5,$D4,$CC,$4E
+	!BYTE	$10			; EXTERNAL SYMBOL FLAG
+	!WORD	3			; ESD INDEX
+	; DCI STRING: PUTS
+	!BYTE	$D0,$D5,$D4,$53
+	!BYTE	$10			; EXTERNAL SYMBOL FLAG
+	!WORD	4			; ESD INDEX
+	; DCI STRING: GETC
+	!BYTE	$C7,$C5,$D4,$43
+	!BYTE	$10			; EXTERNAL SYMBOL FLAG
+	!WORD	6			; ESD INDEX
+	; DCI STRING: PUTB
+	!BYTE	$D0,$D5,$D4,$42
+	!BYTE	$10			; EXTERNAL SYMBOL FLAG
+	!WORD	8			; ESD INDEX
+	; DCI STRING: PUTH
+	!BYTE	$D0,$D5,$D4,$48
+	!BYTE	$10			; EXTERNAL SYMBOL FLAG
+	!WORD	9			; ESD INDEX
+	; DCI STRING: SYSCALL
+	!BYTE	$D3,$D9,$D3,$C3,$C1,$CC,$4C
+	!BYTE	$10			; EXTERNAL SYMBOL FLAG
+	!WORD	11			; ESD INDEX
+	; DCI STRING: HEAPMARK
+	!BYTE	$C8,$C5,$C1,$D0,$CD,$C1,$D2,$4B
+	!BYTE	$10			; EXTERNAL SYMBOL FLAG
+	!WORD	12			; ESD INDEX
+	; DCI STRING: HEAPALLOC
+	!BYTE	$C8,$C5,$C1,$D0,$C1,$CC,$CC,$CF,$43
+	!BYTE	$10			; EXTERNAL SYMBOL FLAG
+	!WORD	14			; ESD INDEX
+	; DCI STRING: MEMCPY
+	!BYTE	$CD,$C5,$CD,$C3,$D0,$59
+	!BYTE	$10			; EXTERNAL SYMBOL FLAG
+	!WORD	18			; ESD INDEX
+	; DCI STRING: TOUPPER
+	!BYTE	$D4,$CF,$D5,$D0,$D0,$C5,$52
+	!BYTE	$10			; EXTERNAL SYMBOL FLAG
+	!WORD	21			; ESD INDEX
+	; DCI STRING: INET
+	!BYTE	$C9,$CE,$C5,$54
+	!BYTE	$10			; EXTERNAL SYMBOL FLAG
+	!WORD	28			; ESD INDEX
+	; DCI STRING: FILEIO
+	!BYTE	$C6,$C9,$CC,$C5,$C9,$4F
+	!BYTE	$10			; EXTERNAL SYMBOL FLAG
+	!WORD	29			; ESD INDEX
+	; DCI STRING: PERR
+	!BYTE	$D0,$C5,$D2,$52
+	!BYTE	$10			; EXTERNAL SYMBOL FLAG
+	!WORD	30			; ESD INDEX
+	; DCI STRING: CONIO
+	!BYTE	$C3,$CF,$CE,$C9,$4F
+	!BYTE	$10			; EXTERNAL SYMBOL FLAG
+	!WORD	31			; ESD INDEX
+	!BYTE	$00			; END OF ESD

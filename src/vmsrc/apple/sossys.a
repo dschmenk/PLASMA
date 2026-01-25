@@ -1,0 +1,3555 @@
+; ACME COMPATIBLE OUTPUT
+	JMP	_INIT			; MODULE INITIALIZATION ROUTINE
+; vmsrc/apple/sossys.pla: 0001: const membank     = $FFEF
+					; membank = 65519
+; vmsrc/apple/sossys.pla: 0002: const RELADDR     = $1000
+					; RELADDR = 4096
+; vmsrc/apple/sossys.pla: 0003: //
+; vmsrc/apple/sossys.pla: 0004: // System flags: memory allocator screen holes.
+; vmsrc/apple/sossys.pla: 0005: //
+; vmsrc/apple/sossys.pla: 0006: const restxt1     = $0001
+					; restxt1 = 1
+; vmsrc/apple/sossys.pla: 0007: const restxt2     = $0002
+					; restxt2 = 2
+; vmsrc/apple/sossys.pla: 0008: const resxtxt1    = $0004
+					; resxtxt1 = 4
+; vmsrc/apple/sossys.pla: 0009: const resxtxt2    = $0008
+					; resxtxt2 = 8
+; vmsrc/apple/sossys.pla: 0010: const reshgr1     = $0010
+					; reshgr1 = 16
+; vmsrc/apple/sossys.pla: 0011: const reshgr2     = $0020
+					; reshgr2 = 32
+; vmsrc/apple/sossys.pla: 0012: const resxhgr1    = $0040
+					; resxhgr1 = 64
+; vmsrc/apple/sossys.pla: 0013: const resxhgr2    = $0080
+					; resxhgr2 = 128
+; vmsrc/apple/sossys.pla: 0014: //
+; vmsrc/apple/sossys.pla: 0015: // Module don't free memory
+; vmsrc/apple/sossys.pla: 0016: //
+; vmsrc/apple/sossys.pla: 0017: const modflagkeep = $1000
+					; modflagkeep = 4096
+; vmsrc/apple/sossys.pla: 0018: const modkeep     = $2000
+					; modkeep = 8192
+; vmsrc/apple/sossys.pla: 0019: const modinitkeep = $4000
+					; modinitkeep = 16384
+; vmsrc/apple/sossys.pla: 0020: //
+; vmsrc/apple/sossys.pla: 0021: // 80 column flag
+; vmsrc/apple/sossys.pla: 0022: //
+; vmsrc/apple/sossys.pla: 0023: const vid80col    = $0800
+					; vid80col = 2048
+; vmsrc/apple/sossys.pla: 0024: //
+; vmsrc/apple/sossys.pla: 0025: // Private addresses
+; vmsrc/apple/sossys.pla: 0026: //
+; vmsrc/apple/sossys.pla: 0027: const instr       = $A020
+					; instr = 40992
+; vmsrc/apple/sossys.pla: 0028: const cmdparser   = $A0F0
+					; cmdparser = 41200
+; vmsrc/apple/sossys.pla: 0029: const xinterp     = $A0F8
+					; xinterp = 41208
+; vmsrc/apple/sossys.pla: 0030: //
+; vmsrc/apple/sossys.pla: 0031: // Indirect interpreter DEFinition entrypoint
+; vmsrc/apple/sossys.pla: 0032: //
+; vmsrc/apple/sossys.pla: 0033: struc t_defentry
+; vmsrc/apple/sossys.pla: 0034:     byte interpjsr
+					; interpjsr = 0
+; vmsrc/apple/sossys.pla: 0035:     word interpaddr
+					; interpaddr = 1
+; vmsrc/apple/sossys.pla: 0036:     word bytecodeaddr
+					; bytecodeaddr = 3
+; vmsrc/apple/sossys.pla: 0037:     byte bytecodexbyte
+					; bytecodexbyte = 5
+; vmsrc/apple/sossys.pla: 0038: end
+					; t_defentry = 6
+; vmsrc/apple/sossys.pla: 0039: //
+; vmsrc/apple/sossys.pla: 0040: // Pedefined functions.
+; vmsrc/apple/sossys.pla: 0041: //
+; vmsrc/apple/sossys.pla: 0042: predef syscall(cmd,params)#1, call(addr,areg,xreg,yreg,status)#1
+; vmsrc/apple/sossys.pla: 0043: predef crout()#0, cout(c)#0, prstr(s)#0, print(i)#0, prbyte(b)#0, prword(w)#0
+; vmsrc/apple/sossys.pla: 0044: predef cin()#1, rdstr(p)#1, toupper(c)#1, strcpy(dst,src)#1, strcat(dst,src)#1
+; vmsrc/apple/sossys.pla: 0045: predef markheap()#1, allocheap(size)#1, allocalignheap(size, pow2, freeaddr), releaseheap(newheap)#1, availheap()#1
+; vmsrc/apple/sossys.pla: 0046: predef memset(addr,value,size)#0, memcpy(dst,src,size)#0
+; vmsrc/apple/sossys.pla: 0047: predef uword_isgt(a,b)#1, uword_isge(a,b)#1, uword_islt(a,b)#1, uword_isle(a,b)#1, sext(a)#1, divmod(a,b)#2
+; vmsrc/apple/sossys.pla: 0048: predef execmod(modfile)#1, open(path)#1, close(refnum)#1, read(refnum, buff, len)#1, write(refnum, buff, len)#1
+; vmsrc/apple/sossys.pla: 0049: predef syslookuptbl(dci)#1
+; vmsrc/apple/sossys.pla: 0050: //
+; vmsrc/apple/sossys.pla: 0051: // Exported CMDSYS table
+; vmsrc/apple/sossys.pla: 0052: //
+; vmsrc/apple/sossys.pla: 0053: word version      = $0220 // 02.20
+_D032 					; version      = $0220 // 02.20
+	!WORD	$0220
+; vmsrc/apple/sossys.pla: 0054: word syspath
+_D033 	!FILL	2			; syspath
+; vmsrc/apple/sossys.pla: 0055: word cmdlnptr
+_D034 	!FILL	2			; cmdlnptr
+; vmsrc/apple/sossys.pla: 0056: word              = @execmod, @open, @close, @read, @write
+_F000 	!WORD	_P026
+_F001 	!WORD	_P027
+_F002 	!WORD	_P028
+_F003 	!WORD	_P029
+_F004 	!WORD	_P030
+; vmsrc/apple/sossys.pla: 0057: byte perr
+_D035 	!FILL	1			; perr
+; vmsrc/apple/sossys.pla: 0058: byte jitcount     = 0
+_D036 					; jitcount     = 0
+	!BYTE	$00
+; vmsrc/apple/sossys.pla: 0059: byte jitsize      = 0
+_D037 					; jitsize      = 0
+	!BYTE	$00
+; vmsrc/apple/sossys.pla: 0060: byte refcons      = 0
+_D038 					; refcons      = 0
+	!BYTE	$00
+; vmsrc/apple/sossys.pla: 0061: byte devcons      = 0
+_D039 					; devcons      = 0
+	!BYTE	$00
+; vmsrc/apple/sossys.pla: 0062: word              = @syslookuptbl
+_F005 	!WORD	_P031
+; vmsrc/apple/sossys.pla: 0063: word systemflags  = vid80col
+_D040 					; systemflags  = vid80col
+	!WORD	$0800
+; vmsrc/apple/sossys.pla: 0064: //
+; vmsrc/apple/sossys.pla: 0065: // String pool.
+; vmsrc/apple/sossys.pla: 0066: //
+; vmsrc/apple/sossys.pla: 0067: byte hexchar[]    = '0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F'
+_D041 					; hexchar[]    = '0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F'
+	!BYTE	$30
+	!BYTE	$31
+	!BYTE	$32
+	!BYTE	$33
+	!BYTE	$34
+	!BYTE	$35
+	!BYTE	$36
+	!BYTE	$37
+	!BYTE	$38
+	!BYTE	$39
+	!BYTE	$41
+	!BYTE	$42
+	!BYTE	$43
+	!BYTE	$44
+	!BYTE	$45
+	!BYTE	$46
+; vmsrc/apple/sossys.pla: 0068: //
+; vmsrc/apple/sossys.pla: 0069: // Exported Machine ID.
+; vmsrc/apple/sossys.pla: 0070: //
+; vmsrc/apple/sossys.pla: 0071: byte machid       = $F2 // Apple ///, 80 columns
+_D042 					; machid       = $F2 // Apple ///, 80 columns
+	!BYTE	$F2
+; vmsrc/apple/sossys.pla: 0072: //
+; vmsrc/apple/sossys.pla: 0073: // Console and textmode control characters
+; vmsrc/apple/sossys.pla: 0074: //
+; vmsrc/apple/sossys.pla: 0075: byte console[]    = ".CONSOLE"
+_D043 					; console[]    = ".CONSOLE"
+	!BYTE	$08
+	!BYTE	$2E,$43,$4F,$4E,$53,$4F,$4C,$45
+; vmsrc/apple/sossys.pla: 0076: byte textmode[]   = 16, 2, 15
+_D044 					; textmode[]   = 16, 2, 15
+	!BYTE	$10
+	!BYTE	$02
+	!BYTE	$0F
+; vmsrc/apple/sossys.pla: 0077: 
+; vmsrc/apple/sossys.pla: 0078: //
+; vmsrc/apple/sossys.pla: 0079: // Working input buffer overlayed with strings table
+; vmsrc/apple/sossys.pla: 0080: //
+; vmsrc/apple/sossys.pla: 0081: byte cmdln        = ""
+_D045 					; cmdln        = ""
+	!BYTE	$00
+; vmsrc/apple/sossys.pla: 0082: //
+; vmsrc/apple/sossys.pla: 0083: // SOS.CMD as DCI string
+; vmsrc/apple/sossys.pla: 0084: //
+; vmsrc/apple/sossys.pla: 0085: byte soscmd       = 'S'|$80,'O'|$80,'S'|$80,'.'|$80,'C'|$80,'M'|$80,'D'
+_D046 					; soscmd       = 'S'|$80,'O'|$80,'S'|$80,'.'|$80,'C'|$80,'M'|$80,'D'
+	!BYTE	$D3
+	!BYTE	$CF
+	!BYTE	$D3
+	!BYTE	$AE
+	!BYTE	$C3
+	!BYTE	$CD
+	!BYTE	$44
+; vmsrc/apple/sossys.pla: 0086: //
+; vmsrc/apple/sossys.pla: 0087: // Standard Library exported functions.
+; vmsrc/apple/sossys.pla: 0088: //
+; vmsrc/apple/sossys.pla: 0089: byte sysmodstr[]  = "CMDSYS"
+_D047 					; sysmodstr[]  = "CMDSYS"
+	!BYTE	$06
+	!BYTE	$43,$4D,$44,$53,$59,$53
+; vmsrc/apple/sossys.pla: 0090: byte machidstr[]  = "MACHID"
+_D048 					; machidstr[]  = "MACHID"
+	!BYTE	$06
+	!BYTE	$4D,$41,$43,$48,$49,$44
+; vmsrc/apple/sossys.pla: 0091: byte sysstr[]     = "SYSCALL"
+_D049 					; sysstr[]     = "SYSCALL"
+	!BYTE	$07
+	!BYTE	$53,$59,$53,$43,$41,$4C,$4C
+; vmsrc/apple/sossys.pla: 0092: byte callstr[]    = "CALL"
+_D050 					; callstr[]    = "CALL"
+	!BYTE	$04
+	!BYTE	$43,$41,$4C,$4C
+; vmsrc/apple/sossys.pla: 0093: byte putcstr[]    = "PUTC"
+_D051 					; putcstr[]    = "PUTC"
+	!BYTE	$04
+	!BYTE	$50,$55,$54,$43
+; vmsrc/apple/sossys.pla: 0094: byte putlnstr[]   = "PUTLN"
+_D052 					; putlnstr[]   = "PUTLN"
+	!BYTE	$05
+	!BYTE	$50,$55,$54,$4C,$4E
+; vmsrc/apple/sossys.pla: 0095: byte putsstr[]    = "PUTS"
+_D053 					; putsstr[]    = "PUTS"
+	!BYTE	$04
+	!BYTE	$50,$55,$54,$53
+; vmsrc/apple/sossys.pla: 0096: byte putistr[]    = "PUTI"
+_D054 					; putistr[]    = "PUTI"
+	!BYTE	$04
+	!BYTE	$50,$55,$54,$49
+; vmsrc/apple/sossys.pla: 0097: byte putbstr[]    = "PUTB"
+_D055 					; putbstr[]    = "PUTB"
+	!BYTE	$04
+	!BYTE	$50,$55,$54,$42
+; vmsrc/apple/sossys.pla: 0098: byte putwstr[]    = "PUTH"
+_D056 					; putwstr[]    = "PUTH"
+	!BYTE	$04
+	!BYTE	$50,$55,$54,$48
+; vmsrc/apple/sossys.pla: 0099: byte getcstr[]    = "GETC"
+_D057 					; getcstr[]    = "GETC"
+	!BYTE	$04
+	!BYTE	$47,$45,$54,$43
+; vmsrc/apple/sossys.pla: 0100: byte getsstr[]    = "GETS"
+_D058 					; getsstr[]    = "GETS"
+	!BYTE	$04
+	!BYTE	$47,$45,$54,$53
+; vmsrc/apple/sossys.pla: 0101: byte toupstr[]    = "TOUPPER"
+_D059 					; toupstr[]    = "TOUPPER"
+	!BYTE	$07
+	!BYTE	$54,$4F,$55,$50,$50,$45,$52
+; vmsrc/apple/sossys.pla: 0102: byte strcpystr[]  = "STRCPY"
+_D060 					; strcpystr[]  = "STRCPY"
+	!BYTE	$06
+	!BYTE	$53,$54,$52,$43,$50,$59
+; vmsrc/apple/sossys.pla: 0103: byte strcatstr[]  = "STRCAT"
+_D061 					; strcatstr[]  = "STRCAT"
+	!BYTE	$06
+	!BYTE	$53,$54,$52,$43,$41,$54
+; vmsrc/apple/sossys.pla: 0104: byte hpmarkstr[]  = "HEAPMARK"
+_D062 					; hpmarkstr[]  = "HEAPMARK"
+	!BYTE	$08
+	!BYTE	$48,$45,$41,$50,$4D,$41,$52,$4B
+; vmsrc/apple/sossys.pla: 0105: byte hpalignstr[] = "HEAPALLOCALIGN"
+_D063 					; hpalignstr[] = "HEAPALLOCALIGN"
+	!BYTE	$0E
+	!BYTE	$48,$45,$41,$50,$41,$4C,$4C,$4F
+	!BYTE	$43,$41,$4C,$49,$47,$4E
+; vmsrc/apple/sossys.pla: 0106: byte hpallocstr[] = "HEAPALLOC"
+_D064 					; hpallocstr[] = "HEAPALLOC"
+	!BYTE	$09
+	!BYTE	$48,$45,$41,$50,$41,$4C,$4C,$4F
+	!BYTE	$43
+; vmsrc/apple/sossys.pla: 0107: byte hprelstr[]   = "HEAPRELEASE"
+_D065 					; hprelstr[]   = "HEAPRELEASE"
+	!BYTE	$0B
+	!BYTE	$48,$45,$41,$50,$52,$45,$4C,$45
+	!BYTE	$41,$53,$45
+; vmsrc/apple/sossys.pla: 0108: byte hpavlstr[]   = "HEAPAVAIL"
+_D066 					; hpavlstr[]   = "HEAPAVAIL"
+	!BYTE	$09
+	!BYTE	$48,$45,$41,$50,$41,$56,$41,$49
+	!BYTE	$4C
+; vmsrc/apple/sossys.pla: 0109: byte memsetstr[]  = "MEMSET"
+_D067 					; memsetstr[]  = "MEMSET"
+	!BYTE	$06
+	!BYTE	$4D,$45,$4D,$53,$45,$54
+; vmsrc/apple/sossys.pla: 0110: byte memcpystr[]  = "MEMCPY"
+_D068 					; memcpystr[]  = "MEMCPY"
+	!BYTE	$06
+	!BYTE	$4D,$45,$4D,$43,$50,$59
+; vmsrc/apple/sossys.pla: 0111: byte uisgtstr[]   = "ISUGT"
+_D069 					; uisgtstr[]   = "ISUGT"
+	!BYTE	$05
+	!BYTE	$49,$53,$55,$47,$54
+; vmsrc/apple/sossys.pla: 0112: byte uisgestr[]   = "ISUGE"
+_D070 					; uisgestr[]   = "ISUGE"
+	!BYTE	$05
+	!BYTE	$49,$53,$55,$47,$45
+; vmsrc/apple/sossys.pla: 0113: byte uisltstr[]   = "ISULT"
+_D071 					; uisltstr[]   = "ISULT"
+	!BYTE	$05
+	!BYTE	$49,$53,$55,$4C,$54
+; vmsrc/apple/sossys.pla: 0114: byte uislestr[]   = "ISULE"
+_D072 					; uislestr[]   = "ISULE"
+	!BYTE	$05
+	!BYTE	$49,$53,$55,$4C,$45
+; vmsrc/apple/sossys.pla: 0115: byte sextstr[]    = "SEXT"
+_D073 					; sextstr[]    = "SEXT"
+	!BYTE	$04
+	!BYTE	$53,$45,$58,$54
+; vmsrc/apple/sossys.pla: 0116: byte divmodstr[]  = "DIVMOD"
+_D074 					; divmodstr[]  = "DIVMOD"
+	!BYTE	$06
+	!BYTE	$44,$49,$56,$4D,$4F,$44
+; vmsrc/apple/sossys.pla: 0117: word exports[]    = @sysmodstr, @version
+_D075 					; exports[]    = @sysmodstr, @version
+_F006 	!WORD	_D047
+_F007 	!WORD	_D032
+; vmsrc/apple/sossys.pla: 0118: word              = @sysstr,    @syscall
+_F008 	!WORD	_D049
+_F009 	!WORD	_P000
+; vmsrc/apple/sossys.pla: 0119: word              = @callstr,   @call
+_F010 	!WORD	_D050
+_F011 	!WORD	_P001
+; vmsrc/apple/sossys.pla: 0120: word              = @putcstr,   @cout
+_F012 	!WORD	_D051
+_F013 	!WORD	_P003
+; vmsrc/apple/sossys.pla: 0121: word              = @putlnstr,  @crout
+_F014 	!WORD	_D052
+_F015 	!WORD	_P002
+; vmsrc/apple/sossys.pla: 0122: word              = @putsstr,   @prstr
+_F016 	!WORD	_D053
+_F017 	!WORD	_P004
+; vmsrc/apple/sossys.pla: 0123: word              = @putistr,   @print
+_F018 	!WORD	_D054
+_F019 	!WORD	_P005
+; vmsrc/apple/sossys.pla: 0124: word              = @putbstr,   @prbyte
+_F020 	!WORD	_D055
+_F021 	!WORD	_P006
+; vmsrc/apple/sossys.pla: 0125: word              = @putwstr,   @prword
+_F022 	!WORD	_D056
+_F023 	!WORD	_P007
+; vmsrc/apple/sossys.pla: 0126: word              = @getcstr,   @cin
+_F024 	!WORD	_D057
+_F025 	!WORD	_P008
+; vmsrc/apple/sossys.pla: 0127: word              = @getsstr,   @rdstr
+_F026 	!WORD	_D058
+_F027 	!WORD	_P009
+; vmsrc/apple/sossys.pla: 0128: word              = @toupstr,   @toupper
+_F028 	!WORD	_D059
+_F029 	!WORD	_P010
+; vmsrc/apple/sossys.pla: 0129: byte sysmods[] // overlay sys path with exports
+_D076 					; sysmods[] // overlay sys path with exports
+; vmsrc/apple/sossys.pla: 0130: word              = @hpmarkstr, @markheap
+_F030 	!WORD	_D062
+_F031 	!WORD	_P013
+; vmsrc/apple/sossys.pla: 0131: word              = @hpallocstr,@allocheap
+_F032 	!WORD	_D064
+_F033 	!WORD	_P014
+; vmsrc/apple/sossys.pla: 0132: word              = @hpalignstr,@allocalignheap
+_F034 	!WORD	_D063
+_F035 	!WORD	_P015
+; vmsrc/apple/sossys.pla: 0133: word              = @hprelstr,  @releaseheap
+_F036 	!WORD	_D065
+_F037 	!WORD	_P016
+; vmsrc/apple/sossys.pla: 0134: word              = @hpavlstr,  @availheap
+_F038 	!WORD	_D066
+_F039 	!WORD	_P017
+; vmsrc/apple/sossys.pla: 0135: word              = @memsetstr, @memset
+_F040 	!WORD	_D067
+_F041 	!WORD	_P018
+; vmsrc/apple/sossys.pla: 0136: word              = @memcpystr, @memcpy
+_F042 	!WORD	_D068
+_F043 	!WORD	_P019
+; vmsrc/apple/sossys.pla: 0137: word              = @strcpystr, @strcpy
+_F044 	!WORD	_D060
+_F045 	!WORD	_P011
+; vmsrc/apple/sossys.pla: 0138: word              = @strcatstr, @strcat
+_F046 	!WORD	_D061
+_F047 	!WORD	_P012
+; vmsrc/apple/sossys.pla: 0139: word              = @uisgtstr,  @uword_isgt
+_F048 	!WORD	_D069
+_F049 	!WORD	_P020
+; vmsrc/apple/sossys.pla: 0140: word              = @uisgestr,  @uword_isge
+_F050 	!WORD	_D070
+_F051 	!WORD	_P021
+; vmsrc/apple/sossys.pla: 0141: word              = @uisltstr,  @uword_islt
+_F052 	!WORD	_D071
+_F053 	!WORD	_P022
+; vmsrc/apple/sossys.pla: 0142: word              = @uislestr,  @uword_isle
+_F054 	!WORD	_D072
+_F055 	!WORD	_P023
+; vmsrc/apple/sossys.pla: 0143: word              = @sextstr,   @sext
+_F056 	!WORD	_D073
+_F057 	!WORD	_P024
+; vmsrc/apple/sossys.pla: 0144: word              = @divmodstr, @divmod
+_F058 	!WORD	_D074
+_F059 	!WORD	_P025
+; vmsrc/apple/sossys.pla: 0145: word              = @machidstr, @machid
+_F060 	!WORD	_D048
+_F061 	!WORD	_D042
+; vmsrc/apple/sossys.pla: 0146: word              = 0
+	!WORD	$0000
+; vmsrc/apple/sossys.pla: 0147: word sysmodsym    = @exports
+_D077 					; sysmodsym    = @exports
+_F062 	!WORD	_D075
+; vmsrc/apple/sossys.pla: 0148: //
+; vmsrc/apple/sossys.pla: 0149: // System variables.
+; vmsrc/apple/sossys.pla: 0150: //
+; vmsrc/apple/sossys.pla: 0151: word heap        = $2000
+_D078 					; heap        = $2000
+	!WORD	$2000
+; vmsrc/apple/sossys.pla: 0152: byte autorun[]
+_D079 					; autorun[]
+; vmsrc/apple/sossys.pla: 0153: byte modseg[15]
+_D080 	!FILL	15			; modseg[15]
+; vmsrc/apple/sossys.pla: 0154: byte modid        = 0
+_D081 					; modid        = 0
+	!BYTE	$00
+; vmsrc/apple/sossys.pla: 0155: word symtbl, lastsym
+_D082 	!FILL	2			; symtbl, lastsym
+_D083 	!FILL	2			; lastsym
+; vmsrc/apple/sossys.pla: 0156: //
+; vmsrc/apple/sossys.pla: 0157: // CALL SOS
+; vmsrc/apple/sossys.pla: 0158: // SYSCALL(CMD, PARAMS)
+; vmsrc/apple/sossys.pla: 0159: //
+; vmsrc/apple/sossys.pla: 0160: asm syscall(cmd,params)#1
+_P000 					; syscall(cmd,params)#1()
+_A000 					; syscall()
+; vmsrc/apple/sossys.pla: 0161:         LDA     ESTKL,X
+        LDA     ESTKL,X
+; vmsrc/apple/sossys.pla: 0162:         LDY     ESTKH,X
+        LDY     ESTKH,X
+; vmsrc/apple/sossys.pla: 0163:         STA     PARAMS
+        STA     PARAMS
+; vmsrc/apple/sossys.pla: 0164:         STY     PARAMS+1
+        STY     PARAMS+1
+; vmsrc/apple/sossys.pla: 0165:         INX
+        INX
+; vmsrc/apple/sossys.pla: 0166:         LDA     ESTKL,X
+        LDA     ESTKL,X
+; vmsrc/apple/sossys.pla: 0167:         STA     CMD
+        STA     CMD
+; vmsrc/apple/sossys.pla: 0168:         BRK
+        BRK
+; vmsrc/apple/sossys.pla: 0169: CMD     !BYTE   00
+CMD     !BYTE   00
+; vmsrc/apple/sossys.pla: 0170: PARAMS  !WORD   0000
+PARAMS  !WORD   0000
+; vmsrc/apple/sossys.pla: 0171:         LDY     #$00
+        LDY     #$00
+; vmsrc/apple/sossys.pla: 0172:         STA     ESTKL,X
+        STA     ESTKL,X
+; vmsrc/apple/sossys.pla: 0173:         STY     ESTKH,X
+        STY     ESTKH,X
+; vmsrc/apple/sossys.pla: 0174:         RTS
+        RTS
+; vmsrc/apple/sossys.pla: 0175: end
+; vmsrc/apple/sossys.pla: 0176: //
+; vmsrc/apple/sossys.pla: 0177: // CALL 6502 ROUTINE
+; vmsrc/apple/sossys.pla: 0178: // CALL(AREG, XREG, YREG, STATUS, ADDR)
+; vmsrc/apple/sossys.pla: 0179: //
+; vmsrc/apple/sossys.pla: 0180: asm call(addr,areg,xreg,yreg,sstatus)#1
+_P001 					; call(addr,areg,xreg,yreg,sstatus)#1()
+_A001 					; call()
+; vmsrc/apple/sossys.pla: 0181: REGVALS =       SRC
+REGVALS =       SRC
+; vmsrc/apple/sossys.pla: 0182:         PHP
+        PHP
+; vmsrc/apple/sossys.pla: 0183:         LDA     ESTKL,X
+        LDA     ESTKL,X
+; vmsrc/apple/sossys.pla: 0184:         STA     TMPL
+        STA     TMPL
+; vmsrc/apple/sossys.pla: 0185:         LDA     ESTKH,X
+        LDA     ESTKH,X
+; vmsrc/apple/sossys.pla: 0186:         STA     TMPH
+        STA     TMPH
+; vmsrc/apple/sossys.pla: 0187:         INX
+        INX
+; vmsrc/apple/sossys.pla: 0188:         LDA     ESTKL,X
+        LDA     ESTKL,X
+; vmsrc/apple/sossys.pla: 0189:         PHA
+        PHA
+; vmsrc/apple/sossys.pla: 0190:         INX
+        INX
+; vmsrc/apple/sossys.pla: 0191:         LDY     ESTKL,X
+        LDY     ESTKL,X
+; vmsrc/apple/sossys.pla: 0192:         INX
+        INX
+; vmsrc/apple/sossys.pla: 0193:         LDA     ESTKL+1,X
+        LDA     ESTKL+1,X
+; vmsrc/apple/sossys.pla: 0194:         PHA
+        PHA
+; vmsrc/apple/sossys.pla: 0195:         LDA     ESTKL,X
+        LDA     ESTKL,X
+; vmsrc/apple/sossys.pla: 0196:         INX
+        INX
+; vmsrc/apple/sossys.pla: 0197:         STX     ESP
+        STX     ESP
+; vmsrc/apple/sossys.pla: 0198:         TAX
+        TAX
+; vmsrc/apple/sossys.pla: 0199:         PLA
+        PLA
+; vmsrc/apple/sossys.pla: 0200:         PLP
+        PLP
+; vmsrc/apple/sossys.pla: 0201:         JSR     JMPTMP
+        JSR     JMPTMP
+; vmsrc/apple/sossys.pla: 0202:         PHP
+        PHP
+; vmsrc/apple/sossys.pla: 0203:         STA     REGVALS+0
+        STA     REGVALS+0
+; vmsrc/apple/sossys.pla: 0204:         STX     REGVALS+1
+        STX     REGVALS+1
+; vmsrc/apple/sossys.pla: 0205:         STY     REGVALS+2
+        STY     REGVALS+2
+; vmsrc/apple/sossys.pla: 0206:         PLA
+        PLA
+; vmsrc/apple/sossys.pla: 0207:         STA     REGVALS+3
+        STA     REGVALS+3
+; vmsrc/apple/sossys.pla: 0208:         LDX     ESP
+        LDX     ESP
+; vmsrc/apple/sossys.pla: 0209:         LDA     #<REGVALS
+        LDA     #<REGVALS
+; vmsrc/apple/sossys.pla: 0210:         LDY     #>REGVALS
+        LDY     #>REGVALS
+; vmsrc/apple/sossys.pla: 0211:         STA     ESTKL,X
+        STA     ESTKL,X
+; vmsrc/apple/sossys.pla: 0212:         STY     ESTKH,X
+        STY     ESTKH,X
+; vmsrc/apple/sossys.pla: 0213:         PLP
+        PLP
+; vmsrc/apple/sossys.pla: 0214:         RTS
+        RTS
+; vmsrc/apple/sossys.pla: 0215: end
+; vmsrc/apple/sossys.pla: 0216: //
+; vmsrc/apple/sossys.pla: 0217: // SET MEMORY TO VALUE
+; vmsrc/apple/sossys.pla: 0218: // MEMSET(ADDR, VALUE, SIZE)
+; vmsrc/apple/sossys.pla: 0219: //   With optimizations from Peter Ferrie
+; vmsrc/apple/sossys.pla: 0220: //
+; vmsrc/apple/sossys.pla: 0221: asm memset(addr,value,size)#0
+_P018 					; memset(addr,value,size)#0()
+_A002 					; memset()
+; vmsrc/apple/sossys.pla: 0222:         LDA     ESTKL+2,X
+        LDA     ESTKL+2,X
+; vmsrc/apple/sossys.pla: 0223:         STA     DSTL
+        STA     DSTL
+; vmsrc/apple/sossys.pla: 0224:         LDA     ESTKH+2,X
+        LDA     ESTKH+2,X
+; vmsrc/apple/sossys.pla: 0225:         STA     DSTH
+        STA     DSTH
+; vmsrc/apple/sossys.pla: 0226:         LDY     ESTKL,X
+        LDY     ESTKL,X
+; vmsrc/apple/sossys.pla: 0227:         BEQ     +
+        BEQ     +
+; vmsrc/apple/sossys.pla: 0228:         INC     ESTKH,X
+        INC     ESTKH,X
+; vmsrc/apple/sossys.pla: 0229:         LDY     #$00
+        LDY     #$00
+; vmsrc/apple/sossys.pla: 0230: +       LDA     ESTKH,X
++       LDA     ESTKH,X
+; vmsrc/apple/sossys.pla: 0231:         BEQ     SETMEX
+        BEQ     SETMEX
+; vmsrc/apple/sossys.pla: 0232: SETMLPL CLC
+SETMLPL CLC
+; vmsrc/apple/sossys.pla: 0233:         LDA     ESTKL+1,X
+        LDA     ESTKL+1,X
+; vmsrc/apple/sossys.pla: 0234: SETMLPH STA     (DST),Y
+SETMLPH STA     (DST),Y
+; vmsrc/apple/sossys.pla: 0235:         DEC     ESTKL,X
+        DEC     ESTKL,X
+; vmsrc/apple/sossys.pla: 0236:         BEQ     ++
+        BEQ     ++
+; vmsrc/apple/sossys.pla: 0237: -       INY
+-       INY
+; vmsrc/apple/sossys.pla: 0238:         BEQ     +
+        BEQ     +
+; vmsrc/apple/sossys.pla: 0239: --      BCS     SETMLPL
+--      BCS     SETMLPL
+; vmsrc/apple/sossys.pla: 0240:         SEC
+        SEC
+; vmsrc/apple/sossys.pla: 0241:         LDA     ESTKH+1,X
+        LDA     ESTKH+1,X
+; vmsrc/apple/sossys.pla: 0242:         BCS     SETMLPH
+        BCS     SETMLPH
+; vmsrc/apple/sossys.pla: 0243: +       INC     DSTH
++       INC     DSTH
+; vmsrc/apple/sossys.pla: 0244:         BNE     --
+        BNE     --
+; vmsrc/apple/sossys.pla: 0245: ++      DEC     ESTKH,X
+++      DEC     ESTKH,X
+; vmsrc/apple/sossys.pla: 0246:         BNE     -
+        BNE     -
+; vmsrc/apple/sossys.pla: 0247: SETMEX  INX
+SETMEX  INX
+; vmsrc/apple/sossys.pla: 0248:         INX
+        INX
+; vmsrc/apple/sossys.pla: 0249:         INX
+        INX
+; vmsrc/apple/sossys.pla: 0250:         RTS
+        RTS
+; vmsrc/apple/sossys.pla: 0251: end
+; vmsrc/apple/sossys.pla: 0252: //
+; vmsrc/apple/sossys.pla: 0253: // COPY MEMORY
+; vmsrc/apple/sossys.pla: 0254: // MEMCPY(DSTADDR, SRCADDR, SIZE)
+; vmsrc/apple/sossys.pla: 0255: //
+; vmsrc/apple/sossys.pla: 0256: asm memcpy(dst,src,size)#0
+_P019 					; memcpy(dst,src,size)#0()
+_A003 					; memcpy()
+; vmsrc/apple/sossys.pla: 0257:         INX
+        INX
+; vmsrc/apple/sossys.pla: 0258:         INX
+        INX
+; vmsrc/apple/sossys.pla: 0259:         INX
+        INX
+; vmsrc/apple/sossys.pla: 0260:         LDA     ESTKL-3,X
+        LDA     ESTKL-3,X
+; vmsrc/apple/sossys.pla: 0261:         ORA     ESTKH-3,X
+        ORA     ESTKH-3,X
+; vmsrc/apple/sossys.pla: 0262:         BEQ     CPYMEX
+        BEQ     CPYMEX
+; vmsrc/apple/sossys.pla: 0263:         LDA     ESTKL-2,X
+        LDA     ESTKL-2,X
+; vmsrc/apple/sossys.pla: 0264:         CMP     ESTKL-1,X
+        CMP     ESTKL-1,X
+; vmsrc/apple/sossys.pla: 0265:         LDA     ESTKH-2,X
+        LDA     ESTKH-2,X
+; vmsrc/apple/sossys.pla: 0266:         SBC     ESTKH-1,X
+        SBC     ESTKH-1,X
+; vmsrc/apple/sossys.pla: 0267:         BCC     REVCPY
+        BCC     REVCPY
+; vmsrc/apple/sossys.pla: 0268: ;
+; vmsrc/apple/sossys.pla: 0269: ; FORWARD COPY
+; FORWARD COPY
+; vmsrc/apple/sossys.pla: 0270: ;
+; vmsrc/apple/sossys.pla: 0271:         LDA     ESTKL-1,X
+        LDA     ESTKL-1,X
+; vmsrc/apple/sossys.pla: 0272:         STA     DSTL
+        STA     DSTL
+; vmsrc/apple/sossys.pla: 0273:         LDA     ESTKH-1,X
+        LDA     ESTKH-1,X
+; vmsrc/apple/sossys.pla: 0274:         STA     DSTH
+        STA     DSTH
+; vmsrc/apple/sossys.pla: 0275:         LDA     ESTKL-2,X
+        LDA     ESTKL-2,X
+; vmsrc/apple/sossys.pla: 0276:         STA     SRCL
+        STA     SRCL
+; vmsrc/apple/sossys.pla: 0277:         LDA     ESTKH-2,X
+        LDA     ESTKH-2,X
+; vmsrc/apple/sossys.pla: 0278:         STA     SRCH
+        STA     SRCH
+; vmsrc/apple/sossys.pla: 0279:         LDY     ESTKL-3,X
+        LDY     ESTKL-3,X
+; vmsrc/apple/sossys.pla: 0280:         BEQ     FORCPYLP
+        BEQ     FORCPYLP
+; vmsrc/apple/sossys.pla: 0281:         INC     ESTKH-3,X
+        INC     ESTKH-3,X
+; vmsrc/apple/sossys.pla: 0282:         LDY     #$00
+        LDY     #$00
+; vmsrc/apple/sossys.pla: 0283: FORCPYLP LDA    (SRC),Y
+FORCPYLP LDA    (SRC),Y
+; vmsrc/apple/sossys.pla: 0284:         STA     (DST),Y
+        STA     (DST),Y
+; vmsrc/apple/sossys.pla: 0285:         INY
+        INY
+; vmsrc/apple/sossys.pla: 0286:         BNE     +
+        BNE     +
+; vmsrc/apple/sossys.pla: 0287:         INC     DSTH
+        INC     DSTH
+; vmsrc/apple/sossys.pla: 0288:         INC     SRCH
+        INC     SRCH
+; vmsrc/apple/sossys.pla: 0289: +       DEC     ESTKL-3,X
++       DEC     ESTKL-3,X
+; vmsrc/apple/sossys.pla: 0290:         BNE     FORCPYLP
+        BNE     FORCPYLP
+; vmsrc/apple/sossys.pla: 0291:         DEC     ESTKH-3,X
+        DEC     ESTKH-3,X
+; vmsrc/apple/sossys.pla: 0292:         BNE     FORCPYLP
+        BNE     FORCPYLP
+; vmsrc/apple/sossys.pla: 0293:         RTS
+        RTS
+; vmsrc/apple/sossys.pla: 0294: ;
+; vmsrc/apple/sossys.pla: 0295: ; REVERSE COPY
+; REVERSE COPY
+; vmsrc/apple/sossys.pla: 0296: ;
+; vmsrc/apple/sossys.pla: 0297: REVCPY  ;CLC
+REVCPY  ;CLC
+; vmsrc/apple/sossys.pla: 0298:         LDA     ESTKL-3,X
+        LDA     ESTKL-3,X
+; vmsrc/apple/sossys.pla: 0299:         ADC     ESTKL-1,X
+        ADC     ESTKL-1,X
+; vmsrc/apple/sossys.pla: 0300:         STA     DSTL
+        STA     DSTL
+; vmsrc/apple/sossys.pla: 0301:         LDA     ESTKH-3,X
+        LDA     ESTKH-3,X
+; vmsrc/apple/sossys.pla: 0302:         ADC     ESTKH-1,X
+        ADC     ESTKH-1,X
+; vmsrc/apple/sossys.pla: 0303:         STA     DSTH
+        STA     DSTH
+; vmsrc/apple/sossys.pla: 0304:         CLC
+        CLC
+; vmsrc/apple/sossys.pla: 0305:         LDA     ESTKL-3,X
+        LDA     ESTKL-3,X
+; vmsrc/apple/sossys.pla: 0306:         ADC     ESTKL-2,X
+        ADC     ESTKL-2,X
+; vmsrc/apple/sossys.pla: 0307:         STA     SRCL
+        STA     SRCL
+; vmsrc/apple/sossys.pla: 0308:         LDA     ESTKH-3,X
+        LDA     ESTKH-3,X
+; vmsrc/apple/sossys.pla: 0309:         ADC     ESTKH-2,X
+        ADC     ESTKH-2,X
+; vmsrc/apple/sossys.pla: 0310:         STA     SRCH
+        STA     SRCH
+; vmsrc/apple/sossys.pla: 0311:         DEC     DSTH
+        DEC     DSTH
+; vmsrc/apple/sossys.pla: 0312:         DEC     SRCH
+        DEC     SRCH
+; vmsrc/apple/sossys.pla: 0313:         LDY     #$FF
+        LDY     #$FF
+; vmsrc/apple/sossys.pla: 0314:         LDA     ESTKL-3,X
+        LDA     ESTKL-3,X
+; vmsrc/apple/sossys.pla: 0315:         BEQ     REVCPYLP
+        BEQ     REVCPYLP
+; vmsrc/apple/sossys.pla: 0316:         INC     ESTKH-3,X
+        INC     ESTKH-3,X
+; vmsrc/apple/sossys.pla: 0317: REVCPYLP LDA    (SRC),Y
+REVCPYLP LDA    (SRC),Y
+; vmsrc/apple/sossys.pla: 0318:         STA     (DST),Y
+        STA     (DST),Y
+; vmsrc/apple/sossys.pla: 0319:         DEY
+        DEY
+; vmsrc/apple/sossys.pla: 0320:         CPY     #$FF
+        CPY     #$FF
+; vmsrc/apple/sossys.pla: 0321:         BNE     +
+        BNE     +
+; vmsrc/apple/sossys.pla: 0322:         DEC     DSTH
+        DEC     DSTH
+; vmsrc/apple/sossys.pla: 0323:         DEC     SRCH
+        DEC     SRCH
+; vmsrc/apple/sossys.pla: 0324: +       DEC     ESTKL-3,X
++       DEC     ESTKL-3,X
+; vmsrc/apple/sossys.pla: 0325:         BNE     REVCPYLP
+        BNE     REVCPYLP
+; vmsrc/apple/sossys.pla: 0326:         DEC     ESTKH-3,X
+        DEC     ESTKH-3,X
+; vmsrc/apple/sossys.pla: 0327:         BNE     REVCPYLP
+        BNE     REVCPYLP
+; vmsrc/apple/sossys.pla: 0328: CPYMEX  RTS
+CPYMEX  RTS
+; vmsrc/apple/sossys.pla: 0329: end
+; vmsrc/apple/sossys.pla: 0330: //
+; vmsrc/apple/sossys.pla: 0331: // COPY FROM MAIN MEM TO EXT MEM.
+; vmsrc/apple/sossys.pla: 0332: //
+; vmsrc/apple/sossys.pla: 0333: // MEMXCPY(DSTSEG, SRC, SIZE)
+; vmsrc/apple/sossys.pla: 0334: //
+; vmsrc/apple/sossys.pla: 0335: asm memxcpy(dst,src,size)#0
+_A004 					; memxcpy()
+; vmsrc/apple/sossys.pla: 0336:         LDA     ESTKL,X
+        LDA     ESTKL,X
+; vmsrc/apple/sossys.pla: 0337:         ORA     ESTKH,X
+        ORA     ESTKH,X
+; vmsrc/apple/sossys.pla: 0338:         BEQ     CPYXMEX
+        BEQ     CPYXMEX
+; vmsrc/apple/sossys.pla: 0339:         LDY     #$00
+        LDY     #$00
+; vmsrc/apple/sossys.pla: 0340:         STY     DSTL
+        STY     DSTL
+; vmsrc/apple/sossys.pla: 0341:         LDA     ESTKH+2,X
+        LDA     ESTKH+2,X
+; vmsrc/apple/sossys.pla: 0342:         CLC
+        CLC
+; vmsrc/apple/sossys.pla: 0343:         ADC     #$60
+        ADC     #$60
+; vmsrc/apple/sossys.pla: 0344:         STA     DSTH
+        STA     DSTH
+; vmsrc/apple/sossys.pla: 0345:         LDA     ESTKL+2,X
+        LDA     ESTKL+2,X
+; vmsrc/apple/sossys.pla: 0346:         CLC
+        CLC
+; vmsrc/apple/sossys.pla: 0347:         ADC     #$7F
+        ADC     #$7F
+; vmsrc/apple/sossys.pla: 0348:         STA     DSTX
+        STA     DSTX
+; vmsrc/apple/sossys.pla: 0349:         LDA     ESTKL+1,X
+        LDA     ESTKL+1,X
+; vmsrc/apple/sossys.pla: 0350:         STA     SRCL
+        STA     SRCL
+; vmsrc/apple/sossys.pla: 0351:         LDA     ESTKH+1,X
+        LDA     ESTKH+1,X
+; vmsrc/apple/sossys.pla: 0352:         STA     SRCH
+        STA     SRCH
+; vmsrc/apple/sossys.pla: 0353:         INC     ESTKH,X
+        INC     ESTKH,X
+; vmsrc/apple/sossys.pla: 0354: CPYXLP  LDA     (SRC),Y
+CPYXLP  LDA     (SRC),Y
+; vmsrc/apple/sossys.pla: 0355:         STA     (DST),Y
+        STA     (DST),Y
+; vmsrc/apple/sossys.pla: 0356:         INY
+        INY
+; vmsrc/apple/sossys.pla: 0357:         BNE     +
+        BNE     +
+; vmsrc/apple/sossys.pla: 0358:         INC     DSTH
+        INC     DSTH
+; vmsrc/apple/sossys.pla: 0359:         INC     SRCH
+        INC     SRCH
+; vmsrc/apple/sossys.pla: 0360: +       DEC     ESTKL,X
++       DEC     ESTKL,X
+; vmsrc/apple/sossys.pla: 0361:         BNE     CPYXLP
+        BNE     CPYXLP
+; vmsrc/apple/sossys.pla: 0362:         DEC     ESTKH,X
+        DEC     ESTKH,X
+; vmsrc/apple/sossys.pla: 0363:         BNE     CPYXLP
+        BNE     CPYXLP
+; vmsrc/apple/sossys.pla: 0364:         LDA     #$00
+        LDA     #$00
+; vmsrc/apple/sossys.pla: 0365:         STA     DSTX
+        STA     DSTX
+; vmsrc/apple/sossys.pla: 0366: CPYXMEX INX
+CPYXMEX INX
+; vmsrc/apple/sossys.pla: 0367:         INX
+        INX
+; vmsrc/apple/sossys.pla: 0368:         INX
+        INX
+; vmsrc/apple/sossys.pla: 0369:         RTS
+        RTS
+; vmsrc/apple/sossys.pla: 0370: end
+; vmsrc/apple/sossys.pla: 0371: //
+; vmsrc/apple/sossys.pla: 0372: // POKE BYTE VAL INTO EXT MEM.
+; vmsrc/apple/sossys.pla: 0373: //
+; vmsrc/apple/sossys.pla: 0374: // XPOKEB(SEG, DST, BYTEVAL)
+; vmsrc/apple/sossys.pla: 0375: //
+; vmsrc/apple/sossys.pla: 0376: asm xpokeb(seg, dst, byteval)#0
+_A005 					; xpokeb()
+; vmsrc/apple/sossys.pla: 0377:         LDA     ESTKL+1,X
+        LDA     ESTKL+1,X
+; vmsrc/apple/sossys.pla: 0378:         STA     DSTL
+        STA     DSTL
+; vmsrc/apple/sossys.pla: 0379:         LDA     ESTKH+1,X
+        LDA     ESTKH+1,X
+; vmsrc/apple/sossys.pla: 0380:         CLC
+        CLC
+; vmsrc/apple/sossys.pla: 0381:         ADC     #$60
+        ADC     #$60
+; vmsrc/apple/sossys.pla: 0382:         STA     DSTH
+        STA     DSTH
+; vmsrc/apple/sossys.pla: 0383:         LDA     ESTKL+2,X
+        LDA     ESTKL+2,X
+; vmsrc/apple/sossys.pla: 0384:         CLC
+        CLC
+; vmsrc/apple/sossys.pla: 0385:         ADC     #$7F
+        ADC     #$7F
+; vmsrc/apple/sossys.pla: 0386:         STA     DSTX
+        STA     DSTX
+; vmsrc/apple/sossys.pla: 0387:         LDY     #$00
+        LDY     #$00
+; vmsrc/apple/sossys.pla: 0388:         LDA     ESTKL,X
+        LDA     ESTKL,X
+; vmsrc/apple/sossys.pla: 0389:         STA     (DST),Y
+        STA     (DST),Y
+; vmsrc/apple/sossys.pla: 0390:         STY     DSTX
+        STY     DSTX
+; vmsrc/apple/sossys.pla: 0391:         INX
+        INX
+; vmsrc/apple/sossys.pla: 0392:         INX
+        INX
+; vmsrc/apple/sossys.pla: 0393:         INX
+        INX
+; vmsrc/apple/sossys.pla: 0394:         RTS
+        RTS
+; vmsrc/apple/sossys.pla: 0395: end
+; vmsrc/apple/sossys.pla: 0396: //
+; vmsrc/apple/sossys.pla: 0397: // Unsigned word comparisons.
+; vmsrc/apple/sossys.pla: 0398: //
+; vmsrc/apple/sossys.pla: 0399: asm uword_isge(a,b)#1
+_P021 					; uword_isge(a,b)#1()
+_A006 					; uword_isge()
+; vmsrc/apple/sossys.pla: 0400:         LDA     ESTKL+1,X
+        LDA     ESTKL+1,X
+; vmsrc/apple/sossys.pla: 0401:         CMP     ESTKL,X
+        CMP     ESTKL,X
+; vmsrc/apple/sossys.pla: 0402:         LDA     ESTKH+1,X
+        LDA     ESTKH+1,X
+; vmsrc/apple/sossys.pla: 0403:         SBC     ESTKH,X
+        SBC     ESTKH,X
+; vmsrc/apple/sossys.pla: 0404:         LDA     #$FF
+        LDA     #$FF
+; vmsrc/apple/sossys.pla: 0405:         ADC     #$00
+        ADC     #$00
+; vmsrc/apple/sossys.pla: 0406:         EOR     #$FF
+        EOR     #$FF
+; vmsrc/apple/sossys.pla: 0407:         STA     ESTKL+1,X
+        STA     ESTKL+1,X
+; vmsrc/apple/sossys.pla: 0408:         STA     ESTKH+1,X
+        STA     ESTKH+1,X
+; vmsrc/apple/sossys.pla: 0409:         INX
+        INX
+; vmsrc/apple/sossys.pla: 0410:         RTS
+        RTS
+; vmsrc/apple/sossys.pla: 0411: end
+; vmsrc/apple/sossys.pla: 0412: asm uword_isle(a,b)#1
+_P023 					; uword_isle(a,b)#1()
+_A007 					; uword_isle()
+; vmsrc/apple/sossys.pla: 0413:         LDA     ESTKL,X
+        LDA     ESTKL,X
+; vmsrc/apple/sossys.pla: 0414:         CMP     ESTKL+1,X
+        CMP     ESTKL+1,X
+; vmsrc/apple/sossys.pla: 0415:         LDA     ESTKH,X
+        LDA     ESTKH,X
+; vmsrc/apple/sossys.pla: 0416:         SBC     ESTKH+1,X
+        SBC     ESTKH+1,X
+; vmsrc/apple/sossys.pla: 0417:         LDA     #$FF
+        LDA     #$FF
+; vmsrc/apple/sossys.pla: 0418:         ADC     #$00
+        ADC     #$00
+; vmsrc/apple/sossys.pla: 0419:         EOR     #$FF
+        EOR     #$FF
+; vmsrc/apple/sossys.pla: 0420:         STA     ESTKL+1,X
+        STA     ESTKL+1,X
+; vmsrc/apple/sossys.pla: 0421:         STA     ESTKH+1,X
+        STA     ESTKH+1,X
+; vmsrc/apple/sossys.pla: 0422:         INX
+        INX
+; vmsrc/apple/sossys.pla: 0423:         RTS
+        RTS
+; vmsrc/apple/sossys.pla: 0424: end
+; vmsrc/apple/sossys.pla: 0425: asm uword_isgt(a,b)#1
+_P020 					; uword_isgt(a,b)#1()
+_A008 					; uword_isgt()
+; vmsrc/apple/sossys.pla: 0426:         LDA     ESTKL,X
+        LDA     ESTKL,X
+; vmsrc/apple/sossys.pla: 0427:         CMP     ESTKL+1,X
+        CMP     ESTKL+1,X
+; vmsrc/apple/sossys.pla: 0428:         LDA     ESTKH,X
+        LDA     ESTKH,X
+; vmsrc/apple/sossys.pla: 0429:         SBC     ESTKH+1,X
+        SBC     ESTKH+1,X
+; vmsrc/apple/sossys.pla: 0430:         LDA     #$FF
+        LDA     #$FF
+; vmsrc/apple/sossys.pla: 0431:         ADC     #$00
+        ADC     #$00
+; vmsrc/apple/sossys.pla: 0432:         STA     ESTKL+1,X
+        STA     ESTKL+1,X
+; vmsrc/apple/sossys.pla: 0433:         STA     ESTKH+1,X
+        STA     ESTKH+1,X
+; vmsrc/apple/sossys.pla: 0434:         INX
+        INX
+; vmsrc/apple/sossys.pla: 0435:         RTS
+        RTS
+; vmsrc/apple/sossys.pla: 0436: end
+; vmsrc/apple/sossys.pla: 0437: asm uword_islt(a,b)#1
+_P022 					; uword_islt(a,b)#1()
+_A009 					; uword_islt()
+; vmsrc/apple/sossys.pla: 0438:         LDA     ESTKL+1,X
+        LDA     ESTKL+1,X
+; vmsrc/apple/sossys.pla: 0439:         CMP     ESTKL,X
+        CMP     ESTKL,X
+; vmsrc/apple/sossys.pla: 0440:         LDA     ESTKH+1,X
+        LDA     ESTKH+1,X
+; vmsrc/apple/sossys.pla: 0441:         SBC     ESTKH,X
+        SBC     ESTKH,X
+; vmsrc/apple/sossys.pla: 0442:         LDA     #$FF
+        LDA     #$FF
+; vmsrc/apple/sossys.pla: 0443:         ADC     #$00
+        ADC     #$00
+; vmsrc/apple/sossys.pla: 0444:         STA     ESTKL+1,X
+        STA     ESTKL+1,X
+; vmsrc/apple/sossys.pla: 0445:         STA     ESTKH+1,X
+        STA     ESTKH+1,X
+; vmsrc/apple/sossys.pla: 0446:         INX
+        INX
+; vmsrc/apple/sossys.pla: 0447:         RTS
+        RTS
+; vmsrc/apple/sossys.pla: 0448: end
+; vmsrc/apple/sossys.pla: 0449: asm divmod(a,b)#2
+_P025 					; divmod(a,b)#2()
+_A010 					; divmod()
+; vmsrc/apple/sossys.pla: 0450:         JSR     INTERP          ; CALL INTERP
+        JSR     INTERP          ; CALL INTERP
+; vmsrc/apple/sossys.pla: 0451:         !BYTE   $36, $5C        ; DIVMOD, RET
+        !BYTE   $36, $5C        ; DIVMOD, RET
+; vmsrc/apple/sossys.pla: 0452: end
+; vmsrc/apple/sossys.pla: 0453: asm sext(a)#1
+_P024 					; sext(a)#1()
+_A011 					; sext()
+; vmsrc/apple/sossys.pla: 0454:         LDY     #$00
+        LDY     #$00
+; vmsrc/apple/sossys.pla: 0455:         LDA     ESTKL,X
+        LDA     ESTKL,X
+; vmsrc/apple/sossys.pla: 0456:         BPL     +
+        BPL     +
+; vmsrc/apple/sossys.pla: 0457:         DEY
+        DEY
+; vmsrc/apple/sossys.pla: 0458: +       STY     ESTKH,X
++       STY     ESTKH,X
+; vmsrc/apple/sossys.pla: 0459:         RTS
+        RTS
+; vmsrc/apple/sossys.pla: 0460: end
+; vmsrc/apple/sossys.pla: 0461: //
+; vmsrc/apple/sossys.pla: 0462: // A DCI string is one that has the high bit set for every character except the last.
+; vmsrc/apple/sossys.pla: 0463: // More efficient than C or Pascal strings.
+; vmsrc/apple/sossys.pla: 0464: //
+; vmsrc/apple/sossys.pla: 0465: //def dcitos(dci, str)
+; vmsrc/apple/sossys.pla: 0466: //    byte len, c
+; vmsrc/apple/sossys.pla: 0467: //    len = 0
+; vmsrc/apple/sossys.pla: 0468: //    repeat
+; vmsrc/apple/sossys.pla: 0469: //        c = (dci).[len]
+; vmsrc/apple/sossys.pla: 0470: //        len = len + 1
+; vmsrc/apple/sossys.pla: 0471: //        (str).[len] = c & $7F
+; vmsrc/apple/sossys.pla: 0472: //    until !(c & $80)
+; vmsrc/apple/sossys.pla: 0473: //    ^str = len
+; vmsrc/apple/sossys.pla: 0474: //    return len
+; vmsrc/apple/sossys.pla: 0475: //end
+; vmsrc/apple/sossys.pla: 0476: asm dcitos(dci, str)#1
+_A012 					; dcitos()
+; vmsrc/apple/sossys.pla: 0477:         LDA     ESTKL,X
+        LDA     ESTKL,X
+; vmsrc/apple/sossys.pla: 0478:         STA     DSTL
+        STA     DSTL
+; vmsrc/apple/sossys.pla: 0479:         LDA     ESTKH,X
+        LDA     ESTKH,X
+; vmsrc/apple/sossys.pla: 0480:         STA     DSTH
+        STA     DSTH
+; vmsrc/apple/sossys.pla: 0481:         LDA     ESTKL+1,X
+        LDA     ESTKL+1,X
+; vmsrc/apple/sossys.pla: 0482:         STA     SRCL
+        STA     SRCL
+; vmsrc/apple/sossys.pla: 0483:         LDA     ESTKH+1,X
+        LDA     ESTKH+1,X
+; vmsrc/apple/sossys.pla: 0484:         STA     SRCH
+        STA     SRCH
+; vmsrc/apple/sossys.pla: 0485:         LDY     #$00
+        LDY     #$00
+; vmsrc/apple/sossys.pla: 0486: -       LDA     (SRC),Y
+-       LDA     (SRC),Y
+; vmsrc/apple/sossys.pla: 0487:         CMP     #$80
+        CMP     #$80
+; vmsrc/apple/sossys.pla: 0488:         AND     #$7F
+        AND     #$7F
+; vmsrc/apple/sossys.pla: 0489:         INY
+        INY
+; vmsrc/apple/sossys.pla: 0490:         STA     (DST),Y
+        STA     (DST),Y
+; vmsrc/apple/sossys.pla: 0491:         BCS     -
+        BCS     -
+; vmsrc/apple/sossys.pla: 0492:         TYA
+        TYA
+; vmsrc/apple/sossys.pla: 0493:         LDY     #$00
+        LDY     #$00
+; vmsrc/apple/sossys.pla: 0494:         STA     (DST),Y
+        STA     (DST),Y
+; vmsrc/apple/sossys.pla: 0495:         INX
+        INX
+; vmsrc/apple/sossys.pla: 0496:         STA     ESTKL,X
+        STA     ESTKL,X
+; vmsrc/apple/sossys.pla: 0497:         STY     ESTKH,X
+        STY     ESTKH,X
+; vmsrc/apple/sossys.pla: 0498:         RTS
+        RTS
+; vmsrc/apple/sossys.pla: 0499: end
+; vmsrc/apple/sossys.pla: 0500: //def stodci(str, dci)
+; vmsrc/apple/sossys.pla: 0501: //    byte len, c
+; vmsrc/apple/sossys.pla: 0502: //    len = ^str
+; vmsrc/apple/sossys.pla: 0503: //    if len == 0
+; vmsrc/apple/sossys.pla: 0504: //        return
+; vmsrc/apple/sossys.pla: 0505: //    fin
+; vmsrc/apple/sossys.pla: 0506: //    c = toupper((str).[len]) & $7F
+; vmsrc/apple/sossys.pla: 0507: //    len = len - 1
+; vmsrc/apple/sossys.pla: 0508: //    (dci).[len] = c
+; vmsrc/apple/sossys.pla: 0509: //    while len
+; vmsrc/apple/sossys.pla: 0510: //      c = toupper((str).[len]) | $80
+; vmsrc/apple/sossys.pla: 0511: //      len = len - 1
+; vmsrc/apple/sossys.pla: 0512: //      (dci).[len] = c
+; vmsrc/apple/sossys.pla: 0513: //    loop
+; vmsrc/apple/sossys.pla: 0514: //    return ^str
+; vmsrc/apple/sossys.pla: 0515: //end
+; vmsrc/apple/sossys.pla: 0516: asm stodci(str, dci)#1
+_A013 					; stodci()
+; vmsrc/apple/sossys.pla: 0517:         LDA     ESTKL,X
+        LDA     ESTKL,X
+; vmsrc/apple/sossys.pla: 0518:         STA     DSTL
+        STA     DSTL
+; vmsrc/apple/sossys.pla: 0519:         LDA     ESTKH,X
+        LDA     ESTKH,X
+; vmsrc/apple/sossys.pla: 0520:         STA     DSTH
+        STA     DSTH
+; vmsrc/apple/sossys.pla: 0521:         LDA     ESTKL+1,X
+        LDA     ESTKL+1,X
+; vmsrc/apple/sossys.pla: 0522:         STA     SRCL
+        STA     SRCL
+; vmsrc/apple/sossys.pla: 0523:         LDA     ESTKH+1,X
+        LDA     ESTKH+1,X
+; vmsrc/apple/sossys.pla: 0524:         STA     SRCH
+        STA     SRCH
+; vmsrc/apple/sossys.pla: 0525:         INX
+        INX
+; vmsrc/apple/sossys.pla: 0526:         LDY     #$00
+        LDY     #$00
+; vmsrc/apple/sossys.pla: 0527:         LDA     (SRC),Y
+        LDA     (SRC),Y
+; vmsrc/apple/sossys.pla: 0528:         BEQ     ++
+        BEQ     ++
+; vmsrc/apple/sossys.pla: 0529:         TAY
+        TAY
+; vmsrc/apple/sossys.pla: 0530:         LDA     (SRC),Y
+        LDA     (SRC),Y
+; vmsrc/apple/sossys.pla: 0531:         JSR     TOUPR
+        JSR     TOUPR
+; vmsrc/apple/sossys.pla: 0532:         BNE     +
+        BNE     +
+; vmsrc/apple/sossys.pla: 0533: -       LDA     (SRC),Y
+-       LDA     (SRC),Y
+; vmsrc/apple/sossys.pla: 0534:         JSR     TOUPR
+        JSR     TOUPR
+; vmsrc/apple/sossys.pla: 0535:         ORA     #$80
+        ORA     #$80
+; vmsrc/apple/sossys.pla: 0536: +       DEY
++       DEY
+; vmsrc/apple/sossys.pla: 0537:         STA     (DST),Y
+        STA     (DST),Y
+; vmsrc/apple/sossys.pla: 0538:         BNE     -
+        BNE     -
+; vmsrc/apple/sossys.pla: 0539:         LDA     (SRC),Y
+        LDA     (SRC),Y
+; vmsrc/apple/sossys.pla: 0540: ++      STA     ESTKL,X
+++      STA     ESTKL,X
+; vmsrc/apple/sossys.pla: 0541:         STY     ESTKH,X
+        STY     ESTKH,X
+; vmsrc/apple/sossys.pla: 0542:         RTS
+        RTS
+; vmsrc/apple/sossys.pla: 0543: end
+; vmsrc/apple/sossys.pla: 0544: asm toupper(c)#1
+_P010 					; toupper(c)#1()
+_A014 					; toupper()
+; vmsrc/apple/sossys.pla: 0545:         LDA     ESTKL,X
+        LDA     ESTKL,X
+; vmsrc/apple/sossys.pla: 0546: TOUPR   AND     #$7F
+TOUPR   AND     #$7F
+; vmsrc/apple/sossys.pla: 0547:         CMP     #'a'
+        CMP     #'a'
+; vmsrc/apple/sossys.pla: 0548:         BCC     +
+        BCC     +
+; vmsrc/apple/sossys.pla: 0549:         CMP     #'z'+1
+        CMP     #'z'+1
+; vmsrc/apple/sossys.pla: 0550:         BCS     +
+        BCS     +
+; vmsrc/apple/sossys.pla: 0551:         SBC     #$1F
+        SBC     #$1F
+; vmsrc/apple/sossys.pla: 0552: +       STA     ESTKL,X
++       STA     ESTKL,X
+; vmsrc/apple/sossys.pla: 0553:         RTS
+        RTS
+; vmsrc/apple/sossys.pla: 0554: end
+; vmsrc/apple/sossys.pla: 0555: //
+; vmsrc/apple/sossys.pla: 0556: // Lookup routines.
+; vmsrc/apple/sossys.pla: 0557: //
+; vmsrc/apple/sossys.pla: 0558: //def lookuptbl(dci, tbl)
+; vmsrc/apple/sossys.pla: 0559: //    word match
+; vmsrc/apple/sossys.pla: 0560: //    while ^tbl
+; vmsrc/apple/sossys.pla: 0561: //        match = dci
+; vmsrc/apple/sossys.pla: 0562: //        while ^tbl == ^match
+; vmsrc/apple/sossys.pla: 0563: //            if !(^tbl & $80)
+; vmsrc/apple/sossys.pla: 0564: //                return (tbl):1
+; vmsrc/apple/sossys.pla: 0565: //            fin
+; vmsrc/apple/sossys.pla: 0566: //            tbl   = tbl   + 1
+; vmsrc/apple/sossys.pla: 0567: //            match = match + 1
+; vmsrc/apple/sossys.pla: 0568: //        loop
+; vmsrc/apple/sossys.pla: 0569: //        while (^tbl & $80)
+; vmsrc/apple/sossys.pla: 0570: //            tbl = tbl + 1
+; vmsrc/apple/sossys.pla: 0571: //        loop
+; vmsrc/apple/sossys.pla: 0572: //        tbl = tbl + 3
+; vmsrc/apple/sossys.pla: 0573: //    loop
+; vmsrc/apple/sossys.pla: 0574: //    return 0
+; vmsrc/apple/sossys.pla: 0575: asm lookuptbl(dci, tbl)#1
+_A015 					; lookuptbl()
+; vmsrc/apple/sossys.pla: 0576:         LDY     #$00
+        LDY     #$00
+; vmsrc/apple/sossys.pla: 0577:         STY     DSTL
+        STY     DSTL
+; vmsrc/apple/sossys.pla: 0578:         LDA     ESTKH,X
+        LDA     ESTKH,X
+; vmsrc/apple/sossys.pla: 0579:         CLC
+        CLC
+; vmsrc/apple/sossys.pla: 0580:         ADC     #$60
+        ADC     #$60
+; vmsrc/apple/sossys.pla: 0581:         STA     DSTH
+        STA     DSTH
+; vmsrc/apple/sossys.pla: 0582:         LDA     ESTKL,X
+        LDA     ESTKL,X
+; vmsrc/apple/sossys.pla: 0583:         CLC
+        CLC
+; vmsrc/apple/sossys.pla: 0584:         ADC     #$7F
+        ADC     #$7F
+; vmsrc/apple/sossys.pla: 0585:         STA     DSTX
+        STA     DSTX
+; vmsrc/apple/sossys.pla: 0586:         LDA     ESTKL+1,X
+        LDA     ESTKL+1,X
+; vmsrc/apple/sossys.pla: 0587:         STA     SRCL
+        STA     SRCL
+; vmsrc/apple/sossys.pla: 0588:         LDA     ESTKH+1,X
+        LDA     ESTKH+1,X
+; vmsrc/apple/sossys.pla: 0589:         STA     SRCH
+        STA     SRCH
+; vmsrc/apple/sossys.pla: 0590: -       LDA     (DST),Y
+-       LDA     (DST),Y
+; vmsrc/apple/sossys.pla: 0591:         BEQ     +
+        BEQ     +
+; vmsrc/apple/sossys.pla: 0592:         CMP     (SRC),Y
+        CMP     (SRC),Y
+; vmsrc/apple/sossys.pla: 0593:         BNE     ++
+        BNE     ++
+; vmsrc/apple/sossys.pla: 0594:         INY
+        INY
+; vmsrc/apple/sossys.pla: 0595:         ASL
+        ASL
+; vmsrc/apple/sossys.pla: 0596:         BCS     -
+        BCS     -
+; vmsrc/apple/sossys.pla: 0597:         LDA     (DST),Y
+        LDA     (DST),Y
+; vmsrc/apple/sossys.pla: 0598:         PHA
+        PHA
+; vmsrc/apple/sossys.pla: 0599:         INY
+        INY
+; vmsrc/apple/sossys.pla: 0600:         LDA     (DST),Y
+        LDA     (DST),Y
+; vmsrc/apple/sossys.pla: 0601:         TAY
+        TAY
+; vmsrc/apple/sossys.pla: 0602:         PLA
+        PLA
+; vmsrc/apple/sossys.pla: 0603: +       INX
++       INX
+; vmsrc/apple/sossys.pla: 0604:         STA     ESTKL,X
+        STA     ESTKL,X
+; vmsrc/apple/sossys.pla: 0605:         STY     ESTKH,X
+        STY     ESTKH,X
+; vmsrc/apple/sossys.pla: 0606:         LDA     #$00
+        LDA     #$00
+; vmsrc/apple/sossys.pla: 0607:         STA     DSTX
+        STA     DSTX
+; vmsrc/apple/sossys.pla: 0608:         RTS
+        RTS
+; vmsrc/apple/sossys.pla: 0609: ++      LDY     #$00
+++      LDY     #$00
+; vmsrc/apple/sossys.pla: 0610: --      LDA     (DST),Y
+--      LDA     (DST),Y
+; vmsrc/apple/sossys.pla: 0611:         INC     DSTL
+        INC     DSTL
+; vmsrc/apple/sossys.pla: 0612:         BEQ     +
+        BEQ     +
+; vmsrc/apple/sossys.pla: 0613: ---     ASL
+---     ASL
+; vmsrc/apple/sossys.pla: 0614:         BCS     --
+        BCS     --
+; vmsrc/apple/sossys.pla: 0615:         LDA     #$02
+        LDA     #$02
+; vmsrc/apple/sossys.pla: 0616:         ADC     DSTL
+        ADC     DSTL
+; vmsrc/apple/sossys.pla: 0617:         STA     DSTL
+        STA     DSTL
+; vmsrc/apple/sossys.pla: 0618:         BCC     -
+        BCC     -
+; vmsrc/apple/sossys.pla: 0619:         INC     DSTH
+        INC     DSTH
+; vmsrc/apple/sossys.pla: 0620:         BCS     -
+        BCS     -
+; vmsrc/apple/sossys.pla: 0621: +       INC     DSTH
++       INC     DSTH
+; vmsrc/apple/sossys.pla: 0622:         BNE     ---
+        BNE     ---
+; vmsrc/apple/sossys.pla: 0623: end
+; vmsrc/apple/sossys.pla: 0624: // def lookupidx(esd, index)
+; vmsrc/apple/sossys.pla: 0625: //    word sym
+; vmsrc/apple/sossys.pla: 0626: //    while ^esd
+; vmsrc/apple/sossys.pla: 0627: //        sym = esd
+; vmsrc/apple/sossys.pla: 0628: //        esd = sym + dcitos(sym, @str)
+; vmsrc/apple/sossys.pla: 0629: //        if esd->0 & $10 and esd->1 == index
+; vmsrc/apple/sossys.pla: 0630: //            return sym
+; vmsrc/apple/sossys.pla: 0631: //        fin
+; vmsrc/apple/sossys.pla: 0632: //        esd = esd + 3
+; vmsrc/apple/sossys.pla: 0633: //    loop
+; vmsrc/apple/sossys.pla: 0634: //end
+; vmsrc/apple/sossys.pla: 0635: asm lookupidx(esd, index)#1
+_A016 					; lookupidx()
+; vmsrc/apple/sossys.pla: 0636:         LDA     ESTKL,X
+        LDA     ESTKL,X
+; vmsrc/apple/sossys.pla: 0637:         STA     TMPL
+        STA     TMPL
+; vmsrc/apple/sossys.pla: 0638:         INX
+        INX
+; vmsrc/apple/sossys.pla: 0639: ---     LDA     ESTKH,X
+---     LDA     ESTKH,X
+; vmsrc/apple/sossys.pla: 0640:         STA     SRCH
+        STA     SRCH
+; vmsrc/apple/sossys.pla: 0641:         LDA     ESTKL,X
+        LDA     ESTKL,X
+; vmsrc/apple/sossys.pla: 0642: --      STA     SRCL
+--      STA     SRCL
+; vmsrc/apple/sossys.pla: 0643:         LDY     #$00
+        LDY     #$00
+; vmsrc/apple/sossys.pla: 0644: -       LDA     (SRC),Y
+-       LDA     (SRC),Y
+; vmsrc/apple/sossys.pla: 0645:         BPL     +
+        BPL     +
+; vmsrc/apple/sossys.pla: 0646:         INY
+        INY
+; vmsrc/apple/sossys.pla: 0647:         BNE     -
+        BNE     -
+; vmsrc/apple/sossys.pla: 0648: +       BEQ     ++              ; END OF ESD
++       BEQ     ++              ; END OF ESD
+; vmsrc/apple/sossys.pla: 0649:         INY
+        INY
+; vmsrc/apple/sossys.pla: 0650:         LDA     (SRC),Y
+        LDA     (SRC),Y
+; vmsrc/apple/sossys.pla: 0651:         INY
+        INY
+; vmsrc/apple/sossys.pla: 0652:         AND     #$10            ; EXTERN FLAG?
+        AND     #$10            ; EXTERN FLAG?
+; vmsrc/apple/sossys.pla: 0653:         BEQ     +
+        BEQ     +
+; vmsrc/apple/sossys.pla: 0654:         LDA     (SRC),Y
+        LDA     (SRC),Y
+; vmsrc/apple/sossys.pla: 0655:         CMP     TMPL
+        CMP     TMPL
+; vmsrc/apple/sossys.pla: 0656:         BEQ     +++             ; MATCH
+        BEQ     +++             ; MATCH
+; vmsrc/apple/sossys.pla: 0657: +       INY
++       INY
+; vmsrc/apple/sossys.pla: 0658:         TYA
+        TYA
+; vmsrc/apple/sossys.pla: 0659:         SEC
+        SEC
+; vmsrc/apple/sossys.pla: 0660:         ADC     SRCL
+        ADC     SRCL
+; vmsrc/apple/sossys.pla: 0661:         STA     ESTKL,X         ; SYM PTRL
+        STA     ESTKL,X         ; SYM PTRL
+; vmsrc/apple/sossys.pla: 0662:         BCC     --
+        BCC     --
+; vmsrc/apple/sossys.pla: 0663:         INC     ESTKH,X         ; SYM PTRH
+        INC     ESTKH,X         ; SYM PTRH
+; vmsrc/apple/sossys.pla: 0664:         BNE     ---
+        BNE     ---
+; vmsrc/apple/sossys.pla: 0665: ++      STA     ESTKL,X         ; END OF ESD
+++      STA     ESTKL,X         ; END OF ESD
+; vmsrc/apple/sossys.pla: 0666:         STA     ESTKH,X
+        STA     ESTKH,X
+; vmsrc/apple/sossys.pla: 0667: +++     RTS
++++     RTS
+; vmsrc/apple/sossys.pla: 0668: end
+; vmsrc/apple/sossys.pla: 0669: //def lookupdef(addr, deftbl)#1
+; vmsrc/apple/sossys.pla: 0670: //    while deftbl->0 == $20
+; vmsrc/apple/sossys.pla: 0671: //        if deftbl=>3 == addr
+; vmsrc/apple/sossys.pla: 0672: //            return deftbl
+; vmsrc/apple/sossys.pla: 0673: //        fin
+; vmsrc/apple/sossys.pla: 0674: //        deftbl = deftbl + t_defentry
+; vmsrc/apple/sossys.pla: 0675: //    loop
+; vmsrc/apple/sossys.pla: 0676: //    return 0
+; vmsrc/apple/sossys.pla: 0677: //end
+; vmsrc/apple/sossys.pla: 0678: asm lookupdef(addr, deftbl)#1
+_A017 					; lookupdef()
+; vmsrc/apple/sossys.pla: 0679:         LDA     ESTKH,X
+        LDA     ESTKH,X
+; vmsrc/apple/sossys.pla: 0680:         STA     SRCH
+        STA     SRCH
+; vmsrc/apple/sossys.pla: 0681:         LDA     ESTKL,X
+        LDA     ESTKL,X
+; vmsrc/apple/sossys.pla: 0682:         STA     SRCL
+        STA     SRCL
+; vmsrc/apple/sossys.pla: 0683:         INX
+        INX
+; vmsrc/apple/sossys.pla: 0684: -       LDY     #$00
+-       LDY     #$00
+; vmsrc/apple/sossys.pla: 0685:         LDA     (SRC),Y
+        LDA     (SRC),Y
+; vmsrc/apple/sossys.pla: 0686:         CMP     #$20            ; JSR OPCODE?
+        CMP     #$20            ; JSR OPCODE?
+; vmsrc/apple/sossys.pla: 0687:         BNE     ++
+        BNE     ++
+; vmsrc/apple/sossys.pla: 0688:         LDY     #$03
+        LDY     #$03
+; vmsrc/apple/sossys.pla: 0689:         LDA     (SRC),Y
+        LDA     (SRC),Y
+; vmsrc/apple/sossys.pla: 0690:         CMP     ESTKL,X
+        CMP     ESTKL,X
+; vmsrc/apple/sossys.pla: 0691:         BNE     +
+        BNE     +
+; vmsrc/apple/sossys.pla: 0692:         INY
+        INY
+; vmsrc/apple/sossys.pla: 0693:         LDA     (SRC),Y
+        LDA     (SRC),Y
+; vmsrc/apple/sossys.pla: 0694:         CMP     ESTKH,X
+        CMP     ESTKH,X
+; vmsrc/apple/sossys.pla: 0695:         BNE     +
+        BNE     +
+; vmsrc/apple/sossys.pla: 0696:         LDA     SRCL            ; MATCH
+        LDA     SRCL            ; MATCH
+; vmsrc/apple/sossys.pla: 0697:         STA     ESTKL,X
+        STA     ESTKL,X
+; vmsrc/apple/sossys.pla: 0698:         LDA     SRCH
+        LDA     SRCH
+; vmsrc/apple/sossys.pla: 0699:         STA     ESTKH,X
+        STA     ESTKH,X
+; vmsrc/apple/sossys.pla: 0700:         RTS
+        RTS
+; vmsrc/apple/sossys.pla: 0701: +       LDA     #$06            ; T_DEFENTRY
++       LDA     #$06            ; T_DEFENTRY
+; vmsrc/apple/sossys.pla: 0702:         CLC
+        CLC
+; vmsrc/apple/sossys.pla: 0703:         ADC     SRCL
+        ADC     SRCL
+; vmsrc/apple/sossys.pla: 0704:         STA     SRCL
+        STA     SRCL
+; vmsrc/apple/sossys.pla: 0705:         BCC     -
+        BCC     -
+; vmsrc/apple/sossys.pla: 0706:         INC     SRCH
+        INC     SRCH
+; vmsrc/apple/sossys.pla: 0707:         BNE     -
+        BNE     -
+; vmsrc/apple/sossys.pla: 0708: ++      STY     ESTKL,X
+++      STY     ESTKL,X
+; vmsrc/apple/sossys.pla: 0709:         STY     ESTKH,X
+        STY     ESTKH,X
+; vmsrc/apple/sossys.pla: 0710:         RTS
+        RTS
+; vmsrc/apple/sossys.pla: 0711: end
+; vmsrc/apple/sossys.pla: 0712: //
+; vmsrc/apple/sossys.pla: 0713: // Reloc internal data
+; vmsrc/apple/sossys.pla: 0714: //
+; vmsrc/apple/sossys.pla: 0715: //def reloc(modfix, modofst, bytecode, rld)#3
+; vmsrc/apple/sossys.pla: 0716: //    word addr, fixup
+; vmsrc/apple/sossys.pla: 0717: //    while ^rld
+; vmsrc/apple/sossys.pla: 0718: //        if ^rld & $10 // EXTERN reference.
+; vmsrc/apple/sossys.pla: 0719: //            return rld, addr, fixup
+; vmsrc/apple/sossys.pla: 0720: //        fin
+; vmsrc/apple/sossys.pla: 0721: //        addr = rld=>1 + modfix
+; vmsrc/apple/sossys.pla: 0722: //        fixup = *addr + modofst
+; vmsrc/apple/sossys.pla: 0723: //        if uword_isge(fixup, bytecode) // Bytecode address.
+; vmsrc/apple/sossys.pla: 0724: //            return rld, addr, fixup
+; vmsrc/apple/sossys.pla: 0725: //        fin
+; vmsrc/apple/sossys.pla: 0726: //        *addr = fixup
+; vmsrc/apple/sossys.pla: 0727: //        rld = rld + 4
+; vmsrc/apple/sossys.pla: 0728: //    loop
+; vmsrc/apple/sossys.pla: 0729: //    return rld, addr, fixup
+; vmsrc/apple/sossys.pla: 0730: //end
+; vmsrc/apple/sossys.pla: 0731: asm reloc(modfix, modofst, bytecode, rld)#3
+_A018 					; reloc()
+; vmsrc/apple/sossys.pla: 0732:         LDA     ESTKL,X
+        LDA     ESTKL,X
+; vmsrc/apple/sossys.pla: 0733:         STA     SRCL
+        STA     SRCL
+; vmsrc/apple/sossys.pla: 0734:         LDA     ESTKH,X
+        LDA     ESTKH,X
+; vmsrc/apple/sossys.pla: 0735:         STA     SRCH
+        STA     SRCH
+; vmsrc/apple/sossys.pla: 0736:         LDY     #$00
+        LDY     #$00
+; vmsrc/apple/sossys.pla: 0737: -       LDA     (SRC),Y
+-       LDA     (SRC),Y
+; vmsrc/apple/sossys.pla: 0738:         BEQ     RLDEX       ; END OF RLD
+        BEQ     RLDEX       ; END OF RLD
+; vmsrc/apple/sossys.pla: 0739:         INY
+        INY
+; vmsrc/apple/sossys.pla: 0740:         LDA     (SRC),Y
+        LDA     (SRC),Y
+; vmsrc/apple/sossys.pla: 0741:         CLC
+        CLC
+; vmsrc/apple/sossys.pla: 0742:         ADC     ESTKL+3,X   ; ADDR=ENTRY=>1+MODFIX
+        ADC     ESTKL+3,X   ; ADDR=ENTRY=>1+MODFIX
+; vmsrc/apple/sossys.pla: 0743:         STA     DSTL
+        STA     DSTL
+; vmsrc/apple/sossys.pla: 0744:         INY
+        INY
+; vmsrc/apple/sossys.pla: 0745:         LDA     (SRC),Y
+        LDA     (SRC),Y
+; vmsrc/apple/sossys.pla: 0746:         ADC     ESTKH+3,X
+        ADC     ESTKH+3,X
+; vmsrc/apple/sossys.pla: 0747:         STA     DSTH
+        STA     DSTH
+; vmsrc/apple/sossys.pla: 0748:         LDY     #$00
+        LDY     #$00
+; vmsrc/apple/sossys.pla: 0749:         LDA     (SRC),Y
+        LDA     (SRC),Y
+; vmsrc/apple/sossys.pla: 0750:         AND     #$10        ; EXTERN REF - EXIT
+        AND     #$10        ; EXTERN REF - EXIT
+; vmsrc/apple/sossys.pla: 0751:         BNE     RLDEX
+        BNE     RLDEX
+; vmsrc/apple/sossys.pla: 0752:         LDA     (SRC),Y
+        LDA     (SRC),Y
+; vmsrc/apple/sossys.pla: 0753:         BMI     FIX16
+        BMI     FIX16
+; vmsrc/apple/sossys.pla: 0754:         AND     #$40
+        AND     #$40
+; vmsrc/apple/sossys.pla: 0755:         BNE     FIXMSB
+        BNE     FIXMSB
+; vmsrc/apple/sossys.pla: 0756: FIXLSB  LDA     (DST),Y
+FIXLSB  LDA     (DST),Y
+; vmsrc/apple/sossys.pla: 0757:         CLC
+        CLC
+; vmsrc/apple/sossys.pla: 0758:         ADC     ESTKL+2,X
+        ADC     ESTKL+2,X
+; vmsrc/apple/sossys.pla: 0759:         CLC
+        CLC
+; vmsrc/apple/sossys.pla: 0760:         BCC     FIX8
+        BCC     FIX8
+; vmsrc/apple/sossys.pla: 0761: FIXMSB  LDY     #$03
+FIXMSB  LDY     #$03
+; vmsrc/apple/sossys.pla: 0762:         LDA     (SRC),Y     ; FIXUPH=(ENTRY->3+MODOFSTL)+(^ADDR+MODOFSTH)
+        LDA     (SRC),Y     ; FIXUPH=(ENTRY->3+MODOFSTL)+(^ADDR+MODOFSTH)
+; vmsrc/apple/sossys.pla: 0763:         CLC
+        CLC
+; vmsrc/apple/sossys.pla: 0764:         ADC     ESTKL+2,X
+        ADC     ESTKL+2,X
+; vmsrc/apple/sossys.pla: 0765:         LDY     #$00
+        LDY     #$00
+; vmsrc/apple/sossys.pla: 0766:         LDA     (DST),Y
+        LDA     (DST),Y
+; vmsrc/apple/sossys.pla: 0767:         ADC     ESTKH+2,X
+        ADC     ESTKH+2,X
+; vmsrc/apple/sossys.pla: 0768:         CLC
+        CLC
+; vmsrc/apple/sossys.pla: 0769:         BCC     FIX8
+        BCC     FIX8
+; vmsrc/apple/sossys.pla: 0770: FIX16   LDA     (DST),Y     ; FIXUP=*ADDR+MODOFST
+FIX16   LDA     (DST),Y     ; FIXUP=*ADDR+MODOFST
+; vmsrc/apple/sossys.pla: 0771:         CLC
+        CLC
+; vmsrc/apple/sossys.pla: 0772:         ADC     ESTKL+2,X
+        ADC     ESTKL+2,X
+; vmsrc/apple/sossys.pla: 0773:         STA     TMPL
+        STA     TMPL
+; vmsrc/apple/sossys.pla: 0774:         INY
+        INY
+; vmsrc/apple/sossys.pla: 0775:         LDA     (DST),Y
+        LDA     (DST),Y
+; vmsrc/apple/sossys.pla: 0776:         ADC     ESTKH+2,X
+        ADC     ESTKH+2,X
+; vmsrc/apple/sossys.pla: 0777:         CMP     ESTKH+1,X   ; FIXUP >= BYTECODE?
+        CMP     ESTKH+1,X   ; FIXUP >= BYTECODE?
+; vmsrc/apple/sossys.pla: 0778:         BCC     +
+        BCC     +
+; vmsrc/apple/sossys.pla: 0779:         STA     TMPH
+        STA     TMPH
+; vmsrc/apple/sossys.pla: 0780:         BNE     RLDEX       ; YEP, EXIT
+        BNE     RLDEX       ; YEP, EXIT
+; vmsrc/apple/sossys.pla: 0781:         LDA     TMPL
+        LDA     TMPL
+; vmsrc/apple/sossys.pla: 0782:         CMP     ESTKL+1,X
+        CMP     ESTKL+1,X
+; vmsrc/apple/sossys.pla: 0783:         BCS     RLDEX       ; YEP, EXIT
+        BCS     RLDEX       ; YEP, EXIT
+; vmsrc/apple/sossys.pla: 0784:         LDA     TMPH
+        LDA     TMPH
+; vmsrc/apple/sossys.pla: 0785: +       STA     (DST),Y     ; *ADDR=FIXUP
++       STA     (DST),Y     ; *ADDR=FIXUP
+; vmsrc/apple/sossys.pla: 0786:         DEY
+        DEY
+; vmsrc/apple/sossys.pla: 0787:         LDA     TMPL
+        LDA     TMPL
+; vmsrc/apple/sossys.pla: 0788: FIX8    STA     (DST),Y
+FIX8    STA     (DST),Y
+; vmsrc/apple/sossys.pla: 0789:         LDA     SRCL        ; NEXT ENTRY
+        LDA     SRCL        ; NEXT ENTRY
+; vmsrc/apple/sossys.pla: 0790: ;       CLC
+;       CLC
+; vmsrc/apple/sossys.pla: 0791:         ADC     #$04
+        ADC     #$04
+; vmsrc/apple/sossys.pla: 0792:         STA     SRCL
+        STA     SRCL
+; vmsrc/apple/sossys.pla: 0793:         BCC     -
+        BCC     -
+; vmsrc/apple/sossys.pla: 0794:         INC     SRCH
+        INC     SRCH
+; vmsrc/apple/sossys.pla: 0795:         BNE     -
+        BNE     -
+; vmsrc/apple/sossys.pla: 0796: RLDEX   INX
+RLDEX   INX
+; vmsrc/apple/sossys.pla: 0797:         LDA     TMPL
+        LDA     TMPL
+; vmsrc/apple/sossys.pla: 0798:         STA     ESTKL,X
+        STA     ESTKL,X
+; vmsrc/apple/sossys.pla: 0799:         LDA     TMPH
+        LDA     TMPH
+; vmsrc/apple/sossys.pla: 0800:         STA     ESTKH,X
+        STA     ESTKH,X
+; vmsrc/apple/sossys.pla: 0801:         LDA     DSTL
+        LDA     DSTL
+; vmsrc/apple/sossys.pla: 0802:         STA     ESTKL+1,X
+        STA     ESTKL+1,X
+; vmsrc/apple/sossys.pla: 0803:         LDA     DSTH
+        LDA     DSTH
+; vmsrc/apple/sossys.pla: 0804:         STA     ESTKH+1,X
+        STA     ESTKH+1,X
+; vmsrc/apple/sossys.pla: 0805:         LDA     SRCL
+        LDA     SRCL
+; vmsrc/apple/sossys.pla: 0806:         STA     ESTKL+2,X
+        STA     ESTKL+2,X
+; vmsrc/apple/sossys.pla: 0807:         LDA     SRCH
+        LDA     SRCH
+; vmsrc/apple/sossys.pla: 0808:         STA     ESTKH+2,X
+        STA     ESTKH+2,X
+; vmsrc/apple/sossys.pla: 0809:         RTS
+        RTS
+; vmsrc/apple/sossys.pla: 0810: end
+; vmsrc/apple/sossys.pla: 0811: def syslookuptbl(dci)#1
+					; dci -> [0]
+_P031 					; syslookuptbl(dci)#1()
+_C000 					; syslookuptbl()
+	JSR	INTERP
+; vmsrc/apple/sossys.pla: 0812:     return lookuptbl(dci, symtbl)
+	!BYTE	$58,$02,$01		; ENTER	2,1
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$6A			; LAW	_D082+0
+_F063 	!WORD	_D082+0		
+	!BYTE	$54			; CALL	_A015
+_F064 	!WORD	_A015		
+	!BYTE	$5A,$02			; LEAVE	2
+; vmsrc/apple/sossys.pla: 0813: end
+; vmsrc/apple/sossys.pla: 0814: //
+; vmsrc/apple/sossys.pla: 0815: // SOS routines
+; vmsrc/apple/sossys.pla: 0816: // FILE I/O
+; vmsrc/apple/sossys.pla: 0817: //
+; vmsrc/apple/sossys.pla: 0818: def open(path)#1
+					; path -> [0]
+_P027 					; open(path)#1()
+_C001 					; open()
+	JSR	INTERP
+; vmsrc/apple/sossys.pla: 0819:     byte params[7]
+					; params -> [2]
+; vmsrc/apple/sossys.pla: 0820: 
+; vmsrc/apple/sossys.pla: 0821:     params.0 = 4
+	!BYTE	$58,$09,$01		; ENTER	9,1
+; vmsrc/apple/sossys.pla: 0822:     params:1 = path
+; vmsrc/apple/sossys.pla: 0823:     params.3 = 0
+; vmsrc/apple/sossys.pla: 0824:     params:4 = 0
+; vmsrc/apple/sossys.pla: 0825:     params.6 = 0
+; vmsrc/apple/sossys.pla: 0826:     perr     = syscall($C8, @params)
+; vmsrc/apple/sossys.pla: 0827:     return params.3
+	!BYTE	$08			; CN	4
+	!BYTE	$74,$02			; SLB	[2]
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$76,$03			; SLW	[3]
+	!BYTE	$00			; CN	0
+	!BYTE	$74,$05			; SLB	[5]
+	!BYTE	$00			; CN	0
+	!BYTE	$76,$06			; SLW	[6]
+	!BYTE	$00			; CN	0
+	!BYTE	$74,$08			; SLB	[8]
+	!BYTE	$2A,$C8			; CB	200
+	!BYTE	$28,$02			; LLA	[2]
+	!BYTE	$54			; CALL	_A000
+_F065 	!WORD	_A000		
+	!BYTE	$78			; SAB	_D035+0
+_F066 	!WORD	_D035+0		
+	!BYTE	$64,$05			; LLB	[5]
+	!BYTE	$5A,$09			; LEAVE	9
+; vmsrc/apple/sossys.pla: 0828: end
+; vmsrc/apple/sossys.pla: 0829: def close(refnum)#1
+					; refnum -> [0]
+_P028 					; close(refnum)#1()
+_C002 					; close()
+	JSR	INTERP
+; vmsrc/apple/sossys.pla: 0830:     byte params[2]
+					; params -> [2]
+; vmsrc/apple/sossys.pla: 0831: 
+; vmsrc/apple/sossys.pla: 0832:     params.0 = 1
+	!BYTE	$58,$04,$01		; ENTER	4,1
+; vmsrc/apple/sossys.pla: 0833:     params.1 = refnum
+; vmsrc/apple/sossys.pla: 0834:     perr     = syscall($CC, @params)
+; vmsrc/apple/sossys.pla: 0835:     return perr
+	!BYTE	$02			; CN	1
+	!BYTE	$74,$02			; SLB	[2]
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$74,$03			; SLB	[3]
+	!BYTE	$2A,$CC			; CB	204
+	!BYTE	$28,$02			; LLA	[2]
+	!BYTE	$54			; CALL	_A000
+_F067 	!WORD	_A000		
+	!BYTE	$7C			; DAB	_D035+0
+_F068 	!WORD	_D035+0		
+	!BYTE	$5A,$04			; LEAVE	4
+; vmsrc/apple/sossys.pla: 0836: end
+; vmsrc/apple/sossys.pla: 0837: def read(refnum, buff, len)#1
+					; refnum -> [0]
+					; buff -> [2]
+					; len -> [4]
+_P029 					; read(refnum, buff, len)#1()
+_C003 					; read()
+	JSR	INTERP
+; vmsrc/apple/sossys.pla: 0838:     byte params[8]
+					; params -> [6]
+; vmsrc/apple/sossys.pla: 0839: 
+; vmsrc/apple/sossys.pla: 0840:     params.0 = 4
+	!BYTE	$58,$0E,$03		; ENTER	14,3
+; vmsrc/apple/sossys.pla: 0841:     params.1 = refnum
+; vmsrc/apple/sossys.pla: 0842:     params:2 = buff
+; vmsrc/apple/sossys.pla: 0843:     params:4 = len
+; vmsrc/apple/sossys.pla: 0844:     params:6 = 0
+; vmsrc/apple/sossys.pla: 0845:     perr     = syscall($CA, @params)
+; vmsrc/apple/sossys.pla: 0846:     return params:6
+	!BYTE	$08			; CN	4
+	!BYTE	$74,$06			; SLB	[6]
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$74,$07			; SLB	[7]
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$76,$08			; SLW	[8]
+	!BYTE	$66,$04			; LLW	[4]
+	!BYTE	$76,$0A			; SLW	[10]
+	!BYTE	$00			; CN	0
+	!BYTE	$76,$0C			; SLW	[12]
+	!BYTE	$2A,$CA			; CB	202
+	!BYTE	$28,$06			; LLA	[6]
+	!BYTE	$54			; CALL	_A000
+_F069 	!WORD	_A000		
+	!BYTE	$78			; SAB	_D035+0
+_F070 	!WORD	_D035+0		
+	!BYTE	$66,$0C			; LLW	[12]
+	!BYTE	$5A,$0E			; LEAVE	14
+; vmsrc/apple/sossys.pla: 0847: end
+; vmsrc/apple/sossys.pla: 0848: def write(refnum, buff, len)#1
+					; refnum -> [0]
+					; buff -> [2]
+					; len -> [4]
+_P030 					; write(refnum, buff, len)#1()
+_C004 					; write()
+	JSR	INTERP
+; vmsrc/apple/sossys.pla: 0849:     byte params[6]
+					; params -> [6]
+; vmsrc/apple/sossys.pla: 0850: 
+; vmsrc/apple/sossys.pla: 0851:     params.0 = 3
+	!BYTE	$58,$0C,$03		; ENTER	12,3
+; vmsrc/apple/sossys.pla: 0852:     params.1 = refnum
+; vmsrc/apple/sossys.pla: 0853:     params:2 = buff
+; vmsrc/apple/sossys.pla: 0854:     params:4 = len
+; vmsrc/apple/sossys.pla: 0855:     perr     = syscall($CB, @params)
+; vmsrc/apple/sossys.pla: 0856:     return perr
+	!BYTE	$06			; CN	3
+	!BYTE	$74,$06			; SLB	[6]
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$74,$07			; SLB	[7]
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$76,$08			; SLW	[8]
+	!BYTE	$66,$04			; LLW	[4]
+	!BYTE	$76,$0A			; SLW	[10]
+	!BYTE	$2A,$CB			; CB	203
+	!BYTE	$28,$06			; LLA	[6]
+	!BYTE	$54			; CALL	_A000
+_F071 	!WORD	_A000		
+	!BYTE	$7C			; DAB	_D035+0
+_F072 	!WORD	_D035+0		
+	!BYTE	$5A,$0C			; LEAVE	12
+; vmsrc/apple/sossys.pla: 0857: end
+; vmsrc/apple/sossys.pla: 0858: //
+; vmsrc/apple/sossys.pla: 0859: // CONSOLE I/O
+; vmsrc/apple/sossys.pla: 0860: //
+; vmsrc/apple/sossys.pla: 0861: def dev_control(devnum, code, list)#1
+					; devnum -> [0]
+					; code -> [2]
+					; list -> [4]
+_C005 					; dev_control()
+	JSR	INTERP
+; vmsrc/apple/sossys.pla: 0862:     byte params[5]
+					; params -> [6]
+; vmsrc/apple/sossys.pla: 0863: 
+; vmsrc/apple/sossys.pla: 0864:     params.0 = 3
+	!BYTE	$58,$0B,$03		; ENTER	11,3
+; vmsrc/apple/sossys.pla: 0865:     params.1 = devnum
+; vmsrc/apple/sossys.pla: 0866:     params.2 = code
+; vmsrc/apple/sossys.pla: 0867:     params:3 = list
+; vmsrc/apple/sossys.pla: 0868:     return syscall($83, @params)
+	!BYTE	$06			; CN	3
+	!BYTE	$74,$06			; SLB	[6]
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$74,$07			; SLB	[7]
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$74,$08			; SLB	[8]
+	!BYTE	$66,$04			; LLW	[4]
+	!BYTE	$76,$09			; SLW	[9]
+	!BYTE	$2A,$83			; CB	131
+	!BYTE	$28,$06			; LLA	[6]
+	!BYTE	$54			; CALL	_A000
+_F073 	!WORD	_A000		
+	!BYTE	$5A,$0B			; LEAVE	11
+; vmsrc/apple/sossys.pla: 0869: end
+; vmsrc/apple/sossys.pla: 0870: def dev_getnum(name)#1
+					; name -> [0]
+_C006 					; dev_getnum()
+	JSR	INTERP
+; vmsrc/apple/sossys.pla: 0871:     byte params[4]
+					; params -> [2]
+; vmsrc/apple/sossys.pla: 0872: 
+; vmsrc/apple/sossys.pla: 0873:     params.0 = 2
+	!BYTE	$58,$06,$01		; ENTER	6,1
+; vmsrc/apple/sossys.pla: 0874:     params:1 = name
+; vmsrc/apple/sossys.pla: 0875:     params.3 = 0
+; vmsrc/apple/sossys.pla: 0876:     syscall($84, @params)
+; vmsrc/apple/sossys.pla: 0877:     return params.3
+	!BYTE	$04			; CN	2
+	!BYTE	$74,$02			; SLB	[2]
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$76,$03			; SLW	[3]
+	!BYTE	$00			; CN	0
+	!BYTE	$74,$05			; SLB	[5]
+	!BYTE	$2A,$84			; CB	132
+	!BYTE	$28,$02			; LLA	[2]
+	!BYTE	$54			; CALL	_A000
+_F074 	!WORD	_A000		
+	!BYTE	$30			; DROP 
+	!BYTE	$64,$05			; LLB	[5]
+	!BYTE	$5A,$06			; LEAVE	6
+; vmsrc/apple/sossys.pla: 0878: end
+; vmsrc/apple/sossys.pla: 0879: def init_cons()#0
+_C007 					; init_cons()
+	JSR	INTERP
+; vmsrc/apple/sossys.pla: 0880:     byte nlmode[2]
+					; nlmode -> [0]
+; vmsrc/apple/sossys.pla: 0881: 
+; vmsrc/apple/sossys.pla: 0882:     refcons  = open(@console)
+	!BYTE	$58,$02,$00		; ENTER	2,0
+; vmsrc/apple/sossys.pla: 0883:     devcons  = dev_getnum(@console)
+; vmsrc/apple/sossys.pla: 0884:     nlmode:0 = $0D80
+; vmsrc/apple/sossys.pla: 0885:     //nlmode.0 = $80
+; vmsrc/apple/sossys.pla: 0886:     //nlmode.1 = $0D
+; vmsrc/apple/sossys.pla: 0887:     dev_control(devcons, $02, @nlmode)
+; vmsrc/apple/sossys.pla: 0888:     write(refcons, @textmode, 3)
+; vmsrc/apple/sossys.pla: 0889: end
+	!BYTE	$26			; LA	_D043+0
+_F075 	!WORD	_D043+0		
+	!BYTE	$54			; CALL	_C001
+_F076 	!WORD	_C001		
+	!BYTE	$78			; SAB	_D038+0
+_F077 	!WORD	_D038+0		
+	!BYTE	$26			; LA	_D043+0
+_F078 	!WORD	_D043+0		
+	!BYTE	$54			; CALL	_C006
+_F079 	!WORD	_C006		
+	!BYTE	$78			; SAB	_D039+0
+_F080 	!WORD	_D039+0		
+	!BYTE	$2C,$80,$0D		; CW	3456
+	!BYTE	$76,$00			; SLW	[0]
+	!BYTE	$68			; LAB	_D039+0
+_F081 	!WORD	_D039+0		
+	!BYTE	$04			; CN	2
+	!BYTE	$28,$00			; LLA	[0]
+	!BYTE	$54			; CALL	_C005
+_F082 	!WORD	_C005		
+	!BYTE	$30			; DROP 
+	!BYTE	$68			; LAB	_D038+0
+_F083 	!WORD	_D038+0		
+	!BYTE	$26			; LA	_D044+0
+_F084 	!WORD	_D044+0		
+	!BYTE	$06			; CN	3
+	!BYTE	$54			; CALL	_C004
+_F085 	!WORD	_C004		
+	!BYTE	$30			; DROP 
+	!BYTE	$5A,$02			; LEAVE	2
+; vmsrc/apple/sossys.pla: 0890: //
+; vmsrc/apple/sossys.pla: 0891: // MEMORY CALLS
+; vmsrc/apple/sossys.pla: 0892: //
+; vmsrc/apple/sossys.pla: 0893: def seg_find(search, pages, id)#3
+					; search -> [0]
+					; pages -> [2]
+					; id -> [4]
+_C008 					; seg_find()
+	JSR	INTERP
+; vmsrc/apple/sossys.pla: 0894:     byte params[10]
+					; params -> [6]
+; vmsrc/apple/sossys.pla: 0895: 
+; vmsrc/apple/sossys.pla: 0896:     params.0 = 6
+	!BYTE	$58,$10,$03		; ENTER	16,3
+; vmsrc/apple/sossys.pla: 0897:     params.1 = search
+; vmsrc/apple/sossys.pla: 0898:     params.2 = id
+; vmsrc/apple/sossys.pla: 0899:     params:3 = pages
+; vmsrc/apple/sossys.pla: 0900:     params:5 = 0
+; vmsrc/apple/sossys.pla: 0901:     params:7 = 0
+; vmsrc/apple/sossys.pla: 0902:     params.9 = 0
+; vmsrc/apple/sossys.pla: 0903:     perr     = syscall($41, @params)
+; vmsrc/apple/sossys.pla: 0904:     return params.9, params:5, params:7
+	!BYTE	$0C			; CN	6
+	!BYTE	$74,$06			; SLB	[6]
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$74,$07			; SLB	[7]
+	!BYTE	$66,$04			; LLW	[4]
+	!BYTE	$74,$08			; SLB	[8]
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$76,$09			; SLW	[9]
+	!BYTE	$00			; CN	0
+	!BYTE	$76,$0B			; SLW	[11]
+	!BYTE	$00			; CN	0
+	!BYTE	$76,$0D			; SLW	[13]
+	!BYTE	$00			; CN	0
+	!BYTE	$74,$0F			; SLB	[15]
+	!BYTE	$2A,$41			; CB	65
+	!BYTE	$28,$06			; LLA	[6]
+	!BYTE	$54			; CALL	_A000
+_F086 	!WORD	_A000		
+	!BYTE	$78			; SAB	_D035+0
+_F087 	!WORD	_D035+0		
+	!BYTE	$64,$0F			; LLB	[15]
+	!BYTE	$66,$0B			; LLW	[11]
+	!BYTE	$66,$0D			; LLW	[13]
+	!BYTE	$5A,$10			; LEAVE	16
+; vmsrc/apple/sossys.pla: 0905: end
+; vmsrc/apple/sossys.pla: 0906: def seg_release(segnum)#1
+					; segnum -> [0]
+_C009 					; seg_release()
+	JSR	INTERP
+; vmsrc/apple/sossys.pla: 0907:     byte params[2]
+					; params -> [2]
+; vmsrc/apple/sossys.pla: 0908: 
+; vmsrc/apple/sossys.pla: 0909:     params.0 = 1
+	!BYTE	$58,$04,$01		; ENTER	4,1
+; vmsrc/apple/sossys.pla: 0910:     params.1 = segnum
+; vmsrc/apple/sossys.pla: 0911:     perr     = syscall($45, @params)
+; vmsrc/apple/sossys.pla: 0912:     return perr
+	!BYTE	$02			; CN	1
+	!BYTE	$74,$02			; SLB	[2]
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$74,$03			; SLB	[3]
+	!BYTE	$2A,$45			; CB	69
+	!BYTE	$28,$02			; LLA	[2]
+	!BYTE	$54			; CALL	_A000
+_F088 	!WORD	_A000		
+	!BYTE	$7C			; DAB	_D035+0
+_F089 	!WORD	_D035+0		
+	!BYTE	$5A,$04			; LEAVE	4
+; vmsrc/apple/sossys.pla: 0913: end
+; vmsrc/apple/sossys.pla: 0914: //
+; vmsrc/apple/sossys.pla: 0915: // CONSOLE I/O
+; vmsrc/apple/sossys.pla: 0916: //
+; vmsrc/apple/sossys.pla: 0917: def cout(ch)#0
+					; ch -> [0]
+_P003 					; cout(ch)#0()
+_C010 					; cout()
+	JSR	INTERP
+; vmsrc/apple/sossys.pla: 0918:     byte nc
+					; nc -> [2]
+; vmsrc/apple/sossys.pla: 0919: 
+; vmsrc/apple/sossys.pla: 0920:     nc = 1
+	!BYTE	$58,$03,$01		; ENTER	3,1
+; vmsrc/apple/sossys.pla: 0921:     if ch == $0D
+; vmsrc/apple/sossys.pla: 0922:         ch = $0A0D
+; vmsrc/apple/sossys.pla: 0923:         nc = 2
+; vmsrc/apple/sossys.pla: 0924:     fin
+	!BYTE	$02			; CN	1
+	!BYTE	$74,$02			; SLB	[2]
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$1A			; CN	13
+	!BYTE	$24			; BRNE	_B001
+	!WORD	_B001-*
+	!BYTE	$2C,$0D,$0A		; CW	2573
+	!BYTE	$76,$00			; SLW	[0]
+	!BYTE	$04			; CN	2
+	!BYTE	$74,$02			; SLB	[2]
+_B001 
+_B002 
+; vmsrc/apple/sossys.pla: 0925:     write(refcons, @ch, nc)
+; vmsrc/apple/sossys.pla: 0926: end
+	!BYTE	$68			; LAB	_D038+0
+_F090 	!WORD	_D038+0		
+	!BYTE	$28,$00			; LLA	[0]
+	!BYTE	$64,$02			; LLB	[2]
+	!BYTE	$54			; CALL	_C004
+_F091 	!WORD	_C004		
+	!BYTE	$30			; DROP 
+	!BYTE	$5A,$03			; LEAVE	3
+; vmsrc/apple/sossys.pla: 0927: def crout()#0
+_P002 					; crout()#0()
+_C011 					; crout()
+	JSR	INTERP
+; vmsrc/apple/sossys.pla: 0928:     cout($0D)
+; vmsrc/apple/sossys.pla: 0929: end
+	!BYTE	$1A			; CN	13
+	!BYTE	$54			; CALL	_C010
+_F092 	!WORD	_C010		
+	!BYTE	$5C			; RET
+; vmsrc/apple/sossys.pla: 0930: def cin()#1
+_P008 					; cin()#1()
+_C012 					; cin()
+	JSR	INTERP
+; vmsrc/apple/sossys.pla: 0931:     byte ch
+					; ch -> [0]
+; vmsrc/apple/sossys.pla: 0932:     read(refcons, @ch, 1)
+	!BYTE	$58,$01,$00		; ENTER	1,0
+; vmsrc/apple/sossys.pla: 0933:     return ch & $7F
+	!BYTE	$68			; LAB	_D038+0
+_F093 	!WORD	_D038+0		
+	!BYTE	$28,$00			; LLA	[0]
+	!BYTE	$02			; CN	1
+	!BYTE	$54			; CALL	_C003
+_F094 	!WORD	_C003		
+	!BYTE	$30			; DROP 
+	!BYTE	$64,$00			; LLB	[0]
+	!BYTE	$3C,$7F			; ANDI	127
+	!BYTE	$5A,$01			; LEAVE	1
+; vmsrc/apple/sossys.pla: 0934: end
+; vmsrc/apple/sossys.pla: 0935: def prstr(str)#0
+					; str -> [0]
+_P004 					; prstr(str)#0()
+_C013 					; prstr()
+	JSR	INTERP
+; vmsrc/apple/sossys.pla: 0936:     write(refcons, str + 1, ^str)
+	!BYTE	$58,$02,$01		; ENTER	2,1
+; vmsrc/apple/sossys.pla: 0937:     if str->[^str] == $0D
+; vmsrc/apple/sossys.pla: 0938:         cout($0A)
+; vmsrc/apple/sossys.pla: 0939:     fin
+	!BYTE	$68			; LAB	_D038+0
+_F095 	!WORD	_D038+0		
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$8C			; INCR
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$60			; LB
+	!BYTE	$54			; CALL	_C004
+_F096 	!WORD	_C004		
+	!BYTE	$30			; DROP 
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$34			; DUP
+	!BYTE	$60			; LB
+	!BYTE	$82			; ADD 
+	!BYTE	$60			; LB
+	!BYTE	$1A			; CN	13
+	!BYTE	$24			; BRNE	_B003
+	!WORD	_B003-*
+	!BYTE	$14			; CN	10
+	!BYTE	$54			; CALL	_C010
+_F097 	!WORD	_C010		
+_B003 
+_B004 
+; vmsrc/apple/sossys.pla: 0940: end
+	!BYTE	$5A,$02			; LEAVE	2
+; vmsrc/apple/sossys.pla: 0941: def print(i)#0
+					; i -> [0]
+_P005 					; print(i)#0()
+_C014 					; print()
+	JSR	INTERP
+; vmsrc/apple/sossys.pla: 0942:     if i < 0; cout('-'); i = -i; fin
+	!BYTE	$58,$02,$01		; ENTER	2,1
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$00			; CN	0
+	!BYTE	$46			; ISLT
+	!BYTE	$4C			; BRFLS	_B005
+	!WORD	_B005-*
+	!BYTE	$2A,$2D			; CB	45
+	!BYTE	$54			; CALL	_C010
+_F098 	!WORD	_C010		
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$90			; NEG
+	!BYTE	$76,$00			; SLW	[0]
+_B005 
+_B006 
+; vmsrc/apple/sossys.pla: 0943:     if i >= 10; print(i / 10); fin
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$14			; CN	10
+	!BYTE	$48			; ISGE
+	!BYTE	$4C			; BRFLS	_B007
+	!WORD	_B007-*
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$14			; CN	10
+	!BYTE	$88			; DIV
+	!BYTE	$54			; CALL	_C014
+_F099 	!WORD	_C014		
+_B007 
+_B008 
+; vmsrc/apple/sossys.pla: 0944:     cout(i % 10 + '0')
+; vmsrc/apple/sossys.pla: 0945: end
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$14			; CN	10
+	!BYTE	$8A			; MOD
+	!BYTE	$38,$30			; ADDI	48
+	!BYTE	$54			; CALL	_C010
+_F100 	!WORD	_C010		
+	!BYTE	$5A,$02			; LEAVE	2
+; vmsrc/apple/sossys.pla: 0946: def rdstr(prompt)#1
+					; prompt -> [0]
+_P009 					; rdstr(prompt)#1()
+_C015 					; rdstr()
+	JSR	INTERP
+; vmsrc/apple/sossys.pla: 0947:     cout(prompt)
+	!BYTE	$58,$02,$01		; ENTER	2,1
+; vmsrc/apple/sossys.pla: 0948:     ^instr = read(refcons, instr+1, 128)
+; vmsrc/apple/sossys.pla: 0949:     if instr->[^instr] == $0D
+; vmsrc/apple/sossys.pla: 0950:         ^instr--
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$54			; CALL	_C010
+_F101 	!WORD	_C010		
+	!BYTE	$68			; LAB	_D038+0
+_F102 	!WORD	_D038+0		
+	!BYTE	$2C,$21,$A0		; CW	40993
+	!BYTE	$2A,$80			; CB	128
+	!BYTE	$54			; CALL	_C003
+_F103 	!WORD	_C003		
+	!BYTE	$78,$20,$A0		; SAB	40992
+	!BYTE	$2C,$20,$A0		; CW	40992
+	!BYTE	$B4,$20,$A0		; ADDAB	40992
+	!BYTE	$60			; LB
+	!BYTE	$1A			; CN	13
+	!BYTE	$24			; BRNE	_B009
+	!WORD	_B009-*
+	!BYTE	$68,$20,$A0		; LAB	40992
+	!BYTE	$8E			; DECR
+; vmsrc/apple/sossys.pla: 0951:     fin
+	!BYTE	$78,$20,$A0		; SAB	40992
+_B009 
+_B010 
+; vmsrc/apple/sossys.pla: 0952:     crout
+; vmsrc/apple/sossys.pla: 0953:     return instr
+	!BYTE	$54			; CALL	_C011
+_F104 	!WORD	_C011		
+	!BYTE	$2C,$20,$A0		; CW	40992
+	!BYTE	$5A,$02			; LEAVE	2
+; vmsrc/apple/sossys.pla: 0954: end
+; vmsrc/apple/sossys.pla: 0955: def prbyte(v)#0
+					; v -> [0]
+_P006 					; prbyte(v)#0()
+_C016 					; prbyte()
+	JSR	INTERP
+; vmsrc/apple/sossys.pla: 0956:     cout(hexchar[(v >> 4) & $0F])
+	!BYTE	$58,$02,$01		; ENTER	2,1
+; vmsrc/apple/sossys.pla: 0957:     cout(hexchar[v & $0F])
+; vmsrc/apple/sossys.pla: 0958: end
+	!BYTE	$26			; LA	_D041+0
+_F105 	!WORD	_D041+0		
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$08			; CN	4
+	!BYTE	$9C			; SHR
+	!BYTE	$3C,$0F			; ANDI	15
+	!BYTE	$82			; ADD 
+	!BYTE	$60			; LB
+	!BYTE	$54			; CALL	_C010
+_F106 	!WORD	_C010		
+	!BYTE	$26			; LA	_D041+0
+_F107 	!WORD	_D041+0		
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$3C,$0F			; ANDI	15
+	!BYTE	$82			; ADD 
+	!BYTE	$60			; LB
+	!BYTE	$54			; CALL	_C010
+_F108 	!WORD	_C010		
+	!BYTE	$5A,$02			; LEAVE	2
+; vmsrc/apple/sossys.pla: 0959: def prword(v)#0
+					; v -> [0]
+_P007 					; prword(v)#0()
+_C017 					; prword()
+	JSR	INTERP
+; vmsrc/apple/sossys.pla: 0960:     prbyte(v >> 8)
+	!BYTE	$58,$02,$01		; ENTER	2,1
+; vmsrc/apple/sossys.pla: 0961:     prbyte(v)
+; vmsrc/apple/sossys.pla: 0962: end
+	!BYTE	$64,$01			; LLB	[1]
+	!BYTE	$54			; CALL	_C016
+_F109 	!WORD	_C016		
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$54			; CALL	_C016
+_F110 	!WORD	_C016		
+	!BYTE	$5A,$02			; LEAVE	2
+; vmsrc/apple/sossys.pla: 0963: //
+; vmsrc/apple/sossys.pla: 0964: // Heap routines.
+; vmsrc/apple/sossys.pla: 0965: //
+; vmsrc/apple/sossys.pla: 0966: def availheap()#1
+_P017 					; availheap()#1()
+_C018 					; availheap()
+	JSR	INTERP
+; vmsrc/apple/sossys.pla: 0967:     byte fp
+					; fp -> [0]
+; vmsrc/apple/sossys.pla: 0968:     return @fp - heap
+	!BYTE	$58,$01,$00		; ENTER	1,0
+	!BYTE	$28,$00			; LLA	[0]
+	!BYTE	$6A			; LAW	_D078+0
+_F111 	!WORD	_D078+0		
+	!BYTE	$84			; SUB 
+	!BYTE	$5A,$01			; LEAVE	1
+; vmsrc/apple/sossys.pla: 0969: end
+; vmsrc/apple/sossys.pla: 0970: def allocheap(size)#1
+					; size -> [0]
+_P014 					; allocheap(size)#1()
+_C019 					; allocheap()
+	JSR	INTERP
+; vmsrc/apple/sossys.pla: 0971:     word addr
+					; addr -> [2]
+; vmsrc/apple/sossys.pla: 0972:     addr = heap
+	!BYTE	$58,$04,$01		; ENTER	4,1
+; vmsrc/apple/sossys.pla: 0973:     heap = heap + size
+; vmsrc/apple/sossys.pla: 0974:     if uword_isge(heap, @addr)
+; vmsrc/apple/sossys.pla: 0975:         heap = addr
+; vmsrc/apple/sossys.pla: 0976:         return 0
+	!BYTE	$6A			; LAW	_D078+0
+_F112 	!WORD	_D078+0		
+	!BYTE	$76,$02			; SLW	[2]
+	!BYTE	$6A			; LAW	_D078+0
+_F113 	!WORD	_D078+0		
+	!BYTE	$B2,$00			; ADDLW	[0]
+	!BYTE	$7E			; DAW	_D078+0
+_F114 	!WORD	_D078+0		
+	!BYTE	$28,$02			; LLA	[2]
+	!BYTE	$54			; CALL	_A006
+_F115 	!WORD	_A006		
+	!BYTE	$4C			; BRFLS	_B011
+	!WORD	_B011-*
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$7A			; SAW	_D078+0
+_F116 	!WORD	_D078+0		
+	!BYTE	$00			; CN	0
+	!BYTE	$5A,$04			; LEAVE	4
+; vmsrc/apple/sossys.pla: 0977:     fin
+_B011 
+_B012 
+; vmsrc/apple/sossys.pla: 0978:     return addr
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$5A,$04			; LEAVE	4
+; vmsrc/apple/sossys.pla: 0979: end
+; vmsrc/apple/sossys.pla: 0980: def allocalignheap(size, pow2, freeaddr)#1
+					; size -> [0]
+					; pow2 -> [2]
+					; freeaddr -> [4]
+_P015 					; allocalignheap(size, pow2, freeaddr)#1()
+_C020 					; allocalignheap()
+	JSR	INTERP
+; vmsrc/apple/sossys.pla: 0981:     word align, addr
+					; align -> [6]
+					; addr -> [8]
+; vmsrc/apple/sossys.pla: 0982:     if freeaddr
+	!BYTE	$58,$0A,$03		; ENTER	10,3
+; vmsrc/apple/sossys.pla: 0983:         *freeaddr = heap
+; vmsrc/apple/sossys.pla: 0984:     fin
+	!BYTE	$66,$04			; LLW	[4]
+	!BYTE	$4C			; BRFLS	_B013
+	!WORD	_B013-*
+	!BYTE	$6A			; LAW	_D078+0
+_F117 	!WORD	_D078+0		
+	!BYTE	$66,$04			; LLW	[4]
+	!BYTE	$72			; SW
+_B013 
+_B014 
+; vmsrc/apple/sossys.pla: 0985:     align = (1 << pow2) - 1
+; vmsrc/apple/sossys.pla: 0986:     addr = (heap | align) + 1
+; vmsrc/apple/sossys.pla: 0987:     heap = addr + size
+; vmsrc/apple/sossys.pla: 0988:     if uword_isge(heap, @addr)
+; vmsrc/apple/sossys.pla: 0989:         return 0
+	!BYTE	$02			; CN	1
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$9A			; SHL
+	!BYTE	$8E			; DECR
+	!BYTE	$76,$06			; SLW	[6]
+	!BYTE	$6A			; LAW	_D078+0
+_F118 	!WORD	_D078+0		
+	!BYTE	$66,$06			; LLW	[6]
+	!BYTE	$96			; OR 
+	!BYTE	$8C			; INCR
+	!BYTE	$6E,$08			; DLW	[8]
+	!BYTE	$B2,$00			; ADDLW	[0]
+	!BYTE	$7E			; DAW	_D078+0
+_F119 	!WORD	_D078+0		
+	!BYTE	$28,$08			; LLA	[8]
+	!BYTE	$54			; CALL	_A006
+_F120 	!WORD	_A006		
+	!BYTE	$4C			; BRFLS	_B015
+	!WORD	_B015-*
+	!BYTE	$00			; CN	0
+	!BYTE	$5A,$0A			; LEAVE	10
+; vmsrc/apple/sossys.pla: 0990:     fin
+_B015 
+_B016 
+; vmsrc/apple/sossys.pla: 0991:     return addr
+	!BYTE	$66,$08			; LLW	[8]
+	!BYTE	$5A,$0A			; LEAVE	10
+; vmsrc/apple/sossys.pla: 0992: end
+; vmsrc/apple/sossys.pla: 0993: def markheap()#1
+_P013 					; markheap()#1()
+_C021 					; markheap()
+	JSR	INTERP
+; vmsrc/apple/sossys.pla: 0994:     return heap
+	!BYTE	$6A			; LAW	_D078+0
+_F121 	!WORD	_D078+0		
+	!BYTE	$5C			; RET
+; vmsrc/apple/sossys.pla: 0995: end
+; vmsrc/apple/sossys.pla: 0996: def releaseheap(newheap)#1
+					; newheap -> [0]
+_P016 					; releaseheap(newheap)#1()
+_C022 					; releaseheap()
+	JSR	INTERP
+; vmsrc/apple/sossys.pla: 0997:     heap = newheap
+	!BYTE	$58,$02,$01		; ENTER	2,1
+; vmsrc/apple/sossys.pla: 0998:     return @newheap - heap
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$7A			; SAW	_D078+0
+_F122 	!WORD	_D078+0		
+	!BYTE	$28,$00			; LLA	[0]
+	!BYTE	$6A			; LAW	_D078+0
+_F123 	!WORD	_D078+0		
+	!BYTE	$84			; SUB 
+	!BYTE	$5A,$02			; LEAVE	2
+; vmsrc/apple/sossys.pla: 0999: end
+; vmsrc/apple/sossys.pla: 1000: //
+; vmsrc/apple/sossys.pla: 1001: // Symbol table routines.
+; vmsrc/apple/sossys.pla: 1002: //
+; vmsrc/apple/sossys.pla: 1003: def addsym(sym, addr)#0
+					; sym -> [0]
+					; addr -> [2]
+_C023 					; addsym()
+	JSR	INTERP
+; vmsrc/apple/sossys.pla: 1004:     while ^sym & $80
+	!BYTE	$58,$04,$02		; ENTER	4,2
+	!BYTE	$50			; BRNCH	_B019
+	!WORD	_B019-*
+_B017 
+; vmsrc/apple/sossys.pla: 1005:         xpokeb(symtbl.0, lastsym, ^sym)
+; vmsrc/apple/sossys.pla: 1006:         lastsym  = lastsym + 1
+; vmsrc/apple/sossys.pla: 1007:         sym      = sym     + 1
+; vmsrc/apple/sossys.pla: 1008:     loop
+	!BYTE	$68			; LAB	_D082+0
+_F124 	!WORD	_D082+0		
+	!BYTE	$6A			; LAW	_D083+0
+_F125 	!WORD	_D083+0		
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$60			; LB
+	!BYTE	$54			; CALL	_A005
+_F126 	!WORD	_A005		
+	!BYTE	$6A			; LAW	_D083+0
+_F127 	!WORD	_D083+0		
+	!BYTE	$8C			; INCR
+	!BYTE	$7A			; SAW	_D083+0
+_F128 	!WORD	_D083+0		
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$8C			; INCR
+	!BYTE	$76,$00			; SLW	[0]
+_B019 
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$60			; LB
+	!BYTE	$3C,$80			; ANDI	128
+	!BYTE	$4E			; BRTRU	_B017
+	!WORD	_B017-*
+_B018 
+; vmsrc/apple/sossys.pla: 1009:     xpokeb(symtbl.0, lastsym, ^sym)
+; vmsrc/apple/sossys.pla: 1010:     xpokeb(symtbl.0, lastsym + 1, addr.0)
+; vmsrc/apple/sossys.pla: 1011:     xpokeb(symtbl.0, lastsym + 2, addr.1)
+; vmsrc/apple/sossys.pla: 1012:     xpokeb(symtbl.0, lastsym + 3, 0)
+; vmsrc/apple/sossys.pla: 1013:     lastsym = lastsym + 3
+; vmsrc/apple/sossys.pla: 1014: end
+	!BYTE	$68			; LAB	_D082+0
+_F129 	!WORD	_D082+0		
+	!BYTE	$6A			; LAW	_D083+0
+_F130 	!WORD	_D083+0		
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$60			; LB
+	!BYTE	$54			; CALL	_A005
+_F131 	!WORD	_A005		
+	!BYTE	$68			; LAB	_D082+0
+_F132 	!WORD	_D082+0		
+	!BYTE	$6A			; LAW	_D083+0
+_F133 	!WORD	_D083+0		
+	!BYTE	$8C			; INCR
+	!BYTE	$64,$02			; LLB	[2]
+	!BYTE	$54			; CALL	_A005
+_F134 	!WORD	_A005		
+	!BYTE	$68			; LAB	_D082+0
+_F135 	!WORD	_D082+0		
+	!BYTE	$6A			; LAW	_D083+0
+_F136 	!WORD	_D083+0		
+	!BYTE	$38,$02			; ADDI	2
+	!BYTE	$64,$03			; LLB	[3]
+	!BYTE	$54			; CALL	_A005
+_F137 	!WORD	_A005		
+	!BYTE	$68			; LAB	_D082+0
+_F138 	!WORD	_D082+0		
+	!BYTE	$6A			; LAW	_D083+0
+_F139 	!WORD	_D083+0		
+	!BYTE	$38,$03			; ADDI	3
+	!BYTE	$00			; CN	0
+	!BYTE	$54			; CALL	_A005
+_F140 	!WORD	_A005		
+	!BYTE	$6A			; LAW	_D083+0
+_F141 	!WORD	_D083+0		
+	!BYTE	$38,$03			; ADDI	3
+	!BYTE	$7A			; SAW	_D083+0
+_F142 	!WORD	_D083+0		
+	!BYTE	$5A,$04			; LEAVE	4
+; vmsrc/apple/sossys.pla: 1015: //
+; vmsrc/apple/sossys.pla: 1016: // String routines.
+; vmsrc/apple/sossys.pla: 1017: //
+; vmsrc/apple/sossys.pla: 1018: def strcpy(dst, src)#1
+					; dst -> [0]
+					; src -> [2]
+_P011 					; strcpy(dst, src)#1()
+_C024 					; strcpy()
+	JSR	INTERP
+; vmsrc/apple/sossys.pla: 1019:     memcpy(dst+1, src+1, ^src)
+	!BYTE	$58,$04,$02		; ENTER	4,2
+; vmsrc/apple/sossys.pla: 1020:     ^dst = ^src
+; vmsrc/apple/sossys.pla: 1021:     return dst
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$8C			; INCR
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$60			; LB
+	!BYTE	$54			; CALL	_A003
+_F143 	!WORD	_A003		
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$60			; LB
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$70			; SB
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$5A,$04			; LEAVE	4
+; vmsrc/apple/sossys.pla: 1022: end
+; vmsrc/apple/sossys.pla: 1023: def strcat(dst, src)#1
+					; dst -> [0]
+					; src -> [2]
+_P012 					; strcat(dst, src)#1()
+_C025 					; strcat()
+	JSR	INTERP
+; vmsrc/apple/sossys.pla: 1024:     memcpy(dst + ^dst + 1, src + 1, ^src)
+	!BYTE	$58,$04,$02		; ENTER	4,2
+; vmsrc/apple/sossys.pla: 1025:     ^dst = ^dst + ^src
+; vmsrc/apple/sossys.pla: 1026:     return dst
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$34			; DUP
+	!BYTE	$60			; LB
+	!BYTE	$82			; ADD 
+	!BYTE	$8C			; INCR
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$8C			; INCR
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$60			; LB
+	!BYTE	$54			; CALL	_A003
+_F144 	!WORD	_A003		
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$60			; LB
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$60			; LB
+	!BYTE	$82			; ADD 
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$70			; SB
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$5A,$04			; LEAVE	4
+; vmsrc/apple/sossys.pla: 1027: end
+; vmsrc/apple/sossys.pla: 1028: //
+; vmsrc/apple/sossys.pla: 1029: // Module routines.
+; vmsrc/apple/sossys.pla: 1030: //
+; vmsrc/apple/sossys.pla: 1031: def lookupextern(esd, index)#1
+					; esd -> [0]
+					; index -> [2]
+_C026 					; lookupextern()
+	JSR	INTERP
+; vmsrc/apple/sossys.pla: 1032:     word sym, addr
+					; sym -> [4]
+					; addr -> [6]
+; vmsrc/apple/sossys.pla: 1033:     byte str[33]
+					; str -> [8]
+; vmsrc/apple/sossys.pla: 1034:     sym = lookupidx(esd, index)
+	!BYTE	$58,$29,$02		; ENTER	41,2
+; vmsrc/apple/sossys.pla: 1035:     if sym
+; vmsrc/apple/sossys.pla: 1036:         addr = lookuptbl(sym, symtbl)
+; vmsrc/apple/sossys.pla: 1037:         if !addr
+; vmsrc/apple/sossys.pla: 1038:             perr = $81
+; vmsrc/apple/sossys.pla: 1039:             dcitos(sym, @str)
+; vmsrc/apple/sossys.pla: 1040:             cout('?'); prstr(@str); crout
+; vmsrc/apple/sossys.pla: 1041:         fin
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$54			; CALL	_A016
+_F145 	!WORD	_A016		
+	!BYTE	$6E,$04			; DLW	[4]
+	!BYTE	$4C			; BRFLS	_B020
+	!WORD	_B020-*
+	!BYTE	$66,$04			; LLW	[4]
+	!BYTE	$6A			; LAW	_D082+0
+_F146 	!WORD	_D082+0		
+	!BYTE	$54			; CALL	_A015
+_F147 	!WORD	_A015		
+	!BYTE	$6E,$06			; DLW	[6]
+	!BYTE	$4E			; BRTRU	_B022
+	!WORD	_B022-*
+	!BYTE	$2A,$81			; CB	129
+	!BYTE	$78			; SAB	_D035+0
+_F148 	!WORD	_D035+0		
+	!BYTE	$66,$04			; LLW	[4]
+	!BYTE	$28,$08			; LLA	[8]
+	!BYTE	$54			; CALL	_A012
+_F149 	!WORD	_A012		
+	!BYTE	$30			; DROP 
+	!BYTE	$2A,$3F			; CB	63
+	!BYTE	$54			; CALL	_C010
+_F150 	!WORD	_C010		
+	!BYTE	$28,$08			; LLA	[8]
+	!BYTE	$54			; CALL	_C013
+_F151 	!WORD	_C013		
+	!BYTE	$54			; CALL	_C011
+_F152 	!WORD	_C011		
+_B022 
+_B023 
+; vmsrc/apple/sossys.pla: 1042:         return addr
+	!BYTE	$66,$06			; LLW	[6]
+	!BYTE	$5A,$29			; LEAVE	41
+; vmsrc/apple/sossys.pla: 1043:     fin
+_B020 
+_B021 
+; vmsrc/apple/sossys.pla: 1044:     return 0
+	!BYTE	$00			; CN	0
+	!BYTE	$5A,$29			; LEAVE	41
+; vmsrc/apple/sossys.pla: 1045: end
+; vmsrc/apple/sossys.pla: 1046: def adddef(ext, addr, deflast)#1
+					; ext -> [0]
+					; addr -> [2]
+					; deflast -> [4]
+_C027 					; adddef()
+	JSR	INTERP
+; vmsrc/apple/sossys.pla: 1047:     word preventry, defentry, defsize
+					; preventry -> [6]
+					; defentry -> [8]
+					; defsize -> [10]
+; vmsrc/apple/sossys.pla: 1048:     defentry = *deflast
+	!BYTE	$58,$0C,$03		; ENTER	12,3
+; vmsrc/apple/sossys.pla: 1049:     *deflast = defentry + t_defentry
+; vmsrc/apple/sossys.pla: 1050:     defentry->interpjsr     = $20      // JSR
+; vmsrc/apple/sossys.pla: 1051:     defentry=>interpaddr    = *xinterp // XINTERP
+; vmsrc/apple/sossys.pla: 1052:     defentry=>bytecodeaddr  = addr
+; vmsrc/apple/sossys.pla: 1053:     defentry->bytecodexbyte = ext
+; vmsrc/apple/sossys.pla: 1054:     defentry->t_defentry    = 0
+; vmsrc/apple/sossys.pla: 1055:     return defentry
+	!BYTE	$66,$04			; LLW	[4]
+	!BYTE	$62			; LW
+	!BYTE	$6E,$08			; DLW	[8]
+	!BYTE	$38,$06			; ADDI	6
+	!BYTE	$66,$04			; LLW	[4]
+	!BYTE	$72			; SW
+	!BYTE	$2A,$20			; CB	32
+	!BYTE	$66,$08			; LLW	[8]
+	!BYTE	$70			; SB
+	!BYTE	$6A,$F8,$A0		; LAW	41208
+	!BYTE	$66,$08			; LLW	[8]
+	!BYTE	$8C			; INCR
+	!BYTE	$72			; SW
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$66,$08			; LLW	[8]
+	!BYTE	$38,$03			; ADDI	3
+	!BYTE	$72			; SW
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$66,$08			; LLW	[8]
+	!BYTE	$38,$05			; ADDI	5
+	!BYTE	$70			; SB
+	!BYTE	$00			; CN	0
+	!BYTE	$66,$08			; LLW	[8]
+	!BYTE	$38,$06			; ADDI	6
+	!BYTE	$70			; SB
+	!BYTE	$66,$08			; LLW	[8]
+	!BYTE	$5A,$0C			; LEAVE	12
+; vmsrc/apple/sossys.pla: 1056: end
+; vmsrc/apple/sossys.pla: 1057: def loadmod(mod)#1
+					; mod -> [0]
+_C028 					; loadmod()
+	JSR	INTERP
+; vmsrc/apple/sossys.pla: 1058:     word refnum, rdlen, modsize, bytecode, codefix, defofst, defcnt, init, initcode[], fixup
+					; refnum -> [2]
+					; rdlen -> [4]
+					; modsize -> [6]
+					; bytecode -> [8]
+					; codefix -> [10]
+					; defofst -> [12]
+					; defcnt -> [14]
+					; init -> [16]
+					; initcode -> [18]
+					; fixup -> [18]
+; vmsrc/apple/sossys.pla: 1059:     word addr, defaddr, modaddr, modfix, modofst, modend
+					; addr -> [20]
+					; defaddr -> [22]
+					; modaddr -> [24]
+					; modfix -> [26]
+					; modofst -> [28]
+					; modend -> [30]
+; vmsrc/apple/sossys.pla: 1060:     word deftbl, deflast, codeseg
+					; deftbl -> [32]
+					; deflast -> [34]
+					; codeseg -> [36]
+; vmsrc/apple/sossys.pla: 1061:     word moddep, rld, esd, sym
+					; moddep -> [38]
+					; rld -> [40]
+					; esd -> [42]
+					; sym -> [44]
+; vmsrc/apple/sossys.pla: 1062:     byte lerr, defext, fileinfo[], str[16], filename[33]
+					; lerr -> [46]
+					; defext -> [47]
+					; fileinfo -> [48]
+					; str -> [48]
+					; filename -> [64]
+; vmsrc/apple/sossys.pla: 1063:     byte header[128]
+					; header -> [97]
+; vmsrc/apple/sossys.pla: 1064:     lerr = 0
+	!BYTE	$58,$E1,$01		; ENTER	225,1
+; vmsrc/apple/sossys.pla: 1065:     //
+; vmsrc/apple/sossys.pla: 1066:     // Read the RELocatable module header (first 128 bytes)
+; vmsrc/apple/sossys.pla: 1067:     //
+; vmsrc/apple/sossys.pla: 1068:     dcitos(mod, @filename)
+; vmsrc/apple/sossys.pla: 1069:     refnum = open(@filename)
+; vmsrc/apple/sossys.pla: 1070:     if !refnum and filename < 16
+; vmsrc/apple/sossys.pla: 1071:         //
+; vmsrc/apple/sossys.pla: 1072:         // Try system path
+; vmsrc/apple/sossys.pla: 1073:         //
+; vmsrc/apple/sossys.pla: 1074:         refnum = open(strcpy(@filename,strcat(strcpy(@header, @sysmods), @filename)))
+; vmsrc/apple/sossys.pla: 1075:     fin
+	!BYTE	$00			; CN	0
+	!BYTE	$74,$2E			; SLB	[46]
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$28,$40			; LLA	[64]
+	!BYTE	$54			; CALL	_A012
+_F153 	!WORD	_A012		
+	!BYTE	$30			; DROP 
+	!BYTE	$28,$40			; LLA	[64]
+	!BYTE	$54			; CALL	_C001
+_F154 	!WORD	_C001		
+	!BYTE	$6E,$02			; DLW	[2]
+	!BYTE	$80			; NOT
+	!BYTE	$AC			; BRAND	_B024
+	!WORD	_B024-*
+	!BYTE	$64,$40			; LLB	[64]
+	!BYTE	$2A,$10			; CB	16
+	!BYTE	$46			; ISLT
+_B024 
+	!BYTE	$4C			; BRFLS	_B025
+	!WORD	_B025-*
+	!BYTE	$28,$40			; LLA	[64]
+	!BYTE	$28,$61			; LLA	[97]
+	!BYTE	$26			; LA	_D076+0
+_F155 	!WORD	_D076+0		
+	!BYTE	$54			; CALL	_C024
+_F156 	!WORD	_C024		
+	!BYTE	$28,$40			; LLA	[64]
+	!BYTE	$54			; CALL	_C025
+_F157 	!WORD	_C025		
+	!BYTE	$54			; CALL	_C024
+_F158 	!WORD	_C024		
+	!BYTE	$54			; CALL	_C001
+_F159 	!WORD	_C001		
+	!BYTE	$76,$02			; SLW	[2]
+_B025 
+_B026 
+; vmsrc/apple/sossys.pla: 1076:     if refnum
+; vmsrc/apple/sossys.pla: 1077:         header.0 = 3
+; vmsrc/apple/sossys.pla: 1078:         header:1 = @filename
+; vmsrc/apple/sossys.pla: 1079:         header:3 = @fileinfo
+; vmsrc/apple/sossys.pla: 1080:         header.5 = 2
+; vmsrc/apple/sossys.pla: 1081:         if not syscall($C4, @header) and fileinfo.1 <> $FE // Make sure it's a REL module
+; vmsrc/apple/sossys.pla: 1082:             close(refnum)
+; vmsrc/apple/sossys.pla: 1083:             perr = $4A // Incompatible type
+; vmsrc/apple/sossys.pla: 1084:             return -perr
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$4C			; BRFLS	_B027
+	!WORD	_B027-*
+	!BYTE	$06			; CN	3
+	!BYTE	$74,$61			; SLB	[97]
+	!BYTE	$28,$40			; LLA	[64]
+	!BYTE	$76,$62			; SLW	[98]
+	!BYTE	$28,$30			; LLA	[48]
+	!BYTE	$76,$64			; SLW	[100]
+	!BYTE	$04			; CN	2
+	!BYTE	$74,$66			; SLB	[102]
+	!BYTE	$2A,$C4			; CB	196
+	!BYTE	$28,$61			; LLA	[97]
+	!BYTE	$54			; CALL	_A000
+_F160 	!WORD	_A000		
+	!BYTE	$80			; NOT
+	!BYTE	$AC			; BRAND	_B029
+	!WORD	_B029-*
+	!BYTE	$64,$31			; LLB	[49]
+	!BYTE	$2A,$FE			; CB	254
+	!BYTE	$42			; ISNE
+_B029 
+	!BYTE	$4C			; BRFLS	_B030
+	!WORD	_B030-*
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$54			; CALL	_C002
+_F161 	!WORD	_C002		
+	!BYTE	$30			; DROP 
+	!BYTE	$2A,$4A			; CB	74
+	!BYTE	$7C			; DAB	_D035+0
+_F162 	!WORD	_D035+0		
+	!BYTE	$90			; NEG
+	!BYTE	$5A,$E1			; LEAVE	225
+; vmsrc/apple/sossys.pla: 1085:         fin
+_B030 
+_B031 
+; vmsrc/apple/sossys.pla: 1086:         rdlen   = read(refnum, @header, 128)
+; vmsrc/apple/sossys.pla: 1087:         modsize = header:0
+; vmsrc/apple/sossys.pla: 1088:         moddep  = @header.1
+; vmsrc/apple/sossys.pla: 1089:         defofst = modsize + RELADDR
+; vmsrc/apple/sossys.pla: 1090:         defext  = 0
+; vmsrc/apple/sossys.pla: 1091:         init    = 0
+; vmsrc/apple/sossys.pla: 1092:         if rdlen > 4 and header:2 == $6502 // magic number
+; vmsrc/apple/sossys.pla: 1093:             //
+; vmsrc/apple/sossys.pla: 1094:             // This is an EXTended RELocatable (data+bytecode) module.
+; vmsrc/apple/sossys.pla: 1095:             //
+; vmsrc/apple/sossys.pla: 1096:             systemflags = header.4 | systemflags
+; vmsrc/apple/sossys.pla: 1097:             defofst     = header:6
+; vmsrc/apple/sossys.pla: 1098:             defcnt      = header:8
+; vmsrc/apple/sossys.pla: 1099:             init        = header:10
+; vmsrc/apple/sossys.pla: 1100:             moddep      = @header.12
+; vmsrc/apple/sossys.pla: 1101:             //
+; vmsrc/apple/sossys.pla: 1102:             // Load module dependencies.
+; vmsrc/apple/sossys.pla: 1103:             //
+; vmsrc/apple/sossys.pla: 1104:             while ^moddep
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$28,$61			; LLA	[97]
+	!BYTE	$2A,$80			; CB	128
+	!BYTE	$54			; CALL	_C003
+_F163 	!WORD	_C003		
+	!BYTE	$76,$04			; SLW	[4]
+	!BYTE	$66,$61			; LLW	[97]
+	!BYTE	$76,$06			; SLW	[6]
+	!BYTE	$28,$62			; LLA	[98]
+	!BYTE	$76,$26			; SLW	[38]
+	!BYTE	$66,$06			; LLW	[6]
+	!BYTE	$2C,$00,$10		; CW	4096
+	!BYTE	$82			; ADD 
+	!BYTE	$76,$0C			; SLW	[12]
+	!BYTE	$00			; CN	0
+	!BYTE	$74,$2F			; SLB	[47]
+	!BYTE	$00			; CN	0
+	!BYTE	$76,$10			; SLW	[16]
+	!BYTE	$66,$04			; LLW	[4]
+	!BYTE	$08			; CN	4
+	!BYTE	$44			; ISGT
+	!BYTE	$AC			; BRAND	_B032
+	!WORD	_B032-*
+	!BYTE	$66,$63			; LLW	[99]
+	!BYTE	$2C,$02,$65		; CW	25858
+	!BYTE	$40			; ISEQ
+_B032 
+	!BYTE	$4C			; BRFLS	_B033
+	!WORD	_B033-*
+	!BYTE	$64,$65			; LLB	[101]
+	!BYTE	$6A			; LAW	_D040+0
+_F164 	!WORD	_D040+0		
+	!BYTE	$96			; OR 
+	!BYTE	$7A			; SAW	_D040+0
+_F165 	!WORD	_D040+0		
+	!BYTE	$66,$67			; LLW	[103]
+	!BYTE	$76,$0C			; SLW	[12]
+	!BYTE	$66,$69			; LLW	[105]
+	!BYTE	$76,$0E			; SLW	[14]
+	!BYTE	$66,$6B			; LLW	[107]
+	!BYTE	$76,$10			; SLW	[16]
+	!BYTE	$28,$6D			; LLA	[109]
+	!BYTE	$76,$26			; SLW	[38]
+	!BYTE	$50			; BRNCH	_B037
+	!WORD	_B037-*
+_B035 
+; vmsrc/apple/sossys.pla: 1105:                 if !lookuptbl(moddep, symtbl)
+; vmsrc/apple/sossys.pla: 1106:                     if refnum
+; vmsrc/apple/sossys.pla: 1107:                         close(refnum)
+; vmsrc/apple/sossys.pla: 1108:                         refnum = 0
+; vmsrc/apple/sossys.pla: 1109:                     fin
+	!BYTE	$66,$26			; LLW	[38]
+	!BYTE	$6A			; LAW	_D082+0
+_F166 	!WORD	_D082+0		
+	!BYTE	$54			; CALL	_A015
+_F167 	!WORD	_A015		
+	!BYTE	$4E			; BRTRU	_B038
+	!WORD	_B038-*
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$4C			; BRFLS	_B040
+	!WORD	_B040-*
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$54			; CALL	_C002
+_F168 	!WORD	_C002		
+	!BYTE	$30			; DROP 
+	!BYTE	$00			; CN	0
+	!BYTE	$76,$02			; SLW	[2]
+_B040 
+_B041 
+; vmsrc/apple/sossys.pla: 1110:                     if loadmod(moddep) < 0
+; vmsrc/apple/sossys.pla: 1111:                         return -perr
+	!BYTE	$66,$26			; LLW	[38]
+	!BYTE	$54			; CALL	_C028
+_F169 	!WORD	_C028		
+	!BYTE	$00			; CN	0
+	!BYTE	$46			; ISLT
+	!BYTE	$4C			; BRFLS	_B042
+	!WORD	_B042-*
+	!BYTE	$68			; LAB	_D035+0
+_F170 	!WORD	_D035+0		
+	!BYTE	$90			; NEG
+	!BYTE	$5A,$E1			; LEAVE	225
+; vmsrc/apple/sossys.pla: 1112:                     fin
+_B042 
+_B043 
+; vmsrc/apple/sossys.pla: 1113:                 fin
+_B038 
+_B039 
+; vmsrc/apple/sossys.pla: 1114:                 moddep = moddep + dcitos(moddep, @str)
+; vmsrc/apple/sossys.pla: 1115:             loop
+	!BYTE	$66,$26			; LLW	[38]
+	!BYTE	$34			; DUP
+	!BYTE	$28,$30			; LLA	[48]
+	!BYTE	$54			; CALL	_A012
+_F171 	!WORD	_A012		
+	!BYTE	$82			; ADD 
+	!BYTE	$76,$26			; SLW	[38]
+_B037 
+	!BYTE	$66,$26			; LLW	[38]
+	!BYTE	$60			; LB
+	!BYTE	$4E			; BRTRU	_B035
+	!WORD	_B035-*
+_B036 
+; vmsrc/apple/sossys.pla: 1116:             //
+; vmsrc/apple/sossys.pla: 1117:             // Init def table.
+; vmsrc/apple/sossys.pla: 1118:             //
+; vmsrc/apple/sossys.pla: 1119:             deftbl   = allocheap(defcnt * t_defentry + 1)
+; vmsrc/apple/sossys.pla: 1120:             deflast  = deftbl
+; vmsrc/apple/sossys.pla: 1121:             ^deflast = 0
+; vmsrc/apple/sossys.pla: 1122:             if !refnum
+; vmsrc/apple/sossys.pla: 1123:                 //
+; vmsrc/apple/sossys.pla: 1124:                 // Reset read pointer.
+; vmsrc/apple/sossys.pla: 1125:                 //
+; vmsrc/apple/sossys.pla: 1126:                 refnum = open(@filename)
+; vmsrc/apple/sossys.pla: 1127:                 rdlen  = read(refnum, @header, 128)
+; vmsrc/apple/sossys.pla: 1128:             fin
+	!BYTE	$66,$0E			; LLW	[14]
+	!BYTE	$0C			; CN	6
+	!BYTE	$86			; MUL
+	!BYTE	$8C			; INCR
+	!BYTE	$54			; CALL	_C019
+_F172 	!WORD	_C019		
+	!BYTE	$6E,$20			; DLW	[32]
+	!BYTE	$76,$22			; SLW	[34]
+	!BYTE	$00			; CN	0
+	!BYTE	$66,$22			; LLW	[34]
+	!BYTE	$70			; SB
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$4E			; BRTRU	_B044
+	!WORD	_B044-*
+	!BYTE	$28,$40			; LLA	[64]
+	!BYTE	$54			; CALL	_C001
+_F173 	!WORD	_C001		
+	!BYTE	$6E,$02			; DLW	[2]
+	!BYTE	$28,$61			; LLA	[97]
+	!BYTE	$2A,$80			; CB	128
+	!BYTE	$54			; CALL	_C003
+_F174 	!WORD	_C003		
+	!BYTE	$76,$04			; SLW	[4]
+_B044 
+_B045 
+; vmsrc/apple/sossys.pla: 1129:         fin
+_B033 
+_B034 
+; vmsrc/apple/sossys.pla: 1130:         //
+; vmsrc/apple/sossys.pla: 1131:         // Alloc heap space for relocated module (data + bytecode).
+; vmsrc/apple/sossys.pla: 1132:         //
+; vmsrc/apple/sossys.pla: 1133:         moddep++
+	!BYTE	$66,$26			; LLW	[38]
+	!BYTE	$8C			; INCR
+; vmsrc/apple/sossys.pla: 1134:         modfix  = moddep  - @header.2 // Adjust to skip header
+; vmsrc/apple/sossys.pla: 1135:         modsize = modsize - modfix
+; vmsrc/apple/sossys.pla: 1136:         rdlen   = rdlen   - modfix - 2
+; vmsrc/apple/sossys.pla: 1137:         modaddr = allocheap(modsize)
+; vmsrc/apple/sossys.pla: 1138:         memcpy(modaddr, moddep, rdlen)
+; vmsrc/apple/sossys.pla: 1139:         //
+; vmsrc/apple/sossys.pla: 1140:         // Read in remainder of module into memory for fixups.
+; vmsrc/apple/sossys.pla: 1141:         //
+; vmsrc/apple/sossys.pla: 1142:         addr = modaddr
+; vmsrc/apple/sossys.pla: 1143:         repeat
+	!BYTE	$6E,$26			; DLW	[38]
+	!BYTE	$28,$63			; LLA	[99]
+	!BYTE	$84			; SUB 
+	!BYTE	$76,$1A			; SLW	[26]
+	!BYTE	$66,$06			; LLW	[6]
+	!BYTE	$66,$1A			; LLW	[26]
+	!BYTE	$84			; SUB 
+	!BYTE	$76,$06			; SLW	[6]
+	!BYTE	$66,$04			; LLW	[4]
+	!BYTE	$66,$1A			; LLW	[26]
+	!BYTE	$84			; SUB 
+	!BYTE	$3A,$02			; SUBI	2
+	!BYTE	$76,$04			; SLW	[4]
+	!BYTE	$66,$06			; LLW	[6]
+	!BYTE	$54			; CALL	_C019
+_F175 	!WORD	_C019		
+	!BYTE	$6E,$18			; DLW	[24]
+	!BYTE	$66,$26			; LLW	[38]
+	!BYTE	$66,$04			; LLW	[4]
+	!BYTE	$54			; CALL	_A003
+_F176 	!WORD	_A003		
+	!BYTE	$66,$18			; LLW	[24]
+	!BYTE	$76,$14			; SLW	[20]
+_B047 
+; vmsrc/apple/sossys.pla: 1144:             addr  = addr + rdlen
+; vmsrc/apple/sossys.pla: 1145:             rdlen = read(refnum, addr, 4096)
+; vmsrc/apple/sossys.pla: 1146:         until rdlen <= 0
+	!BYTE	$66,$14			; LLW	[20]
+	!BYTE	$B2,$04			; ADDLW	[4]
+	!BYTE	$76,$14			; SLW	[20]
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$66,$14			; LLW	[20]
+	!BYTE	$2C,$00,$10		; CW	4096
+	!BYTE	$54			; CALL	_C003
+_F177 	!WORD	_C003		
+	!BYTE	$76,$04			; SLW	[4]
+_B048 
+	!BYTE	$66,$04			; LLW	[4]
+	!BYTE	$00			; CN	0
+	!BYTE	$4A			; ISLE
+	!BYTE	$4C			; BRFLS	_B047
+	!WORD	_B047-*
+_B046 
+; vmsrc/apple/sossys.pla: 1147:         close(refnum)
+; vmsrc/apple/sossys.pla: 1148:         //
+; vmsrc/apple/sossys.pla: 1149:         // Add module to symbol table.
+; vmsrc/apple/sossys.pla: 1150:         //
+; vmsrc/apple/sossys.pla: 1151:         addsym(mod, modaddr)
+; vmsrc/apple/sossys.pla: 1152:         //
+; vmsrc/apple/sossys.pla: 1153:         // Apply all fixups and symbol import/export.
+; vmsrc/apple/sossys.pla: 1154:         //
+; vmsrc/apple/sossys.pla: 1155:         modfix   = modaddr - modfix
+; vmsrc/apple/sossys.pla: 1156:         modofst  = modfix  - RELADDR
+; vmsrc/apple/sossys.pla: 1157:         modend   = modaddr + modsize
+; vmsrc/apple/sossys.pla: 1158:         bytecode = defofst + modofst
+; vmsrc/apple/sossys.pla: 1159:         rld      = modend  // Re-Locatable Directory
+; vmsrc/apple/sossys.pla: 1160:         esd      = rld     // Extern+Entry Symbol Directory
+; vmsrc/apple/sossys.pla: 1161:         while ^esd         // Scan to end of ESD
+	!BYTE	$66,$02			; LLW	[2]
+	!BYTE	$54			; CALL	_C002
+_F178 	!WORD	_C002		
+	!BYTE	$30			; DROP 
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$66,$18			; LLW	[24]
+	!BYTE	$54			; CALL	_C023
+_F179 	!WORD	_C023		
+	!BYTE	$66,$18			; LLW	[24]
+	!BYTE	$66,$1A			; LLW	[26]
+	!BYTE	$84			; SUB 
+	!BYTE	$6E,$1A			; DLW	[26]
+	!BYTE	$2C,$00,$10		; CW	4096
+	!BYTE	$84			; SUB 
+	!BYTE	$76,$1C			; SLW	[28]
+	!BYTE	$66,$18			; LLW	[24]
+	!BYTE	$B2,$06			; ADDLW	[6]
+	!BYTE	$76,$1E			; SLW	[30]
+	!BYTE	$66,$0C			; LLW	[12]
+	!BYTE	$B2,$1C			; ADDLW	[28]
+	!BYTE	$76,$08			; SLW	[8]
+	!BYTE	$66,$1E			; LLW	[30]
+	!BYTE	$6E,$28			; DLW	[40]
+	!BYTE	$76,$2A			; SLW	[42]
+	!BYTE	$50			; BRNCH	_B051
+	!WORD	_B051-*
+_B049 
+; vmsrc/apple/sossys.pla: 1162:             esd = esd + 4
+; vmsrc/apple/sossys.pla: 1163:         loop
+	!BYTE	$66,$2A			; LLW	[42]
+	!BYTE	$38,$04			; ADDI	4
+	!BYTE	$76,$2A			; SLW	[42]
+_B051 
+	!BYTE	$66,$2A			; LLW	[42]
+	!BYTE	$60			; LB
+	!BYTE	$4E			; BRTRU	_B049
+	!WORD	_B049-*
+_B050 
+; vmsrc/apple/sossys.pla: 1164:         esd++
+	!BYTE	$66,$2A			; LLW	[42]
+	!BYTE	$8C			; INCR
+; vmsrc/apple/sossys.pla: 1165:         if defcnt
+; vmsrc/apple/sossys.pla: 1166:             //
+; vmsrc/apple/sossys.pla: 1167:             // Locate bytecode defs in allocated segment.
+; vmsrc/apple/sossys.pla: 1168:             //
+; vmsrc/apple/sossys.pla: 1169:             modseg[modid], codeseg, drop = seg_find($00, (rld - bytecode + 255) >> 8, modid + $12)
+; vmsrc/apple/sossys.pla: 1170:             if perr
+; vmsrc/apple/sossys.pla: 1171:                 return -perr
+	!BYTE	$76,$2A			; SLW	[42]
+	!BYTE	$66,$0E			; LLW	[14]
+	!BYTE	$4C			; BRFLS	_B052
+	!WORD	_B052-*
+	!BYTE	$00			; CN	0
+	!BYTE	$66,$28			; LLW	[40]
+	!BYTE	$66,$08			; LLW	[8]
+	!BYTE	$84			; SUB 
+	!BYTE	$38,$FF			; ADDI	255
+	!BYTE	$10			; CN	8
+	!BYTE	$9C			; SHR
+	!BYTE	$68			; LAB	_D081+0
+_F180 	!WORD	_D081+0		
+	!BYTE	$38,$12			; ADDI	18
+	!BYTE	$54			; CALL	_C008
+_F181 	!WORD	_C008		
+	!BYTE	$30			; DROP 
+	!BYTE	$76,$24			; SLW	[36]
+	!BYTE	$26			; LA	_D080+0
+_F182 	!WORD	_D080+0		
+	!BYTE	$B4			; ADDAB	_D081+0
+_F183 	!WORD	_D081+0		
+	!BYTE	$70			; SB
+	!BYTE	$68			; LAB	_D035+0
+_F184 	!WORD	_D035+0		
+	!BYTE	$4C			; BRFLS	_B054
+	!WORD	_B054-*
+	!BYTE	$68			; LAB	_D035+0
+_F185 	!WORD	_D035+0		
+	!BYTE	$90			; NEG
+	!BYTE	$5A,$E1			; LEAVE	225
+; vmsrc/apple/sossys.pla: 1172:             fin
+_B054 
+_B055 
+; vmsrc/apple/sossys.pla: 1173:             modid++
+	!BYTE	$68			; LAB	_D081+0
+_F186 	!WORD	_D081+0		
+	!BYTE	$8C			; INCR
+; vmsrc/apple/sossys.pla: 1174:             defext  =  codeseg.0 + $7F // (codeseg.0 | $80) - 1
+; vmsrc/apple/sossys.pla: 1175:             defaddr = (codeseg & $FF00) + $6000
+; vmsrc/apple/sossys.pla: 1176:             codefix = defaddr - bytecode
+; vmsrc/apple/sossys.pla: 1177:             defofst = defaddr - defofst
+; vmsrc/apple/sossys.pla: 1178:         fin
+	!BYTE	$78			; SAB	_D081+0
+_F187 	!WORD	_D081+0		
+	!BYTE	$64,$24			; LLB	[36]
+	!BYTE	$38,$7F			; ADDI	127
+	!BYTE	$74,$2F			; SLB	[47]
+	!BYTE	$66,$24			; LLW	[36]
+	!BYTE	$5E,$00			; CFFB	65280
+	!BYTE	$94			; AND 
+	!BYTE	$2C,$00,$60		; CW	24576
+	!BYTE	$82			; ADD 
+	!BYTE	$6E,$16			; DLW	[22]
+	!BYTE	$66,$08			; LLW	[8]
+	!BYTE	$84			; SUB 
+	!BYTE	$76,$0A			; SLW	[10]
+	!BYTE	$66,$16			; LLW	[22]
+	!BYTE	$66,$0C			; LLW	[12]
+	!BYTE	$84			; SUB 
+	!BYTE	$76,$0C			; SLW	[12]
+_B052 
+_B053 
+; vmsrc/apple/sossys.pla: 1179:         //
+; vmsrc/apple/sossys.pla: 1180:         // Run through the DeFinition Dictionary.
+; vmsrc/apple/sossys.pla: 1181:         //
+; vmsrc/apple/sossys.pla: 1182:         while ^rld == $02
+	!BYTE	$50			; BRNCH	_B058
+	!WORD	_B058-*
+_B056 
+; vmsrc/apple/sossys.pla: 1183:             //
+; vmsrc/apple/sossys.pla: 1184:             // This is a bytcode def entry - add it to the def directory.
+; vmsrc/apple/sossys.pla: 1185:             //
+; vmsrc/apple/sossys.pla: 1186:             adddef(defext, rld=>1 + defofst, @deflast)
+; vmsrc/apple/sossys.pla: 1187:             rld = rld + 4
+; vmsrc/apple/sossys.pla: 1188:         loop
+	!BYTE	$64,$2F			; LLB	[47]
+	!BYTE	$66,$28			; LLW	[40]
+	!BYTE	$8C			; INCR
+	!BYTE	$62			; LW
+	!BYTE	$B2,$0C			; ADDLW	[12]
+	!BYTE	$28,$22			; LLA	[34]
+	!BYTE	$54			; CALL	_C027
+_F188 	!WORD	_C027		
+	!BYTE	$30			; DROP 
+	!BYTE	$66,$28			; LLW	[40]
+	!BYTE	$38,$04			; ADDI	4
+	!BYTE	$76,$28			; SLW	[40]
+_B058 
+	!BYTE	$66,$28			; LLW	[40]
+	!BYTE	$60			; LB
+	!BYTE	$04			; CN	2
+	!BYTE	$22			; BREQ	_B056
+	!WORD	_B056-*
+_B057 
+; vmsrc/apple/sossys.pla: 1189:         //
+; vmsrc/apple/sossys.pla: 1190:         // Run through the Re-Location Dictionary.
+; vmsrc/apple/sossys.pla: 1191:         //
+; vmsrc/apple/sossys.pla: 1192:         while ^rld
+	!BYTE	$50			; BRNCH	_B061
+	!WORD	_B061-*
+_B059 
+; vmsrc/apple/sossys.pla: 1193:             rld, addr, fixup = reloc(modfix, modofst, bytecode, rld)
+; vmsrc/apple/sossys.pla: 1194:             if ^rld
+; vmsrc/apple/sossys.pla: 1195:                 *addr = ^rld & $10 ?? *addr + lookupextern(esd, rld->3) :: lookupdef(fixup + codefix, deftbl)
+; vmsrc/apple/sossys.pla: 1196:                 rld   = rld + 4
+; vmsrc/apple/sossys.pla: 1197:             fin
+	!BYTE	$66,$1A			; LLW	[26]
+	!BYTE	$66,$1C			; LLW	[28]
+	!BYTE	$66,$08			; LLW	[8]
+	!BYTE	$66,$28			; LLW	[40]
+	!BYTE	$54			; CALL	_A018
+_F189 	!WORD	_A018		
+	!BYTE	$76,$12			; SLW	[18]
+	!BYTE	$76,$14			; SLW	[20]
+	!BYTE	$6E,$28			; DLW	[40]
+	!BYTE	$60			; LB
+	!BYTE	$4C			; BRFLS	_B062
+	!WORD	_B062-*
+	!BYTE	$66,$28			; LLW	[40]
+	!BYTE	$60			; LB
+	!BYTE	$3C,$10			; ANDI	16
+	!BYTE	$4C			; BRFLS	_B064
+	!WORD	_B064-*
+	!BYTE	$66,$14			; LLW	[20]
+	!BYTE	$62			; LW
+	!BYTE	$66,$2A			; LLW	[42]
+	!BYTE	$66,$28			; LLW	[40]
+	!BYTE	$38,$03			; ADDI	3
+	!BYTE	$60			; LB
+	!BYTE	$54			; CALL	_C026
+_F190 	!WORD	_C026		
+	!BYTE	$82			; ADD 
+	!BYTE	$50			; BRNCH	_B065
+	!WORD	_B065-*
+_B064 
+	!BYTE	$66,$12			; LLW	[18]
+	!BYTE	$B2,$0A			; ADDLW	[10]
+	!BYTE	$66,$20			; LLW	[32]
+	!BYTE	$54			; CALL	_A017
+_F191 	!WORD	_A017		
+_B065 
+	!BYTE	$66,$14			; LLW	[20]
+	!BYTE	$72			; SW
+	!BYTE	$66,$28			; LLW	[40]
+	!BYTE	$38,$04			; ADDI	4
+	!BYTE	$76,$28			; SLW	[40]
+_B062 
+_B063 
+; vmsrc/apple/sossys.pla: 1198:         loop
+_B061 
+	!BYTE	$66,$28			; LLW	[40]
+	!BYTE	$60			; LB
+	!BYTE	$4E			; BRTRU	_B059
+	!WORD	_B059-*
+_B060 
+; vmsrc/apple/sossys.pla: 1199:         //
+; vmsrc/apple/sossys.pla: 1200:         // Run through the External/Entry Symbol Directory.
+; vmsrc/apple/sossys.pla: 1201:         //
+; vmsrc/apple/sossys.pla: 1202:         while ^esd
+	!BYTE	$50			; BRNCH	_B068
+	!WORD	_B068-*
+_B066 
+; vmsrc/apple/sossys.pla: 1203:             sym = esd
+; vmsrc/apple/sossys.pla: 1204:             esd = esd + dcitos(esd, @str)
+; vmsrc/apple/sossys.pla: 1205:             if ^esd & $08
+; vmsrc/apple/sossys.pla: 1206:                 //
+; vmsrc/apple/sossys.pla: 1207:                 // EXPORT symbol - add it to the global symbol table.
+; vmsrc/apple/sossys.pla: 1208:                 //
+; vmsrc/apple/sossys.pla: 1209:                 addr = esd=>1 + modofst
+; vmsrc/apple/sossys.pla: 1210:                 if uword_isge(addr, bytecode)
+; vmsrc/apple/sossys.pla: 1211:                     //
+; vmsrc/apple/sossys.pla: 1212:                     // Use the def directory address for bytecode.
+; vmsrc/apple/sossys.pla: 1213:                     //
+; vmsrc/apple/sossys.pla: 1214:                     addr = lookupdef(addr + codefix, deftbl)
+; vmsrc/apple/sossys.pla: 1215:                 fin
+	!BYTE	$66,$2A			; LLW	[42]
+	!BYTE	$76,$2C			; SLW	[44]
+	!BYTE	$66,$2A			; LLW	[42]
+	!BYTE	$34			; DUP
+	!BYTE	$28,$30			; LLA	[48]
+	!BYTE	$54			; CALL	_A012
+_F192 	!WORD	_A012		
+	!BYTE	$82			; ADD 
+	!BYTE	$6E,$2A			; DLW	[42]
+	!BYTE	$60			; LB
+	!BYTE	$3C,$08			; ANDI	8
+	!BYTE	$4C			; BRFLS	_B069
+	!WORD	_B069-*
+	!BYTE	$66,$2A			; LLW	[42]
+	!BYTE	$8C			; INCR
+	!BYTE	$62			; LW
+	!BYTE	$B2,$1C			; ADDLW	[28]
+	!BYTE	$6E,$14			; DLW	[20]
+	!BYTE	$66,$08			; LLW	[8]
+	!BYTE	$54			; CALL	_A006
+_F193 	!WORD	_A006		
+	!BYTE	$4C			; BRFLS	_B071
+	!WORD	_B071-*
+	!BYTE	$66,$14			; LLW	[20]
+	!BYTE	$B2,$0A			; ADDLW	[10]
+	!BYTE	$66,$20			; LLW	[32]
+	!BYTE	$54			; CALL	_A017
+_F194 	!WORD	_A017		
+	!BYTE	$76,$14			; SLW	[20]
+_B071 
+_B072 
+; vmsrc/apple/sossys.pla: 1216:                 addsym(sym, addr)
+; vmsrc/apple/sossys.pla: 1217:             fin
+	!BYTE	$66,$2C			; LLW	[44]
+	!BYTE	$66,$14			; LLW	[20]
+	!BYTE	$54			; CALL	_C023
+_F195 	!WORD	_C023		
+_B069 
+_B070 
+; vmsrc/apple/sossys.pla: 1218:             esd = esd + 3
+; vmsrc/apple/sossys.pla: 1219:         loop
+	!BYTE	$66,$2A			; LLW	[42]
+	!BYTE	$38,$03			; ADDI	3
+	!BYTE	$76,$2A			; SLW	[42]
+_B068 
+	!BYTE	$66,$2A			; LLW	[42]
+	!BYTE	$60			; LB
+	!BYTE	$4E			; BRTRU	_B066
+	!WORD	_B066-*
+_B067 
+; vmsrc/apple/sossys.pla: 1220:         if defext
+; vmsrc/apple/sossys.pla: 1221:             //
+; vmsrc/apple/sossys.pla: 1222:             // Copy bytecode to code segment.
+; vmsrc/apple/sossys.pla: 1223:             //
+; vmsrc/apple/sossys.pla: 1224:             memxcpy(codeseg, bytecode, modsize - (bytecode - modaddr))
+; vmsrc/apple/sossys.pla: 1225:         fin
+	!BYTE	$64,$2F			; LLB	[47]
+	!BYTE	$4C			; BRFLS	_B073
+	!WORD	_B073-*
+	!BYTE	$66,$24			; LLW	[36]
+	!BYTE	$66,$08			; LLW	[8]
+	!BYTE	$66,$06			; LLW	[6]
+	!BYTE	$66,$08			; LLW	[8]
+	!BYTE	$66,$18			; LLW	[24]
+	!BYTE	$84			; SUB 
+	!BYTE	$84			; SUB 
+	!BYTE	$54			; CALL	_A004
+_F196 	!WORD	_A004		
+_B073 
+_B074 
+; vmsrc/apple/sossys.pla: 1226:     else
+	!BYTE	$50			; BRNCH	_B028
+	!WORD	_B028-*
+_B027 
+; vmsrc/apple/sossys.pla: 1227:         lerr = $46
+; vmsrc/apple/sossys.pla: 1228:     fin
+	!BYTE	$2A,$46			; CB	70
+	!BYTE	$74,$2E			; SLB	[46]
+_B028 
+; vmsrc/apple/sossys.pla: 1229:     if lerr
+; vmsrc/apple/sossys.pla: 1230:         return -lerr
+	!BYTE	$64,$2E			; LLB	[46]
+	!BYTE	$4C			; BRFLS	_B075
+	!WORD	_B075-*
+	!BYTE	$64,$2E			; LLB	[46]
+	!BYTE	$90			; NEG
+	!BYTE	$5A,$E1			; LEAVE	225
+; vmsrc/apple/sossys.pla: 1231:     fin
+_B075 
+_B076 
+; vmsrc/apple/sossys.pla: 1232:     //
+; vmsrc/apple/sossys.pla: 1233:     // Free up end-of-module main memory.
+; vmsrc/apple/sossys.pla: 1234:     //
+; vmsrc/apple/sossys.pla: 1235:     releaseheap(bytecode)
+; vmsrc/apple/sossys.pla: 1236:     //
+; vmsrc/apple/sossys.pla: 1237:     // Call init routine if it exists.
+; vmsrc/apple/sossys.pla: 1238:     //
+; vmsrc/apple/sossys.pla: 1239:     initcode = modkeep
+; vmsrc/apple/sossys.pla: 1240:     if init
+; vmsrc/apple/sossys.pla: 1241:         initcode = adddef(defext, init + defofst, @deflast)()
+; vmsrc/apple/sossys.pla: 1242:         if initcode < 0
+; vmsrc/apple/sossys.pla: 1243:             perr = -initcode
+; vmsrc/apple/sossys.pla: 1244:         fin
+	!BYTE	$66,$08			; LLW	[8]
+	!BYTE	$54			; CALL	_C022
+_F197 	!WORD	_C022		
+	!BYTE	$30			; DROP 
+	!BYTE	$2C,$00,$20		; CW	8192
+	!BYTE	$76,$12			; SLW	[18]
+	!BYTE	$66,$10			; LLW	[16]
+	!BYTE	$4C			; BRFLS	_B077
+	!WORD	_B077-*
+	!BYTE	$64,$2F			; LLB	[47]
+	!BYTE	$66,$10			; LLW	[16]
+	!BYTE	$B2,$0C			; ADDLW	[12]
+	!BYTE	$28,$22			; LLA	[34]
+	!BYTE	$54			; CALL	_C027
+_F198 	!WORD	_C027		
+	!BYTE	$56			; ICAL
+	!BYTE	$6E,$12			; DLW	[18]
+	!BYTE	$00			; CN	0
+	!BYTE	$46			; ISLT
+	!BYTE	$4C			; BRFLS	_B079
+	!WORD	_B079-*
+	!BYTE	$66,$12			; LLW	[18]
+	!BYTE	$90			; NEG
+	!BYTE	$78			; SAB	_D035+0
+_F199 	!WORD	_D035+0		
+_B079 
+_B080 
+; vmsrc/apple/sossys.pla: 1245:     fin
+_B077 
+_B078 
+; vmsrc/apple/sossys.pla: 1246:     return initcode
+	!BYTE	$66,$12			; LLW	[18]
+	!BYTE	$5A,$E1			; LEAVE	225
+; vmsrc/apple/sossys.pla: 1247: end
+; vmsrc/apple/sossys.pla: 1248: def execmod(modfile)#1
+					; modfile -> [0]
+_P026 					; execmod(modfile)#1()
+_C029 					; execmod()
+	JSR	INTERP
+; vmsrc/apple/sossys.pla: 1249:     byte moddci[63]
+					; moddci -> [2]
+; vmsrc/apple/sossys.pla: 1250:     word keep, saveheap, savesym, saveflags, savemodid
+					; keep -> [65]
+					; saveheap -> [67]
+					; savesym -> [69]
+					; saveflags -> [71]
+					; savemodid -> [73]
+; vmsrc/apple/sossys.pla: 1251: 
+; vmsrc/apple/sossys.pla: 1252:     perr = 1
+	!BYTE	$58,$4B,$01		; ENTER	75,1
+; vmsrc/apple/sossys.pla: 1253:     if stodci(modfile, @moddci)
+; vmsrc/apple/sossys.pla: 1254:         saveheap  = heap
+; vmsrc/apple/sossys.pla: 1255:         savesym   = lastsym
+; vmsrc/apple/sossys.pla: 1256:         saveflags = systemflags
+; vmsrc/apple/sossys.pla: 1257:         savemodid = modid
+; vmsrc/apple/sossys.pla: 1258:         keep = loadmod(@moddci)
+; vmsrc/apple/sossys.pla: 1259:         if keep < modkeep
+; vmsrc/apple/sossys.pla: 1260:             if not (keep & modflagkeep)
+; vmsrc/apple/sossys.pla: 1261:                 systemflags = saveflags
+; vmsrc/apple/sossys.pla: 1262:             fin
+	!BYTE	$02			; CN	1
+	!BYTE	$78			; SAB	_D035+0
+_F200 	!WORD	_D035+0		
+	!BYTE	$66,$00			; LLW	[0]
+	!BYTE	$28,$02			; LLA	[2]
+	!BYTE	$54			; CALL	_A013
+_F201 	!WORD	_A013		
+	!BYTE	$4C			; BRFLS	_B081
+	!WORD	_B081-*
+	!BYTE	$6A			; LAW	_D078+0
+_F202 	!WORD	_D078+0		
+	!BYTE	$76,$43			; SLW	[67]
+	!BYTE	$6A			; LAW	_D083+0
+_F203 	!WORD	_D083+0		
+	!BYTE	$76,$45			; SLW	[69]
+	!BYTE	$6A			; LAW	_D040+0
+_F204 	!WORD	_D040+0		
+	!BYTE	$76,$47			; SLW	[71]
+	!BYTE	$68			; LAB	_D081+0
+_F205 	!WORD	_D081+0		
+	!BYTE	$76,$49			; SLW	[73]
+	!BYTE	$28,$02			; LLA	[2]
+	!BYTE	$54			; CALL	_C028
+_F206 	!WORD	_C028		
+	!BYTE	$6E,$41			; DLW	[65]
+	!BYTE	$2C,$00,$20		; CW	8192
+	!BYTE	$46			; ISLT
+	!BYTE	$4C			; BRFLS	_B083
+	!WORD	_B083-*
+	!BYTE	$66,$41			; LLW	[65]
+	!BYTE	$2C,$00,$10		; CW	4096
+	!BYTE	$94			; AND 
+	!BYTE	$4E			; BRTRU	_B085
+	!WORD	_B085-*
+	!BYTE	$66,$47			; LLW	[71]
+	!BYTE	$7A			; SAW	_D040+0
+_F207 	!WORD	_D040+0		
+_B085 
+_B086 
+; vmsrc/apple/sossys.pla: 1263:             while modid > savemodid
+	!BYTE	$50			; BRNCH	_B089
+	!WORD	_B089-*
+_B087 
+; vmsrc/apple/sossys.pla: 1264:                 modid--
+	!BYTE	$68			; LAB	_D081+0
+_F208 	!WORD	_D081+0		
+	!BYTE	$8E			; DECR
+; vmsrc/apple/sossys.pla: 1265:                 seg_release(modseg[modid])
+; vmsrc/apple/sossys.pla: 1266:             loop
+	!BYTE	$78			; SAB	_D081+0
+_F209 	!WORD	_D081+0		
+	!BYTE	$26			; LA	_D080+0
+_F210 	!WORD	_D080+0		
+	!BYTE	$B4			; ADDAB	_D081+0
+_F211 	!WORD	_D081+0		
+	!BYTE	$60			; LB
+	!BYTE	$54			; CALL	_C009
+_F212 	!WORD	_C009		
+	!BYTE	$30			; DROP 
+_B089 
+	!BYTE	$68			; LAB	_D081+0
+_F213 	!WORD	_D081+0		
+	!BYTE	$66,$49			; LLW	[73]
+	!BYTE	$44			; ISGT
+	!BYTE	$4E			; BRTRU	_B087
+	!WORD	_B087-*
+_B088 
+; vmsrc/apple/sossys.pla: 1267:             heap    = saveheap
+; vmsrc/apple/sossys.pla: 1268:             lastsym = savesym
+; vmsrc/apple/sossys.pla: 1269:             xpokeb(symtbl.0, lastsym, 0)
+; vmsrc/apple/sossys.pla: 1270:         fin
+	!BYTE	$66,$43			; LLW	[67]
+	!BYTE	$7A			; SAW	_D078+0
+_F214 	!WORD	_D078+0		
+	!BYTE	$66,$45			; LLW	[69]
+	!BYTE	$7A			; SAW	_D083+0
+_F215 	!WORD	_D083+0		
+	!BYTE	$68			; LAB	_D082+0
+_F216 	!WORD	_D082+0		
+	!BYTE	$6A			; LAW	_D083+0
+_F217 	!WORD	_D083+0		
+	!BYTE	$00			; CN	0
+	!BYTE	$54			; CALL	_A005
+_F218 	!WORD	_A005		
+_B083 
+_B084 
+; vmsrc/apple/sossys.pla: 1271:     fin
+_B081 
+_B082 
+; vmsrc/apple/sossys.pla: 1272:     return -perr
+	!BYTE	$68			; LAB	_D035+0
+_F219 	!WORD	_D035+0		
+	!BYTE	$90			; NEG
+	!BYTE	$5A,$4B			; LEAVE	75
+; vmsrc/apple/sossys.pla: 1273: end
+; vmsrc/apple/sossys.pla: 1274: //
+; vmsrc/apple/sossys.pla: 1275: // Init 2K symbol table.
+; vmsrc/apple/sossys.pla: 1276: //
+; vmsrc/apple/sossys.pla: 1277: drop, symtbl, drop = seg_find($00, $08, $11)
+_INIT 
+	JSR	INTERP
+; vmsrc/apple/sossys.pla: 1278: lastsym = symtbl & $FF00
+; vmsrc/apple/sossys.pla: 1279: xpokeb(symtbl.0, lastsym, 0)
+; vmsrc/apple/sossys.pla: 1280: while *sysmodsym
+	!BYTE	$00			; CN	0
+	!BYTE	$10			; CN	8
+	!BYTE	$2A,$11			; CB	17
+	!BYTE	$54			; CALL	_C008
+_F220 	!WORD	_C008		
+	!BYTE	$30			; DROP 
+	!BYTE	$7A			; SAW	_D082+0
+_F221 	!WORD	_D082+0		
+	!BYTE	$30			; DROP 
+	!BYTE	$6A			; LAW	_D082+0
+_F222 	!WORD	_D082+0		
+	!BYTE	$5E,$00			; CFFB	65280
+	!BYTE	$94			; AND 
+	!BYTE	$7A			; SAW	_D083+0
+_F223 	!WORD	_D083+0		
+	!BYTE	$68			; LAB	_D082+0
+_F224 	!WORD	_D082+0		
+	!BYTE	$6A			; LAW	_D083+0
+_F225 	!WORD	_D083+0		
+	!BYTE	$00			; CN	0
+	!BYTE	$54			; CALL	_A005
+_F226 	!WORD	_A005		
+	!BYTE	$50			; BRNCH	_B092
+	!WORD	_B092-*
+_B090 
+; vmsrc/apple/sossys.pla: 1281:     stodci(sysmodsym=>0, heap)
+; vmsrc/apple/sossys.pla: 1282:     addsym(heap, sysmodsym=>2)
+; vmsrc/apple/sossys.pla: 1283:     sysmodsym = sysmodsym + 4
+; vmsrc/apple/sossys.pla: 1284: loop
+	!BYTE	$6A			; LAW	_D077+0
+_F227 	!WORD	_D077+0		
+	!BYTE	$62			; LW
+	!BYTE	$6A			; LAW	_D078+0
+_F228 	!WORD	_D078+0		
+	!BYTE	$54			; CALL	_A013
+_F229 	!WORD	_A013		
+	!BYTE	$30			; DROP 
+	!BYTE	$6A			; LAW	_D078+0
+_F230 	!WORD	_D078+0		
+	!BYTE	$6A			; LAW	_D077+0
+_F231 	!WORD	_D077+0		
+	!BYTE	$38,$02			; ADDI	2
+	!BYTE	$62			; LW
+	!BYTE	$54			; CALL	_C023
+_F232 	!WORD	_C023		
+	!BYTE	$6A			; LAW	_D077+0
+_F233 	!WORD	_D077+0		
+	!BYTE	$38,$04			; ADDI	4
+	!BYTE	$7A			; SAW	_D077+0
+_F234 	!WORD	_D077+0		
+_B092 
+	!BYTE	$6A			; LAW	_D077+0
+_F235 	!WORD	_D077+0		
+	!BYTE	$62			; LW
+	!BYTE	$4E			; BRTRU	_B090
+	!WORD	_B090-*
+_B091 
+; vmsrc/apple/sossys.pla: 1285: //
+; vmsrc/apple/sossys.pla: 1286: // Clear system path and command line
+; vmsrc/apple/sossys.pla: 1287: //
+; vmsrc/apple/sossys.pla: 1288: sysmods  = 0
+; vmsrc/apple/sossys.pla: 1289: syspath  = @sysmods
+; vmsrc/apple/sossys.pla: 1290: cmdlnptr = @cmdln
+; vmsrc/apple/sossys.pla: 1291: //
+; vmsrc/apple/sossys.pla: 1292: // Print PLASMA version
+; vmsrc/apple/sossys.pla: 1293: //
+; vmsrc/apple/sossys.pla: 1294: init_cons
+; vmsrc/apple/sossys.pla: 1295: prstr("PLEIADES VM v2.20\n")
+	!BYTE	$00			; CN	0
+	!BYTE	$78			; SAB	_D076+0
+_F236 	!WORD	_D076+0		
+	!BYTE	$26			; LA	_D076+0
+_F237 	!WORD	_D076+0		
+	!BYTE	$7A			; SAW	_D033+0
+_F238 	!WORD	_D033+0		
+	!BYTE	$26			; LA	_D045+0
+_F239 	!WORD	_D045+0		
+	!BYTE	$7A			; SAW	_D034+0
+_F240 	!WORD	_D034+0		
+	!BYTE	$54			; CALL	_C007
+_F241 	!WORD	_C007		
+	!BYTE	$2E			; CS
+	!BYTE	$12
+	!BYTE	$50,$4C,$45,$49,$41,$44,$45,$53
+	!BYTE	$20,$56,$4D,$20,$76,$32,$2E,$32
+	!BYTE	$30,$0D
+	!BYTE	$54			; CALL	_C013
+_F242 	!WORD	_C013		
+; vmsrc/apple/sossys.pla: 1296: prstr("MEM:$"); prword(availheap); crout
+	!BYTE	$2E			; CS
+	!BYTE	$05
+	!BYTE	$4D,$45,$4D,$3A,$24
+	!BYTE	$54			; CALL	_C013
+_F243 	!WORD	_C013		
+; vmsrc/apple/sossys.pla: 1297: //
+; vmsrc/apple/sossys.pla: 1298: // Exec command line parser
+; vmsrc/apple/sossys.pla: 1299: //
+; vmsrc/apple/sossys.pla: 1300: loadmod(@soscmd)
+; vmsrc/apple/sossys.pla: 1301: modid   = 0
+; vmsrc/apple/sossys.pla: 1302: autorun = open("AUTORUN")
+	!BYTE	$54			; CALL	_C018
+_F244 	!WORD	_C018		
+	!BYTE	$54			; CALL	_C017
+_F245 	!WORD	_C017		
+	!BYTE	$54			; CALL	_C011
+_F246 	!WORD	_C011		
+	!BYTE	$26			; LA	_D046+0
+_F247 	!WORD	_D046+0		
+	!BYTE	$54			; CALL	_C028
+_F248 	!WORD	_C028		
+	!BYTE	$30			; DROP 
+	!BYTE	$00			; CN	0
+	!BYTE	$78			; SAB	_D081+0
+_F249 	!WORD	_D081+0		
+	!BYTE	$2E			; CS
+	!BYTE	$07
+	!BYTE	$41,$55,$54,$4F,$52,$55,$4E
+	!BYTE	$54			; CALL	_C001
+_F250 	!WORD	_C001		
+	!BYTE	$78			; SAB	_D079+0
+_F251 	!WORD	_D079+0		
+; vmsrc/apple/sossys.pla: 1303: if autorun > 0
+; vmsrc/apple/sossys.pla: 1304:     cmdln = read(autorun, @cmdln.1, 64)
+; vmsrc/apple/sossys.pla: 1305:     close(autorun)
+; vmsrc/apple/sossys.pla: 1306: fin
+	!BYTE	$68			; LAB	_D079+0
+_F252 	!WORD	_D079+0		
+	!BYTE	$00			; CN	0
+	!BYTE	$44			; ISGT
+	!BYTE	$4C			; BRFLS	_B093
+	!WORD	_B093-*
+	!BYTE	$68			; LAB	_D079+0
+_F253 	!WORD	_D079+0		
+	!BYTE	$26			; LA	_D045+1
+_F254 	!WORD	_D045+1		
+	!BYTE	$2A,$40			; CB	64
+	!BYTE	$54			; CALL	_C003
+_F255 	!WORD	_C003		
+	!BYTE	$78			; SAB	_D045+0
+_F256 	!WORD	_D045+0		
+	!BYTE	$68			; LAB	_D079+0
+_F257 	!WORD	_D079+0		
+	!BYTE	$54			; CALL	_C002
+_F258 	!WORD	_C002		
+	!BYTE	$30			; DROP 
+_B093 
+_B094 
+; vmsrc/apple/sossys.pla: 1307: //
+; vmsrc/apple/sossys.pla: 1308: // Call cmd line parser
+; vmsrc/apple/sossys.pla: 1309: //
+; vmsrc/apple/sossys.pla: 1310: repeat
+_B096 
+; vmsrc/apple/sossys.pla: 1311:     execmod((*cmdparser)())
+; vmsrc/apple/sossys.pla: 1312:     write(refcons, @textmode, 3)
+; vmsrc/apple/sossys.pla: 1313:     cmdln = 0
+; vmsrc/apple/sossys.pla: 1314: until 0
+	!BYTE	$6A,$F0,$A0		; LAW	41200
+	!BYTE	$56			; ICAL
+	!BYTE	$54			; CALL	_C029
+_F259 	!WORD	_C029		
+	!BYTE	$30			; DROP 
+	!BYTE	$68			; LAB	_D038+0
+_F260 	!WORD	_D038+0		
+	!BYTE	$26			; LA	_D044+0
+_F261 	!WORD	_D044+0		
+	!BYTE	$06			; CN	3
+	!BYTE	$54			; CALL	_C004
+_F262 	!WORD	_C004		
+	!BYTE	$30			; DROP 
+	!BYTE	$00			; CN	0
+	!BYTE	$78			; SAB	_D045+0
+_F263 	!WORD	_D045+0		
+_B097 
+	!BYTE	$50			; BRNCH	_B096
+	!WORD	_B096-*
+_B095 
+; vmsrc/apple/sossys.pla: 1315: done
+	!BYTE	$00			; CN	0
+	!BYTE	$5C			; RET
+_SYSFLAGS	=	0
