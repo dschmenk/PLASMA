@@ -826,10 +826,36 @@ def logb
 end
 
 def scalb(scale)
-    // Scale - use SANE
-    if !saneInit; initSANE; fin
-    sane:saveZP()
-    return sane:restoreZP(sane:op2FP(FFEXT|FOSCALB, stackRegs[0], scale))
+    // scalb(x, n) = x * 2^n = x * pow2(n)
+    // Hardware accelerated via pow2X and mul
+    word err
+
+    if !mfAvailable
+        if !saneInit; initSANE; fin
+        sane:saveZP()
+        return sane:restoreZP(sane:op2FP(FFEXT|FOSCALB, stackRegs[0], scale))
+    fin
+
+    // Push scale as integer, convert to float, compute 2^scale
+    err = pushInt(scale)
+    if err < 0
+        _drop(0)  // Drop the pushed value
+        if !saneInit; initSANE; fin
+        sane:saveZP()
+        return sane:restoreZP(sane:op2FP(FFEXT|FOSCALB, stackRegs[1], scale))
+    fin
+
+    // Compute 2^scale
+    err = pow2X
+    if err < 0
+        _drop(0)  // Drop the failed result
+        if !saneInit; initSANE; fin
+        sane:saveZP()
+        return sane:restoreZP(sane:op2FP(FFEXT|FOSCALB, stackRegs[0], scale))
+    fin
+
+    // Multiply x * 2^scale
+    return mul
 end
 
 //==============================================================================
@@ -1568,20 +1594,146 @@ def cot
 end
 
 //==============================================================================
-// FINANCIAL AND RANDOM (SANE fallback)
+// FINANCIAL FUNCTIONS (Hardware accelerated via powXY)
 //==============================================================================
 
 def compXY
-    if !saneInit; initSANE; fin
-    sane:saveZP()
-    return sane:restoreZP(_drop(_swap(sane:op2ELEM(FFEXT|FOCOMPND, stackRegs[0], stackRegs[1]))))
+    // compXY(rate, periods) = (1 + rate)^periods
+    // Hardware accelerated via powXY
+    word err
+    byte[t_extended] one
+
+    if !mfAvailable
+        if !saneInit; initSANE; fin
+        sane:saveZP()
+        return sane:restoreZP(_drop(_swap(sane:op2ELEM(FFEXT|FOCOMPND, stackRegs[0], stackRegs[1]))))
+    fin
+
+    // Stack: periods (top), rate (second)
+    // Need to compute: (1 + rate)^periods
+
+    // one = 1.0
+    one.0 = 0
+    one.1 = $3F
+    one.2 = $80
+    one.3 = 0
+    one.4 = 0
+    one.5 = 0
+    one.6 = 0
+    one.7 = 0
+    one.8 = 0
+    one.9 = 0
+
+    // Push 1.0, then add to rate
+    memcpy(stackRegs[2], @one, t_extended)  // Push 1.0
+    memcpy(stackRegs[3], stackRegs[1], t_extended)  // Copy rate
+    stackRegs[0], stackRegs[1], stackRegs[2], stackRegs[3] = stackRegs[2], stackRegs[3], stackRegs[0], stackRegs[1]
+
+    // Stack now: rate, 1.0, periods, (old)
+    err = add  // Compute 1 + rate
+    if err < 0
+        _drop(0)
+        if !saneInit; initSANE; fin
+        sane:saveZP()
+        return sane:restoreZP(_drop(_swap(sane:op2ELEM(FFEXT|FOCOMPND, stackRegs[0], stackRegs[1]))))
+    fin
+
+    // Stack now: (1+rate), periods, ...
+    // Swap to get periods on top for powXY
+    swap
+
+    // Stack now: periods, (1+rate), ...
+    // Call powXY to compute (1+rate)^periods
+    return powXY
 end
 
 def annuityXY
-    if !saneInit; initSANE; fin
-    sane:saveZP()
-    return sane:restoreZP(_drop(_swap(sane:op2ELEM(FFEXT|FOANNUIT, stackRegs[0], stackRegs[1]))))
+    // annuityXY(rate, periods) = (1 - (1+rate)^-periods) / rate
+    // Hardware accelerated via powXY
+    word err
+    byte[t_extended] one
+
+    if !mfAvailable
+        if !saneInit; initSANE; fin
+        sane:saveZP()
+        return sane:restoreZP(_drop(_swap(sane:op2ELEM(FFEXT|FOANNUIT, stackRegs[0], stackRegs[1]))))
+    fin
+
+    // Stack: periods (top), rate (second)
+    // Need: (1 - (1+rate)^-periods) / rate
+
+    // one = 1.0
+    one.0 = 0
+    one.1 = $3F
+    one.2 = $80
+    one.3 = 0
+    one.4 = 0
+    one.5 = 0
+    one.6 = 0
+    one.7 = 0
+    one.8 = 0
+    one.9 = 0
+
+    // Save rate for later division
+    memcpy(stackRegs[2], stackRegs[1], t_extended)  // Copy rate to stack[2]
+
+    // Negate periods: -periods
+    err = neg
+    if err < 0
+        _drop(0)
+        if !saneInit; initSANE; fin
+        sane:saveZP()
+        return sane:restoreZP(_drop(_swap(sane:op2ELEM(FFEXT|FOANNUIT, stackRegs[0], stackRegs[1]))))
+    fin
+
+    // Stack now: -periods, rate, rate, ...
+    // Compute (1 + rate)
+    memcpy(stackRegs[3], @one, t_extended)  // Push 1.0
+    stackRegs[0], stackRegs[1], stackRegs[2], stackRegs[3] = stackRegs[3], stackRegs[1], stackRegs[0], stackRegs[2]
+    // Stack: 1.0, rate, -periods, rate
+
+    err = add  // 1 + rate
+    if err < 0
+        _drop(0); _drop(0)
+        if !saneInit; initSANE; fin
+        sane:saveZP()
+        return sane:restoreZP(_drop(_swap(sane:op2ELEM(FFEXT|FOANNUIT, stackRegs[0], stackRegs[1]))))
+    fin
+
+    // Stack: (1+rate), -periods, rate, ...
+    swap  // Stack: -periods, (1+rate), rate, ...
+
+    err = powXY  // (1+rate)^-periods
+    if err < 0
+        _drop(0)
+        if !saneInit; initSANE; fin
+        sane:saveZP()
+        return sane:restoreZP(_drop(_swap(sane:op2ELEM(FFEXT|FOANNUIT, stackRegs[0], stackRegs[1]))))
+    fin
+
+    // Stack: (1+rate)^-periods, rate, ...
+    // Compute 1 - (1+rate)^-periods
+    memcpy(stackRegs[2], @one, t_extended)
+    stackRegs[0], stackRegs[1], stackRegs[2] = stackRegs[2], stackRegs[0], stackRegs[1]
+    // Stack: 1.0, (1+rate)^-periods, rate, ...
+
+    err = sub  // 1 - (1+rate)^-periods
+    if err < 0
+        _drop(0)
+        if !saneInit; initSANE; fin
+        sane:saveZP()
+        return sane:restoreZP(_drop(_swap(sane:op2ELEM(FFEXT|FOANNUIT, stackRegs[0], stackRegs[1]))))
+    fin
+
+    // Stack: (1-(1+rate)^-periods), rate, ...
+    // Divide by rate
+    swap
+    return div
 end
+
+//==============================================================================
+// RANDOM NUMBER GENERATION (SANE fallback)
+//==============================================================================
 
 def randNum(pSeed)
     if !saneInit; initSANE; fin

@@ -10,9 +10,9 @@
 - **API Compatible**: Maintains complete API compatibility with `fpu.pla`
 - **Automatic Fallback**: Detects MegaFlash presence and falls back to SANE if not available
 - **Format Conversion**: Automatically converts between SANE Extended (80-bit) and MBF (40-bit) formats
-- **Hardware-Accelerated Operations** (28 functions total):
+- **Hardware-Accelerated Operations** (31 functions total):
   - **Direct FPU**: mul, div, sqrt, sin, cos, tan, atan, ln, exp
-  - **Via Identities**: neg, abs, log2, log21, ln1, pow2, pow21, powE1, powE21, powXInt, powXY, asin, acos, sinh, cosh, tanh, sec, csc, cot
+  - **Via Identities**: neg, abs, log2, log21, ln1, pow2, pow21, powE1, powE21, powXInt, powXY, asin, acos, sinh, cosh, tanh, sec, csc, cot, scalb, compXY, annuityXY
 
 ## Usage
 
@@ -113,6 +113,9 @@ The library uses the following MegaFlash registers (Slot 4):
 - `sec` - Secant (1/cos)
 - `csc` - Cosecant (1/sin)
 - `cot` - Cotangent (1/tan)
+- `scalb` - Binary scale (x * 2^n via pow2X and mul)
+- `compXY` - Compound interest ((1 + rate)^periods via powXY)
+- `annuityXY` - Annuity ((1 - (1+r)^-periods) / r via powXY)
 
 ### Software Fallback (SANE)
 - `add` - Addition (conversion overhead makes hardware slower)
@@ -122,9 +125,7 @@ The library uses the following MegaFlash registers (Slot 4):
 - `cmp` - Compare
 - `trunc` - Truncate
 - `round` - Round
-- `logb` - Log base
-- `scalb` - Scale
-- `compXY`, `annuityXY` - Financial functions
+- `logb` - Log base (binary exponent extraction)
 - `randNum` - Random number generation
 
 ## Building

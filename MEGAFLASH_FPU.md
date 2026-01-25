@@ -58,13 +58,12 @@ This ensures programs work on any Apple II system, whether or not MegaFlash is p
 
 ### Accelerated Operations
 
-The following operations use MegaFlash hardware acceleration:
+The library provides **31 hardware-accelerated functions** out of 40 total SANE operations (78% coverage):
 
-- **Arithmetic**: `mul`, `div`, `sqrt`
-- **Trigonometry**: `sin`, `cos`, `tan`, `atan`
-- **Logarithmic**: `lnX` (natural log), `powEX` (e^x)
+- **Direct Hardware FPU** (9 functions): `mul`, `div`, `sqrt`, `sin`, `cos`, `tan`, `atan`, `lnX`, `powEX`
+- **Via Mathematical Identities** (22 functions): `neg`, `abs`, `log2X`, `log21X`, `ln1X`, `pow2X`, `pow21X`, `powE1X`, `powE21X`, `powXInt`, `powXY`, `asin`, `acos`, `sinh`, `cosh`, `tanh`, `sec`, `csc`, `cot`, `scalb`, `compXY`, `annuityXY`
 
-Operations not supported by MegaFlash hardware (add, sub, rem, neg, abs, etc.) automatically use SANE fallback.
+The remaining 9 operations (add, sub, rem, type, cmp, trunc, round, logb, randNum) use SANE fallback.
 
 ### Performance
 
