@@ -5,6 +5,7 @@ include "inc/args.plh"
 include "inc/int32.plh"
 include "inc/hgrlib.plh"
 include "inc/hgrtile.plh"
+include "inc/sndseq.plh"
 sysflags reshgr1 // Reserve HGR page 1
 
 const rndnum        = $4E // ZP location of RND
@@ -40,10 +41,14 @@ word maze[] = $0400,$0480,$0500,$0580,$0600,$0680,$0700,$0780
 word        = $0428,$04A8,$0528,$05A8,$0628,$06A8,$0728,$07A8
 word        = $0450,$04D0,$0550,$05D0,$0650,$06D0,$0750,$07D0
 
-word arg, seed, moveCnt
+word arg, seed, moveCnt, seq, len
 byte entry, exit, solved, ref
 byte viewFlag = TRUE
 res[4] tics
+
+def boop#0
+    tonePlay(64, 16)#0
+end
 
 def cellSetFlags(x, y, flags)#0
     maze.[y, x] = maze.[y, x] | flags
@@ -380,6 +385,8 @@ def mazePlay
                 if !(maze.[y, x] & WALL_TOP) 
                     y--
                     moveCnt++
+                else
+                    boop
                 fin
                 break
             is 'M'
@@ -387,6 +394,8 @@ def mazePlay
                 if !(maze.[y + 1, x] & WALL_TOP)
                     y++
                     moveCnt++
+                else
+                    boop
                 fin
                 break
             is 'J'
@@ -394,6 +403,8 @@ def mazePlay
                 if !(maze.[y, x] & WALL_LEFT)
                     x--
                     moveCnt++
+                else
+                    boop
                 fin
                 break
             is 'K'
@@ -401,11 +412,21 @@ def mazePlay
                 if !(maze.[y, x + 1] & WALL_LEFT)
                     x++
                     moveCnt++
-                    if x == MAZE_WIDTH; return TRUE; fin // Solved!
+                    if x == MAZE_WIDTH // Solved!
+                        tonePlay(32, 8)#0
+                        tonePlay(16, 16)#0
+                        return TRUE
+                    fin
+                else
+                    boop
                 fin
                 break
             is 'Q'
+                tonePlay(96, 8)#0
+                tonePlay(128, 16)#0
                 return FALSE
+            otherwise
+                boop
         wend
     loop
     return TRUE
@@ -434,14 +455,22 @@ def atoi(strptr)#1
     return num * sign
 end
 
+def backgroundProc#0
+end
+
 conio:textmode(40)
 hgrMode(hgrPage1)
 ref = fileio:open("MAZE.SPLASH")
 fileio:read(ref, $2000, $2000)
 fileio:close(ref)
-for moveCnt = 0 to 10000
-    if conio:keypressed(); getc; break; fin
-next
+ref = fileio:open("MAZE.SEQ")
+seq = heapalloc(heapavail - 256)
+len = fileio:read(ref, seq, heapmark - seq)
+fileio:close(ref)
+heaprelease(seq + len)
+musicPlay(seq, TRUE)
+musicGetKey(8, @backgroundProc) // Yield every 8/16 second
+musicStop
 arg = argNext(argFirst)
 if ^arg and ^(arg + 1) == 'V'
     viewFlag = FALSE
