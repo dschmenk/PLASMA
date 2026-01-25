@@ -46,11 +46,13 @@ INT32TEST  = rel/INT32TEST\#FE1000
 SANE       = rel/SANE\#FE1000
 FPSTR      = rel/FPSTR\#FE1000
 FPU        = rel/FPU\#FE1000
+FPU_MF     = rel/FPU_MF\#FE1000
 SNDSEQ     = rel/apple/SNDSEQ\#FE1000
 PLAYSEQ    = rel/apple/PLAYSEQ\#FE1000
 PLAYPCM    = rel/apple/PLAYPCM\#FE1000
 SANITY     = rel/SANITY\#FE1000
 RPNCALC    = rel/RPNCALC\#FE1000
+RPNCALC    = rel/RPNCALC_MF\#FE1000
 LZ4        = rel/LZ4\#FE1000
 LZ4CAT     = rel/LZ4CAT\#FE1000
 MOUSE      = rel/apple/MOUSE\#FE1000
@@ -131,7 +133,7 @@ $(INITSLOT) $(SOS) $(ROD) $(SIEVE) $(PRIMEGAP) $(MOUSE) $(UTHERNET2) $(UTHERNET)
 $(HTTPD) $(TFTPD) $(ROGUE) $(ROGUEMAP) $(ROGUECOMBAT) $(SFM) $(SFMSPRT) $(GRAFIX) $(GFXDEMO) $(LINES) $(TURTLE) \
 $(SINCOS) $(HGRTILE) $(HGRFONT) $(HGRSPRITE) $(HGRLIB) $(TILETEST) $(HGRTEST) $(GRLIB) $(DGRLIB) $(VBLANK) \
 $(GRTEST) $(DGRTEST) $(MAZE) $(FILEIO_APL) $(CONIO_APL) $(JOYBUZZ) $(PORTIO) $(SPIPORT) \
-$(SDFAT) $(FATCAT) $(FATGET) $(FATPUT) $(FATWDSK) $(FATRDSK) $(INT32) $(INT32TEST) $(SANE) $(FPSTR) $(FPU) $(SANITY) \
+$(SDFAT) $(FATCAT) $(FATGET) $(FATPUT) $(FATWDSK) $(FATRDSK) $(INT32) $(INT32TEST) $(SANE) $(FPSTR) $(FPU) $(FPU_MF) $(SANITY) \
 $(LZ4) $(LZ4CAT) $(RPNCALC) $(SNDSEQ) $(PLAYSEQ) $(PLAYPCM) $(CONIOTEST)
 
 	-rm vmsrc/plvmzp.inc
@@ -386,6 +388,10 @@ $(FPU): libsrc/fpu.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AMOW libsrc/fpu.pla
 	acme --setpc 4094 -o $(FPU) libsrc/fpu.a
 
+$(FPU_MF): libsrc/fpu_mf.pla $(PLVM02) $(PLASM)
+	./$(PLASM) -AMOW libsrc/fpu_mf.pla
+	acme --setpc 4094 -o $(FPU) libsrc/fpu_mf.a
+
 $(SANITY): samplesrc/sanity.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AMOW samplesrc/sanity.pla
 	acme --setpc 4094 -o $(SANITY) samplesrc/sanity.a
@@ -397,6 +403,10 @@ $(LZ4): libsrc/lz4.pla $(PLVM02) $(PLASM)
 $(RPNCALC): samplesrc/rpncalc.pla libsrc/fpu.pla inc/fpu.plh libsrc/fpstr.pla inc/fpstr.plh inc/conio.plh $(PLVM02) $(PLASM)
 	./$(PLASM) -AMOW samplesrc/rpncalc.pla
 	acme --setpc 4094 -o $(RPNCALC) samplesrc/rpncalc.a
+
+$(RPNCALC_MF): samplesrc/rpncalc.pla libsrc/fpu_mf.pla inc/fpu.plh libsrc/fpstr.pla inc/fpstr.plh inc/conio.plh $(PLVM02) $(PLASM)
+	./$(PLASM) -AMOW samplesrc/rpncalc.pla
+	acme --setpc 4094 -o $(RPNCALC_MF) samplesrc/rpncalc.a
 
 $(ETHERIP): libsrc/etherip.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AMOW libsrc/etherip.pla
