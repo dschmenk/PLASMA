@@ -41,7 +41,7 @@ word maze[] = $0400,$0480,$0500,$0580,$0600,$0680,$0700,$0780
 word        = $0428,$04A8,$0528,$05A8,$0628,$06A8,$0728,$07A8
 word        = $0450,$04D0,$0550,$05D0,$0650,$06D0,$0750,$07D0
 
-word arg, seed, moveCnt, seq, len
+word arg, seed, moveCnt, seq
 byte entry, exit, solved, ref
 byte viewFlag = TRUE
 res[4] tics
@@ -274,7 +274,7 @@ def cellVis(x, y, dir)#0
         fin
         cellSetFlags(x, y, CELL_SEEN | SEEN_TOP | SEEN_LEFT)
         tileDraw(x, y, @mazeTileSet + 8 * (maze.[y, x] & 7))
-        if maze.[y, x + 1] & WALL_LEFT
+        if x < MAZE_WIDTH and maze.[y, x + 1] & WALL_LEFT
             if not (maze.[y, x + 1] & CELL_SEEN)
                 cellSetFlags(x + 1, y, SEEN_LEFT)
                 tileDraw(x + 1, y, @mazeTileSet + 8 * ((maze.[y, x + 1] & (maze.[y, x + 1] >> 3)) & 7))
@@ -309,7 +309,7 @@ def cellView(x, y)#0
         repeat
             vis++
             cellVis(vis, y, DIR_RIGHT)
-        until (vis >= MAZE_WIDTH) or (maze.[y, vis] & WALL_LEFT)
+        until vis >= MAZE_WIDTH or (maze.[y, vis] & WALL_LEFT)
         vis = y
         repeat
             vis++
@@ -353,7 +353,7 @@ def mazeInit#0
     exit  = conio:rnd() % MAZE_HEIGHT
     maze.[entry, 0]             = WALL_TOP
     maze.[exit, MAZE_WIDTH]     = WALL_TOP
-    if exit < MAZE_HEIGHT
+    if exit < MAZE_HEIGHT-1
         maze.[exit + 1, MAZE_WIDTH] = WALL_TOP|WALL_LEFT
     else
         maze.[exit + 1, MAZE_WIDTH] = WALL_TOP
@@ -455,22 +455,6 @@ def atoi(strptr)#1
     return num * sign
 end
 
-def backgroundProc#0
-end
-
-conio:textmode(40)
-hgrMode(hgrPage1)
-ref = fileio:open("MAZE.SPLASH")
-fileio:read(ref, $2000, $2000)
-fileio:close(ref)
-ref = fileio:open("MAZE.SEQ")
-seq = heapalloc(heapavail - 256)
-len = fileio:read(ref, seq, heapmark - seq)
-fileio:close(ref)
-heaprelease(seq + len)
-musicPlay(seq, TRUE)
-musicGetKey(8, @backgroundProc) // Yield every 8/16 second
-musicStop
 arg = argNext(argFirst)
 if ^arg and ^(arg + 1) == 'V'
     viewFlag = FALSE
@@ -479,11 +463,28 @@ fin
 if ^arg
     *rndnum = atoi(arg)
 else
+    conio:textmode(40)
+    hgrMode(hgrPage1)
+    ref = fileio:open("MAZE.SPLASH")
+    fileio:read(ref, $2000, $2000)
+    fileio:close(ref)
+    seq = musicRead("MAZE.SEQ")
+    musicPlay(seq, FALSE)
+    musicGetKey(16, NULL)
+    musicStop
+    heaprelease(seq)
     hgrMode(hgrOff)
-    puts("I, J, K, M or arrow keys to move.\n")
-    puts("Q to quit.\n")
-    puts("Add seed value to command line to\n")
-    puts("replay maze.\n\n")
+    conio:gotoxy(1, 1)
+    puts("By Resman, artwork by Daniel Henderson")
+    conio:gotoxy(3, 5)
+    puts("I, J, K, M or arrow keys to move.")
+    conio:gotoxy(15, 7)
+    puts("Q to quit.")
+    conio:gotoxy(3, 11)
+    puts("Add seed value to command line to")
+    conio:gotoxy(3, 12)
+    puts("replay maze.")
+    conio:gotoxy(1, 20)
     puts("Press a key to generate the maze...")
     while not conio:keypressed()
         conio:rnd()
