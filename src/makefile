@@ -390,7 +390,7 @@ $(FPU): libsrc/fpu.pla $(PLVM02) $(PLASM)
 
 $(FPU_MF): libsrc/fpu_mf.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AMOW libsrc/fpu_mf.pla
-	acme --setpc 4094 -o $(FPU) libsrc/fpu_mf.a
+	acme --setpc 4094 -o $(FPU_MF) libsrc/fpu_mf.a
 
 $(SANITY): samplesrc/sanity.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AMOW samplesrc/sanity.pla
