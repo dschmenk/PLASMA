@@ -409,7 +409,7 @@ def mbTicklePSG(pVIA)
     //puts("VIA address: $"); puth(pVIA); puts(" Timer Diff = "); puti(viaCheck(pVIA)); putln
     if viaCheck(pVIA) == 8 and viaCheck(pVIA) == 8 // Check twice
         pVIA->IER  = $7F  // Mask all interrupts
-        //pVIA->ACR  = $00  // Stop T1 countdown
+        //pVIA->ACR  = $00  // Stop auto T1 countdown
         pVIA->DDRB = $FF  // Output enable port A and B
         pVIA->DDRA = $FF
         pVIA->IORA = $00 // Reset MockingBoard
@@ -489,13 +489,12 @@ def mbSequence(yield, func)#0
     disableInts
     mbVIA1=>T1L = $F9C2     // 16 Ints/sec
     mbVIA1=>T1C = $F9C2     // 16 Ints/sec
-    mbVIA1->ACR = $40       // Continuous T1 interrupts
-    mbVIA1->IFR = $40       // Clear all interrupts
-    mbVIA1->IER = $C0       // Enable Timer1 interrupt
+    mbVIA1->ACR = $40       // Continuous T1 counting
+    mbVIA1->IER = $C0       // Enable Timer1 interrupt (needed for some emulators to run T1)
     psgSetup(mbVIA1)
     if mbVIA2; psgSetup(mbVIA2); fin
     overflow    = 0
-    if yield and func
+    if yield
         yieldTime = seqTime + yield
     else
         yieldTime = $7FFF
@@ -657,8 +656,9 @@ def mbSequence(yield, func)#0
         while !(mbVIA1->IFR & $40) // Wait for T1 interrupt
             if a2keypressed(); quit = TRUE; break; fin
         loop
-        mbVIA1->IFR = $40
+        mbVIA1->T1C // Read T1C-L, clear interrupt
     until quit
+    mbVIA1->IER = $7F // Mask all interrupts
     psgWrite(mbVIA1, MIXER,   $FF) // Turn everything off
     psgWrite(mbVIA1, AENVAMP, $00)
     psgWrite(mbVIA1, BENVAMP, $00)
@@ -669,9 +669,6 @@ def mbSequence(yield, func)#0
         psgWrite(mbVIA2, BENVAMP, $00)
         psgWrite(mbVIA2, CENVAMP, $00)
     fin
-    mbVIA1->ACR = $00 // Stop T1 countdown
-    mbVIA1->IER = $7F // Mask all interrupts
-    mbVIA1->IFR = $40 // Clear interrupt
     setStatusReg(status)
 end
 //
@@ -685,7 +682,7 @@ def spkrSequence(yield, func)#0
     // Start sequencing
     //
     overflow = 0
-    if yield and func
+    if yield
         yieldTime = seqTime + yield
     else
         yieldTime = $7FFF
@@ -850,7 +847,7 @@ export def musicGetKey(yield, backgroundProc)#1
     char key
 
     key = 0
-    if yield < 1; yield = 1; fin
+    if yield < 0; yield = 0; fin
     if backgroundProc == NULL; backgroundProc = @nopBackground; fin
     if seqTrack
         repeat
@@ -874,7 +871,7 @@ export def musicRead(filename)#1
     ref = fileio:open(filename)
     if ref
         if heapavail > 128
-            len = heapavail - 32
+            len = heapavail - 64
             seq = heapalloc(len)
         fin
         if seq
