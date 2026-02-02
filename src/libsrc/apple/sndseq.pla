@@ -487,11 +487,11 @@ def mbSequence(yield, func)#0
     //
     status = getStatusReg
     disableInts
-    mbVIA1->ACR = $40       // Continuous T1 interrupts
     mbVIA1=>T1L = $F9C2     // 16 Ints/sec
     mbVIA1=>T1C = $F9C2     // 16 Ints/sec
-    mbVIA1->IFR = $40       // Clear interrupt
+    mbVIA1->IFR = $7F       // Clear all interrupts
     mbVIA1->IER = $C0       // Enable Timer1 interrupt
+    mbVIA1->ACR = $40       // Continuous T1 interrupts
     psgSetup(mbVIA1)
     if mbVIA2; psgSetup(mbVIA2); fin
     overflow    = 0
@@ -551,11 +551,11 @@ def mbSequence(yield, func)#0
                 fin
                 updateTime = seqTime
             else
-                //
-                // Percussion event
-                //
                 period = seqEvent->perchanvol
                 if period
+                    //
+                    // Percussion event
+                    //
                     if (period & $80)
                         psgWrite(mbVIA1, MIXER,       $1C)   // NG on C, Tone on B, A
                         psgWrite(mbVIA1, CENVAMP,     $10)
@@ -570,15 +570,18 @@ def mbSequence(yield, func)#0
                         psgWrite(mbVIA2, ENVPERIOD+1, period)
                     fin
                 else
+                    //
+                    // End of sequence
+                    //
                     if seqRepeat
                         //
                         // Reset sequence
                         //
                         musicPlay(seqTrack, TRUE)
-                        seqTime = -1 // Offset seqTime++ later
                     else
                         musicStop
                     fin
+                    seqTime = -1 // Offset seqTime++ later
                     quit = TRUE // Exit out
                     break
                 fin
@@ -650,12 +653,15 @@ def mbSequence(yield, func)#0
         // Increment time tick
         //
         seqTime++
+        if yieldTime <= seqTime; func()#0; yieldTime = seqTime + yield; fin
         while !(mbVIA1->IFR & $40) // Wait for T1 interrupt
             if a2keypressed(); quit = TRUE; break; fin
         loop
-        mbVIA1->IFR = $40 // Clear interrupt
-        if yieldTime <= seqTime; func()#0; yieldTime = seqTime + yield; fin
+        mbVIA1->IFR = $40
     until quit
+    mbVIA1->ACR = $00 // Stop T1 countdown
+    mbVIA1->IER = $00 // Mask all interrupts
+    mbVIA1->IFR = $FF // Clear interrupt
     psgWrite(mbVIA1, MIXER,   $FF) // Turn everything off
     psgWrite(mbVIA1, AENVAMP, $00)
     psgWrite(mbVIA1, BENVAMP, $00)
@@ -666,9 +672,6 @@ def mbSequence(yield, func)#0
         psgWrite(mbVIA2, BENVAMP, $00)
         psgWrite(mbVIA2, CENVAMP, $00)
     fin
-    //mbVIA1->ACR = $00 // Stop T1 countdown
-    mbVIA1->IER = $7F // Mask all interrupts
-    mbVIA1->IFR = $40 // Clear interrupt
     setStatusReg(status)
 end
 //
@@ -737,12 +740,15 @@ def spkrSequence(yield, func)#0
                     next
                 fin
             else
-                //
-                // Percussion event
-                //
                 if seqEvent->perchanvol
+                    //
+                    // Percussion event
+                    //
                     //pcmPlay($D000, 0, 64) // Play some random sample as percussion
                 else
+                    //
+                    // End of sequence
+                    //
                     if seqRepeat
                         musicPlay(seqTrack, TRUE)
                     else
@@ -848,7 +854,7 @@ export def musicGetKey(yield, backgroundProc)#1
     if backgroundProc == NULL; backgroundProc = @nopBackground; fin
     if seqTrack
         repeat
-            musicSequence(yield, backgroundProc)#0 // Call background proc every half second
+            musicSequence(yield, backgroundProc)#0
             if keypressed()
                 key       = getc
                 seqRepeat = FALSE
