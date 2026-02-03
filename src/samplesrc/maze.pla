@@ -6,6 +6,8 @@ include "inc/int32.plh"
 include "inc/hgrlib.plh"
 include "inc/hgrtile.plh"
 include "inc/sndseq.plh"
+include "inc/lz4.plh"
+
 sysflags reshgr1 // Reserve HGR page 1
 
 const rndnum        = $4E // ZP location of RND
@@ -423,6 +425,7 @@ def mazePlay
                 fin
                 break
             is 'Q'
+            is keyescape
                 tonePlay(96, 8)#0
                 tonePlay(128, 16)#0
                 return FALSE
@@ -466,9 +469,7 @@ if ^arg
 else
     conio:textmode(40)
     hgrMode(hgrPage1)
-    ref = fileio:open("MAZE.SPLASH")
-    fileio:read(ref, $2000, $2000)
-    fileio:close(ref)
+    lz4Read("MAZE.SPLASH.LZ4", $2000, $4000, heapmark, heapmark + heapavail - 256)
     ref = fileio:open("MAZE.PCM")
     pcmlen = fileio:read(ref, heapmark, heapavail)
     fileio:close(ref)
@@ -496,32 +497,32 @@ else
     loop
     getc
 fin
+conio:textmode(40)
+conio:viewport(0, 20, 40, 4)
+hgrMode(hgrPage1)
+hgrDrawBuf(hgrPage1)
+tileDrawBuf(hgrPage1)
 repeat
-    moveCnt = 0
     seed = *rndnum
-    conio:textmode(40)
-    hgrMode(hgrPage1)
-    hgrDrawBuf(hgrPage1)
-    tileDrawBuf(hgrPage1)
+    moveCnt = 0
+    ^$C052 // Switch to all graphics/text
     mazeInit
     tileFromText(0, @mazeTileSet)
     mazeGen
     solved = mazePlay
     store32(@tics)
-    hgrMode(hgrOff)
-    if solved
-        puts("Solved!\n")
-    fin
+    conio:clear(cls)
+    ^$C053 // Switch to mixed graphics/text
+    lz4Read(solved ?? "MAZE.WIN.LZ4" :: "MAZE.LOSE.LZ4", $2000, $4000, heapmark, heapmark + heapavail - 256)
+    if conio:keypressed(); getc; fin
     puts("Seed  = "); puti(seed); putln
     puts("Moves = "); puti(moveCnt); putln
     puts("Timer = "); puti32(@tics)
     load32(@tics); divi16(1085); store32(@tics)
     puts(" ("); puti32(@tics); puts(" secs)\n")
-    for moveCnt = 0 to 1000
-        if conio:keypressed(); getc; fin
-    next
     puts("Play again? (Y/N):")
 until toupper(conio:getkey()) <> 'Y'
+hgrMode(hgrOff)
 conio:textmode(0)
 done
 
