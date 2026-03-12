@@ -44,6 +44,6 @@ The combination of all these enhancements make PLEIADES an efficient environment
 - [4/6 - 140K PLEIADES Demos](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLEIADES-2.20-DEMOS.po)
 - [5/6 - 140K PLEIADES Floating Point & Apple /// SOS](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLEIADES-2.20-FPSOS.po)
 - [6/6 - 140K PLEIADES Build](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLEIADES-2.20-BLD.po)
-- [32 MB PLEIADES Full Install including DHGR Toolkit](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLEIADES-2.20.po)
+- [32 MB PLEIADES Full Install including DHGR Toolkit](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLEIADES-2.21.po)
 - [140K Apple /// MAME Boot](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLEIADES-A3MAME.po)
 - [16 MB Apple /// MAME Hard Disk](https://github.com/dschmenk/PLASMA/blob/master/images/apple/apple3.hd)
