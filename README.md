@@ -2,8 +2,8 @@
 
 ## (**PL**asma **E**nhanced **I**nter**A**ctive **D**evelopment **E**nvironment**S**)
 
-![Pleiades](https://upload.wikimedia.org/wikipedia/commons/thumb/4/4e/Pleiades_large.jpg/1024px-Pleiades_large.jpg)
-image credit: NASA, ESA, AURA/Caltech, Palomar Observator
+![Pleiades](https://upload.wikimedia.org/wikipedia/commons/thumb/4/4e/Pleiades_large.jpg/3840px-Pleiades_large.jpg)
+image credit: NASA, ESA, AURA/Caltech, Palomar Observatory
 
 PLASMA has grown from a language compiler to a full featured interactive environment for developing and running applications on a 6502 computer. Currently the Apple // series and the Apple /// are fully supported. With the addition of FORTH and LISP to the PLASMA ecosystem as well as support for assembly programming with EDASM and even a bugfix so AppleSoft can run from the PLEIADES command line, a new designation for the expanded functionality seems in order.
 PLEIADES incorporates many feature improvements and bug fixes from the previous PLASMA 2.11 release. Here a some of the biggest updates:
@@ -44,6 +44,6 @@ The combination of all these enhancements make PLEIADES an efficient environment
 - [4/6 - 140K PLEIADES Demos](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLEIADES-2.20-DEMOS.po)
 - [5/6 - 140K PLEIADES Floating Point & Apple /// SOS](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLEIADES-2.20-FPSOS.po)
 - [6/6 - 140K PLEIADES Build](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLEIADES-2.20-BLD.po)
-- [32 MB PLEIADES Full Install including DHGR Toolkit](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLEIADES-2.20.po)
+- [32 MB PLEIADES Full Install including DHGR Toolkit](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLEIADES-2.21.po)
 - [140K Apple /// MAME Boot](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLEIADES-A3MAME.po)
 - [16 MB Apple /// MAME Hard Disk](https://github.com/dschmenk/PLASMA/blob/master/images/apple/apple3.hd)
