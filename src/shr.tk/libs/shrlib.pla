@@ -1,0 +1,199 @@
+include "inc/cmdsys.plh"
+//
+// Apple II hardware constants.
+//
+const vidctl        = $C029
+const shadow        = $C035
+const pixbuf        = $2000
+const scbbuf        = $9D00
+const palbuf        = $9E00
+const scb640        = $80       // 640 PIXEL, PAL 0, NO INT
+const scb320        = $00       // 320 PIXEL, PAL 0, NO INT, NO FILL
+
+word pal4BPP = $0000, $0007, $0070, $0077, $0700, $0707, $0770, $0777
+word         = $0CCC, $000F, $00F0, $00FF, $0F00, $0F0F, $0FF0, $0FFF
+word pal2BPP = $0000, $0777, $0CCC, $0FFF, $0000, $0777, $0CCC, $0FFF
+word         = $0000, $0777, $0CCC, $0FFF, $0000, $0777, $0CCC, $0FFF
+byte mask4BPP = $F0, $0F
+byte mask2BPP = $C0, $30, $0C, $03
+byte clr4BPPExp = $00, $11, $22, $33, $44, $55, $66, $77, $88, $99, $AA, $BB, $CC, $DD, $EE, $FF
+byte clr2BPPExp = $00, $55, $AA, $FF
+byte _clr
+word shrScanline[200]
+
+asm shrInc(buff)
+!SOURCE    "vmsrc/apple/plvmzp.inc"
+SHADOW  =       $C035
+MAINRD  =       $C002
+AUXRD   =       $C003
+MAINWRT =       $C004
+AUXWRT  =       $C005
+end
+//
+// Peek byte from AUX memory
+// This gets copied to $0100!!!
+//
+asm _auxPeek(addr)#1
+        STA     AUXRD           ; $0100
+        LDA     (ESTKH-1,X)     ; $0103
+        STA     MAINRD          ; $0105
+        RTS                     ; $0108
+end
+asm _shrSetBits(addr, data, mask)#0
+        LDY     SHADOW          ; $0109
+        TYA
+        AND     #$F7
+        STA     SHADOW
+        LDA     ESTKL+2,X
+        STA     ESTKH+1,X
+        LDA     ESTKL+1,X
+        STA     AUXRD
+        STA     AUXWRT
+        EOR     (ESTKH+1,X)
+        AND     ESTKL+0,X
+        EOR     (ESTKH+1,X)
+        STA     (ESTKH+1,X)
+        STA     MAINRD
+        STA     MAINWRT
+        STY     SHADOW
+        INX
+        INX
+        INX
+        RTS
+end
+export asm shrPeek(addr)#1
+        LDY     SHADOW
+        TYA
+        AND     #$F7
+        STA     SHADOW
+        LDA     ESTKL,X
+        STA     ESTKH-1,X
+        JSR     $0100
+        STA     ESTKL,X
+        STY     SHADOW
+        LDY     #$00
+        STY     ESTKH,X
+        RTS
+end
+export asm shrSetBits(addr, data, mask)#0
+        JMP     $0109
+end
+//
+// Poke byte into SHR memory
+//
+export asm shrPoke(addr, data)#0
+        LDY     SHADOW
+        TYA
+        AND     #$F7
+        STA     SHADOW
+        LDA     ESTKL+1,X
+        STA     ESTKH+0,X
+        LDA     ESTKL+0,X
+        STA     AUXWRT
+        STA     (ESTKH+0,X)
+        STA     MAINWRT
+        STY     SHADOW
+        INX
+        INX
+        RTS
+end
+export asm shrSet(addr, data, len)#0
+        LDA     SHADOW
+        AND     #$F7
+        STA     SHADOW
+        LDY     ESTKL+2,X
+        LDA     #$00
+        STA     DSTL
+        LDA     ESTKH+2,X
+        STA     DSTH
+        LDA     ESTKL+1,X
+        INC     ESTKH+0,X
+        STA     AUXWRT
+-       STA     (DST),Y
+        INY
+        BNE     +
+        INC     DSTH
++       DEC     ESTKL+0,X
+        BNE     -
+        DEC     ESTKH+0,X
+        BNE     -
+        STA     MAINWRT
+        LDA     SHADOW
+        ORA     #$08
+        STA     SHADOW
+        INX
+        INX
+        INX
+        RTS
+end
+export asm shrPixel(x, y)#0
+        JMP     $2000
+end
+export asm shrColor(clr)#0
+        JMP     $2000
+end
+def shrColor4BPP(clr)#0
+    _clr = clr4BPPExp[clr & $0F]
+end
+def shrColor2BPP(clr)#0
+    _clr = clr2BPPExp[clr & $03]
+end
+def shrPixel4BPP(x, y)#0
+    shrSetBits(shrScanline[y] + (x >> 1), _clr, mask4BPP[x & 1])
+end
+def shrPixel2BPP(x, y)#0
+    shrSetBits(shrScanline[y] + (x >> 2), _clr, mask2BPP[x & 3])
+end
+export def shrSCB(row, scb)#0
+    shrPoke(scbbuf + row, scb)
+end
+export def shrPalette(idx, rgbptr)#0
+    word palptr
+    byte i
+
+    palptr = palbuf + idx * 32
+    for i = 0 to 31
+        shrPoke(palptr + i, ^(rgbptr + i))
+    next
+end
+export def shrMode(mode)#0
+    byte row, scb
+
+    if mode
+        //
+        // Set super hires graphics
+        //
+        ^vidctl = ^vidctl | $C0 // Turn on linear SHR mode
+        if mode == 640
+            scb = scb640
+            *(@shrPixel + 1) = @shrPixel2BPP
+            *(@shrColor + 1) = @shrColor2BPP
+            shrPalette(0, @pal2BPP)
+        else
+            scb = scb320
+            *(@shrPixel + 1) = @shrPixel4BPP
+            *(@shrColor + 1) = @shrColor4BPP
+            shrPalette(0, @pal4BPP)
+        fin
+        for row = 0 to 199
+            shrScanline[row] = $2000 + row * 160
+            shrPoke(scbbuf + row, scb)
+        next
+        shrSet(pixbuf, 0, $7D00)
+    else
+        //
+        // Set text mode
+        //
+        ^vidctl = ^vidctl & $3F
+        call($FC58, 0, 0, 0, 0) // home()
+    fin
+end
+//
+// Put read AUX/SHR mem routines in scary location
+//
+memcpy($0100, @_auxPeek, @shrPeek - @_auxPeek)
+//
+// Keep module in memory
+//
+return modkeep
+done
