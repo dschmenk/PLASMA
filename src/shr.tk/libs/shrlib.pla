@@ -7,19 +7,21 @@ const shadow        = $C035
 const pixbuf        = $2000
 const scbbuf        = $9D00
 const palbuf        = $9E00
-const scb640        = $80       // 640 PIXEL, PAL 0, NO INT
-const scb320        = $00       // 320 PIXEL, PAL 0, NO INT, NO FILL
+const scb640        = $80       // 640 PIXELS, PAL# 0, NO INT
+const scb320        = $00       // 320 PIXELS, PAL# 0, NO INT, NO FILL
 
 word pal4BPP = $0000, $0007, $0070, $0077, $0700, $0707, $0770, $0777
 word         = $0CCC, $000F, $00F0, $00FF, $0F00, $0F0F, $0FF0, $0FFF
-word pal2BPP = $0000, $0777, $0CCC, $0FFF, $0000, $0777, $0CCC, $0FFF
-word         = $0000, $0777, $0CCC, $0FFF, $0000, $0777, $0CCC, $0FFF
+word pal2BPP = $0000, $0555, $0AAA, $0FFF, $0000, $0555, $0AAA, $0FFF
+word         = $0000, $0555, $0AAA, $0FFF, $0000, $0555, $0AAA, $0FFF
 byte mask4BPP = $F0, $0F
 byte mask2BPP = $C0, $30, $0C, $03
 byte clr4BPPExp = $00, $11, $22, $33, $44, $55, $66, $77, $88, $99, $AA, $BB, $CC, $DD, $EE, $FF
 byte clr2BPPExp = $00, $55, $AA, $FF
-byte _clr
-word shrScanline[200]
+byte clrExp
+byte shrScanLineL[200]
+byte shrScanLineH[200]
+word _addr[] // naughty
 
 asm shrInc(buff)
 !SOURCE    "vmsrc/apple/plvmzp.inc"
@@ -102,12 +104,14 @@ export asm shrSet(addr, data, len)#0
         AND     #$F7
         STA     SHADOW
         LDY     ESTKL+2,X
+        LDA     ESTKL+0,X
+        BEQ     + 
+        INC     ESTKH+0,X
         LDA     #$00
-        STA     DSTL
++       STA     DSTL
         LDA     ESTKH+2,X
         STA     DSTH
         LDA     ESTKL+1,X
-        INC     ESTKH+0,X
         STA     AUXWRT
 -       STA     (DST),Y
         INY
@@ -126,6 +130,77 @@ export asm shrSet(addr, data, len)#0
         INX
         RTS
 end
+//def shrPixel4BPP(x, y)#0
+//    shrSetBits(shrScanline[y] + (x >> 1), _clr, mask4BPP[x & 1])
+//end
+asm shrPixel4BPP(x, y)#0
+        DEX
+        LDY     #$00
+        LDA     ESTKH+2,X
+        LSR
+        ROR     ESTKL+2,X
+        BCC     +
+        INY
+end
+asm _pix4A
++       LDA     $3000,Y         ; mask4BPP[]
+        STA     ESTKL+0,X
+        LDY     ESTKL+1,X
+        LDA     ESTKL+2,X
+        CLC
+end
+asm _pix4B
+        ADC     $1000,Y         ; shrScanlineL[]
+        STA     ESTKL+2,X
+        LDA     #$00
+end
+asm _pix4C
+        ADC     $1800,Y         ; shrScanLineH[]
+        STA     ESTKH+2,X
+end
+asm _pix4D
+        LDA     $2000           ; clrExp
+        STA     ESTKL+1,X
+        JMP     $0109
+end
+//def shrPixel2BPP(x, y)#0
+//    shrSetBits(shrScanline[y] + (x >> 2), _clr, mask2BPP[x & 3])
+//end
+asm shrPixel2BPP(x, y)#0
+        DEX
+        LDY     #$00
+        LDA     ESTKH+2,X
+        LSR
+        ROR     ESTKL+2,X
+        BCC     +
+        INY
++       LSR
+        ROR     ESTKL+2,X
+        BCC     +
+        INY
+        INY
+end
+asm _pix2A
++       LDA     $3000,Y         ; mask2BPP[]
+        STA     ESTKL+0,X
+        LDY     ESTKL+1,X
+        LDA     ESTKL+2,X
+        CLC
+end
+asm _pix2B
+        ADC     $1000,Y         ; shrScanlineL[]
+        STA     ESTKL+2,X
+        LDA     #$00
+end
+asm _pix2C
+        ADC     $1800,Y         ; shrScanLineH[]
+        STA     ESTKH+2,X
+end
+asm _pix2D
+        LDA     $2000           ; clrExp
+        STA     ESTKL+1,X
+        JMP     $0109
+end
 export asm shrPixel(x, y)#0
         JMP     $2000
 end
@@ -133,16 +208,10 @@ export asm shrColor(clr)#0
         JMP     $2000
 end
 def shrColor4BPP(clr)#0
-    _clr = clr4BPPExp[clr & $0F]
+    clrExp = clr4BPPExp[clr & $0F]
 end
 def shrColor2BPP(clr)#0
-    _clr = clr2BPPExp[clr & $03]
-end
-def shrPixel4BPP(x, y)#0
-    shrSetBits(shrScanline[y] + (x >> 1), _clr, mask4BPP[x & 1])
-end
-def shrPixel2BPP(x, y)#0
-    shrSetBits(shrScanline[y] + (x >> 2), _clr, mask2BPP[x & 3])
+    clrExp = clr2BPPExp[clr & $03]
 end
 export def shrSCB(row, scb)#0
     shrPoke(scbbuf + row, scb)
@@ -157,7 +226,7 @@ export def shrPalette(idx, rgbptr)#0
     next
 end
 export def shrMode(mode)#0
-    byte row, scb
+    byte scb
 
     if mode
         //
@@ -175,10 +244,7 @@ export def shrMode(mode)#0
             *(@shrColor + 1) = @shrColor4BPP
             shrPalette(0, @pal4BPP)
         fin
-        for row = 0 to 199
-            shrScanline[row] = $2000 + row * 160
-            shrPoke(scbbuf + row, scb)
-        next
+        shrSet(scbbuf, scb, 200)
         shrSet(pixbuf, 0, $7D00)
     else
         //
@@ -192,6 +258,26 @@ end
 // Put read AUX/SHR mem routines in scary location
 //
 memcpy($0100, @_auxPeek, @shrPeek - @_auxPeek)
+//
+// Fill HiLo scan line address arrays
+//
+_addr = pixbuf
+for clrExp = 0 to 199
+    shrScanlineL[clrExp] = _addr
+    shrScanlineH[clrExp] = _addr >> 8
+    _addr = _addr + 160
+next
+//
+// Fixups
+//
+_pix4A:1 = @mask4BPP
+_pix4B:1 = @shrScanLineL
+_pix4C:1 = @shrScanLineH
+_pix4D:1 = @clrExp
+_pix2A:1 = @mask2BPP
+_pix2B:1 = @shrScanLineL
+_pix2C:1 = @shrScanLineH
+_pix2D:1 = @clrExp
 //
 // Keep module in memory
 //
