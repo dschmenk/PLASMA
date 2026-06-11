@@ -4,6 +4,7 @@ const OP_SRC    = 0
 const OP_XOR    = 1
 const OP_AND    = 2
 const OP_OR     = 3
+const OP_NONE   = 4
 //
 // Apple II graphics soft switches
 //
@@ -276,8 +277,11 @@ byte[] dhgrMask = 13, 12, 7, 14
 //
 const DST_SCREEN    = 0
 const DST_MEMORY    = 1
+const DST_NONE      = 3
 word surfWidth, surfWidth7, surfHeight, surfPtr, surfSpan
-byte dhgrSurface, opScr, opMem
+byte dhgrSurface    = DST_NONE
+byte opScr          = OP_NONE
+byte opMem          = OP_NONE
 //
 // Surface independent entrypoints
 //
@@ -2417,15 +2421,15 @@ def dhgrOpMem(op)#0
     wend
 end
 export def dhgrOp(op)#0
-    if dhgrSurface // Memory
-        if op <> opMem
-            opMem = op
-            dhgrOpMem(opMem)
-        fin
-    else // Screen
+    if dhgrSurface == DST_SCREEN
         if op <> opScr
             opScr = op
             dhgrOpScr(opScr)
+        fin
+    else // Memory
+        if op <> opMem
+            opMem = op
+            dhgrOpMem(opMem)
         fin
     fin
 end
@@ -2435,7 +2439,7 @@ export def dhgrSurfScr(op)#0
     surfHeight = 192
     surfPtr    = $2000
     surfSpan   = 10
-    if dhgrSurface == DST_MEMORY
+    if dhgrSurface <> DST_SCREEN
         dhgrSurface    = DST_SCREEN
         dcgrPixel:1    = @dcgrPlotScr
         dcgrHLin:1     = @dcgrHLinScr
@@ -2458,7 +2462,7 @@ export def dhgrSurfMem(op, memh, memptr, memspan)#0
     surfHeight = memh
     surfPtr    = memptr
     surfSpan   = memspan
-    if dhgrSurface == DST_SCREEN
+    if dhgrSurface <> DST_MEMORY
         dhgrSurface    = DST_MEMORY
         dcgrPixel:1    = @extPlotMem
         dcgrHLin:1     = @extHLinMem
@@ -2539,7 +2543,7 @@ export def dhgrMode(mode)#1
         ^store80ena = 0
         dhgrOpMem(OP_SRC)
         dhgrOpScr(OP_SRC)
-        dhgrSurface = DST_MEMORY
+        dhgrSurface = DST_NONE
         dhgrSurfScr(OP_SRC)
         dcgrColor(0)
         dhgrClearBl7(0, 0, 20, 192)
