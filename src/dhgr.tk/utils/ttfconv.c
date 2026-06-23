@@ -18,6 +18,7 @@
 #define GLYPH_COUNT (GLYPH_LAST-GLYPH_FIRST+1)
 #define FONT_AA     0x40
 int fontFormat = FONT_AA;
+int narrow = 0;
 /*
  * Bit reversals
  */
@@ -47,7 +48,7 @@ void write_glyph(FILE *fp, int left, int top, int width, int height, int advance
     glyphdef[1] = -top;
     glyphdef[2] = fontFormat == FONT_AA ? (width + 3) / 4 : width;
     glyphdef[3] = height;
-    glyphdef[4] = advance;
+    glyphdef[4] = advance - narrow;
     fwrite(&glyphdef, 1, 5, fp);
     swapbuf = malloc(pitch * height);
     if (fontFormat == FONT_AA)
@@ -224,6 +225,9 @@ int main(int argc, char **argv)
                     break;
                 case 'I':
                     clrRot = clrRotWonB;
+                    break;
+                case 'N':
+                    narrow = atoi(&argv[0][2]);
                     break;
             }
         }

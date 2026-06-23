@@ -1,0 +1,387 @@
+include "../../inc/cmdsys.plh"
+include "../../inc/args.plh"
+include "../../inc/matchfiles.plh"
+include "../../inc/fileio.plh"
+include "../../inc/conio.plh"
+include "../../inc/vblank.plh"
+include "../../inc/sndseq.plh"
+include "../../inc/joybuzz.plh"
+include "../inc/dhgrlib.plh"
+include "../inc/dhgrutils.plh"
+include "sean.plh"
+sysflags resxtxt1|reshgr1|resxhgr1
+
+var arg
+//
+// Tiles
+//
+var tileList  = NULL
+byte tileRow1 =  1,  2,  3,  4,  5,  5,  5,  6, 19, 20
+byte tileRow2 =  8,  9,  9,  9,  9,  9,  9,  9,  9,  9
+byte tileRow3 =  9,  9,  9,  9,  9,  9,  9,  9,  9,  9
+byte tileRow4 =  8,  9,  9, 10, 11, 11, 11, 12,  9,  9
+byte tileRow5 =  9,  9,  9, 13, 14, 14, 14, 15,  9,  9
+byte tileRow6 =  8,  9,  9, 16, 17, 17, 17, 18,  9,  9
+byte tileRow7 =  9,  9,  9,  9,  9,  9,  9,  9,  9,  9
+byte tileRow8 =  8,  9,  9,  9,  9,  9,  9,  9,  9,  9
+var tileMap   = @tileRow1, @tileRow2, @tileRow3, @tileRow4
+var           = @tileRow5, @tileRow6, @tileRow7, @tileRow8 
+//
+// Sprites
+//
+var spriteList = NULL
+var hoard // Equipment
+var horde // People
+//
+// Nerds
+//
+const NUM_NERDS    = 4
+const LOOK_FORWARD = 0
+const LOOK_RIGHT   = 1
+const LOOK_LEFT    = 2
+const LOOK_AWAY    = 3
+const MOVE_DOWN    = 0
+const MOVE_RIGHT   = 1
+const MOVE_LEFT    = 2
+const MOVE_UP      = 3
+const MOVE_NONE    = 4
+const MOVE_MASK    = 3
+byte nerdPlayer    = 0
+byte[NUM_NERDS] nerdX = 2, 3, 4, 5
+byte[NUM_NERDS] nerdY = 2,  2,  2,  2
+byte[NUM_NERDS] nerdDir = LOOK_LEFT, LOOK_FORWARD, LOOK_FORWARD, LOOK_RIGHT
+//
+// Levels
+//
+const LEVEL_SCALE = 10
+//
+// This fixes the Virtual ][ bug with outstanding Mockingboard interrupts
+//
+byte[4] params
+asm serviceCYA#0
+        CLC
+        RTS
+end
+//
+// Load assets
+//
+def loadTiles#0
+    byte refnum
+
+    refnum = fileio:open("TILES")
+    if refnum
+        tileList = heapAlloc(TILE_SIZE*NUM_TILES)
+        if tileList and fileio:read(refnum, tileList, TILE_SIZE*NUM_TILES) <> TILE_SIZE*NUM_TILES
+            heapRelease(tileList)
+            tileList = NULL
+            puts("Error reading tiles\n")
+        fin
+        fileio:close(refnum)
+    fin
+end
+def loadSprites#0
+    byte refnum
+
+    refnum = fileio:open("SPRITES")
+    if refnum
+        spriteList = heapAlloc(SPRITE_SIZE*NUM_SPRITES)
+        if spriteList and fileio:read(refnum, spriteList, SPRITE_SIZE*NUM_SPRITES) <> SPRITE_SIZE*NUM_SPRITES
+            heapRelease(spriteList)
+            spriteList = NULL
+            puts("Error reading sprites\n")
+        fin
+        fileio:close(refnum)
+    fin
+end
+def drawMap#0
+    byte i, j, k, l
+
+    for j = TILEMAP_HEIGHT/2-1 downto 0
+        k = TILEMAP_HEIGHT-1 - j
+        for i = TILEMAP_WIDTH/2-1 downto 0
+            l = TILEMAP_WIDTH-1 - i
+            dhgrMemBl7(i*TILE_WIDTH7, j*TILE_HEIGHT, TILE_WIDTH7, TILE_HEIGHT, tileList+(tileMap.[j,i]-1)*TILE_SIZE, TILE_SPAN)
+            dhgrMemBl7(i*TILE_WIDTH7, k*TILE_HEIGHT, TILE_WIDTH7, TILE_HEIGHT, tileList+(tileMap.[k,i]-1)*TILE_SIZE, TILE_SPAN)
+            dhgrMemBl7(l*TILE_WIDTH7, j*TILE_HEIGHT, TILE_WIDTH7, TILE_HEIGHT, tileList+(tileMap.[j,l]-1)*TILE_SIZE, TILE_SPAN)
+            dhgrMemBl7(l*TILE_WIDTH7, k*TILE_HEIGHT, TILE_WIDTH7, TILE_HEIGHT, tileList+(tileMap.[k,l]-1)*TILE_SIZE, TILE_SPAN)
+        next
+    next
+end
+def drawScore#0
+    dcgrColor(CLR_WHITE)
+    dcgrStr(55, 14, "Score: 1234")
+    dcgrColor(CLR_BLACK)
+    dcgrBoldStr(CLR_GREEN, 6, 2*TILE_HEIGHT-14, "1")
+    dcgrColor(CLR_BLACK)
+    dcgrBoldStr(CLR_BROWN, 6, 4*TILE_HEIGHT-14, "2")
+    dcgrColor(CLR_BLACK)
+    dcgrBoldStr(CLR_GREY, 6, 6*TILE_HEIGHT-14, "3")
+    dcgrColor(CLR_BLACK)
+    dcgrBoldStr(CLR_ORANGE, 6, 8*TILE_HEIGHT-14, "4")
+end
+def nerdHit(x, y)
+    byte i
+
+    for i = 0 to NUM_NERDS-1
+        if x == nerdX[i] and y == nerdY[i]; return TRUE; fin
+    next
+    return FALSE
+end
+def moveNerd(nerd, booty, dir)
+    byte oldX, oldY
+
+    oldX = nerdX[nerd]
+    oldY = nerdY[nerd]
+    when dir
+        is MOVE_UP
+            if nerdY[nerd] <= 1 or tileMap.[nerdY[nerd] - 1, nerdX[nerd]] <> TILE_FLOOR or nerdHit(nerdX[nerd], nerdY[nerd] - 1)
+              return FALSE
+            fin
+            nerdY[nerd]--
+            nerdDir[nerd] = LOOK_AWAY
+            break
+        is MOVE_LEFT
+            if nerdX[nerd] < 1 or tileMap.[nerdY[nerd], nerdX[nerd] - 1] <> TILE_FLOOR or nerdHit(nerdX[nerd] - 1, nerdY[nerd])
+                return FALSE
+            fin
+            nerdX[nerd]--
+            nerdDir[nerd] = LOOK_LEFT
+            break
+        is MOVE_RIGHT
+            if nerdX[nerd] >= 9 or tileMap.[nerdY[nerd], nerdX[nerd] + 1] <> TILE_FLOOR or nerdHit(nerdX[nerd] + 1, nerdY[nerd])
+                return FALSE
+            fin
+            nerdX[nerd]++
+            nerdDir[nerd] = LOOK_RIGHT
+            break
+        is MOVE_DOWN
+            if nerdY[nerd] >= 7 or tileMap.[nerdY[nerd] + 1, nerdX[nerd]] <> TILE_FLOOR or nerdHit(nerdX[nerd], nerdY[nerd] + 1)
+                return FALSE
+            fin
+            nerdY[nerd]++
+            nerdDir[nerd] = LOOK_FORWARD
+            break
+    wend
+    dhgrMemBl7(oldX * TILE_WIDTH7,                                  \
+                oldY * TILE_HEIGHT,                                 \
+                TILE_WIDTH7,                                        \
+                TILE_HEIGHT,                                        \
+                tileList + (tileMap.[oldY, oldX] - 1)*TILE_SIZE,    \
+                TILE_SPAN)
+    dcgrPixMap(nerdX[nerd] * TILE_WIDTH,        \
+                nerdY[nerd] * TILE_HEIGHT + 2,  \
+                SPRITE_WIDTH,                   \
+                SPRITE_HEIGHT,                  \
+                spriteList + (HORDE_BASE + nerd*NUM_NERDS + nerdDir[nerd])*SPRITE_SIZE)
+    if booty
+        dcgrPixMap(nerdX[nerd] * TILE_WIDTH,    \
+                nerdY[nerd] * TILE_HEIGHT + 6,  \
+                SPRITE_WIDTH,                   \
+                SPRITE_HEIGHT,                  \
+                spriteList + (booty - 1)*SPRITE_SIZE)
+    fin
+    return TRUE
+end
+def playGG(level)#0
+    byte nerd, level, try
+    byte joyEn, joyX, joyY, btn0, btn1, buzz
+    byte joyLeft, joyRight, joyUp, joyDown
+    var[NUM_NERDS] update
+    byte[NUM_NERDS] booty
+
+    booty  = 0
+    joyEn  = FALSE
+    joyX, joyY, btn0, btn1 = joyPos(0)
+    if joyX < MAX_JOY and joyY < MAX_JOY
+        joyEn    = TRUE
+        joyLeft  = joyX / 2
+        joyRight = (joyX + MAX_JOY) / 2
+        joyUp    = joyY / 2
+        joyDown  = (joyY + MAX_JOY) / 2 
+    fin
+    for nerd = 0 to NUM_NERDS-1
+        booty[nerd] = 0
+        update[nerd] = conio:rnd() % (level * LEVEL_SCALE) + 1
+        moveNerd(nerd, 0, MOVE_NONE)
+    next
+    update[nerdPlayer] = level + 1
+    buzz = 0
+    while TRUE
+        if buzz; buzz = ((buzz + 1) & 63) + 1; fin
+        joyX, joyY, btn0, btn1 = joyPos(buzz)
+        for nerd = 0 to NUM_NERDS-1
+            if update[nerd]
+                update[nerd]--
+            else
+                if nerd == nerdPlayer
+                    if joyEn
+                        if joyX < joyLeft
+                            moveNerd(nerdPlayer, booty[nerdPlayer], MOVE_LEFT)
+                        elsif joyX > joyRight
+                            moveNerd(nerdPlayer, booty[nerdPlayer], MOVE_RIGHT)
+                        fin
+                        if joyY < joyUp
+                            moveNerd(nerdPlayer, booty[nerdPlayer], MOVE_UP)
+                        elsif joyY > joyDown
+                            moveNerd(nerdPlayer, booty[nerdPlayer], MOVE_DOWN)
+                        fin
+                    fin
+                    if conio:keypressed()
+                        when toupper(conio:getkey())
+                            is 'I'
+                            is keyarrowup
+                                moveNerd(nerdPlayer, booty[nerdPlayer], MOVE_UP)
+                                break
+                            is 'J'
+                            is keyarrowleft
+                                moveNerd(nerdPlayer, booty[nerdPlayer], MOVE_LEFT)
+                                break
+                            is 'K'
+                            is keyarrowright
+                                moveNerd(nerdPlayer, booty[nerdPlayer], MOVE_RIGHT)
+                                break
+                            is 'M'
+                            is keyarrowdown
+                                moveNerd(nerdPlayer, booty[nerdPlayer], MOVE_DOWN)
+                                break
+                            is 'B'
+                                booty[nerdPlayer]++
+                                if booty[nerdPlayer] > HOARD_NUM; booty[nerdPlayer] = 0; fin
+                                moveNerd(nerdPlayer, booty[nerdPlayer], MOVE_NONE)
+                                break
+                            is 'P'
+                                nerdPlayer++
+                                if nerdPlayer >= NUM_NERDS; nerdPlayer = 0; fin
+                                break
+                            is 'S'
+                                if buzz; buzz = 0; else buzz = 1; fin
+                                break
+                            is '1'
+                                level = 9
+                                break
+                            is '2'
+                                level = 8
+                                break
+                            is '3'
+                                level = 7
+                                break
+                            is '4'
+                                level = 6
+                                break
+                            is '5'
+                                level = 5
+                                break
+                            is '6'
+                                level = 4
+                                break
+                            is '7'
+                                level = 3
+                                break
+                            is '8'
+                                level = 2
+                                break
+                            is '9'
+                                level = 1
+                                break
+                            is '0'
+                                level = 0
+                                break
+                            is keyescape
+                                return
+                        wend
+                    fin
+                    update[nerdPlayer] = level + 1
+                else // Move NPC
+                    try = 4
+                    while try and not moveNerd(nerd, booty[nerd], (conio:rnd() + 2) & MOVE_MASK); try--; loop
+                    update[nerd] = level * LEVEL_SCALE + 1
+                fin
+            fin
+        next
+    loop
+end
+def menu
+    byte i
+
+    screenRead("MENU.DHGR")
+    getc
+    dcgrColor(CLR_PINK)
+    dhgrClearBl7(0, 0, SCR_WIDTH7, SCR_HEIGHT)
+    dcgrColor(CLR_BLACK)
+    dhgrClearBl7(1, 12, 7, 110)
+    dhgrClearBl7(8, 76, 5, 46)
+    dcgrColor(CLR_YELLOW)
+    dhgrClearBl7(1, 122, 12, 64)
+    dcgrColor(CLR_AQUA)
+    dhgrClearBl7(2, 35, 5, 58)
+    dcgrVLin(37, 89, 13)
+    dcgrVLin(37, 89, 49)
+    dcgrVLin(39, 87, 12)
+    dcgrVLin(39, 87, 50)
+    dhgrClearBl7(10, 18, 9, 48)
+    for i = 0 to 3
+        dcgrPixMap(i*TILE_WIDTH + 74, 22, SPRITE_WIDTH, SPRITE_HEIGHT, spriteList + i*SPRITE_SIZE)
+        dcgrPixMap(i*TILE_WIDTH + 74, 24+SPRITE_HEIGHT, SPRITE_WIDTH, SPRITE_HEIGHT, spriteList + (i*4+HORDE_BASE)*SPRITE_SIZE)
+    next
+    dcgrColor(CLR_BLACK)
+    dcgrStr(15, 44, ">")
+    dcgrStr(15, 53, "SEAN'S")
+    dcgrStr(15, 62, "GARAGE")
+    dcgrStr(15, 71, "GIVEAWAY")
+    dcgrStr(15, 80, ">")
+    dcgrStr(92,  84, "P) Play")
+    dcgrStr(92, 104, "I) Info")
+    dcgrStr(92, 124, "N) Nerd")
+    dcgrStr(92, 144, "S) Scores")
+    dcgrStr(92, 164, "Q) Quit")
+    dcgrStr(92, 180, "8 bit shack")
+    dcgrStr(98, 190, "2026")
+    return getc
+end
+def randomize#0
+    conio:rnd()
+end
+//
+// Import test harness
+//
+arg = argNext(argFirst)
+while ^arg
+    arg = argNext(arg)
+loop
+dhgrMode(DHGR_COLOR_MODE)
+//screenRead("SPLASH.DHGR")
+//
+// Hook CYA IRQ handler into ProDOS IRQ chain
+//
+params.0 = 2
+params.1 = 3
+params:2 = @serviceCYA
+syscall($40, @params)
+//
+// Play opening sequence
+//
+//arg = musicRead("GG.SEQ")
+//musicPlay(arg, FALSE)
+//musicGetKey(8, @randomize)
+//heaprelease(arg)
+dcgrFont(FONT_DEF_THIN)
+loadTiles
+loadSprites
+if tileList <> NULL and spriteList <> NULL
+    menu
+    //screenRead("GG.DHGR")
+    //getc
+    drawMap
+    drawScore
+    playGG(9)
+fin
+dhgrMode(DHGR_TEXT_MODE)
+//
+// Detach interrupts
+//
+params.0 = 1
+params.1 = 0
+syscall($41, @params)
+puts("Memory free: "); puti(heapAvail); puts(" bytes\n")
+return 0
+done

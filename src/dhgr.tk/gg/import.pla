@@ -1,0 +1,268 @@
+include "../../inc/cmdsys.plh"
+include "../../inc/args.plh"
+include "../../inc/matchfiles.plh"
+include "../../inc/fileio.plh"
+include "../../inc/conio.plh"
+include "../../inc/vblank.plh"
+include "../inc/dhgrlib.plh"
+include "../inc/dhgrutils.plh"
+include "sean.plh"
+sysflags resxtxt1|reshgr1|resxhgr1
+
+var arg
+//
+// Tiles
+//
+var tileList         = NULL
+byte tileRow1        =  1,  2,  3,  4,  5,  5,  5,  6,  3,  7
+byte tileRow2        =  8,  9,  9,  9,  9,  9,  9,  9,  9,  9
+byte tileRow3        =  9,  9,  9,  9,  9,  9,  9,  9,  9,  9
+byte tileRow4        =  8,  9,  9, 10, 11, 11, 11, 12,  9,  9
+byte tileRow5        =  9,  9,  9, 13, 14, 14, 14, 15,  9,  9
+byte tileRow6        =  8,  9,  9, 16, 17, 17, 17, 18,  9,  9
+byte tileRow7        =  9,  9,  9,  9,  9,  9,  9,  9,  9,  9
+byte tileRow8        =  9,  9,  9,  9,  9,  9,  9,  9,  9,  9
+var tileMap          = @tileRow1, @tileRow2, @tileRow3, @tileRow4
+var                  = @tileRow5, @tileRow6, @tileRow7, @tileRow8 
+char tileBaseName    = "TILE"
+//
+// Sprites
+//
+var spriteList       = NULL
+char spriteBaseName  = "SPRITE"
+var hoard // Equipment
+var horde // People
+//
+// Opening screen text
+//
+char Title = "Every year, Sean opens "
+char       = "his garage and heart."
+char       = "Everything's free."
+char       = "One rule: Use 'em, don't sell 'em."
+char       = "Event starts - snag the most"
+char       = "computers before time runs out!"
+char       = "Spot a red box?"
+char       = "Show Sean - it's the jackpot!"
+char       = "Beat the rivals. Have fun. Go!"
+char       = ""
+//
+// Double Lores conversion arrays.
+//
+const DLGRFRAME_SIZE   = 2048
+const DLGRFRAME_WIDTH  = 80
+const DLGRFRAME_HEIGHT = 48
+word rowOfst = $0000,$0080,$0100,$0180,$0200,$0280,$0300,$0380
+word         = $0028,$00A8,$0128,$01A8,$0228,$02A8,$0328,$03A8
+word         = $0050,$00D0,$0150,$01D0,$0250,$02D0,$0350,$03D0
+byte  rotClr = $00,$22,$44,$66,$888,$AA,$CC,$EE
+byte         = $11,$33,$55,$77,$99,$BB,$DD,$FF
+//
+// DLGR import routines
+//
+def dlgr2dhgr(dlgrPtr, left, top, width, height)#0
+    byte i, j, cl, ch
+    var rowPtr
+
+    for j = 0 to height - 1 step 2
+        rowPtr = dlgrPtr + rowOfst[(j + top)/2]
+        for i = 0 to width - 1 step 2
+            cl = ^(rowPtr + (i + left)/2 + 1024)
+            ch = ^(rowPtr + (i + left)/2)
+            dcgrColor(rotClr[cl & $0F])
+            dcgrPixel(i, j)
+            dcgrColor(ch)
+            dcgrPixel(i + 1, j)
+            dcgrColor(rotClr[cl >> 4])
+            dcgrPixel(i, j + 1)
+            dcgrColor(ch >> 4)
+            dcgrPixel(i + 1, j + 1)
+        next
+    next
+end
+def dlgr2pix(dlgrPtr, left, top, width, height, pixPtr)#0
+    byte i, j, cl, ch, halfwidth
+    var rowPtr
+
+    halfwidth = width / 2
+    for j = 0 to height - 1 step 2
+        rowptr = dlgrPtr + rowOfst[(j + top)/2]
+        for i = 0 to halfwidth - 1
+            cl = ^(rowPtr + (i + left) + 1024)
+            ch = ^(rowPtr + (i + left))
+            pixPtr->[i]             =  (rotClr[cl & $0F] & $0F) | (ch << 4)
+            pixPtr->[i + halfwidth] = ((rotClr[cl >> 4]) & $0F) | (ch & $F0)
+        next
+        pixPtr = pixPtr + width
+    next
+end
+def dlgrRead(file)#1
+    var frameptr
+    byte refnum
+
+    frameptr = NULL
+    refnum = fileio:open(file)
+    if refnum
+        frameptr = heapAlloc(DLGRFRAME_SIZE)
+        if frameptr and fileio:read(refnum, frameptr, DLGRFRAME_SIZE) <> DLGRFRAME_SIZE
+            heapRelease(frameptr)
+            frameptr = NULL
+            puts("Error reading: "); puts(file); putln
+        fin
+        fileio:close(refnum)
+    fin
+    return frameptr
+end
+//
+// Render title screen
+//
+def drawTitle#0
+    byte strX, strY, extX, extY
+    byte h, v
+    var strTitle
+
+    screenRead("GGRAW.DHGR")
+    dcgrFont(fontRead("GG.FON"))
+    strTitle = @Title
+    strY    = 100
+    while ^strTitle and strY < 192
+        extX, extY = dcgrStrExtents(strTitle)
+        strX = 70 - (extX + 1)/2
+        dcgrColor(CLR_BLACK)
+        dcgrRect(strX - 1, strY - extY + 1, extX + 4, extY + 2)
+        dcgrRect(strX - 2, strY - extY + 2, extX + 6, extY)
+        dcgrColor(CLR_WHITE)
+        dcgrStr(strX, strY, strTitle)
+        strY = strY + extY + 2// 12
+        strTitle = strTitle + ^strTitle + 1
+    loop
+    screenWrite("GG.DHGR")
+end
+def strcati(str, i)#0
+    if i >= 10; strcati(str, i / 10); fin
+    ^str++
+    ^(str + (^str)) = (i % 10 + '0')
+end
+def itoa(str, i)#1
+    ^str = 0
+    if i < 0; ^str = 1; ^(str+1) = '-'; i = -i; fin
+    strcati(str, i)
+    return str
+end
+def importTiles#0
+    var dlgrPtr, tilePtr
+    byte i
+    char tileFile[64]
+    char numStr[4]
+
+    tileList = heapAlloc(TILE_SIZE * NUM_TILES)
+    if tileList
+        tilePtr = tileList
+        for i = 1 to NUM_TILES
+            strcpy(@tileFile, @tileBaseName)
+            strcat(@tileFile, itoa(@numStr, i))
+            puts(@tileFile); putln
+            dhgrSurfMem(OP_SRC, TILE_HEIGHT, tilePtr, TILE_SPAN)
+            dlgrPtr = dlgrRead(@tileFile)
+            if dlgrPtr
+                dlgr2dhgr(dlgrPtr, 0, 0, TILE_WIDTH, TILE_HEIGHT)
+                heapRelease(dlgrPtr)
+            else
+                heapRelease(tileList)
+                tileList = NULL
+                return
+            fin
+            tilePtr = tilePtr + TILE_SIZE
+        next
+    fin
+end
+def importSprites#0
+    var dlgrPtr, spritePtr
+    byte i
+    char spriteFile[64]
+    char numStr[4]
+
+    spriteList = heapAlloc(SPRITE_SIZE * NUM_SPRITES)
+    if spriteList
+        spritePtr = spriteList
+        for i = 1 to NUM_SPRITES
+            strcpy(@spriteFile, @spriteBaseName)
+            strcat(@spriteFile, itoa(@numStr, i))
+            puts(@spriteFile); putln
+            dlgrPtr = dlgrRead(@spriteFile)
+            if dlgrPtr
+                dlgr2pix(dlgrPtr, 0, 0, SPRITE_WIDTH, SPRITE_HEIGHT, spritePtr)
+                heapRelease(dlgrPtr)
+            else
+                heapRelease(spriteList)
+                spriteList = NULL
+                return
+            fin
+            spritePtr = spritePtr + SPRITE_SIZE
+        next
+    fin
+end
+def exportTiles#0
+    byte refnum
+
+    fileio:destroy("TILES")
+    fileio:create("TILES", $06, $0000)
+    refnum = fileio:open("TILES")
+    if not refnum or (fileio:write(refnum, tileList, TILE_SIZE * NUM_TILES) <> TILE_SIZE * NUM_TILES)
+        puts("Error writing tiles\n")
+    fin
+    fileio:close(refnum)
+end
+def exportSprites#0
+    byte refnum
+
+    fileio:destroy("SPRITES")
+    fileio:create("SPRITES", $06, $0000)
+    refnum = fileio:open("SPRITES")
+    if not refnum or (fileio:write(refnum, spriteList, SPRITE_SIZE * NUM_SPRITES) <> SPRITE_SIZE * NUM_SPRITES)
+        puts("Error writing tiles\n")
+    fin
+    fileio:close(refnum)
+end
+def drawMap#0
+    byte i, j
+
+    for j = 0 to TILEMAP_HEIGHT-1
+        for i = 0 to TILEMAP_WIDTH-1
+            dhgrMemBl7(i*TILE_WIDTH7, j*TILE_HEIGHT, TILE_WIDTH7, TILE_HEIGHT, tileList+(tileMap.[j,i]-1)*TILE_SIZE, TILE_SPAN)
+        next
+    next
+end
+def drawSprites#0
+    byte i
+
+    for i = 0 to HOARD_NUM-1
+        dcgrPixMap((i + 3) * TILE_WIDTH, 4*TILE_HEIGHT+2, SPRITE_WIDTH, SPRITE_HEIGHT, spriteList + i * SPRITE_SIZE)
+    next
+    for i = 0 to HORDE_NUM-1
+        dcgrPixMap((i % 10)*TILE_WIDTH, 6*TILE_HEIGHT+2 + (i/10)*TILE_HEIGHT, SPRITE_WIDTH, SPRITE_HEIGHT, spriteList + (i+HORDE_BASE)*SPRITE_SIZE)
+    next
+end
+//
+// Import test harness
+//
+arg = argNext(argFirst)
+while ^arg
+    arg = argNext(arg)
+loop
+importTiles
+importSprites
+if tileList <> NULL and spriteList <> NULL
+    dhgrMode(DHGR_COLOR_MODE)
+    drawMap
+    //dcgrColor(CLR_WHITE)
+    //dhgrClearBl7(0, 0, SCR_WIDTH7, SCR_HEIGHT)
+    drawSprites
+    //screenWrite("SPRITES.DHGR")
+    drawTitle
+    exportTiles
+    exportSprites
+    getc
+    dhgrMode(DHGR_TEXT_MODE)
+fin
+return 0
+done
