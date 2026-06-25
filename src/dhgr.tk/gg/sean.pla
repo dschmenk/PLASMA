@@ -2,7 +2,6 @@ include "../../inc/cmdsys.plh"
 include "../../inc/args.plh"
 include "../../inc/fileio.plh"
 include "../../inc/conio.plh"
-include "../../inc/vblank.plh"
 include "../../inc/sndseq.plh"
 include "../../inc/joybuzz.plh"
 include "../inc/dhgrlib.plh"
@@ -61,6 +60,23 @@ byte[NUM_NERDS] nerdX = 2, 3, 4, 5
 byte[NUM_NERDS] nerdY = 2,  2,  2,  2
 byte[NUM_NERDS] nerdDir = LOOK_LEFT, LOOK_FORWARD, LOOK_FORWARD, LOOK_RIGHT
 byte[NUM_NERDS] nerdHoard, nerdScore
+//
+// Hit tests
+//
+const HIT_NOTHING = 0
+const HIT_NERD    = 1
+const HIT_TILE    = 2
+//
+// Zone mapping
+//
+const ZONE_NORTH = 1
+const ZONE_SOUTH = 2
+const ZONE_WEST  = 4
+const ZONE_EAST  = 8
+const ZONE_NE    = ZONE_NORTH|ZONE_EAST
+const ZONE_NW    = ZONE_NORTH|ZONE_WEST
+const ZONE_SE    = ZONE_SOUTH|ZONE_EAST
+const ZONE_SW    = ZONE_SOUTH|ZONE_WEST
 //
 // Joystick values
 //
@@ -313,10 +329,10 @@ def hitCheck(nerd, x, y)
             for i = 0 to NUM_NERDS-1
                 if x == nerdX[i] and y == nerdY[i]
                     addAction(1, @actionSFX, SFX_BUMP)
-                    return TRUE
+                    return HIT_NERD
                 fin
             next
-            return FALSE
+            return HIT_NOTHING
         is TILE_BOX
             //
             // Drop off hoard?
@@ -370,8 +386,25 @@ def hitCheck(nerd, x, y)
                 addAction(1, @actionSFX, SFX_PICKUP)
             fin
     wend
-    return TRUE
+    return HIT_TILE
 end
+def mapZone(x, y)#1
+    byte zone
+
+    zone = 0
+    if x < 4
+        zone = ZONE_WEST
+    elsif x > 6
+        zone = ZONE_EAST
+    fin
+    if y < 2 or (y == 2 and (x > 3 and x < 7)) // Include middle-top row of table
+        zone = zone | ZONE_NORTH
+    elsif y > 5 or (y == 5 and (x > 3 and x < 7)) // Include middle-bottom row of table
+        zone = zone | ZONE_SOUTH
+    fin
+    return zone
+end
+
 def moveNerd(nerd, dir)
     byte oldX, oldY
     var moved
@@ -465,10 +498,118 @@ def actionUpdateHoard(event)#0
     fin
 end
 def actionUpdateNerd(event)#0
+    byte nerd, moveDir, i
+    byte targetX, targetY, nerdZone, targetZone
+    var nearest, dist, distX, distY
+
     //
     // Move NPC
     //
-    moveNerd(event=>evParam, conio:rnd() & MOVE_MASK)
+    nerd = event->evParam
+    if nerdHoard[nerd]
+        //
+        // Head for NPCs collection box unless jackpot
+        //
+        if nerdHoard[nerd] == JACKPOT
+            targetX = 8
+            targetY = 0
+        else
+            targetX = 0
+            targetY = nerd * 2 + 1
+        fin
+    else
+        //
+        // Head for nearest table position with booty
+        //
+        nearest = 1000
+        for i = 0 to HOARD_POS-1
+            if hoardType[i]
+                if hoardType[i] == JACKPOT // Always go for the jackpot
+                    nearest = 0
+                    targetX = tablePosX[i]
+                    targetY = tablePosY[i]
+                    break
+                fin
+                distX = tablePosX[i] - nerdX[nerd]
+                distY = tablePosY[i] - nerdY[nerd]
+                dist  = distX * distX + distY * distY
+                if dist < nearest
+                    nearest = dist
+                    targetX = tablePosX[i]
+                    targetY = tablePosY[i]
+                fin
+            fin
+        next
+        if nearest == 1000
+            //
+            // Wander aimlessly with nothing to go for
+            //
+            targetX = conio:rnd() % TILEMAP_WIDTH
+            targetY = conio:rnd() % TILEMAP_HEIGHT
+        fin
+    fin
+    //
+    // Find best way to target
+    //
+    distX      = targetX - nerdX[nerd]
+    distY      = targetY - nerdY[nerd]
+    nerdZone   = mapZone(nerdX[nerd], nerdY[nerd])
+    targetZone = mapZone(targetX, targetY)
+    if nerdZone == targetZone
+        //
+        // Head directly to target
+        //
+        if distY == 0
+            moveDir = distX < 0 ?? MOVE_LEFT :: MOVE_RIGHT
+        elsif distX == 0
+            moveDir = distY < 0 ?? MOVE_UP :: MOVE_DOWN
+        elsif distX * distX > distY * distY
+            moveDir = distX < 0 ?? MOVE_LEFT :: MOVE_RIGHT
+        else
+            moveDir = distY < 0 ?? MOVE_UP :: MOVE_DOWN
+        fin
+    else
+        when nerdZone & targetZone
+            is ZONE_EAST
+            is ZONE_WEST
+                //
+                // Prioritize up/down
+                //
+                if distY == 0
+                    moveDir = distX < 0 ?? MOVE_LEFT :: MOVE_RIGHT
+                else
+                    moveDir = distY < 0 ?? MOVE_UP :: MOVE_DOWN
+                fin
+                break
+            is ZONE_NORTH
+            is ZONE_SOUTH
+                //
+                // Prioritize left/right
+                //
+                if distX == 0
+                    moveDir = distY < 0 ?? MOVE_UP :: MOVE_DOWN
+                else
+                    moveDir = distX < 0 ?? MOVE_LEFT :: MOVE_RIGHT
+                fin
+                break
+            otherwise
+                //
+                // Have to move around table
+                //
+                if nerdZone & (ZONE_EAST | ZONE_WEST)
+                    moveDir = targetY < 5 ?? MOVE_UP :: MOVE_DOWN
+                elsif nerdZone & (ZONE_NORTH | ZONE_SOUTH)
+                    moveDir = targetX < 5 ?? MOVE_LEFT :: MOVE_RIGHT
+                elsif distX * distX > distY * distY
+                    moveDir = distX < 0 ??  MOVE_LEFT :: MOVE_RIGHT
+                else
+                    moveDir = distY < 0 ?? MOVE_UP :: MOVE_DOWN                    
+                fin
+        wend
+    fin
+    if not moveNerd(nerd, moveDir)
+        moveNerd(nerd, conio:rnd() & MOVE_MASK)
+    fin
     addEvent(level * LEVEL_SCALE, event)
 end
 def joyCalibrate#4
