@@ -1,0 +1,115 @@
+//
+// Events
+//
+include "../../inc/cmdsys.plh"
+include "event.plh"
+
+const MAX_EVENTS = 20
+res[MAX_EVENTS*t_event] eventTable
+var eventFreeList = @eventTable
+var eventQueue
+//
+// Event implementation
+//
+export def eventInit#0
+    eventQueue    = NULL
+    eventFreeList = @eventTable + (MAX_EVENTS-1) * t_event
+    eventFreeList=>evNext = NULL
+    repeat
+        eventFreeList = eventFreeList - t_event
+        eventFreeList=>evNext = eventFreeList + t_event
+    until eventFreeList == @eventTable
+end
+export def eventFree(event)#0
+    event=>evNext = eventFreeList
+    eventFreeList = event
+end
+export def eventNew#1
+    var event
+
+    event         = eventFreeList
+    eventFreeList = eventFreeList=>evNext
+    event=>evNext = NULL
+    return event
+end
+export def doEvents#0
+    var event
+
+    if eventQueue
+        eventQueue=>evDelta--
+        while eventQueue and eventQueue=>evDelta == 0
+            event      = eventQueue
+            eventQueue = eventQueue=>evNext
+            event=>evAction(event)#0
+        loop
+    fin
+end
+export def addEvent(time, event)#0
+    var search
+
+    if time < 1; time = 1; fin
+    if eventQueue
+        if eventQueue=>evDelta >= time
+            //
+            // Insert at head of queue
+            //
+            eventQueue=>evDelta = eventQueue=>evDelta - time
+            event=>evNext       = eventQueue
+            eventQueue          = event
+        else
+            search = eventQueue
+            time   = time - search=>evDelta
+            while search=>evNext
+                if search=>evNext=>evDelta < time
+                    //
+                    // Keep searching while time > evDelta
+                    //
+                    search = search=>evNext
+                    time   = time - search=>evDelta
+                else
+                    event=>evDelta  = time
+                    event=>evNext   = search=>evNext
+                    search=>evNext  = event
+                    search          = event=>evNext
+                    search=>evDelta = search=>evDelta - time
+                    return
+                fin
+            loop
+            if not search=>evNext
+                search=>evNext = event
+                event=>evNext  = NULL
+            fin
+        fin
+    else
+        eventQueue    = event
+        event=>evNext = NULL
+    fin
+    event=>evDelta = time
+end
+export def addAction(time, action, param)#0
+    var event, search
+
+    event           = eventNew
+    event=>evAction = action
+    event=>evParam  = param
+    addEvent(time, event)
+end
+export def dumpEvents#0
+    var event
+
+    event = eventQueue
+    while event
+        puts("Event: "); puti(event=>evDelta); putc(','); puti(event=>evParam); putln
+        event = event=>evNext
+    loop
+    puts("End of events.\n")
+end
+//
+// Go ahead and initialize for now
+//
+eventInit
+//
+// Keep module in memory
+//
+return modkeep
+done

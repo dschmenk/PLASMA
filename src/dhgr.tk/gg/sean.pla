@@ -1,6 +1,5 @@
 include "../../inc/cmdsys.plh"
 include "../../inc/args.plh"
-include "../../inc/matchfiles.plh"
 include "../../inc/fileio.plh"
 include "../../inc/conio.plh"
 include "../../inc/vblank.plh"
@@ -8,6 +7,7 @@ include "../../inc/sndseq.plh"
 include "../../inc/joybuzz.plh"
 include "../inc/dhgrlib.plh"
 include "../inc/dhgrutils.plh"
+include "event.plh"
 include "sean.plh"
 sysflags resxtxt1|reshgr1|resxhgr1|nojitc
 
@@ -25,7 +25,18 @@ byte tileRow6 =  8,  9,  9, 16, 17, 17, 17, 18,  9,  9
 byte tileRow7 =  9,  9,  9,  9,  9,  9,  9,  9,  9,  9
 byte tileRow8 =  8,  9,  9,  9,  9,  9,  9,  9,  9,  9
 var tileMap   = @tileRow1, @tileRow2, @tileRow3, @tileRow4
-var           = @tileRow5, @tileRow6, @tileRow7, @tileRow8 
+var           = @tileRow5, @tileRow6, @tileRow7, @tileRow8
+//
+// Hoard
+//
+const HOARD_ACTION_MASK   = $01FF
+const HOARD_POS           = 12
+byte[HOARD_POS] tablePosX = 3, 4, 5, 6, 7, 3, 7, 3, 4, 5, 6, 7
+byte[HOARD_POS] tablePosY = 3, 3, 3, 3, 3, 4, 4, 5, 5, 5, 5, 5
+byte[HOARD_POS] hoardType
+byte hoardAvailable // Available to be picked up
+byte hoardActive    // Active equipment in play
+byte hoardRemaining // Equipment remaining
 //
 // Sprites
 //
@@ -49,12 +60,29 @@ byte[NUM_NERDS] nerdClr = CLR_GREEN, CLR_BROWN, CLR_GREY, CLR_ORANGE
 byte[NUM_NERDS] nerdX = 2, 3, 4, 5
 byte[NUM_NERDS] nerdY = 2,  2,  2,  2
 byte[NUM_NERDS] nerdDir = LOOK_LEFT, LOOK_FORWARD, LOOK_FORWARD, LOOK_RIGHT
-byte[NUM_NERDS] nerdBooty, nerdScore
+byte[NUM_NERDS] nerdHoard, nerdScore
+//
+// Joystick values
+//
+byte joyX, joyY, btn0, btn1, buzz
+byte joyLeft, joyRight, joyUp, joyDown
 //
 // Levels
 //
 const LEVEL_SCALE = 10
-byte level, game, hoard // Equipment
+byte level
+//
+// Sound F/X
+//
+const SFX_BUMP    = 0
+const SFX_PICKUP  = 1
+const SFX_SCORE   = 2
+const SFX_JACKPOT = 3
+byte sfxBump      = 20, 20, 20, 20, 0
+byte sfxPickup    = 8, 9, 10, 0
+byte sfxScore     = 5, 10, 5, 10, 0
+byte sfxJackpot   = 5, 10, 15, 20, 15, 10, 5, 10, 15, 20, 15, 10, 5,0
+var sfxList       = @sfxBump, @sfxPickup, @sfxScore, @sfxJackpot
 //
 // This fixes the Virtual ][ bug with outstanding Mockingboard interrupts
 //
@@ -108,6 +136,25 @@ def loadSprites#0
         fileio:close(refnum)
     fin
 end
+//
+// Sound F/X Action
+//
+def actionSFX(event)#0
+    byte sfxTable, sfxIndex
+
+    sfxIndex = event->evParam.1
+    sfxTable = event->evParam.0
+    buzz = sfxList.[sfxTable, sfxIndex]
+    if buzz
+        event->evParam.1 = sfxIndex + 1
+        addEvent(1, event)
+    else
+        eventFree(event)
+    fin
+end
+//
+// Drawing utilites
+//
 def drawFrame(x, y, w, h)#0
     byte r, b
 
@@ -206,17 +253,24 @@ def drawMenu#0
     dcgrStr(104, 190, "2026")
     for i = 0 to 4; drawItem(i); next
 end
+def drawMessage(msg)#0
+    byte extX, extY
+
+    dhgrMemBl7(4*TILE_WIDTH7, 4*TILE_HEIGHT, TILE_WIDTH7, TILE_HEIGHT, tileList+(TILE_TABLEMID-1)*TILE_SIZE, TILE_SPAN)
+    dhgrMemBl7(5*TILE_WIDTH7, 4*TILE_HEIGHT, TILE_WIDTH7, TILE_HEIGHT, tileList+(TILE_TABLEMID-1)*TILE_SIZE, TILE_SPAN)
+    dhgrMemBl7(6*TILE_WIDTH7, 4*TILE_HEIGHT, TILE_WIDTH7, TILE_HEIGHT, tileList+(TILE_TABLEMID-1)*TILE_SIZE, TILE_SPAN)
+    if msg
+        dcgrColor(CLR_WHITE)
+        extX, extY = dcgrStrExtents(msg)   
+        dcgrStr((140 + TILE_WIDTH/2 - extX)/2, 5*TILE_HEIGHT - extY, msg)
+    fin
+end
 def drawStatus#0
     char[4] str
-    var chalkboard
 
-    itoa(@str, hoard)
-    chalkboard = tileList+(TILE_CHALKBOARD-1)*TILE_SIZE
+    itoa(@str, hoardRemaining)
     dcgrColor(CLR_WHITE)
-    //dhgrMemBl7(4*TILE_WIDTH7, 0, TILE_WIDTH7, TILE_HEIGHT, chalkboard, TILE_SPAN)
-    //dhgrMemBl7(5*TILE_WIDTH7, 0, TILE_WIDTH7, TILE_HEIGHT, chalkboard, TILE_SPAN)
-    dhgrMemBl7(6*TILE_WIDTH7, 0, TILE_WIDTH7, TILE_HEIGHT, chalkboard, TILE_SPAN)
-    dcgrStr(46, 15, "Remaining:")
+    dhgrMemBl7(6*TILE_WIDTH7, 0, TILE_WIDTH7, TILE_HEIGHT, tileList+(TILE_CHALKBOARD-1)*TILE_SIZE, TILE_SPAN)
     dcgrStr(86, 15, @str)
 end
 def drawScore(nerd)#0
@@ -240,6 +294,13 @@ def drawMap#0
             dhgrMemBl7(l*TILE_WIDTH7, k*TILE_HEIGHT, TILE_WIDTH7, TILE_HEIGHT, tileList+(tileMap.[k,l]-1)*TILE_SIZE, TILE_SPAN)
         next
     next
+    dcgrColor(CLR_WHITE)
+    dcgrStr(46, 15, "Remaining")
+end
+def actionSean(event)#0
+    dhgrMemBl7(8*TILE_WIDTH7, 0, TILE_WIDTH7, TILE_HEIGHT, tileList+(TILE_SEAN1-1)*TILE_SIZE, TILE_SPAN)
+    dhgrMemBl7(9*TILE_WIDTH7, 0, TILE_WIDTH7, TILE_HEIGHT, tileList+(TILE_SEAN2-1)*TILE_SIZE, TILE_SPAN)
+    eventFree(event)
 end
 def hitCheck(nerd, x, y)
     byte i
@@ -250,20 +311,22 @@ def hitCheck(nerd, x, y)
             // Check for other nerds
             //
             for i = 0 to NUM_NERDS-1
-                if x == nerdX[i] and y == nerdY[i]; return TRUE; fin
+                if x == nerdX[i] and y == nerdY[i]
+                    addAction(1, @actionSFX, SFX_BUMP)
+                    return TRUE
+                fin
             next
             return FALSE
         is TILE_BOX
             //
-            // Drop off booty?
+            // Drop off hoard?
             //
-            if y == nerd * 2 + 1 and nerdBooty[nerd]
-                nerdBooty[nerd] = 0
+            if y == nerd * 2 + 1 and nerdHoard[nerd]
+                hoardActive--
+                nerdHoard[nerd] = 0
                 nerdScore[nerd]++
                 drawScore(nerd)
-                if hoard == 0
-                    game = FALSE
-                fin
+                addAction(1, @actionSFX, SFX_SCORE)
             fin
             break
         is TILE_SEAN1
@@ -271,15 +334,41 @@ def hitCheck(nerd, x, y)
             //
             // Jackpot?
             //
-            if nerdBooty[nerd] == JACKPOT
-                nerdBooty[nerd] = 0
+            if nerdHoard[nerd] == JACKPOT
+                hoardActive--
+                nerdHoard[nerd] = 0
                 nerdScore[nerd] = nerdScore[nerd] + 3
                 drawScore(nerd)
-                if hoard == 0
-                    game = FALSE
-                fin
+                addAction(1, @actionSFX, SFX_JACKPOT)
+                addAction(100, @actionSean, 0)
+                dhgrMemBl7(8*TILE_WIDTH7, 0, TILE_WIDTH7, TILE_HEIGHT, tileList+(TILE_BOX-1)*TILE_SIZE, TILE_SPAN)
+                dhgrMemBl7(9*TILE_WIDTH7, 0, TILE_WIDTH7, TILE_HEIGHT, tileList+(TILE_BOX-1)*TILE_SIZE, TILE_SPAN)
             fin
             break
+        is TILE_TABLE1
+        is TILE_TABLE2
+        is TILE_TABLE3
+        is TILE_TABLE4
+        is TILE_TABLE5
+        is TILE_TABLE6
+        is TILE_TABLE7
+        is TILE_TABLE8
+            for i = 0 to HOARD_POS-1
+                if tablePosX[i] == x and tablePosY[i] == y; break; fin
+            next
+            if hoardType[i] // Pick up HW
+                dhgrMemBl7(x*TILE_WIDTH7, y*TILE_HEIGHT, TILE_WIDTH7, TILE_HEIGHT, tileList+(tileMap.[y,x]-1)*TILE_SIZE, TILE_SPAN)
+                nerdHoard[nerd], hoardType[i] = hoardType[i], nerdHoard[nerd] // Swap goods
+                if hoardType[i]
+                    dcgrPixMap(tablePosX[i] * TILE_WIDTH,       \
+                                tablePosY[i] * TILE_HEIGHT + 2, \
+                                SPRITE_WIDTH, SPRITE_HEIGHT,    \
+                                spriteList + (hoardType[i] - 1) * SPRITE_SIZE)
+                else
+                    hoardAvailable--
+                fin
+                addAction(1, @actionSFX, SFX_PICKUP)
+            fin
     wend
     return TRUE
 end
@@ -290,210 +379,237 @@ def moveNerd(nerd, dir)
 
     oldX  = nerdX[nerd]
     oldY  = nerdY[nerd]
-    moved = TRUE
+    moved = FALSE
     when dir
         is MOVE_UP
-            if hitCheck(nerd, nerdX[nerd], nerdY[nerd] - 1)
-                moved = FALSE
-            else
+            if not hitCheck(nerd, nerdX[nerd], nerdY[nerd] - 1)
                 nerdY[nerd]--
+                moved = TRUE
             fin
             nerdDir[nerd] = LOOK_AWAY
             break
         is MOVE_LEFT
-            if nerdX[nerd] < 1 or hitCheck(nerd, nerdX[nerd] - 1, nerdY[nerd])
-                moved = FALSE
-            else
+            if nerdX[nerd] > 0 and not hitCheck(nerd, nerdX[nerd] - 1, nerdY[nerd])
                 nerdX[nerd]--
+                moved = TRUE
             fin
             nerdDir[nerd] = LOOK_LEFT
             break
         is MOVE_RIGHT
-            if nerdX[nerd] >= 9 or hitCheck(nerd, nerdX[nerd] + 1, nerdY[nerd])
-                moved = FALSE
-            else
+            if nerdX[nerd] < 9 and not hitCheck(nerd, nerdX[nerd] + 1, nerdY[nerd])
                 nerdX[nerd]++
+                moved = TRUE
             fin
             nerdDir[nerd] = LOOK_RIGHT
             break
         is MOVE_DOWN
-            if nerdY[nerd] >= 7 or hitCheck(nerd, nerdX[nerd], nerdY[nerd] + 1)
-                moved = FALSE
-            else
+            if nerdY[nerd] < 7 and not hitCheck(nerd, nerdX[nerd], nerdY[nerd] + 1)
                 nerdY[nerd]++
+                moved = TRUE
             fin
             nerdDir[nerd] = LOOK_FORWARD
             break
     wend
+    //
+    // Draw nerd + any hoard to memory surface the size of a tile
+    //
     dhgrSurfMem(OP_SRC, TILE_HEIGHT, @tileNerd, TILE_SPAN)
     dcgrColor(CLR_LTBLUE)
     dhgrClearBl7(0, 0, TILE_WIDTH7, TILE_HEIGHT)
     dcgrPixMap(0, 2, SPRITE_WIDTH, SPRITE_HEIGHT, spriteList + (HORDE_BASE + nerd*NUM_NERDS + nerdDir[nerd])*SPRITE_SIZE)
-    if nerdBooty[nerd]
-        dcgrPixMap(0, 0, SPRITE_WIDTH, SPRITE_HEIGHT, spriteList + (nerdBooty[nerd] + HOARD_BASE)*SPRITE_SIZE)
+    if nerdHoard[nerd]
+        dcgrPixMap(0, 0, SPRITE_WIDTH, SPRITE_HEIGHT, spriteList + (nerdHoard[nerd] + HOARD_BASE)*SPRITE_SIZE)
     fin
     dhgrSurfScr(OP_SRC)
-    if oldX <> nerdX[nerd] or oldY <> nerdY[nerd]
+    if moved
+        //
+        // Erase previous position
+        //
         dcgrColor(CLR_LTBLUE)
         dhgrClearBl7(oldX * TILE_WIDTH7, oldY * TILE_HEIGHT, TILE_WIDTH7, TILE_HEIGHT)
     fin
-    dhgrMemBl7(nerdX[nerd] * TILE_WIDTH7,   \
-                nerdY[nerd] * TILE_HEIGHT,  \
-                TILE_WIDTH7,                \
-                TILE_HEIGHT,                \
-                @tileNerd,                  \
-                TILE_SPAN)
-    //dhgrMemBl7(oldX * TILE_WIDTH7,                                  \
-    //            oldY * TILE_HEIGHT,                                 \
-    //            TILE_WIDTH7,                                        \
-    //            TILE_HEIGHT,                                        \
-    //            tileList + (tileMap.[oldY, oldX] - 1)*TILE_SIZE,    \
-    //            TILE_SPAN)
-    //dcgrPixMap(nerdX[nerd] * TILE_WIDTH,        \
-    //            nerdY[nerd] * TILE_HEIGHT + 2,  \
-    //            SPRITE_WIDTH,                   \
-    //            SPRITE_HEIGHT,                  \
-    //            spriteList + (HORDE_BASE + nerd*NUM_NERDS + nerdDir[nerd])*SPRITE_SIZE)
-    //if nerdBooty[nerd]
-    //    dcgrPixMap(nerdX[nerd] * TILE_WIDTH,    \
-    //            nerdY[nerd] * TILE_HEIGHT + 6,  \
-    //            SPRITE_WIDTH,                   \
-    //            SPRITE_HEIGHT,                  \
-    //            spriteList + (nerdBooty[nerd] + HOARD_BASE)*SPRITE_SIZE)
-    //fin
+    //
+    // Update nerd on screen
+    //
+    dhgrMemBl7(nerdX[nerd] * TILE_WIDTH7,  nerdY[nerd] * TILE_HEIGHT, TILE_WIDTH7, TILE_HEIGHT, @tileNerd, TILE_SPAN)
     return moved
 end
-def playGG#0
-    byte nerd, moveDir, try
-    byte joyEn, joyX, joyY, btn0, btn1, buzz
-    byte joyLeft, joyRight, joyUp, joyDown
-    var[NUM_NERDS] update
+def addHoard#0
+    byte pos
 
+    if hoardRemaining and hoardAvailable < HOARD_POS
+        pos = conio:rnd() % HOARD_POS
+        while hoardType[pos]
+            pos++; if pos >= HOARD_POS; pos = 0; fin
+        loop
+        hoardType[pos] = ((conio:rnd() & 255) < 25) ?? JACKPOT :: (conio:rnd() & HOARD_NUM-2) + 1
+        hoardActive++
+        hoardAvailable++
+        hoardRemaining--
+        dcgrPixMap(tablePosX[pos] * TILE_WIDTH, tablePosY[pos]*TILE_HEIGHT+2, SPRITE_WIDTH, SPRITE_HEIGHT, spriteList + (hoardType[pos] - 1) * SPRITE_SIZE)
+        drawStatus
+    fin
+end
+//
+// Actions
+//
+def actionUpdateHoard(event)#0
+    //
+    // Add hoard to table at random time
+    //
+    addHoard
+    if hoardRemaining
+        addEvent(conio:rnd() & HOARD_ACTION_MASK, event)
+    else
+        eventFree(event)
+    fin
+end
+def actionUpdateNerd(event)#0
+    //
+    // Move NPC
+    //
+    moveNerd(event=>evParam, conio:rnd() & MOVE_MASK)
+    addEvent(level * LEVEL_SCALE, event)
+end
+def joyCalibrate#4
+    byte x, y
+
+    x, y, drop, drop = joyPos(0)
+    if x < MAX_JOY and y < MAX_JOY
+        return x / 2, (x + MAX_JOY) / 2, y / 2, (y + MAX_JOY) / 2 
+    fin
+    return 0, 0, MAX_JOY, MAX_JOY
+end
+def actionUpdatePlayer(event)#0
+    byte moveDir
+
+    moveDir = MOVE_NONE
+    if joyX < joyLeft
+        moveDir = MOVE_LEFT
+    elsif joyX > joyRight
+        moveDir = MOVE_RIGHT
+    fin
+    if joyY < joyUp
+        moveDir = MOVE_UP
+    elsif joyY > joyDown
+        moveDir = MOVE_DOWN
+    fin
+    if conio:keypressed()
+        when toupper(conio:getkey())
+            is keyArrowUp
+                moveDir = MOVE_UP
+                break
+            is keyArrowLeft
+                moveDir = MOVE_LEFT
+                break
+            is keyArrowRight
+                moveDir = MOVE_RIGHT
+                break
+            is keyArrowDown
+                moveDir = MOVE_DOWN
+                break
+            is 'C' // Recalibrate joystick on the fly
+                joyLeft, joyRight, joyUp, joyDown = joyCalibrate
+                break
+            is '1'
+                level = 9
+                break
+            is '2'
+                level = 8
+                break
+            is '3'
+                level = 7
+                break
+            is '4'
+                level = 6
+                break
+            is '5'
+                level = 5
+                break
+            is '6'
+                level = 4
+                break
+            is '7'
+                level = 3
+                break
+            is '8'
+                level = 2
+                break
+            is '9'
+                level = 1
+                break
+            is '0'
+                level = 0
+                break
+            is 'X'
+                dhgrMode(DHGR_TEXT_MODE)
+                dumpEvents
+            is keyEscape
+                hoardActive = 0; hoardRemaining = 0
+        wend
+        moveNerd(nerdPlayer, moveDir)
+    fin
+    addEvent(level, event)
+end
+def playGG#0
     //
     // Automatic joystick enable/calibration
     //
-    joyEn  = FALSE
-    joyX, joyY, btn0, btn1 = joyPos(0)
-    if joyX < MAX_JOY and joyY < MAX_JOY
-        joyEn    = TRUE
-        joyLeft  = joyX / 2
-        joyRight = (joyX + MAX_JOY) / 2
-        joyUp    = joyY / 2
-        joyDown  = (joyY + MAX_JOY) / 2 
-    fin
+    joyLeft, joyRight, joyUp, joyDown = joyCalibrate
     //
-    // Intitialize level
+    // Initialize event system
     //
-    for nerd = 0 to NUM_NERDS-1
-        nerdX[nerd]     = 1
-        nerdY[nerd]     = nerd * 2 + 1
-        nerdBooty[nerd] = 0
-        nerdScore[nerd] = 0
-        drawScore(nerd)
-        update[nerd]    = conio:rnd() % (level * LEVEL_SCALE)
-        moveNerd(nerd, MOVE_NONE)
+    eventInit
+    //
+    // Intitialize nerds
+    //
+    for buzz = 0 to NUM_NERDS-1
+        nerdX[buzz]     = 1
+        nerdY[buzz]     = buzz * 2 + 1
+        nerdHoard[buzz] = 0
+        nerdScore[buzz] = 0
+        drawScore(buzz)
+        moveNerd(buzz, MOVE_NONE)
+        if buzz == nerdPlayer
+            addAction(level, @actionUpdatePlayer, buzz)
+        else
+            addAction(conio:rnd() % (level * LEVEL_SCALE), @actionUpdateNerd, buzz)
+        fin
     next
-    update[nerdPlayer] = level
-    hoard              = 12
-    drawStatus
-    buzz               = 0
-    game               = TRUE
-    while game
-        if buzz; buzz = ((buzz + 1) & 63) + 1; fin
+    //
+    // Initialize hoard
+    //
+    hoardRemaining = 20
+    hoardActive    = 0
+    addHoard
+    addHoard
+    addHoard
+    addHoard
+    addAction(conio:rnd() & HOARD_ACTION_MASK, @actionUpdateHoard, 0)
+    //
+    // Go!
+    //
+    drawMessage("Ready...")
+    conio:tone(50, 40)
+    drawMessage("Set...")
+    conio:tone(50, 40)
+    drawMessage("Go!")
+    conio:tone(60, 10)
+    drawMessage(NULL)
+    buzz = 0
+    while hoardActive or hoardRemaining
+        //
+        // Sound/joystick
+        //
         joyX, joyY, btn0, btn1 = joyPos(buzz)
-        for nerd = 0 to NUM_NERDS-1
-            if update[nerd]
-                update[nerd]--
-            else
-                if nerd == nerdPlayer
-                    moveDir = MOVE_NONE
-                    if joyEn
-                        if joyX < joyLeft
-                            moveDir = MOVE_LEFT
-                        elsif joyX > joyRight
-                            moveDir = MOVE_RIGHT
-                        fin
-                        if joyY < joyUp
-                            moveDir = MOVE_UP
-                        elsif joyY > joyDown
-                            moveDir = MOVE_DOWN
-                        fin
-                    fin
-                    if conio:keypressed()
-                        when toupper(conio:getkey())
-                            is 'I'
-                            is keyArrowUp
-                                moveDir = MOVE_UP
-                                break
-                            is 'J'
-                            is keyArrowLeft
-                                moveDir = MOVE_LEFT
-                                break
-                            is 'K'
-                            is keyArrowRight
-                                moveDir = MOVE_RIGHT
-                                break
-                            is 'M'
-                            is keyArrowDown
-                                moveDir = MOVE_DOWN
-                                break
-                            is 'B'
-                                hoard--
-                                drawStatus
-                                nerdBooty[nerdPlayer]++
-                                if nerdBooty[nerdPlayer] > HOARD_NUM; nerdBooty[nerdPlayer] = 0; fin
-                                moveNerd(nerdPlayer, MOVE_NONE)
-                                break
-                            is 'P'
-                                nerdPlayer++
-                                if nerdPlayer >= NUM_NERDS; nerdPlayer = 0; fin
-                                break
-                            is 'S'
-                                if buzz; buzz = 0; else buzz = 1; fin
-                                break
-                            is '1'
-                                level = 9
-                                break
-                            is '2'
-                                level = 8
-                                break
-                            is '3'
-                                level = 7
-                                break
-                            is '4'
-                                level = 6
-                                break
-                            is '5'
-                                level = 5
-                                break
-                            is '6'
-                                level = 4
-                                break
-                            is '7'
-                                level = 3
-                                break
-                            is '8'
-                                level = 2
-                                break
-                            is '9'
-                                level = 1
-                                break
-                            is '0'
-                                level = 0
-                                break
-                            is keyEscape
-                                game = FALSE
-                        wend
-                        moveNerd(nerdPlayer, moveDir)
-                    fin
-                    update[nerdPlayer] = level
-                else // Move NPC
-                     moveNerd(nerd, conio:rnd() & MOVE_MASK)
-                    update[nerd] = (level * LEVEL_SCALE)
-                fin
-            fin
-        next
+        //
+        // Check event queue
+        //
+        doEvents
     loop
+    drawMessage("Finished!")
+    conio:tone(30, 20)
+    conio:tone(200, 10)
 end
 def info#0
     screenRead("GG.DHGR")
@@ -579,34 +695,33 @@ def randomize#0
     conio:rnd()
 end
 //
-// Import test harness
-//
-arg = argNext(argFirst)
-while ^arg
-    arg = argNext(arg)
-loop
-dhgrMode(DHGR_COLOR_MODE)
-//screenRead("SPLASH.DHGR")
-//
 // Hook CYA IRQ handler into ProDOS IRQ chain
 //
 params.0 = 2
 params.1 = 3
 params:2 = @serviceCYA
 syscall($40, @params)
-//
-// Play opening sequence
-//
-//arg = musicRead("GG.SEQ")
-//musicPlay(arg, FALSE)
-//musicGetKey(8, @randomize)
-//heaprelease(arg)
+dhgrMode(DHGR_COLOR_MODE)
+arg = argNext(argFirst)
+while ^arg and ^(arg + 1) == '-'
+    when toupper(^(arg + 2))
+        is 'S' // Splash screen
+            //
+            // Play opening sequence
+            //
+            screenRead("SPLASH.DHGR")
+            spriteList = musicRead("GG.SEQ")
+            musicPlay(spriteList, FALSE)
+            musicGetKey(8, @randomize)
+            heaprelease(spriteList)
+            spriteList = NULL
+    wend
+    arg = argNext(arg)
+loop
 dcgrFont(FONT_DEF_THIN)
 loadTiles
 loadSprites
 if tileList <> NULL and spriteList <> NULL
-    //screenRead("MENU.DHGR")
-    //getc
     level = 9
     while menu
         drawMap
