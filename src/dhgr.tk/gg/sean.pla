@@ -29,10 +29,10 @@ var           = @tileRow5, @tileRow6, @tileRow7, @tileRow8
 // Hoard
 //
 const HOARD_ACTION_MASK   = $01FF
-const HOARD_POS           = 12
-byte[HOARD_POS] tablePosX = 3, 4, 5, 6, 7, 3, 7, 3, 4, 5, 6, 7
-byte[HOARD_POS] tablePosY = 3, 3, 3, 3, 3, 4, 4, 5, 5, 5, 5, 5
-byte[HOARD_POS] hoardType
+const TABLE_POSITIONS           = 8
+byte[TABLE_POSITIONS] tablePosX = 4, 5, 6, 3, 7, 4, 5, 6
+byte[TABLE_POSITIONS] tablePosY = 3, 3, 3, 4, 4, 5, 5, 5
+byte[TABLE_POSITIONS] hoardType
 byte hoardAvailable // Available to be picked up
 byte hoardActive    // Active equipment in play
 byte hoardRemaining // Equipment remaining
@@ -365,11 +365,7 @@ def hitCheck(nerd, x, y)
         is TILE_TABLE2
         is TILE_TABLE3
         is TILE_TABLE4
-        is TILE_TABLE5
-        is TILE_TABLE6
-        is TILE_TABLE7
-        is TILE_TABLE8
-            for i = 0 to HOARD_POS-1
+            for i = 0 to TABLE_POSITIONS-1
                 if tablePosX[i] == x and tablePosY[i] == y; break; fin
             next
             if hoardType[i] // Pick up HW
@@ -392,12 +388,12 @@ def mapZone(x, y)#1
     byte zone
 
     zone = 0
-    if x < 4
+    if x < 3 or (x == 3 and y == 4) // Incude side of table
         zone = ZONE_WEST
-    elsif x > 6
+    elsif x > 7 or (x == 7 and y == 4) // Include side of table
         zone = ZONE_EAST
     fin
-    if y < 2 or (y == 2 and (x > 3 and x < 7)) // Include middle-top row of table
+    if y < 3 or (y == 3 and (x > 3 and x < 7)) // Include middle-top row of table
         zone = zone | ZONE_NORTH
     elsif y > 5 or (y == 5 and (x > 3 and x < 7)) // Include middle-bottom row of table
         zone = zone | ZONE_SOUTH
@@ -470,10 +466,10 @@ end
 def addHoard#0
     byte pos
 
-    if hoardRemaining and hoardAvailable < HOARD_POS
-        pos = conio:rnd() % HOARD_POS
+    if hoardRemaining and hoardAvailable < TABLE_POSITIONS
+        pos = conio:rnd() % TABLE_POSITIONS
         while hoardType[pos]
-            pos++; if pos >= HOARD_POS; pos = 0; fin
+            pos++; if pos >= TABLE_POSITIONS; pos = 0; fin
         loop
         hoardType[pos] = ((conio:rnd() & 255) < 25) ?? JACKPOT :: (conio:rnd() & HOARD_NUM-2) + 1
         hoardActive++
@@ -522,7 +518,7 @@ def actionUpdateNerd(event)#0
         // Head for nearest table position with booty
         //
         nearest = 1000
-        for i = 0 to HOARD_POS-1
+        for i = 0 to TABLE_POSITIONS-1
             if hoardType[i]
                 if hoardType[i] == JACKPOT // Always go for the jackpot
                     nearest = 0
@@ -573,7 +569,7 @@ def actionUpdateNerd(event)#0
             is ZONE_EAST
             is ZONE_WEST
                 //
-                // Prioritize up/down
+                // Both on same side - prioritize up/down
                 //
                 if distY == 0
                     moveDir = distX < 0 ?? MOVE_LEFT :: MOVE_RIGHT
@@ -584,7 +580,7 @@ def actionUpdateNerd(event)#0
             is ZONE_NORTH
             is ZONE_SOUTH
                 //
-                // Prioritize left/right
+                // Both on same side - prioritize left/right
                 //
                 if distX == 0
                     moveDir = distY < 0 ?? MOVE_UP :: MOVE_DOWN
@@ -596,10 +592,10 @@ def actionUpdateNerd(event)#0
                 //
                 // Have to move around table
                 //
-                if nerdZone & (ZONE_EAST | ZONE_WEST)
-                    moveDir = targetY < 5 ?? MOVE_UP :: MOVE_DOWN
-                elsif nerdZone & (ZONE_NORTH | ZONE_SOUTH)
-                    moveDir = targetX < 5 ?? MOVE_LEFT :: MOVE_RIGHT
+                if nerdZone == ZONE_EAST or nerdZone == ZONE_WEST
+                    moveDir = targetY < TILEMAP_HEIGHT/2 ?? MOVE_UP :: MOVE_DOWN
+                elsif nerdZone == ZONE_NORTH or nerdZone == ZONE_SOUTH
+                    moveDir = targetX < TILEMAP_WIDTH/2 ?? MOVE_LEFT :: MOVE_RIGHT
                 elsif distX * distX > distY * distY
                     moveDir = distX < 0 ??  MOVE_LEFT :: MOVE_RIGHT
                 else
@@ -608,7 +604,7 @@ def actionUpdateNerd(event)#0
         wend
     fin
     if not moveNerd(nerd, moveDir)
-        moveNerd(nerd, conio:rnd() & MOVE_MASK)
+        moveNerd(nerd, conio:rnd() & MOVE_MASK) // Help get unstuck
     fin
     addEvent(level * LEVEL_SCALE, event)
 end
@@ -720,7 +716,11 @@ def playGG#0
     //
     // Initialize hoard
     //
+    for buzz = 0 to TABLE_POSITIONS-1
+        hoardType[buzz] = 0
+    next
     hoardRemaining = 20
+    hoardAvailable = 0
     hoardActive    = 0
     addHoard
     addHoard
