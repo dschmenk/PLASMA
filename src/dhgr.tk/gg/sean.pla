@@ -10,6 +10,13 @@ include "event.plh"
 include "sean.plh"
 sysflags resxtxt1|reshgr1|resxhgr1|nojitc
 
+//
+// Predefines
+//
+predef moveNerd(nerd, dir)#1
+//
+// Arg pointer
+//
 var arg
 //
 // Tiles
@@ -104,13 +111,15 @@ var  seqSplash
 //
 const SFX_BUMP    = 0
 const SFX_PICKUP  = 1
-const SFX_SCORE   = 2
-const SFX_JACKPOT = 3
-byte sfxBump      = 20, 20, 20, 20, 0
+const SFX_JACKPOT = 2
+const SFX_SCORE   = 3
+const SFX_STEAL   = 4
+byte sfxBump      = 15, 15, 15, 15, 0
 byte sfxPickup    = 8, 9, 10, 0
+byte sfxJackpot   = 5, 10, 15, 20, 15, 10, 5, 10, 15, 20, 15, 10, 5 // Run into score sfx
 byte sfxScore     = 5, 10, 5, 10, 0
-byte sfxJackpot   = 5, 10, 15, 20, 15, 10, 5, 10, 15, 20, 15, 10, 5,0
-var sfxList       = @sfxBump, @sfxPickup, @sfxScore, @sfxJackpot
+byte sfxSteal     = 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 0
+var sfxList       = @sfxBump, @sfxPickup, @sfxJackpot, @sfxScore, @sfxSteal
 //
 // This fixes the Virtual ][ bug with outstanding Mockingboard interrupts
 //
@@ -359,10 +368,10 @@ def actionSean(event)#0
     dhgrMemBl7(9*TILE_WIDTH7, 0, TILE_WIDTH7, TILE_HEIGHT, tileList+(TILE_SEAN2-1)*TILE_SIZE, TILE_SPAN)
     eventFree(event)
 end
-def hitCheck(nerd, x, y)
+def hitCheck(nerd, x, y)#1
     byte i
 
-    if x < 0 or x > TILEMAP_WIDTH-1 or y > TILEMAP_HEIGHT-1; return HIT_TILE; fin // Quick test for edges
+    if x < 0 or x >= TILEMAP_WIDTH or y >= TILEMAP_HEIGHT; return HIT_TILE; fin // Quick test for edges
     when tileMap.[y, x]
         is TILE_FLOOR
             //
@@ -370,7 +379,18 @@ def hitCheck(nerd, x, y)
             //
             for i = 0 to NUM_NERDS-1
                 if x == nerdX[i] and y == nerdY[i]
-                    addAction(1, @actionSFX, SFX_BUMP)
+                    //
+                    // Steal?
+                    //
+                    if nerd == nerdPlayer and (btn0 & btn1) & $80 and \\
+                        not nerdHoard[nerd] and nerdHoard[i] and nerdScore[nerd] <= nerdScore[i]
+                        nerdHoard[nerd] = nerdHoard[i]
+                        nerdHoard[i]    = 0
+                        addAction(1, @actionSFX, SFX_STEAL)
+                        moveNerd(i, MOVE_NONE) // Draw sealee without hoard
+                    else
+                        addAction(1, @actionSFX, SFX_BUMP)
+                    fin
                     return HIT_NERD
                 fin
             next
@@ -430,7 +450,7 @@ def mapZone(x, y)#1
     byte zone
 
     zone = 0
-    if x < 3 or (x == 3 and y == 4) // Incude side of table
+    if x < 3 or (x == 3 and y == 4) // Include end of table
         zone = ZONE_WEST
     elsif x > 7 or (x == 7 and y == 4) // Include side of table
         zone = ZONE_EAST
@@ -442,7 +462,7 @@ def mapZone(x, y)#1
     fin
     return zone
 end
-def moveNerd(nerd, dir)
+def moveNerd(nerd, dir)#1
     byte oldX, oldY
     var moved
     byte[TILE_SIZE] tileNerd
@@ -640,7 +660,7 @@ def actionUpdateNerd(event)#0
                 moveDir = distY < 0 ?? MOVE_UP :: MOVE_DOWN                    
             fin
     wend
-    if not moveNerd(nerd, moveDir) and (distX * distX * distY * distY) > 1
+    if not moveNerd(nerd, moveDir) and (distX * distX + distY * distY) > 1
         moveNerd(nerd, conio:rnd() & MOVE_MASK) // Help get unstuck
     fin
     addEvent(level * HORDE_SCALE + HORDE_EQ, event)
