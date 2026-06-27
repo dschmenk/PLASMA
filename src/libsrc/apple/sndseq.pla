@@ -78,7 +78,7 @@ word        keypressed    = @a2keypressed
 
 word instr[] // Overlay with other variables
 word seqTrack, seqEvent, seqTime, eventTime, updateTime
-byte numNotes, seqRepeat
+byte numNotes, seqRepeat, seqQuit
 byte indexA[2], indexB[2], indexC[2]
 byte noteA[2], noteB[2], noteC[2]
 word notes1[MAX_MBCH_NOTES], notes2[MAX_MBCH_NOTES]
@@ -471,7 +471,7 @@ end
 //
 def mbSequence(yield, func)#0
     word period, n, yieldTime
-    byte note, volume, channel, i, overflow, status, quit
+    byte note, volume, channel, i, overflow, status
 
     //
     // Reset oscillator table
@@ -500,7 +500,6 @@ def mbSequence(yield, func)#0
         yieldTime = $7FFF
     fin
     updateTime = seqTime
-    quit = FALSE
     repeat
         while eventTime == seqTime
             note = seqEvent->percnote
@@ -581,7 +580,7 @@ def mbSequence(yield, func)#0
                         musicStop
                     fin
                     seqTime = -1 // Offset seqTime++ later
-                    quit = TRUE // Exit out
+                    seqQuit = TRUE // Exit out
                     break
                 fin
             fin
@@ -654,10 +653,10 @@ def mbSequence(yield, func)#0
         seqTime++
         if yieldTime <= seqTime; func()#0; yieldTime = seqTime + yield; fin
         while !(mbVIA1->IFR & $40) // Wait for T1 interrupt
-            if a2keypressed(); quit = TRUE; break; fin
+            if a2keypressed(); seqQuit = TRUE; break; fin
         loop
         mbVIA1->T1C // Read T1C-L, clear interrupt
-    until quit
+    until seqQuit
     mbVIA1->IER = $7F // Mask all interrupts
     psgWrite(mbVIA1, MIXER,   $FF) // Turn everything off
     psgWrite(mbVIA1, AENVAMP, $00)
@@ -779,8 +778,9 @@ def spkrSequence(yield, func)#0
             seqTime  = duration + seqTime
             tonePlay(period, DUR16TH * duration)#0
         fin
+        seqQuit = keypressed()
         if yieldTime <= seqTime; func()#0; yieldTime = seqTime + yield; fin
-    until keypressed()
+    until seqQuit
 end
 //
 // No sequence, just waste time and yield
@@ -839,6 +839,8 @@ end
 //
 export def musicStop#0
     musicSequence = @noSequence
+    seqQuit       = TRUE
+    seqRepeat     = FALSE
 end
 //
 // Play until keystroke
