@@ -34,9 +34,9 @@ char spriteBaseName  = "SPRITE"
 var hoard // Equipment
 var horde // People
 //
-// Opening screen text
+// Info screen text
 //
-char Title = "Every year, Sean opens "
+char Info  = "Every year, Sean opens "
 char       = "his garage and heart."
 char       = "Everything's free."
 char       = "One rule: Use 'em, don't sell 'em."
@@ -114,29 +114,30 @@ def dlgrRead(file)#1
     return frameptr
 end
 //
-// Render title screen
+// Render info screen
 //
-def drawTitle#0
+def drawInfo#0
     byte strX, strY, extX, extY
     byte h, v
-    var strTitle
+    var strInfo, fontptr
 
     screenRead("GGRAW.DHGR")
-    dcgrFont(fontRead("GG.FON"))
-    strTitle = @Title
+    fontptr = fontRead("GG.FON") 
+    dcgrFont(fontptr)
+    strInfo = @Info
     strY    = 100
-    while ^strTitle and strY < 192
-        extX, extY = dcgrStrExtents(strTitle)
+    while ^strInfo and strY < 192
+        extX, extY = dcgrStrExtents(strInfo)
         strX = 70 - (extX + 1)/2
         dcgrColor(CLR_BLACK)
         dcgrRect(strX - 1, strY - extY + 1, extX + 4, extY + 2)
         dcgrRect(strX - 2, strY - extY + 2, extX + 6, extY)
         dcgrColor(CLR_WHITE)
-        dcgrStr(strX, strY, strTitle)
+        dcgrStr(strX, strY, strInfo)
         strY = strY + extY + 2// 12
-        strTitle = strTitle + ^strTitle + 1
+        strInfo = strInfo + ^strInfo + 1
     loop
-    screenWrite("GG.DHGR")
+    heapRelease(fontptr)
 end
 def strcati(str, i)#0
     if i >= 10; strcati(str, i / 10); fin
@@ -224,6 +225,26 @@ def exportSprites#0
     fin
     fileio:close(refnum)
 end
+def exportInfo#0
+    var bl7ptr, span
+    byte refnum
+
+    bl7ptr, span = dhgrAllocBl7Mem(SCR_WIDTH, 92)
+    if bl7ptr
+        dhgrSurfMem(OP_SRC, 92, bl7ptr, span)
+        dhgrScrBl7(0,  0, span/4, 92)
+        dhgrSurfScr(OP_SRC)
+        fileio:destroy("GGINFO.IMG")
+        fileio:create("GGINFO.IMG", $06, $0000)
+        refnum = fileio:open("GGINFO.IMG")
+        if refnum
+            fileio:write(refnum, bl7ptr, span*92)
+            fileio:close(refnum)
+        fin
+        heapRelease(bl7ptr)
+    fin
+    screenWrite("GG.DHGR")
+end
 def drawMap#0
     byte i, j
 
@@ -266,8 +287,9 @@ if tileList <> NULL and spriteList <> NULL
     drawSprites
     if pause; getc; fin
     //screenWrite("SPRITES.DHGR")
-    drawTitle
+    drawInfo
     if pause; getc; fin
+    exportInfo
     exportTiles
     exportSprites
     dhgrMode(DHGR_TEXT_MODE)

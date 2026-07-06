@@ -11,6 +11,10 @@ include "sean.plh"
 sysflags resxtxt1|reshgr1|resxhgr1|nojitc
 
 //
+// Version
+//
+char ggVersion = "0.4d"
+//
 // Predefines
 //
 predef moveNerd(nerd, dir)#1
@@ -102,9 +106,7 @@ const HORDE_SCALE = 5
 const HORDE_EQ    = 4
 const HOARD_SCALE = HORDE_SCALE * 10
 const PLAYER_EQ   = HORDE_EQ + 1
-byte level        = 9
-byte totalScore   = 0
-byte exit
+byte level, totalScore, exit
 var  seqSplash
 //
 // Sound F/X
@@ -120,6 +122,39 @@ byte sfxJackpot   = 5, 10, 15, 20, 15, 10, 5, 10, 15, 20, 15, 10, 5 // Run into 
 byte sfxScore     = 5, 10, 5, 10, 0
 byte sfxSteal     = 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 0
 var sfxList       = @sfxBump, @sfxPickup, @sfxJackpot, @sfxScore, @sfxSteal
+//
+// Info screen text
+//
+char infoText = "Every year, Sean opens "
+char          = "his garage and heart."
+char          = "Everything's free."
+char          = "One rule: Use 'em, don't sell 'em."
+char          = "Event starts - snag the most"
+char          = "computers before time runs out!"
+char          = "Spot a red box?"
+char          = "Show Sean - it's the jackpot!"
+char          = "Beat the rivals. Have fun. Go!"
+char          = ""
+var fontGG
+//
+// Leaderboards
+//
+struc t_leaders
+    char[3] initials
+    byte    bestscore
+end
+char leaderBoard  = 'W', 'O', 'Z', 100
+char              = 'W', 'O', 'Z', 90
+char              = 'W', 'O', 'Z', 80
+char              = 'W', 'O', 'Z', 70
+char              = 'W', 'O', 'Z', 60
+char              = 'W', 'O', 'Z', 50
+char              = 'W', 'O', 'Z', 40
+char              = 'W', 'O', 'Z', 30
+char              = 'W', 'O', 'Z', 20
+char              = 'W', 'O', 'Z', 10
+byte updateLeaders
+char leaderName = "LEADERBOARD"
 //
 // This fixes the Virtual ][ bug with outstanding Mockingboard interrupts
 //
@@ -202,6 +237,40 @@ end
 //
 // Drawing utilites
 //
+def drawInfo#0
+    var bl7ptr, span
+    byte refnum
+    byte strX, strY, extX, extY
+    byte h, v
+    var strInfo
+
+    dcgrColor(CLR_GREEN)
+    dhgrClearBl7(0, 0, SCR_WIDTH7, SCR_HEIGHT)
+    bl7ptr, span = dhgrAllocBl7Mem(SCR_WIDTH, 92)
+    if bl7ptr
+        refnum = fileio:open("GGINFO.IMG")
+        if refnum
+            fileio:read(refnum, bl7ptr, span*92)
+            fileio:close(refnum)
+        fin
+        dhgrMemBl7(0,  0, span/4, 92, bl7ptr, span)
+        heapRelease(bl7ptr)
+    fin
+    dcgrFont(fontGG)
+    strInfo = @infoText
+    strY    = 100
+    while ^strInfo and strY < 192
+        extX, extY = dcgrStrExtents(strInfo)
+        strX = 70 - (extX + 1)/2
+        dcgrColor(CLR_BLACK)
+        dcgrRect(strX - 1, strY - extY + 1, extX + 4, extY + 2)
+        dcgrRect(strX - 2, strY - extY + 2, extX + 6, extY)
+        dcgrColor(CLR_WHITE)
+        dcgrStr(strX, strY, strInfo)
+        strY = strY + extY + 2// 12
+        strInfo = strInfo + ^strInfo + 1
+    loop
+end
 def drawFrame(x, y, w, h)#0
     byte r, b
 
@@ -305,13 +374,15 @@ def drawMenu#0
     for i = 0 to 3
         dcgrPixMap(i*TILE_WIDTH + i + 72, 32, SPRITE_WIDTH, SPRITE_HEIGHT, spriteList + (i*4+HORDE_BASE)*SPRITE_SIZE)
     next
+    dcgrFont(FONT_DEF_THIN)
     dcgrStr(15, 44, ">")
     dcgrStr(15, 53, "SEAN'S")
     dcgrStr(15, 62, "GARAGE")
     dcgrStr(15, 71, "GIVEAWAY")
     dcgrStr(15, 80, ">")
     dcgrStr(92, 180, "8 bit shack")
-    dcgrStr(96, 190, "2026 v0.2")
+    dcgrStr(96, 190, "2026 v")
+    dcgrStr(120, 190, @ggVersion)
     dcgrColor(CLR_WHITE)
     dcgrBoldStr(CLR_BLACK, 70-24, 10, "Score:")
     dcgrColor(CLR_WHITE)
@@ -319,11 +390,36 @@ def drawMenu#0
     for i = 0 to 4; drawItem(i); next
     drawName
 end
+def drawLeaderBoard#0
+    byte i
+    char[4] str
+    var leader
+
+    dcgrColor(CLR_DRKBLUE)
+    dhgrClearBl7(0, 0, SCR_WIDTH7, SCR_HEIGHT)
+    dcgrColor(CLR_WHITE)
+    dcgrBoldStr(CLR_BLACK, 70-20, 10, "Top Scores")
+    dcgrPixMap(20, 20, SPRITE_WIDTH, SPRITE_HEIGHT, spriteList + (WOZ-1)*SPRITE_SIZE)
+    dcgrPixMap(110, 20, SPRITE_WIDTH, SPRITE_HEIGHT, spriteList + (WOZ-1)*SPRITE_SIZE)
+    leader = @leaderBoard
+    dcgrColor(CLR_WHITE)
+    for i = 1 to 10
+        dcgrStr(i == 10 ?? 46 :: 50, i*12+20, itoa(@str, i))
+        str[0] = 3
+        str[1] = leader->[0]
+        str[2] = leader->[1]
+        str[3] = leader->[2]
+        dcgrStr(62, i*12+20, @str)
+        dcgrStr(82, i*12+20, itoa(@str, leader->[3]))
+        leader = leader + t_leaders
+    next
+end
 def drawMessage(msg)#0
     dhgrMemBl7(4*TILE_WIDTH7, 4*TILE_HEIGHT, TILE_WIDTH7, TILE_HEIGHT, tileList+(TILE_TABLEMID-1)*TILE_SIZE, TILE_SPAN)
     dhgrMemBl7(5*TILE_WIDTH7, 4*TILE_HEIGHT, TILE_WIDTH7, TILE_HEIGHT, tileList+(TILE_TABLEMID-1)*TILE_SIZE, TILE_SPAN)
     dhgrMemBl7(6*TILE_WIDTH7, 4*TILE_HEIGHT, TILE_WIDTH7, TILE_HEIGHT, tileList+(TILE_TABLEMID-1)*TILE_SIZE, TILE_SPAN)
     if msg
+        dcgrFont(FONT_DEF_THIN)
         dcgrColor(CLR_WHITE)
         dcgrStr(5*TILE_WIDTH+TILE_WIDTH/2 - ^msg * 2, 5*TILE_HEIGHT - 10, msg)
     fin
@@ -358,6 +454,7 @@ def drawMap#0
             dhgrMemBl7(l*TILE_WIDTH7, k*TILE_HEIGHT, TILE_WIDTH7, TILE_HEIGHT, tileList+(tileMap.[k,l]-1)*TILE_SIZE, TILE_SPAN)
         next
     next
+    dcgrFont(FONT_DEF_THIN)
     dcgrColor(CLR_WHITE)
     dcgrStr(46, 15, "Level")
     dcgrStr(46+24, 15, itoa(@lvlStr, 10 - level))
@@ -705,11 +802,25 @@ def actionUpdatePlayer(event)#0
             is 'C' // Recalibrate joystick on the fly
                 joyLeft, joyRight, joyUp, joyDown = joyCalibrate
                 break
+            is 'P' // Pause
+                drawMessage("Paused...")
+                getc
+                drawMessage(NULL)
+                break
             is keyEscape
                 hoardActive = 0; hoardRemaining = 0; exit = TRUE
         wend
     fin
     moveNerd(nerdPlayer, moveDir)
+    addEvent(PLAYER_EQ, event)
+end
+def actionDemo(event)#0
+    if conio:keypressed()
+        when toupper(conio:getkey())
+            is keyEscape
+                hoardActive = 0; hoardRemaining = 0; exit = TRUE
+        wend
+    fin
     addEvent(PLAYER_EQ, event)
 end
 def playGG#0
@@ -737,6 +848,7 @@ def playGG#0
             addAction(conio:rnd() % (level * HORDE_SCALE + HORDE_EQ), @actionUpdateNerd, buzz)
         fin
     next
+    if nerdPlayer > 3; addAction(1, @actionDemo, 0); fin
     //
     // Initialize hoard
     //
@@ -784,6 +896,78 @@ def playGG#0
     next
 end
 //
+// Top scores
+//
+def loadLeaderBoard#0
+    byte refnum
+
+    refnum = fileio:open(@leaderName)
+    if refnum
+        fileio:read(refnum, @leaderBoard, t_leaders*10)
+        fileio:close(refnum)
+    fin
+end
+def storeLeaderBoard#0
+    byte refnum
+
+    if updateLeaders
+        fileio:destroy(@leaderName)
+        fileio:create(@leaderName, $06, $0000)
+        refnum = fileio:open(@leaderName)
+        if refnum
+            fileio:write(refnum, @leaderBoard, t_leaders*10)
+            fileio:close(refnum)
+        fin
+    fin
+end
+def updateLeaderBoard#0
+    byte pulse, pos, key
+    var leader
+    byte[2] initial
+
+    for leader = 0 to 9
+        if leaderBoard[leader * t_leaders + 3] < totalScore; break; fin
+    next
+    if leader == 10 or nerdPlayer > 3; return; fin
+    updateLeaders = TRUE
+    memcpy(@leaderBoard + (leader + 1) * t_leaders, @leaderBoard + leader * t_leaders, (9 - leader) * t_leaders)
+    leader = @leaderBoard + leader * t_leaders
+    leader->[0] = '_'
+    leader->[1] = '_'
+    leader->[2] = '_'
+    leader->[3] = totalScore
+    dcgrColor(CLR_BLACK)
+    dhgrClearBl7(3*TILE_WIDTH7, 3*TILE_HEIGHT, TILE_WIDTH7*5, TILE_HEIGHT*3)
+    dcgrFont(FONT_DEF_THIN)
+    dcgrColor(CLR_AQUA)
+    dcgrBoldStr(CLR_MAGENTA, 5*TILE_WIDTH+TILE_WIDTH/2 - 15 * 2, 5*TILE_HEIGHT - 28, "Enter Initials")
+    dcgrColor(CLR_WHITE)
+    dcgrStr(5*TILE_WIDTH+TILE_WIDTH/2 - 4 * 2, 5*TILE_HEIGHT - 8, "_ _ _")
+    initial[0] = 1
+    initial[1] = leader->[0]
+    pos        = 0
+    repeat
+        dcgrColor(pulse)
+        dcgrStr(5*TILE_WIDTH+TILE_WIDTH/2 - 4 * 2 + pos * 8, 5*TILE_HEIGHT - 8, @initial)
+        pulse++
+        key = 0
+        if conio:keypressed()
+            key = toupper(getc)
+            if key >= 'A' and key <= 'Z'
+                initial[1] = key
+                dcgrColor(CLR_BLACK)
+                dcgrRect(5*TILE_WIDTH+TILE_WIDTH/2 - 4 * 2 + pos * 8, 5*TILE_HEIGHT - 16, 4, 8)
+                dcgrColor(CLR_WHITE)
+                dcgrStr(5*TILE_WIDTH+TILE_WIDTH/2 - 4 * 2 + pos * 8, 5*TILE_HEIGHT - 8, @initial)
+                leader->[pos] = key
+                pos++
+                if pos > 2; pos = 0; fin
+                initial[1] = leader->[pos]
+            fin
+        fin
+    until key == keyEnter
+end
+//
 // Menu interface
 //
 def randomize#0
@@ -794,7 +978,7 @@ def randomize#0
     fin
 end
 def info#0
-    screenRead("GG.DHGR")
+    drawInfo
     getc
     drawMenu
 end
@@ -804,9 +988,15 @@ def nerdNext#0
     nerdPlayer = (nerdPlayer + 1) & (NUM_NERDS - 1)
     drawName
 end
+def scores#0
+    drawLeaderBoard
+    getc
+    drawMenu
+end
 def menu
     byte item, pulse, key
 
+    if nerdPlayer > 3; nerdPlayer = 3; fin
     drawMenu
     item = 0
     while TRUE
@@ -863,10 +1053,12 @@ def menu
                 nerdNext
                 break
             is 'S'
-                dcgrColor(CLR_BLACK)
-                drawItem(item)
+                scores
                 item = 3
                 break
+            is 'D'
+                nerdPlayer = 4
+                return TRUE
             is keyArrowDown
                 dcgrColor(CLR_BLACK)
                 drawItem(item)
@@ -882,6 +1074,7 @@ def menu
                     is 0; return TRUE
                     is 1; info; break
                     is 2; nerdNext; break
+                    is 3; scores; break
                     is 4; return FALSE
                 wend
         wend
@@ -921,7 +1114,8 @@ while ^arg and ^(arg + 1) == '-'
     wend
     arg = argNext(arg)
 loop
-dcgrFont(FONT_DEF_THIN)
+fontGG = fontRead("GG.FON")
+loadLeaderBoard
 loadTiles
 loadSprites
 if tileList <> NULL and spriteList <> NULL
@@ -933,13 +1127,17 @@ if tileList <> NULL and spriteList <> NULL
     // Run, Rinse, Repeat
     //
     while menu
-        exit = FALSE
+        totalScore = 0
+        exit       = FALSE
+        level      = 9
         while level and not exit
             playGG
             level--
         loop
+        updateLeaderBoard
     loop
 fin
+storeLeaderBoard
 dhgrMode(DHGR_TEXT_MODE)
 //
 // Detach interrupts
