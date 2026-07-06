@@ -9,11 +9,13 @@ include "../inc/dhgrutils.plh"
 include "event.plh"
 include "sean.plh"
 sysflags resxtxt1|reshgr1|resxhgr1|nojitc
+const page1m = $C054
+const page1x = $C055
 
 //
 // Version
 //
-char ggVersion = "0.4d"
+char ggVersion = "0.5q"
 //
 // Predefines
 //
@@ -98,7 +100,7 @@ const ZONE_SW    = ZONE_SOUTH|ZONE_WEST
 // Joystick values
 //
 byte joyX, joyY, btn0, btn1, buzz
-byte joyLeft, joyRight, joyUp, joyDown
+byte joyLeft, joyRight, joyUp, joyDown, altInputDir
 //
 // Levels
 //
@@ -137,13 +139,44 @@ char          = "Beat the rivals. Have fun. Go!"
 char          = ""
 var fontGG
 //
+// Random ending quotes
+//
+const NUM_QUOTES = 25
+char loserText[]
+char             = "Cards on the table, parts in my pocket"
+char             = "Loot the loot before they reboot"
+char             = "Finders keepers, losers weepers"
+char             = "Greed is good, bytes are better"
+char             = "Stack the deck, fill the slots"
+char             = "Open Apple + Control + Defeat"
+char             = "Always playing the right card"
+char             = "I'm not stuck, I'm buffering"
+char             = "Born to game, forced to load"
+char             = "Lag is just a state of mind"
+char             = "Snag the card, win the hand"
+char             = "You hesitate, I appropriate"
+char             = "Steal fast, regret faster"
+char             = "I overclocked my reflexes"
+char             = "Card grabbed, slot filled"
+char             = "Snooze and lose your RAM"
+char             = "Hot-swap the competition"
+char             = "Eject before they expect"
+char             = "Format the competition"
+char             = "Every part for itself"
+char             = "Hands off my floppy!"
+char             = "You snooze, I seize"
+char             = "Cache me if you can"
+char             = "Plug it and chug it"
+char             = "RAM and grab it"
+//
 // Leaderboards
 //
 struc t_leaders
     char[3] initials
     byte    bestscore
 end
-char leaderBoard  = 'W', 'O', 'Z', 100
+char leaderBoard  = 'W', 'O', 'Z', 110
+char              = 'W', 'O', 'Z', 100
 char              = 'W', 'O', 'Z', 90
 char              = 'W', 'O', 'Z', 80
 char              = 'W', 'O', 'Z', 70
@@ -152,9 +185,7 @@ char              = 'W', 'O', 'Z', 50
 char              = 'W', 'O', 'Z', 40
 char              = 'W', 'O', 'Z', 30
 char              = 'W', 'O', 'Z', 20
-char              = 'W', 'O', 'Z', 10
-byte updateLeaders
-char leaderName = "LEADERBOARD"
+char leaderName   = "LEADERBOARD"
 //
 // This fixes the Virtual ][ bug with outstanding Mockingboard interrupts
 //
@@ -174,7 +205,7 @@ def assert(val, msg)#0
     fin
 end
 //
-// String utilities
+// Utility functions
 //
 def strcati(str, i)#0
     if i >= 10; strcati(str, i / 10); fin
@@ -186,6 +217,23 @@ def itoa(str, i)#1
     if i < 0; ^str = 1; ^(str+1) = '-'; i = -i; fin
     strcati(str, i)
     return str
+end
+def wait(delay)#0
+    while delay
+        call($FCA8, 255, 0, 0, 0)
+        delay--
+    loop
+end
+def waitButtonKey#0
+    while TRUE
+        if (^$C061 | ^$C062) & $80 // Look for joystick button pushed
+            return
+        fin
+        if conio:keypressed()
+            getc
+            return
+        fin
+    loop
 end
 //
 // Load assets
@@ -237,11 +285,36 @@ end
 //
 // Drawing utilites
 //
+def drawCenteredMsg(strY, msg)
+    byte strX, extX, extY
+
+    extX, extY = dcgrStrExtents(msg)
+    strX = 70 - (extX + 1)/2
+    dcgrColor(CLR_BLACK)
+    dcgrRect(strX - 1, strY - extY + 1, extX + 4, extY + 2)
+    dcgrRect(strX - 2, strY - extY + 2, extX + 6, extY)
+    dcgrColor(CLR_WHITE)
+    dcgrStr(strX, strY, msg)
+    return extY
+end
+def rndQuote#0
+    byte i
+    var msg
+
+    msg = @loserText
+    i = conio:rnd() % NUM_QUOTES
+    while i
+        msg = msg + ^msg + 1
+        i--
+    loop
+    dcgrFont(fontGG)
+    drawCenteredMsg(5*TILE_HEIGHT - 10, msg)
+    waitButtonKey
+end
 def drawInfo#0
     var bl7ptr, span
     byte refnum
-    byte strX, strY, extX, extY
-    byte h, v
+    byte strY
     var strInfo
 
     dcgrColor(CLR_GREEN)
@@ -260,14 +333,7 @@ def drawInfo#0
     strInfo = @infoText
     strY    = 100
     while ^strInfo and strY < 192
-        extX, extY = dcgrStrExtents(strInfo)
-        strX = 70 - (extX + 1)/2
-        dcgrColor(CLR_BLACK)
-        dcgrRect(strX - 1, strY - extY + 1, extX + 4, extY + 2)
-        dcgrRect(strX - 2, strY - extY + 2, extX + 6, extY)
-        dcgrColor(CLR_WHITE)
-        dcgrStr(strX, strY, strInfo)
-        strY = strY + extY + 2// 12
+        strY = strY + drawCenteredMsg(strY, strInfo) + 2// 12
         strInfo = strInfo + ^strInfo + 1
     loop
 end
@@ -775,16 +841,38 @@ def actionUpdatePlayer(event)#0
     byte moveDir
 
     moveDir = MOVE_NONE
-    if joyX < joyLeft
-        moveDir = MOVE_LEFT
-    elsif joyX > joyRight
-        moveDir = MOVE_RIGHT
+    if altInputDir & 1
+        if joyY < joyUp
+            moveDir = MOVE_UP
+            if conio:keypressed(); getc; fin
+        elsif joyY > joyDown
+            moveDir = MOVE_DOWN
+            if conio:keypressed(); getc; fin
+        fin
+        if joyX < joyLeft
+            moveDir = MOVE_LEFT
+            if conio:keypressed(); getc; fin
+        elsif joyX > joyRight
+            moveDir = MOVE_RIGHT
+            if conio:keypressed(); getc; fin
+        fin
+    else
+        if joyX < joyLeft
+            moveDir = MOVE_LEFT
+            if conio:keypressed(); getc; fin
+        elsif joyX > joyRight
+            moveDir = MOVE_RIGHT
+            if conio:keypressed(); getc; fin
+        fin
+        if joyY < joyUp
+            moveDir = MOVE_UP
+            if conio:keypressed(); getc; fin
+        elsif joyY > joyDown
+            moveDir = MOVE_DOWN
+            if conio:keypressed(); getc; fin
+        fin
     fin
-    if joyY < joyUp
-        moveDir = MOVE_UP
-    elsif joyY > joyDown
-        moveDir = MOVE_DOWN
-    fin
+    altInputDir++
     if conio:keypressed()
         when toupper(conio:getkey())
             is keyArrowUp
@@ -804,7 +892,7 @@ def actionUpdatePlayer(event)#0
                 break
             is 'P' // Pause
                 drawMessage("Paused...")
-                getc
+                waitButtonKey
                 drawMessage(NULL)
                 break
             is keyEscape
@@ -886,14 +974,12 @@ def playGG#0
         doEvents
     loop
     totalScore = totalScore + nerdScore[nerdPlayer] // Add to total score
-    drawMessage(exit ?? "Quitter!" :: level == 1 ?? "Finished!" :: "Next Level!")
-    conio:tone(30, 20)
-    conio:tone(200, 10)
-    for hoardActive = 255 downto 0
-        for hoardAvailable = 7 downto 0
-            if conio:keypressed(); conio:getkey(); return ;fin
-        next
-    next
+    if level > 1
+        drawMessage(exit ?? "Quitter!" :: "Next Level!")
+        conio:tone(30, 20)
+        conio:tone(200, 10)
+        wait(5)
+    fin
 end
 //
 // Top scores
@@ -910,17 +996,15 @@ end
 def storeLeaderBoard#0
     byte refnum
 
-    if updateLeaders
-        fileio:destroy(@leaderName)
-        fileio:create(@leaderName, $06, $0000)
-        refnum = fileio:open(@leaderName)
-        if refnum
-            fileio:write(refnum, @leaderBoard, t_leaders*10)
-            fileio:close(refnum)
-        fin
+    fileio:destroy(@leaderName)
+    fileio:create(@leaderName, $06, $0000)
+    refnum = fileio:open(@leaderName)
+    if refnum
+        fileio:write(refnum, @leaderBoard, t_leaders*10)
+        fileio:close(refnum)
     fin
 end
-def updateLeaderBoard#0
+def updateLeaderBoard#1
     byte pulse, pos, key
     var leader
     byte[2] initial
@@ -928,8 +1012,7 @@ def updateLeaderBoard#0
     for leader = 0 to 9
         if leaderBoard[leader * t_leaders + 3] < totalScore; break; fin
     next
-    if leader == 10 or nerdPlayer > 3; return; fin
-    updateLeaders = TRUE
+    if leader == 10 or nerdPlayer > 3; return FALSE; fin
     memcpy(@leaderBoard + (leader + 1) * t_leaders, @leaderBoard + leader * t_leaders, (9 - leader) * t_leaders)
     leader = @leaderBoard + leader * t_leaders
     leader->[0] = '_'
@@ -953,33 +1036,52 @@ def updateLeaderBoard#0
         key = 0
         if conio:keypressed()
             key = toupper(getc)
-            if key >= 'A' and key <= 'Z'
-                initial[1] = key
+        else
+            joyX, joyY, btn0, btn1 = joyPos(0)
+            if joyX > joyRight
+                key = initial[1]
+                wait(2)
+                if conio:keypressed(); getc; fin
+            fin
+            if joyY < joyUp
                 dcgrColor(CLR_BLACK)
                 dcgrRect(5*TILE_WIDTH+TILE_WIDTH/2 - 4 * 2 + pos * 8, 5*TILE_HEIGHT - 16, 4, 8)
-                dcgrColor(CLR_WHITE)
-                dcgrStr(5*TILE_WIDTH+TILE_WIDTH/2 - 4 * 2 + pos * 8, 5*TILE_HEIGHT - 8, @initial)
-                leader->[pos] = key
-                pos++
-                if pos > 2; pos = 0; fin
-                initial[1] = leader->[pos]
+                initial[1]++; if initial[1] < 'A' or initial[1] > 'Z'; initial[1] = 'A'; fin
+                wait(1)
+                if conio:keypressed(); getc; fin
+            elsif joyY > joyDown
+                dcgrColor(CLR_BLACK)
+                dcgrRect(5*TILE_WIDTH+TILE_WIDTH/2 - 4 * 2 + pos * 8, 5*TILE_HEIGHT - 16, 4, 8)
+                initial[1]--; if initial[1] < 'A' or initial[1] > 'Z'; initial[1] = 'Z'; fin
+                wait(1)
+                if conio:keypressed(); getc; fin
+            fin
+            if btn0 or btn1
+                leader->[pos] = initial[1]
+                key = keyEnter
             fin
         fin
+        if key >= 'A' and key <= 'Z'
+            initial[1] = key
+            dcgrColor(CLR_BLACK)
+            dcgrRect(5*TILE_WIDTH+TILE_WIDTH/2 - 4 * 2 + pos * 8, 5*TILE_HEIGHT - 16, 4, 8)
+            dcgrColor(CLR_WHITE)
+            dcgrStr(5*TILE_WIDTH+TILE_WIDTH/2 - 4 * 2 + pos * 8, 5*TILE_HEIGHT - 8, @initial)
+            leader->[pos] = key
+            pos++
+            if pos > 2; pos = 0; fin
+            initial[1] = leader->[pos]
+        fin
     until key == keyEnter
+    storeLeaderBoard
+    return TRUE
 end
 //
 // Menu interface
 //
-def randomize#0
-    conio:rnd()
-    if (^$C061 | ^$C062) & $80 // Look for joystick button pushed
-        getc
-        musicStop
-    fin
-end
 def info#0
     drawInfo
-    getc
+    waitButtonKey
     drawMenu
 end
 def nerdNext#0
@@ -990,7 +1092,7 @@ def nerdNext#0
 end
 def scores#0
     drawLeaderBoard
-    getc
+    waitButtonKey
     drawMenu
 end
 def menu
@@ -1013,13 +1115,19 @@ def menu
             joyX, joyY, btn0, btn1 = joyPos(0)
             if joyX < joyLeft
                 key = keyArrowLeft
+                if conio:keypressed(); getc; fin
             elsif joyX > joyRight
                 key = keyArrowRight
+                if conio:keypressed(); getc; fin
             fin
             if joyY < joyUp
                 key = keyArrowUp
+                wait(2)
+                if conio:keypressed(); getc; fin
             elsif joyY > joyDown
                 key = keyArrowDown
+                wait(2)
+                if conio:keypressed(); getc; fin
             fin
             if btn0 or btn1
                 key = keyEnter
@@ -1083,6 +1191,15 @@ def menu
     return FALSE
 end
 //
+// Splash screen
+//
+def randomize#0
+    conio:rnd()
+    if (^$C061 | ^$C062) & $80 // Look for joystick button pushed
+        musicStop
+    fin
+end
+//
 // Hook CYA IRQ handler into ProDOS IRQ chain
 //
 params.0 = 2
@@ -1134,10 +1251,11 @@ if tileList <> NULL and spriteList <> NULL
             playGG
             level--
         loop
-        updateLeaderBoard
+        if not updateLeaderBoard
+            rndQuote
+        fin
     loop
 fin
-storeLeaderBoard
 dhgrMode(DHGR_TEXT_MODE)
 //
 // Detach interrupts
