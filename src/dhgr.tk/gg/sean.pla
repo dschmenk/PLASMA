@@ -15,7 +15,7 @@ const page1x = $C055
 //
 // Version
 //
-char ggVersion = "0.5q"
+char ggVersion = "0.6b"
 //
 // Predefines
 //
@@ -100,15 +100,18 @@ const ZONE_SW    = ZONE_SOUTH|ZONE_WEST
 // Joystick values
 //
 byte joyX, joyY, btn0, btn1, buzz
-byte joyLeft, joyRight, joyUp, joyDown, altInputDir
+byte joyLeft, joyRight, joyUp, joyDown, altJoyDir
 //
 // Levels
 //
-const HORDE_SCALE = 5
-const HORDE_EQ    = 4
-const HOARD_SCALE = HORDE_SCALE * 10
-const PLAYER_EQ   = HORDE_EQ + 1
-byte level, totalScore, exit
+const HORDE_SCALE  = 3
+const HORDE_EQ     = 0
+const HOARD_SCALE  = 20
+const HOARD_EQ     = 5
+const PLAYER_EQ    = 0
+const PLAYER_SCALE = 1
+byte level = 9
+byte totalScore, exit
 var  seqSplash
 //
 // Sound F/X
@@ -118,12 +121,13 @@ const SFX_PICKUP  = 1
 const SFX_JACKPOT = 2
 const SFX_SCORE   = 3
 const SFX_STEAL   = 4
-byte sfxBump      = 10, 11, 12, 13, 14, 15, 15, 15, 15, 0
+byte sfxBump      = 9, 11, 13, 15, 0
 byte sfxPickup    = 4, 5, 6, 7, 8, 9, 10, 0
 byte sfxJackpot   = 5, 10, 15, 20, 15, 10, 5, 10, 15, 20, 15, 10, 5 // Run into score sfx
 byte sfxScore     = 5, 10, 15, 5, 10, 15, 0
 byte sfxSteal     = 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0
 var sfxList       = @sfxBump, @sfxPickup, @sfxJackpot, @sfxScore, @sfxSteal
+byte bumping
 //
 // Info screen text
 //
@@ -175,8 +179,7 @@ struc t_leaders
     char[3] initials
     byte    bestscore
 end
-char leaderBoard  = 'W', 'O', 'Z', 110
-char              = 'W', 'O', 'Z', 100
+char leaderBoard  = 'W', 'O', 'Z', 100
 char              = 'W', 'O', 'Z', 90
 char              = 'W', 'O', 'Z', 80
 char              = 'W', 'O', 'Z', 70
@@ -185,6 +188,7 @@ char              = 'W', 'O', 'Z', 50
 char              = 'W', 'O', 'Z', 40
 char              = 'W', 'O', 'Z', 30
 char              = 'W', 'O', 'Z', 20
+char              = 'W', 'O', 'Z', 10
 char leaderName   = "LEADERBOARD"
 //
 // This fixes the Virtual ][ bug with outstanding Mockingboard interrupts
@@ -279,6 +283,9 @@ def actionSFX(event)#0
         event->evParam.1 = sfxIndex + 1
         addEvent(1, event)
     else
+        if sfxTable == SFX_BUMP
+            bumping = FALSE
+        fin
         eventFree(event)
     fin
 end
@@ -291,8 +298,8 @@ def drawCenteredMsg(strY, msg)
     extX, extY = dcgrStrExtents(msg)
     strX = 70 - (extX + 1)/2
     dcgrColor(CLR_BLACK)
-    dcgrRect(strX - 1, strY - extY + 1, extX + 4, extY + 2)
-    dcgrRect(strX - 2, strY - extY + 2, extX + 6, extY)
+    dcgrRect(strX - 1, strY - extY,     extX + 4, extY + 2)
+    dcgrRect(strX - 2, strY - extY + 1, extX + 6, extY)
     dcgrColor(CLR_WHITE)
     dcgrStr(strX, strY, msg)
     return extY
@@ -309,6 +316,10 @@ def rndQuote#0
     loop
     dcgrFont(fontGG)
     drawCenteredMsg(5*TILE_HEIGHT - 10, msg)
+    conio:tone(100, 20)
+    conio:tone(75, 30)
+    conio:tone(100, 40)
+    if conio:keypressed(); getc; fin
     waitButtonKey
 end
 def drawInfo#0
@@ -552,7 +563,10 @@ def hitCheck(nerd, x, y)#1
                         addAction(1, @actionSFX, SFX_STEAL)
                         moveNerd(i, MOVE_NONE) // Draw sealee without hoard
                     else
-                        addAction(1, @actionSFX, SFX_BUMP)
+                        if not bumping // Don't overload bumping sound effects
+                            bumping = TRUE
+                            addAction(1, @actionSFX, SFX_BUMP)
+                        fin
                     fin
                     return HIT_NERD
                 fin
@@ -593,7 +607,7 @@ def hitCheck(nerd, x, y)#1
             for i = 0 to TABLE_POSITIONS-1
                 if tablePosX[i] == x and tablePosY[i] == y; break; fin
             next
-            if hoardType[i] // Pick up HW
+            if hoardType[i] and nerdHoard[nerd] <> JACKPOT // Pick up HW (but avoid swapping out jackpot)
                 dhgrMemBl7(x*TILE_WIDTH7, y*TILE_HEIGHT, TILE_WIDTH7, TILE_HEIGHT, tileList+(tileMap.[y,x]-1)*TILE_SIZE, TILE_SPAN)
                 nerdHoard[nerd], hoardType[i] = hoardType[i], nerdHoard[nerd] // Swap goods
                 if hoardType[i]
@@ -723,7 +737,7 @@ def actionUpdateHoard(event)#0
     //
     addHoard
     if hoardRemaining
-        addEvent(conio:rnd() % ((level + 1) * HOARD_SCALE), event)
+        addEvent(conio:rnd() % (level * HOARD_SCALE + HOARD_EQ), event)
     else
         eventFree(event)
     fin
@@ -832,16 +846,16 @@ def joyCalibrate#4
     byte x, y
 
     x, y, drop, drop = joyPos(0)
-    if x > 1 and y > 1 and x < MAX_JOY and y < MAX_JOY
+    if x < MAX_JOY and y < MAX_JOY
         return x / 2, (x + MAX_JOY) / 2, y / 2, (y + MAX_JOY) / 2 
     fin
-    return 0, 0, MAX_JOY, MAX_JOY
+    return 0, MAX_JOY, 0, MAX_JOY
 end
 def actionUpdatePlayer(event)#0
     byte moveDir
 
     moveDir = MOVE_NONE
-    if altInputDir & 1
+    if altJoyDir & 1 // Alternate joystick direction priority
         if joyY < joyUp
             moveDir = MOVE_UP
             if conio:keypressed(); getc; fin
@@ -872,19 +886,27 @@ def actionUpdatePlayer(event)#0
             if conio:keypressed(); getc; fin
         fin
     fin
-    altInputDir++
+    altJoyDir++
     if conio:keypressed()
         when toupper(conio:getkey())
             is keyArrowUp
+            is 'I'
+            is 'W'
                 moveDir = MOVE_UP
                 break
             is keyArrowLeft
+            is 'J'
+            is 'A'
                 moveDir = MOVE_LEFT
                 break
             is keyArrowRight
+            is 'L'
+            is 'D'
                 moveDir = MOVE_RIGHT
                 break
             is keyArrowDown
+            is 'K'
+            is 'S'
                 moveDir = MOVE_DOWN
                 break
             is 'C' // Recalibrate joystick on the fly
@@ -900,7 +922,7 @@ def actionUpdatePlayer(event)#0
         wend
     fin
     moveNerd(nerdPlayer, moveDir)
-    addEvent(PLAYER_EQ, event)
+    addEvent(level * PLAYER_SCALE + PLAYER_EQ, event)
 end
 def actionDemo(event)#0
     if conio:keypressed()
@@ -923,6 +945,7 @@ def playGG#0
     //
     // Intitialize horde
     //
+    args = (level * HORDE_SCALE + HORDE_EQ) / 3
     for buzz = 0 to NUM_NERDS-1
         nerdX[buzz]     = 1
         nerdY[buzz]     = buzz * 2 + 1
@@ -931,12 +954,13 @@ def playGG#0
         drawScore(buzz)
         moveNerd(buzz, MOVE_NONE)
         if buzz == nerdPlayer
-            addAction(PLAYER_EQ, @actionUpdatePlayer, buzz)
+            addAction(level * PLAYER_SCALE + PLAYER_EQ + buzz, @actionUpdatePlayer, buzz)
         else
-            addAction(conio:rnd() % (level * HORDE_SCALE + HORDE_EQ), @actionUpdateNerd, buzz)
+            addAction(args + buzz, @actionUpdateNerd, buzz)
+            args = args + (level * HORDE_SCALE + HORDE_EQ) / 3
         fin
     next
-    if nerdPlayer > 3; addAction(1, @actionDemo, 0); fin
+    if nerdPlayer > 3; addAction(args, @actionDemo, 0); fin
     //
     // Initialize hoard
     //
@@ -951,7 +975,7 @@ def playGG#0
     addHoard
     addHoard
     addHoard
-    addAction((level + 1) * HOARD_SCALE, @actionUpdateHoard, 0)
+    addAction(level * HOARD_SCALE + HOARD_EQ, @actionUpdateHoard, 0)
     //
     // Go!
     //
@@ -1009,6 +1033,7 @@ def updateLeaderBoard#1
     var leader
     byte[2] initial
 
+    if conio:keypressed(); getc; fin // Clear any pending keypresses
     for leader = 0 to 9
         if leaderBoard[leader * t_leaders + 3] < totalScore; break; fin
     next
@@ -1047,27 +1072,28 @@ def updateLeaderBoard#1
                 dcgrColor(CLR_BLACK)
                 dcgrRect(5*TILE_WIDTH+TILE_WIDTH/2 - 4 * 2 + pos * 8, 5*TILE_HEIGHT - 16, 4, 8)
                 initial[1]++; if initial[1] < 'A' or initial[1] > 'Z'; initial[1] = 'A'; fin
+                leader->[pos] = initial[1]
                 wait(1)
                 if conio:keypressed(); getc; fin
             elsif joyY > joyDown
                 dcgrColor(CLR_BLACK)
                 dcgrRect(5*TILE_WIDTH+TILE_WIDTH/2 - 4 * 2 + pos * 8, 5*TILE_HEIGHT - 16, 4, 8)
                 initial[1]--; if initial[1] < 'A' or initial[1] > 'Z'; initial[1] = 'Z'; fin
+                leader->[pos] = initial[1]
                 wait(1)
                 if conio:keypressed(); getc; fin
             fin
             if btn0 or btn1
-                leader->[pos] = initial[1]
                 key = keyEnter
             fin
         fin
         if key >= 'A' and key <= 'Z'
             initial[1] = key
+            leader->[pos] = key
             dcgrColor(CLR_BLACK)
             dcgrRect(5*TILE_WIDTH+TILE_WIDTH/2 - 4 * 2 + pos * 8, 5*TILE_HEIGHT - 16, 4, 8)
             dcgrColor(CLR_WHITE)
             dcgrStr(5*TILE_WIDTH+TILE_WIDTH/2 - 4 * 2 + pos * 8, 5*TILE_HEIGHT - 8, @initial)
-            leader->[pos] = key
             pos++
             if pos > 2; pos = 0; fin
             initial[1] = leader->[pos]
@@ -1101,6 +1127,7 @@ def menu
     if nerdPlayer > 3; nerdPlayer = 3; fin
     drawMenu
     item = 0
+    if conio:keypressed(); getc; fin // Clear any pending keypresses
     while TRUE
         dcgrColor(pulse >> 1)
         drawItem(item)
@@ -1206,6 +1233,10 @@ params.0 = 2
 params.1 = 3
 params:2 = @serviceCYA
 syscall($40, @params)
+//
+// Automatic joystick enable/calibration
+//
+joyLeft, joyRight, joyUp, joyDown = joyCalibrate
 dhgrMode(DHGR_COLOR_MODE)
 arg = argNext(argFirst)
 while ^arg and ^(arg + 1) == '-'
@@ -1237,16 +1268,11 @@ loadTiles
 loadSprites
 if tileList <> NULL and spriteList <> NULL
     //
-    // Automatic joystick enable/calibration
-    //
-    joyLeft, joyRight, joyUp, joyDown = joyCalibrate
-    //
     // Run, Rinse, Repeat
     //
     while menu
         totalScore = 0
         exit       = FALSE
-        level      = 9
         while level and not exit
             playGG
             level--
@@ -1254,6 +1280,7 @@ if tileList <> NULL and spriteList <> NULL
         if not updateLeaderBoard
             rndQuote
         fin
+        level = 9
     loop
 fin
 dhgrMode(DHGR_TEXT_MODE)
