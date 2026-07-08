@@ -15,7 +15,7 @@ const page1x = $C055
 //
 // Version
 //
-char ggVersion = "0.6b"
+char ggVersion = "0.6h"
 //
 // Predefines
 //
@@ -58,6 +58,7 @@ var spriteList = NULL
 // Nerds
 //
 const NUM_NERDS    = 4
+const NUM_DIRS     = 4
 const LOOK_FORWARD = 0
 const LOOK_RIGHT   = 1
 const LOOK_LEFT    = 2
@@ -79,6 +80,13 @@ byte[NUM_NERDS] nerdX = 2, 3, 4, 5
 byte[NUM_NERDS] nerdY = 2,  2,  2,  2
 byte[NUM_NERDS] nerdDir = LOOK_LEFT, LOOK_FORWARD, LOOK_FORWARD, LOOK_RIGHT
 byte[NUM_NERDS] nerdHoard, nerdScore
+//
+// Pre-rendered nerd tiles
+//
+var [NUM_DIRS] nerdBaseTile0, nerdBaseTile1, nerdBaseTile2, nerdBaseTile3
+var [NUM_NERDS] nerdBaseTile = @nerdBaseTile0, @nerdBaseTile1, @nerdBaseTile2, @nerdBaseTile3
+var [NUM_DIRS] nerdActiveTile0, nerdActiveTile1, nerdActiveTile2, nerdActiveTile3
+var [NUM_NERDS] nerdTile = @nerdActiveTile0, @nerdActiveTile1, @nerdActiveTile2, @nerdActiveTile3
 //
 // Hit tests
 //
@@ -104,13 +112,16 @@ byte joyLeft, joyRight, joyUp, joyDown, altJoyDir
 //
 // Levels
 //
-const HORDE_SCALE  = 3
-const HORDE_EQ     = 0
-const HOARD_SCALE  = 20
-const HOARD_EQ     = 5
-const PLAYER_EQ    = 0
-const PLAYER_SCALE = 1
+const HORDE_EQ        = 9
+const HORDE_MULSCALE  = 1
+const HORDE_DIVSCALE  = 1
+const HOARD_SCALE     = 50
+const HOARD_EQ        = 30
+const PLAYER_EQ       = 3
+const PLAYER_MULSCALE = 2
+const PLAYER_DIVSCALE = 1
 byte level = 9
+byte level2
 byte totalScore, exit
 var  seqSplash
 //
@@ -128,20 +139,6 @@ byte sfxScore     = 5, 10, 15, 5, 10, 15, 0
 byte sfxSteal     = 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0
 var sfxList       = @sfxBump, @sfxPickup, @sfxJackpot, @sfxScore, @sfxSteal
 byte bumping
-//
-// Info screen text
-//
-char infoText = "Every year, Sean opens "
-char          = "his garage and heart."
-char          = "Everything's free."
-char          = "One rule: Use 'em, don't sell 'em."
-char          = "Event starts - snag the most"
-char          = "computers before time runs out!"
-char          = "Spot a red box?"
-char          = "Show Sean - it's the jackpot!"
-char          = "Beat the rivals. Have fun. Go!"
-char          = ""
-var fontGG
 //
 // Random ending quotes
 //
@@ -257,7 +254,7 @@ def loadTiles#0
     fin
 end
 def loadSprites#0
-    byte refnum
+    byte refnum, nerd, dir
 
     refnum = fileio:open("SPRITES")
     if refnum
@@ -269,6 +266,37 @@ def loadSprites#0
         fin
         fileio:close(refnum)
     fin
+    //
+    // Render nerds into tiles
+    //
+    for nerd = 0 to NUM_NERDS-1
+        for dir = 0 to NUM_DIRS-1
+            nerdBaseTile[nerd, dir] = heapAlloc(TILE_SIZE)
+            dhgrSurfMem(OP_SRC, TILE_HEIGHT, nerdBaseTile[nerd, dir], TILE_SPAN)
+            dcgrColor(CLR_LTBLUE)
+            dhgrClearBl7(0, 0, TILE_WIDTH7, TILE_HEIGHT)
+            dcgrPixMap(0, 2, SPRITE_WIDTH, SPRITE_HEIGHT, spriteList + (HORDE_BASE + nerd*NUM_NERDS + dir)*SPRITE_SIZE)
+        next
+        for dir = 0 to NUM_DIRS-1
+            nerdTile[nerd, dir] = heapAlloc(TILE_SIZE)
+        next
+    next
+    dhgrSurfScr(OP_SRC)
+end
+def resetNerdTiles(nerd)#0
+    memcpy(nerdTile[nerd, 0], nerdBaseTile[nerd, 0], TILE_SIZE*NUM_DIRS)
+end
+def updateNerdTiles(nerd)#0
+    byte dir
+
+    for dir = 0 to NUM_DIRS-1
+        dhgrSurfMem(OP_SRC, TILE_HEIGHT, nerdTile[nerd, dir], TILE_SPAN)
+        //
+        // Draw nerd + any hoard to memory surface the size of a tile
+        //
+        dcgrPixMap(0, 0, SPRITE_WIDTH, SPRITE_HEIGHT, spriteList + (nerdHoard[nerd] + HOARD_BASE)*SPRITE_SIZE)
+    next
+    dhgrSurfScr(OP_SRC)
 end
 //
 // Sound F/X Action
@@ -292,20 +320,9 @@ end
 //
 // Drawing utilites
 //
-def drawCenteredMsg(strY, msg)
-    byte strX, extX, extY
-
-    extX, extY = dcgrStrExtents(msg)
-    strX = 70 - (extX + 1)/2
-    dcgrColor(CLR_BLACK)
-    dcgrRect(strX - 1, strY - extY,     extX + 4, extY + 2)
-    dcgrRect(strX - 2, strY - extY + 1, extX + 6, extY)
-    dcgrColor(CLR_WHITE)
-    dcgrStr(strX, strY, msg)
-    return extY
-end
 def rndQuote#0
     byte i
+    byte strX, strY, extX, extY
     var msg
 
     msg = @loserText
@@ -314,39 +331,19 @@ def rndQuote#0
         msg = msg + ^msg + 1
         i--
     loop
-    dcgrFont(fontGG)
-    drawCenteredMsg(5*TILE_HEIGHT - 10, msg)
+    strY = 5*TILE_HEIGHT - 10
+    extX, extY = dcgrStrExtents(msg)
+    strX = 70 - (extX + 1)/2
+    dcgrColor(CLR_BLACK)
+    dcgrRect(strX - 1, strY - extY - 1, extX + 4, extY + 3)
+    dcgrRect(strX - 2, strY - extY    , extX + 6, extY + 1)
+    dcgrColor(CLR_WHITE)
+    dcgrStr(strX, strY, msg)
     conio:tone(100, 20)
     conio:tone(75, 30)
     conio:tone(100, 40)
     if conio:keypressed(); getc; fin
     waitButtonKey
-end
-def drawInfo#0
-    var bl7ptr, span
-    byte refnum
-    byte strY
-    var strInfo
-
-    dcgrColor(CLR_GREEN)
-    dhgrClearBl7(0, 0, SCR_WIDTH7, SCR_HEIGHT)
-    bl7ptr, span = dhgrAllocBl7Mem(SCR_WIDTH, 92)
-    if bl7ptr
-        refnum = fileio:open("GGINFO.IMG")
-        if refnum
-            fileio:read(refnum, bl7ptr, span*92)
-            fileio:close(refnum)
-        fin
-        dhgrMemBl7(0,  0, span/4, 92, bl7ptr, span)
-        heapRelease(bl7ptr)
-    fin
-    dcgrFont(fontGG)
-    strInfo = @infoText
-    strY    = 100
-    while ^strInfo and strY < 192
-        strY = strY + drawCenteredMsg(strY, strInfo) + 2// 12
-        strInfo = strInfo + ^strInfo + 1
-    loop
 end
 def drawFrame(x, y, w, h)#0
     byte r, b
@@ -560,6 +557,8 @@ def hitCheck(nerd, x, y)#1
                         not nerdHoard[nerd] and nerdHoard[i] and nerdScore[nerd] <= nerdScore[i]
                         nerdHoard[nerd] = nerdHoard[i]
                         nerdHoard[i]    = 0
+                        resetNerdTiles(i)
+                        updateNerdTiles(nerd)
                         addAction(1, @actionSFX, SFX_STEAL)
                         moveNerd(i, MOVE_NONE) // Draw sealee without hoard
                     else
@@ -582,6 +581,7 @@ def hitCheck(nerd, x, y)#1
                 nerdScore[nerd]++
                 drawScore(nerd)
                 addAction(1, @actionSFX, SFX_SCORE)
+                resetNerdTiles(nerd)
             fin
             break
         is TILE_SEAN1
@@ -598,6 +598,7 @@ def hitCheck(nerd, x, y)#1
                 addAction(100, @actionSean, 0)
                 dhgrMemBl7(8*TILE_WIDTH7, 0, TILE_WIDTH7, TILE_HEIGHT, tileList+(TILE_SEAN3-1)*TILE_SIZE, TILE_SPAN)
                 dhgrMemBl7(9*TILE_WIDTH7, 0, TILE_WIDTH7, TILE_HEIGHT, tileList+(TILE_SEAN4-1)*TILE_SIZE, TILE_SPAN)
+                resetNerdTiles(nerd)
             fin
             break
         is TILE_TABLE1
@@ -609,7 +610,9 @@ def hitCheck(nerd, x, y)#1
             next
             if hoardType[i] and nerdHoard[nerd] <> JACKPOT // Pick up HW (but avoid swapping out jackpot)
                 dhgrMemBl7(x*TILE_WIDTH7, y*TILE_HEIGHT, TILE_WIDTH7, TILE_HEIGHT, tileList+(tileMap.[y,x]-1)*TILE_SIZE, TILE_SPAN)
+                if nerdHoard[nerd]; resetNerdTiles(nerd); fin
                 nerdHoard[nerd], hoardType[i] = hoardType[i], nerdHoard[nerd] // Swap goods
+                updateNerdTiles(nerd)
                 if hoardType[i]
                     dcgrPixMap(tablePosX[i] * TILE_WIDTH,       \
                                 tablePosY[i] * TILE_HEIGHT + 2, \
@@ -642,7 +645,6 @@ end
 def moveNerd(nerd, dir)#1
     byte oldX, oldY
     var moved
-    byte[TILE_SIZE] tileNerd
 
     oldX  = nerdX[nerd]
     oldY  = nerdY[nerd]
@@ -677,17 +679,6 @@ def moveNerd(nerd, dir)#1
             nerdDir[nerd] = LOOK_FORWARD
             break
     wend
-    //
-    // Draw nerd + any hoard to memory surface the size of a tile
-    //
-    dhgrSurfMem(OP_SRC, TILE_HEIGHT, @tileNerd, TILE_SPAN)
-    dcgrColor(CLR_LTBLUE)
-    dhgrClearBl7(0, 0, TILE_WIDTH7, TILE_HEIGHT)
-    dcgrPixMap(0, 2, SPRITE_WIDTH, SPRITE_HEIGHT, spriteList + (HORDE_BASE + nerd*NUM_NERDS + nerdDir[nerd])*SPRITE_SIZE)
-    if nerdHoard[nerd]
-        dcgrPixMap(0, 0, SPRITE_WIDTH, SPRITE_HEIGHT, spriteList + (nerdHoard[nerd] + HOARD_BASE)*SPRITE_SIZE)
-    fin
-    dhgrSurfScr(OP_SRC)
     if moved
         //
         // Erase previous position
@@ -698,7 +689,7 @@ def moveNerd(nerd, dir)#1
     //
     // Update nerd on screen
     //
-    dhgrMemBl7(nerdX[nerd] * TILE_WIDTH7,  nerdY[nerd] * TILE_HEIGHT, TILE_WIDTH7, TILE_HEIGHT, @tileNerd, TILE_SPAN)
+    dhgrMemBl7(nerdX[nerd] * TILE_WIDTH7,  nerdY[nerd] * TILE_HEIGHT, TILE_WIDTH7, TILE_HEIGHT, nerdTile[nerd, nerdDir[nerd]], TILE_SPAN)
     return moved
 end
 def addHoard#0
@@ -840,7 +831,7 @@ def actionUpdateNerd(event)#0
     if not moveNerd(nerd, moveDir) and (distX * distX + distY * distY) > 1
         moveNerd(nerd, conio:rnd() & MOVE_MASK) // Help get unstuck
     fin
-    addEvent(level * HORDE_SCALE + HORDE_EQ, event)
+    addEvent(level2 * HORDE_MULSCALE / HORDE_DIVSCALE + HORDE_EQ, event)
 end
 def joyCalibrate#4
     byte x, y
@@ -922,7 +913,7 @@ def actionUpdatePlayer(event)#0
         wend
     fin
     moveNerd(nerdPlayer, moveDir)
-    addEvent(level * PLAYER_SCALE + PLAYER_EQ, event)
+    addEvent(level * PLAYER_MULSCALE / PLAYER_DIVSCALE + PLAYER_EQ, event)
 end
 def actionDemo(event)#0
     if conio:keypressed()
@@ -931,7 +922,7 @@ def actionDemo(event)#0
                 hoardActive = 0; hoardRemaining = 0; exit = TRUE
         wend
     fin
-    addEvent(PLAYER_EQ, event)
+    addEvent(HORDE_EQ + PLAYER_EQ, event)
 end
 def playGG#0
     //
@@ -945,19 +936,22 @@ def playGG#0
     //
     // Intitialize horde
     //
-    args = (level * HORDE_SCALE + HORDE_EQ) / 3
+    level2 = level * level
+    args = (level2 * HORDE_MULSCALE / HORDE_DIVSCALE + HORDE_EQ) / 3
     for buzz = 0 to NUM_NERDS-1
         nerdX[buzz]     = 1
         nerdY[buzz]     = buzz * 2 + 1
+        nerdDir[buzz]   = LOOK_RIGHT
         nerdHoard[buzz] = 0
         nerdScore[buzz] = 0
         drawScore(buzz)
+        resetNerdTiles(buzz)
         moveNerd(buzz, MOVE_NONE)
         if buzz == nerdPlayer
-            addAction(level * PLAYER_SCALE + PLAYER_EQ + buzz, @actionUpdatePlayer, buzz)
+            addAction(level * PLAYER_MULSCALE / PLAYER_DIVSCALE + PLAYER_EQ + buzz, @actionUpdatePlayer, buzz)
         else
             addAction(args + buzz, @actionUpdateNerd, buzz)
-            args = args + (level * HORDE_SCALE + HORDE_EQ) / 3
+            args = args + (level2 * HORDE_MULSCALE / HORDE_DIVSCALE + HORDE_EQ) / 3
         fin
     next
     if nerdPlayer > 3; addAction(args, @actionDemo, 0); fin
@@ -1038,6 +1032,11 @@ def updateLeaderBoard#1
         if leaderBoard[leader * t_leaders + 3] < totalScore; break; fin
     next
     if leader == 10 or nerdPlayer > 3; return FALSE; fin
+    conio:tone(10, 40)
+    wait(1)
+    conio:tone(20,  30)
+    conio:tone(20,  30)
+    conio:tone(300, 5)
     memcpy(@leaderBoard + (leader + 1) * t_leaders, @leaderBoard + leader * t_leaders, (9 - leader) * t_leaders)
     leader = @leaderBoard + leader * t_leaders
     leader->[0] = '_'
@@ -1106,7 +1105,7 @@ end
 // Menu interface
 //
 def info#0
-    drawInfo
+    screenRead("GGINFO.DHGR")    
     waitButtonKey
     drawMenu
 end
@@ -1262,7 +1261,6 @@ while ^arg and ^(arg + 1) == '-'
     wend
     arg = argNext(arg)
 loop
-fontGG = fontRead("GG.FON")
 loadLeaderBoard
 loadTiles
 loadSprites
