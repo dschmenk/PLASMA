@@ -15,7 +15,7 @@ const page1x = $C055
 //
 // Version
 //
-char ggVersion = "0.6h"
+char ggVersion = "0.6w"
 //
 // Predefines
 //
@@ -58,6 +58,8 @@ var spriteList = NULL
 // Nerds
 //
 const NUM_NERDS    = 4
+const WOZ          = 4
+const SIGNED       = $80
 const NUM_DIRS     = 4
 const LOOK_FORWARD = 0
 const LOOK_RIGHT   = 1
@@ -72,21 +74,22 @@ const MOVE_MASK    = 3
 byte nerdPlayer    = 0
 char nerdDaniel    = "Daniel"
 char nerdBecky     = "Becky"
-char nerdHarriet   = "Sharon"
+char nerdSharon    = "Sharon"
 char nerdJavier    = "Jav Master"
-var  nerdName      = @nerdDaniel, @nerdBecky, @nerdHarriet, @nerdJavier
-byte[NUM_NERDS] nerdClr = CLR_GREEN, CLR_BROWN, CLR_GREY, CLR_ORANGE
-byte[NUM_NERDS] nerdX = 2, 3, 4, 5
-byte[NUM_NERDS] nerdY = 2,  2,  2,  2
-byte[NUM_NERDS] nerdDir = LOOK_LEFT, LOOK_FORWARD, LOOK_FORWARD, LOOK_RIGHT
-byte[NUM_NERDS] nerdHoard, nerdScore
+var nerdName       = @nerdDaniel, @nerdBecky, @nerdSharon, @nerdJavier
+byte nerdClr       = CLR_GREEN, CLR_BROWN, CLR_GREY, CLR_ORANGE
+byte nerdX         = 2, 3, 4, 5, 10
+byte nerdY         = 2,  2,  2,  2, 2
+byte nerdDir       = LOOK_FORWARD, LOOK_FORWARD, LOOK_FORWARD, LOOK_FORWARD, LOOK_FORWARD
+byte nerdHoard     = 0, 0, 0, 0, 0
+byte nerdScore     = 0, 0, 0, 0
 //
 // Pre-rendered nerd tiles
 //
-var [NUM_DIRS] nerdBaseTile0, nerdBaseTile1, nerdBaseTile2, nerdBaseTile3
-var [NUM_NERDS] nerdBaseTile = @nerdBaseTile0, @nerdBaseTile1, @nerdBaseTile2, @nerdBaseTile3
-var [NUM_DIRS] nerdActiveTile0, nerdActiveTile1, nerdActiveTile2, nerdActiveTile3
-var [NUM_NERDS] nerdTile = @nerdActiveTile0, @nerdActiveTile1, @nerdActiveTile2, @nerdActiveTile3
+var[NUM_DIRS] nerdBaseTile0, nerdBaseTile1, nerdBaseTile2, nerdBaseTile3, nerdBaseTile4
+var nerdBaseTile = @nerdBaseTile0, @nerdBaseTile1, @nerdBaseTile2, @nerdBaseTile3, @nerdBaseTile4
+var[NUM_DIRS] nerdActiveTile0, nerdActiveTile1, nerdActiveTile2, nerdActiveTile3, nerdActiveTile4
+var nerdTile = @nerdActiveTile0, @nerdActiveTile1, @nerdActiveTile2, @nerdActiveTile3, @nerdActiveTile4
 //
 // Hit tests
 //
@@ -120,6 +123,7 @@ const HOARD_EQ        = 30
 const PLAYER_EQ       = 3
 const PLAYER_MULSCALE = 2
 const PLAYER_DIVSCALE = 1
+const WOZ_MOVE        = 50
 byte level = 9
 byte level2
 byte totalScore, exit
@@ -132,12 +136,14 @@ const SFX_PICKUP  = 1
 const SFX_JACKPOT = 2
 const SFX_SCORE   = 3
 const SFX_STEAL   = 4
+const SFX_SIGN    = 5
 byte sfxBump      = 9, 11, 13, 15, 0
 byte sfxPickup    = 4, 5, 6, 7, 8, 9, 10, 0
 byte sfxJackpot   = 5, 10, 15, 20, 15, 10, 5, 10, 15, 20, 15, 10, 5 // Run into score sfx
 byte sfxScore     = 5, 10, 15, 5, 10, 15, 0
 byte sfxSteal     = 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0
-var sfxList       = @sfxBump, @sfxPickup, @sfxJackpot, @sfxScore, @sfxSteal
+byte sfxSign      = 5, 4, 3, 2, 1, 0
+var sfxList       = @sfxBump, @sfxPickup, @sfxJackpot, @sfxScore, @sfxSteal, @sfxSign
 byte bumping
 //
 // Random ending quotes
@@ -269,7 +275,7 @@ def loadSprites#0
     //
     // Render nerds into tiles
     //
-    for nerd = 0 to NUM_NERDS-1
+    for nerd = 0 to NUM_NERDS // Include Woz
         for dir = 0 to NUM_DIRS-1
             nerdBaseTile[nerd, dir] = heapAlloc(TILE_SIZE)
             dhgrSurfMem(OP_SRC, TILE_HEIGHT, nerdBaseTile[nerd, dir], TILE_SPAN)
@@ -473,8 +479,8 @@ def drawLeaderBoard#0
     dhgrClearBl7(0, 0, SCR_WIDTH7, SCR_HEIGHT)
     dcgrColor(CLR_WHITE)
     dcgrBoldStr(CLR_BLACK, 70-20, 10, "Top Scores")
-    dcgrPixMap(20, 20, SPRITE_WIDTH, SPRITE_HEIGHT, spriteList + (WOZ-1)*SPRITE_SIZE)
-    dcgrPixMap(110, 20, SPRITE_WIDTH, SPRITE_HEIGHT, spriteList + (WOZ-1)*SPRITE_SIZE)
+    dcgrPixMap(20,  20, SPRITE_WIDTH, SPRITE_HEIGHT, spriteList + (WOZ*4+HORDE_BASE)*SPRITE_SIZE)
+    dcgrPixMap(110, 20, SPRITE_WIDTH, SPRITE_HEIGHT, spriteList + (WOZ*4+HORDE_BASE)*SPRITE_SIZE)
     leader = @leaderBoard
     dcgrColor(CLR_WHITE)
     for i = 1 to 10
@@ -497,6 +503,10 @@ def drawMessage(msg)#0
         dcgrColor(CLR_WHITE)
         dcgrStr(5*TILE_WIDTH+TILE_WIDTH/2 - ^msg * 2, 5*TILE_HEIGHT - 10, msg)
     fin
+end
+def actionClearMessage(event)#0
+    drawMessage(NULL)
+    eventFree(event)
 end
 def drawStatus#0
     char[4] str
@@ -548,19 +558,21 @@ def hitCheck(nerd, x, y)#1
             //
             // Check for other nerds
             //
-            for i = 0 to NUM_NERDS-1
+            for i = 0 to NUM_NERDS
                 if x == nerdX[i] and y == nerdY[i]
-                    //
-                    // Steal?
-                    //
-                    if nerd == nerdPlayer and (btn0 & btn1) & $80 and \\
-                        not nerdHoard[nerd] and nerdHoard[i] and nerdScore[nerd] <= nerdScore[i]
+                    if i == WOZ and nerdHoard[nerd] and nerdHoard[nerd] < JACKPOT // Sign item?
+                        nerdHoard[nerd] = nerdHoard[nerd] | SIGNED
+                        addAction(1, @actionSFX, SFX_SIGN)
+                        addAction(100, @actionClearMessage, 0)
+                        drawMessage("Signed!")
+                    elsif nerd == nerdPlayer and (btn0 & btn1) & $80 and \
+                        not nerdHoard[nerd] and nerdHoard[i] and nerdScore[nerd] <= nerdScore[i] // Steal?
                         nerdHoard[nerd] = nerdHoard[i]
                         nerdHoard[i]    = 0
                         resetNerdTiles(i)
                         updateNerdTiles(nerd)
                         addAction(1, @actionSFX, SFX_STEAL)
-                        moveNerd(i, MOVE_NONE) // Draw sealee without hoard
+                        moveNerd(i, MOVE_NONE) // Draw stealee without hoard
                     else
                         if not bumping // Don't overload bumping sound effects
                             bumping = TRUE
@@ -577,6 +589,7 @@ def hitCheck(nerd, x, y)#1
             //
             if y == nerd * 2 + 1 and nerdHoard[nerd]
                 hoardActive--
+                if nerdHoard[nerd] & SIGNED; nerdScore[nerd]++; fin
                 nerdHoard[nerd] = 0
                 nerdScore[nerd]++
                 drawScore(nerd)
@@ -596,6 +609,8 @@ def hitCheck(nerd, x, y)#1
                 drawScore(nerd)
                 addAction(1, @actionSFX, SFX_JACKPOT)
                 addAction(100, @actionSean, 0)
+                addAction(100, @actionClearMessage, 0)
+                drawMessage("Jackpot!")
                 dhgrMemBl7(8*TILE_WIDTH7, 0, TILE_WIDTH7, TILE_HEIGHT, tileList+(TILE_SEAN3-1)*TILE_SIZE, TILE_SPAN)
                 dhgrMemBl7(9*TILE_WIDTH7, 0, TILE_WIDTH7, TILE_HEIGHT, tileList+(TILE_SEAN4-1)*TILE_SIZE, TILE_SPAN)
                 resetNerdTiles(nerd)
@@ -605,23 +620,25 @@ def hitCheck(nerd, x, y)#1
         is TILE_TABLE2
         is TILE_TABLE3
         is TILE_TABLE4
-            for i = 0 to TABLE_POSITIONS-1
-                if tablePosX[i] == x and tablePosY[i] == y; break; fin
-            next
-            if hoardType[i] and nerdHoard[nerd] <> JACKPOT // Pick up HW (but avoid swapping out jackpot)
-                dhgrMemBl7(x*TILE_WIDTH7, y*TILE_HEIGHT, TILE_WIDTH7, TILE_HEIGHT, tileList+(tileMap.[y,x]-1)*TILE_SIZE, TILE_SPAN)
-                if nerdHoard[nerd]; resetNerdTiles(nerd); fin
-                nerdHoard[nerd], hoardType[i] = hoardType[i], nerdHoard[nerd] // Swap goods
-                updateNerdTiles(nerd)
-                if hoardType[i]
-                    dcgrPixMap(tablePosX[i] * TILE_WIDTH,       \
-                                tablePosY[i] * TILE_HEIGHT + 2, \
-                                SPRITE_WIDTH, SPRITE_HEIGHT,    \
-                                spriteList + (hoardType[i] - 1) * SPRITE_SIZE)
-                else
-                    hoardAvailable--
+            if nerd < WOZ // Don't let Woz pick up items
+                for i = 0 to TABLE_POSITIONS-1
+                    if tablePosX[i] == x and tablePosY[i] == y; break; fin
+                next
+                if hoardType[i] and nerdHoard[nerd] <> JACKPOT // Pick up HW (but avoid swapping out jackpot)
+                    dhgrMemBl7(x*TILE_WIDTH7, y*TILE_HEIGHT, TILE_WIDTH7, TILE_HEIGHT, tileList+(tileMap.[y,x]-1)*TILE_SIZE, TILE_SPAN)
+                    if nerdHoard[nerd]; resetNerdTiles(nerd); fin
+                    nerdHoard[nerd], hoardType[i] = hoardType[i], nerdHoard[nerd] & $7F // Swap goods
+                    updateNerdTiles(nerd)
+                    if hoardType[i]
+                        dcgrPixMap(tablePosX[i] * TILE_WIDTH,       \
+                                    tablePosY[i] * TILE_HEIGHT + 2, \
+                                    SPRITE_WIDTH, SPRITE_HEIGHT,    \
+                                    spriteList + ((hoardType[i] & $7F) - 1) * SPRITE_SIZE)
+                    else
+                        hoardAvailable--
+                    fin
+                    addAction(1, @actionSFX, SFX_PICKUP)
                 fin
-                addAction(1, @actionSFX, SFX_PICKUP)
             fin
     wend
     return HIT_TILE
@@ -833,6 +850,17 @@ def actionUpdateNerd(event)#0
     fin
     addEvent(level2 * HORDE_MULSCALE / HORDE_DIVSCALE + HORDE_EQ, event)
 end
+def actionUpdateWoz(event)#0
+    byte nerd, moveDir, i
+    byte targetX, targetY, nerdZone, targetZone
+    var nearest, dist, distX, distY
+
+    //
+    // Woz aimlessly wanders around
+    //
+    moveNerd(WOZ, conio:rnd() & MOVE_MASK)
+    addEvent(WOZ_MOVE, event)
+end
 def joyCalibrate#4
     byte x, y
 
@@ -954,7 +982,13 @@ def playGG#0
             args = args + (level2 * HORDE_MULSCALE / HORDE_DIVSCALE + HORDE_EQ) / 3
         fin
     next
-    if nerdPlayer > 3; addAction(args, @actionDemo, 0); fin
+    nerdX[WOZ]     = TILEMAP_WIDTH-1
+    nerdY[WOZ]     = TILEMAP_HEIGHT-1
+    nerdDir[WOZ]   = LOOK_LEFT
+    resetNerdTiles(WOZ)
+    moveNerd(WOZ, MOVE_NONE)
+    addAction(WOZ_MOVE, @actionUpdateWoz, 0)
+    if nerdPlayer > NUM_NERDS-1; addAction(args, @actionDemo, 0); fin
     //
     // Initialize hoard
     //
