@@ -15,7 +15,7 @@ const page1x = $C055
 //
 // Version
 //
-char ggVersion = "0.7a"
+char ggVersion = "0.7c"
 //
 // Predefines
 //
@@ -135,16 +135,18 @@ var  totalScore, seqSplash
 const SFX_BUMP    = 0
 const SFX_PICKUP  = 1
 const SFX_JACKPOT = 2
-const SFX_SCORE   = 3
-const SFX_STEAL   = 4
-const SFX_SIGN    = 5
-byte sfxBump      = 9, 11, 13, 15, 0
+const SFX_SCORE2  = 3
+const SFX_SCORE   = 4
+const SFX_STEAL   = 5
+const SFX_SIGN    = 6
+byte sfxBump      = 10, 12, 14, 16, 18, 20, 0
 byte sfxPickup    = 4, 5, 6, 7, 8, 9, 10, 0
-byte sfxJackpot   = 5, 10, 15, 20, 15, 10, 5, 10, 15, 20, 15, 10, 5 // Run into score sfx
+byte sfxJackpot   = 5, 10, 15, 20, 15, 10 // Run into score2 sfx 
+byte sfxScore2    = 5, 10, 15, 20, 15, 10 // Run into score sfx
 byte sfxScore     = 5, 10, 15, 5, 10, 15, 0
 byte sfxSteal     = 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0
-byte sfxSign      = 5, 4, 3, 2, 1, 0
-var sfxList       = @sfxBump, @sfxPickup, @sfxJackpot, @sfxScore, @sfxSteal, @sfxSign
+byte sfxSign      = 10, 9, 8, 7, 6, 5, 0
+var sfxList       = @sfxBump, @sfxPickup, @sfxJackpot, @sfxScore2, @sfxScore, @sfxSteal, @sfxSign
 byte bumping
 //
 // Random ending quotes
@@ -263,16 +265,18 @@ def wait(delay)#0
         delay--
     loop
 end
+def getButtonKey#1
+    byte input
+
+    input = (^$C061 | ^$C062) & $80 // Look for either joystick button pushed
+    if conio:keypressed() // Look for keypress
+        input = input | (getc & $7F)
+    fin
+    return input
+end
 def waitButtonKey#0
-    while TRUE
-        if (^$C061 | ^$C062) & $80 // Look for joystick button pushed
-            return
-        fin
-        if conio:keypressed()
-            getc
-            return
-        fin
-    loop
+    repeat
+    until getButtonKey
 end
 //
 // Load assets
@@ -380,8 +384,11 @@ def rndQuote#0
     conio:tone(100, 20)
     conio:tone(75, 30)
     conio:tone(100, 40)
-    if conio:keypressed(); getc; fin
-    waitButtonKey
+    i = 25
+    while i and not getButtonKey
+        wait(1)
+        i--
+    loop
 end
 def drawFrame(x, y, w, h)#0
     byte r, b
@@ -597,7 +604,7 @@ def hitCheck(nerd, x, y)#1
                         addAction(1, @actionSFX, SFX_SIGN)
                         addAction(100, @actionClearMessage, 0)
                         drawMessage("Signed!")
-                    elsif nerd == nerdPlayer and (btn0 & btn1) & $80 and \
+                    elsif nerd == nerdPlayer and (btn0 | btn1) & $80 and \
                         not nerdHoard[nerd] and nerdHoard[i] and nerdScore[nerd] <= nerdScore[i] // Steal?
                         nerdHoard[nerd] = nerdHoard[i]
                         nerdHoard[i]    = 0
@@ -621,11 +628,15 @@ def hitCheck(nerd, x, y)#1
             //
             if y == nerd * 2 + 1 and nerdHoard[nerd]
                 hoardActive--
-                if nerdHoard[nerd] & SIGNED; nerdScore[nerd]++; fin
-                nerdHoard[nerd] = 0
                 nerdScore[nerd]++
+                if nerdHoard[nerd] & SIGNED
+                    nerdScore[nerd]++
+                    addAction(1, @actionSFX, SFX_SCORE2)
+                else
+                    addAction(1, @actionSFX, SFX_SCORE)
+                fin
+                nerdHoard[nerd] = 0
                 drawScore(nerd)
-                addAction(1, @actionSFX, SFX_SCORE)
                 resetNerdTiles(nerd)
             fin
             break
@@ -906,38 +917,6 @@ def actionUpdatePlayer(event)#0
     byte moveDir
 
     moveDir = MOVE_NONE
-    if altJoyDir & 1 // Alternate joystick direction priority
-        if joyY < joyUp
-            moveDir = MOVE_UP
-            if conio:keypressed(); getc; fin
-        elsif joyY > joyDown
-            moveDir = MOVE_DOWN
-            if conio:keypressed(); getc; fin
-        fin
-        if joyX < joyLeft
-            moveDir = MOVE_LEFT
-            if conio:keypressed(); getc; fin
-        elsif joyX > joyRight
-            moveDir = MOVE_RIGHT
-            if conio:keypressed(); getc; fin
-        fin
-    else
-        if joyX < joyLeft
-            moveDir = MOVE_LEFT
-            if conio:keypressed(); getc; fin
-        elsif joyX > joyRight
-            moveDir = MOVE_RIGHT
-            if conio:keypressed(); getc; fin
-        fin
-        if joyY < joyUp
-            moveDir = MOVE_UP
-            if conio:keypressed(); getc; fin
-        elsif joyY > joyDown
-            moveDir = MOVE_DOWN
-            if conio:keypressed(); getc; fin
-        fin
-    fin
-    altJoyDir++
     if conio:keypressed()
         when toupper(conio:getkey())
             is keyArrowUp
@@ -971,6 +950,31 @@ def actionUpdatePlayer(event)#0
             is keyEscape
                 hoardActive = 0; hoardRemaining = 0; exit = TRUE
         wend
+    else
+        if altJoyDir & 1 // Alternate joystick direction priority
+            if joyY < joyUp
+                moveDir = MOVE_UP
+            elsif joyY > joyDown
+                moveDir = MOVE_DOWN
+            fin
+            if joyX < joyLeft
+                moveDir = MOVE_LEFT
+            elsif joyX > joyRight
+                moveDir = MOVE_RIGHT
+            fin
+        else
+            if joyX < joyLeft
+                moveDir = MOVE_LEFT
+            elsif joyX > joyRight
+                moveDir = MOVE_RIGHT
+            fin
+            if joyY < joyUp
+                moveDir = MOVE_UP
+            elsif joyY > joyDown
+                moveDir = MOVE_DOWN
+            fin
+        fin
+        altJoyDir++
     fin
     moveNerd(nerdPlayer, moveDir)
     addEvent(level * PLAYER_MULSCALE / PLAYER_DIVSCALE + PLAYER_EQ, event)
@@ -1060,12 +1064,11 @@ def playGG#0
         doEvents
     loop
     totalScore = totalScore + nerdScore[nerdPlayer] // Add to total score
-    if level > 1
-        drawMessage(exit ?? "Quitter!" :: "Next Level!")
-        conio:tone(30, 20)
-        conio:tone(200, 10)
-        wait(5)
-    fin
+    drawMessage(exit ?? "Quitter!" :: level ?? "Next Level!" :: "Finished!")
+    conio:tone(30, 20)
+    conio:tone(200, 10)
+    wait(5)
+    getButtonKey
 end
 //
 // Top scores
