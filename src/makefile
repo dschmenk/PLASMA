@@ -50,6 +50,7 @@ FPU_MF     = rel/FPU_MF\#FE1000
 SNDSEQ     = rel/apple/SNDSEQ\#FE1000
 PLAYSEQ    = rel/apple/PLAYSEQ\#FE1000
 PLAYPCM    = rel/apple/PLAYPCM\#FE1000
+EVENT      = rel/EVENT\#FE1000
 SANITY     = rel/SANITY\#FE1000
 RPNCALC    = rel/RPNCALC\#FE1000
 RPNCALC_MF  = rel/RPNCALC_MF\#FE1000
@@ -134,7 +135,7 @@ $(HTTPD) $(TFTPD) $(ROGUE) $(ROGUEMAP) $(ROGUECOMBAT) $(SFM) $(SFMSPRT) $(GRAFIX
 $(SINCOS) $(HGRTILE) $(HGRFONT) $(HGRSPRITE) $(HGRLIB) $(TILETEST) $(HGRTEST) $(GRLIB) $(DGRLIB) $(VBLANK) \
 $(GRTEST) $(DGRTEST) $(MAZE) $(FILEIO_APL) $(CONIO_APL) $(JOYBUZZ) $(PORTIO) $(SPIPORT) \
 $(SDFAT) $(FATCAT) $(FATGET) $(FATPUT) $(FATWDSK) $(FATRDSK) $(INT32) $(INT32TEST) $(SANE) $(FPSTR) $(FPU) $(FPU_MF) $(SANITY) \
-$(LZ4) $(LZ4CAT) $(RPNCALC) $(SNDSEQ) $(PLAYSEQ) $(PLAYPCM) $(CONIOTEST)
+$(LZ4) $(LZ4CAT) $(RPNCALC) $(SNDSEQ) $(PLAYSEQ) $(PLAYPCM) $(CONIOTEST) $(EVENT)
 
 	-rm vmsrc/plvmzp.inc
 
@@ -407,6 +408,10 @@ $(RPNCALC): samplesrc/rpncalc.pla libsrc/fpu.pla inc/fpu.plh libsrc/fpstr.pla in
 $(RPNCALC_MF): samplesrc/rpncalc.pla libsrc/fpu_mf.pla inc/fpu.plh libsrc/fpstr.pla inc/fpstr.plh inc/conio.plh $(PLVM02) $(PLASM)
 	./$(PLASM) -AMOW samplesrc/rpncalc.pla
 	acme --setpc 4094 -o $(RPNCALC_MF) samplesrc/rpncalc.a
+
+$(EVENT): libsrc/event.pla $(PLVM02) $(PLASM)
+	./$(PLASM) -AMOW libsrc/event.pla
+	acme --setpc 4094 -o $(EVENT) libsrc/event.a
 
 $(ETHERIP): libsrc/etherip.pla $(PLVM02) $(PLASM)
 	./$(PLASM) -AMOW libsrc/etherip.pla

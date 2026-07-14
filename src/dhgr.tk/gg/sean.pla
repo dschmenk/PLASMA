@@ -2,11 +2,11 @@ include "../../inc/cmdsys.plh"
 include "../../inc/args.plh"
 include "../../inc/fileio.plh"
 include "../../inc/conio.plh"
+include "../../inc/event.plh"
 include "../../inc/sndseq.plh"
 include "../../inc/joybuzz.plh"
 include "../inc/dhgrlib.plh"
 include "../inc/dhgrutils.plh"
-include "event.plh"
 include "sean.plh"
 sysflags resxtxt1|reshgr1|resxhgr1|nojitc
 const page1m = $C054
@@ -15,7 +15,7 @@ const page1x = $C055
 //
 // Version
 //
-char ggVersion = "0.7r"
+char ggVersion = "0.8c"
 //
 // Predefines
 //
@@ -30,6 +30,7 @@ var arg
 const HIT_NOTHING = 0
 const HIT_NERD    = 1
 const HIT_TILE    = 2
+const HIT_EXIT    = 3
 //
 // Zone mapping
 //
@@ -61,6 +62,11 @@ var           = @tileRow5, @tileRow6, @tileRow7, @tileRow8
 //
 const SEAN_X = 4
 const SEAN_Y = 0
+//
+// Garage Door
+//
+const DOOR_X = 0
+const DOOR_Y = 0
 //
 // Hoard
 //
@@ -136,9 +142,10 @@ const PLAYER_EQ       = 3
 const PLAYER_MULSCALE = 1
 const PLAYER_DIVSCALE = 1
 const WOZ_MOVE        = 50
+const EXIT_MOVE       = 100
 byte level            = NUM_LEVELS
 var  level2
-byte exit
+byte exit, quit
 var  totalScore, seqSplash
 //
 // Sound F/X
@@ -534,7 +541,7 @@ def drawScore(nerd)#0
     itoa(@str, nerdScore[nerd])
     dcgrColor(nerdClr[nerd])
     dcgrRect(nerdBoxX[nerd]*TILE_WIDTH+2, nerdBoxY[nerd]*TILE_HEIGHT+14, 8, 8)
-    dcgrColor(CLR_BLACK)
+    dcgrColor(CLR_WHITE)
     dcgrStr(nerdBoxX[nerd]*TILE_WIDTH+(nerdScore[nerd] > 9 ?? 1 :: 4), nerdBoxY[nerd]*TILE_HEIGHT+22, @str)
 end
 def drawMap#0
@@ -599,7 +606,7 @@ def updateNerdTiles(nerd)#0
         //dcgrPixMap(0, 0, SPRITE_WIDTH, SPRITE_HEIGHT, spriteList + (nerdHoard[nerd] + HOARD_BASE)*SPRITE_SIZE)
         dcgrColor(hoardClr[nerdHoard[nerd]-1])
         dcgrRect(3, 10, 7, 8)
-        dcgrColor(hoardClr[nerdHoard[nerd]-1] - 1)
+        dcgrColor(hoardClr[nerdHoard[nerd]-1] ^ CLR_GREY)
         drawFrame(2, 9, 9, 10)
     next
     dhgrSurfScr(OP_SRC)
@@ -705,6 +712,16 @@ def hitCheck(nerd, x, y)#1
                 dhgrMemBl7((SEAN_X+1)*TILE_WIDTH7, SEAN_Y, TILE_WIDTH7, TILE_HEIGHT, tileList+(TILE_SEAN4-1)*TILE_SIZE, TILE_SPAN)
                 resetNerdTiles(nerd)
             fin
+            break
+        is TILE_OPENDOOR1
+        is TILE_OPENDOOR2
+            //
+            // Nerd exit level
+            //
+            dcgrColor(CLR_LTBLUE) // Erase nerd
+            dhgrClearBl7(nerdX[nerd] * TILE_WIDTH7, nerdY[nerd] * TILE_HEIGHT, TILE_WIDTH7, TILE_HEIGHT)
+            nerdY[nerd] = 0
+            return HIT_EXIT
             break
         otherwise
             //
@@ -828,6 +845,44 @@ def addHoard#0
         drawStatus
     fin
 end
+def navigateNerd(nerd, targetX, targetY)#0
+    byte moveDir, nerdZone, targetZone
+    var distX, distY
+
+    distX      = targetX - nerdX[nerd]
+    distY      = targetY - nerdY[nerd]
+    nerdZone   = mapZone(nerdX[nerd], nerdY[nerd])
+    targetZone = mapZone(targetX, targetY)
+    if nerdZone & targetZone
+        //
+        // Same zone - move to target linearly
+        //
+        if distX * distX > distY * distY
+            moveDir = distX < 0 ??  MOVE_LEFT :: MOVE_RIGHT
+        else
+            moveDir = distY < 0 ?? MOVE_UP :: MOVE_DOWN                    
+        fin
+    else
+        //
+        // Have to move around table
+        //
+        if nerdZone & (ZONE_EAST | ZONE_WEST)
+            moveDir = targetY < TILEMAP_HEIGHT/2 ?? MOVE_UP :: MOVE_DOWN
+        elsif nerdZone & (ZONE_NORTH | ZONE_SOUTH)
+            moveDir = targetX < TILEMAP_WIDTH/2 ?? MOVE_LEFT :: MOVE_RIGHT
+        fin
+    fin
+    if not moveNerd(nerd, moveDir) and (distX * distX + distY * distY) > 1
+        if moveDir == MOVE_LEFT or moveDir == MOVE_RIGHT // Moving diagonal can be problematic
+            moveDir = distY < 0 ?? MOVE_UP :: MOVE_DOWN                    
+        else
+            moveDir = distX < 0 ??  MOVE_LEFT :: MOVE_RIGHT
+        fin
+        if not moveNerd(nerd, moveDir)
+            moveNerd(nerd, conio:rnd() & MOVE_MASK) // Help get unstuck
+        fin
+    fin
+end
 //
 // Game Actions
 //
@@ -843,7 +898,7 @@ def actionUpdateHoard(event)#0
     fin
 end
 def actionUpdateNerd(event)#0
-    byte nerd, moveDir, i
+    byte nerd, i
     byte targetX, targetY, nerdZone, targetZone
     var nearest, dist, distX, distY
 
@@ -903,39 +958,7 @@ def actionUpdateNerd(event)#0
     //
     // Find best way to target
     //
-    distX      = targetX - nerdX[nerd]
-    distY      = targetY - nerdY[nerd]
-    nerdZone   = mapZone(nerdX[nerd], nerdY[nerd])
-    targetZone = mapZone(targetX, targetY)
-    if nerdZone & targetZone
-        //
-        // Same zone - move to target linearly
-        //
-        if distX * distX > distY * distY
-            moveDir = distX < 0 ??  MOVE_LEFT :: MOVE_RIGHT
-        else
-            moveDir = distY < 0 ?? MOVE_UP :: MOVE_DOWN                    
-        fin
-    else
-        //
-        // Have to move around table
-        //
-        if nerdZone & (ZONE_EAST | ZONE_WEST)
-            moveDir = targetY < TILEMAP_HEIGHT/2 ?? MOVE_UP :: MOVE_DOWN
-        elsif nerdZone & (ZONE_NORTH | ZONE_SOUTH)
-            moveDir = targetX < TILEMAP_WIDTH/2 ?? MOVE_LEFT :: MOVE_RIGHT
-        fin
-    fin
-    if not moveNerd(nerd, moveDir) and (distX * distX + distY * distY) > 1
-        if moveDir == MOVE_LEFT or moveDir == MOVE_RIGHT // Moving diagonal can be problematic
-            moveDir = distY < 0 ?? MOVE_UP :: MOVE_DOWN                    
-        else
-            moveDir = distX < 0 ??  MOVE_LEFT :: MOVE_RIGHT
-        fin
-        if not moveNerd(nerd, moveDir)
-            moveNerd(nerd, conio:rnd() & MOVE_MASK) // Help get unstuck
-        fin
-    fin
+    navigateNerd(nerd, targetX, targetY)
     addEvent(level2 * HORDE_MULSCALE / HORDE_DIVSCALE + HORDE_EQ, event)
 end
 def actionUpdateWoz(event)#0
@@ -979,7 +1002,7 @@ def actionUpdatePlayer(event)#0
                 joyLeft, joyRight, joyUp, joyDown = joyCalibrate
                 break
             is 'P' // Pause
-                drawMessage("Pause...")
+                drawMessage("Pause")
                 waitButtonKey
                 drawMessage(NULL)
                 break
@@ -987,7 +1010,7 @@ def actionUpdatePlayer(event)#0
                 stateExamine
                 break
             is keyEscape
-                hoardActive = 0; hoardRemaining = 0; exit = TRUE
+                hoardActive = 0; hoardRemaining = 0; quit = TRUE
         wend
     else
         if altJoyDir & 1 // Alternate joystick direction priority
@@ -1022,7 +1045,7 @@ def actionDemo(event)#0
     if conio:keypressed()
         when toupper(conio:getkey())
             is keyEscape
-                hoardActive = 0; hoardRemaining = 0; exit = TRUE
+                hoardActive = 0; hoardRemaining = 0; quit = TRUE
                 break
             is 'X' // Examine state
                 stateExamine
@@ -1030,6 +1053,19 @@ def actionDemo(event)#0
         wend
     fin
     addEvent(HORDE_EQ + PLAYER_EQ, event)
+end
+def actionExitNerd(event)#0
+    byte nerd
+
+    nerd = event->evParam
+    navigateNerd(nerd, DOOR_X + 1, DOOR_Y)
+    if nerdY[nerd] == 0 // Exit?
+        dhgrMemBl7(DOOR_X*TILE_WIDTH7,     SEAN_Y, TILE_WIDTH7, TILE_HEIGHT, tileList+(TILE_OPENDOOR1-1)*TILE_SIZE, TILE_SPAN)
+        dhgrMemBl7((DOOR_X+1)*TILE_WIDTH7, SEAN_Y, TILE_WIDTH7, TILE_HEIGHT, tileList+(TILE_OPENDOOR2-1)*TILE_SIZE, TILE_SPAN)
+        exit--
+    else
+        addEvent(EXIT_MOVE, event)
+    fin
 end
 def playGG#0
     //
@@ -1141,10 +1177,49 @@ def playGG#0
         //
         doEvents
     loop
-    if nerdPlayer < NUM_NERDS
-        totalScore = totalScore + nerdScore[nerdPlayer] // Add to total score if not demo
+    if quit
+        drawMessage("Quitter!")
+    else
+        //
+        // Nerds head for exit
+        //
+        drawMessage(level > 1 ?? "Next Level!" :: "Finished!")
+        //
+        // Open garage door
+        //
+        dcgrColor(CLR_MEDBLUE)
+        for buzz = 19 downto 6
+            dcgrHLin(2, 25, buzz)
+            conio:tone(10, 100)
+        next
+        tileMap.[DOOR_Y, DOOR_X]   = TILE_OPENDOOR1
+        tileMap.[DOOR_Y, DOOR_X+1] = TILE_OPENDOOR2
+        dhgrMemBl7(DOOR_X*TILE_WIDTH7,     SEAN_Y, TILE_WIDTH7, TILE_HEIGHT, tileList+(TILE_OPENDOOR1-1)*TILE_SIZE, TILE_SPAN)
+        dhgrMemBl7((DOOR_X+1)*TILE_WIDTH7, SEAN_Y, TILE_WIDTH7, TILE_HEIGHT, tileList+(TILE_OPENDOOR2-1)*TILE_SIZE, TILE_SPAN)
+        //
+        // File everyone out
+        //
+        eventInit
+        exit = NUM_NERDS
+        if level <= NUM_LEVELS/2; exit++; fin // Add Woz to the upper levels
+        for buzz = 0 to exit-1
+            addAction(1, @actionExitNerd, buzz)
+        next
+        while exit
+            doEvents
+        loop
+        //
+        // Close garage door
+        //
+        tileMap.[DOOR_Y, DOOR_X]   = TILE_DOOR1
+        tileMap.[DOOR_Y, DOOR_X+1] = TILE_DOOR2
+        //
+        // Update total score
+        //
+        if nerdPlayer < NUM_NERDS
+            totalScore = totalScore + nerdScore[nerdPlayer] // Add to total score if not demo
+        fin
     fin
-    drawMessage(exit ?? "Quitter!" :: level > 1 ?? "Next Level!" :: "Finished!")
     conio:tone(30, 20)
     conio:tone(200, 10)
     wait(5)
@@ -1412,8 +1487,8 @@ if tileList <> NULL and spriteList <> NULL
     //
     while menu
         totalScore = 0
-        exit       = FALSE
-        while level and not exit
+        quit       = FALSE
+        while level and not quit
             playGG
             level--
         loop
