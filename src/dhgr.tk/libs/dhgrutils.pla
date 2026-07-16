@@ -3,8 +3,8 @@ include "inc/fileio.plh"
 include "dhgr.tk/inc/dhgrlib.plh"
 include "dhgr.tk/inc/dhgrutils.plh"
 
-const page1m = $C054
-const page1x = $C055
+const page1m     = $C054
+const page1x     = $C055
 //
 // Font header
 //
@@ -32,6 +32,32 @@ end
 // Current and default font pointers
 //
 var fontPtr, fontDefault, fontDefThin, fontDefSlim
+asm isIIc#1
+!SOURCE    "vmsrc/apple/plvmzp.inc"
+LCRDEN  =       $C080
+LCWTEN  =       $C081
+ROMEN   =       $C082
+LCRWEN  =       $C083
+LCBNK2  =       $00
+LCBNK1  =       $08
+        LDA     #$00
+        BIT     ROMEN
+        LDY     $FBB3
+        CPY     #$06
+        BNE     +
+        LDY     $FBC0
+        ;CPY    #$00
+        BNE     +
+        LDY     $FBBF
+        CPY     #$05            ; Skip //c+
+        BEQ     +
+        LDA     #$FF
++       BIT     LCRDEN+LCBNK2
+        DEX
+        STA     ESTKL,X
+        STA     ESTKH,X
+        RTS
+end
 //
 // Function pointers
 //
@@ -392,12 +418,26 @@ export def spriteWrite(filestr, xorg, yorg, width, height, sprptr)#1
 end
 export def screenRead(filestr)#1
     byte refnum
+    var tmpBuf, hrAddr
 
     refnum = fileio:open(filestr)
     if refnum
-        ^page1x // Read AUX bytes
-        fileio:read(refnum, $2000, $2000)
-        ^page1m // Read MAIN bytes
+        if isIIc // Reading into AUX bytes fails on *some* //c smartport
+            tmpBuf = heapAlloc($0200)
+            if tmpBuf
+                for hrAddr = $2000 to $3FFF step $0200
+                    fileio:read(refnum, tmpBuf, $0200)
+                    ^page1x // Switch in AUX bytes
+                    memcpy(hrAddr, tmpbuf, $0200)
+                    ^page1m // Switch in MAIN bytes
+                next
+                heapRelease(tmpBuf)
+            fin
+        else
+            ^page1x // Read AUX bytes
+            fileio:read(refnum, $2000, $2000)
+            ^page1m // Read MAIN bytes
+        fin
         fileio:read(refnum, $2000, $2000)
         fileio:close(refnum)
     fin
@@ -405,17 +445,30 @@ export def screenRead(filestr)#1
 end
 export def screenWrite(filestr)#1
     byte refnum, result
+    var tmpBuf, hrAddr
 
     fileio:destroy(filestr)
     result = fileio:create(filestr, $06, $2000)
     if result == FILE_ERR_OK
         refnum = fileio:open(filestr)
         if refnum
-            ^page1x // Write AUX bytes
-            if fileio:write(refnum, $2000, $2000) == $2000
-                ^page1m // Write MAIN bytes
+            if isIIc
+                tmpBuf = heapAlloc($0200)
+                if tmpBuf
+                    for hrAddr = $2000 to $3FFF step $0200
+                        ^page1x // Switch in AUX bytes
+                        memcpy(tmpBuf, hrAddr, $0200)
+                        ^page1m // Switch in MAIN bytes
+                        fileio:write(refnum, tmpBuf, $0200)
+                    next
+                    heapRelease(tmpBuf)
+                fin
+            else
+                ^page1x // Write AUX bytes
                 fileio:write(refnum, $2000, $2000)
+                ^page1m // Write MAIN bytes
             fin
+            fileio:write(refnum, $2000, $2000)
             result = perr
             fileio:close(refnum)
         else

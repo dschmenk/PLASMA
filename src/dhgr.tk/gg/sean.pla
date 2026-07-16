@@ -9,13 +9,11 @@ include "../inc/dhgrlib.plh"
 include "../inc/dhgrutils.plh"
 include "sean.plh"
 sysflags resxtxt1|reshgr1|resxhgr1|nojitc
-const page1m = $C054
-const page1x = $C055
 
 //
 // Version
 //
-char ggVersion = "0.8c"
+char ggVersion = "1.0"
 //
 // Predefines
 //
@@ -47,16 +45,17 @@ const ZONE_SW    = ZONE_SOUTH|ZONE_WEST
 //
 var tileList  = NULL
 //  Columns      0   1   2   3   4   5   6   7   8   9
-byte tileRow1 =  1,  2,  3,  7, 19, 20,  4,  5,  5,  6  // 0 Rows
-byte tileRow2 =  8,  9,  9,  9,  9,  9,  9,  9,  9,  8  // 1
-byte tileRow3 =  9,  9,  9,  9,  9,  9,  9,  9,  9,  9  // 2
-byte tileRow4 =  9,  9,  9, 10, 11, 11, 12,  9,  9,  9  // 3
-byte tileRow5 =  9,  9,  9, 13, 14, 14, 15,  9,  9,  9  // 4
-byte tileRow6 =  9,  9,  9, 16, 17, 17, 18,  9,  9,  9  // 5
-byte tileRow7 =  9,  9,  9,  9,  9,  9,  9,  9,  9,  9  // 6
-byte tileRow8 =  8,  9,  9,  9,  9,  9,  9,  9,  9,  8  // 7
-var tileMap   = @tileRow1, @tileRow2, @tileRow3, @tileRow4
-var           = @tileRow5, @tileRow6, @tileRow7, @tileRow8
+//              --  --  --  --  --  --  --  --  --  --
+byte tileRow0 =  1,  2,  3,  7, 19, 20,  4,  5,  5,  6
+byte tileRow1 =  8,  9,  9,  9,  9,  9,  9,  9,  9,  8
+byte tileRow2 =  9,  9,  9,  9,  9,  9,  9,  9,  9,  9
+byte tileRow3 =  9,  9,  9, 10, 11, 11, 12,  9,  9,  9
+byte tileRow4 =  9,  9,  9, 13, 14, 14, 15,  9,  9,  9
+byte tileRow5 =  9,  9,  9, 16, 17, 17, 18,  9,  9,  9
+byte tileRow6 =  9,  9,  9,  9,  9,  9,  9,  9,  9,  9
+byte tileRow7 =  8,  9,  9,  9,  9,  9,  9,  9,  9,  8
+var tileMap   = @tileRow0, @tileRow1, @tileRow2, @tileRow3
+var           = @tileRow4, @tileRow5, @tileRow6, @tileRow7
 //
 // Sean
 //
@@ -75,7 +74,7 @@ byte[TABLE_POSITIONS] hoardType
 byte tablePosX = 4, 5, 3, 6, 4, 5, 3, 6, 3, 6
 byte tablePosY = 3, 3, 4, 4, 5, 5, 3, 3, 5, 5
 byte hoardClr  = CLR_DRKGREEN, CLR_YELLOW, CLR_BLACK, CLR_GREY, CLR_MAGENTA
-const HOARD_SIZE = 20
+const HOARD_MINSIZE = 10
 byte hoardAvailable // Available to be picked up
 byte hoardActive    // Active equipment in play
 byte hoardRemaining // Equipment remaining
@@ -135,10 +134,10 @@ byte joyLeft, joyRight, joyUp, joyDown, altJoyDir
 const NUM_LEVELS      = 20
 const HORDE_EQ        = 12
 const HORDE_MULSCALE  = 1
-const HORDE_DIVSCALE  = 2
-const HOARD_SCALE     = 50
-const HOARD_EQ        = 30
-const PLAYER_EQ       = 3
+const HORDE_DIVSCALE  = 4
+const HOARD_SCALE     = 25
+const HOARD_EQ        = 75
+const PLAYER_EQ       = 4
 const PLAYER_MULSCALE = 1
 const PLAYER_DIVSCALE = 1
 const WOZ_MOVE        = 50
@@ -203,16 +202,6 @@ struc t_leaders
     var     bestscore
 end
 char leaderBoard  = 'W', 'O', 'Z'
-var               = 250
-char              = 'W', 'O', 'Z'
-var               = 240
-char              = 'W', 'O', 'Z'
-var               = 230
-char              = 'W', 'O', 'Z'
-var               = 220
-char              = 'W', 'O', 'Z'
-var               = 210
-char              = 'W', 'O', 'Z'
 var               = 200
 char              = 'W', 'O', 'Z'
 var               = 190
@@ -222,6 +211,16 @@ char              = 'W', 'O', 'Z'
 var               = 170
 char              = 'W', 'O', 'Z'
 var               = 160
+char              = 'W', 'O', 'Z'
+var               = 150
+char              = 'W', 'O', 'Z'
+var               = 140
+char              = 'W', 'O', 'Z'
+var               = 130
+char              = 'W', 'O', 'Z'
+var               = 120
+char              = 'W', 'O', 'Z'
+var               = 110
 char leaderFile   = "LEADERBOARD"
 //
 // This fixes the Virtual ][ bug with outstanding Mockingboard interrupts
@@ -477,6 +476,7 @@ def drawMenu#0
         dcgrRect(i*(TILE_WIDTH+4) + 64, 28, TILE_WIDTH+4, TILE_HEIGHT+4)
         dcgrPixMap(i*(TILE_WIDTH+4) + 64+2, 28+4, SPRITE_WIDTH, SPRITE_HEIGHT, spriteList + (i*4+HORDE_BASE)*SPRITE_SIZE)
     next
+
     dcgrFont(FONT_DEF_THIN)
     dcgrStr(15, 44, ">")
     dcgrStr(15, 53, "SEAN'S")
@@ -593,20 +593,39 @@ end
 def resetNerdTiles(nerd)#0
     memcpy(nerdTile[nerd, 0], nerdBaseTile[nerd, 0], TILE_SIZE*NUM_DIRS)
 end
-def updateNerdTiles(nerd)#0
-    byte dir
+def signNerdTiles(nerd)#0
+    byte dir, clrBack
 
+    clrBack = hoardClr[(nerdHoard[nerd] & $7F)-1] ^ CLR_GREY
+    for dir = 0 to NUM_DIRS-1
+        dhgrSurfMem(OP_SRC, TILE_HEIGHT, nerdTile[nerd, dir], TILE_SPAN)
+        //
+        // Sign hoard to memory surface
+        //
+        dcgrColor(clrBack)
+        dcgrStr(4, 18, "W")
+    next
+    dhgrSurfScr(OP_SRC)
+end
+def updateNerdTiles(nerd)#0
+    byte dir, clrFore, clrBack
+
+    clrFore = hoardClr[(nerdHoard[nerd] & $7F)-1]
+    clrBack = hoardClr[(nerdHoard[nerd] & $7F)-1] ^ CLR_GREY
     for dir = 0 to NUM_DIRS-1
         dhgrSurfMem(OP_SRC, TILE_HEIGHT, nerdTile[nerd, dir], TILE_SPAN)
         //
         // Draw nerd + any hoard to memory surface the size of a tile
         //
-        //dcgrPixMap(0, 0, SPRITE_WIDTH, SPRITE_HEIGHT, spriteList + (nerdHoard[nerd] + HOARD_BASE)*SPRITE_SIZE)
-        dcgrColor(hoardClr[nerdHoard[nerd]-1])
+        //dcgrPixMap(0, 0, SPRITE_WIDTH, SPRITE_HEIGHT, spriteList + ((nerdHoard[nerd] & $7F) + HOARD_BASE)*SPRITE_SIZE)
+        dcgrColor(clrFore)
         dcgrRect(3, 10, 7, 8)
-        dcgrColor(hoardClr[nerdHoard[nerd]-1] ^ CLR_GREY)
+        dcgrColor(clrBack)
         drawFrame(2, 9, 9, 10)
     next
+    if nerdHoard[nerd] & SIGNED
+        signNerdTiles(nerd)
+    fin
     dhgrSurfScr(OP_SRC)
 end
 //
@@ -652,6 +671,7 @@ def hitCheck(nerd, x, y)#1
             for i = 0 to NUM_NERDS
                 if x == nerdX[i] and y == nerdY[i]
                     if i == WOZ and nerdHoard[nerd] and nerdHoard[nerd] < JACKPOT // Sign item?
+                        signNerdTiles(nerd)
                         nerdHoard[nerd] = nerdHoard[nerd] | SIGNED
                         addAction(1, @actionSFX, SFX_SIGN)
                         addAction(100, @actionClearMessage, 0)
@@ -731,7 +751,7 @@ def hitCheck(nerd, x, y)#1
                         if hoardType[i] and nerdHoard[nerd] <> JACKPOT // Pick up HW (but avoid swapping out jackpot)
                             dhgrMemBl7(x*TILE_WIDTH7, y*TILE_HEIGHT, TILE_WIDTH7, TILE_HEIGHT, tileList+(tileMap.[y,x]-1)*TILE_SIZE, TILE_SPAN)
                             if nerdHoard[nerd]; resetNerdTiles(nerd); fin
-                            nerdHoard[nerd], hoardType[i] = hoardType[i], nerdHoard[nerd] & $7F // Swap goods
+                            nerdHoard[nerd], hoardType[i] = hoardType[i], nerdHoard[nerd] // Swap goods
                             updateNerdTiles(nerd)
                             if hoardType[i]
                                 dcgrPixMap(tablePosX[i] * TILE_WIDTH,       \
@@ -1000,6 +1020,7 @@ def actionUpdatePlayer(event)#0
                 joyLeft, joyRight, joyUp, joyDown = joyCalibrate
                 break
             is 'P' // Pause
+            is keyEscape // Pause
                 drawMessage("Pause")
                 waitButtonKey
                 drawMessage(NULL)
@@ -1007,7 +1028,7 @@ def actionUpdatePlayer(event)#0
             is 'X' // Examine state
                 stateExamine
                 break
-            is keyEscape
+            is keyCtrlQ
                 hoardActive = 0; hoardRemaining = 0; quit = TRUE
         wend
     else
@@ -1043,6 +1064,7 @@ def actionDemo(event)#0
     if conio:keypressed()
         when toupper(conio:getkey())
             is keyEscape
+            is keyCtrlQ
                 hoardActive = 0; hoardRemaining = 0; quit = TRUE
                 break
             is 'X' // Examine state
@@ -1147,12 +1169,11 @@ def playGG#0
     next
     hoardActive    = 0
     hoardAvailable = 0
-    hoardRemaining = HOARD_SIZE
+    hoardRemaining = HOARD_MINSIZE + NUM_LEVELS - level
     hoardJackpots  = hoardRemaining / 10
-    addHoard
-    addHoard
-    addHoard
-    addHoard
+    for buzz = 0 to hoardRemaining / 5
+        addHoard
+    next
     addAction(level * HOARD_SCALE + HOARD_EQ, @actionUpdateHoard, 0)
     //
     // Go!
@@ -1526,6 +1547,6 @@ dhgrMode(DHGR_TEXT_MODE)
 params.0 = 1
 params.1 = 0
 syscall($41, @params)
-puts("Memory free: "); puti(heapAvail); puts(" bytes\n")
+//puts("Memory free: "); puti(heapAvail); puts(" bytes\n")
 return 0
 done
