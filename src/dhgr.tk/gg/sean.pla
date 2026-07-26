@@ -13,7 +13,7 @@ sysflags resxtxt1|reshgr1|resxhgr1|nojitc
 //
 // Version
 //
-char ggVersion = "1.0"
+char ggVersion = "0.99"
 //
 // Predefines
 //
@@ -22,6 +22,10 @@ predef moveNerd(nerd, dir)#1
 // Arg pointer
 //
 var arg
+//
+// Menu Items
+//
+const MENU_ITEMS  = 4
 //
 // Hit tests
 //
@@ -106,7 +110,7 @@ char nerdBecky     = "Becky"
 char nerdSharon    = "Sharon"
 char nerdJavier    = "Jav Master"
 var nerdName       = @nerdDaniel, @nerdBecky, @nerdSharon, @nerdJavier
-byte nerdClr       = CLR_DRKGREEN, CLR_BROWN, CLR_GREY, CLR_ORANGE
+byte nerdClr       = CLR_DRKGREEN, CLR_BROWN, CLR_GREY, CLR_ORANGE, CLR_MAGENTA
 byte nerdX         = 2, 3, 4, 5, 10
 byte nerdY         = 2,  2,  2,  2, 2
 byte nerdDir       = LOOK_FORWARD, LOOK_FORWARD, LOOK_FORWARD, LOOK_FORWARD, LOOK_FORWARD
@@ -144,7 +148,7 @@ const WOZ_MOVE        = 50
 const EXIT_MOVE       = 100
 byte level            = NUM_LEVELS
 var  level2
-byte exit, quit
+byte quit
 var  totalScore, seqSplash
 //
 // Sound F/X
@@ -224,9 +228,19 @@ char              = 'W', 'O', 'Z'
 var               = 110
 char leaderFile   = "LEADERBOARD"
 //
+// Sean's Inner Circle
+//
+char thankyou[]
+char = "       Sean's Inner Circle"
+char = "       -------------------"
+char = " "
+char = "  Head to the KickStarter to get"
+char = "         your name here!"
+char = ""
+//
 // Dedications
 //
-char Thanks[]
+char dedications[]
 char = "Resman:"
 char = "Storm, faithful dog for 17 years"
 char = "Copy protected, never duplicated"
@@ -422,7 +436,10 @@ def drawItem(item)#0
             dcgrStr(96, 116, "[S]cores")
             break
         is 3
-            dcgrStr(96, 136, "[Q]uit")
+            dcgrStr(96, 136, "[T]hanks")
+            break
+        is 4
+            dcgrStr(96, 156, "[Q]uit")
         wend
 end
 def drawSelect#0
@@ -509,13 +526,15 @@ def drawMenu#0
     dcgrStr(15, 71, "GIVEAWAY")
     dcgrStr(15, 80, ">")
     dcgrStr(92, 180, "8 bit shack")
-    dcgrStr(96, 190, "2026 v")
-    dcgrStr(120, 190, @ggVersion)
+    dcgrStr(96, 190, "2026 DEMO") // !!! DEMO
+//    dcgrStr(96, 190, "2026 v")
+//    dcgrStr(120, 190, @ggVersion)
     dcgrColor(CLR_WHITE)
-    dcgrBoldStr(CLR_BLACK, 110-24, 10, "Score:")
-    dcgrColor(CLR_WHITE)
-    dcgrBoldStr(CLR_BLACK, 110, 10, itoa(@str, totalScore))
-    for i = 0 to 3; drawItem(i); next
+    dcgrBoldStr(CLR_BLACK, 110-10, 10, "DEMO")
+//    dcgrBoldStr(CLR_BLACK, 110-24, 10, "Score:")
+//    dcgrColor(CLR_WHITE)
+//    dcgrBoldStr(CLR_BLACK, 110, 10, itoa(@str, totalScore))
+    for i = 0 to MENU_ITEMS; drawItem(i); next
     drawName
 end
 def drawLeaderBoard#0
@@ -598,6 +617,7 @@ def rndQuote#0
         msg = msg + ^msg + 1
         i--
     loop
+    msg = "Thanks for playing the DEMO" // !!! DEMO
     strY = 5*TILE_HEIGHT - 10
     extX, extY = dcgrStrExtents(msg)
     strX = 70 - (extX + 1)/2
@@ -673,7 +693,7 @@ def actionSFX(event)#0
     buzz = sfxList.[sfxTable, sfxIndex]
     if buzz
         event->evParam.1 = sfxIndex + 1
-        addEvent(1, event)
+        addEvent(event, 1)
     else
         if sfxTable == SFX_BUMP
             bumping = FALSE
@@ -695,11 +715,11 @@ def hitCheck(nerd, x, y)#1
             //
             for i = 0 to NUM_NERDS
                 if x == nerdX[i] and y == nerdY[i]
-                    if i == WOZ and nerdHoard[nerd] and nerdHoard[nerd] < JACKPOT // Sign item?
+                    if i == WOZ and nerdHoard[nerd] and nerdHoard[nerd] <= JACKPOT // Sign item?
                         signNerdTiles(nerd)
                         nerdHoard[nerd] = nerdHoard[nerd] | SIGNED
-                        addAction(1, @actionSFX, SFX_SIGN)
-                        addAction(100, @actionClearMessage, 0)
+                        addAction(@actionSFX, SFX_SIGN, 1)
+                        addAction(@actionClearMessage, 0, 100)
                         drawMessage("Signed")
                     elsif nerd == nerdPlayer and (btn0 | btn1) & $80 and \
                         not nerdHoard[nerd] and nerdHoard[i] and nerdScore[nerd] <= nerdScore[i] // Steal?
@@ -707,12 +727,12 @@ def hitCheck(nerd, x, y)#1
                         nerdHoard[i]    = 0
                         resetNerdTiles(i)
                         updateNerdTiles(nerd)
-                        addAction(1, @actionSFX, SFX_STEAL)
+                        addAction(@actionSFX, SFX_STEAL, 1)
                         moveNerd(i, MOVE_NONE) // Draw stealee without hoard
                     else
                         if not bumping // Don't overload bumping sound effects
                             bumping = TRUE
-                            addAction(1, @actionSFX, SFX_BUMP)
+                            addAction(@actionSFX, SFX_BUMP, 1)
                         fin
                     fin
                     return HIT_NERD
@@ -728,9 +748,9 @@ def hitCheck(nerd, x, y)#1
                 nerdScore[nerd]++
                 if nerdHoard[nerd] & SIGNED
                     nerdScore[nerd]++
-                    addAction(1, @actionSFX, SFX_SCORE2)
+                    addAction(@actionSFX, SFX_SCORE2, 1)
                 else
-                    addAction(1, @actionSFX, SFX_SCORE)
+                    addAction(@actionSFX, SFX_SCORE, 1)
                 fin
                 nerdHoard[nerd] = 0
                 drawScore(nerd)
@@ -742,14 +762,14 @@ def hitCheck(nerd, x, y)#1
             //
             // Jackpot?
             //
-            if nerdHoard[nerd] == JACKPOT
+            if nerdHoard[nerd] & $7F == JACKPOT
                 hoardActive--
+                nerdScore[nerd] = nerdScore[nerd] + (nerdHoard[nerd] & SIGNED ?? 4 :: 3)
                 nerdHoard[nerd] = 0
-                nerdScore[nerd] = nerdScore[nerd] + 3
                 drawScore(nerd)
-                addAction(1, @actionSFX, SFX_JACKPOT)
-                addAction(100, @actionSeanSit, 0)
-                addAction(100, @actionClearMessage, 0)
+                addAction(@actionSFX, SFX_JACKPOT, 1)
+                addAction(@actionSeanSit, 0, 100)
+                addAction(@actionClearMessage, 0, 100)
                 drawMessage("Jackpot")
                 dhgrMemBl7(SEAN_X*TILE_WIDTH7,     SEAN_Y, TILE_WIDTH7, TILE_HEIGHT, tileList+(TILE_SEAN3-1)*TILE_SIZE, TILE_SPAN)
                 dhgrMemBl7((SEAN_X+1)*TILE_WIDTH7, SEAN_Y, TILE_WIDTH7, TILE_HEIGHT, tileList+(TILE_SEAN4-1)*TILE_SIZE, TILE_SPAN)
@@ -786,7 +806,7 @@ def hitCheck(nerd, x, y)#1
                             else
                                 hoardAvailable--
                             fin
-                            addAction(1, @actionSFX, SFX_PICKUP)
+                            addAction(@actionSFX, SFX_PICKUP, 1)
                         fin
                         return HIT_TILE
                     fin
@@ -935,7 +955,7 @@ def actionUpdateHoard(event)#0
     //
     addHoard
     if hoardRemaining
-        addEvent(conio:rnd() % (level * HOARD_SCALE + HOARD_EQ), event)
+        addEvent(event, conio:rnd() % (level * HOARD_SCALE + HOARD_EQ))
     else
         eventFree(event)
     fin
@@ -1002,7 +1022,7 @@ def actionUpdateNerd(event)#0
     // Find best way to target
     //
     navigateNerd(nerd, targetX, targetY)
-    addEvent(level2 * HORDE_MULSCALE / HORDE_DIVSCALE + HORDE_EQ, event)
+    addEvent(event, level2 * HORDE_MULSCALE / HORDE_DIVSCALE + HORDE_EQ)
 end
 def actionUpdateWoz(event)#0
     byte nerd, moveDir, i
@@ -1013,7 +1033,7 @@ def actionUpdateWoz(event)#0
     // Woz aimlessly wanders around
     //
     moveNerd(WOZ, conio:rnd() & MOVE_MASK)
-    addEvent(WOZ_MOVE, event)
+    addEvent(event, WOZ_MOVE)
 end
 def actionUpdatePlayer(event)#0
     byte moveDir
@@ -1086,7 +1106,7 @@ def actionUpdatePlayer(event)#0
         altJoyDir++
     fin
     moveNerd(nerdPlayer, moveDir)
-    addEvent(level * PLAYER_MULSCALE / PLAYER_DIVSCALE + PLAYER_EQ, event)
+    addEvent(event, level * PLAYER_MULSCALE / PLAYER_DIVSCALE + PLAYER_EQ)
 end
 def actionDemo(event)#0
     if conio:keypressed()
@@ -1103,19 +1123,18 @@ def actionDemo(event)#0
                 break
         wend
     fin
-    addEvent(HORDE_EQ + PLAYER_EQ, event)
+    addEvent(event, HORDE_EQ + PLAYER_EQ)
 end
 def actionExitNerd(event)#0
     byte nerd
 
     nerd = event->evParam
     navigateNerd(nerd, DOOR_X + 1, DOOR_Y)
-    if nerdY[nerd] == 0 // Exit?
-        dhgrMemBl7(DOOR_X*TILE_WIDTH7,     SEAN_Y, TILE_WIDTH7, TILE_HEIGHT, tileList+(TILE_OPENDOOR1-1)*TILE_SIZE, TILE_SPAN)
-        dhgrMemBl7((DOOR_X+1)*TILE_WIDTH7, SEAN_Y, TILE_WIDTH7, TILE_HEIGHT, tileList+(TILE_OPENDOOR2-1)*TILE_SIZE, TILE_SPAN)
-        exit--
+    if nerdY[nerd] == DOOR_Y // Exit?
+        dhgrMemBl7(DOOR_X*TILE_WIDTH7,     DOOR_Y, TILE_WIDTH7, TILE_HEIGHT, tileList+(TILE_OPENDOOR1-1)*TILE_SIZE, TILE_SPAN)
+        dhgrMemBl7((DOOR_X+1)*TILE_WIDTH7, DOOR_Y, TILE_WIDTH7, TILE_HEIGHT, tileList+(TILE_OPENDOOR2-1)*TILE_SIZE, TILE_SPAN)
     else
-        addEvent(EXIT_MOVE, event)
+        addEvent(event, EXIT_MOVE)
     fin
 end
 def playGG#0
@@ -1171,9 +1190,9 @@ def playGG#0
         resetNerdTiles(buzz)
         moveNerd(buzz, MOVE_NONE)
         if buzz == nerdPlayer
-            addAction(level * PLAYER_MULSCALE / PLAYER_DIVSCALE + PLAYER_EQ + buzz, @actionUpdatePlayer, buzz)
+            addAction(@actionUpdatePlayer, buzz, level * PLAYER_MULSCALE / PLAYER_DIVSCALE + PLAYER_EQ + buzz)
         else
-            addAction(args + buzz, @actionUpdateNerd, buzz)
+            addAction(@actionUpdateNerd, buzz, args + buzz)
             args = args + (level2 * HORDE_MULSCALE / HORDE_DIVSCALE + HORDE_EQ) / 3
         fin
     next
@@ -1189,9 +1208,9 @@ def playGG#0
         nerdDir[WOZ] = conio:rnd() & 3
         resetNerdTiles(WOZ)
         moveNerd(WOZ, MOVE_NONE)
-        addAction(WOZ_MOVE, @actionUpdateWoz, 0)
+        addAction(@actionUpdateWoz, 0, WOZ_MOVE)
     fin
-    if nerdPlayer > NUM_NERDS-1; addAction(args, @actionDemo, 0); fin
+    if nerdPlayer > NUM_NERDS-1; addAction(@actionDemo, 0, args); fin
     //
     // Initialize hoard
     //
@@ -1205,7 +1224,7 @@ def playGG#0
     for buzz = 0 to hoardRemaining / 5
         addHoard
     next
-    addAction(level * HOARD_SCALE + HOARD_EQ, @actionUpdateHoard, 0)
+    addAction(@actionUpdateHoard, 0, level * HOARD_SCALE + HOARD_EQ)
     //
     // Go!
     //
@@ -1228,11 +1247,6 @@ def playGG#0
         doEvents
     loop
     //
-    // Mkae sure Sean is sitting
-    //
-    dhgrMemBl7(SEAN_X*TILE_WIDTH7,     SEAN_Y, TILE_WIDTH7, TILE_HEIGHT, tileList+(TILE_SEAN1-1)*TILE_SIZE, TILE_SPAN)
-    dhgrMemBl7((SEAN_X+1)*TILE_WIDTH7, SEAN_Y, TILE_WIDTH7, TILE_HEIGHT, tileList+(TILE_SEAN2-1)*TILE_SIZE, TILE_SPAN)
-    //
     // Ending animation
     //
     if quit
@@ -1252,20 +1266,21 @@ def playGG#0
         next
         tileMap.[DOOR_Y, DOOR_X]   = TILE_OPENDOOR1
         tileMap.[DOOR_Y, DOOR_X+1] = TILE_OPENDOOR2
-        dhgrMemBl7(DOOR_X*TILE_WIDTH7,     SEAN_Y, TILE_WIDTH7, TILE_HEIGHT, tileList+(TILE_OPENDOOR1-1)*TILE_SIZE, TILE_SPAN)
-        dhgrMemBl7((DOOR_X+1)*TILE_WIDTH7, SEAN_Y, TILE_WIDTH7, TILE_HEIGHT, tileList+(TILE_OPENDOOR2-1)*TILE_SIZE, TILE_SPAN)
+        dhgrMemBl7(DOOR_X*TILE_WIDTH7,     DOOR_Y, TILE_WIDTH7, TILE_HEIGHT, tileList+(TILE_OPENDOOR1-1)*TILE_SIZE, TILE_SPAN)
+        dhgrMemBl7((DOOR_X+1)*TILE_WIDTH7, DOOR_Y, TILE_WIDTH7, TILE_HEIGHT, tileList+(TILE_OPENDOOR2-1)*TILE_SIZE, TILE_SPAN)
+        //
+        // Make sure Sean is sitting
+        //
+        dhgrMemBl7(SEAN_X*TILE_WIDTH7,     SEAN_Y, TILE_WIDTH7, TILE_HEIGHT, tileList+(TILE_SEAN1-1)*TILE_SIZE, TILE_SPAN)
+        dhgrMemBl7((SEAN_X+1)*TILE_WIDTH7, SEAN_Y, TILE_WIDTH7, TILE_HEIGHT, tileList+(TILE_SEAN2-1)*TILE_SIZE, TILE_SPAN)
         //
         // File everyone out
         //
         eventInit
-        exit = NUM_NERDS
-        if level <= NUM_LEVELS/2; exit++; fin // Add Woz to the upper levels
-        for buzz = 0 to exit-1
-            addAction(1, @actionExitNerd, buzz)
+        for buzz = 0 to level <= NUM_LEVELS/2 ?? NUM_NERDS :: NUM_NERDS-1 // Add Woz to the upper levels
+            addAction(@actionExitNerd, buzz, 1)
         next
-        while exit
-            doEvents
-        loop
+        while doEvents; loop
         //
         // Close garage door
         //
@@ -1415,13 +1430,13 @@ def info#0
     waitButtonKey
     drawMenu
 end
-def thankyou#0
+def textscreen(color, textstrings)#0
     byte strX, strY, extX, extY
     var str
 
-    dcgrColor(CLR_DRKGREEN)
+    dcgrColor(color)
     dhgrClearBl7(0, 0, SCR_WIDTH7, SCR_HEIGHT)
-    str  = @Thanks
+    str  = textstrings
     strY = 10
     while ^str and strY < 192
         extX, extY = dcgrStrExtents(str)
@@ -1498,8 +1513,11 @@ def menu
                 scores
                 item = 2
                 break
-            is 'T' // Hidden dedications
-                thankyou
+            is 'T' // Thank you
+                textscreen(CLR_DRKBLUE, @thankyou)
+                break
+            is 'E' // Easter-egg hidden dedications
+                textscreen(CLR_DRKGREEN, @dedications)
                 break
             is 'D'
                 nerdPlayer = NUM_NERDS // Signal demo mode
@@ -1507,19 +1525,20 @@ def menu
             is keyArrowDown
                 dcgrColor(CLR_BLACK)
                 drawItem(item)
-                item++; if item > 3; item = 0; fin
+                item++; if item > MENU_ITEMS; item = 0; fin
                 break
             is keyArrowUp
                 dcgrColor(CLR_BLACK)
                 drawItem(item)
-                if item == 0; item = 3; else item--; fin
+                if item == 0; item = MENU_ITEMS; else item--; fin
                 break
             is keyEnter
                 when item
                     is 0; return TRUE
                     is 1; info; break
                     is 2; scores; break
-                    is 3; return FALSE
+                    is 3; textscreen(CLR_DRKBLUE, @thankyou); break
+                    is 4; return FALSE
                 wend
         wend
         pulse++
@@ -1588,10 +1607,12 @@ if tileList <> NULL and spriteList <> NULL
         while level and not quit
             playGG
             level--
+            if level < 16; quit = TRUE; fin // !!! DEMO
         loop
-        if not updateLeaderBoard
+// !!! DEMO
+//        if not updateLeaderBoard
             rndQuote
-        fin
+//        fin
         level = NUM_LEVELS
     loop
 fin
