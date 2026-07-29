@@ -116,7 +116,7 @@ cd Src
 
 ### acme Cross-Assembler
 
-There are two source projects you need to download: the first is a nice cross-platform 6502 assembler called [acme](http://sourceforge.net/p/acme-crossass/code-0/6/tree/trunk/docs/QuickRef.txt). Download, build, and install the acme assembler by typing:
+There is an additional source project you need to download: a nice cross-platform 6502 assembler called [acme](http://sourceforge.net/p/acme-crossass/code-0/6/tree/trunk/docs/QuickRef.txt). Many modern Linux distributions include this in their package manager. Using HomeBrew on MacOS, install 'acme'. Otherwise, download, build, and install the acme assembler by typing:
 
 ```
 git clone https://github.com/meonwax/acme
