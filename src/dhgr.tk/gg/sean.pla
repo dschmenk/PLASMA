@@ -110,6 +110,7 @@ const MOVE_UP      = 3
 const MOVE_NONE    = 4
 const MOVE_MASK    = 3
 byte nerdPlayer    = 0
+byte nerdPlayer2   = NUM_NERDS // Hidden two player mode
 char nerdDaniel    = "Daniel"
 char nerdBecky     = "Becky"
 char nerdSharon    = "Sharon"
@@ -154,7 +155,7 @@ const EXIT_MOVE       = 100
 byte level            = NUM_LEVELS
 var  level2
 byte quit
-var  totalScore, seqSplash
+var  totalScore, totalScore2, seqSplash
 //
 // Sound F/X
 //
@@ -532,14 +533,12 @@ def drawMenu#0
     dcgrStr(15, 71, "GIVEAWAY")
     dcgrStr(15, 80, ">")
     dcgrStr(92, 180, "8 bit shack")
-    dcgrStr(96, 190, "2026 DEMO") // !!! DEMO
-//    dcgrStr(96, 190, "2026 v")
-//    dcgrStr(120, 190, @ggVersion)
+    dcgrStr(96, 190, "2026 v")
+    dcgrStr(120, 190, @ggVersion)
     dcgrColor(CLR_WHITE)
-    dcgrBoldStr(CLR_BLACK, 110-10, 10, "DEMO")
-//    dcgrBoldStr(CLR_BLACK, 110-24, 10, "Score:")
-//    dcgrColor(CLR_WHITE)
-//    dcgrBoldStr(CLR_BLACK, 110, 10, itoa(@str, totalScore))
+    dcgrBoldStr(CLR_BLACK, 110-24, 10, "Score:")
+    dcgrColor(CLR_WHITE)
+    dcgrBoldStr(CLR_BLACK, 110, 10, itoa(@str, totalScore))
     for i = 0 to MENU_ITEMS; drawItem(i); next
     drawName
 end
@@ -568,9 +567,7 @@ end
 def drawMessage(msg)#0
     dhgrMemBl7(4*TILE_WIDTH7, 4*TILE_HEIGHT, TILE_WIDTH7, TILE_HEIGHT, tileList+(TILE_TABLEMID-1)*TILE_SIZE, TILE_SPAN)
     dhgrMemBl7(5*TILE_WIDTH7, 4*TILE_HEIGHT, TILE_WIDTH7, TILE_HEIGHT, tileList+(TILE_TABLEMID-1)*TILE_SIZE, TILE_SPAN)
-    //dhgrMemBl7(6*TILE_WIDTH7, 4*TILE_HEIGHT, TILE_WIDTH7, TILE_HEIGHT, tileList+(TILE_TABLEMID-1)*TILE_SIZE, TILE_SPAN)
     if msg
-        dcgrFont(FONT_DEF_THIN)
         dcgrColor(CLR_WHITE)
         dcgrStr(70 - ^msg * 2, 5*TILE_HEIGHT - 10, msg)
     fin
@@ -623,7 +620,6 @@ def rndQuote#0
         msg = msg + ^msg + 1
         i--
     loop
-    msg = "Thanks for playing the DEMO" // !!! DEMO
     strY = 5*TILE_HEIGHT - 10
     extX, extY = dcgrStrExtents(msg)
     strX = 70 - (extX + 1)/2
@@ -727,7 +723,7 @@ def hitCheck(nerd, x, y)#1
                         addAction(@actionSFX, SFX_SIGN, 1)
                         addAction(@actionClearMessage, 0, 100)
                         drawMessage("Signed")
-                    elsif nerd == nerdPlayer and (btn0 | btn1) & $80 and \
+                    elsif (btn0 | btn1) & $80 and (nerd == nerdPlayer or nerd == nerdPlayer2) and  \
                         not nerdHoard[nerd] and nerdHoard[i] and nerdScore[nerd] <= nerdScore[i] // Steal?
                         nerdHoard[nerd] = nerdHoard[i]
                         nerdHoard[i]    = 0
@@ -1041,32 +1037,25 @@ def actionUpdateWoz(event)#0
     moveNerd(WOZ, conio:rnd() & MOVE_MASK)
     addEvent(event, WOZ_MOVE)
 end
-def actionUpdatePlayer(event)#0
-    byte moveDir
-
-    moveDir = MOVE_NONE
+def getPlayerKbd#1
     if conio:keypressed()
         when toupper(conio:getkey())
             is keyArrowUp
             is 'I'
             is 'W'
-                moveDir = MOVE_UP
-                break
+                return MOVE_UP
             is keyArrowLeft
             is 'J'
             is 'A'
-                moveDir = MOVE_LEFT
-                break
+                return MOVE_LEFT
             is keyArrowRight
             is 'L'
             is 'D'
-                moveDir = MOVE_RIGHT
-                break
+                return MOVE_RIGHT
             is keyArrowDown
             is 'K'
             is 'S'
-                moveDir = MOVE_DOWN
-                break
+                return MOVE_DOWN
             is 'C' // Recalibrate joystick on the fly
                 joyLeft, joyRight, joyUp, joyDown = joyCalibrate
                 break
@@ -1085,33 +1074,52 @@ def actionUpdatePlayer(event)#0
             is keyCtrlQ
                 hoardActive = 0; hoardRemaining = 0; quit = TRUE
         wend
-    else
-        if altJoyDir & 1 // Alternate joystick direction priority
-            if joyY < joyUp
-                moveDir = MOVE_UP
-            elsif joyY > joyDown
-                moveDir = MOVE_DOWN
-            fin
-            if joyX < joyLeft
-                moveDir = MOVE_LEFT
-            elsif joyX > joyRight
-                moveDir = MOVE_RIGHT
-            fin
-        else
-            if joyX < joyLeft
-                moveDir = MOVE_LEFT
-            elsif joyX > joyRight
-                moveDir = MOVE_RIGHT
-            fin
-            if joyY < joyUp
-                moveDir = MOVE_UP
-            elsif joyY > joyDown
-                moveDir = MOVE_DOWN
-            fin
+    fin
+    return MOVE_NONE
+end
+def getPlayerJoy#1
+    altJoyDir = not altJoyDir // Alternate joystick direction priority
+    if altJoyDir
+        if joyY < joyUp
+            return MOVE_UP
+        elsif joyY > joyDown
+            return MOVE_DOWN
         fin
-        altJoyDir++
+        if joyX < joyLeft
+            return MOVE_LEFT
+        elsif joyX > joyRight
+            return MOVE_RIGHT
+        fin
+    else
+        if joyX < joyLeft
+            return MOVE_LEFT
+        elsif joyX > joyRight
+            return MOVE_RIGHT
+        fin
+        if joyY < joyUp
+            return MOVE_UP
+        elsif joyY > joyDown
+            return MOVE_DOWN
+        fin
+    fin
+    return MOVE_NONE
+end
+def actionUpdatePlayer(event)#0
+    byte moveDir
+
+    moveDir = getPlayerKbd
+    if not moveDir
+        moveDir = getPlayerJoy
     fin
     moveNerd(nerdPlayer, moveDir)
+    addEvent(event, level * PLAYER_MULSCALE / PLAYER_DIVSCALE + PLAYER_EQ)
+end
+def actionUpdatePlayer1(event)#0
+    moveNerd(nerdPlayer, getPlayerJoy)
+    addEvent(event, level * PLAYER_MULSCALE / PLAYER_DIVSCALE + PLAYER_EQ)
+end
+def actionUpdatePlayer2(event)#0
+    moveNerd(nerdPlayer2, getPlayerKbd)
     addEvent(event, level * PLAYER_MULSCALE / PLAYER_DIVSCALE + PLAYER_EQ)
 end
 def actionDemo(event)#0
@@ -1196,7 +1204,9 @@ def playGG#0
         resetNerdTiles(buzz)
         moveNerd(buzz, MOVE_NONE)
         if buzz == nerdPlayer
-            addAction(@actionUpdatePlayer, buzz, level * PLAYER_MULSCALE / PLAYER_DIVSCALE + PLAYER_EQ + buzz)
+            addAction(nerdPlayer2 < NUM_NERDS ?? @actionUpdatePlayer1 :: @actionUpdatePlayer, buzz, level * PLAYER_MULSCALE / PLAYER_DIVSCALE + PLAYER_EQ + buzz)
+        elsif buzz == nerdPlayer2
+            addAction(@actionUpdatePlayer2, buzz, level * PLAYER_MULSCALE / PLAYER_DIVSCALE + PLAYER_EQ + buzz)
         else
             addAction(@actionUpdateNerd, buzz, args + buzz)
             args = args + (level2 * HORDE_MULSCALE / HORDE_DIVSCALE + HORDE_EQ) / 3
@@ -1299,6 +1309,9 @@ def playGG#0
         if nerdPlayer < NUM_NERDS
             totalScore = totalScore + nerdScore[nerdPlayer] // Add to total score if not demo
         fin
+        if nerdPlayer2 < NUM_NERDS
+            totalScore2 = totalScore2 + nerdScore[nerdPlayer2] // Add to total score if two player
+        fin
     fin
     if soundOn
         conio:tone(30, 20)
@@ -1339,7 +1352,7 @@ def updateLeaderBoard#1
     for leader = 0 to 9
         if *(@leaderBoard + leader * t_leaders + bestscore) < totalScore; break; fin
     next
-    if leader == 10 or nerdPlayer > 3; return FALSE; fin
+    if leader == 10 or nerdPlayer > NUM_NERDS-1; return FALSE; fin
     conio:tone(10, 40)
     wait(1)
     conio:tone(20,  30)
@@ -1460,6 +1473,7 @@ def menu
     byte item, pulse, key
 
     if nerdPlayer > NUM_NERDS-1; nerdPlayer = 0; fin
+    nerdPlayer2 = NUM_NERDS
     drawMenu
     item = 0
     if conio:keypressed(); getc; fin // Clear any pending keypresses
@@ -1528,6 +1542,9 @@ def menu
                 break
             is 'D'
                 nerdPlayer = NUM_NERDS // Signal demo mode
+                return TRUE
+            is '2' // Hidden two player mode
+                nerdPlayer2 = (nerdPlayer + 1) & NUM_NERDS-1
                 return TRUE
             is keyArrowDown
                 dcgrColor(CLR_BLACK)
@@ -1609,17 +1626,25 @@ if tileList <> NULL and spriteList <> NULL
     // Run, Rinse, Repeat
     //
     while menu
-        totalScore = 0
-        quit       = FALSE
+        totalScore  = 0
+        totalScore2 = 0
+        quit        = FALSE
         while level and not quit
             playGG
             level--
-            if level < 16; quit = TRUE; fin // !!! DEMO
         loop
-// !!! DEMO
-//        if not updateLeaderBoard
+        if nerdPlayer2 < NUM_NERDS
+            dcgrColor(CLR_BLACK)
+            dcgrRect(3*TILE_WIDTH, 3*TILE_HEIGHT, 4*TILE_WIDTH, 3*TILE_HEIGHT)
+            dcgrColor(CLR_WHITE)
+            dcgrStr(82-32, 4*TILE_HEIGHT, "Player1:")
+            dcgrStr(82,    4*TILE_HEIGHT, itoa(@params, totalScore))
+            dcgrStr(82-32, 5*TILE_HEIGHT, "Player2:")
+            dcgrStr(82,    5*TILE_HEIGHT, itoa(@params, totalScore2))
+            waitButtonKey
+        elsif not updateLeaderBoard
             rndQuote
-//        fin
+        fin
         level = NUM_LEVELS
     loop
 fin
