@@ -18,7 +18,7 @@ sysflags resxtxt1|reshgr1|resxhgr1|nojitc
 //
 // Version
 //
-char ggVersion = "0.99"
+char ggVersion = "0.9d"
 //
 // Predefines
 //
@@ -97,6 +97,7 @@ var spriteList = NULL
 //
 const NUM_NERDS    = 4
 const WOZ          = 4
+const NERD_INVALID = -1
 const SIGNED       = $80
 const NUM_DIRS     = 4
 const LOOK_FORWARD = 0
@@ -110,7 +111,7 @@ const MOVE_UP      = 3
 const MOVE_NONE    = 4
 const MOVE_MASK    = 3
 byte nerdPlayer    = 0
-byte nerdPlayer2   = NUM_NERDS // Hidden two player mode
+byte nerdPlayer2   = NERD_INVALID // Hidden two player mode
 char nerdDaniel    = "Daniel"
 char nerdBecky     = "Becky"
 char nerdSharon    = "Sharon"
@@ -124,8 +125,8 @@ byte nerdHoard     = 0, 0, 0, 0, 0
 byte nerdScore     = 0, 0, 0, 0
 byte nerdBoxX      = 0, 0, TILEMAP_WIDTH-1, TILEMAP_WIDTH-1
 byte nerdBoxY      = 1, TILEMAP_HEIGHT-1, 1, TILEMAP_HEIGHT-1
+var  nerdNextEvent, playerNextEvent
 byte nerdRandomize
-
 //
 // Pre-rendered nerd tiles
 //
@@ -153,7 +154,6 @@ const PLAYER_DIVSCALE = 1
 const WOZ_MOVE        = 50
 const EXIT_MOVE       = 100
 byte level            = NUM_LEVELS
-var  level2
 byte quit
 var  totalScore, totalScore2, seqSplash
 //
@@ -431,6 +431,12 @@ def drawFrame(x, y, w, h)#0
     dcgrHLin(x, r, y)
     dcgrHLin(x, r, b)
 end  
+def drawInfoBox#0
+    dcgrColor(CLR_BLACK)
+    dhgrClearBl7(3*TILE_WIDTH7, 3*TILE_HEIGHT, 4*TILE_WIDTH7, 3*TILE_HEIGHT)
+    dcgrColor(CLR_WHITE)
+    drawFrame(3*TILE_WIDTH, 3*TILE_HEIGHT, 4*TILE_WIDTH, 3*TILE_HEIGHT)
+end
 def drawItem(item)#0
     when item
         is 0
@@ -1024,7 +1030,7 @@ def actionUpdateNerd(event)#0
     // Find best way to target
     //
     navigateNerd(nerd, targetX, targetY)
-    addEvent(event, level2 * HORDE_MULSCALE / HORDE_DIVSCALE + HORDE_EQ)
+    addEvent(event, nerdNextEvent)
 end
 def actionUpdateWoz(event)#0
     byte nerd, moveDir, i
@@ -1065,9 +1071,9 @@ def getPlayerKbd#1
                 waitButtonKey
                 drawMessage(NULL)
                 break
-            //is 'X' // Examine state
-            //    stateExamine
-            //    break
+            is 'X' // Examine state
+                stateExamine
+                break
             is keyCtrlS
                 soundOn = not soundOn
                 break
@@ -1112,15 +1118,15 @@ def actionUpdatePlayer(event)#0
         moveDir = getPlayerJoy
     fin
     moveNerd(nerdPlayer, moveDir)
-    addEvent(event, level * PLAYER_MULSCALE / PLAYER_DIVSCALE + PLAYER_EQ)
+    addEvent(event, playerNextEvent)
 end
 def actionUpdatePlayer1(event)#0
     moveNerd(nerdPlayer, getPlayerJoy)
-    addEvent(event, level * PLAYER_MULSCALE / PLAYER_DIVSCALE + PLAYER_EQ)
+    addEvent(event, playerNextEvent)
 end
 def actionUpdatePlayer2(event)#0
     moveNerd(nerdPlayer2, getPlayerKbd)
-    addEvent(event, level * PLAYER_MULSCALE / PLAYER_DIVSCALE + PLAYER_EQ)
+    addEvent(event, playerNextEvent)
 end
 def actionDemo(event)#0
     if conio:keypressed()
@@ -1163,8 +1169,8 @@ def playGG#0
     //
     // Intitialize horde
     //
-    level2 = level * level
-    args = (level2 * HORDE_MULSCALE / HORDE_DIVSCALE + HORDE_EQ) / 3
+    nerdNextEvent   = level * level * HORDE_MULSCALE  / HORDE_DIVSCALE  + HORDE_EQ
+    playerNextEvent = level *         PLAYER_MULSCALE / PLAYER_DIVSCALE + PLAYER_EQ
     for buzz = 0 to NUM_NERDS-1
         if nerdRandomize
             repeat
@@ -1204,12 +1210,11 @@ def playGG#0
         resetNerdTiles(buzz)
         moveNerd(buzz, MOVE_NONE)
         if buzz == nerdPlayer
-            addAction(nerdPlayer2 < NUM_NERDS ?? @actionUpdatePlayer1 :: @actionUpdatePlayer, buzz, level * PLAYER_MULSCALE / PLAYER_DIVSCALE + PLAYER_EQ + buzz)
+            addAction(nerdPlayer2 < NUM_NERDS ?? @actionUpdatePlayer1 :: @actionUpdatePlayer, buzz, playerNextEvent + buzz)
         elsif buzz == nerdPlayer2
-            addAction(@actionUpdatePlayer2, buzz, level * PLAYER_MULSCALE / PLAYER_DIVSCALE + PLAYER_EQ + buzz)
+            addAction(@actionUpdatePlayer2, buzz, playerNextEvent + buzz)
         else
-            addAction(@actionUpdateNerd, buzz, args + buzz)
-            args = args + (level2 * HORDE_MULSCALE / HORDE_DIVSCALE + HORDE_EQ) / 3
+            addAction(@actionUpdateNerd, buzz, nerdNextEvent * buzz / 3)
         fin
     next
     nerdX[WOZ] = 0
@@ -1226,7 +1231,7 @@ def playGG#0
         moveNerd(WOZ, MOVE_NONE)
         addAction(@actionUpdateWoz, 0, WOZ_MOVE)
     fin
-    if nerdPlayer > NUM_NERDS-1; addAction(@actionDemo, 0, args); fin
+    if nerdPlayer > NUM_NERDS-1; addAction(@actionDemo, 0, HORDE_EQ + PLAYER_EQ); fin
     bumping = FALSE // Reset bumping sound effect
     //
     // Initialize hoard
@@ -1469,11 +1474,22 @@ def textscreen(color, textstrings)#0
     waitButtonKey
     drawMenu
 end
+def chkjoy#1
+    if joyLeft + joyUp == 0
+        drawInfoBox
+        dcgrStr(82-32, 4*TILE_HEIGHT, "Joy Stick")
+        dcgrStr(82-32, 5*TILE_HEIGHT, "Not Found")
+        waitButtonKey
+        drawMenu
+        return FALSE
+    fin
+    return TRUE
+end
 def menu
     byte item, pulse, key
 
     if nerdPlayer > NUM_NERDS-1; nerdPlayer = 0; fin
-    nerdPlayer2 = NUM_NERDS
+    nerdPlayer2 = NERD_INVALID
     drawMenu
     item = 0
     if conio:keypressed(); getc; fin // Clear any pending keypresses
@@ -1541,11 +1557,14 @@ def menu
                 textscreen(CLR_DRKGREEN, @dedications)
                 break
             is 'D'
-                nerdPlayer = NUM_NERDS // Signal demo mode
+                nerdPlayer = NERD_INVALID // Signal demo mode
                 return TRUE
             is '2' // Hidden two player mode
-                nerdPlayer2 = (nerdPlayer + 1) & NUM_NERDS-1
-                return TRUE
+                if chkjoy
+                    nerdPlayer2 = (nerdPlayer + 1) & NUM_NERDS-1
+                    return TRUE
+                fin
+                break
             is keyArrowDown
                 dcgrColor(CLR_BLACK)
                 drawItem(item)
@@ -1634,13 +1653,12 @@ if tileList <> NULL and spriteList <> NULL
             level--
         loop
         if nerdPlayer2 < NUM_NERDS
-            dcgrColor(CLR_BLACK)
-            dhgrClearBl7(3*TILE_WIDTH7, 3*TILE_HEIGHT, 4*TILE_WIDTH7, 3*TILE_HEIGHT)
-            dcgrColor(CLR_WHITE)
+            drawInfoBox
             dcgrStr(82-32, 4*TILE_HEIGHT, "Player1:")
             dcgrStr(82,    4*TILE_HEIGHT, itoa(@params, totalScore))
             dcgrStr(82-32, 5*TILE_HEIGHT, "Player2:")
             dcgrStr(82,    5*TILE_HEIGHT, itoa(@params, totalScore2))
+            totalScore  = 0
             waitButtonKey
         elsif not updateLeaderBoard
             rndQuote
