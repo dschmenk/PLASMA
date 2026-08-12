@@ -18,7 +18,7 @@ sysflags resxtxt1|reshgr1|resxhgr1|nojitc
 //
 // Version
 //
-char ggVersion = "0.9o"
+char ggVersion = "0.9y"
 //
 // Predefines
 //
@@ -137,6 +137,8 @@ var nerdTile = @nerdActiveTile0, @nerdActiveTile1, @nerdActiveTile2, @nerdActive
 //
 // Joystick values
 //
+const SENSE_MASK = $03
+const SENSE_MOD  = $80
 byte joyX, joyY, btn0, btn1, buzz
 byte joySense, altJoyDir
 byte joyLeft, joyRight, joyUp, joyDown
@@ -205,6 +207,10 @@ var               = 120
 char              = 'W', 'O', 'Z'
 var               = 110
 char leaderFile   = "LEADERBOARD"
+//
+// Startup file
+//
+char startupFile = "AUTORUN"
 //
 // Random ending quotes
 //
@@ -370,28 +376,28 @@ def waitButtonKey#0
     until getButtonKey
 end
 def joyCalibrate#4
-    byte x, y, mid
+    byte x, y, xRange, yRange
 
     x, y, drop, drop = joyPos(0)
     if x < MAX_JOY and y < MAX_JOY
-        when joySense
+        when joySense & SENSE_MASK
             is 0
-                x   = x / 3
-                y   = y / 3
-                mid = MAX_JOY * 2 / 3
+                xRange = x * 9 / 10 + 2
+                yRange = y * 9 / 10 + 2
                 break
             is 1
-                x   = x * 2 / 5
-                y   = y * 2 / 5
-                mid = MAX_JOY * 3 / 5
+                xRange = x * 7 / 10 + 1
+                yRange = y * 7 / 10 + 1
+                break
+            is 2
+                xRange = x * 5 / 10
+                yRange = y * 5 / 10
                 break
             otherwise
-                x   = x / 2
-                y   = y / 2
-                mid = MAX_JOY / 2
-                break
+                xRange = x * 3 / 10
+                yRange = y * 3 / 10
         wend
-        return max(x, 1), min(mid + x, MAX_JOY-2), max(y, 1), min(mid + y, MAX_JOY-2)
+        return max(x - xRange, 1), min(x + xRange, MAX_JOY-1), max(y - yRange, 1), min(y + yRange, MAX_JOY-1)
     fin
     return 0, MAX_JOY, 0, MAX_JOY
 end
@@ -601,6 +607,37 @@ def drawMessage(msg)#0
         dcgrColor(CLR_WHITE)
         dcgrStr(70 - ^msg * 2, 5*TILE_HEIGHT - 10, msg)
     fin
+end
+def drawJoyStatus#0
+    byte x, y
+    char pos[4]
+
+    drawInfoBox
+    dcgrStr(82-32, 4*TILE_HEIGHT-6, "Joy Stick")
+    if joyLeft + joyUp > 0
+        dcgrStr(82-36, 5*TILE_HEIGHT-10, "Sensitivity")
+        when joySense & SENSE_MASK
+            is 0
+                dcgrStr(82-24, 6*TILE_HEIGHT-16, "Lowest")
+                break
+            is 1
+                dcgrStr(82-24, 6*TILE_HEIGHT-16, "Middle")
+                break
+            is 2
+                dcgrStr(82-26, 6*TILE_HEIGHT-16, "Highest")
+                break
+            is 3
+                dcgrStr(82-26, 6*TILE_HEIGHT-16, "Extreme")
+                break
+        wend
+        x, y, drop, drop = joyPos(0)
+        dcgrStr(82-26, 6*TILE_HEIGHT-2, "(  ,  )")
+        dcgrStr(82-22, 6*TILE_HEIGHT-2, itoa(pos, x))
+        dcgrStr(82-10, 6*TILE_HEIGHT-2, itoa(pos, y))
+    else
+        dcgrStr(82-32, 5*TILE_HEIGHT, "NOT FOUND")
+    fin
+    wait(15)
 end
 def drawStatus#0
     char[4] str
@@ -1451,6 +1488,22 @@ def updateLeaderBoard#1
     storeLeaderBoard
     return TRUE
 end
+def updateStartup#0
+    byte refnum
+    char cmdstr[40]
+    char joyval[4]
+
+    fileio:destroy(@startupFile)
+    fileio:create(@startupFile, $04, $0000) // TEXT file
+    refnum = fileio:open(@startupFile)
+    if refnum
+        strcpy(@cmdstr, "+SEAN -S -J")
+        strcat(@cmdstr, itoa(joyval, joySense & SENSE_MASK))
+        puts(@cmdstr)
+        fileio:write(refnum, @cmdstr+1, cmdstr)
+        fileio:close(refnum)
+    fin
+end
 //
 // Menu Interface
 //
@@ -1500,10 +1553,7 @@ def textscreen(color, textstrings)#0
 end
 def chkjoy#1
     if joyLeft + joyUp == 0
-        drawInfoBox
-        dcgrStr(82-32, 4*TILE_HEIGHT, "Joy Stick")
-        dcgrStr(82-32, 5*TILE_HEIGHT, "Not Found")
-        waitButtonKey
+        drawJoyStatus
         drawMenu
         return FALSE
     fin
@@ -1581,12 +1631,14 @@ def menu
                 //
                 // Adjust joystick sensitivity
                 //
-                joySense++; if joySense > 2; joySense = 0; fin
+                joySense = ((joySense + 1) & SENSE_MASK) | SENSE_MOD
             is 'C'
                 //
                 // Recalibrate joystick
                 //
                 joyLeft, joyRight, joyUp, joyDown = joyCalibrate
+                drawJoyStatus
+                drawMenu
                 break
             is 'E' // Easter-egg hidden dedications
                 textscreen(CLR_DRKGREEN, @dedications)
@@ -1639,10 +1691,6 @@ params.0 = 2
 params.1 = 3
 params:2 = @serviceCYA
 syscall($40, @params)
-//
-// Automatic joystick enable/calibration
-//
-joyLeft, joyRight, joyUp, joyDown = joyCalibrate
 dhgrMode(DHGR_COLOR_MODE)
 arg = argNext(argFirst)
 while ^arg and ^(arg + 1) == '-'
@@ -1666,12 +1714,22 @@ while ^arg and ^(arg + 1) == '-'
             level = NUM_LEVELS+1 - atoi(arg + 2)
             if level > NUM_LEVELS; level = 0; fin
             break
+        is 'J'
+            //
+            // Set joystick sensitivity
+            //
+            joySense = (^(arg + 3) - '0') & SENSE_MASK
+            break
         is 'R'
             nerdRandomize = TRUE
             break
     wend
     arg = argNext(arg)
 loop
+//
+// Automatic joystick enable/calibration
+//
+joyLeft, joyRight, joyUp, joyDown = joyCalibrate
 loadLeaderBoard
 loadTiles
 loadSprites
@@ -1711,5 +1769,12 @@ syscall($41, @params)
 puts("Memory free: "); puti(heapAvail); puts(" bytes\n")
 puts("Joystick: ");puti(joyLeft);putc(',');puti(joyRight);putc(',');puti(joyUp);putc(',');puti(joyDown);putc(',')
 joyLeft, joyUp, drop, drop = joyPos(0); puti(joyLeft);putc(',');puti(joyUp);putln
+if joySense & SENSE_MOD
+    puts("Update joystick settings (Y/N)?")
+    if toupper(getc) == 'Y'
+        updateStartup
+    fin
+    putln
+fin
 return 0
 done
