@@ -18,7 +18,7 @@ sysflags resxtxt1|reshgr1|resxhgr1|nojitc
 //
 // Version
 //
-char ggVersion = "0.9j"
+char ggVersion = "0.9o"
 //
 // Predefines
 //
@@ -138,7 +138,8 @@ var nerdTile = @nerdActiveTile0, @nerdActiveTile1, @nerdActiveTile2, @nerdActive
 // Joystick values
 //
 byte joyX, joyY, btn0, btn1, buzz
-byte joyLeft, joyRight, joyUp, joyDown, altJoyDir
+byte joySense, altJoyDir
+byte joyLeft, joyRight, joyUp, joyDown
 //
 // Levels
 //
@@ -307,6 +308,12 @@ end
 //
 // Utility Functions
 //
+def min(a, b)
+    return a < b ?? a :: b
+end
+def max(a, b)
+    return a > b ?? a :: b
+end
 def strcati(str, i)#0
     if i >= 10; strcati(str, i / 10); fin
     ^str++
@@ -363,11 +370,28 @@ def waitButtonKey#0
     until getButtonKey
 end
 def joyCalibrate#4
-    byte x, y
+    byte x, y, mid
 
     x, y, drop, drop = joyPos(0)
     if x < MAX_JOY and y < MAX_JOY
-        return x / 3, MAX_JOY - x / 3, y / 3, MAX_JOY - y / 3 
+        when joySense
+            is 0
+                x   = x / 3
+                y   = y / 3
+                mid = MAX_JOY * 2 / 3
+                break
+            is 1
+                x   = x * 2 / 5
+                y   = y * 2 / 5
+                mid = MAX_JOY * 3 / 5
+                break
+            otherwise
+                x   = x / 2
+                y   = y / 2
+                mid = MAX_JOY / 2
+                break
+        wend
+        return max(x, 1), min(mid + x, MAX_JOY-2), max(y, 1), min(mid + y, MAX_JOY-2)
     fin
     return 0, MAX_JOY, 0, MAX_JOY
 end
@@ -1553,6 +1577,17 @@ def menu
             is 'T' // Kickstarter Thank You
                 textscreen(CLR_DRKBLUE, @kickstarter)
                 break
+            is 'J'
+                //
+                // Adjust joystick sensitivity
+                //
+                joySense++; if joySense > 2; joySense = 0; fin
+            is 'C'
+                //
+                // Recalibrate joystick
+                //
+                joyLeft, joyRight, joyUp, joyDown = joyCalibrate
+                break
             is 'E' // Easter-egg hidden dedications
                 textscreen(CLR_DRKGREEN, @dedications)
                 break
@@ -1674,6 +1709,7 @@ params.0 = 1
 params.1 = 0
 syscall($41, @params)
 puts("Memory free: "); puti(heapAvail); puts(" bytes\n")
-puts("Joystick: ");puti(joyLeft);putc(',');puti(joyRight);putc(',');puti(joyUp);putc(',');puti(joyDown);putln
+puts("Joystick: ");puti(joyLeft);putc(',');puti(joyRight);putc(',');puti(joyUp);putc(',');puti(joyDown);putc(',')
+joyLeft, joyUp, drop, drop = joyPos(0); puti(joyLeft);putc(',');puti(joyUp);putln
 return 0
 done
