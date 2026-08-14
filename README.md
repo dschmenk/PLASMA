@@ -34,8 +34,8 @@ The combination of all these enhancements make PLEIADES an efficient environment
 
 ## Disk Images:
 
-- [140K Single Disk Bootable FORTH](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLFORTH.po) [Try it!](https://apple2ts.com?appmode=game&capslock=off#https://github.com/dschmenk/PLASMA/raw/refs/heads/master/images/apple/PLFORTH.po)
-- [140K Single Disk Bootable LISP](https://github.com/dschmenk/PLASMA/blob/master/images/apple/DRAWL.po) [Try it!](https://apple2ts.com?appmode=game&capslock=off#https://github.com/dschmenk/PLASMA/raw/refs/heads/master/images/apple/DRAWL.po)
+- [140K Single Disk Bootable FORTH](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLFORTH.po)
+- [140K Single Disk Bootable LISP](https://github.com/dschmenk/PLASMA/blob/master/images/apple/DRAWL.po)
 - [140K ASM Toolkit](https://github.com/dschmenk/PLASMA/blob/master/images/apple/ASM-TK.po)
 - [140K DHGR Toolkit](https://github.com/dschmenk/PLASMA/blob/master/images/apple/DHGR-TK.po)
 - [1/6 - 140K PLEIADES Install Boot](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLEIADES-2.20-INST.po)
@@ -44,6 +44,12 @@ The combination of all these enhancements make PLEIADES an efficient environment
 - [4/6 - 140K PLEIADES Demos](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLEIADES-2.20-DEMOS.po)
 - [5/6 - 140K PLEIADES Floating Point & Apple /// SOS](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLEIADES-2.20-FPSOS.po)
 - [6/6 - 140K PLEIADES Build](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLEIADES-2.20-BLD.po)
-- [32 MB PLEIADES Full Install including DHGR Toolkit](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLEIADES-2.21.po) [Try it!](https://apple2ts.com?appmode=game&capslock=off#https://github.com/dschmenk/PLASMA/raw/refs/heads/master/images/apple/PLEIADES-2.21.po)
+- [32 MB PLEIADES Full Install including DHGR Toolkit](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLEIADES-2.21.po)
 - [140K Apple /// MAME Boot](https://github.com/dschmenk/PLASMA/blob/master/images/apple/PLEIADES-A3MAME.po)
 - [16 MB Apple /// MAME Hard Disk](https://github.com/dschmenk/PLASMA/blob/master/images/apple/apple3.hd)
+
+## Run in CT6502 In-Browser Emulator:
+
+ - [140K Single Disk Bootable FORTH](https://apple2ts.com?appmode=game&capslock=off#https://github.com/dschmenk/PLASMA/raw/refs/heads/master/images/apple/PLFORTH.po)
+ - [140K Single Disk Bootable LISP](https://apple2ts.com?appmode=game&capslock=off#https://github.com/dschmenk/PLASMA/raw/refs/heads/master/images/apple/DRAWL.po)
+ - [32 MB PLEIADES Full Install including DHGR Toolkit](https://apple2ts.com?appmode=game&capslock=off#https://github.com/dschmenk/PLASMA/raw/refs/heads/master/images/apple/PLEIADES-2.21.po)
