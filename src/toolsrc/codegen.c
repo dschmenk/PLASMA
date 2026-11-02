@@ -1259,7 +1259,7 @@ int crunch_seq(t_opseq **seq, int pass)
                         freeops = 1;
                         break;
                     case LOGIC_NOT_CODE:
-                        op->val = op->val ? 0 : 1;
+                        op->val = op->val ? 0 : -1;
                         freeops = 1;
                         break;
                     case UNARY_CODE(BPTR_TOKEN):
@@ -1377,27 +1377,27 @@ int crunch_seq(t_opseq **seq, int pass)
                                     freeops  = 2;
                                     break;
                                 case BINARY_CODE(EQ_TOKEN):
-                                    op->val = op->val == opnext->val ? 1 : 0;
+                                    op->val = op->val == opnext->val ? -1 : 0;
                                     freeops  = 2;
                                     break;
                                 case BINARY_CODE(NE_TOKEN):
-                                    op->val = op->val != opnext->val ? 1 : 0;
+                                    op->val = op->val != opnext->val ? -1 : 0;
                                     freeops  = 2;
                                     break;
                                 case BINARY_CODE(GE_TOKEN):
-                                    op->val = op->val >= opnext->val ? 1 : 0;
+                                    op->val = op->val >= opnext->val ? -1 : 0;
                                     freeops  = 2;
                                     break;
                                 case BINARY_CODE(LT_TOKEN):
-                                    op->val = op->val < opnext->val ? 1 : 0;
+                                    op->val = op->val < opnext->val ? -1 : 0;
                                     freeops  = 2;
                                     break;
                                 case BINARY_CODE(GT_TOKEN):
-                                    op->val = op->val > opnext->val ? 1 : 0;
+                                    op->val = op->val > opnext->val ? -1 : 0;
                                     freeops  = 2;
                                     break;
                                 case BINARY_CODE(LE_TOKEN):
-                                    op->val = op->val <= opnext->val ? 1 : 0;
+                                    op->val = op->val <= opnext->val ? -1 : 0;
                                     freeops  = 2;
                                     break;
                             }

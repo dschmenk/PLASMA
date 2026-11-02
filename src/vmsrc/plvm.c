@@ -551,7 +551,7 @@ void vm_interp(M6502 *mpu, code *vm_ip)
                  * 0x080-0x08F
                  */
             case 0x80: // NOT : TOS = !TOS
-                TOS = !TOS;
+                TOS = TOS ? 0 : -1;
                 break;
             case 0x82: // ADD : TOS = TOS + TOS-1
                 val = POP;
