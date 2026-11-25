@@ -375,14 +375,8 @@ _MULLPL LSR     TMPL            ; ~MULTPLRL
         BNE     _MULLPL
         BEQ     +
 _MULLPH CLC
-        TAY                     ; PRODH
-        LDA     ESTKL+1,X       ; PRODL
-        ADC     ESTKL,X         ; +MULTPLNDL
-        STA     ESTKL+1,X       ; =PRODL
-        TYA                     ; PRODH
         ADC     ESTKH,X         ; +MULTPLNDH
--       ASL     ESTKL,X         ; MULTPLNDL
-        ROL     ESTKH,X         ; MULTPLNDH
+-       ASL     ESTKH,X         ; MULTPLNDH
 +       LSR     ESTKH+1,X       ; MULTPLRH
         BCS     _MULLPH
         BNE     -               ; ONLY MULT AS MANY BITS AS WE NEED
